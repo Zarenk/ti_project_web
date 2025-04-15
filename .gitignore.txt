@@ -1,0 +1,15 @@
+# Node
+node_modules/
+dist/
+.next/
+.env
+
+# Logs
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Compilados
+*.tsbuildinfo

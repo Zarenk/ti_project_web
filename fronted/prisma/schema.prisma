@@ -1,0 +1,289 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product{
+  id Int @id @default(autoincrement())
+  name String @unique
+  description String?
+  price Float
+  priceSell Float?
+  status String?
+  image String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relación con Category
+  categoryId  Int
+  category    Category @relation(fields: [categoryId], references: [id])
+  entryDetail EntryDetail[]
+  inventory Inventory[]
+
+  // Relación con Transfer
+  transfers   Transfer[] // Relación con el modelo Transfer
+}
+
+model Category{
+  id Int @id @default(autoincrement())
+  name String @unique
+  description String?
+  status String?
+  image String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relación con Product
+  products    Product[]
+}
+
+enum UserRole {
+  ADMIN
+  EMPLOYEE
+  CLIENT
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  role      UserRole @default(CLIENT) // Enum para roles de usuario
+  client    Client?  // Relación opcional con el modelo Client
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entrys    Entry[]   // Relación con el modelo Entry
+  inventoryHistory InventoryHistory[] // Relación con el modelo InventoryHistory
+  // Relación con Sales
+  sales Sales[] // Relación con el modelo Sales
+}
+
+model Client{
+  id      Int      @id @default(autoincrement())
+  userId    Int      @unique
+  name    String   
+  type String?
+  typeNumber String? @unique
+  phone String?
+  adress String?
+  email String? 
+  status  String?
+  image   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+  // Relación con Sales
+  sales Sales[] // Relación con el modelo Sales
+}
+
+model Provider{
+  id      Int      @id @default(autoincrement())
+  name    String   @unique
+  document String?
+  documentNumber String?
+  description String?
+  phone String?
+  adress String?
+  email String? 
+  website String?
+  status  String?
+  image   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entrys    Entry[]   // Relación con el modelo Entry
+}
+
+model Entry {
+  id          Int       @id @default(autoincrement())
+  storeId     Int       // Almacén relacionado con la entrada  
+  userId      Int       // Usuario que realiza la entrada
+  providerId  Int       // Proveedor relacionado con la entrada
+  date        DateTime  @default(now()) // Fecha de la entrada
+  description String?   // Descripción opcional
+  pdfUrl      String?
+  guiaUrl     String?   // URL del PDF de la guía de remisión
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  store       Store     @relation(fields: [storeId], references: [id]) // Relación con el modelo Store
+  user        User      @relation(fields: [userId], references: [id]) // Relación con el modelo User
+  provider    Provider  @relation(fields: [providerId], references: [id]) // Relación con el modelo Provider
+  details     EntryDetail[]
+
+  invoice     Invoice?  @relation // Relación 1:1 con Comprobante (sin `fields` ni `references`)
+}
+
+model Invoice {
+  id          Int       @id @default(autoincrement())
+  entryId     Int       @unique // Clave foránea única para la relación 1:1// Relación con la entrada
+  serie       String?   // Serie del comprobante
+  nroCorrelativo String? // Número correlativo del comprobante
+  comprobante String?   // Número del comprobante
+  tipoMoneda  String?   // Tipo de moneda (e.g., PEN, USD)
+  total       Float?    // Total del comprobante
+  fechaEmision DateTime? // Fecha de emisión del comprobante
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  entry       Entry     @relation(fields: [entryId], references: [id], onDelete:  Cascade) // Relación con Entry
+}
+
+model EntryDetail {
+  id          Int       @id @default(autoincrement())
+  entryId     Int       // Relación con la entrada
+  productId   Int       // Producto relacionado
+  quantity    Int       // Cantidad de productos ingresados
+  price       Float     // Precio unitario del producto
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  entry       Entry     @relation(fields: [entryId], references: [id], onDelete: Cascade) // Relación con el modelo Entry
+  product     Product   @relation(fields: [productId], references: [id]) // Relación con el modelo Product
+  series      EntryDetailSeries[] // Relación con las series
+  // Relación con SalesDetail
+  salesDetails SalesDetail[] // Relación con el modelo SalesDetail
+}
+
+model EntryDetailSeries {
+  id          Int             @id @default(autoincrement())
+  entryDetailId Int
+  serial      String          @unique
+  entryDetail EntryDetail     @relation(fields: [entryDetailId], references: [id], onDelete: Cascade)
+}
+
+model Inventory {
+  id          Int       @id @default(autoincrement())
+  productId   Int       
+  storeId     Int  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt 
+
+  InventoryHistory InventoryHistory[] // Relación con el modelo InventoryHistory
+  storeOnInventory StoreOnInventory[] // Relación con la tabla intermedia
+  product     Product   @relation(fields: [productId], references: [id])
+
+  @@unique([productId, storeId]) // Clave compuesta
+}
+
+model Store{
+  id      Int      @id @default(autoincrement())
+  name    String   @unique
+  description String?
+  phone String?
+  adress String?
+  email String? 
+  website String?
+  status  String?
+  image   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  storeOnInventory StoreOnInventory[] // Relación con la tabla intermedia
+  entries   Entry[]   // Relación con el modelo Entry
+
+  // Relación con Transfer como tienda de origen
+  transfersFrom Transfer[] @relation("SourceStore")
+
+  // Relación con Transfer como tienda de destino
+  transfersTo Transfer[] @relation("DestinationStore")
+
+  // Relación con Sales
+  sales Sales[] // Relación con el modelo Sales
+}
+
+model StoreOnInventory {
+  id          Int       @id @default(autoincrement())
+  inventoryId Int
+  storeId     Int
+  stock       Int       @default(0) // Stock específico para esta relación
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  inventory   Inventory @relation(fields: [inventoryId], references: [id])
+  store       Store     @relation(fields: [storeId], references: [id])
+  // Relación con SalesDetail
+  salesDetails SalesDetail[] // Relación con el modelo SalesDetail
+}
+
+model InventoryHistory {
+  id          Int       @id @default(autoincrement())
+  inventoryId Int       // Relación con el inventario
+  userId      Int       // Usuario que realiza el cambio
+  action      String    // Tipo de acción: "create", "update", "delete"
+  description String?   // Descripción opcional
+  stockChange Int       // Cambio en el stock (positivo o negativo)
+  previousStock Int?    // Stock anterior (opcional)
+  newStock    Int?      // Stock nuevo (opcional)
+  createdAt   DateTime  @default(now()) // Fecha del cambio
+
+  inventory   Inventory @relation(fields: [inventoryId], references: [id])
+  user        User      @relation(fields: [userId], references: [id]) // Relación con la tabla de usuarios
+}
+
+model Transfer {
+  id                Int       @id @default(autoincrement())
+  sourceStoreId     Int       // ID de la tienda de origen
+  destinationStoreId Int      // ID de la tienda de destino
+  productId         Int       // ID del producto trasladado
+  quantity          Int       // Cantidad trasladada
+  description       String?   // Descripción opcional
+  createdAt         DateTime  @default(now()) // Fecha del traslado
+
+  // Relación con la tabla Store para la tienda de origen
+  sourceStore       Store     @relation("SourceStore", fields: [sourceStoreId], references: [id])
+
+  // Relación con la tabla Store para la tienda de destino
+  destinationStore  Store     @relation("DestinationStore", fields: [destinationStoreId], references: [id])
+
+  // Relación con la tabla Product
+  product           Product   @relation(fields: [productId], references: [id])
+
+  @@index([sourceStoreId]) // Índice para optimizar consultas por tienda de origen
+  @@index([destinationStoreId]) // Índice para optimizar consultas por tienda de destino
+  @@index([productId]) // Índice para optimizar consultas por producto 
+}
+
+model Sales {
+  id          Int       @id @default(autoincrement())
+  userId      Int       // Usuario que realiza la venta
+  storeId     Int       // Tienda donde se realiza la venta
+  clientId    Int       // Cliente asociado a la venta
+  total       Float     // Total de la venta
+  description String?   // Descripción opcional
+  createdAt   DateTime  @default(now()) // Fecha de la venta
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id]) // Relación con el usuario
+  store       Store     @relation(fields: [storeId], references: [id]) // Relación con la tienda
+  client      Client    @relation(fields: [clientId], references: [id]) // Relación con el cliente
+  salesDetails SalesDetail[] // Relación con los detalles de la venta
+}
+
+model SalesDetail {
+  id          Int       @id @default(autoincrement())
+  salesId      Int       // Relación con la venta
+  entryDetailId Int          // Relación con el detalle de la entrada
+  storeOnInventoryId Int // Relación con el inventario de la tienda
+  productId   Int       // Producto relacionado
+  quantity    Int       // Cantidad de productos vendidos
+  price       Float     // Precio unitario del producto
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  sale        Sales     @relation(fields: [salesId], references: [id], onDelete: Cascade) // Relación con el modelo Sales
+  entryDetail EntryDetail @relation(fields: [entryDetailId], references: [id]) // Relación con el modelo EntryDetail
+  storeOnInventory StoreOnInventory @relation(fields: [storeOnInventoryId], references: [id]) // Relación con el inventario de la tienda
+}

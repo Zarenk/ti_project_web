@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2 UBL-Invoice-2.1.xsd">
+  <ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionContent>
+        <?xml version="1.0"?><Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><Reference URI="#Invoice"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><DigestValue>N6cGi+pQD8LQeYhL0Cwlzm/oGJtFSr7KTxFlfi93JK4=</DigestValue></Reference></SignedInfo><SignatureValue>KhClpbMJ/UsMSdq9TNfnYjF4Fnk5N64IsERRkjZNZSBiwXZCocX/qu+gHjGoVh1uTRIZL7Wf990jvnhMsOPobcYcRr0laDWXqbqUhC5J1S9eb3HdE3XO+WhVOSrDv0CtU74QboL5DLEA8FzaDcAxb3ckRzn1Mf2P06UvuwJsV6wVqiU15JAM1QWzy6Ls3nYAQFkNQ2nZy3+jY36tWT6arDOAFM0mJlYi2+n+ELyDu80nxJggqTcX263a2KJcuctCvq5n6oV3+cmAASpLoa0c1eNgAsaVrLq4Mrpo+H0dJYzDFyx/eCYDgpF7EQqjZLZcDziF97f91DesjDBhT+7m4g==</SignatureValue><KeyInfo><X509Data><X509Certificate>MIIDozCCAougAwIBAgIUHRBz+ovLr6Y0dJ3Zi7GY2uOj/D4wDQYJKoZIhvcNAQELBQAwejELMAkGA1UEBhMCUEUxDjAMBgNVBAgMBVRBQ05BMQ4wDAYDVQQHDAVUQUNOQTELMAkGA1UECgwCVEkxCzAJBgNVBAsMAlRJMQswCQYDVQQDDAJUSTEkMCIGCSqGSIb3DQEJARYVc290b19uZXh0QGhvdG1haWwuY29tMB4XDTI1MDQxMzIzMDYzOFoXDTI2MDQxMzIzMDYzOFowejELMAkGA1UEBhMCUEUxDjAMBgNVBAgMBVRBQ05BMQ4wDAYDVQQHDAVUQUNOQTELMAkGA1UECgwCVEkxCzAJBgNVBAsMAlRJMQswCQYDVQQDDAJUSTEkMCIGCSqGSIb3DQEJARYVc290b19uZXh0QGhvdG1haWwuY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAozDLT1XmxQYvbGt1R2eRgp8lO0E6iYYAU1dxzMsZKu66PGzgGMBHRGJF4uAPeRLQpjrHFv8/3WHpYcRcqkofYr+y8xHfuo0ki2iy2ZF9Yf5kT7d/SKV3XAY25JXRVo20T7VV1rVNNBbJdcu1S7eZ1G3HohaOE4buRyviunl3Tmy7KMRrqBfXPvo3d6OyB/EQdrBj3qC0RmO9jeLEAt8LQF/AfgQXN4o5Z8OKiVtQermUE0nV7jcm+ODjKi77FCaQjAFH3LatQm1PO0eTPyDx+xoLPmP90vfG2/55Q5XyI4D/JCkUnMFQfgfnEZg7y5TPmKwCXabtpSLUXAqIBUPZ9QIDAQABoyEwHzAdBgNVHQ4EFgQUXWbsOOov83Dw40EznXxfMeIq/eAwDQYJKoZIhvcNAQELBQADggEBAB2iuH5quSfzO3MOMW0ofa2tO2ekSG8X8Al0FzpuknjsQF6xXZjgkGwrevRKh6zBQ7KIepOIIQwGRz0HOJBDMbSlMpDc5nLUCOl4Ds0ykvZ61eiEaaVMHZh9i75IMzS3OIQq62Ob+ArseI4i5p3DfL3l7Hyqic1t6FDuAb2vUiHeNtdvQr5legTdCwfSOpgluZqPTuOprTaLN9o8ll9YYHahxiA1eVc0Oyi1Nlq1rfpbyAbRHFWOJTDri3HwlztygzK/sF1rZxZSVUXr5h9iIpQYcV60xvPRWllQE3Gq9z4dI9lZKD4Eopwof+QxotsBqN7nnLZLyDiVDYVDpweKFp4=</X509Certificate></X509Data></KeyInfo></Signature>
+      </ext:ExtensionContent>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>
+  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>2.0</cbc:CustomizationID>
+  <cbc:ID>F001-123</cbc:ID>
+  <cbc:InvoiceTypeCode>01</cbc:InvoiceTypeCode>
+  <cbc:IssueDate>2025-04-12</cbc:IssueDate>
+  <cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode>
+  <cac:AccountingSupplierParty>
+    <cbc:CustomerAssignedAccountID>20519857538</cbc:CustomerAssignedAccountID>
+    <cbc:AdditionalAccountID>6</cbc:AdditionalAccountID>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name>TECNOLOGIA INFORMATICA EIRL</cbc:Name>
+      </cac:PartyName>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cbc:CustomerAssignedAccountID>20654321098</cbc:CustomerAssignedAccountID>
+    <cbc:AdditionalAccountID>6</cbc:AdditionalAccountID>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name>Cliente SAC</cbc:Name>
+      </cac:PartyName>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="PEN">18.00</cbc:TaxAmount>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:PayableAmount currencyID="PEN">250.00</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+  <cac:InvoiceLine>
+    <cbc:ID>1</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="NIU">2</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="PEN">100.00</cbc:LineExtensionAmount>
+    <cac:Item>
+      <cbc:Description>Producto 1</cbc:Description>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="PEN">50.00</cbc:PriceAmount>
+    </cac:Price>
+    <cac:TaxTotal>
+      <cbc:TaxAmount currencyID="PEN">15.25</cbc:TaxAmount>
+      <cac:TaxSubtotal>
+        <cbc:TaxableAmount currencyID="PEN">84.75</cbc:TaxableAmount>
+        <cbc:TaxAmount currencyID="PEN">15.25</cbc:TaxAmount>
+        <cac:TaxCategory>
+          <cac:TaxScheme>
+            <cbc:ID>1000</cbc:ID>
+            <cbc:Name>IGV</cbc:Name>
+            <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+          </cac:TaxScheme>
+        </cac:TaxCategory>
+      </cac:TaxSubtotal>
+    </cac:TaxTotal>
+  </cac:InvoiceLine>
+  <cac:InvoiceLine>
+    <cbc:ID>2</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="NIU">1</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="PEN">150.00</cbc:LineExtensionAmount>
+    <cac:Item>
+      <cbc:Description>Producto 2</cbc:Description>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="PEN">150.00</cbc:PriceAmount>
+    </cac:Price>
+    <cac:TaxTotal>
+      <cbc:TaxAmount currencyID="PEN">22.88</cbc:TaxAmount>
+      <cac:TaxSubtotal>
+        <cbc:TaxableAmount currencyID="PEN">127.12</cbc:TaxableAmount>
+        <cbc:TaxAmount currencyID="PEN">22.88</cbc:TaxAmount>
+        <cac:TaxCategory>
+          <cac:TaxScheme>
+            <cbc:ID>1000</cbc:ID>
+            <cbc:Name>IGV</cbc:Name>
+            <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+          </cac:TaxScheme>
+        </cac:TaxCategory>
+      </cac:TaxSubtotal>
+    </cac:TaxTotal>
+  </cac:InvoiceLine>
+</Invoice>
