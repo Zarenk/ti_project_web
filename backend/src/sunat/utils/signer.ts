@@ -6,8 +6,11 @@ import { convert, create } from 'xmlbuilder2';
  * Genera el DigestValue del XML.
  */
 function generateDigest(xml: string): string {
-  const canonicalObj = convert(xml, { format: 'object' }); // objeto plano
-  const canonicalXml = create(canonicalObj).end({ prettyPrint: false }); // usarlo directamente aquí
+  const canonicalObj = convert(xml, { format: 'object' });
+  const root = create(canonicalObj); // No usamos .end()
+
+  const canonicalXml = root.toString({ prettyPrint: false }); // Solo el nodo, sin encabezado
+
   const hash = crypto.createHash('sha256');
   hash.update(canonicalXml);
   return hash.digest('base64');
@@ -17,7 +20,7 @@ function generateDigest(xml: string): string {
  * Construye el nodo SignedInfo.
  */
 function buildSignedInfo(digestValue: string): string {
-  const signedInfoXml = create({ version: '1.0' })
+  const signedInfoXml = create()
     .ele('SignedInfo', { xmlns: 'http://www.w3.org/2000/09/xmldsig#' })
     .ele('CanonicalizationMethod', {
       Algorithm: 'http://www.w3.org/2001/10/xml-exc-c14n#',
@@ -36,7 +39,7 @@ function buildSignedInfo(digestValue: string): string {
       }).up()
       .ele('DigestValue').txt(digestValue).up()
     .up()
-    .end({ prettyPrint: false });
+    .end({ prettyPrint: false, headless: true });
 
   return signedInfoXml;
 }
@@ -74,7 +77,7 @@ function insertSignatureIntoXml(xml: string, signature: string): string {
     firmaSinIndentar
   );
 
-  console.log("Signature XML:", updatedXml); // Debugging: imprime la firma procesada
+  console.log("Signature XML:", processedSignature); // Debugging: imprime la firma procesada
 
   return updatedXml;
 }
@@ -87,25 +90,33 @@ export function firmarDocumentoUBL(xml: string, privateKeyPath: string, certific
   const signedInfo = buildSignedInfo(digestValue);
   const signatureValue = signWithPrivateKey(signedInfo, privateKeyPath);
 
-  const signatureXml = create()
-    .ele('Signature', { xmlns: 'http://www.w3.org/2000/09/xmldsig#' })
-      .import(create(signedInfo).root())
-      .ele('SignatureValue').txt(signatureValue).up()
-      .ele('KeyInfo')
-        .ele('X509Data')
-          .ele('X509Certificate').txt(
-            fs.readFileSync(certificatePath, 'utf8')
-              .replace('-----BEGIN CERTIFICATE-----', '')
-              .replace('-----END CERTIFICATE-----', '')
-              .replace(/\r?\n|\r/g, '')
-          ).up()
+  // Construye el XML completo con la firma incluida
+  const signedXml = create()
+    .ele('ext:UBLExtensions', {
+      'xmlns:ext': 'urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2', // Define el prefijo ext si no está definido
+    })
+      .import(create(xml).root()) // Importa el contenido original del XML
+      .ele('ext:UBLExtensions')
+        .ele('ext:UBLExtension')
+          .ele('ext:ExtensionContent')
+            .ele('Signature', { xmlns: 'http://www.w3.org/2000/09/xmldsig#', id: 'Signature' })
+              .import(create(signedInfo).root())
+              .ele('SignatureValue').txt(signatureValue).up()
+              .ele('KeyInfo')
+                .ele('X509Data')
+                  .ele('X509Certificate').txt(
+                    fs.readFileSync(certificatePath, 'utf8')
+                      .replace('-----BEGIN CERTIFICATE-----', '')
+                      .replace('-----END CERTIFICATE-----', '')
+                      .replace(/\r?\n|\r/g, '')
+                  ).up()
+                .up()
+              .up()
+            .up()
+          .up()
         .up()
       .up()
-    .up()
-    .end({ prettyPrint: false });
-
-  // Insertar la firma en el XML original
-  const signedXml = insertSignatureIntoXml(xml, signatureXml);
+    .end({ prettyPrint: false }); // Genera el XML completo sin encabezado innecesario
 
   return signedXml;
 }

@@ -40,9 +40,9 @@ export async function sendToSunat(
       </soapenv:Envelope>
     `;
 
-    console.log('Archivo a enviar:', zipFilePath);
-    console.log('Contenido base64 (inicio):', zipContent.slice(0, 100));
-    console.log('SOAP Envelope:', soapEnvelope);
+    //console.log('Archivo a enviar:', zipFilePath);
+    //console.log('Contenido base64 (inicio):', zipContent.slice(0, 100));
+    //console.log('SOAP Envelope:', soapEnvelope);
 
     // Enviar la solicitud a la SUNAT
     const response = await axios.post(sunatUrl, soapEnvelope, {

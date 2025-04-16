@@ -5,7 +5,10 @@ import { Builder } from 'xml2js';
  */
 
 function generateBaseXML(data: any, documentType: string): any {
-  
+
+  // Contenido original de __raw
+  const rawContent = '<!-- Firma digital no disponible -->';
+
   return {
     [documentType]: {
       $: {
@@ -20,8 +23,8 @@ function generateBaseXML(data: any, documentType: string): any {
       'ext:UBLExtensions': [
         {
           'ext:UBLExtension': {
-            'ext:ExtensionContent':  {
-              __raw: data.firmaXML || '<!-- Firma digital no disponible -->'
+            'ext:ExtensionContent': {
+              __raw: '<!-- Firma digital no disponible -->'
             },
           },
         },
@@ -99,7 +102,6 @@ export function generateInvoiceXML(data: any): string {
 
   // Al final, solo agregamos la firma sin encabezado extra
   // const finalXml = builder.buildObject(baseXML);
-
   return builder.buildObject(baseXML);
 }
 

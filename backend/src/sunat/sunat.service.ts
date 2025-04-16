@@ -23,8 +23,11 @@ export class SunatService {
       throw new Error('Tipo de documento no soportado');
     }
 
+    console.log('XML generado:', xml);
+
     // Firmar el XML
     const signedXml = firmarDocumentoUBL(xml, privateKeyPath, certificatePath);
+    // Elimina encabezado XML
 
     const tipoComprobante = documentType === 'invoice' ? '01' :
                         documentType === 'boleta' ? '03' :

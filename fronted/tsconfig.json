@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-<<<<<<< HEAD
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
@@ -25,30 +24,4 @@
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
-=======
-    "declaration": true,
-    "removeComments": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
-    "allowSyntheticDefaultImports": true,
-    "target": "ES2023",
-    "sourceMap": true,
-    "outDir": "./dist",
-    "baseUrl": "./",
-    "incremental": true,
-    // esto se ingreso para que no de error al importar los modulos de node PDF
-    "typeRoots": ["./node_modules/@types", "./src/types"],
-    "esModuleInterop": true,
-    "strict": true,
-    "moduleResolution": "node",
-    "module": "commonjs",
-    //
-    "skipLibCheck": true,
-    "strictNullChecks": true,
-    "forceConsistentCasingInFileNames": true,
-    "noImplicitAny": false,
-    "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
-  }
->>>>>>> 23838054d847e31eb0c9647b0de71ae041057ce8
 }
