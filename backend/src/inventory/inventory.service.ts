@@ -725,33 +725,38 @@ export class InventoryService {
         },
       })
   
+      let series: string[] = []
       if (row.serie && typeof row.serie === 'string') {
-        const entry = await this.prisma.entry.create({
-          data: {
-            storeId,
-            tipoMoneda: 'PEN',
-            userId,
-            tipoCambioId: 1,
-            createdAt: new Date(),
-            description: 'import_excel',
-            providerId,
-          },
-        })
   
-        const entryDetail = await this.prisma.entryDetail.create({
-          data: {
-            entryId: entry.id,
-            productId: product.id,
-            quantity: 1,
-            price: parsedPrecioCompra,
-            priceInSoles: parsedPrecioCompra,
-          },
-        })
-  
-        const series = row.serie
+        series = row.serie
           .split(',')
           .map((s: string) => s.trim())
           .filter((s: string) => s.length > 0)
+      }
+
+      const entry = await this.prisma.entry.create({
+        data: {
+          storeId,
+          tipoMoneda: 'PEN',
+          userId,
+          tipoCambioId: 1,
+          createdAt: new Date(),
+          description: 'import_excel',
+          providerId,
+        },
+      })
+
+      const entryDetail = await this.prisma.entryDetail.create({
+        data: {
+          entryId: entry.id,
+          productId: product.id,
+          quantity: series.length > 0 ? series.length : parsedStock,
+          price: parsedPrecioCompra,
+          priceInSoles: parsedPrecioCompra,
+        },
+      })
+
+      if (series.length > 0) {
   
         for (const serial of series) {
           if (seenInExcel.has(serial)) {
