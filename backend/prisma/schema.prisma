@@ -16,6 +16,8 @@ datasource db {
 model Product{
   id Int @id @default(autoincrement())
   name String @unique
+  barcode   String?  @unique // Opcional pero único
+  qrCode    String?  @unique // Opcional pero único
   description String?
   price Float
   priceSell Float?
@@ -32,6 +34,9 @@ model Product{
 
   // Relación con Transfer
   transfers   Transfer[] // Relación con el modelo Transfer
+
+  @@index([categoryId])
+  @@index([name])
 }
 
 model Category{
@@ -63,10 +68,15 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entrys    Entry[]   // Relación con el modelo Entry
+  entrys           Entry[]   // Relación con el modelo Entry
   inventoryHistory InventoryHistory[] // Relación con el modelo InventoryHistory
   // Relación con Sales
-  sales Sales[] // Relación con el modelo Sales
+  sales            Sales[]
+  cashTransactions CashTransaction[] // Relación con la tabla de transacciones de caja
+  cashClosures     CashClosure[] // Relación con la tabla de cierres de caja
+
+  @@index([email])
+  @@index([username])
 }
 
 model Client{
@@ -90,9 +100,9 @@ model Client{
 
 model Provider{
   id      Int      @id @default(autoincrement())
-  name    String   @unique
+  name    String   
   document String?
-  documentNumber String?
+  documentNumber String?  @unique
   description String?
   phone String?
   adress String?
@@ -113,6 +123,8 @@ model Entry {
   providerId  Int       // Proveedor relacionado con la entrada
   date        DateTime  @default(now()) // Fecha de la entrada
   description String?   // Descripción opcional
+  tipoMoneda  String?   // Tipo de moneda (e.g., PEN, USD)
+  tipoCambioId Int?      // FK a TipoCambio
   pdfUrl      String?
   guiaUrl     String?   // URL del PDF de la guía de remisión
   createdAt   DateTime  @default(now())
@@ -124,14 +136,22 @@ model Entry {
   details     EntryDetail[]
 
   invoice     Invoice?  @relation // Relación 1:1 con Comprobante (sin `fields` ni `references`)
+  tipoCambio   TipoCambio? @relation(fields: [tipoCambioId], references: [id])
+
+  shippingGuides ShippingGuide[]
+
+  @@index([storeId])
+  @@index([userId])
+  @@index([providerId])
+  @@index([date])
 }
 
 model Invoice {
   id          Int       @id @default(autoincrement())
   entryId     Int       @unique // Clave foránea única para la relación 1:1// Relación con la entrada
-  serie       String?   // Serie del comprobante
-  nroCorrelativo String? // Número correlativo del comprobante
-  comprobante String?   // Número del comprobante
+  serie       String   // Serie del comprobante
+  nroCorrelativo String // Número correlativo del comprobante
+  tipoComprobante String?   // Número del comprobante
   tipoMoneda  String?   // Tipo de moneda (e.g., PEN, USD)
   total       Float?    // Total del comprobante
   fechaEmision DateTime? // Fecha de emisión del comprobante
@@ -139,29 +159,8 @@ model Invoice {
   updatedAt   DateTime  @updatedAt
 
   entry       Entry     @relation(fields: [entryId], references: [id], onDelete:  Cascade) // Relación con Entry
-}
 
-model EntryDetail {
-  id          Int       @id @default(autoincrement())
-  entryId     Int       // Relación con la entrada
-  productId   Int       // Producto relacionado
-  quantity    Int       // Cantidad de productos ingresados
-  price       Float     // Precio unitario del producto
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  entry       Entry     @relation(fields: [entryId], references: [id], onDelete: Cascade) // Relación con el modelo Entry
-  product     Product   @relation(fields: [productId], references: [id]) // Relación con el modelo Product
-  series      EntryDetailSeries[] // Relación con las series
-  // Relación con SalesDetail
-  salesDetails SalesDetail[] // Relación con el modelo SalesDetail
-}
-
-model EntryDetailSeries {
-  id          Int             @id @default(autoincrement())
-  entryDetailId Int
-  serial      String          @unique
-  entryDetail EntryDetail     @relation(fields: [entryDetailId], references: [id], onDelete: Cascade)
+  @@index([entryId])
 }
 
 model Inventory {
@@ -175,13 +174,49 @@ model Inventory {
   storeOnInventory StoreOnInventory[] // Relación con la tabla intermedia
   product     Product   @relation(fields: [productId], references: [id])
 
+  entryDetails EntryDetail[] // Relación uno-a-muchos con EntryDetail
+
   @@unique([productId, storeId]) // Clave compuesta
+}
+
+model EntryDetail {
+  id          Int       @id @default(autoincrement())
+  entryId     Int       // Relación con la entrada
+  productId   Int       // Producto relacionado
+  quantity    Int       // Cantidad de productos ingresados
+  price       Float     // Precio unitario del producto
+  priceInSoles  Float?      // Precio en soles ya congelado
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  inventoryId Int?      // Relación con Inventory
+
+  entry       Entry     @relation(fields: [entryId], references: [id], onDelete: Cascade) // Relación con el modelo Entry
+  product     Product   @relation(fields: [productId], references: [id]) // Relación con el modelo Product
+  series      EntryDetailSeries[] // Relación con las series
+  inventory   Inventory? @relation(fields: [inventoryId], references: [id]) // Relación con Inventory
+  // Relación con SalesDetail
+  salesDetails SalesDetail[] // Relación con el modelo SalesDetail
+
+  @@index([entryId])  
+  @@index([productId])
+}
+
+model EntryDetailSeries {
+  id          Int             @id @default(autoincrement())
+  entryDetailId Int
+  serial      String          @unique
+  status      String   @default("active") // Nuevo campo
+  entryDetail EntryDetail     @relation(fields: [entryDetailId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Store{
   id      Int      @id @default(autoincrement())
   name    String   @unique
   description String?
+  ruc String?
   phone String?
   adress String?
   email String? 
@@ -202,6 +237,9 @@ model Store{
 
   // Relación con Sales
   sales Sales[] // Relación con el modelo Sales
+  
+  // Relación con la tabla de caja
+  CashRegister CashRegister[]
 }
 
 model StoreOnInventory {
@@ -216,6 +254,9 @@ model StoreOnInventory {
   store       Store     @relation(fields: [storeId], references: [id])
   // Relación con SalesDetail
   salesDetails SalesDetail[] // Relación con el modelo SalesDetail
+
+  @@index([inventoryId])
+  @@index([storeId])
 }
 
 model InventoryHistory {
@@ -231,6 +272,10 @@ model InventoryHistory {
 
   inventory   Inventory @relation(fields: [inventoryId], references: [id])
   user        User      @relation(fields: [userId], references: [id]) // Relación con la tabla de usuarios
+
+  @@index([inventoryId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Transfer {
@@ -270,6 +315,41 @@ model Sales {
   store       Store     @relation(fields: [storeId], references: [id]) // Relación con la tienda
   client      Client    @relation(fields: [clientId], references: [id]) // Relación con el cliente
   salesDetails SalesDetail[] // Relación con los detalles de la venta
+  invoices InvoiceSales[] // Relación con las facturas de venta
+  payments      SalePayment[]   // 👈 Relación con tabla intermedia
+  shippingGuides ShippingGuide[]
+
+  @@index([userId])
+  @@index([storeId])
+  @@index([clientId])
+  @@index([createdAt])
+}
+
+model PaymentMethod {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // Ejemplo: "Visa", "Yape", "Plin", "Efectivo", "Transferencia"
+  description String?  // Descripción opcional del método de pago
+  isActive    Boolean  @default(true) // Indica si el método de pago está habilitado
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  payments    SalePayment[]  // 👈 Relación con tabla intermedia
+  cashTransactionPayments CashTransactionPaymentMethod[] // Relación con la tabla intermedia de transacciones de caja
+}
+
+model SalePayment {
+  id               Int            @id @default(autoincrement())
+  salesId           Int
+  paymentMethodId  Int
+  amount           Float          // 👈 Monto pagado con ese método
+  currency         String @default("PEN")        // Tipo de moneda (e.g., PEN, USD)
+  transactionId    String?        // ✅ ID de transacción para rastrear pagos digitales
+  referenceNote    String?        // (opcional) para agregar voucher, observación, etc.
+  sale             Sales          @relation(fields: [salesId], references: [id])
+  paymentMethod    PaymentMethod  @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([salesId])
+  @@index([paymentMethodId])
 }
 
 model SalesDetail {
@@ -286,4 +366,143 @@ model SalesDetail {
   sale        Sales     @relation(fields: [salesId], references: [id], onDelete: Cascade) // Relación con el modelo Sales
   entryDetail EntryDetail @relation(fields: [entryDetailId], references: [id]) // Relación con el modelo EntryDetail
   storeOnInventory StoreOnInventory @relation(fields: [storeOnInventoryId], references: [id]) // Relación con el inventario de la tienda
+
+  @@index([salesId])
+  @@index([productId])
+  @@index([entryDetailId])
+  @@index([storeOnInventoryId])
+}
+
+model InvoiceSales {
+  id          Int       @id @default(autoincrement())
+  salesId     Int       @unique // Clave foránea única para la relación 1:1// Relación con la entrada
+  serie       String   // Serie del comprobante
+  nroCorrelativo String // Número correlativo del comprobante
+  tipoComprobante String   // Número del comprobante
+  tipoMoneda  String?   // Tipo de moneda (e.g., PEN, USD)
+  total       Float?    // Total del comprobante
+  fechaEmision DateTime? // Fecha de emisión del comprobante
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  sales       Sales     @relation(fields: [salesId], references: [id], onDelete:  Cascade) // Relación con Entry
+  @@unique([tipoComprobante, serie, nroCorrelativo]) // Restricción única compuesta
+}
+
+model TipoCambio {
+  id        Int      @id @default(autoincrement())
+  fecha     DateTime           // Fecha del tipo de cambio
+  moneda    String             // Ej: "USD", "EUR", "CLP"
+  valor     Float              // Cuánto vale 1 unidad de esa moneda en soles
+  createdAt DateTime @default(now())
+
+  entries   Entry[]            // Relación con entradas
+  @@unique([fecha, moneda])    // Evita duplicados
+
+  @@index([fecha, moneda]) // 🚀 índice compuesto
+}
+
+model CashRegister {
+  id             Int              @id @default(autoincrement())
+  name           String           @unique
+  description    String?
+  storeId        Int
+  initialBalance Decimal          @default(0.00)
+  currentBalance Decimal          @default(0.00)
+  status         CashRegisterStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  store          Store            @relation(fields: [storeId], references: [id])
+  transactions   CashTransaction[]
+  closures       CashClosure[]
+
+  @@map("cash_registers")
+}
+
+model CashTransaction {
+  id              Int              @id @default(autoincrement())
+  cashRegisterId  Int
+  type            CashTransactionType
+  amount          Decimal
+  description     String?
+  userId          Int
+  createdAt       DateTime         @default(now())
+
+  cashRegister    CashRegister     @relation(fields: [cashRegisterId], references: [id])
+  paymentMethods  CashTransactionPaymentMethod[] // Relación con la tabla intermedia
+  user            User             @relation(fields: [userId], references: [id])
+
+  @@map("cash_transactions")
+}
+
+model CashTransactionPaymentMethod {
+  id                Int             @id @default(autoincrement())
+  cashTransactionId Int
+  paymentMethodId   Int            // Hacer que el campo sea opcional
+
+  cashTransaction   CashTransaction @relation(fields: [cashTransactionId], references: [id])
+  paymentMethod     PaymentMethod  @relation(fields: [paymentMethodId], references: [id]) // Relación opcional
+}
+
+model CashClosure {
+  id              Int             @id @default(autoincrement())
+  cashRegisterId  Int
+  userId          Int
+  openingBalance  Decimal
+  closingBalance  Decimal
+  totalIncome     Decimal
+  notes           String?
+  totalExpense    Decimal
+  createdAt       DateTime         @default(now())
+
+  cashRegister    CashRegister     @relation(fields: [cashRegisterId], references: [id])
+  user            User             @relation(fields: [userId], references: [id])
+
+  @@map("cash_closures")
+}
+
+// Enums
+enum CashRegisterStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum CashTransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+model ShippingGuide {
+  id              Int      @id @default(autoincrement())
+  serie           String
+  correlativo     String
+  motivoTraslado  String
+  fechaTraslado   DateTime
+  puntoPartida    String
+  puntoLlegada    String
+
+  transportistaTipoDocumento  String
+  transportistaNumeroDocumento String
+  transportistaRazonSocial     String
+  transportistaNumeroPlaca     String
+
+  destinatarioTipoDocumento    String
+  destinatarioNumeroDocumento  String
+  destinatarioRazonSocial      String
+
+  xmlName        String?
+  zipName        String?
+  cdrAceptado    Boolean
+  cdrCode        String?
+  cdrDescription String?
+
+  ventaId        Int?       // si está asociada a una venta
+  entryId        Int?       // si está asociada a una entrada (traslado)
+
+  createdAt      DateTime  @default(now())
+
+  sale           Sales?    @relation(fields: [ventaId], references: [id])
+  entry          Entry?    @relation(fields: [entryId], references: [id])
 }

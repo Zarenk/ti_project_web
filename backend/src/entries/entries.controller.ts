@@ -20,9 +20,12 @@ export class EntriesController {
       storeId: number,
       userId: number;
       providerId: number;
+      date: Date;
       description?: string;
-      details: { productId: number, name:string; quantity: number; price: number }[];
-      invoice?: {serie:string; nroCorrelativo:string; comprobante:string; tipoMoneda:string; total:number; fechaEmision: Date;}
+      tipoMoneda?: string;
+      tipoCambioId?: number;
+      details: { productId: number, name:string; quantity: number; price: number, priceInSoles: number }[];
+      invoice?: {serie:string; nroCorrelativo:string; tipoComprobante:string; tipoMoneda:string; total:number; fechaEmision: Date;}
     },
   ) {
     return this.entriesService.createEntry(body);

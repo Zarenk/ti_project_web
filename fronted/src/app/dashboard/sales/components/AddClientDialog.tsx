@@ -18,9 +18,10 @@ interface AddClientDialogProps {
   onClose: () => void;
   setClients: React.Dispatch<React.SetStateAction<{ id: number; name: string; type:string; typeNumber:string; }[]>>;
   setValue: UseFormSetValue<SalesType>; // Para actualizar valores en el formulario principal
+  updateTipoComprobante: (tipoComprobante: string) => void;
 }
 
-export function AddClientDialog({ isOpen, onClose, setClients, setValue }: AddClientDialogProps) {
+export function AddClientDialog({ isOpen, onClose, setClients, setValue, updateTipoComprobante }: AddClientDialogProps) {
   const [newClientName, setNewClientName] = useState("");
   const [newClientNumberType, setNewClientNumberType] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,6 +74,18 @@ const [valueType, setValueType] = useState(""); // Almacena el valor seleccionad
         setValue("client_name", createdClient.name);
         setValue("client_type", createdClient.type);
         setValue("client_typeNumber", createdClient.typeNumber);
+
+        // Actualizar el combobox de tipoComprobante según el tipo de cliente
+        if (createdClient.type === "RUC") {
+          setValue("tipoComprobante", "FACTURA");
+          updateTipoComprobante("FACTURA"); // Actualiza el tipo de comprobante en SalesForm
+        } else if (createdClient.type === "SIN DOCUMENTO") {
+          setValue("tipoComprobante", "SIN COMPROBANTE");
+          updateTipoComprobante("SIN COMPROBANTE");
+        } else {
+          setValue("tipoComprobante", "BOLETA");
+          updateTipoComprobante("BOLETA");
+        }
 
         // Limpiar los campos y cerrar el diálogo
         setNewClientName("");
@@ -134,13 +147,15 @@ const [valueType, setValueType] = useState(""); // Almacena el valor seleccionad
                       <CommandList>
                         <CommandEmpty>No se encontraron resultados.</CommandEmpty>
                         <CommandGroup>
-                          {["SIN DOCUMENTO", "DNI", "RUC", "CARNET DE EXTRANJERI", "OTRO"].map((type, index) => (
+                          {["SIN DOCUMENTO", "DNI", "RUC", "CARNET DE EXTRANJERIA", "OTRO"].map((type, index) => (
                           <CommandItem
                             key={`${type}-${index}`}
                             value={type}
                             onSelect={(currentValue) => {
-                            setValueType(currentValue === valueType ? "" : currentValue);
-                            setOpenType(false); // Cierra el combobox
+                              if (currentValue === valueType) return; // 👈 si es el mismo, no hacer nada
+                              setValueType(currentValue === valueType ? "" : currentValue);
+                              setNewClientNumberType(""); // ← limpia el número al cambiar tipo
+                              setOpenType(false); // Cierra el combobox
                             }}
                             >
                             {type}
@@ -159,7 +174,7 @@ const [valueType, setValueType] = useState(""); // Almacena el valor seleccionad
               </Popover>
           </div>
           <div>
-            <Label htmlFor="new-client-name" className="text-sm font-medium">
+            <Label htmlFor="new-client-number" className="text-sm font-medium">
               N° de Documento
             </Label>
             <Input

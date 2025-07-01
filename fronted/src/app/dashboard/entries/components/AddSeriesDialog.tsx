@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useEffect, useRef, useState } from "react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { checkSeries } from "../entries.api";
 
 interface AddSeriesDialogProps {
   isOpen: boolean;
@@ -10,12 +11,23 @@ interface AddSeriesDialogProps {
   series: string[];
   setSeries: React.Dispatch<React.SetStateAction<string[]>>;
   quantity: number;
+  getAllSeriesFromDataTable: () => string[]; // Nueva propiedad para recibir la función
 }
 
-export function AddSeriesDialog({ isOpen, onClose, series, setSeries, quantity }: AddSeriesDialogProps) {
+export function AddSeriesDialog({ isOpen, onClose, series, setSeries, quantity, getAllSeriesFromDataTable }: AddSeriesDialogProps) {
   const [currentSeries, setCurrentSeries] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null); // Referencia al input
 
-  const handleAddSeries = () => {
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => {
+        inputRef.current?.focus(); // Forzar el enfoque después de un pequeño retraso
+      }, 100); // Ajusta el tiempo si es necesario
+    }
+  }, [isOpen]);
+
+  const handleAddSeries = async () => {
+    const normalizedSeries = currentSeries.trim();
     if (currentSeries.trim() === "") {
       toast.error("Por favor, ingresa un número de serie válido.");
       return;
@@ -28,8 +40,28 @@ export function AddSeriesDialog({ isOpen, onClose, series, setSeries, quantity }
       toast.error(`Solo puedes agregar un máximo de ${quantity} series.`);
       return;
     }
-    setSeries((prev) => [...prev, currentSeries]);
-    setCurrentSeries("");
+    // Verificar si la serie ya existe en otros productos del DataTable
+    const allSeriesInDataTable = getAllSeriesFromDataTable(); // Función para obtener todas las series del DataTable
+    if (allSeriesInDataTable.includes(normalizedSeries)) {
+      toast.error("El número de serie ya está asociado a otro producto en el formulario.");
+      return;
+    }
+    // Llamar al backend para verificar si la serie ya existe en la base de datos
+    try{
+      const result = await checkSeries(normalizedSeries);
+
+      if (result.exists) {
+        toast.error('La serie ya está asociada a otro producto.');
+        return;
+      }
+      setSeries((prev) => [...prev, currentSeries]);
+      setCurrentSeries("");
+      toast.success('Serie agregada correctamente.');
+    }
+    catch(error){
+      console.error('Error al verificar la serie:', error);
+      toast.error('Ocurrió un error al verificar la serie. Inténtalo nuevamente.');
+    }
   };
 
   const handleRemoveSeries = (serial: string) => {
@@ -40,16 +72,20 @@ export function AddSeriesDialog({ isOpen, onClose, series, setSeries, quantity }
     <AlertDialog open={isOpen} onOpenChange={onClose}>
       <AlertDialogContent className="max-w-lg">
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-lg font-bold text-gray-100">
+          
+          <AlertDialogTitle className="text-lg font-bold">
             Administrar Series
-          </AlertDialogTitle>
-          <p className="text-sm text-gray-100">
-            Agrega o elimina números de serie para los productos seleccionados.
-          </p>
+          </AlertDialogTitle>        
         </AlertDialogHeader>
+        <AlertDialogDescription>
+          Esta acción registrará el ingreso de series en los productos.
+        </AlertDialogDescription>
+        <p className="text-sm">
+            Agrega o elimina números de serie para los productos seleccionados.
+        </p>
         <div className="space-y-4">
           <div>
-            <label htmlFor="series-input" className="block text-sm font-medium text-gray-100">
+            <label htmlFor="series-input" className="block text-sm font-medium">
               Número de Serie
             </label>
             <div className="flex gap-2 mt-1">
@@ -59,6 +95,7 @@ export function AddSeriesDialog({ isOpen, onClose, series, setSeries, quantity }
                 value={currentSeries}
                 onChange={(e) => setCurrentSeries(e.target.value)}
                 className="flex-1"
+                ref={inputRef} // Asignar la referencia al input
               />
               <Button onClick={handleAddSeries} className="bg-blue-600 hover:bg-blue-700 text-white">
                 Agregar
@@ -66,15 +103,15 @@ export function AddSeriesDialog({ isOpen, onClose, series, setSeries, quantity }
             </div>
           </div>
           <div>
-            <h3 className="text-sm font-medium text-gray-100">Series Agregadas</h3>
+            <h3 className="text-sm font-medium">Series Agregadas</h3>
             {series.length > 0 ? (
-              <ul className="mt-2 space-y-2 max-h-40  overflow-y-auto border rounded-md p-2 bg-gray-900">
+              <ul className="mt-2 space-y-2 max-h-40  overflow-y-auto border rounded-md p-2">
                 {series.map((serial, index) => (
                   <li
                     key={index}
-                    className="flex justify-between items-center bg-gray-800 p-2 rounded-md shadow-sm border"
+                    className="flex justify-between items-center p-2 rounded-md shadow-sm border"
                   >
-                    <span className="text-sm font-medium text-gray-100">{serial}</span>
+                    <span className="text-sm font-medium">{serial}</span>
                     <Button
                       variant="outline"
                       size="sm"
@@ -87,12 +124,12 @@ export function AddSeriesDialog({ isOpen, onClose, series, setSeries, quantity }
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-gray-100 mt-2">No se han agregado series aún.</p>
+              <p className="text-sm mt-2">No se han agregado series aún.</p>
             )}
           </div>
         </div>
         <AlertDialogFooter>
-          <AlertDialogCancel className="bg-gray-200 hover:bg-gray-300 text-gray-100">
+          <AlertDialogCancel className="bg-gray-200 hover:bg-gray-300">
             Cancelar
           </AlertDialogCancel>
           <AlertDialogAction className="bg-blue-600 hover:bg-blue-700 text-white">

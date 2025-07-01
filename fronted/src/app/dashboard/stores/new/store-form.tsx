@@ -26,6 +26,11 @@ export function StoreForm({store}: {store: any}) {
       .regex(/^[a-zA-Z0-9\s]+$/, "El nombre solo puede contener letras, números y espacios"),
     description: z.string({
     }),
+    ruc: z.string({
+        required_error: "Se requiere el RUC",
+      })
+      .length(11, "El RUC debe tener exactamente 11 dígitos")
+      .regex(/^\d{11}$/, "El RUC solo puede contener números"),
     phone: z.string({
     }),
     adress: z.string({
@@ -51,6 +56,7 @@ export function StoreForm({store}: {store: any}) {
     defaultValues: {
         name: store?.name || '',
         description: store?.description || '',
+        ruc: store?.ruc || '',
         phone: store?.phone || '',
         adress: store?.adress || '',
         email: store?.email || '',
@@ -118,13 +124,36 @@ export function StoreForm({store}: {store: any}) {
                     
                     <div className="flex flex-col">
                         <Label className='py-3'>
-                            Descripcion
+                            Descripcion / RAZON SOCIAL
                         </Label>
                         <Input
                         maxLength={100} // Limita a 100 caracteres
                         {...register('description')}></Input>
                         {form.formState.errors.description && (
                             <p className="text-red-500 text-sm">{form.formState.errors.description.message}</p>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col">
+                        <Label className='py-3'>
+                            RUC
+                        </Label>
+                        <Input
+                            maxLength={11} // Limita a 11 caracteres
+                            {...register('ruc', {
+                            onChange: (e) => {
+                                // Permite solo números
+                                e.target.value = e.target.value.replace(/\D/g, '');
+                            },
+                            })}
+                            onInput={(e) => {
+                            // Restringe la entrada a solo números
+                            const input = e.target as HTMLInputElement;
+                            input.value = input.value.replace(/\D/g, ''); // Reemplaza cualquier carácter no numérico
+                            }}
+                        />
+                        {form.formState.errors.ruc && (
+                            <p className="text-red-500 text-sm">{form.formState.errors.ruc.message}</p>
                         )}
                     </div>
 

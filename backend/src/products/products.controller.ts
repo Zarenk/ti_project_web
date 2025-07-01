@@ -63,4 +63,38 @@ export class ProductsController {
   async removes(@Body('ids') ids: number[]) {
     return this.productsService.removes(ids);
   }
+
+  @Patch(':id/price-sell')
+  async updatePriceSell(
+    @Param('id') id: string,
+    @Body('priceSell') priceSell: number,
+  ) {
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) {
+      throw new BadRequestException('El ID debe ser un número válido.');
+    }
+
+    if (priceSell <= 0) {
+      throw new BadRequestException('El precio de venta debe ser mayor a 0.');
+    }
+
+    return this.productsService.update(numericId, { id: numericId, priceSell });
+  }
+
+  @Patch(':id/category')
+  async updateCategory(
+    @Param('id') id: string,
+    @Body('categoryId') categoryId: number,
+  ) {
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) {
+      throw new BadRequestException('El ID debe ser un número válido.');
+    }
+
+    if (!categoryId || isNaN(categoryId)) {
+      throw new BadRequestException('El ID de la categoría debe ser un número válido.');
+    }
+
+    return this.productsService.update(numericId, { id: numericId, categoryId });
+  }
 }

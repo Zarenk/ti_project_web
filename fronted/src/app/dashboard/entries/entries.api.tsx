@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 // Crear una nueva entrada
@@ -5,8 +7,11 @@ export async function createEntry(data: {
   storeId: number;
   userId: number;
   providerId: number;
+  date: Date;
   description?: string;
-  details: { productId: number; quantity: number; price: number; }[];
+  tipoMoneda?: string;
+  tipoCambioId?: number;
+  details: { productId: number; quantity: number; price: number; priceInSoles: number }[];
   invoice?: { serie: string; nroCorrelativo: string; comprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
 }) {
     try{
@@ -181,4 +186,16 @@ export async function uploadGuiaPdf(entryId: number, pdfFile: File): Promise<voi
 export function getPdfGuiaUrl(pdfPath: string): string {
   return `${BACKEND_URL}${pdfPath}`;
 }
+//
+
+// Verificar si una serie ya existe
+export const checkSeries = async (serial: string): Promise<{ exists: boolean }> => {
+  try {
+    const response = await axios.post(`${BACKEND_URL}/api/series/check`, { serial });
+    return response.data; // Retorna { exists: boolean }
+  } catch (error: any) {
+    console.error('Error al verificar la serie:', error);
+    throw new Error(error.response?.data?.message || 'Error al verificar la serie.');
+  }
+};
 //

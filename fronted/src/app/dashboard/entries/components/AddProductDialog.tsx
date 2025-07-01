@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,7 +20,7 @@ interface AddProductDialogProps {
   setCategories: React.Dispatch<React.SetStateAction<{ id: number; name: string }[]>>;
   setProducts: React.Dispatch<
     React.SetStateAction<
-      { id: number; name: string; price: number; description: string; categoryId: number; category_name: string }[]
+      { id: number; name: string; price: number; priceSell: number; description: string; categoryId: number; category_name: string }[]
     >
   >;
   setValueProduct: React.Dispatch<React.SetStateAction<string>>;
@@ -29,11 +29,14 @@ interface AddProductDialogProps {
       id: number;
       name: string;
       price: number;
+      priceSell: number;
       categoryId: number;
       category_name: string;
     } | null>
   >;
   setValue: UseFormSetValue<EntriesType>; // Usar el tipo de react-hook-form
+  isNewCategoryBoolean: boolean; // Agregar esta propiedad
+  setIsNewCategoryBoolean: React.Dispatch<React.SetStateAction<boolean>>; // Agregar esta propiedad
 }
 
 export function AddProductDialog({
@@ -45,10 +48,13 @@ export function AddProductDialog({
   setValueProduct,
   setCurrentProduct,
   setValue,
+  isNewCategoryBoolean,
+  setIsNewCategoryBoolean,
 }: AddProductDialogProps) {
   const [newProductName, setNewProductName] = useState("");
   const [newProductCategory, setNewProductCategory] = useState("");
   const [newProductPrice, setNewProductPrice] = useState<number | "">("");
+  const [newProductPriceSell, setNewProductPriceSell] = useState<number | "">("");
   const [isNewCategory, setIsNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [isCategoryPopoverOpen, setIsCategoryPopoverOpen] = useState(false);
@@ -63,6 +69,7 @@ export function AddProductDialog({
       const category = await createCategory({ name: newCategoryName });
       toast.success("Categoría agregada correctamente.");
       setCategories((prev) => [...prev, category]); // Actualizar las categorías en el estado principal
+      setIsNewCategoryBoolean(true);
       return { id: category.id, name: category.name };
     } catch (error: any) {
       console.error("Error al agregar la categoría:", error);
@@ -105,6 +112,7 @@ export function AddProductDialog({
         name: newProductName,
         categoryId,
         price: Number(newProductPrice),
+        priceSell: Number(newProductPriceSell),
       });
 
       setProducts((prevProducts) => [
@@ -113,6 +121,7 @@ export function AddProductDialog({
           id: createdProduct.id,
           name: createdProduct.name,
           price: createdProduct.price,
+          priceSell: createdProduct.priceSell || 0,
           description: createdProduct.description || "",
           categoryId: createdProduct.categoryId,
           category_name: categoryName,
@@ -124,17 +133,20 @@ export function AddProductDialog({
         id: createdProduct.id,
         name: createdProduct.name,
         price: createdProduct.price,
+        priceSell: createdProduct.priceSell || 0,
         categoryId: createdProduct.categoryId,
         category_name: createdProduct.category_name || "Sin categoría",
       });
       setValue("category_name", categoryName);
       setValue("price", createdProduct.price);
+      setValue("priceSell", createdProduct.priceSell);
 
       toast.success("Producto agregado correctamente.");
       onClose();
       setNewProductName("");
       setNewProductCategory("");
       setNewProductPrice("");
+      setNewProductPriceSell("");
       setNewCategoryName("");
       setIsNewCategory(false);
     } catch (error: any) {
@@ -149,6 +161,9 @@ export function AddProductDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Agregar Producto</AlertDialogTitle>
         </AlertDialogHeader>
+        <AlertDialogDescription>
+          Completa los campos para agregar un nuevo producto.
+        </AlertDialogDescription>
         <div className="space-y-4">
           <div>
             <Label htmlFor="new-product-name" className="text-sm font-medium">
@@ -217,14 +232,28 @@ export function AddProductDialog({
           )}
           <div>
             <Label htmlFor="new-product-price" className="text-sm font-medium">
-              Precio del Producto
+              Precio de compra del Producto
             </Label>
             <Input
               id="new-product-price"
               type="number"
               value={newProductPrice}
               onChange={(e) => setNewProductPrice(e.target.value ? Number(e.target.value) : "")}
-              placeholder="Ingresa el precio del producto"
+              placeholder="Ingresa el precio de compra del producto"
+              min={0}
+              step={0.01}
+            />
+          </div>
+          <div>
+            <Label htmlFor="new-product-price" className="text-sm font-medium">
+              Precio de venta del Producto
+            </Label>
+            <Input
+              id="new-product-price"
+              type="number"
+              value={newProductPriceSell}
+              onChange={(e) => setNewProductPriceSell(e.target.value ? Number(e.target.value) : "")}
+              placeholder="Ingresa el precio de venta del producto"
               min={0}
               step={0.01}
             />

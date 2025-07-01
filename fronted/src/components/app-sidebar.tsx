@@ -6,6 +6,7 @@ import {
   BookOpen,
   Bot,
   Command,
+  DollarSign,
   Frame,
   GalleryVerticalEnd,
   Globe,
@@ -13,11 +14,13 @@ import {
   Link,
   Map,
   PieChart,
+  QrCode,
   Settings2,
   Settings2Icon,
   ShoppingCart,
   SquareTerminal,
   Store,
+  UserIcon,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -161,13 +164,28 @@ const data = {
       ],
     },
     {
+      title: "Tipo de Cambio",
+      url: "#",
+      icon: DollarSign,
+      items: [
+        {
+          title: "Nuevo Tipo de Cambio",
+          url: "/dashboard/exchange/new",
+        },
+        {
+          title: "Ver Tipo de Cambio",
+          url: "/dashboard/exchange",
+        },
+      ],
+    },
+    {
       title: "Ventas",
       url: "#",
       icon: ShoppingCart,
       items: [
         {
           title: "Caja",
-          url: "",
+          url: "/dashboard/cashregister",
         },
         {
           title: "Realizar Venta",
@@ -175,7 +193,7 @@ const data = {
         },
         {
           title: "Ver Historial de Ventas",
-          url: "/dashboard/sales",
+          url: "/dashboard/sales/salesdashboard",
         },
       ],
     },
@@ -183,19 +201,24 @@ const data = {
   ],
   projects: [
     {
-      name: "Pagina Web",
-      url: "#",
-      icon: Globe,
+      name: "Escaner QR",
+      url: "/barcode",
+      icon: QrCode,
     },
     {
-      name: "Estadisticas",
-      url: "#",
-      icon: PieChart,
+      name: "Login",
+      url: "/login",
+      icon: UserIcon,
     },
     {
       name: "Opciones",
       url: "#",
       icon: Settings2Icon,
+    },
+    {
+      name: "Pagina Web",
+      url: "#",
+      icon: Globe,
     },
   ],
 }

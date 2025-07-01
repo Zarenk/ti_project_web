@@ -547,7 +547,7 @@ export const CalendarDatePicker = React.forwardRef<
             <PopoverContent
               className="w-auto" //este controla el tamaño de la ventana emergente fecha
               align="start"
-              avoidCollisions={false}
+              avoidCollisions={true} // cambiar de false a true si es necesario para evitar colisiones de pantalla
               onInteractOutside={handleClose}
               onEscapeKeyDown={handleClose}
               style={{

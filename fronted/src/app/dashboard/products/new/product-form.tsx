@@ -182,7 +182,8 @@ export function ProductForm({product, categories}: {product: any; categories: an
                     
                     <div className="flex flex-col">
                         {/* CATEGORIA */}
-                        <Label className='py-3'>Categoría</Label>                    
+                        <Label className='py-3'>Categoría</Label>  
+                        {categories.length > 0 ? (                  
                         <Select
                             value={form.watch("categoryId")}                       
                             onValueChange={(value) => setValue("categoryId", value, { shouldValidate: true })
@@ -205,6 +206,9 @@ export function ProductForm({product, categories}: {product: any; categories: an
                             ))}
                             </SelectContent>
                         </Select>
+                        ) : (
+                            <p className="text-red-500 text-sm">No hay categorías disponibles. Por favor, cree una.</p>
+                          )}
                         {form.formState.errors.categoryId && (
                             <p className="text-red-500">
                             {form.formState.errors.categoryId.message}

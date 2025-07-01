@@ -13,13 +13,19 @@ import { MLModule } from './ml/ml.module';
 import { SalesModule } from './sales/sales.module';
 import { ClientsModule } from './clients/clients.module';
 import { SunatModule } from './sunat/sunat.module';
+import { SeriesModule } from './series/series.module';
+import { ExchangeModule } from './exchange/exchange.module';
+import { PaymentmethodsModule } from './paymentmethods/paymentmethods.module';
+import { CashregisterModule } from './cashregister/cashregister.module';
+import { BarcodeGateway } from './barcode/barcode.gateway';
+import { GuideModule } from './guide/guide.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
     ProductsModule, UsersModule, CategoryModule, StoresModule, 
-    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule],
+    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, BarcodeGateway],
 })
 export class AppModule {}

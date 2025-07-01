@@ -37,6 +37,13 @@ export class UsersService {
     });
   }
 
+  async findOne(userId: number) {
+    return this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true }, // Selecciona solo los campos necesarios
+    });
+  }
+
   findAll() {
     return this.prismaService.user.findMany()
   }

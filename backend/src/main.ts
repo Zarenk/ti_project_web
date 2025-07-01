@@ -4,10 +4,22 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as bodyParser from 'body-parser';
 import * as express from 'express';
 import { join } from 'path'; // Ensure 'join' is imported for path handling
+import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
+  
   const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api'); // PARA COLOCAR PREVIAMENTE EN LA URL /API/
+  // PARA COLOCAR PREVIAMENTE EN LA URL /API/
+  app.setGlobalPrefix('api');
+  // Habilitar la validación global de DTOs
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true, // elimina campos no definidos en DTO
+    forbidNonWhitelisted: true, // lanza error si llegan campos extras
+    transform: true, // transforma automáticamente el payload a la clase
+  }));
+
+  // Servir archivos estáticos desde la carpeta "uploads/sunat"
+  app.use('/sunat.zip/facturas', express.static(join(__dirname, '..', 'sunat.zip', 'facturas')));
 
   //DOCUMENTACION SWAGGER
   const config = new DocumentBuilder()

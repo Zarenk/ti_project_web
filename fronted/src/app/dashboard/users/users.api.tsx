@@ -52,3 +52,30 @@ export async function getUserProfile() {
     throw error;
   }
 }
+
+export async function getUserProfileId() {
+  const token = localStorage.getItem('token'); // Obtén el token del localStorage
+
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/users/profileid`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`, // Envía el token en el encabezado Authorization
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al obtener el perfil del usuario');
+    }
+
+    return await response.json(); // Devuelve el perfil del usuario
+  } catch (error: any) {
+    console.error('Error en getUserProfileId:', error.message);
+    throw error;
+  }
+}

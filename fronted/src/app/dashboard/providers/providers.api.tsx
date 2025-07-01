@@ -43,14 +43,14 @@ export async function getProvider(id: string){
     //return data.json()
 }
 
-export async function checkProviderExists(name: string): Promise<boolean> {
+export async function checkProviderExists(documentNumber: string): Promise<boolean> {
   try {
     const response = await fetch(`${BACKEND_URL}/api/providers/check`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ documentNumber }),
     });
 
     if (!response.ok) {

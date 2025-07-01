@@ -34,11 +34,30 @@ export async function createCategoryDefault(){
     }
 }
 
-export async function getCategories(){
-    const data = await fetch(`${BACKEND_URL}/api/category`, {
-        'cache': 'no-store',
-    });
-    return data.json()
+export async function getCategories() {
+  try {
+      const response = await fetch(`${BACKEND_URL}/api/category`, {
+          cache: 'no-store',
+      });
+
+      // Validar si la respuesta fue exitosa (código 2xx)
+      if (!response.ok) {
+        // Puedes manejar diferentes códigos si deseas
+        if (response.status === 404) {
+          console.warn('No se encontraron categorías.');
+          return []; // o null, según tu caso
+        }
+
+        throw new Error(`Error al obtener categorías: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+  } catch (error) {
+      // Manejar errores de red u otros
+      console.error('Error al obtener categorías:', error);
+      return []; // Devuelve un array vacío si ocurre un error
+  }
 }
 
 export async function getCategory(id: string){

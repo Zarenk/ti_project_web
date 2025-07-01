@@ -17,9 +17,12 @@ export class EntriesService {
     storeId: number;
     userId: number;
     providerId: number;
+    date: Date;
     description?: string;
-    details: { productId: number; name: string; quantity: number; price: number; series?: string[]; }[];
-    invoice?: { serie: string; nroCorrelativo: string; comprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
+    tipoMoneda?: string;
+    tipoCambioId?: number;
+    details: { productId: number; name: string; quantity: number; price: number; priceInSoles: number; series?: string[]; }[];
+    invoice?: { serie: string; nroCorrelativo: string; tipoComprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
   }) {
 
   try{
@@ -46,7 +49,7 @@ export class EntriesService {
       }
 
       // Verificar que los productos existan
-      const verifiedProducts: { productId: number; quantity: number; price: number }[] = [];
+      const verifiedProducts: { productId: number; quantity: number; price: number, priceInSoles: number }[] = [];
       for (const detail of data.details) {
 
         if (!detail.productId) {
@@ -64,6 +67,7 @@ export class EntriesService {
           productId: product.id,
           quantity: detail.quantity,
           price: detail.price,
+          priceInSoles: detail.priceInSoles,
         });
       }
 
@@ -73,12 +77,16 @@ export class EntriesService {
           storeId: data.storeId,
           userId: data.userId,
           providerId: data.providerId,
+          date: data.date,
           description: data.description,
+          tipoMoneda: data.tipoMoneda,
+          tipoCambioId: data.tipoCambioId,
           details: {
             create: verifiedProducts.map((product) => ({
               productId: product.productId,
               quantity: product.quantity,
               price: product.price,
+              priceInSoles: product.priceInSoles,
             })),
           },
         },
@@ -92,7 +100,7 @@ export class EntriesService {
             entryId: entry.id,
             serie: data.invoice.serie,
             nroCorrelativo: data.invoice.nroCorrelativo,
-            comprobante: data.invoice.comprobante,
+            tipoComprobante: data.invoice.tipoComprobante,
             tipoMoneda: data.invoice.tipoMoneda,
             total: data.invoice.total,
             fechaEmision: data.invoice.fechaEmision,
@@ -138,6 +146,15 @@ export class EntriesService {
           });
         }
 
+        // Actualizar el campo inventoryId en los EntryDetail ya creados
+        const entryDetail = entry.details.find((d) => d.productId === detail.productId);
+        if (entryDetail) {
+          await prisma.entryDetail.update({
+            where: { id: entryDetail.id },
+            data: { inventoryId: inventory.id }, // Asociar el EntryDetail con el Inventory
+          });
+        }
+
         // Verificar si ya existe un registro en StoreOnInventory
         const storeInventory = await prisma.storeOnInventory.findFirst({
           where: {
@@ -167,7 +184,6 @@ export class EntriesService {
               userId: data.userId, // Registrar el usuario que realizó el cambio
             },
           });
-
         } else {
           // Si existe, actualizar el stock
           await prisma.storeOnInventory.update({

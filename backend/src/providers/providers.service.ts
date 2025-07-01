@@ -21,7 +21,7 @@ export class ProvidersService {
         error.code === "P2002"
       ) {
         throw new ConflictException(
-          `El Proveedor con el nombre "${createProviderDto.name}" ya existe.`
+          `El Proveedor con el RUC "${createProviderDto.documentNumber}" ya existe.`
         );
       }
       console.error("Error en el backend:", error);
@@ -62,9 +62,9 @@ export class ProvidersService {
   }
 
   // providers.service.ts
-  async checkIfExists(name: string): Promise<boolean> {
+  async checkIfExists(documentNumber: string): Promise<boolean> {
     const provider = await this.prismaService.provider.findUnique({
-      where: { name },
+      where: { documentNumber },
     });
     return !!provider; // Devuelve true si el proveedor existe, false si no
   }
@@ -87,7 +87,7 @@ export class ProvidersService {
         error.code === "P2002"
       ) {
         throw new ConflictException(
-          `El proveedor con el nombre "${updateProviderDto.name}" ya existe.`
+          `El proveedor con el RUC "${updateProviderDto.name}" ya existe.`
         );
       }
       console.error("Error en el backend:", error);

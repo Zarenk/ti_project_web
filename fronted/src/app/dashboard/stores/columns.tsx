@@ -25,6 +25,7 @@ export type Stores = {
     id: string
     name: string
     description: string
+    ruc: string
     phone: string
     adress: string
     email: string
@@ -78,11 +79,25 @@ export const columns: ColumnDef<Stores>[] = [
               variant="ghost"
               onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
             >
-              Descripcion
+              Descripcion / Razon S.
               <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
           )
         },
+    },
+    {
+      accessorKey: 'ruc',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            RUC
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
     },
     {
         accessorKey: 'phone',
@@ -287,6 +302,7 @@ export const columns: ColumnDef<Stores>[] = [
                 <span className="block space-y-2">
                   <div><strong>Nombre:</strong> {stores.name}</div>
                   <div><strong>Descripción:</strong> {stores.description}</div>
+                  <div><strong>RUC:</strong> {stores.ruc}</div>
                   <div><strong>Telefono:</strong> {stores.phone}</div>
                   <div><strong>Direccion:</strong> {stores.adress}</div>
                   <div><strong>Email:</strong> {stores.email}</div>

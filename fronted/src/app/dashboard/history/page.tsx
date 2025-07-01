@@ -1,135 +1,132 @@
 "use client"
 
-import { jwtDecode } from 'jwt-decode';
-import React, { useState, useEffect } from 'react';
-import { toast } from 'sonner';
+import { useEffect, useState } from "react"
+import { jwtDecode } from "jwt-decode"
+import { toast } from "sonner"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface HistoryEntry {
-  id: number;
-  action: string;
-  stockChange: number;
-  previousStock: number | null;
-  newStock: number | null;
-  createdAt: string;
-  user: {
-    username: string;
-  };
+  id: number
+  action: string
+  stockChange: number
+  previousStock: number | null
+  newStock: number | null
+  createdAt: string
+  user: { username: string }
   inventory: {
-    product: {
-      name: string;
-    };
+    product: { name: string }
     storeOnInventory: {
-      store: {
-        name: string;
-      };
-      stock: number;
-    }[];
-  };
+      store: { name: string }
+      stock: number
+    }[]
+  }
 }
 
 function getUserIdFromToken(): number | null {
-  const token = localStorage.getItem('token'); // Obtén el token del localStorage
+  const token = localStorage.getItem("token")
   if (!token) {
-    console.error('No se encontró un token de autenticación');
-    return null;
+    return null
   }
 
   try {
-    const decodedToken: { sub: number } = jwtDecode(token); // Decodifica el token
-    return decodedToken.sub; // Retorna el userId (sub es el estándar en JWT para el ID del usuario)
+    const decodedToken: { sub: number } = jwtDecode(token)
+    return decodedToken.sub
   } catch (error) {
-    console.error('Error al decodificar el token:', error);
-    return null;
+    console.error("Error decoding token:", error)
+    return null
   }
 }
 
 export default function UserHistory() {
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const [userId, setUserId] = useState<number | null>(null);
-
-  // Obtener el userId al cargar el componente
-  useEffect(() => {
-    const id = getUserIdFromToken();
-    if (!id) {
-      toast.error(
-        "No se pudo obtener el ID del usuario. Por favor, inicie sesión nuevamente."
-      );
-    }
-    setUserId(id);
-  }, []);
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+  const [loading, setLoading] = useState(false)
+  const [userId, setUserId] = useState<number | null>(null)
 
   useEffect(() => {
     async function fetchHistory() {
-      if (!userId) return; // No hacer nada si no hay userId
-      setLoading(true);
+      const id = getUserIdFromToken()
+      if (!id) {
+        toast.error("No se pudo obtener el ID del usuario. Inicia sesión nuevamente.")
+        return
+      }
+  
+      setUserId(id) // Si necesitas conservarlo en el estado global/local
+  
+      setLoading(true)
       try {
-        const response = await fetch(`http://localhost:4000/api/inventory/history/users/${userId}`);
-        if (!response.ok) {
-            throw new Error("Error al obtener el historial del usuario");
-        }
-        const data = await response.json();
-        setHistory(data);
+        const res = await fetch(`http://localhost:4000/api/inventory/history/users/${id}`)
+        if (!res.ok) throw new Error("Error al obtener el historial del usuario")
+        const data = await res.json()
+        setHistory(data)
       } catch (error) {
-        console.error('Error al obtener el historial del usuario:', error);
+        console.error("Error:", error)
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
     }
-
-    fetchHistory();
-  }, [userId]);
-
-  if (loading) {
-    return <p>Cargando historial...</p>;
-  }
-
-  if (history.length === 0) {
-    return <p>No hay historial disponible para este usuario.</p>;
-  }
+  
+    fetchHistory()
+  }, [])
 
   return (
-    <div>
-      <h2 className="text-xl font-bold mb-4">Historial del Usuario</h2>
-      <table className="table-auto w-full border-collapse border border-gray-300">
-        <thead>
-          <tr>
-            <th className="border border-gray-300 px-4 py-2">Usuario</th>
-            <th className="border border-gray-300 px-4 py-2">Acción</th>
-            <th className="border border-gray-300 px-4 py-2">Producto</th>
-            <th className="border border-gray-300 px-4 py-2">Tienda</th>
-            <th className="border border-gray-300 px-4 py-2">Stock Anterior</th>
-            <th className="border border-gray-300 px-4 py-2">Cambio</th>
-            <th className="border border-gray-300 px-4 py-2">Stock Actual</th>
-            <th className="border border-gray-300 px-4 py-2">Fecha</th>
-          </tr>
-        </thead>
-        <tbody>
-          {history.map((entry) => (
-            <tr key={entry.id}>
-            <td className="border border-gray-300 px-4 py-2">{entry.user.username}</td>
-              <td className="border border-gray-300 px-4 py-2">{entry.action}</td>
-              <td className="border border-gray-300 px-4 py-2">{entry.inventory.product.name}</td>
-              <td className="border border-gray-300 px-4 py-2">
-                {entry.inventory.storeOnInventory.map((store) => store.store.name).join(', ')}
-              </td>
-              <td className="border border-gray-300 px-4 py-2">
-                {entry.previousStock ?? 0 > 0 ? `+${entry.previousStock}` : entry.previousStock}
-              </td>
-              <td className="border border-gray-300 px-4 py-2">
-                {entry.stockChange > 0 ? `+${entry.stockChange}` : entry.stockChange}
-              </td>
-              <td className="border border-gray-300 px-4 py-2">
-                    {entry.inventory.storeOnInventory.map((store) => store.stock).join(', ')} {/* Mostrar stock */}
-              </td>
-              <td className="border border-gray-300 px-4 py-2">
-                {new Date(entry.createdAt).toLocaleString()}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl">Historial del Usuario</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full rounded-md" />
+              ))}
+            </div>
+          ) : history.length === 0 ? (
+            <p className="text-muted-foreground">No hay historial disponible para este usuario.</p>
+          ) : (
+            <div className="overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Usuario</TableHead>
+                    <TableHead>Acción</TableHead>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Tienda(s)</TableHead>
+                    <TableHead>Stock Anterior</TableHead>
+                    <TableHead>Cambio</TableHead>
+                    <TableHead>Stock Actual</TableHead>
+                    <TableHead>Fecha</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {history.map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell>{entry.user.username}</TableCell>
+                      <TableCell>{entry.action}</TableCell>
+                      <TableCell>{entry.inventory.product.name}</TableCell>
+                      <TableCell>
+                        {entry.inventory.storeOnInventory.map((s) => s.store.name).join(", ")}
+                      </TableCell>
+                      <TableCell>{entry.previousStock ?? 0}</TableCell>
+                      <TableCell className={entry.stockChange > 0 ? "text-green-600" : "text-red-600"}>
+                        {entry.stockChange > 0 ? `+${entry.stockChange}` : entry.stockChange}
+                      </TableCell>
+                      <TableCell>
+                        {entry.inventory.storeOnInventory.map((s) => s.stock).join(", ")}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(entry.createdAt).toLocaleString("es-PE")}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
-  );
+  )
 }

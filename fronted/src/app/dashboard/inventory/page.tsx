@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { columns } from "./columns"; // Importar las columnas definidas
-import { getAllPurchasePrices, getInventory } from "./inventory.api";
+import { getAllPurchasePrices, getInventory, getInventoryWithCurrency } from "./inventory.api";
 import { DataTable } from "./data-table";
 
 interface InventoryItem {
@@ -15,6 +15,11 @@ interface InventoryItem {
   stock: number;
   createdAt: Date;
   updateAt: Date;
+  tipoMoneda: string;
+  stockByCurrency: {
+    USD: number;
+    PEN: number;
+  }; // Nuevo campo para el desglose por moneda
   storeOnInventory: {
     id: number;
     stock: number;
@@ -35,7 +40,8 @@ export default function InventoryPage() {
       try {
         // Obtener el inventario y los precios de compra en paralelo
         const [inventoryData, purchasePrices] = await Promise.all([
-          getInventory(), // Llama al endpoint para obtener el inventario
+          //getInventory(), // Llama al endpoint para obtener el inventario
+          getInventoryWithCurrency(), // Llama al endpoint para obtener el inventario con desglose por moneda
           getAllPurchasePrices(), // Llama al endpoint para obtener los precios de compra
         ]);
   
@@ -61,6 +67,7 @@ export default function InventoryPage() {
                   category: item.product.category.name,
                 },
                 stock: 0,
+                stockByCurrency: { USD: 0, PEN: 0 }, // Desglose por moneda
                 createdAt: item.createdAt,
                 updateAt: item.updatedAt,
                 storeOnInventory: [],
@@ -69,11 +76,19 @@ export default function InventoryPage() {
               };
             }
   
+            // Sumar el stock por moneda
             acc[productName].stock += item.storeOnInventory.reduce(
               (total: number, store: any) => total + store.stock,
               0
             );
+
+            // Sumar el stock por moneda
+          item.stockByStore.forEach((store: any) => {
+            acc[productName].stockByCurrency.USD += store.stockByCurrency.USD;
+            acc[productName].stockByCurrency.PEN += store.stockByCurrency.PEN;
+          });
   
+            // Agregar las tiendas al inventario agrupado
             acc[productName].storeOnInventory.push(...item.storeOnInventory);
   
             // Calcular el updateAt más reciente entre las entradas de storeOnInventory

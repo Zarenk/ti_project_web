@@ -103,7 +103,8 @@ export class StoresService {
             where: { id: Number(store.id) },
             data: {  
               name: store.name,
-              description: store.description,          
+              description: store.description,  
+              ruc: store.ruc,        
               phone: store.phone,
               adress: store.adress,
               email: store.email,

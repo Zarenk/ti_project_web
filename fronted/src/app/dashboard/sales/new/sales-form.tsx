@@ -7,33 +7,35 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { z } from 'zod'
-import { useEffect, useState } from 'react'
+import { JSX, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Barcode, CalendarIcon, Check, ChevronsUpDown, FileText, Plus, Printer, Save, TrashIcon, X } from 'lucide-react'
+import { Barcode, CalendarIcon, Check, ChevronsUpDown, Plus, Save, X } from 'lucide-react'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { cn } from '@/lib/utils'
+import { cn, uploadPdfToServer } from '@/lib/utils'
 import React from 'react'
-import { createProduct, getProducts, verifyOrCreateProducts } from '../../products/products.api'
-import { checkProviderExists, createProvider, getProviders } from '../../providers/providers.api'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {jwtDecode} from 'jwt-decode';
-import { checkStoreExists, createStore, getStores } from '../../stores/stores.api'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import {  getStores } from '../../stores/stores.api'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
-import { createCategory } from '../../categories/categories.api'
-import { createEntry } from '../../entries/entries.api'
 import { Calendar } from '@/components/ui/calendar'
 import { format } from 'date-fns'
 import { es } from "date-fns/locale";
 import AddClientDialog from '../components/AddClientDialog'
-import { createSale, fetchSeriesByProductAndStore, getProductsByStore, getSeriesByProductAndStore, getStockByProductAndStore, sendInvoiceToSunat } from '../sales.api'
+import { createSale, fetchSeriesByProductAndStore, generarYEnviarDocumento, getProductsByStore, getSeriesByProductAndStore, getStockByProductAndStore, sendInvoiceToSunat } from '../sales.api'
 import { AddSeriesDialog } from '../components/AddSeriesDialog'
 import { SeriesModal } from '../components/SeriesModal'
 import { StoreChangeDialog } from '../components/StoreChangeDialog'
 import { getClients } from '../../clients/clients.api'
-
+import { InvoiceDocument } from '../components/pdf/InvoiceDocument'
+import QRCode from 'qrcode';
+import { numeroALetrasCustom } from '../components/utils/numeros-a-letras'
+import { pdf } from '@react-pdf/renderer';
+import { PaymentMethodsModal } from '../components/PaymentMethodsSelector'
+import { ProductDetailModal } from '../components/ProductDetailModal'
+// @ts-ignore
+const Numalet = require('numalet');
 
 // Función para obtener el userId del token JWT almacenado en localStorage
 function getUserIdFromToken(): number | null {
@@ -52,6 +54,13 @@ function getUserIdFromToken(): number | null {
   }
 }
 
+// Define el tipo para los métodos de pago seleccionados
+type SelectedPayment = {
+  paymentMethodId: number | null;
+  amount: number;
+  currency: string;
+};
+
 //definir el esquema de validacion
 const salesSchema = z.object({
   name: z.string({}),
@@ -69,7 +78,7 @@ const salesSchema = z.object({
   nroCorrelativo: z.string({}),
   ruc: z.string({}),
   fecha_emision_comprobante: z.string({}),
-  comprobante: z.string({}),
+  tipoComprobante: z.string({}),
   total_comprobante: z.string({}),
   tipo_moneda: z.string({}),
   stock: z.number({}),
@@ -77,34 +86,33 @@ const salesSchema = z.object({
 //inferir el tipo de dato
 export type SalesType = z.infer<typeof salesSchema>;
 
-
 export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
-    //hook de react-hook-form
-    const form = useForm<SalesType>({
-    resolver: zodResolver(salesSchema),
-    defaultValues: {
-        name: sales?.name || '',
-        description: sales?.description || '',    
-        createdAt: sales?.createAt || '',   
-        price: sales?.price || 1, // Valor predeterminado para quantity
-        quantity: sales?.quantity || 1, // Valor predeterminado para quantity
-        category_name: sales?.category_name || '', // Valor predeterminado para category_name
-        client_name: sales?.client_name || '', 
-        client_type: sales?.client_type || '', 
-        client_typeNumber: sales?.client_typeNumber || '', 
-        store_name: sales?.store_name || '', 
-        store_adress: sales?.store_adress || '', 
-        ruc: sales?.ruc || '', // Valor predeterminado para ruc
-        serie: sales?.serie || '', // Valor predeterminado para serie
-        nroCorrelativo: sales?.nroCorrelativo || '', // Valor predeterminado para serie
-        fecha_emision_comprobante: sales?.fecha_emision_comprobante || '', // Valor predeterminado 
-        comprobante: sales?.comprobante || '', // Valor predeterminado
-        total_comprobante: sales?.total_comprobante || '', // Valor predeterminado
-        tipo_moneda: sales?.total_comprobante || '', // Valor predeterminado
-        stock: sales?.stock || 0,
+  //hook de react-hook-form
+  const form = useForm<SalesType>({
+  resolver: zodResolver(salesSchema),
+  defaultValues: {
+      name: sales?.name || '',
+      description: sales?.description || '',    
+      createdAt: sales?.createAt || '',   
+      price: sales?.price || 1, // Valor predeterminado para quantity
+      quantity: sales?.quantity || 1, // Valor predeterminado para quantity
+      category_name: sales?.category_name || '', // Valor predeterminado para category_name
+      client_name: sales?.client_name || '', 
+      client_type: sales?.client_type || '', 
+      client_typeNumber: sales?.client_typeNumber || '', 
+      store_name: sales?.store_name || '', 
+      store_adress: sales?.store_adress || '', 
+      ruc: sales?.ruc || '', // Valor predeterminado para ruc
+      serie: sales?.serie || '', // Valor predeterminado para serie
+      nroCorrelativo: sales?.nroCorrelativo || '', // Valor predeterminado para serie
+      fecha_emision_comprobante: sales?.fecha_emision_comprobante || '', // Valor predeterminado 
+      tipoComprobante: sales?.tipoComprobante || '', // Valor predeterminado
+      total_comprobante: sales?.total_comprobante || '', // Valor predeterminado
+      tipo_moneda: sales?.total_comprobante || '', // Valor predeterminado
+      stock: sales?.stock || 0,
     }
-    });
+  });
 
   // Extraer funciones y estados del formulario
   const { handleSubmit, register, setValue, formState: {errors} } = form;
@@ -116,13 +124,133 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   const router = useRouter();
   const params = useParams<{id: string}>();
 
+  // Estado para manejar el PDF GENERADO A PARTIR DE LA VENTA
+  const [showPDF, setShowPDF] = useState(false); // Controla si se muestra el PDF
+  const [pdfData, setPdfData] = useState<any>(null); // Almacena los datos para el PDF
+
+  // Función para abrir el PDF en una nueva ventana
+  const openPDFInNewWindow = async (documentData: JSX.Element) => {
+    const blob = await pdf(documentData).toBlob();
+    const blobUrl = URL.createObjectURL(blob);
+    window.open(blobUrl);
+  };
+
+  // Estado para pagos
+  const [payments, setPayments] = useState<SelectedPayment[]>([]); // Define el tipo explícito
+
+  // Estado para manejar el modal de métodos de pago
+  const [forceOpenPaymentModal, setForceOpenPaymentModal] = useState(false);
+
+  // MODAL PARA SELECCIONAR SERIES
+  const [isDialogOpenSeries, setIsDialogOpenSeries] = useState(false);
+  const [series, setSeries] = useState<string[]>([]);
+  
+  // Estado para manejar el modal de series
+  const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false); // Controla la apertura del modal  
+  const [currentSeries, setCurrentSeries] = useState<string[]>([]); // Series del producto actual
+  
+  // Estado para manejar el combobox de series
+  const [availableSeries, setAvailableSeries] = useState<string[]>([]); // Series disponibles
+  const [selectedSeries, setSelectedSeries] = useState<string[]>([]); // Series seleccionadas en el modal
+  
+  // Estado para controlar el diálogo de confirmación del boton REGISTRAR VENTA
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // Estado para controlar el AlertDialog de precio 0
+  const [isPriceAlertOpen, setIsPriceAlertOpen] = useState(false); // Controla la apertura del AlertDialog
+  const [productWithZeroPrice, setProductWithZeroPrice] = useState<{ id: number; name: string } | null>(null); // Almacena el producto con precio 0
+  
+  // Estado para manejar el AlertDialog de la tabla productos pantalla chicas
+  const [selectedProductDetail, setSelectedProductDetail] = useState<typeof selectedProducts[0] | null>(null);
+
+  // COMBOBOX DE PRODUCTOS
+  const [open, setOpen] = React.useState(false)
+  const [value, setValueProduct] = React.useState("")
+  // Estado para manejar la tienda seleccionada
+  const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
+
+  // Estado para los productos
+  const [products, setProducts] = useState<
+    { id: number; name: string; price: number; description: string; categoryId: number; category_name: string; stock: number }[]
+  >([]); 
+
+  // Estado para rastrear si el combobox de tiendas ha sido tocado
+  const [isStoreChangeDialogOpen, setIsStoreChangeDialogOpen] = useState(false); // Controla la apertura del AlertDialog
+  const [pendingStore, setPendingStore] = useState<string | null>(null); // Almacena la tienda seleccionada temporalmente
+
+  // CONTROLAR LA MONEDA
+  const [currency, setCurrency] = useState<string>(form.getValues("tipo_moneda") || "PEN");
+
+  // COMBOBOX DE COMPROBANTE
+  const [openInvoice, setOpenInvoice] = useState(false); // Controla si el combobox está abierto
+  const [valueInvoice, setValueInvoice] = useState(""); // Almacena el valor seleccionado
+
+  // Estado para controlar si el combobox de clientes está habilitado
+  const [isClientDisabled, setIsClientDisabled] = useState(true);
+
+  // Estados para agregar un producto al datatable
+  const [selectedProducts, setSelectedProducts] = useState<
+    { id: number; name: string; price: number; quantity: number; category_name: string, series?: string[], newSeries?: string }[]
+    >([]);
+  const [currentProduct, setCurrentProduct] = useState<{ id: number; name: string; price: number; categoryId: number; category_name: string; series?: string[] } | null>(null);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [stock, setStock] = useState<number>(0);
+
+  // VARIABLES DE CALENDAR
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [openCalendar, setOpenCalendar] = useState(false);
+  const [createdAt, setCreatedAt] = useState<Date | null>(null);
+
+  // COMBOBOX DE TIENDAS
+  const [stores, setStores] = useState<{ id: number; 
+    name: string, description: string, adress: string }[]>([]); // Estado para as tiendas
+  const [openStore, setOpenStore] = React.useState(false)
+  const [valueStore, setValueStore] = React.useState("")
+
+  // COMBOBOX DE Clientes
+  const [isDialogOpenClient, setIsDialogOpenClient] = useState(false); // Controla la apertura del diálogo
+  const [clients, setClients] = useState<{ id: number; 
+    name: string, type: string, typeNumber: string }[]>([]); // Estado para los proveedores
+  // Cargar los clientes al montar el componente
+  const [openClient, setOpenClient] = React.useState(false)
+  const [valueClient, setValueClient] = React.useState("")
+
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
-  console.log("onSubmit ejecutado con datos:", data); // Depuración
 
   const userId = getUserIdFromToken(); // Obtén el userId del token
+
       if (!userId) {
         toast.error("No se pudo obtener el ID del usuario. Por favor, inicie sesión nuevamente.");
+        return;
+      }
+      if (payments.length === 0) {
+        toast.error("Debe agregar al menos un método de pago antes de registrar la venta.");
+        return;
+      }
+      if (selectedProducts.length === 0) {
+        toast.error("Debe agregar al menos un producto antes de registrar la venta.");
+        return;
+      }
+
+      // Calcular el total de productos
+      const totalProductos = selectedProducts.reduce((sum, product) => {
+        return sum + (product.price * product.quantity);
+      }, 0);
+
+      // Calcular el total de los métodos de pago
+      const totalPagos = payments.reduce((sum, payment) => {
+        return sum + payment.amount;
+      }, 0);
+
+      // Validar que ambos totales sean iguales (permite pequeña tolerancia)
+      const precision = 0.01;
+      if (Math.abs(totalProductos - totalPagos) > precision) {
+        toast.error(`El monto ingresado en los métodos de pago no coincide con el total de productos.
+      Total productos: S/ ${totalProductos.toFixed(2)}
+      Total metodo de pagos: S/ ${totalPagos.toFixed(2)}.
+      Por favor revise.`);
+        setForceOpenPaymentModal(true); // 👈 fuerza la apertura del modal
         return;
       }
 
@@ -132,29 +260,109 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
         if (!storeId) {
           toast.error("Debe seleccionar una tienda válida.");
           return;
-        }    
-        // Validar que el cliente exista
-        const clientId = clients.find((client) => client.typeNumber === data.client_typeNumber)?.id; // Encuentra el ID de la tienda seleccionada       
-        if (!clientId) {
-          toast.error("Debe seleccionar una tienda válida.");
-          return;
-        }    
-        // Validar que haya productos seleccionados
-        if (selectedProducts.length === 0) {
-          toast.error("Debe agregar al menos un producto al registro.");
-          return;
         } 
+           
+        // Validar que el cliente exista, excepto si el tipo de comprobante es "SIN COMPROBANTE"
+        let clientId = null;
+        if (data.tipoComprobante === "SIN COMPROBANTE") {
+          // Seleccionar automáticamente el cliente "SIN CLIENTE"
+          const sinCliente = clients.find((client) => client.name === "Sin Cliente");
+          if (sinCliente) {
+            clientId = sinCliente.id;
+          } else {
+            clientId = null;
+            //toast.error("No se encontró el cliente predeterminado 'Sin Ciente'.");
+            //return;
+          }
+        } else {
+          // Validar que el cliente exista, excepto si el nombre del cliente es "Sin Cliente"
+          if (data.client_name !== "Sin Cliente") {
+            clientId = clients.find((client) => client.typeNumber === data.client_typeNumber)?.id;
+            if (!clientId) {
+              toast.error("Debe seleccionar un cliente válido.");
+              return;
+            }
+          }
+          else{
+            const sinClient = clients.find((client) => client.name === "Sin Cliente");
+            if (sinClient) {
+              clientId = sinClient.id;
+            } else {
+              toast.error("No se encontró el cliente predeterminado 'Sin Cliente'.");
+              return;
+            }
+          }
+        }
 
-        // Prepara el payload para enviar al backend
-        // Calculate the total by summing up the price * quantity for each selected product
-        const total = selectedProducts.reduce((sum, product) => sum + product.price * product.quantity, 0);
+        // Asegurarse de que clientId no sea null
+        if (clientId === null) {
+          //toast.error("El cliente no es válido.");
+          //return;         
+        }
+
+        // Validar que todos los productos tengan valores válidos
+        selectedProducts.forEach((product) => {
+          if (product.price === undefined || product.quantity === undefined) {
+            throw new Error(`El producto "${product.name}" tiene datos incompletos.`);
+          }
+        });
+
+        // Calcular el total
+        const total = selectedProducts.reduce((sum, product) => {
+          const productTotal = product.price * product.quantity;
+          return sum + (isNaN(productTotal) ? 0 : productTotal); // Asegurarse de que no se sumen valores NaN
+        }, 0);
+
 
         // Transformar los productos seleccionados al formato esperado
         const transformedDetails = selectedProducts.map((product) => ({
           productId: product.id, // Usar `id` como `productId`
           quantity: product.quantity,
-          price: product.price,
+          description: product.name,
+          price: Number(product.price),
+          total: Number(product.quantity * product.price),
+          subTotal: Number((product.quantity * product.price) / 1.18), // Ajusta según tu lógica de IGV
+          igv: Number((product.quantity * product.price) - (product.quantity * product.price) / 1.18),
+          series: product.series || [], // Incluir las series seleccionadas
         }));
+
+        let comprobante: string | null = null;
+        let serieInvoice: string | null = null;
+        let correlativoInvoice: string | null = null;
+
+        if (data.tipoComprobante === "FACTURA") {
+          comprobante = "invoice";
+        } else if (data.tipoComprobante === "BOLETA") {
+          comprobante = "boleta";
+        } else if (data.tipoComprobante === "SIN COMPROBANTE") {
+          // Si el tipo de comprobante es "SIN COMPROBANTE", no hacer nada
+          console.log("No se requiere comprobante para 'SIN COMPROBANTE'.");
+        } else {
+          // Si el tipo de comprobante no es válido, lanzar un error
+          throw new Error("El tipo de comprobante no es válido.");
+        }
+        
+        // Verificar si comprobante es válido antes de llamar a generarYEnviarDocumento
+        if (comprobante) {
+          const { respuesta } = await generarYEnviarDocumento({ documentType: comprobante });
+          if (!respuesta) {
+            throw new Error("La respuesta del backend no contiene los datos esperados.");
+          }
+          serieInvoice = respuesta.serie; // Obtén la serie de la respuesta o del formulario
+          correlativoInvoice = respuesta.correlativo;
+
+          console.log("Serie:", serieInvoice, "Correlativo:", correlativoInvoice);
+        } else {
+          console.log("No se generó ningún documento porque el tipo de comprobante es 'SIN COMPROBANTE'.");
+        }
+
+        let tipoDocumentoFormatted;
+        if(data.client_type === "CARNET DE EXTRANJERIA"){
+          tipoDocumentoFormatted = 'CE';
+        }
+        else{
+          tipoDocumentoFormatted = data.client_type;
+        }
 
         const payload = {         
           userId,
@@ -163,48 +371,105 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
           total,
           description: data.description,
           createdAt: createdAt ? createdAt.toISOString() : null, // Formato ISO para la fecha
+          payments,
           details: transformedDetails,
+          tipoMoneda: data.tipo_moneda,
+          ...(data.tipoComprobante !== "SIN COMPROBANTE" && { // Solo incluir si no es "SIN COMPROBANTE"
+            tipoComprobante: data.tipoComprobante,
+            serie: serieInvoice,
+            correlativo: correlativoInvoice,
+          }),
         };
 
-        console.log("Payload enviado al backend:", payload);
         const createdSale = await createSale(payload);
+        console.log("Datos recibidos en createSale:", payload);
+
         if (!createdSale || !createdSale.id) {
           throw new Error("No se pudo obtener el ID de la venta creada.");
-        }
-
-        console.log("Entrada creada con ID:", createdSale.id);      
+        }   
 
         toast.success("Se registro la informacion correctamente."); // Notificación de éxito
 
-        // Llamar al endpoint para enviar la factura a la SUNAT
-        const invoicePayload = {
-          saleId: createdSale.id,
-          serie: data.serie,
-          nroCorrelativo: data.nroCorrelativo,
-          comprobante: data.comprobante,
-          tipoMoneda: data.tipo_moneda,
-          total: total,
-          fechaEmision: createdAt,
-          client: {
-            name: data.client_typeNumber,
-            type: data.client_name,
-            typeNumber: data.client_name,
-          },
-          store: {
-            name: data.store_name,
-            adress: data.store_adress,
-            ruc: data.ruc,
-          },
-          details: transformedDetails,
-        };
+        if(data.tipoComprobante != "SIN COMPROBANTE"){
+          // Llamar al endpoint para enviar la factura a la SUNAT
+          const invoicePayload = {
+            saleId: createdSale.id,
+            serie: serieInvoice,
+            correlativo: correlativoInvoice,
+            documentType: comprobante,
+            tipoMoneda: data.tipo_moneda,
+            total: Number(total),
+            fechaEmision: createdAt ? createdAt.toISOString() : new Date().toISOString(),
+            cliente: {
+              razonSocial: data.client_name,
+              ruc: data.client_typeNumber,
+              dni: data.client_typeNumber,
+              nombre: data.client_name,
+              tipoDocumento: tipoDocumentoFormatted,
+            },
+            emisor: {
+              razonSocial: data.store_name,
+              adress: data.store_adress,
+              ruc: 20519857538,
+            },
+            items: selectedProducts.map((product) => ({
+              cantidad: Number(product.quantity),
+              descripcion: product.name,
+              series: product.series || [], // Pasar las series al documento
+              precioUnitario: Number(product.price),
+              subtotal: Number((product.price * product.quantity) / 1.18), // Subtotal sin IGV
+              igv: Number((product.price * product.quantity) - (product.price * product.quantity) / 1.18), // IGV
+              total: Number(product.price * product.quantity), // Total con IGV
+            })),
+          };
 
-        const sunatResponse = await sendInvoiceToSunat(invoicePayload);
-        console.log("Respuesta de la SUNAT:", sunatResponse);
+          console.log("Payload para SUNAT:", invoicePayload);
 
-        if (sunatResponse.success) {
-          toast.success("Factura enviada a la SUNAT correctamente.");
-        } else {
-          toast.error("Error al enviar la factura a la SUNAT.");
+          const sunatResponse = await sendInvoiceToSunat(invoicePayload);
+          console.log("Respuesta de la SUNAT:", sunatResponse);
+
+          // Luego dentro de onSubmit, después de calcular `total`:
+          const totalTexto = numeroALetrasCustom(total, 'PEN'); // 'PEN' | 'USD'
+          console.log("Importe en letras:", totalTexto); // Verificar el resultado
+
+          // Generar el código QR
+          const qrData = `Representación impresa de la ${data.tipoComprobante.toUpperCase()} ELECTRÓNICA\nN° ${data.serie}-${data.nroCorrelativo}`;
+          const qrCode = await QRCode.toDataURL(qrData);
+
+          // ✅ Mostrar el PDF en nueva ventana
+          await openPDFInNewWindow(
+            <InvoiceDocument
+              data={{ ...invoicePayload, serie: serieInvoice, correlativo: correlativoInvoice }}
+              qrCode={qrCode}
+              importeEnLetras={totalTexto}
+            />
+          );
+
+          const blob = await pdf(
+            <InvoiceDocument
+              data={{ ...invoicePayload, serie: serieInvoice, correlativo: correlativoInvoice }}
+              qrCode={qrCode}
+              importeEnLetras={totalTexto}
+            />
+          ).toBlob();
+          
+          await uploadPdfToServer({
+            blob,
+            ruc: 20519857538,
+            tipoComprobante: comprobante ?? "SIN_COMPROBANTE", // "boleta" o "invoice"
+            serie: serieInvoice!,
+            correlativo: correlativoInvoice!,
+          });
+
+          setShowPDF(true);
+
+          if (sunatResponse.message && sunatResponse.message.toLowerCase().includes("exitosamente")) {
+            toast.success("Factura enviada a la SUNAT correctamente.");
+          } else if (sunatResponse.message) {
+            toast.error(`Error al enviar la factura a la SUNAT: ${sunatResponse.message}`);
+          } else {
+            toast.error("Error desconocido al enviar la factura a la SUNAT.");
+          }
         }
 
         router.push("/dashboard/sales");
@@ -212,152 +477,78 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
     }
     catch(error: any){
       console.error("Error al registrar la venta o enviar la factura:", error);
-      toast.error("Ocurrió un error al guardar la venta.")
+      toast.error("Ocurrió un error al guardar la venta.")      
     }
         
   })      
   //
 
-  // COMBOBOX DE PRODUCTOS
-  const [open, setOpen] = React.useState(false)
-  const [value, setValueProduct] = React.useState("")
-  // Estado para manejar la tienda seleccionada
-  const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
+  // Manejar el cambio en el combobox de tipoComprobante
+  const handleTipoComprobanteChange = (currentValue: string) => {
+    const selectedValue = currentValue === valueInvoice ? "" : currentValue;
+    setValueInvoice(selectedValue); // Actualiza el estado local
+    form.setValue("tipoComprobante", selectedValue); // Actualiza el formulario
+    setOpenInvoice(false); // Cierra el combobox
 
-    // Estado para los productos
-    const [products, setProducts] = useState<
-      { id: number; name: string; price: number; description: string; categoryId: number; category_name: string; stock: number }[]
-    >([]);
-
-    // Cargar los productos cuando se selecciona una tienda
-    useEffect(() => {
-      async function fetchProductsByStore() {
-        if (!selectedStoreId) return; // Si no hay tienda seleccionada, no hacer nada
-
-        try {
-          const products = await getProductsByStore(selectedStoreId);
-          // Mapea los datos para adaptarlos al formato esperado
-          const formattedProducts = products.map((item: any) => ({
-            id: item.inventory.product.id,
-            name: item.inventory.product.name,
-            price: item.inventory.product.price,
-            description: item.inventory.product.description,
-            categoryId: item.inventory.product.categoryId,
-            category_name: item.inventory.product.category.name,
-          }));
-          setProducts(formattedProducts); // Actualiza el estado con los productos
-        } catch (error) {
-          console.error('Error al obtener los productos por tienda:', error);
-        }
-      }
-
-      fetchProductsByStore();
-    }, [selectedStoreId]); // Ejecutar cuando cambie la tienda seleccionada    
-  //
-
-  // COMBOBOX DE COMPROBANTE
-  const [openInvoice, setOpenInvoice] = useState(false); // Controla si el combobox está abierto
-  const [valueInvoice, setValueInvoice] = useState(""); // Almacena el valor seleccionado
-  //
-
-  // VARIABLES DE CALENDAR
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
-  const [openCalendar, setOpenCalendar] = useState(false);
-  const [createdAt, setCreatedAt] = useState<Date | null>(null);
-
-  const handleDateChange = (date: Date | undefined) => {
-    setSelectedDate(date || null);
-
-    if (date) {
-      const formattedDate = format(date, "dd 'de' MMMM 'de' yyyy", { locale: es }); // Formato en español
-      console.log("Fecha seleccionada (formateada):", formattedDate);
-      // Aquí puedes enviar la fecha formateada al formulario o backend
+    // Habilitar o deshabilitar el combobox de clientes según el valor seleccionado
+    if (!selectedValue || selectedValue === "SIN COMPROBANTE") {
+      setIsClientDisabled(true); // Deshabilita el combobox de clientes
+    } else {
+      setIsClientDisabled(false); // Habilita el combobox de clientes
     }
+
+    // Limpiar los campos relacionados con el cliente
+    setValueClient(""); // Limpia el valor del combobox de cliente
+    form.setValue("client_name", ""); // Limpia el nombre del cliente
+    form.setValue("client_type", ""); // Limpia el tipo de documento
+    form.setValue("client_typeNumber", ""); // Limpia el número de documento
   };
-
-  // COMBOBOX DE Clientes
-    const [isDialogOpenClient, setIsDialogOpenClient] = useState(false); // Controla la apertura del diálogo
-    const [clients, setClients] = useState<{ id: number; 
-     name: string, type: string, typeNumber: string }[]>([]); // Estado para los proveedores
-    // Cargar los clientes al montar el componente
-    const [openClient, setOpenClient] = React.useState(false)
-    const [valueClient, setValueClient] = React.useState("")
-    // Cargar los proveedores al montar el componente
-    useEffect(() => {
-      async function fetchClients() {
-        try {
-            const clients = await getClients();
-            setClients(clients); // Guarda los proveedores en el estado
-        } catch (error) {
-            console.error('Error al obtener los clientes:', error);
-          }
-        }
-  
-        fetchClients();
-    }, []);
   //
 
-   // COMBOBOX DE TIENDAS
-    const [stores, setStores] = useState<{ id: number; 
-    name: string, description: string, adress: string }[]>([]); // Estado para as tiendas
-    const [openStore, setOpenStore] = React.useState(false)
-    const [valueStore, setValueStore] = React.useState("")
-    // Cargar lass tiendas al montar el componente
-    useEffect(() => {
-      async function fetchStores() {
-        try {
-            const stores = await getStores();
-            setStores(stores); // Guarda las tiendas en el estado
-        } catch (error) {
-            console.error('Error al obtener las tiendas:', error);
-          }
-        }
-  
-        fetchStores();
-    }, []);
-
-    // Estado para rastrear si el combobox de tiendas ha sido tocado
-    const [isStoreChangeDialogOpen, setIsStoreChangeDialogOpen] = useState(false); // Controla la apertura del AlertDialog
-    const [pendingStore, setPendingStore] = useState<string | null>(null); // Almacena la tienda seleccionada temporalmente
-
-    const handleStoreChange = (storeName: string) => {
-      setValueStore(storeName === valueStore ? "" : storeName);
-      const selectedStore = stores.find((store) => String(store.name) === storeName);
+  // Manejar el cambio en el combobox de Tiendas
+  const handleStoreChange = (storeName: string) => {
+    setValueStore(storeName === valueStore ? "" : storeName);
+    const selectedStore = stores.find((store) => String(store.name) === storeName);
     
-      if (selectedStore) {
-        // Actualiza los valores de los campos relacionados con la tienda
-        setSelectedStoreId(selectedStore.id); // Actualiza el ID de la tienda seleccionada
-        setValue("store_name", selectedStore.name || "");
-        setValue("store_adress", selectedStore.adress || "");
+    if (selectedStore) {
+      // Actualiza los valores de los campos relacionados con la tienda
+      setSelectedStoreId(selectedStore.id); // Actualiza el ID de la tienda seleccionada
+      setValue("store_name", selectedStore.name || "");
+      setValue("store_adress", selectedStore.adress || "");
     
-        // Limpia los campos relacionados con los productos
-        setSelectedProducts([]); // Limpia la lista de productos seleccionados
-        setCurrentProduct(null); // Limpia el producto actual
-        setQuantity(1); // Restablece la cantidad a 1
-        setStock(0); // Restablece el stock a 0
-        setValueProduct(""); // Limpia el valor del combobox de productos
-        setValue("category_name", ""); // Limpia el input de categoría
-        setValue("price", 0); // Limpia el input de precio
-        setValue("description", ""); // Limpia el input de descripción
-      } else {
-        console.error("Tienda no encontrada:", storeName);
-      }
+      // Limpia los campos relacionados con los productos
+      setSelectedProducts([]); // Limpia la lista de productos seleccionados
+      setCurrentProduct(null); // Limpia el producto actual
+      setQuantity(1); // Restablece la cantidad a 1
+      setStock(0); // Restablece el stock a 0
+      setValueProduct(""); // Limpia el valor del combobox de productos
+      setValue("category_name", ""); // Limpia el input de categoría
+      setValue("price", 0); // Limpia el input de precio
+      setValue("description", ""); // Limpia el input de descripción
+    } else {
+      console.error("Tienda no encontrada:", storeName);
+    }
     
-      setOpenStore(false); // Cierra el combobox de tiendas
-    };
+    setOpenStore(false); // Cierra el combobox de tiendas
+  };
   //
 
-  // Función para agregar un producto al datatable
-  const [selectedProducts, setSelectedProducts] = useState<
-  { id: number; name: string; price: number; quantity: number; category_name: string, series?: string[], newSeries?: string }[]
-  >([]);
-  const [currentProduct, setCurrentProduct] = useState<{ id: number; name: string; price: number; categoryId: number; category_name: string; series?: string[] } | null>(null);
-  const [quantity, setQuantity] = useState<number>(1);
-  const [stock, setStock] = useState<number>(0);
+  // Función para eliminar un producto del datatable
+  const removeProduct = (id: number) => {
+    setSelectedProducts((prev) => prev.filter((product) => product.id !== id));
+  };
+  //
 
+  // Funcion para agregar productos al datatable
   const addProduct = () => {
     if (!currentProduct) {
       toast.error("No se ha seleccionado ningun producto.");
+      return;
+    }
+
+    // 🔒 Validar si el precio es 0 o null
+    if (!currentProduct.price || currentProduct.price === 0) {
+      toast.error("Este producto no tiene un precio asignado. Vuelva a seleccionarlo e ingrese un precio válido.");
       return;
     }
 
@@ -450,30 +641,66 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   };
   //
 
-  // Función para eliminar un producto del datatable
-  const removeProduct = (id: number) => {
-    setSelectedProducts((prev) => prev.filter((product) => product.id !== id));
-  };
+  // Cargar los productos cuando se selecciona una tienda
+  useEffect(() => {
+
+    async function fetchProductsByStore() {
+      if (!selectedStoreId) return; // Si no hay tienda seleccionada, no hacer nada
+
+      try {
+        const products = await getProductsByStore(selectedStoreId);
+        // Mapea los datos para adaptarlos al formato esperado
+        const formattedProducts = products.map((item: any) => ({
+          id: item.inventory.product.id,
+          name: item.inventory.product.name,
+          price: item.inventory.product.priceSell,
+          description: item.inventory.product.description,
+          categoryId: item.inventory.product.categoryId,
+          category_name: item.inventory.product.category.name,
+        }));
+        setProducts(formattedProducts); // Actualiza el estado con los productos
+      } catch (error) {
+        console.error('Error al obtener los productos por tienda:', error);
+      }
+    }
+
+      fetchProductsByStore();
+    }, [selectedStoreId]); // Ejecutar cuando cambie la tienda seleccionada    
   //
 
-  // CONTROLAR LA MONEDA
-  const [currency, setCurrency] = useState<string>(form.getValues("tipo_moneda") || "PEN");
+  // Cargar los proveedores al montar el componente
+  useEffect(() => {
+    async function fetchClients() {
+      try {
+          const clients = await getClients();
+          setClients(clients); // Guarda los proveedores en el estado
+      } catch (error) {
+          console.error('Error al obtener los clientes:', error);
+        }
+      }
+      fetchClients();
+  }, []);
+  //
+
+  // Cargar lass tiendas al montar el componente
+  useEffect(() => {
+      async function fetchStores() {
+        try {
+          const stores = await getStores();
+          setStores(stores); // Guarda las tiendas en el estado
+        } catch (error) {
+          console.error('Error al obtener las tiendas:', error);
+        }
+      }
+  
+      fetchStores();
+  }, []);
+
   // Actualizar el valor del formulario cuando cambie el estado local
   useEffect(() => {
     form.setValue("tipo_moneda", currency, { shouldValidate: true });
   }, [currency, form]);
   //
-
-  // MODAL PARA SELECCIONAR SERIES
-  const [isDialogOpenSeries, setIsDialogOpenSeries] = useState(false);
-  const [series, setSeries] = useState<string[]>([]);
-
-  const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false); // Controla la apertura del modal  
-  const [currentSeries, setCurrentSeries] = useState<string[]>([]); // Series del producto actual
-
-  // Estado para manejar el combobox de series
-  const [availableSeries, setAvailableSeries] = useState<string[]>([]); // Series disponibles
-  const [selectedSeries, setSelectedSeries] = useState<string[]>([]); // Series seleccionadas en el modal
 
   return (
     <div className="container mx-auto w-full max-w-4xl grid sm:max-w-md md:max-w-lg lg:max-w-4xl">
@@ -505,8 +732,19 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                       key={type}
                                       value={type}
                                       onSelect={(currentValue) => {
-                                        setValueInvoice(currentValue === valueInvoice ? "" : currentValue);
+
+                                        if (currentValue === valueInvoice) {
+                                          setOpenInvoice(false); // Solo cierra el Popover
+                                          return;
+                                        }
+
+                                        const selectedValue = currentValue === valueInvoice ? "" : currentValue;
+                                        setValueInvoice(selectedValue); // Actualiza el estado local
+                                        form.setValue("tipoComprobante", selectedValue); // Actualiza el formulario
                                         setOpenInvoice(false); // Cierra el combobox
+
+                                        // Llama a la función handleTipoComprobanteChange
+                                        handleTipoComprobanteChange(selectedValue); // Actualiza el estado de habilitación del combobox de clientes
                                       }}
                                     >
                                       {type}
@@ -523,10 +761,10 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                             </Command>
                           </PopoverContent>
                       </Popover>
-                        <div className="flex justify-between gap-1">                          
+                      <div className="flex justify-between gap-1">                          
                           <Label className="text-sm font-medium py-2 mr-20 sm:mr-12 md:mr-0 xl:mr-12">Fecha de Comprobante</Label>
-                        </div>
-                        <div className="flex gap-1">                                                                        
+                      </div>
+                      <div className="flex gap-1">                                                                        
                         <Popover open={openCalendar} onOpenChange={setOpenCalendar}>
                           <PopoverTrigger asChild>
                             <Button
@@ -563,7 +801,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                           </PopoverContent>
                         </Popover>
                         </div>
-                        <div className="flex justify-start gap-1">
+                        <div className="flex justify-between gap-1">
                           <div className="flex flex-col">
                             <Label className="text-sm font-medium py-2">Moneda</Label>
                             <Select
@@ -571,7 +809,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                               onValueChange={(value) => {
                                 setCurrency(value); // Actualiza el estado local
                                 form.setValue("tipo_moneda", value, { shouldValidate: true }); // Actualiza el formulario
-                              }}
+                               }}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Selecciona una moneda" />
@@ -581,6 +819,15 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                 <SelectItem value="USD">Dólares (USD)</SelectItem>
                               </SelectContent>
                             </Select>
+                          </div>
+                          <div className="flex flex-col flex-grow">
+                            <Label className="text-sm font-medium py-2">Ingrese Metodo de Pago</Label>
+                            <PaymentMethodsModal
+                              value={payments}
+                              onChange={setPayments}
+                              selectedProducts={selectedProducts}
+                              forceOpen={forceOpenPaymentModal}
+                            />
                           </div>
                         </div>
                     </div>
@@ -597,6 +844,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   role="combobox"
                                   aria-expanded={openClient}
                                   className="w-[260px] justify-between"
+                                  disabled={isClientDisabled}
                                 >
                                   {valueClient
                                     ? clients.find((client) => String(client.name) === valueClient)?.name
@@ -611,7 +859,19 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   <CommandList>
                                     <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                                     <CommandGroup>
-                                      {clients.map((client) => (
+                                      {clients
+                                        .filter((client) => {
+                                          // Mostrar solo clientes con type "RUC" si el tipo de comprobante es FACTURA
+                                          if (valueInvoice === "FACTURA") {
+                                            return client.type === "RUC";
+                                          }
+                                          // Excluir clientes con type "RUC" si el tipo de comprobante es BOLETA
+                                          if (valueInvoice === "BOLETA") {
+                                            return client.type !== "RUC";
+                                          }
+                                          return true; // Mostrar todos los clientes en otros casos
+                                        })
+                                        .map((client) => (
                                         <CommandItem
                                           key={client.name}
                                           value={client.name}
@@ -648,7 +908,9 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                               </PopoverContent>
                             </Popover>
                             <Button className='sm:w-auto sm:ml-2 ml-0
-                            bg-green-700 hover:bg-green-800 text-white' type="button" onClick={() => setIsDialogOpenClient(true)}>
+                            bg-green-700 hover:bg-green-800 text-white' type="button" 
+                            disabled={isClientDisabled}
+                            onClick={() => setIsDialogOpenClient(true)}>
                                 <Save className="w-6 h-6"/>
                             </Button>
                             <AddClientDialog
@@ -656,6 +918,10 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                             onClose={() => setIsDialogOpenClient(false)}
                             setClients={setClients}
                             setValue={form.setValue} // Pasar la función para actualizar el formulario principal
+                            updateTipoComprobante={(tipoComprobante: string) => {
+                              setValueInvoice(tipoComprobante); // Actualiza el estado local del combobox
+                              form.setValue("tipoComprobante", tipoComprobante); // Actualiza el formulario
+                            }}
                             />   
                           </div>
                           <Label className="text-sm font-medium py-2">Nombre del Cliente</Label>
@@ -771,7 +1037,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                 }
                                 setPendingStore(null); // Limpia la tienda pendiente
                               }}
-                            />;               
+                            />             
                           </div>
                           <Label className="text-sm font-medium py-2">Tienda</Label>
                           <Input {...register("store_name")} readOnly></Input>
@@ -786,17 +1052,19 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                           <div className="flex gap-1">
                             <Popover open={open} onOpenChange={setOpen}>
                               <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  aria-expanded={open}
-                                  className="w-[200px] sm:w-[300px] justify-between"
-                                >
-                                  {value
-                                    ? products.find((product) => String(product.name) === value)?.name
-                                    : "Selecciona un producto..."}
-                                  <ChevronsUpDown className="opacity-50" />
-                                </Button>
+                              <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={open}
+                              className="w-[200px] sm:w-[300px] justify-between"
+                            >
+                              <span className="truncate max-w-[80%] block">
+                                {value
+                                  ? products.find((product) => String(product.name) === value)?.name
+                                  : "Selecciona un producto..."}
+                              </span>
+                              <ChevronsUpDown className="opacity-50" />
+                            </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-[200px] sm:w-[300px] p-0">
                                 <Command>
@@ -810,12 +1078,19 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                           key={product.name}
                                           value={product.name}
                                           onSelect={async (currentValue) => {
+
+                                            if (currentValue === value) {
+                                              setOpen(false); // Solo cierra el Popover
+                                              return;
+                                            }
+
                                             setValueProduct(currentValue === value ? "" : currentValue)
                                             const selectedProduct = products.find(
                                               (product) => String(product.name) === currentValue
                                             );
                                           
                                             if (selectedProduct) {
+                                           
                                               // Calcula el stock restante considerando los productos ya agregados
                                               const existingProduct = selectedProducts.find(
                                                 (product) => product.id === selectedProduct.id
@@ -842,7 +1117,14 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                                     ? realStock - existingProduct.quantity
                                                     : realStock;
                                             
-                                                    setStock(simulatedStock > 0 ? simulatedStock : 0);
+                                                  setStock(simulatedStock > 0 ? simulatedStock : 0);
+
+                                                  if (selectedProduct.price === 0 || selectedProduct.price === null) {
+                                                    setProductWithZeroPrice({ id: selectedProduct.id, name: selectedProduct.name }); // Almacena el producto con precio 0 o null
+                                                    setIsPriceAlertOpen(true); // Abre el AlertDialog
+                                                    return; // Detiene la ejecución hasta que el usuario ingrese un precio válido
+                                                  }
+
                                                   } catch (error) {
                                                     console.error('Error al obtener el stock del producto:', error);
                                                     setCurrentProduct({
@@ -934,7 +1216,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                           </div>                                      
                           <Label className="text-sm font-medium py-2">Categoria</Label>
                           <Input {...register("category_name")} readOnly ></Input>
-                          <Label className="text-sm font-medium py-2">Precio de Compra</Label>
+                          <Label className="text-sm font-medium py-2">Precio de Venta</Label>
                           <Input {...register("price", { valueAsNumber: true })} readOnly
                           step="0.01" // Permite valores con decimales
                           min={0} // Asegura que no se ingresen valores negativos
@@ -982,24 +1264,32 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                   </div>
 
                     {/* Datatable para mostrar los productos seleccionados */}
-                    <div className='border px-2 overflow-x-auto max-w-full'>
-                      <Table className="table-fixed w-full">
-                        <TableHeader>
+                    <div className='border px-2 overflow-x-auto w-full'>
+                      <Table className="w-full text-sm">
+                        <TableHeader className="bg-muted/50">
                           <TableRow>
-                            <TableHead className="text-left w-[100px] sm:w-[300px] max-w-[400px] truncate">Nombre</TableHead>
-                            <TableHead className="text-left max-w-[150px] truncate">Categoria</TableHead>
-                            <TableHead className="text-left max-w-[150px] truncate">Cantidad</TableHead>
-                            <TableHead className="text-left max-w-[150px] truncate">Precio</TableHead>    
-                            <TableHead className="text-left max-w-[150px] truncate">Series</TableHead>                    
-                            <TableHead className="text-left max-w-[150px] truncate">Acciones</TableHead>
+                            <TableHead className="text-left w-[100px] max-w-[100px] sm:w-[200px] sm:max-w-[200px] truncate whitespace-nowrap overflow-hidden">Nombre</TableHead>
+                            <TableHead className="text-left hidden sm:table-cell w-[100px] truncate">Categoria</TableHead>
+                            <TableHead className="text-left md:table-cell w-[100px] truncate">Cantidad</TableHead>
+                            <TableHead className="text-left md:table-cell w-[100px] truncate">Precio</TableHead>    
+                            <TableHead className="text-left hidden sm:table-cell w-[100px] truncate">Series</TableHead>                    
+                            <TableHead className="text-left w-[100px] truncate">Acciones</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {selectedProducts.map((product, index) => (
-                            <TableRow key={product.id}>
-                              <TableCell className="w-[100px] sm:w-[300px] max-w-[400px] truncate overflow-hidden whitespace-nowrap">{product.name}</TableCell>
-                              <TableCell className="max-w-[150px] truncate overflow-hidden whitespace-nowrap">{product.category_name}</TableCell>
-                              <TableCell className="max-w-[100px] truncate overflow-hidden whitespace-nowrap">
+                            <TableRow
+                            key={product.id}
+                            className="cursor-pointer md:cursor-default"
+                            onClick={() => {
+                              if (window.innerWidth < 768) {
+                                setSelectedProductDetail(product); // solo para móviles
+                              }
+                            }}
+                            >
+                              <TableCell className="font-semibold w-[100px] max-w-[100px] sm:w-[200px] sm:max-w-[200px] truncate whitespace-nowrap overflow-hidden">{product.name}</TableCell>
+                              <TableCell className="hidden sm:table-cell truncate">{product.category_name}</TableCell>
+                              <TableCell className="truncate">
                                 <Input
                                   type="number"
                                   value={product.quantity}
@@ -1017,7 +1307,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   className="w-full"
                                 />
                               </TableCell>
-                              <TableCell className="max-w-[100px] truncate overflow-hidden whitespace-nowrap">
+                              <TableCell className="truncate">
                               <Input
                               type="number"
                               value={product.price}
@@ -1036,7 +1326,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                               className="w-full"
                               />
                               </TableCell>
-                              <TableCell className="text-xs max-w-[250px] truncate overflow-hidden whitespace-nowrap">
+                              <TableCell className="hidden md:table-cell text-xs">
                                 <div
                                   className="cursor-pointer text-blue-500 underline"
                                   onClick={() => {
@@ -1058,10 +1348,13 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                 onClose={() => setIsSeriesModalOpen(false)}
                                 series={currentSeries}
                               />                                 
-                              <TableCell className="max-w-[100px] truncate overflow-hidden whitespace-nowrap">
+                              <TableCell className="">
                                 <Button
                                   variant="outline"
-                                  onClick={() => removeProduct(product.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeProduct(product.id)
+                                  }}
                                 >
                                 <X className="w-4 h-4" color="red"/>
                                 </Button>
@@ -1070,12 +1363,113 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                           ))}
                         </TableBody>
                       </Table>     
-                    </div>                          
+                    </div>      
 
-                    <Button className='mt-4' type="submit"
-                    onClick={() => console.log("Botón Crear Ingreso clickeado")}>
+                    {selectedProductDetail && (
+                      <ProductDetailModal
+                        product={selectedProductDetail}
+                        onClose={() => setSelectedProductDetail(null)}
+                      />
+                    )}                    
+
+                    <Button className='mt-4' type="button"
+                    onClick={() => setIsDialogOpen(true)}>
                       Registrar Venta
                     </Button>
+
+                      {/* Diálogo de confirmación */}
+                      <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmar Registro</AlertDialogTitle>
+                          </AlertDialogHeader>
+                          <p>¿Estás seguro de que deseas registrar esta venta?</p>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => setIsDialogOpen(false)}>
+                              Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => {
+                                setIsDialogOpen(false); // Cerrar el diálogo
+                                onSubmit(); // Llamar a la función de envío
+                              }}
+                            >
+                              Confirmar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      {/* ...other buttons like "Limpiar" and "Volver"... */}
+
+                      {/* AlertDialog Previo Venta */}
+                      <AlertDialog open={isPriceAlertOpen} onOpenChange={setIsPriceAlertOpen}>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Precio de Venta Requerido</AlertDialogTitle>
+                          </AlertDialogHeader>
+                          <p>
+                            El producto <strong>{productWithZeroPrice?.name}</strong> tiene un precio de venta de <strong>0</strong>. Por favor, ingrese un precio válido.
+                          </p>
+                          <div className="flex flex-col gap-2 mt-4">
+                            <Label className="text-sm font-medium">Nuevo Precio de Venta</Label>
+                            <Input
+                              type="number"
+                              min={0.01}
+                              step="0.01"
+                              placeholder="Ingrese un precio"
+                              onChange={(e) => {
+                                const newPrice = parseFloat(e.target.value);
+                                if (newPrice > 0) {
+                                  setProducts((prev) =>
+                                    prev.map((product) =>
+                                      product.id === productWithZeroPrice?.id
+                                        ? { ...product, price: newPrice }
+                                        : product
+                                    )
+                                  );
+
+                                  // Actualiza el estado de currentProduct
+                                  setCurrentProduct((prev) =>
+                                    prev && prev.id === productWithZeroPrice?.id
+                                      ? { ...prev, price: newPrice }
+                                      : prev
+                                  );
+
+                                  setValue("price", newPrice); // Actualiza el precio en el formulario
+                                }
+                              }}
+                            />
+                          </div>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => setIsPriceAlertOpen(false)}>
+                              Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => {
+                                if (productWithZeroPrice) {
+                                  const updatedProduct = products.find(
+                                    (product) => product.id === productWithZeroPrice.id
+                                  );
+                                  if (!updatedProduct || updatedProduct.price <= 0) {
+                                    toast.error("Debe ingresar un precio válido antes de continuar.");
+                                    return;
+                                  }
+                                  // ✅ Forzar selección del producto después de actualizar su precio
+                                  setCurrentProduct({
+                                    ...updatedProduct,
+                                    series: [], // Aquí puedes conservar series si es necesario
+                                  });
+                                  setValueProduct(updatedProduct.name); // Fuerza el valor en el combobox
+                                }
+                                setIsPriceAlertOpen(false); // Cierra el AlertDialog solo al confirmar
+                              }}
+                            >
+                              Confirmar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+
                     <Button className=''
                     type="button" // Evita que el botón envíe el formulario
                     onClick={() => {
@@ -1092,7 +1486,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                             store_adress: "",      
                             ruc: "",
                             fecha_emision_comprobante: "",
-                            comprobante: "",
+                            tipoComprobante: "",
                             serie: "",
                             total_comprobante: "",
                         })
@@ -1133,7 +1527,6 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                     >
                         Volver
                     </Button>
-
                     
         </form>
     </div>

@@ -86,10 +86,20 @@ export class ProductsService {
 
   findAll() {
     return this.prismaService.product.findMany({
-      include: {
-        category: true,
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        priceSell: true,
+        description: true,
+        categoryId: true,
+        category: {
+          select: {
+            name: true, // 👈 solo si necesitas mostrar el nombre de la categoría
+          },
+        },
       },
-    })
+    });
   }
 
   async findOne(id: number) {
@@ -227,5 +237,17 @@ export class ProductsService {
       console.error("Error en el backend:", error);
       throw new InternalServerErrorException('Hubo un error al eliminar los productos.');     
     }
+  }
+
+  async findByBarcode(code: string) {
+    return this.prismaService.product.findFirst({
+      where: {
+        OR: [
+          { barcode: code },
+          { qrCode: code },
+        ],
+        // Puedes omitir el OR si solo usas uno de esos campos
+      },
+    })
   }
 }

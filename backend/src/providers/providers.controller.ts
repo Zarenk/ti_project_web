@@ -16,12 +16,12 @@ export class ProvidersController {
 
   // providers.controller.ts
   @Post("check")
-  async checkProvider(@Body("name") name: string) {
-    if (!name) {
-      throw new BadRequestException("El nombre del proveedor es obligatorio.");
+  async checkProvider(@Body("documentNumber") documentNumber: string) {
+    if (!documentNumber) {
+      throw new BadRequestException("El Nombre y el Ruc son obligatorios.");
     }
 
-    const exists = await this.providersService.checkIfExists(name);
+    const exists = await this.providersService.checkIfExists(documentNumber);
     return { exists };
   }
 

@@ -24,10 +24,11 @@ export function ProviderForm({provider}: {provider: any}) {
       .min(3, "El nombre del proveedor debe tener al menos 3 caracteres")
       .max(50, "El nombre del proveedor no puede tener más de 50 caracteres")
       .regex(/^[a-zA-Z0-9\s]+$/, "El nombre solo puede contener letras, números y espacios"),
-    document: z.enum(["Sin Documento", "DNI", "RUC"], {
+    document: z.enum(["Otro Documento", "DNI", "RUC"], {
         required_error: "El tipo de documento es obligatorio",
       }),
-    documentNumber: z.string({}),
+    documentNumber: z.string({required_error: "Se requiere el Nro. de documento",})
+        .min(1, "El número de documento es obligatorio"),
     description: z.string({
     }),
     phone: z.string({
@@ -77,6 +78,10 @@ export function ProviderForm({provider}: {provider: any}) {
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
     try{
+        if (!data.documentNumber){
+            toast.error("El número de documento es obligatorio.");
+            return;
+        }
         // Validar el número de documento según el tipo de documento
         if (data.document === "DNI" && !/^\d{8}$/.test(data.documentNumber)) {
             toast.error("El número de documento debe tener exactamente 8 dígitos para DNI");
@@ -85,11 +90,6 @@ export function ProviderForm({provider}: {provider: any}) {
 
         if (data.document === "RUC" && !/^\d{11}$/.test(data.documentNumber)) {
             toast.error("El número de documento debe tener exactamente 11 dígitos para RUC");
-            return;
-        }
-
-        if (data.document === "Sin Documento" && data.documentNumber) {
-            toast.error("No se debe ingresar un número de documento para 'Sin Documento'");
             return;
         }
 
@@ -109,7 +109,7 @@ export function ProviderForm({provider}: {provider: any}) {
     catch(error: any){
 
         if (error.response?.status === 409 || error.response?.data?.message.includes("ya existe")) {
-            setNameError(error.response?.data?.message || "El nombre del proveedor ya existe.");
+            setNameError(error.response?.data?.message || "El Nro de documento del proveedor ya existe.");
             console.log("Estado nameError actualizado:", error.response?.data?.message);
         } else {
             console.error("Error inesperado:", error.message);
@@ -131,10 +131,7 @@ export function ProviderForm({provider}: {provider: any}) {
                         ></Input>
                         {form.formState.errors.name && (
                             <p className="text-red-500 text-sm">{form.formState.errors.name.message}</p>
-                        )}
-                        {nameError && (
-                            <p className="text-red-500 text-sm">{nameError}</p> // Muestra el error del nombre duplicado
-                        )}
+                        )}                       
                     </div>
 
                     <div className="flex flex-col">
@@ -142,14 +139,14 @@ export function ProviderForm({provider}: {provider: any}) {
                             Seleccione el Tipo de Documento
                         </Label>
                         <Select value={form.watch("document")} // Sincroniza el valor del Select con el formulario
-                        defaultValue={form.getValues("document")} onValueChange={(value) => setValue("document", value as "DNI" | "RUC" | "Sin Documento", {shouldValidate: true})}>
+                        defaultValue={form.getValues("document")} onValueChange={(value) => setValue("document", value as "DNI" | "RUC" | "Otro Documento", {shouldValidate: true})}>
                             <SelectTrigger>
                                 <SelectValue /> {/*placeholder="Documento" */}
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="DNI">DNI</SelectItem>
                                 <SelectItem value="RUC">RUC</SelectItem>
-                                <SelectItem value="Sin Documento">Sin Documento</SelectItem>
+                                <SelectItem value="Sin Documento">Otro Documento</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -168,6 +165,9 @@ export function ProviderForm({provider}: {provider: any}) {
                         {...register('documentNumber')}></Input>
                         {form.formState.errors.documentNumber && (
                             <p className="text-red-500 text-sm">{form.formState.errors.documentNumber.message}</p>
+                        )}
+                        {nameError && (
+                            <p className="text-red-500 text-sm">{nameError}</p> // Muestra el error del nombre duplicado
                         )}                       
                     </div>
                     
@@ -268,7 +268,7 @@ export function ProviderForm({provider}: {provider: any}) {
                     onClick={() => 
                         form.reset({
                             name: "",
-                            document: "Sin Documento",
+                            document: "Otro Documento",
                             documentNumber: "",
                             description: "",
                             phone: "",

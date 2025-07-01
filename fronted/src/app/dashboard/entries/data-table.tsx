@@ -57,6 +57,9 @@ createdAt:Date,
 store_name:string,
 provider_name:string, 
 user_username:string,
+date:Date,
+tipoMoneda:string,
+description:string,
 pdfUrl: string,
 guiaUrl: string,
 details: { product: string; quantity: number; price: number; series: string }[]; 
@@ -71,6 +74,9 @@ createdAt:Date,
 store_name:string,
 provider_name:string, 
 user_username:string,
+date:Date,
+tipoMoneda:string,
+description:string,
 pdfUrl: string,
 guiaUrl: string,
 details: { product: string; quantity: number; price: number, series:string }[]; 
@@ -80,20 +86,25 @@ details: { product: string; quantity: number; price: number, series:string }[];
 }: DataTableProps<TData, TValue>) {
 
   const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({})
+  React.useState<VisibilityState>({})
 
-  const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
+  // Ordenar los datos por la fecha de creación en orden descendente
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [data]);
   
   // Filtrar los datos según el rango de fechas seleccionado
+  const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
+
   const filteredData = useMemo(() => {
     if (!selectedDateRange?.from || !selectedDateRange?.to) {
-      return data; // Si no hay rango seleccionado, mostrar todos los datos
+      return sortedData; // Si no hay rango seleccionado, mostrar todos los datos
     }
 
     const from = new Date(selectedDateRange.from);
     const to = new Date(selectedDateRange.to);
 
-    return data.filter((item) => {
+    return sortedData.filter((item) => {
       const itemDate = new Date(item.createdAt); // Asegúrate de que `item.date` sea una fecha válida
       return itemDate >= from && itemDate <= to;
     });
@@ -622,7 +633,7 @@ details: { product: string; quantity: number; price: number, series:string }[];
               </AlertDialogHeader>
               <AlertDialogDescription>
               </AlertDialogDescription>
-              <div className="max-h-[70vh] overflow-y-auto space-y-8">
+              <div className="max-h-[80vh] overflow-y-auto space-y-8">
                 <div className="space-y-4">
                   {/* Información General */}
                   <h3 className="text-lg font-semibold">Información General</h3>
@@ -630,7 +641,14 @@ details: { product: string; quantity: number; price: number, series:string }[];
                   <div><strong>Tienda:</strong> {selectedRowData.store_name}</div>
                   <div><strong>Proveedor:</strong> {selectedRowData.provider_name}</div>
                   <div><strong>Usuario que registro :</strong> {selectedRowData.user_username}</div>
+                  <div><strong>Observacion(es) :</strong> {selectedRowData.description}</div>
                   <div><strong>Fecha de Creación:</strong> {new Date(selectedRowData.createdAt).toLocaleDateString()}</div>
+                  <div><strong>Fecha de Compra:</strong> {new Date(selectedRowData.date).toLocaleDateString()}</div>
+                  <div><strong>Moneda:</strong> {selectedRowData.tipoMoneda}</div>
+                  <div><strong>Total: </strong>
+                    {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"}{" "}
+                    {selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0).toFixed(2)}
+                  </div>
                   {/* Enlace para la factura */}
                   {selectedRowData.pdfUrl && (
                     <div>
@@ -665,8 +683,8 @@ details: { product: string; quantity: number; price: number, series:string }[];
                     <thead>
                       <tr>
                         <th className="border border-gray-300 px-4 py-2">Producto</th>
-                        <th className="border border-gray-300 px-4 py-2">Cantidad</th>
-                        <th className="border border-gray-300 px-4 py-2">Precio</th>
+                        <th className="border border-gray-300 px-4 py-2">Cant.</th>
+                        <th className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">Precio</th>
                         <th className="border border-gray-300 px-4 py-2">Series</th>
                       </tr>
                     </thead>
@@ -675,7 +693,9 @@ details: { product: string; quantity: number; price: number, series:string }[];
                         <tr key={index}>
                           <td className="border border-gray-300 px-4 py-2">{detail.product_name}</td>
                           <td className="border border-gray-300 px-4 py-2">{detail.quantity}</td>
-                          <td className="border border-gray-300 px-4 py-2">S/. {detail.price.toFixed(2)}</td>
+                          <td className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">
+                            {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}
+                          </td>
                           <td className="border border-gray-300 px-4 py-2">
                           {detail.series && detail.series.length > 0
                             ? detail.series.join(", ") // Mostrar las series separadas por comas
@@ -711,16 +731,22 @@ details: { product: string; quantity: number; price: number, series:string }[];
                         <div><strong>Tienda:</strong> {entry.store_name}</div>
                         <div><strong>Proveedor:</strong> {entry.provider_name}</div>
                         <div><strong>Usuario que registró:</strong> {entry.user_username}</div>
+                        <div><strong>Observacion(es) :</strong> {entry.description}</div>
                         <div><strong>Fecha de Creación:</strong> {new Date(entry.createdAt).toLocaleDateString()}</div>
-          
+                        <div><strong>Fecha de Compra:</strong> {new Date(entry.date).toLocaleDateString()}</div>
+                        <div><strong>Moneda:</strong> {entry.tipoMoneda}</div>
+                        <div><strong>Total: </strong>
+                          {entry.tipoMoneda === "PEN" ? "S/." : "$"}{" "}
+                          {entry.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0).toFixed(2)}
+                        </div>
                         {/* Detalles de Productos */}
                         <h3 className="text-lg font-semibold">Detalles de Productos</h3>
                         <table className="table-auto w-full border-collapse border border-gray-300">
                           <thead>
                             <tr>
                               <th className="border border-gray-300 px-4 py-2">Producto</th>
-                              <th className="border border-gray-300 px-4 py-2">Cantidad</th>
-                              <th className="border border-gray-300 px-4 py-2">Precio</th>
+                              <th className="border border-gray-300 px-4 py-2">Cant.</th>
+                              <th className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">Precio</th>
                               <th className="border border-gray-300 px-4 py-2">Series</th>
                             </tr>
                           </thead>
@@ -729,7 +755,9 @@ details: { product: string; quantity: number; price: number, series:string }[];
                               <tr key={detailIndex}>
                                 <td className="border border-gray-300 px-4 py-2">{detail.product_name}</td>
                                 <td className="border border-gray-300 px-4 py-2">{detail.quantity}</td>
-                                <td className="border border-gray-300 px-4 py-2">S/. {detail.price.toFixed(2)}</td>
+                                <td className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">
+                                  {entry.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}
+                                </td>
                                 <td className="border border-gray-300 px-4 py-2">
                                 {detail.series && detail.series.length > 0
                                   ? detail.series.join(", ") // Mostrar las series separadas por comas

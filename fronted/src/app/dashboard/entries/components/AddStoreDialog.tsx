@@ -10,18 +10,20 @@ import { EntriesType } from "../new/entries.form";
 interface AddStoreDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  setStores: React.Dispatch<React.SetStateAction<{ id: number; name: string; description:string; adress: string }[]>>;
+  setStores: React.Dispatch<React.SetStateAction<{ id: number; name: string; description:string; ruc:string; adress: string }[]>>;
   setValue: UseFormSetValue<EntriesType>; // Para actualizar valores en el formulario principal
 }
 
 export function AddStoreDialog({ isOpen, onClose, setStores, setValue }: AddStoreDialogProps) {
   const [newStoreName, setNewStoreName] = useState("");
   const [newStoreAddress, setNewStoreAddress] = useState("");
+  const [newStoreDescription, setNewStoreDescription] = useState("");
+  const [newStoreRuc, setNewStoreRuc] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAddStore = async () => {
     if (!newStoreName || !newStoreAddress) {
-      toast.error("Por favor, completa todos los campos.");
+      toast.error("Por favor, completa los campos Nombre y Direccion de la tienda.");
       return;
     }
 
@@ -38,8 +40,9 @@ export function AddStoreDialog({ isOpen, onClose, setStores, setValue }: AddStor
       // Crear la tienda en el backend
       const createdStore = await createStore({
         name: newStoreName,
+        description: newStoreDescription || "Descripción predeterminada",
+        ruc: newStoreRuc,
         adress: newStoreAddress,
-        description: "Descripción predeterminada",
       });
 
       if (createdStore && createdStore.id) {
@@ -53,6 +56,8 @@ export function AddStoreDialog({ isOpen, onClose, setStores, setValue }: AddStor
         // Limpiar los campos y cerrar el diálogo
         setNewStoreName("");
         setNewStoreAddress("");
+        setNewStoreDescription("");
+        setNewStoreRuc("");
         onClose();
         toast.success("Tienda agregada correctamente.");
       } else {
@@ -86,6 +91,34 @@ export function AddStoreDialog({ isOpen, onClose, setStores, setValue }: AddStor
               onChange={(e) => setNewStoreName(e.target.value)}
               placeholder="Ingresa el nombre de la tienda"
               maxLength={100}
+            />
+          </div>
+          <div>
+            <Label htmlFor="new-store-description" className="text-sm font-medium">
+              Descripcion / Razon Social(Opcional)
+            </Label>
+            <Input
+              id="new-store-description"
+              value={newStoreDescription}
+              onChange={(e) => setNewStoreDescription(e.target.value)}
+              placeholder="Ingresa las descripcion/razon social de la tienda(Opcional)"
+              maxLength={100}
+            />
+          </div>
+          <div>
+            <Label htmlFor="new-store-ruc" className="text-sm font-medium">
+              RUC(Opcional)
+            </Label>
+            <Input
+              id="new-store-ruc"
+              value={newStoreRuc}
+              onChange={(e) => {
+                // Permitir solo números y limitar a 11 caracteres
+                const value = e.target.value.replace(/\D/g, ''); // Elimina caracteres no numéricos
+                setNewStoreRuc(value.slice(0, 11)); // Limita a 11 caracteres
+              }}
+              placeholder="Ingresa el ruc de la tienda(Opcional)"
+              maxLength={11}
             />
           </div>
           <div>

@@ -52,7 +52,7 @@ import { useRouter } from "next/navigation"
 import { DataTableToolbar } from "./data-table-components/data-table-toolbar"
  
 interface DataTableProps<TData extends {id:string, name:string, 
-  description:string, phone: string, adress: string, email: string, website: string
+  description:string, ruc:string, phone: string, adress: string, email: string, website: string
   status:string, createdAt:Date
   }, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -60,7 +60,7 @@ interface DataTableProps<TData extends {id:string, name:string,
 }
  
 export function DataTable<TData extends {id:string, name:string, 
-  description:string, phone: string, adress: string, email: string, website: string
+  description:string, ruc:string, phone: string, adress: string, email: string, website: string
   status:string, createdAt:Date}, TValue>({
   columns,
   data,
@@ -222,6 +222,7 @@ export function DataTable<TData extends {id:string, name:string,
   const columnLabels: Record<string, string> = {
     name: "Nombre",
     description: "Descripción",
+    ruc: "RUC",
     phone: "Telefono",
     adress: "Direccion", 
     email: "Email", 
@@ -293,12 +294,13 @@ export function DataTable<TData extends {id:string, name:string,
               <thead>
                 <tr>
                   <th style="width: 15%;">Nombre</th>
-                  <th style="width: 15%;">Descripcion</th>
+                  <th style="width: 15%;">Descripcion/R.S.</th>
+                  <th style="width: 10%;">Ruc</th>
                   <th style="width: 10%;">Telefono</th>
                   <th style="width: 15%;">Direccion</th>
                   <th style="width: 10%;">Email</th>
-                  <th style="width: 10%;">Pagina web</th>
-                  <th style="width: 10%;">Estado</th>
+                  <th style="width: 5%;">Pagina web</th>
+                  <th style="width: 5%;">Estado</th>
                   <th style="width: 15%;">Fecha</th>
                 </tr>
               </thead>
@@ -312,6 +314,9 @@ export function DataTable<TData extends {id:string, name:string,
                     </td>
                     <td class="truncate" title="${row.description}">
                       ${row.description}
+                    </td>
+                    <td class="truncate" title="${row.ruc}">
+                      ${row.ruc}
                     </td>
                     <td class="truncate"${row.phone}">
                       ${row.phone}
@@ -742,7 +747,8 @@ export function DataTable<TData extends {id:string, name:string,
                 </AlertDialogDescription>
                 <span className="block space-y-2">
                     <div><strong>Nombre:</strong> {selectedRowData.name}</div>
-                    <div><strong>Descripción:</strong> {selectedRowData.description}</div>
+                    <div><strong>Descripción / Razon S. :</strong> {selectedRowData.description}</div>
+                    <div><strong>Ruc:</strong> {selectedRowData.ruc}</div>
                     <div><strong>Telefono:</strong> S/. {selectedRowData.phone}</div>
                     <div><strong>Direccion:</strong> S/. {selectedRowData.adress}</div>
                     <div><strong>Email:</strong> {selectedRowData.email}</div>
@@ -777,13 +783,16 @@ export function DataTable<TData extends {id:string, name:string,
                           <strong>Nombre:</strong> {row.name}
                         </div>
                         <div>
-                          <strong>Descripción:</strong> {row.description}
+                          <strong>Descripción/R.S:</strong> {row.description}
                         </div>
                         <div>
-                          <strong>Telefono:</strong> S/. {row.phone}
+                          <strong>Ruc:</strong> {row.ruc}
                         </div>
                         <div>
-                          <strong>Direccion:</strong> S/. {row.adress}
+                          <strong>Telefono:</strong> {row.phone}
+                        </div>
+                        <div>
+                          <strong>Direccion:</strong> {row.adress}
                         </div>
                         <div>
                           <strong>Email:</strong> {row.email}

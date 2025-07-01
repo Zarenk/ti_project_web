@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Request, UseGuards, Get } from '@nestjs/common';
+import { Controller, Post, Body, Request, UseGuards, Get, NotFoundException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ApiResponse } from '@nestjs/swagger';
@@ -26,6 +26,18 @@ export class UsersController {
   @Post('profile')
   getProfile(@Request() req) {
     return req.user;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('profileid')
+  async getProfileId(@Request() req) {
+    const user = await this.usersService.findOne(req.user.userId);
+  
+    if (!user) {
+      throw new NotFoundException(`No se encontró el usuario con ID ${req.user.userId}`);
+    }
+  
+    return { id: user.id, name: user.username }; // Devuelve solo los datos necesarios
   }
 
   @Get()

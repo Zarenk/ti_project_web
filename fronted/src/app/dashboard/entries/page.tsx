@@ -24,6 +24,9 @@ export default async function Page() {
     user_username: entry.user?.username || "Sin usuario",
     store_name: entry.store?.name   || "Sin tienda",
     store_adress: entry.store?.adress || "Sin direccion",
+    date: entry.date ? new Date(entry.date) : new Date(), // Asegúrate de que la fecha esté en el formato correcto
+    description: entry.description || "Sin descripcion",
+    tipoMoneda: entry.tipoMoneda || "Sin moneda",
     details: entry.details.map((detail: any) => ({ 
         product_name: detail.product?.name || "Sin nombre",
         quantity: detail.quantity || 0, 

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns:tns="http://service.sunat.gob.pe"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+    name="BillService"
+    targetNamespace="http://service.sunat.gob.pe">
+
+  <wsdl:types>
+    <xsd:schema targetNamespace="http://service.sunat.gob.pe">
+      <xsd:element name="sendBill">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="fileName" type="xsd:string"/>
+            <xsd:element name="contentFile" type="xsd:base64Binary"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+
+      <xsd:element name="sendBillResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="applicationResponse" type="xsd:base64Binary"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+    </xsd:schema>
+  </wsdl:types>
+
+  <wsdl:message name="sendBillRequest">
+    <wsdl:part name="parameters" element="tns:sendBill"/>
+  </wsdl:message>
+  <wsdl:message name="sendBillResponse">
+    <wsdl:part name="parameters" element="tns:sendBillResponse"/>
+  </wsdl:message>
+
+  <wsdl:portType name="BillServicePortType">
+    <wsdl:operation name="sendBill">
+      <wsdl:input message="tns:sendBillRequest"/>
+      <wsdl:output message="tns:sendBillResponse"/>
+    </wsdl:operation>
+  </wsdl:portType>
+
+  <wsdl:binding name="BillServicePortBinding" type="tns:BillServicePortType">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http" style="document"/>
+    <wsdl:operation name="sendBill">
+      <soap:operation soapAction="" style="document"/>
+      <wsdl:input>
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+
+  <wsdl:service name="BillService">
+    <wsdl:port name="BillServicePort" binding="tns:BillServicePortBinding">
+      <soap:address location="https://e-beta.sunat.gob.pe/ol-ti-itemision-guia-gem-beta/billService"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

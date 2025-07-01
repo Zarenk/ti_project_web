@@ -14,18 +14,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import Link from "next/link"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { StringDecoder } from 'string_decoder';
-import { deleteEntry } from './entries.api';
+import { deleteEntry, getPdfGuiaUrl, getPdfUrl } from './entries.api';
 
 
 export type Entryes = {
     id: string
     createdAt: Date
+    tipoMoneda: string
+    date: Date
+    description?: string
     provider: {
         id: string
         name: string
@@ -41,8 +42,11 @@ export type Entryes = {
     provider_name: string
     user_username: string
     store_name: string
-    details: { product: string; quantity: number; price: number }[];
+    pdfUrl: string,
+    guiaUrl: string,
+    details: { product: string; product_name: string; quantity: number; price: number; series: string[] }[];
 }
+
 
 export const columns: ColumnDef<Entryes>[] = [
     {
@@ -149,17 +153,46 @@ export const columns: ColumnDef<Entryes>[] = [
         cell: ({ row }) => {
             const provider = row.original.provider; // Accede al usuario desde los datos de la fila
             return <div className="font-medium">{provider?.name || 'Sin proveedor'}</div>;
-          },
-          filterFn: (row, columnId, filterValue) => { // no elimines el columnId
-            // Filtra las filas basándose en el ID de la categoría
-            return filterValue.includes(row.original.provider?.id);
-        },
+        }
+    },
+    {
+      accessorKey: 'total',
+      header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            >
+              Total
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          )
+      },
+      cell: ({ row }) => {
+          // Calcular el total dinámicamente
+          const total = row.original.details.reduce((sum, detail) => {
+            return sum + detail.price * detail.quantity;
+          }, 0);
+          return (
+            <div className="font-medium">
+              {row.original.tipoMoneda === "PEN" ? "S/." : "$"} {total.toFixed(2)}
+            </div>
+          );
+      },
+      sortingFn: (rowA, rowB) => {
+        // Calcular el total para ambas filas
+        const totalA = rowA.original.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0);
+        const totalB = rowB.original.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0);
+    
+        // Comparar los totales
+        return totalA - totalB;
+      },
     },
     {
       id: "actions",
       cell: ({ row }) => {
 
-        const products = row.original
+        const entries = row.original
 
         const router = useRouter(); // Usa useRouter dentro del componente React
         const handleRemoveEntry = async (id: number) => {
@@ -243,7 +276,7 @@ export const columns: ColumnDef<Entryes>[] = [
                 </AlertDialogCancel>
                 <AlertDialogAction
                   onClick={async () => {
-                    await handleRemoveEntry(Number(products.id))
+                    await handleRemoveEntry(Number(entries.id))
                     setIsDialogOpen(false)
                   }}
                 >
@@ -257,13 +290,84 @@ export const columns: ColumnDef<Entryes>[] = [
           <AlertDialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Detalles del Producto</AlertDialogTitle>
+                <AlertDialogTitle>Informacion General</AlertDialogTitle>
               </AlertDialogHeader>
               <AlertDialogDescription>               
               </AlertDialogDescription>
+              <div className="max-h-[80vh] overflow-y-auto space-y-8">
                 <span className="block space-y-2">
-                  <div><strong>Fecha de Creación:</strong> {new Date(products.createdAt).toLocaleDateString()}</div>
+                  <div><strong>Tienda:</strong> {entries.store_name || "Sin tienda"}</div>
+                  <div><strong>Proveedor:</strong> {entries.provider?.name || "Sin proveedor"}</div>
+                  <div><strong>Usuario que registró:</strong> {entries.user?.username || "Sin usuario"}</div>
+                  <div><strong>Observación(es):</strong> {entries.description || "Sin observaciones"}</div>
+                  <div><strong>Fecha de Creación:</strong> {new Date(entries.createdAt).toLocaleDateString()}</div>
+                  <div><strong>Fecha de Compra:</strong> {new Date(entries.date).toLocaleDateString()}</div>
+                  <div><strong>Moneda:</strong> {entries.tipoMoneda}</div>
+                  <div><strong>Total: </strong>
+                    {entries.tipoMoneda === "PEN" ? "S/." : "$"}{" "}
+                    {entries.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0).toFixed(2)}
+                  </div>
+                  {/* Enlace para la factura */}
+                  {entries.pdfUrl && (
+                    <div>
+                      <strong>Factura:</strong>{" "}
+                      <a
+                        href={getPdfUrl(entries.pdfUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 underline"
+                      >
+                        Ver Factura
+                      </a>
+                    </div>
+                  )}
+                  {/* Enlace para la factura */}
+                  {entries.guiaUrl && (
+                    <div>
+                      <strong>Guia de Remision:</strong>{" "}
+                      <a
+                        href={getPdfGuiaUrl(entries.guiaUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 underline"
+                      >
+                        Ver Guia
+                      </a>
+                    </div>
+                  )}                  
                 </span>
+
+                {/* Tabla de detalles */}
+                <div className="mt-4">
+                  <h3 className="text-lg font-bold">Detalles</h3>
+                  <table className="table-auto w-full border-collapse border border-gray-300 mt-2">
+                    <thead>
+                      <tr>
+                        <th className="border border-gray-300 px-4 py-2">Producto</th>
+                        <th className="border border-gray-300 px-4 py-2">Cant.</th>
+                        <th className="border border-gray-300 px-4 py-2">Precio</th>
+                        <th className="border border-gray-300 px-4 py-2">Series</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.details.map((detail, index) => (
+                        <tr key={index}>
+                          <td className="border border-gray-300 px-4 py-2">{detail.product_name}</td>
+                          <td className="border border-gray-300 px-4 py-2">{detail.quantity}</td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {entries.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {detail.series && detail.series.length > 0
+                            ? detail.series.join(", ") // Mostrar las series separadas por comas
+                            : "Sin series"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={handleDialogViewClose}>Cerrar</AlertDialogCancel>
               </AlertDialogFooter>
