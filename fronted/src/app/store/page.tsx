@@ -21,6 +21,7 @@ interface Product {
   name: string
   description: string
   price: number
+  brand: string
   category: string
   image?: string | null
 }
@@ -37,6 +38,7 @@ export default function StorePage() {
           name: p.name,
           description: p.description || "",
           price: p.priceSell ?? p.price,
+          brand: p.brand || "Sin marca",
           category: p.category?.name || "Sin categoría",
           image: p.image || null,
         })) as Product[]
@@ -52,10 +54,16 @@ export default function StorePage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState("name")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([])
 
-  // Obtener categorías y marcas únicas
-  const categories = [...new Set(products.map((p) => p.category))]
-  const brands = [...new Set(products.map((p) => p.brand))]
+  // Obtener categorías y marcas únicas ordenadas alfanuméricamente
+  const categories = [...new Set(products.map((p) => p.category))].sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true })
+  )
+
+  const brands = [...new Set(products.map((p) => p.brand))].sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true })
+  )
 
   // Función para manejar filtros de categoría
   const handleCategoryChange = (category: string, checked: CheckedState) => {
@@ -66,7 +74,6 @@ export default function StorePage() {
     }
   }
 
-  // Función para manejar filtros de marca
   const handleBrandChange = (brand: string, checked: CheckedState) => {
     if (checked === true) {
       setSelectedBrands([...selectedBrands, brand])
@@ -81,10 +88,12 @@ export default function StorePage() {
       // Filtro por búsqueda
       const matchesSearch =
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchTerm.toLowerCase())
+        product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.brand.toLowerCase().includes(searchTerm.toLowerCase())
 
       // Filtro por categoría
       const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(product.category)
+      const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(product.brand)
 
       return matchesSearch && matchesCategory
     })
@@ -98,6 +107,8 @@ export default function StorePage() {
           return a.price - b.price
         case "price-high":
           return b.price - a.price
+        case "brand":
+          return a.brand.localeCompare(b.brand)
         default:
           return 0
       }
@@ -109,6 +120,7 @@ export default function StorePage() {
   // Función para limpiar filtros
   const clearFilters = () => {
     setSelectedCategories([])
+    setSelectedBrands([])
     setSearchTerm("")
     setSortBy("name")
   }
@@ -194,6 +206,7 @@ export default function StorePage() {
                     </div>
                   </AccordionContent>
                 </AccordionItem>
+                
               </Accordion>
             </div>
           </aside>
@@ -235,6 +248,12 @@ export default function StorePage() {
                           Precio (Mayor a Menor)
                         </div>
                       </SelectItem>
+                      <SelectItem value="brand">
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-4 w-4" />
+                          Marca (A-Z)
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -272,6 +291,7 @@ export default function StorePage() {
                       </div>
                       <h3 className="font-semibold text-lg mb-1 line-clamp-1">{product.name}</h3>
                       <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
+                      <span className="text-sm text-gray-500 mb-2 block">{product.brand}</span>
                       <div className="flex items-center justify-between">
                         <span className="text-2xl font-bold text-green-600">${product.price.toFixed(2)}</span>
                       </div>
