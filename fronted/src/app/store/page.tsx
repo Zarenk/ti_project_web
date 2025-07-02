@@ -1,8 +1,8 @@
 "use client"
 
 import Image from "next/image"
-import { Search, Filter, Package, Calendar, TrendingUp, DollarSign, Tag } from "lucide-react"
-import { useState, useMemo } from "react"
+import { Search, Filter, Package, DollarSign, Tag } from "lucide-react"
+import { useState, useMemo, useEffect } from "react"
 import type { CheckedState } from "@radix-ui/react-checkbox"
 
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/accordion"
+import { getProducts } from "../dashboard/products/products.api"
 
 // Tipos
 interface Product {
@@ -20,153 +21,40 @@ interface Product {
   name: string
   description: string
   price: number
-  brand: string
   category: string
-  stock: number
-  date: string
-  relevance: number
-  image: string
-}
-
-interface SortOption {
-  value: string
-  label: string
-  icon: React.ReactNode
+  image?: string | null
 }
 
 export default function StorePage() {
-  // Datos de ejemplo de productos
-  const products: Product[] = [
-    {
-      id: 1,
-      name: "iPhone 15 Pro",
-      description: "Smartphone de última generación con chip A17 Pro",
-      price: 1199.99,
-      brand: "Apple",
-      category: "Smartphones",
-      stock: 25,
-      date: "2024-09-15",
-      relevance: 95,
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      id: 2,
-      name: "MacBook Air M3",
-      description: "Laptop ultradelgada con chip M3 de Apple",
-      price: 1299.99,
-      brand: "Apple",
-      category: "Laptops",
-      stock: 12,
-      date: "2024-03-10",
-      relevance: 90,
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      id: 3,
-      name: "Samsung Galaxy S24",
-      description: "Smartphone Android con cámara de 200MP",
-      price: 899.99,
-      brand: "Samsung",
-      category: "Smartphones",
-      stock: 18,
-      date: "2024-01-20",
-      relevance: 88,
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      id: 4,
-      name: "Dell XPS 13",
-      description: "Laptop premium con pantalla InfinityEdge",
-      price: 999.99,
-      brand: "Dell",
-      category: "Laptops",
-      stock: 8,
-      date: "2023-11-05",
-      relevance: 82,
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      id: 5,
-      name: "AirPods Pro 2",
-      description: "Auriculares inalámbricos con cancelación de ruido",
-      price: 249.99,
-      brand: "Apple",
-      category: "Accesorios",
-      stock: 45,
-      date: "2023-09-12",
-      relevance: 85,
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      id: 6,
-      name: "Sony WH-1000XM5",
-      description: "Auriculares over-ear con cancelación de ruido premium",
-      price: 399.99,
-      brand: "Sony",
-      category: "Accesorios",
-      stock: 22,
-      date: "2023-05-15",
-      relevance: 87,
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      id: 7,
-      name: "iPad Pro 12.9",
-      description: "Tablet profesional con chip M2 y pantalla Liquid Retina",
-      price: 1099.99,
-      brand: "Apple",
-      category: "Tablets",
-      stock: 15,
-      date: "2023-10-18",
-      relevance: 89,
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      id: 8,
-      name: "Surface Pro 9",
-      description: "Tablet 2 en 1 con Windows 11 y teclado desmontable",
-      price: 1199.99,
-      brand: "Microsoft",
-      category: "Tablets",
-      stock: 10,
-      date: "2023-08-22",
-      relevance: 80,
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      id: 9,
-      name: "Gaming Mouse Pro",
-      description: "Mouse gaming con sensor óptico de alta precisión",
-      price: 79.99,
-      brand: "Logitech",
-      category: "Accesorios",
-      stock: 35,
-      date: "2024-02-14",
-      relevance: 75,
-      image: "/placeholder.svg?height=300&width=300",
-    },
-    {
-      id: 10,
-      name: "Mechanical Keyboard RGB",
-      description: "Teclado mecánico con switches Cherry MX y RGB",
-      price: 149.99,
-      brand: "Corsair",
-      category: "Accesorios",
-      stock: 28,
-      date: "2024-01-08",
-      relevance: 78,
-      image: "/placeholder.svg?height=300&width=300",
-    },
-  ]
+  const [products, setProducts] = useState<Product[]>([])
+
+  useEffect(() => {
+    async function fetchProducts() {
+      try {
+        const data = await getProducts()
+        const mapped = data.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || "",
+          price: p.priceSell ?? p.price,
+          category: p.category?.name || "Sin categoría",
+          image: p.image || null,
+        })) as Product[]
+        setProducts(mapped)
+      } catch (error) {
+        console.error("Error fetching products:", error)
+      }
+    }
+
+    fetchProducts()
+  }, [])
 
   const [searchTerm, setSearchTerm] = useState("")
-  const [sortBy, setSortBy] = useState("relevance")
+  const [sortBy, setSortBy] = useState("name")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([])
 
-  // Obtener categorías y marcas únicas
+  // Obtener categorías únicas
   const categories = [...new Set(products.map((p) => p.category))]
-  const brands = [...new Set(products.map((p) => p.brand))]
 
   // Función para manejar filtros de categoría
   const handleCategoryChange = (category: string, checked: CheckedState) => {
@@ -177,14 +65,6 @@ export default function StorePage() {
     }
   }
 
-  // Función para manejar filtros de marca
-  const handleBrandChange = (brand: string, checked: CheckedState) => {
-    if (checked === true) {
-      setSelectedBrands([...selectedBrands, brand])
-    } else if (checked === false) {
-      setSelectedBrands(selectedBrands.filter((b) => b !== brand))
-    }
-  }
 
   // Filtrar y ordenar productos
   const filteredAndSortedProducts = useMemo(() => {
@@ -192,16 +72,12 @@ export default function StorePage() {
       // Filtro por búsqueda
       const matchesSearch =
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.brand.toLowerCase().includes(searchTerm.toLowerCase())
+        product.description.toLowerCase().includes(searchTerm.toLowerCase())
 
       // Filtro por categoría
       const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(product.category)
 
-      // Filtro por marca
-      const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(product.brand)
-
-      return matchesSearch && matchesCategory && matchesBrand
+      return matchesSearch && matchesCategory
     })
 
     // Ordenar productos
@@ -213,27 +89,19 @@ export default function StorePage() {
           return a.price - b.price
         case "price-high":
           return b.price - a.price
-        case "date":
-          return new Date(b.date).getTime() - new Date(a.date).getTime()
-        case "stock":
-          return b.stock - a.stock
-        case "brand":
-          return a.brand.localeCompare(b.brand)
-        case "relevance":
         default:
-          return b.relevance - a.relevance
+          return 0
       }
     })
 
     return filtered
-  }, [products, searchTerm, sortBy, selectedCategories, selectedBrands])
+  }, [products, searchTerm, sortBy, selectedCategories])
 
   // Función para limpiar filtros
   const clearFilters = () => {
     setSelectedCategories([])
-    setSelectedBrands([])
     setSearchTerm("")
-    setSortBy("relevance")
+    setSortBy("name")
   }
 
   return (
@@ -275,7 +143,7 @@ export default function StorePage() {
                 </Button>
               </div>
 
-              <Accordion type="multiple" defaultValue={["categories", "brands"]} className="w-full">
+              <Accordion type="multiple" defaultValue={["categories"]} className="w-full">
                 {/* Filtro por categorías */}
                 <AccordionItem value="categories">
                   <AccordionTrigger className="text-base">Categorías</AccordionTrigger>
@@ -297,26 +165,6 @@ export default function StorePage() {
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* Filtro por marcas */}
-                <AccordionItem value="brands">
-                  <AccordionTrigger className="text-base">Marcas</AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-3">
-                      {brands.map((brand) => (
-                        <div key={brand} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`brand-${brand}`}
-                            checked={selectedBrands.includes(brand)}
-                            onCheckedChange={(checked) => handleBrandChange(brand, checked as CheckedState)}
-                          />
-                          <Label htmlFor={`brand-${brand}`} className="text-sm font-normal">
-                            {brand}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
               </Accordion>
             </div>
           </aside>
@@ -340,12 +188,6 @@ export default function StorePage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="relevance">
-                        <div className="flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4" />
-                          Relevancia
-                        </div>
-                      </SelectItem>
                       <SelectItem value="name">
                         <div className="flex items-center gap-2">
                           <Tag className="h-4 w-4" />
@@ -362,24 +204,6 @@ export default function StorePage() {
                         <div className="flex items-center gap-2">
                           <DollarSign className="h-4 w-4" />
                           Precio (Mayor a Menor)
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="date">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4" />
-                          Fecha (Más Reciente)
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="stock">
-                        <div className="flex items-center gap-2">
-                          <Package className="h-4 w-4" />
-                          Stock (Mayor a Menor)
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="brand">
-                        <div className="flex items-center gap-2">
-                          <Tag className="h-4 w-4" />
-                          Marca (A-Z)
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -408,12 +232,6 @@ export default function StorePage() {
                           height={300}
                           className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
                         />
-                        <Badge
-                          variant={product.stock > 20 ? "default" : product.stock > 10 ? "secondary" : "destructive"}
-                          className="absolute top-2 right-2"
-                        >
-                          Stock: {product.stock}
-                        </Badge>
                       </div>
                     </CardHeader>
 
@@ -425,16 +243,8 @@ export default function StorePage() {
                       </div>
                       <h3 className="font-semibold text-lg mb-1 line-clamp-1">{product.name}</h3>
                       <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
-                      <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
-                        <span className="font-medium">{product.brand}</span>
-                        <span>{new Date(product.date).toLocaleDateString()}</span>
-                      </div>
                       <div className="flex items-center justify-between">
                         <span className="text-2xl font-bold text-green-600">${product.price.toFixed(2)}</span>
-                        <div className="flex items-center gap-1">
-                          <TrendingUp className="h-3 w-3 text-gray-400" />
-                          <span className="text-xs text-gray-500">{product.relevance}%</span>
-                        </div>
                       </div>
                     </CardContent>
 
