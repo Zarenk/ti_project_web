@@ -53,10 +53,9 @@ export default function StorePage() {
   const [sortBy, setSortBy] = useState("name")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
 
-  // Obtener categorías únicas ordenadas alfanuméricamente
-  const categories = [...new Set(products.map((p) => p.category))].sort((a, b) =>
-    a.localeCompare(b, undefined, { numeric: true })
-  )
+  // Obtener categorías y marcas únicas
+  const categories = [...new Set(products.map((p) => p.category))]
+  const brands = [...new Set(products.map((p) => p.brand))]
 
   // Función para manejar filtros de categoría
   const handleCategoryChange = (category: string, checked: CheckedState) => {
@@ -64,6 +63,15 @@ export default function StorePage() {
       setSelectedCategories([...selectedCategories, category])
     } else if (checked === false) {
       setSelectedCategories(selectedCategories.filter((c) => c !== category))
+    }
+  }
+
+  // Función para manejar filtros de marca
+  const handleBrandChange = (brand: string, checked: CheckedState) => {
+    if (checked === true) {
+      setSelectedBrands([...selectedBrands, brand])
+    } else if (checked === false) {
+      setSelectedBrands(selectedBrands.filter((b) => b !== brand))
     }
   }
 
@@ -159,6 +167,27 @@ export default function StorePage() {
                           />
                           <Label htmlFor={`category-${category}`} className="text-sm font-normal">
                             {category}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Filtro por marcas */}
+                <AccordionItem value="brands">
+                  <AccordionTrigger className="text-base">Marcas</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-3">
+                      {brands.map((brand) => (
+                        <div key={brand} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`brand-${brand}`}
+                            checked={selectedBrands.includes(brand)}
+                            onCheckedChange={(checked) => handleBrandChange(brand, checked as CheckedState)}
+                          />
+                          <Label htmlFor={`brand-${brand}`} className="text-sm font-normal">
+                            {brand}
                           </Label>
                         </div>
                       ))}
