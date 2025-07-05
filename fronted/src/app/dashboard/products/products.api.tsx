@@ -45,8 +45,8 @@ export async function createProduct(productData: any){
     return data; // Asegúrate de que el backend devuelva un objeto con `id`, `name`, y `price`
 }
 
-export async function verifyOrCreateProducts(products: { name: string; price: number; description?: string; categoryId?: number }[]){
-  try{
+export async function verifyOrCreateProducts(products: { name: string; price: number; description?: string; brand?: string; categoryId?: number }[]){
+  try{ 
     const res = await fetch(`${BACKEND_URL}/api/products/verify-or-create-products`,{
       method: 'POST',
       headers: {

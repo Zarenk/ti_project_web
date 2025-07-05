@@ -51,13 +51,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useRouter } from "next/navigation"
  
 interface DataTableProps<TData extends {id:string, createdAt:Date, name:string, 
-  description:string, price: number, priceSell: number, status: string, category_name: string}, TValue> {
+  description:string, brand?: string, price: number, priceSell: number, status: string, category_name: string}, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
 }
  
 export function DataTable<TData extends {id:string, createdAt:Date, name:string, 
-  description:string, price: number, priceSell: number, status: string, category_name: string}, TValue>({
+  description:string, brand?: string, price: number, priceSell: number, status: string, category_name: string}, TValue>({
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
@@ -220,6 +220,7 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
     name: "Nombre",
     createdAt: "Fecha de Creación",
     description: "Descripción",
+    brand: "Marca",
     price: "Precio",
     priceSell: "Precio Venta", 
     category_name: "Categoría", 
@@ -291,6 +292,7 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
                   <th style="width: 20%;">Nombre</th>
                   <th style="width: 20%;">Categoría</th>
                   <th style="width: 16%;">Descripción</th>
+                  <th style="width: 12%;">Marca</th>
                   <th style="width: 9%;">Precio</th>
                   <th style="width: 10%;">Precio Venta</th>
                   <th style="width: 10%;">Estado</th>
@@ -311,6 +313,7 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
                     <td class="truncate"${row.description}">
                       ${row.description}
                     </td>
+                    <td class="truncate">${row.brand ?? ''}</td>
                     <td>S/. ${row.price}</td>
                     <td>S/. ${row.priceSell}</td>
                     <td>${row.status}</td>
@@ -803,6 +806,9 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
                         </div>
                         <div>
                           <strong>Descripción:</strong> {row.description}
+                        </div>
+                        <div>
+                          <strong>Marca:</strong> {row.brand || 'Sin marca'}
                         </div>
                         <div>
                           <strong>Precio:</strong> S/. {row.price}

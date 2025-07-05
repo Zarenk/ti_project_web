@@ -75,6 +75,7 @@ export async function handleFormSubmission({
       name: product.name,
       price: product.price,
       quantity: product.quantity,
+      brand: product.brand || null, // Agregar la marca si está disponible
       categoryId: categories.find((cat: any) => cat.name === product.category_name)?.id || null,
     }));
 

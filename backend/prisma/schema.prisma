@@ -19,6 +19,7 @@ model Product{
   barcode   String?  @unique // Opcional pero único
   qrCode    String?  @unique // Opcional pero único
   description String?
+  brand String?
   price Float
   priceSell Float?
   status String?

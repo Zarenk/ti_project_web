@@ -27,6 +27,7 @@ export type Products = {
     id: string
     name: string
     description: string
+    brand?: string
     price: number
     priceSell: number
     status: string
@@ -111,6 +112,20 @@ export const columns: ColumnDef<Products>[] = [
           )
         },
     },
+    {
+        accessorKey: 'brand',
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            >
+              Marca
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          )
+        },
+    },  
     {
         accessorKey: 'price',
         header: ({ column }) => {
@@ -288,6 +303,7 @@ export const columns: ColumnDef<Products>[] = [
                   <div><strong>Descripción:</strong> {products.description}</div>
                   <div><strong>Precio Compra:</strong> S/. {products.price}</div>
                   <div><strong>Precio Venta:</strong> S/. {products.priceSell}</div>
+                  <div><strong>Marca:</strong> {products.brand || 'Sin marca'}</div>
                   <div><strong>Estado:</strong> {products.status}</div>
                   <div><strong>Categoría:</strong> {products.category?.name || "Sin categoría"}</div>
                   <div><strong>Fecha de Creación:</strong> {new Date(products.createdAt).toLocaleDateString()}</div>

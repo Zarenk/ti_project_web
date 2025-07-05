@@ -33,7 +33,7 @@ export class ProductsService {
     }
   }
 
-  async verifyOrCreateProducts(products: { name: string; price: number; description?: string; categoryId?: number }[]) {
+  async verifyOrCreateProducts(products: { name: string; price: number; description?: string; brand?: string; categoryId?: number }[]) {
     const createdProducts: {
       name: string;
       id: number;
@@ -70,6 +70,7 @@ export class ProductsService {
             name: product.name,
             price: product.price,
             description: product.description || '',
+            brand: product.brand || null,
             categoryId: product.categoryId || defaultCategory.id,
           },
         });
@@ -92,6 +93,7 @@ export class ProductsService {
         price: true,
         priceSell: true,
         description: true,
+        brand: true,
         categoryId: true,
         category: {
           select: {
@@ -171,6 +173,7 @@ export class ProductsService {
               status: product.status,
               name: product.name,
               description: product.description,
+              brand: product.brand,
             },
           })
         )

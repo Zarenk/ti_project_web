@@ -16,7 +16,7 @@ export class ProductsController {
 
   @Post('verify-or-create-products')
   async verifyOrCreateProducts(
-    @Body() products: { name: string; price: number; description?: string; categoryId?: number }[],
+    @Body() products: { name: string; price: number; description?: string; brand?: string; categoryId?: number }[],
   ) {
     return this.productsService.verifyOrCreateProducts(products);
   }

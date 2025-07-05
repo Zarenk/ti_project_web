@@ -25,6 +25,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
       .regex(/^[a-zA-Z0-9\s]+$/, "El nombre solo puede contener letras, números y espacios"),
     description: z.string({
     }),
+    brand: z.string().optional(),
     price: z.number({
       required_error: "Se requiere el precio del producto",
       }).min(0, "El precio debe ser un número positivo")
@@ -51,6 +52,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
     defaultValues: {
         name: product?.name || '',
         description: product?.description || '',
+        brand: product?.brand || '',
         price: product?.price || 0.00,
         priceSell: product?.priceSell || 0.00,
         status: product?.status || "Activo" , // Valor predeterminado
@@ -135,6 +137,18 @@ export function ProductForm({product, categories}: {product: any; categories: an
                         {...register('description')}></Input>
                         {form.formState.errors.description && (
                             <p className="text-red-500 text-sm">{form.formState.errors.description.message}</p>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col">
+                        <Label className='py-3'>
+                            Marca
+                        </Label>
+                        <Input
+                        maxLength={50}
+                        {...register('brand')}></Input>
+                        {form.formState.errors.brand && (
+                            <p className="text-red-500 text-sm">{form.formState.errors.brand.message}</p>
                         )}
                     </div>
 
@@ -242,6 +256,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
                         form.reset({
                             name: "",
                             description: "",
+                            brand: "",
                             price: 0.0,
                             priceSell: 0.0,
                             image: "",
