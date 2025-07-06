@@ -94,6 +94,7 @@ export class ProductsService {
         priceSell: true,
         description: true,
         brand: true,
+        createdAt: true,
         categoryId: true,
         category: {
           select: {
