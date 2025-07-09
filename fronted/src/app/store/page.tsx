@@ -2,10 +2,12 @@
 
 import Image from "next/image"
 import { Search, Filter, Package, DollarSign, Tag } from "lucide-react"
+import Navbar from "@/components/navbar"
 import { useState, useMemo, useEffect } from "react"
 import type { CheckedState } from "@radix-ui/react-checkbox"
 
 import { Button } from "@/components/ui/button"
+import { ModeToggle } from "@/components/mode-toggle"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -92,10 +94,13 @@ export default function StorePage() {
         product.brand.toLowerCase().includes(searchTerm.toLowerCase())
 
       // Filtro por categoría
-      const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(product.category)
-      const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(product.brand)
+      const matchesCategory =
+        selectedCategories.length === 0 ||
+        selectedCategories.includes(product.category)
+      const matchesBrand =
+        selectedBrands.length === 0 || selectedBrands.includes(product.brand)
 
-      return matchesSearch && matchesCategory
+      return matchesSearch && matchesCategory && matchesBrand
     })
 
     // Ordenar productos
@@ -115,7 +120,7 @@ export default function StorePage() {
     })
 
     return filtered
-  }, [products, searchTerm, sortBy, selectedCategories])
+  }, [products, searchTerm, sortBy, selectedCategories, selectedBrands])
 
   // Función para limpiar filtros
   const clearFilters = () => {
@@ -126,24 +131,28 @@ export default function StorePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
+      <Navbar />
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-card shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Catálogo de Productos</h1>
-              <p className="text-gray-600">Encuentra los mejores productos tecnológicos</p>
+              <h1 className="text-2xl font-bold text-foreground">Catálogo de Productos</h1>
+                <p className="text-muted-foreground">Encuentra los mejores productos tecnológicos</p>
             </div>
-            <div className="relative max-w-md w-full">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                type="text"
-                placeholder="Buscar productos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex items-center gap-4">
+              <div className="relative max-w-md w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  type="text"
+                  placeholder="Buscar productos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <ModeToggle />
             </div>
           </div>
         </div>
@@ -153,7 +162,7 @@ export default function StorePage() {
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar con filtros */}
           <aside className="lg:w-64 flex-shrink-0">
-            <div className="bg-white rounded-lg shadow-sm border p-6 sticky top-8">
+            <div className="bg-card rounded-lg shadow-sm border p-6 sticky top-8">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <Filter className="h-5 w-5" />
@@ -164,7 +173,11 @@ export default function StorePage() {
                 </Button>
               </div>
 
-              <Accordion type="multiple" defaultValue={["categories"]} className="w-full">
+              <Accordion
+                type="multiple"
+                defaultValue={["categories", "brands"]}
+                className="w-full"
+              >
                 {/* Filtro por categorías */}
                 <AccordionItem value="categories">
                   <AccordionTrigger className="text-base">Categorías</AccordionTrigger>
@@ -214,9 +227,9 @@ export default function StorePage() {
           {/* Contenido principal */}
           <main className="flex-1">
             {/* Barra de herramientas */}
-            <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
+            <div className="bg-card rounded-lg shadow-sm border p-4 mb-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Package className="h-4 w-4" />
                   {filteredAndSortedProducts.length} productos encontrados
                 </div>
@@ -263,9 +276,9 @@ export default function StorePage() {
             {/* Grid de productos */}
             {filteredAndSortedProducts.length === 0 ? (
               <div className="text-center py-12">
-                <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron productos</h3>
-                <p className="text-gray-600">Intenta ajustar tus filtros o términos de búsqueda</p>
+                <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">No se encontraron productos</h3>
+                <p className="text-muted-foreground">Intenta ajustar tus filtros o términos de búsqueda</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -290,8 +303,8 @@ export default function StorePage() {
                         </Badge>
                       </div>
                       <h3 className="font-semibold text-lg mb-1 line-clamp-1">{product.name}</h3>
-                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
-                      <span className="text-sm text-gray-500 mb-2 block">{product.brand}</span>
+                      <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{product.description}</p>
+                      <span className="text-sm text-muted-foreground mb-2 block">{product.brand}</span>
                       <div className="flex items-center justify-between">
                         <span className="text-2xl font-bold text-green-600">${product.price.toFixed(2)}</span>
                       </div>

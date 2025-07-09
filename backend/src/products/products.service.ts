@@ -14,10 +14,15 @@ export class ProductsService {
   ) {}
 
   async create(createProductDto: CreateProductDto) {
+    const { specification, ...data } = createProductDto
     try{
       return await this.prismaService.product.create({
-        data: createProductDto
-      })   
+        data: {
+          ...data,
+          specification: specification ? { create: specification } : undefined,
+        },
+        include: { specification: true },
+      })
     }
     catch (error) {
       if (
@@ -101,6 +106,7 @@ export class ProductsService {
             name: true, // 👈 solo si necesitas mostrar el nombre de la categoría
           },
         },
+        specification: true,
       },
     });
   }
@@ -115,6 +121,7 @@ export class ProductsService {
       where: {id: id,},
       include: {
         category: true, // Incluye la relación con la categoría
+        specification: true,
       },
     })
 
@@ -126,10 +133,17 @@ export class ProductsService {
   }
 
   async update(id: number, updateProductDto: UpdateProductDto) {
+    const { specification, ...data } = updateProductDto
     try{
       const productFound = await this.prismaService.product.update({
-        where: {id: Number(id)},  
-        data: updateProductDto
+        where: { id: Number(id) },
+        data: {
+          ...data,
+          specification: specification
+            ? { upsert: { create: specification, update: specification } }
+            : undefined,
+        },
+        include: { specification: true },
       })
   
       if(!productFound){

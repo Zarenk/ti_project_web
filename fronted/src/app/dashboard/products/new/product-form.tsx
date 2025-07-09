@@ -41,6 +41,11 @@ export function ProductForm({product, categories}: {product: any; categories: an
       .or(z.literal("")), // Permite que el campo sea una cadena vacía
     status: z.enum(["Activo", "Inactivo"]).optional(),
     categoryId: z.string().nonempty("Debe seleccionar una categoría"), // Validar categoría
+    processor: z.string().optional(),
+    ram: z.string().optional(),
+    storage: z.string().optional(),
+    graphics: z.string().optional(),
+    screen: z.string().optional(),
     }) //{name: "", lastname: "", age: z.number()}
 
     //inferir el tipo de dato
@@ -58,6 +63,12 @@ export function ProductForm({product, categories}: {product: any; categories: an
         status: product?.status || "Activo" , // Valor predeterminado
         image: product?.image || '',       
         categoryId: product?.categoryId? String(product.categoryId) : '',
+        processor: product?.specification?.processor || '',
+        ram: product?.specification?.ram || '',
+        storage: product?.specification?.storage || '',
+        graphics: product?.specification?.graphics || '',
+        screen: product?.specification?.screen || '',
+        
     }
     });
 
@@ -72,9 +83,18 @@ export function ProductForm({product, categories}: {product: any; categories: an
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
     try{
-        const payload={
-            ...data,
-            categoryId: Number(data.categoryId), // Convierte categoryId a un número
+        const { processor, ram, storage, graphics, screen, ...productData } = data
+        const spec: any = {}
+        if (processor) spec.processor = processor
+        if (ram) spec.ram = ram
+        if (storage) spec.storage = storage
+        if (graphics) spec.graphics = graphics
+        if (screen) spec.screen = screen
+
+        const payload = {
+            ...productData,
+            categoryId: Number(productData.categoryId),
+            specification: Object.keys(spec).length ? spec : undefined,
         }
 
         if(params?.id){
@@ -230,6 +250,15 @@ export function ProductForm({product, categories}: {product: any; categories: an
                         )}
                     </div>
 
+                    <div className="flex flex-col pt-4">
+                        <Label className='py-3 font-semibold'>Especificaciones (opcional)</Label>
+                        <Input placeholder='Procesador' {...register('processor')} className='mb-2'></Input>
+                        <Input placeholder='RAM' {...register('ram')} className='mb-2'></Input>
+                        <Input placeholder='Almacenamiento' {...register('storage')} className='mb-2'></Input>
+                        <Input placeholder='Gráficos' {...register('graphics')} className='mb-2'></Input>
+                        <Input placeholder='Pantalla' {...register('screen')}></Input>
+                    </div>
+
                     <div className="flex flex-col">
                         <Label className='py-3'>
                             Seleccion un estado
@@ -262,6 +291,11 @@ export function ProductForm({product, categories}: {product: any; categories: an
                             image: "",
                             status: "Activo", // Restablece el estado a "Activo"
                             categoryId: "",
+                            processor: "",
+                            ram: "",
+                            storage: "",
+                            graphics: "",
+                            screen: "",
                         })
                     } // Restablece el estado a "Activo"})} // Restablece los campos del formulario
                     >

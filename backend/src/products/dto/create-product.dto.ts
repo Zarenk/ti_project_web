@@ -1,3 +1,13 @@
-import {Product} from '@prisma/client'
+import { Product, ProductSpecification } from '@prisma/client'
 
-export type CreateProductDto = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
+export type ProductSpecInput = Omit<
+  ProductSpecification,
+  'id' | 'productId' | 'createdAt' | 'updatedAt'
+>
+
+export type CreateProductDto = Omit<
+  Product,
+  'id' | 'createdAt' | 'updatedAt' | 'specification'
+> & {
+  specification?: ProductSpecInput
+}

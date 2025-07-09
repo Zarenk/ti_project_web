@@ -19,12 +19,13 @@ import { PaymentmethodsModule } from './paymentmethods/paymentmethods.module';
 import { CashregisterModule } from './cashregister/cashregister.module';
 import { BarcodeGateway } from './barcode/barcode.gateway';
 import { GuideModule } from './guide/guide.module';
+import { ProductspecsModule } from './productspecs/productspecs.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
     ProductsModule, UsersModule, CategoryModule, StoresModule, 
-    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule],
+    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule],
   controllers: [AppController],
   providers: [AppService, BarcodeGateway],
 })

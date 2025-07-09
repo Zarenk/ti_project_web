@@ -27,52 +27,40 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-800">
-      <div className="bg-gray-700 shadow-lg rounded-lg p-8 w-full max-w-md">
-        <h1 className="text-3xl font-bold text-center text-gray-100 mb-6">Bienvenido</h1>
-        <p className="text-center text-gray-100 mb-6">
-          Inicia sesión para acceder a tu cuenta
-        </p>
-        <form onSubmit={handleLogin} className="flex flex-col gap-4">
-          <div>
-            <Label htmlFor="email" className="block text-sm font-medium text-gray-100">
-              Correo Electrónico
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="Ingresa tu correo"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label htmlFor="password" className="block text-sm font-medium text-gray-100">
-              Contraseña
-            </Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Ingresa tu contraseña"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="mt-1"
-            />
-          </div>
-          <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-            Iniciar Sesión
-          </Button>
-        </form>
-        <p className="text-center text-sm text-gray-100 mt-4">
-          ¿No tienes una cuenta?{' '}
-          <a href="/register" className="text-blue-400 font-bold hover:underline">
-            Regístrate aquí
-          </a>
-        </p>
+    <form onSubmit={handleLogin} className="flex flex-col gap-4">
+      <div>
+        <Label htmlFor="email" className="block text-sm font-medium">
+          Correo Electrónico
+        </Label>
+        <Input
+          id="email"
+          type="email"
+          placeholder="Ingresa tu correo"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          className="mt-1"
+        />
       </div>
-    </div>
+
+      <div>
+        <Label htmlFor="password" className="block text-sm font-medium">
+          Contraseña
+        </Label>
+        <Input
+          id="password"
+          type="password"
+          placeholder="Ingresa tu contraseña"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          className="mt-1"
+        />
+      </div>
+      <Button type="submit" className="w-full">
+        Iniciar Sesión
+      </Button>
+    </form>
+ 
   );
 }

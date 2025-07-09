@@ -33,11 +33,29 @@ model Product{
   entryDetail EntryDetail[]
   inventory Inventory[]
 
+  specification ProductSpecification?
+
   // Relación con Transfer
   transfers   Transfer[] // Relación con el modelo Transfer
 
   @@index([categoryId])
   @@index([name])
+}
+
+model ProductSpecification {
+  id         Int      @id @default(autoincrement())
+  productId  Int      @unique
+  processor  String?
+  ram        String?
+  storage    String?
+  graphics   String?
+  screen     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  product    Product  @relation(fields: [productId], references: [id])
+
+  @@index([productId])
 }
 
 model Category{
