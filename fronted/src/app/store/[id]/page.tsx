@@ -28,7 +28,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/progress"
 import Navbar from "@/components/navbar"
 import { getProduct } from "../../dashboard/products/products.api"
+
+import { toast } from "sonner"
 import { getStoresWithProduct } from "../../dashboard/inventory/inventory.api"
+import { useCart } from "@/context/cart-context"
 
 interface Props {
   params: { id: string }
@@ -41,6 +44,7 @@ export default function ProductPage({ params }: Props) {
   const [isInWishlist, setIsInWishlist] = useState(false)
   const [product, setProduct] = useState<any>(null)
   const [stock, setStock] = useState<number | null>(null)
+  const { addItem } = useCart()
 
   useEffect(() => {
     async function fetchProduct() {
@@ -249,7 +253,21 @@ export default function ProductPage({ params }: Props) {
               </div>
 
               <div className="flex gap-3 mb-4">
-                <Button size="lg" className="flex-1 bg-blue-600 hover:bg-blue-700">
+                <Button
+                  size="lg"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  onClick={() => {
+                    if (product) {
+                      addItem({
+                        id: product.id,
+                        name: product.name,
+                        price: product.priceSell ?? product.price,
+                        image: product.image,
+                      })
+                      toast.success("Producto agregado al carrito")
+                    }
+                  }}
+                >
                   <ShoppingCart className="w-5 h-5 mr-2" />
                   Agregar al Carrito
                 </Button>

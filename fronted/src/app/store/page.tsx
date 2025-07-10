@@ -18,6 +18,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { getProducts } from "../dashboard/products/products.api"
 import { getStoresWithProduct } from "../dashboard/inventory/inventory.api"
 import Link from "next/link"
+import { toast } from "sonner"
+import { useCart } from "@/context/cart-context"
 
 // Tipos
 interface Product {
@@ -33,6 +35,7 @@ interface Product {
 
 export default function StorePage() {
   const [products, setProducts] = useState<Product[]>([])
+  const { addItem } = useCart()
 
   useEffect(() => {
     async function fetchProducts() {
@@ -347,7 +350,20 @@ export default function StorePage() {
                     </Link>
 
                     <CardFooter className="p-4 pt-0">
-                      <Button className="w-full">Agregar al Carrito</Button>
+                      <Button
+                        className="w-full"
+                        onClick={() => {
+                          addItem({
+                            id: product.id,
+                            name: product.name,
+                            price: product.price,
+                            image: product.images[0],
+                          })
+                          toast.success("Producto agregado al carrito")
+                        }}
+                      >
+                        Agregar al Carrito
+                      </Button>
                     </CardFooter>
                   </Card>
                 ))}

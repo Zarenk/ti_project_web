@@ -3,6 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { ModeToggle } from "@/components/mode-toggle"
+import CartSheet from "@/components/cart-sheet"
 
 export default function Navbar() {
   return (
@@ -16,6 +17,7 @@ export default function Navbar() {
           <Link href="/store" className="text-sm font-medium text-muted-foreground hover:text-foreground">
             Productos
           </Link>
+          <CartSheet />
           <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">
             Iniciar sesión
           </Link>
