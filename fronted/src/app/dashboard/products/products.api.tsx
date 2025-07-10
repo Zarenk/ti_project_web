@@ -148,3 +148,19 @@ export const deleteProducts = async (ids: string[]) => {
     throw error;
   }
 };
+
+export async function uploadProductImage(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${BACKEND_URL}/api/products/upload-image`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error('Error al subir la imagen');
+  }
+
+  return res.json() as Promise<{ url: string }>;
+}

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { createProduct, updateProduct } from '../products.api'
+import { uploadProductImage } from '../products.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { SelectTrigger, SelectValue } from '@radix-ui/react-select'
@@ -75,13 +76,24 @@ export function ProductForm({product, categories}: {product: any; categories: an
     fields: imageFields,
     append: appendImage,
     remove: removeImage,
-  } = useFieldArray({ control, name: 'images' });
+  } = useFieldArray<ProductType, 'images'>({ control, name: 'images' });
 
   const router = useRouter();
   const params = useParams<{id: string}>();
 
   // Estado para manejar el error del nombre si se repite
   const [nameError, setNameError] = useState<string | null>(null);
+
+  const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const { url } = await uploadProductImage(file);
+      setValue(`images.${index}` as const, url);
+    } catch (err) {
+      console.error('Error subiendo imagen', err);
+    }
+  };
 
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
@@ -208,10 +220,15 @@ export function ProductForm({product, categories}: {product: any; categories: an
                     <div className="flex flex-col">
                         <Label className='py-3'>Imagenes</Label>
                         {imageFields.map((field, index) => (
-                          <div key={field.id} className="flex items-center gap-2 mb-2">
+                          <div key={field.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-2">
                             <Input
                               maxLength={200}
                               {...register(`images.${index}` as const)}
+                            />
+                            <Input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg,image/gif"
+                              onChange={(e) => handleImageFile(e, index)}
                             />
                             {index > 0 && (
                               <Button type="button" variant="destructive" onClick={() => removeImage(index)}>-</Button>

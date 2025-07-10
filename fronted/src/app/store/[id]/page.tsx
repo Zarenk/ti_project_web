@@ -76,9 +76,12 @@ export default function ProductPage({ params }: Props) {
     ? [product.image]
     : ["/placeholder.svg?height=600&width=600"]
 
+  const salePrice = product?.priceSell ?? product?.price ?? 0
+  const originalPrice = +(salePrice * 1.15).toFixed(2)
+
   const currentConfig = {
-    price: product?.priceSell ?? product?.price ?? 0,
-    originalPrice: product?.price ?? product?.priceSell ?? 0,
+    price: salePrice,
+    originalPrice,
     specs: {
       processor: product?.specification?.processor ?? "",
       ram: product?.specification?.ram ?? "",
@@ -210,7 +213,7 @@ export default function ProductPage({ params }: Props) {
                     <span className="text-xl text-gray-500 dark:text-gray-400 line-through">S/.{currentConfig.originalPrice}</span>
                     {currentConfig.originalPrice > currentConfig.price && (
                       <Badge className="bg-red-500 hover:bg-red-600">
-                        Ahorra ${currentConfig.originalPrice - currentConfig.price}
+                        Ahorra S/.{currentConfig.originalPrice - currentConfig.price}
                       </Badge>
                     )}
                   </div>

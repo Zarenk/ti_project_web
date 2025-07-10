@@ -1,8 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+
 
 @Controller('products')
 export class ProductsController {
@@ -20,6 +24,31 @@ export class ProductsController {
   ) {
     return this.productsService.verifyOrCreateProducts(products);
   }
+
+  @Post('upload-image')
+    @UseInterceptors(
+      FileInterceptor('file', {
+        storage: diskStorage({
+          destination: './uploads/products',
+          filename: (req, file, cb) => {
+            const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+            cb(null, `${unique}${extname(file.originalname)}`);
+          },
+        }),
+        fileFilter: (req, file, cb) => {
+          if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+            return cb(new BadRequestException('Solo se permiten imagenes'), false);
+          }
+          cb(null, true);
+        },
+      }),
+    )
+    uploadImage(@UploadedFile() file: Express.Multer.File) {
+      if (!file) {
+        throw new BadRequestException('No se proporcionó ninguna imagen');
+      }
+      return { url: `/uploads/products/${file.filename}` };
+    }
 
   @Get()
   @ApiResponse({status: 200, description: 'Return all products'}) // Swagger 
