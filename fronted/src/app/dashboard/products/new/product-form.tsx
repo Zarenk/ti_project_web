@@ -60,7 +60,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
         price: product?.price || 0.00,
         priceSell: product?.priceSell || 0.00,
         status: product?.status || "Activo" , // Valor predeterminado
-        images: product?.images?.length ? product.images : [""],     
+        images: product?.images?.length ? product.images : [],   
         categoryId: product?.categoryId? String(product.categoryId) : '',
         processor: product?.specification?.processor || '',
         ram: product?.specification?.ram || '',
@@ -106,8 +106,11 @@ export function ProductForm({product, categories}: {product: any; categories: an
         if (graphics) spec.graphics = graphics
         if (screen) spec.screen = screen
 
+        const cleanedImages = productData.images?.filter((img) => img.trim() !== "") ?? []
+
         const payload = {
             ...productData,
+            images: cleanedImages.length > 0 ? cleanedImages : undefined,
             categoryId: Number(productData.categoryId),
             specification: Object.keys(spec).length ? spec : undefined,
         }

@@ -18,6 +18,10 @@ import { useCart } from "@/context/cart-context"
 
 export default function CartSheet() {
   const { items } = useCart()
+  const subtotal = items.reduce(
+    (acc, item) => acc + item.price * item.quantity,
+    0,
+  )
 
   return (
     <Sheet>
@@ -54,7 +58,7 @@ export default function CartSheet() {
                   )}
                   <div className="flex-1">
                     <p className="font-medium leading-none">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-blue-600">
                       x{item.quantity} • {formatCurrency(item.price)}
                     </p>
                   </div>
@@ -63,6 +67,14 @@ export default function CartSheet() {
             </ul>
           )}
         </div>
+        {items.length > 0 && (
+          <div className="px-4 py-2 border-t">
+            <div className="flex justify-between font-medium">
+              <span>Subtotal</span>
+              <span className="text-blue-600">{formatCurrency(subtotal)}</span>
+            </div>
+          </div>
+        )}
         <SheetFooter>
           <Button className="w-full" disabled={items.length === 0} asChild>
             <Link href="#">Pagar</Link>

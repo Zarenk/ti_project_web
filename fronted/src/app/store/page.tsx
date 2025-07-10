@@ -31,6 +31,13 @@ interface Product {
   category: string
   images: string[]
   stock: number | null
+  specification?: {
+    processor?: string
+    ram?: string
+    storage?: string
+    graphics?: string
+    screen?: string
+  }
 }
 
 export default function StorePage() {
@@ -62,6 +69,7 @@ export default function StorePage() {
               category: p.category?.name || 'Sin categoría',
               images: p.images || [],
               stock,
+              specification: p.specification ?? undefined,
             }
           })
         ) as Product[]
@@ -324,7 +332,7 @@ export default function StorePage() {
                             {product.category}
                           </Badge>
                         </div>
-                        <h3 className="font-semibold text-lg mb-1 line-clamp-1">{product.name}</h3>
+                        <h3 className="font-semibold text-base sm:text-lg mb-1 break-words whitespace-normal">{product.name}</h3>
                         <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{product.description}</p>
                         <span className="text-sm text-muted-foreground mb-2 block">{product.brand}</span>
                         <div className="flex items-center justify-between">
@@ -346,6 +354,23 @@ export default function StorePage() {
                             ? `Stock: ${product.stock}`
                             : 'Sin stock'}
                         </p>
+                        <div className="hidden group-hover:block mt-2 space-y-1 text-xs text-muted-foreground">
+                          {product.specification?.processor && (
+                            <p>Procesador: {product.specification.processor}</p>
+                          )}
+                          {product.specification?.ram && (
+                            <p>RAM: {product.specification.ram}</p>
+                          )}
+                          {product.specification?.storage && (
+                            <p>Almacenamiento: {product.specification.storage}</p>
+                          )}
+                          {product.specification?.graphics && (
+                            <p>Gráficos: {product.specification.graphics}</p>
+                          )}
+                          {product.specification?.screen && (
+                            <p>Pantalla: {product.specification.screen}</p>
+                          )}
+                        </div>
                       </CardContent>
                     </Link>
 
