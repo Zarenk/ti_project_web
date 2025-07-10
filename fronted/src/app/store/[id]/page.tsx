@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/progress"
 import Navbar from "@/components/navbar"
 import { getProduct } from "../../dashboard/products/products.api"
+import { getStoresWithProduct } from "../../dashboard/inventory/inventory.api"
 
 interface Props {
   params: { id: string }
@@ -39,6 +40,7 @@ export default function ProductPage({ params }: Props) {
   const [quantity, setQuantity] = useState(1)
   const [isInWishlist, setIsInWishlist] = useState(false)
   const [product, setProduct] = useState<any>(null)
+  const [stock, setStock] = useState<number | null>(null)
 
   useEffect(() => {
     async function fetchProduct() {
@@ -51,6 +53,24 @@ export default function ProductPage({ params }: Props) {
     }
     fetchProduct()
   }, [params.id])
+
+  useEffect(() => {
+    async function fetchStock() {
+      try {
+        const stores = await getStoresWithProduct(Number(params.id))
+        const total = stores.reduce(
+          (sum: number, item: any) => sum + (item.stock ?? 0),
+          0
+        )
+        setStock(total)
+      } catch (error) {
+        console.error("Error fetching stock:", error)
+      }
+    }
+    if (product) {
+      fetchStock()
+    }
+  }, [product, params.id])
 
   const images = product?.image
     ? [product.image]
@@ -66,6 +86,15 @@ export default function ProductPage({ params }: Props) {
       graphics: product?.specification?.graphics ?? "",
     },
   }
+
+  const discountPercentage =
+    currentConfig.originalPrice > currentConfig.price
+      ? Math.round(
+          ((currentConfig.originalPrice - currentConfig.price) /
+            currentConfig.originalPrice) *
+            100,
+        )
+      : 0
 
   const reviews = [
     { name: "Carlos M.", rating: 5, comment: "Excelente laptop para trabajo y gaming. La batería dura todo el día." },
@@ -85,9 +114,13 @@ export default function ProductPage({ params }: Props) {
           {/* Galería de Imágenes */}
           <div className="space-y-4">
             <div className="relative">
-              <Badge className="absolute top-4 left-4 z-10 bg-red-500 hover:bg-red-600">-13% OFF</Badge>
+              {discountPercentage > 0 && (
+                <Badge className="absolute top-4 left-4 z-10 bg-red-500 hover:bg-red-600">
+                  -{discountPercentage}% OFF
+                </Badge>
+              )}
               <Badge className="absolute top-4 right-4 z-10 bg-green-500 hover:bg-green-600">Envío Gratis</Badge>
-              <div className="aspect-square rounded-2xl overflow-hidden bg-white shadow-lg">
+              <div className="aspect-square rounded-2xl overflow-hidden bg-white dark:bg-gray-900 shadow-lg">
                 <Image
                   src={images[selectedImage] || "/placeholder.svg"}
                   alt={product?.name || "Producto"}
@@ -139,7 +172,7 @@ export default function ProductPage({ params }: Props) {
 
             {/* Información del Modelo */}
             <div className="space-y-4">
-              <div className="bg-white p-6 rounded-xl shadow-sm border">
+              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center gap-3 mb-3">
                   <Badge className="bg-blue-500 hover:bg-blue-600">{product?.brand}</Badge>
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{product?.name}</h2>
@@ -169,19 +202,19 @@ export default function ProductPage({ params }: Props) {
             </div>
 
             {/* Precio y Cantidad */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border">
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-sm border">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <div className="flex items-center gap-3">
                     <span className="text-3xl font-bold text-green-600">S/.{currentConfig.price}</span>
-                    <span className="text-xl text-gray-500 line-through">S/.{currentConfig.originalPrice}</span>
+                    <span className="text-xl text-gray-500 dark:text-gray-400 line-through">S/.{currentConfig.originalPrice}</span>
                     {currentConfig.originalPrice > currentConfig.price && (
                       <Badge className="bg-red-500 hover:bg-red-600">
                         Ahorra ${currentConfig.originalPrice - currentConfig.price}
                       </Badge>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">Precio incluye IVA • 12 cuotas sin interés</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Precio incluye IVA • 12 cuotas sin interés</p>
                 </div>
               </div>
 
@@ -201,7 +234,15 @@ export default function ProductPage({ params }: Props) {
                     <Plus className="w-4 h-4" />
                   </Button>
                 </div>
-                <span className="text-sm text-green-600">Solo quedan 3 en stock</span>
+                {stock !== null ? (
+                  stock > 0 ? (
+                    <span className="text-sm text-green-600">Solo quedan {stock} en stock</span>
+                  ) : (
+                    <span className="text-sm text-red-600">Sin stock disponible</span>
+                  )
+                ) : (
+                  <span className="text-sm text-gray-600">Cargando stock...</span>
+                )}
               </div>
 
               <div className="flex gap-3 mb-4">
@@ -226,32 +267,32 @@ export default function ProductPage({ params }: Props) {
 
             {/* Beneficios */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm">
+              <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg shadow-sm">
                 <Truck className="w-6 h-6 text-green-500" />
                 <div>
                   <p className="font-medium text-sm">Envío Gratis</p>
-                  <p className="text-xs text-gray-600">Entrega en 24-48h</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Entrega en 24-48h</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm">
+              <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg shadow-sm">
                 <Shield className="w-6 h-6 text-blue-500" />
                 <div>
                   <p className="font-medium text-sm">Garantía 3 años</p>
-                  <p className="text-xs text-gray-600">Soporte técnico</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Soporte técnico</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm">
+              <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg shadow-sm">
                 <Award className="w-6 h-6 text-purple-500" />
                 <div>
                   <p className="font-medium text-sm">Calidad Premium</p>
-                  <p className="text-xs text-gray-600">Certificado ISO</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Certificado ISO</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm">
+              <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg shadow-sm">
                 <Zap className="w-6 h-6 text-yellow-500" />
                 <div>
                   <p className="font-medium text-sm">Setup Gratis</p>
-                  <p className="text-xs text-gray-600">Configuración incluida</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Configuración incluida</p>
                 </div>
               </div>
             </div>
@@ -278,19 +319,19 @@ export default function ProductPage({ params }: Props) {
                     </h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Procesador:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Procesador:</span>
                         <span className="font-medium">{currentConfig.specs.processor}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Memoria RAM:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Memoria RAM:</span>
                         <span className="font-medium">{currentConfig.specs.ram}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Almacenamiento:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Almacenamiento:</span>
                         <span className="font-medium">{currentConfig.specs.storage}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Gráficos:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Gráficos:</span>
                         <span className="font-medium">{currentConfig.specs.graphics}</span>
                       </div>
                     </div>
@@ -305,19 +346,19 @@ export default function ProductPage({ params }: Props) {
                     </h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Pantalla:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Pantalla:</span>
                         <span className="font-medium">15.6" 4K OLED</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Resolución:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Resolución:</span>   
                         <span className="font-medium">3840 x 2160</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Tasa de refresco:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Tasa de refresco:</span>
                         <span className="font-medium">120Hz</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Conectividad:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Conectividad:</span>
                         <span className="font-medium">WiFi 6E, Bluetooth 5.3</span>
                       </div>
                     </div>
@@ -364,7 +405,7 @@ export default function ProductPage({ params }: Props) {
                     <CardContent className="p-6 text-center">
                       <feature.icon className="w-12 h-12 mx-auto mb-4 text-blue-500" />
                       <h3 className="font-bold mb-2">{feature.title}</h3>
-                      <p className="text-sm text-gray-600">{feature.description}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{feature.description}</p>
                     </CardContent>
                   </Card>
                 ))}
@@ -381,14 +422,14 @@ export default function ProductPage({ params }: Props) {
                         <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                       ))}
                     </div>
-                    <div className="text-sm text-gray-600 mt-1">2,847 reseñas</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">2,847 reseñas</div>
                   </div>
                   <div className="flex-1 space-y-2">
                     {[5, 4, 3, 2, 1].map((stars) => (
                       <div key={stars} className="flex items-center gap-3">
                         <span className="text-sm w-8">{stars}★</span>
                         <Progress value={stars === 5 ? 85 : stars === 4 ? 12 : 2} className="flex-1" />
-                        <span className="text-sm text-gray-600 w-12">
+                        <span className="text-sm text-gray-600 dark:text-gray-400 w-12">
                           {stars === 5 ? "85%" : stars === 4 ? "12%" : "2%"}
                         </span>
                       </div>
@@ -411,7 +452,7 @@ export default function ProductPage({ params }: Props) {
                           </div>
                           <Badge variant="secondary">Compra verificada</Badge>
                         </div>
-                        <p className="text-gray-700">{review.comment}</p>
+                         <p className="text-gray-700 dark:text-gray-300">{review.comment}</p>
                       </CardContent>
                     </Card>
                   ))}
@@ -429,21 +470,21 @@ export default function ProductPage({ params }: Props) {
                         <Check className="w-5 h-5 text-green-500 mt-0.5" />
                         <div>
                           <p className="font-medium">Garantía extendida de 3 años</p>
-                          <p className="text-sm text-gray-600">Cobertura completa de hardware y software</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Cobertura completa de hardware y software</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <Check className="w-5 h-5 text-green-500 mt-0.5" />
                         <div>
                           <p className="font-medium">Soporte técnico 24/7</p>
-                          <p className="text-sm text-gray-600">Chat, teléfono y soporte remoto</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Chat, teléfono y soporte remoto</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <Check className="w-5 h-5 text-green-500 mt-0.5" />
                         <div>
                           <p className="font-medium">Servicio a domicilio</p>
-                          <p className="text-sm text-gray-600">Reparación en tu hogar u oficina</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Reparación en tu hogar u oficina</p>
                         </div>
                       </div>
                     </div>
@@ -458,21 +499,21 @@ export default function ProductPage({ params }: Props) {
                         <Truck className="w-5 h-5 text-blue-500 mt-0.5" />
                         <div>
                           <p className="font-medium">Envío express gratuito</p>
-                          <p className="text-sm text-gray-600">Entrega en 24-48 horas hábiles</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Entrega en 24-48 horas hábiles</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <Shield className="w-5 h-5 text-green-500 mt-0.5" />
                         <div>
                           <p className="font-medium">Seguro de transporte</p>
-                          <p className="text-sm text-gray-600">Cobertura total durante el envío</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Cobertura total durante el envío</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <Check className="w-5 h-5 text-purple-500 mt-0.5" />
                         <div>
                           <p className="font-medium">Devolución gratuita</p>
-                          <p className="text-sm text-gray-600">30 días para cambios y devoluciones</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">30 días para cambios y devoluciones</p>
                         </div>
                       </div>
                     </div>
