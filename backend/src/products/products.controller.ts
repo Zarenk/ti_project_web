@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UseInterceptors, UploadedFile, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -43,11 +44,12 @@ export class ProductsController {
         },
       }),
     )
-    uploadImage(@UploadedFile() file: Express.Multer.File) {
+    uploadImage(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
       if (!file) {
         throw new BadRequestException('No se proporcionó ninguna imagen');
       }
-      return { url: `/uploads/products/${file.filename}` };
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      return { url: `${baseUrl}/uploads/products/${file.filename}` };
     }
 
   @Get()

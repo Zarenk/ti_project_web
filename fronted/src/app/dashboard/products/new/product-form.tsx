@@ -258,12 +258,12 @@ export function ProductForm({product, categories}: {product: any; categories: an
                                     {categories.find((category: any) => String(category.id) === form.watch("categoryId"))?.name || "Seleccione una categoria"}
                                 </SelectValue>
                             </SelectTrigger>
-                            <SelectContent className="bg-gray-800 border border-gray-400 rounded-lg max-h-60 overflow-y-auto">
+                            <SelectContent className="bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-400 rounded-lg max-h-60 overflow-y-auto">
                             {categories.map((category: any) => (
                                 <SelectItem 
                                 key={category.id} 
                                 value={String(category.id)}
-                                className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
                                 >
                                 {category.name}
                                 </SelectItem>

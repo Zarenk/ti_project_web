@@ -63,7 +63,9 @@ export class CategoryService {
   }
 
   findAll() {
-    return this.prismaService.category.findMany()
+     return this.prismaService.category.findMany({
+      orderBy: { name: 'asc' },
+    })
   }
 
   async findOne(id: number) {

@@ -86,6 +86,7 @@ export default function StorePage() {
   const [sortBy, setSortBy] = useState("name")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedBrands, setSelectedBrands] = useState<string[]>([])
+  const [selectedAvailability, setSelectedAvailability] = useState<string[]>([])
 
   // Obtener categorías y marcas únicas ordenadas alfanuméricamente
   const categories = [...new Set(products.map((p) => p.category))].sort((a, b) =>
@@ -113,6 +114,16 @@ export default function StorePage() {
     }
   }
 
+  const handleAvailabilityChange = (option: string, checked: CheckedState) => {
+    if (checked === true) {
+      setSelectedAvailability([...selectedAvailability, option])
+    } else if (checked === false) {
+      setSelectedAvailability(
+        selectedAvailability.filter((o) => o !== option)
+      )
+    }
+  }
+
   // Filtrar y ordenar productos
   const filteredAndSortedProducts = useMemo(() => {
     const filtered = products.filter((product: Product) => {
@@ -129,7 +140,20 @@ export default function StorePage() {
       const matchesBrand =
         selectedBrands.length === 0 || selectedBrands.includes(product.brand)
 
-      return matchesSearch && matchesCategory && matchesBrand
+      const matchesAvailability =
+        selectedAvailability.length === 0 ||
+        (selectedAvailability.includes('stock') &&
+          product.stock !== null &&
+          product.stock > 0) ||
+        (selectedAvailability.includes('noStock') &&
+          (product.stock === null || product.stock <= 0))
+
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesBrand &&
+        matchesAvailability
+      )
     })
 
     // Ordenar productos
@@ -149,12 +173,20 @@ export default function StorePage() {
     })
 
     return filtered
-  }, [products, searchTerm, sortBy, selectedCategories, selectedBrands])
+  }, [
+    products,
+    searchTerm,
+    sortBy,
+    selectedCategories,
+    selectedBrands,
+    selectedAvailability,
+  ])
 
   // Función para limpiar filtros
   const clearFilters = () => {
     setSelectedCategories([])
     setSelectedBrands([])
+    setSelectedAvailability([])
     setSearchTerm("")
     setSortBy("name")
   }
@@ -203,7 +235,7 @@ export default function StorePage() {
 
               <Accordion
                 type="multiple"
-                defaultValue={["categories", "brands"]}
+                defaultValue={["categories", "brands", "availability"]}
                 className="w-full"
               >
                 {/* Filtro por categorías */}
@@ -244,6 +276,47 @@ export default function StorePage() {
                           </Label>
                         </div>
                       ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Filtro por disponibilidad */}
+                <AccordionItem value="availability">
+                  <AccordionTrigger className="text-base">
+                    Disponibilidad
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="availability-stock"
+                          checked={selectedAvailability.includes('stock')}
+                          onCheckedChange={(checked) =>
+                            handleAvailabilityChange('stock', checked as CheckedState)
+                          }
+                        />
+                        <Label
+                          htmlFor="availability-stock"
+                          className="text-sm font-normal"
+                        >
+                          Stock
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="availability-noStock"
+                          checked={selectedAvailability.includes('noStock')}
+                          onCheckedChange={(checked) =>
+                            handleAvailabilityChange('noStock', checked as CheckedState)
+                          }
+                        />
+                        <Label
+                          htmlFor="availability-noStock"
+                          className="text-sm font-normal"
+                        >
+                          Sin stock
+                        </Label>
+                      </div>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
