@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
+import Link from "next/link"
 import {
   Heart,
   Star,
@@ -25,28 +26,44 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/progress"
+import Navbar from "@/components/navbar"
+import { getProduct } from "../../dashboard/products/products.api"
 
-export default function ProductPage() {
+interface Props {
+  params: { id: string }
+}
+
+export default function ProductPage({ params }: Props) {
+
   const [selectedImage, setSelectedImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [isInWishlist, setIsInWishlist] = useState(false)
+  const [product, setProduct] = useState<any>(null)
 
-  const images = [
-    "/placeholder.svg?height=600&width=600",
-    "/placeholder.svg?height=600&width=600",
-    "/placeholder.svg?height=600&width=600",
-    "/placeholder.svg?height=600&width=600",
-    "/placeholder.svg?height=600&width=600",
-  ]
+  useEffect(() => {
+    async function fetchProduct() {
+      try {
+        const data = await getProduct(params.id)
+        setProduct(data)
+      } catch (error) {
+        console.error("Error fetching product:", error)
+      }
+    }
+    fetchProduct()
+  }, [params.id])
+
+  const images = product?.image
+    ? [product.image]
+    : ["/placeholder.svg?height=600&width=600"]
 
   const currentConfig = {
-    price: 1699,
-    originalPrice: 1899,
+    price: product?.priceSell ?? product?.price ?? 0,
+    originalPrice: product?.price ?? product?.priceSell ?? 0,
     specs: {
-      processor: "Intel Core i7-13700H",
-      ram: "32GB DDR5",
-      storage: "1TB SSD NVMe",
-      graphics: "NVIDIA RTX 4060",
+      processor: product?.specification?.processor ?? "",
+      ram: product?.specification?.ram ?? "",
+      storage: product?.specification?.storage ?? "",
+      graphics: product?.specification?.graphics ?? "",
     },
   }
 
@@ -56,8 +73,13 @@ export default function ProductPage() {
     { name: "Miguel R.", rating: 4, comment: "Gran calidad de construcción. La pantalla es increíble." },
   ]
 
+  if (!product) {
+    return <div className="p-6">Cargando...</div>
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
+      <Navbar />
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-2 gap-12">
           {/* Galería de Imágenes */}
@@ -68,7 +90,7 @@ export default function ProductPage() {
               <div className="aspect-square rounded-2xl overflow-hidden bg-white shadow-lg">
                 <Image
                   src={images[selectedImage] || "/placeholder.svg"}
-                  alt="Laptop TechPro X1"
+                  alt={product?.name || "Producto"}
                   width={600}
                   height={600}
                   className="w-full h-full object-cover"
@@ -101,16 +123,16 @@ export default function ProductPage() {
           <div className="space-y-6">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Badge variant="secondary">Nuevo Modelo 2024</Badge>
+                <Badge variant="secondary">Nuevo Modelo 2025</Badge>
                 <Badge className="bg-blue-500 hover:bg-blue-600">Bestseller</Badge>
               </div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">TechPro X1 - Laptop Gaming & Profesional</h1>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{product?.name || ""}</h1>
               <div className="flex items-center gap-4 mb-4">
                 <div className="flex items-center gap-1">
                   {[...Array(5)].map((_, i) => (
                     <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
                   ))}
-                  <span className="text-sm text-gray-600 ml-2">(4.9) • 2,847 reseñas</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400 ml-2">(4.9) • 2,847 reseñas</span>
                 </div>
               </div>
             </div>
@@ -119,31 +141,28 @@ export default function ProductPage() {
             <div className="space-y-4">
               <div className="bg-white p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center gap-3 mb-3">
-                  <Badge className="bg-blue-500 hover:bg-blue-600">TechPro</Badge>
-                  <h2 className="text-2xl font-bold text-gray-900">Modelo X1 Pro Gaming</h2>
+                  <Badge className="bg-blue-500 hover:bg-blue-600">{product?.brand}</Badge>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{product?.name}</h2>
                 </div>
-                <p className="text-gray-700 leading-relaxed">
-                  La laptop perfecta para profesionales y gamers exigentes. Combina un diseño elegante con potencia
-                  extrema, featuring procesador Intel de última generación, gráficos dedicados NVIDIA RTX, pantalla 4K
-                  OLED de 120Hz y construcción premium en aluminio. Ideal para gaming, diseño gráfico, programación y
-                  productividad avanzada.
+                <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                  {product?.description}
                 </p>
                 <div className="flex items-center gap-4 mt-4">
                   <div className="flex items-center gap-2">
                     <Cpu className="w-5 h-5 text-blue-500" />
-                    <span className="text-sm font-medium">Intel i7-13700H</span>
+                    <span className="text-sm font-medium">{currentConfig.specs.processor}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <MemoryStick className="w-5 h-5 text-green-500" />
-                    <span className="text-sm font-medium">32GB DDR5</span>
+                    <span className="text-sm font-medium">{currentConfig.specs.ram}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <HardDrive className="w-5 h-5 text-purple-500" />
-                    <span className="text-sm font-medium">1TB SSD</span>
+                    <span className="text-sm font-medium">{currentConfig.specs.storage}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Monitor className="w-5 h-5 text-orange-500" />
-                    <span className="text-sm font-medium">RTX 4060</span>
+                    <span className="text-sm font-medium">{currentConfig.specs.graphics}</span>
                   </div>
                 </div>
               </div>
@@ -154,11 +173,13 @@ export default function ProductPage() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <div className="flex items-center gap-3">
-                    <span className="text-3xl font-bold text-green-600">${currentConfig.price}</span>
-                    <span className="text-xl text-gray-500 line-through">${currentConfig.originalPrice}</span>
-                    <Badge className="bg-red-500 hover:bg-red-600">
-                      Ahorra ${currentConfig.originalPrice - currentConfig.price}
-                    </Badge>
+                    <span className="text-3xl font-bold text-green-600">S/.{currentConfig.price}</span>
+                    <span className="text-xl text-gray-500 line-through">S/.{currentConfig.originalPrice}</span>
+                    {currentConfig.originalPrice > currentConfig.price && (
+                      <Badge className="bg-red-500 hover:bg-red-600">
+                        Ahorra ${currentConfig.originalPrice - currentConfig.price}
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-sm text-gray-600 mt-1">Precio incluye IVA • 12 cuotas sin interés</p>
                 </div>

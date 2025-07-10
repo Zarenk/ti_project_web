@@ -10,4 +10,5 @@ export type CreateProductDto = Omit<
   'id' | 'createdAt' | 'updatedAt' | 'specification'
 > & {
   specification?: ProductSpecInput
+  images?: string[]
 }

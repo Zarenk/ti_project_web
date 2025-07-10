@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useForm } from 'react-hook-form'
+import { useForm, useFieldArray } from 'react-hook-form'
 import { createProduct, updateProduct } from '../products.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
@@ -34,11 +34,9 @@ export function ProductForm({product, categories}: {product: any; categories: an
       required_error: "Se requiere el precio de venta del producto",
       }).min(0, "El precio de venta debe ser un número positivo")
       .max(99999999.99, "El precio no puede exceder 99999999.99"),
-    image: z.string()
-      .url("La imagen debe ser una URL válida") // Valida que sea una URL válida
-      //.regex(/\.(jpg|jpeg|png|gif)$/i, "La imagen debe tener una extensión válida (.jpg, .jpeg, .png, .gif)") // Valida extensiones
-      .optional() // El campo es opcional
-      .or(z.literal("")), // Permite que el campo sea una cadena vacía
+    images: z
+      .array(z.string().url("La imagen debe ser una URL válida"))
+      .optional(),
     status: z.enum(["Activo", "Inactivo"]).optional(),
     categoryId: z.string().nonempty("Debe seleccionar una categoría"), // Validar categoría
     processor: z.string().optional(),
@@ -61,7 +59,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
         price: product?.price || 0.00,
         priceSell: product?.priceSell || 0.00,
         status: product?.status || "Activo" , // Valor predeterminado
-        image: product?.image || '',       
+        images: product?.images?.length ? product.images : [""],     
         categoryId: product?.categoryId? String(product.categoryId) : '',
         processor: product?.specification?.processor || '',
         ram: product?.specification?.ram || '',
@@ -72,7 +70,12 @@ export function ProductForm({product, categories}: {product: any; categories: an
     }
     });
 
-  const { handleSubmit, register, setValue } = form;
+  const { handleSubmit, register, setValue, control } = form;
+  const {
+    fields: imageFields,
+    append: appendImage,
+    remove: removeImage,
+  } = useFieldArray({ control, name: 'images' });
 
   const router = useRouter();
   const params = useParams<{id: string}>();
@@ -203,15 +206,22 @@ export function ProductForm({product, categories}: {product: any; categories: an
                     </div>
 
                     <div className="flex flex-col">
-                        <Label className='py-3'>
-                            Imagen
-                        </Label>                
-                        <Input
-                        maxLength={200} // Limita a 100 caracteres
-                        {...register('image')}></Input>
-                        {form.formState.errors.image && (
-                            <p className="text-red-500 text-sm">{form.formState.errors.image.message}</p>
+                        <Label className='py-3'>Imagenes</Label>
+                        {imageFields.map((field, index) => (
+                          <div key={field.id} className="flex items-center gap-2 mb-2">
+                            <Input
+                              maxLength={200}
+                              {...register(`images.${index}` as const)}
+                            />
+                            {index > 0 && (
+                              <Button type="button" variant="destructive" onClick={() => removeImage(index)}>-</Button>
+                            )}
+                          </div>
+                        ))}
+                        {form.formState.errors.images && (
+                          <p className="text-red-500 text-sm">{(form.formState.errors.images as any).message}</p>
                         )}
+                        <Button type="button" variant="outline" onClick={() => appendImage("")}>Agregar imagen</Button>
                     </div>
                     
                     <div className="flex flex-col">
@@ -288,7 +298,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
                             brand: "",
                             price: 0.0,
                             priceSell: 0.0,
-                            image: "",
+                            images: [""],
                             status: "Activo", // Restablece el estado a "Activo"
                             categoryId: "",
                             processor: "",

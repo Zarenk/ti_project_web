@@ -14,11 +14,12 @@ export class ProductsService {
   ) {}
 
   async create(createProductDto: CreateProductDto) {
-    const { specification, ...data } = createProductDto
+    const { specification, images, ...data } = createProductDto
     try{
       return await this.prismaService.product.create({
         data: {
           ...data,
+          images: images ?? [],
           specification: specification ? { create: specification } : undefined,
         },
         include: { specification: true },
@@ -46,7 +47,7 @@ export class ProductsService {
       price: number;
       priceSell: number | null;
       status: string | null;
-      image: string | null;
+      images: string[];
       createdAt: Date;
       updatedAt: Date;
       categoryId: number;
@@ -77,6 +78,7 @@ export class ProductsService {
             description: product.description || '',
             brand: product.brand || null,
             categoryId: product.categoryId || defaultCategory.id,
+            images: [],
           },
         });
         createdProducts.push(newProduct);
@@ -100,6 +102,7 @@ export class ProductsService {
         description: true,
         brand: true,
         createdAt: true,
+        images: true,
         categoryId: true,
         category: {
           select: {
@@ -133,12 +136,13 @@ export class ProductsService {
   }
 
   async update(id: number, updateProductDto: UpdateProductDto) {
-    const { specification, ...data } = updateProductDto
+    const { specification, images, ...data } = updateProductDto
     try{
       const productFound = await this.prismaService.product.update({
         where: { id: Number(id) },
         data: {
           ...data,
+          images: images ?? undefined,
           specification: specification
             ? { upsert: { create: specification, update: specification } }
             : undefined,

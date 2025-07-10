@@ -16,6 +16,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/accordion"
 import { getProducts } from "../dashboard/products/products.api"
+import Link from "next/link"
 
 // Tipos
 interface Product {
@@ -25,7 +26,7 @@ interface Product {
   price: number
   brand: string
   category: string
-  image?: string | null
+  images: string[]
 }
 
 export default function StorePage() {
@@ -42,7 +43,7 @@ export default function StorePage() {
           price: p.priceSell ?? p.price,
           brand: p.brand || "Sin marca",
           category: p.category?.name || "Sin categoría",
-          image: p.image || null,
+          images: p.images || [],
         })) as Product[]
         setProducts(mapped)
       } catch (error) {
@@ -152,7 +153,6 @@ export default function StorePage() {
                   className="pl-10"
                 />
               </div>
-              <ModeToggle />
             </div>
           </div>
         </div>
@@ -284,31 +284,34 @@ export default function StorePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredAndSortedProducts.map((product) => (
                   <Card key={product.id} className="group hover:shadow-lg transition-shadow duration-200">
-                    <CardHeader className="p-0">
-                      <div className="relative overflow-hidden rounded-t-lg">
-                        <Image
-                          src={product.image || "/placeholder.svg"}
-                          alt={product.name}
-                          width={300}
-                          height={300}
-                          className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
-                        />
-                      </div>
+                    <Link href={`/store/${product.id}`}
+                      className="block">
+                      <CardHeader className="p-0">
+                        <div className="relative overflow-hidden rounded-t-lg">
+                          <Image
+                            src={product.images[0] || "/placeholder.svg"}
+                            alt={product.name}
+                            width={300}
+                            height={300}
+                            className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
+                          />
+                        </div>
                     </CardHeader>
 
                     <CardContent className="p-4">
-                      <div className="mb-2">
-                        <Badge variant="outline" className="text-xs">
-                          {product.category}
-                        </Badge>
-                      </div>
-                      <h3 className="font-semibold text-lg mb-1 line-clamp-1">{product.name}</h3>
-                      <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{product.description}</p>
-                      <span className="text-sm text-muted-foreground mb-2 block">{product.brand}</span>
-                      <div className="flex items-center justify-between">
-                        <span className="text-2xl font-bold text-green-600">${product.price.toFixed(2)}</span>
-                      </div>
-                    </CardContent>
+                        <div className="mb-2">
+                          <Badge variant="outline" className="text-xs">
+                            {product.category}
+                          </Badge>
+                        </div>
+                        <h3 className="font-semibold text-lg mb-1 line-clamp-1">{product.name}</h3>
+                        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{product.description}</p>
+                        <span className="text-sm text-muted-foreground mb-2 block">{product.brand}</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-2xl font-bold text-green-600">${product.price.toFixed(2)}</span>
+                        </div>
+                      </CardContent>
+                    </Link>
 
                     <CardFooter className="p-4 pt-0">
                       <Button className="w-full">Agregar al Carrito</Button>

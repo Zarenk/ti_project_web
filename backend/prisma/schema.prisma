@@ -24,6 +24,7 @@ model Product{
   priceSell Float?
   status String?
   image String?
+  images String[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
