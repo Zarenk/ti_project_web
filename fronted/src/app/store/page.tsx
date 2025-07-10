@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { Search, Filter, Package, DollarSign, Tag } from "lucide-react"
+import { Search, Filter, Package, PackageOpen, DollarSign, Tag } from "lucide-react"
 import Navbar from "@/components/navbar"
 import { useState, useMemo, useEffect } from "react"
 import type { CheckedState } from "@radix-ui/react-checkbox"
@@ -16,6 +16,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/accordion"
 import { getProducts } from "../dashboard/products/products.api"
+import { getStoresWithProduct } from "../dashboard/inventory/inventory.api"
 import Link from "next/link"
 
 // Tipos
@@ -27,6 +28,7 @@ interface Product {
   brand: string
   category: string
   images: string[]
+  stock: number | null
 }
 
 export default function StorePage() {
@@ -35,16 +37,31 @@ export default function StorePage() {
   useEffect(() => {
     async function fetchProducts() {
       try {
-        const data = await getProducts()
-        const mapped = data.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          description: p.description || "",
-          price: p.priceSell ?? p.price,
-          brand: p.brand || "Sin marca",
-          category: p.category?.name || "Sin categoría",
-          images: p.images || [],
-        })) as Product[]
+        const fetchedProducts = await getProducts()
+        const mapped = await Promise.all(
+          fetchedProducts.map(async (p: any) => {
+            let stock: number | null = null
+            try {
+              const stores = await getStoresWithProduct(p.id)
+              stock = stores.reduce(
+                (sum: number, item: any) => sum + (item.stock ?? 0),
+                0
+              )
+            } catch (error) {
+              console.error('Error fetching stock:', error)
+            }
+            return {
+              id: p.id,
+              name: p.name,
+              description: p.description || '',
+              price: p.priceSell ?? p.price,
+              brand: p.brand || 'Sin marca',
+              category: p.category?.name || 'Sin categoría',
+              images: p.images || [],
+              stock,
+            }
+          })
+        ) as Product[]
         setProducts(mapped)
       } catch (error) {
         console.error("Error fetching products:", error)
@@ -310,6 +327,22 @@ export default function StorePage() {
                         <div className="flex items-center justify-between">
                           <span className="text-2xl font-bold text-green-600">${product.price.toFixed(2)}</span>
                         </div>
+                        <p
+                          className={`text-xs mt-1 flex items-center gap-1 ${
+                            product.stock !== null && product.stock > 0
+                              ? 'text-green-600'
+                              : 'text-red-600'
+                          }`}
+                        >
+                          {product.stock !== null && product.stock > 0 ? (
+                            <PackageOpen className="w-4 h-4" />
+                          ) : (
+                            <Package className="w-4 h-4" />
+                          )}
+                          {product.stock !== null && product.stock > 0
+                            ? `Stock: ${product.stock}`
+                            : 'Sin stock'}
+                        </p>
                       </CardContent>
                     </Link>
 

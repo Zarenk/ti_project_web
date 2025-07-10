@@ -209,11 +209,11 @@ export default function ProductPage({ params }: Props) {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <div className="flex items-center gap-3">
-                    <span className="text-3xl font-bold text-green-600">S/.{currentConfig.price}</span>
-                    <span className="text-xl text-gray-500 dark:text-gray-400 line-through">S/.{currentConfig.originalPrice}</span>
+                    <span className="text-3xl font-bold text-green-600">S/.{currentConfig.price.toFixed(2)}</span>
+                    <span className="text-xl text-gray-500 dark:text-gray-400 line-through">S/.{currentConfig.originalPrice.toFixed(2)}</span>
                     {currentConfig.originalPrice > currentConfig.price && (
                       <Badge className="bg-red-500 hover:bg-red-600">
-                        Ahorra S/.{currentConfig.originalPrice - currentConfig.price}
+                        Ahorra S/.{(currentConfig.originalPrice - currentConfig.price).toFixed(2)}
                       </Badge>
                     )}
                   </div>
