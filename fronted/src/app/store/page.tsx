@@ -384,7 +384,10 @@ export default function StorePage() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredAndSortedProducts.map((product) => (
-                  <Card key={product.id} className="group hover:shadow-lg transition-shadow duration-200">
+                  <Card
+                    key={product.id}
+                    className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes"
+                  >
                     <Link href={`/store/${product.id}`}
                       className="block">
                       <CardHeader className="p-0">
@@ -447,7 +450,9 @@ export default function StorePage() {
                       </CardContent>
                     </Link>
 
-                    <CardFooter className="p-4 pt-0">
+                    <CardFooter
+                      className="p-4 pt-0 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 transition-all"
+                    >
                       <Button
                         className="w-full"
                         onClick={() => {

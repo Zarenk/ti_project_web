@@ -132,18 +132,17 @@
 }
 
 .banner-track {
-  display: flex;
-  width: max-content;
+  display: inline-block;
   white-space: nowrap;
   animation: banner-marquee 15s linear infinite;
 }
 
 @keyframes banner-marquee {
   0% {
-    transform: translateX(0);
+    transform: translateX(100%);
   }
   100% {
-    transform: translateX(-50%);
+    transform: translateX(-100%);
   }
 }
 
@@ -157,4 +156,35 @@
   100% {
     background-color: #1e40af; /* dark blue */
   }
+}
+
+/* Product card hover stripes */
+.card-stripes::before,
+.card-stripes::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgb(59 130 246),
+    transparent
+  );
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.card-stripes::before {
+  top: 0;
+}
+
+.card-stripes::after {
+  bottom: 0;
+}
+
+.group:hover .card-stripes::before,
+.group:hover .card-stripes::after {
+  opacity: 1;
 }

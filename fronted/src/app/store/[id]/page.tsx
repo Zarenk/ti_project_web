@@ -20,14 +20,18 @@ import {
   Check,
   Plus,
   Minus,
+  Package,
+  PackageOpen,
+  Maximize2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/progress"
 import Navbar from "@/components/navbar"
-import { getProduct } from "../../dashboard/products/products.api"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { getProduct, getProducts } from "../../dashboard/products/products.api"
 
 import { toast } from "sonner"
 import { getStoresWithProduct } from "../../dashboard/inventory/inventory.api"
@@ -37,6 +41,24 @@ interface Props {
   params: { id: string }
 }
 
+interface RelatedProduct {
+  id: number
+  name: string
+  description: string
+  price: number
+  brand: string
+  category: string
+  images: string[]
+  stock: number | null
+  specification?: {
+    processor?: string
+    ram?: string
+    storage?: string
+    graphics?: string
+    screen?: string
+  }
+}
+
 export default function ProductPage({ params }: Props) {
 
   const [selectedImage, setSelectedImage] = useState(0)
@@ -44,6 +66,10 @@ export default function ProductPage({ params }: Props) {
   const [isInWishlist, setIsInWishlist] = useState(false)
   const [product, setProduct] = useState<any>(null)
   const [stock, setStock] = useState<number | null>(null)
+  const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([])
+  const [showMagnifier, setShowMagnifier] = useState(false)
+  const [magnifierPos, setMagnifierPos] = useState({ x: 0, y: 0, width: 0, height: 0 })
+  const [isImageDialogOpen, setIsImageDialogOpen] = useState(false)
   const { addItem } = useCart()
 
   useEffect(() => {
@@ -75,6 +101,49 @@ export default function ProductPage({ params }: Props) {
       fetchStock()
     }
   }, [product, params.id])
+
+  useEffect(() => {
+    async function fetchRelated() {
+      try {
+        const all = await getProducts()
+        const filtered = all.filter((p: any) =>
+          p.id !== product.id &&
+          (p.category?.name === product.category?.name || p.brand === product.brand)
+        )
+        const mapped = await Promise.all(
+          filtered.slice(0, 4).map(async (p: any) => {
+            let rpStock: number | null = null
+            try {
+              const stores = await getStoresWithProduct(p.id)
+              rpStock = stores.reduce(
+                (sum: number, item: any) => sum + (item.stock ?? 0),
+                0
+              )
+            } catch (err) {
+              console.error('Error fetching stock:', err)
+            }
+            return {
+              id: p.id,
+              name: p.name,
+              description: p.description || '',
+              price: p.priceSell ?? p.price,
+              brand: p.brand || 'Sin marca',
+              category: p.category?.name || 'Sin categoría',
+              images: p.images || [],
+              stock: rpStock,
+              specification: p.specification ?? undefined,
+            } as RelatedProduct
+          })
+        )
+        setRelatedProducts(mapped)
+      } catch (err) {
+        console.error('Error fetching related products:', err)
+      }
+    }
+    if (product) {
+      fetchRelated()
+    }
+  }, [product])
 
   const images: string[] =
     product?.images && product.images.length > 0
@@ -130,7 +199,26 @@ export default function ProductPage({ params }: Props) {
                 </Badge>
               )}
               <Badge className="absolute top-4 right-4 z-10 bg-green-500 hover:bg-green-600">Envío Gratis</Badge>
-              <div className="aspect-square rounded-2xl overflow-hidden bg-white dark:bg-gray-900 shadow-lg group cursor-zoom-in">
+              <div
+                className="aspect-square rounded-2xl overflow-hidden bg-white dark:bg-gray-900 shadow-lg group cursor-zoom-in relative"
+                onMouseEnter={() => setShowMagnifier(true)}
+                onMouseLeave={() => setShowMagnifier(false)}
+                onMouseMove={(e) => {
+                  const { left, top, width, height } = e.currentTarget.getBoundingClientRect()
+                  const x = e.clientX - left
+                  const y = e.clientY - top
+                  setMagnifierPos({ x, y, width, height })
+                }}
+              >
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="absolute bottom-4 right-4 z-20 bg-white/70 dark:bg-gray-800/70 hover:bg-white dark:hover:bg-gray-800 rounded-full"
+                  onClick={() => setIsImageDialogOpen(true)}
+                >
+                  <Maximize2 className="w-5 h-5" />
+                  <span className="sr-only">Maximizar imagen</span>
+                </Button>
                 <Image
                   src={images[selectedImage] || "/placeholder.svg"}
                   alt={product?.name || "Producto"}
@@ -138,8 +226,36 @@ export default function ProductPage({ params }: Props) {
                   height={600}
                   className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                 />
+                {showMagnifier && (
+                  <div
+                    className="absolute pointer-events-none rounded-full border-2 border-white shadow-lg"
+                    style={{
+                      top: magnifierPos.y - 75,
+                      left: magnifierPos.x - 75,
+                      width: 150,
+                      height: 150,
+                      backgroundImage: `url(${images[selectedImage] || "/placeholder.svg"})`,
+                      backgroundRepeat: "no-repeat",
+                      backgroundSize: `${magnifierPos.width * 2}px ${magnifierPos.height * 2}px`,
+                      backgroundPositionX: `-${magnifierPos.x * 2 - 75}px`,
+                      backgroundPositionY: `-${magnifierPos.y * 2 - 75}px`,
+                    }}
+                  />
+                )}
               </div>
             </div>
+
+            <Dialog open={isImageDialogOpen} onOpenChange={setIsImageDialogOpen}>
+              <DialogContent className="max-w-3xl p-0 bg-transparent border-none shadow-none">
+                <Image
+                  src={images[selectedImage] || "/placeholder.svg"}
+                  alt={product?.name || "Producto"}
+                  width={900}
+                  height={900}
+                  className="w-full h-full object-contain"
+                />
+              </DialogContent>
+            </Dialog>
 
             <div className="flex gap-3 overflow-x-auto pb-2">
               {images.map((image: string, index: number) => (
@@ -549,6 +665,82 @@ export default function ProductPage({ params }: Props) {
               </div>
             </TabsContent>
           </Tabs>
+
+          {relatedProducts.length > 0 && (
+            <div className="mt-16">
+              <h2 className="text-2xl font-bold mb-6">Productos relacionados</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {relatedProducts.map((rp) => (
+                  <Card key={rp.id} className="group hover:shadow-lg transition-shadow duration-200">
+                    <Link href={`/store/${rp.id}`} className="block">
+                      <CardHeader className="p-0">
+                        <div className="relative overflow-hidden rounded-t-lg">
+                          <Image
+                            src={rp.images[0] || "/placeholder.svg"}
+                            alt={rp.name}
+                            width={300}
+                            height={300}
+                            className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
+                          />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-4">
+                        <div className="mb-2">
+                          <Badge variant="outline" className="text-xs">
+                            {rp.category}
+                          </Badge>
+                        </div>
+                        <h3 className="font-semibold text-base sm:text-lg mb-1 break-words whitespace-normal">
+                          {rp.name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                          {rp.description}
+                        </p>
+                        <span className="text-sm text-muted-foreground mb-2 block">{rp.brand}</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-2xl font-bold text-green-600">S/.{rp.price.toFixed(2)}</span>
+                        </div>
+                        <p
+                          className={`text-xs mt-1 flex items-center gap-1 ${rp.stock !== null && rp.stock > 0 ? 'text-green-600' : 'text-red-600'}`}
+                        >
+                          {rp.stock !== null && rp.stock > 0 ? (
+                            <PackageOpen className="w-4 h-4" />
+                          ) : (
+                            <Package className="w-4 h-4" />
+                          )}
+                          {rp.stock !== null && rp.stock > 0 ? `Stock: ${rp.stock}` : 'Sin stock'}
+                        </p>
+                        <div className="hidden group-hover:block mt-2 space-y-1 text-xs text-muted-foreground">
+                          {rp.specification?.processor && <p>Procesador: {rp.specification.processor}</p>}
+                          {rp.specification?.ram && <p>RAM: {rp.specification.ram}</p>}
+                          {rp.specification?.storage && <p>Almacenamiento: {rp.specification.storage}</p>}
+                          {rp.specification?.graphics && <p>Gráficos: {rp.specification.graphics}</p>}
+                          {rp.specification?.screen && <p>Pantalla: {rp.specification.screen}</p>}
+                        </div>
+                      </CardContent>
+                    </Link>
+                    <CardFooter className="p-4 pt-0">
+                      <Button
+                        className="w-full"
+                        onClick={() => {
+                          addItem({
+                            id: rp.id,
+                            name: rp.name,
+                            price: rp.price,
+                            image: rp.images[0],
+                          })
+                          toast.success('Producto agregado al carrito')
+                        }}
+                      >
+                        Agregar al Carrito
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>
