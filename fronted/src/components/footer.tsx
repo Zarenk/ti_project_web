@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Monitor, Facebook, Twitter, Instagram, Youtube, Phone, Mail, MapPin, Headphones } from "lucide-react"
+import Image from "next/image"
 
 export default function Footer() {
   return (
@@ -11,9 +12,7 @@ export default function Footer() {
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           <div>
             <div className="flex items-center gap-2 mb-6">
-              <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-500 rounded-lg flex items-center justify-center">
-                <Monitor className="h-6 w-6 text-white" />
-              </div>
+                <Image src="/ti_logo_final_2024.png" alt="TechPro" width={24} height={24} className="h-6 w-6" />
               <span className="text-2xl font-bold">TI Store</span>
             </div>
             <p className="text-blue-200 mb-6">
