@@ -62,10 +62,10 @@ export default function CartSheet() {
                   <div className="flex-1">
                     <p className="font-medium leading-none">{item.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {formatCurrency(item.price)} x {item.quantity}
+                      {formatCurrency(item.price, "PEN")} x {item.quantity}
                     </p>
                     <p className="text-sm font-semibold text-blue-600">
-                      {formatCurrency(item.price * item.quantity)}
+                      {formatCurrency(item.price * item.quantity, "PEN")}
                     </p>
                   </div>
                   <Button
@@ -85,7 +85,7 @@ export default function CartSheet() {
           <div className="px-4 py-2 border-t">
             <div className="flex justify-between font-medium">
               <span>Subtotal</span>
-              <span className="text-blue-600">{formatCurrency(subtotal)}</span>
+              <span className="text-blue-600">{formatCurrency(subtotal, "PEN")}</span>
             </div>
           </div>
         )}

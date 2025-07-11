@@ -9,11 +9,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(value: number, currency: string = "USD"): string {
-  return new Intl.NumberFormat("es-ES", {
+export function formatCurrency(
+  value: number,
+  currency: string = "USD",
+): string {
+  const formatted = new Intl.NumberFormat("es-PE", {
     style: "currency",
     currency,
   }).format(value);
+
+  return currency === "PEN" ? formatted.replace("S/", "S/.") : formatted;
 }
 
 export async function uploadPdfToServer({

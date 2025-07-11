@@ -128,19 +128,33 @@
   font-size: 0.875rem;
   padding-top: 0.25rem;
   padding-bottom: 0.25rem;
+  animation: banner-bg 8s ease-in-out infinite;
 }
 
-.banner-marquee {
-  display: inline-block;
+.banner-track {
+  display: flex;
+  width: max-content;
   white-space: nowrap;
   animation: banner-marquee 15s linear infinite;
 }
 
 @keyframes banner-marquee {
   0% {
-    transform: translateX(100%);
+    transform: translateX(0);
   }
   100% {
-    transform: translateX(-100%);
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes banner-bg {
+  0% {
+    background-color: #1e40af; /* dark blue */
+  }
+  50% {
+    background-color: #60a5fa; /* light blue */
+  }
+  100% {
+    background-color: #1e40af; /* dark blue */
   }
 }

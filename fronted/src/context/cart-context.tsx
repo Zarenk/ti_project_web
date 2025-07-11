@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, ReactNode } from "react"
+import { createContext, useContext, useState, ReactNode, useEffect } from "react"
 
 export type CartItem = {
   id: number
@@ -20,7 +20,15 @@ type CartContextType = {
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([])
+  const [items, setItems] = useState<CartItem[]>(() => {
+    if (typeof window === "undefined") return []
+    try {
+      const stored = localStorage.getItem("cart")
+      return stored ? (JSON.parse(stored) as CartItem[]) : []
+    } catch {
+      return []
+    }
+  })
   const subtotal = items.reduce(
     (acc, item) => acc + item.price * item.quantity,
     0,
@@ -45,6 +53,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
 
   const clear = () => setItems([])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      localStorage.setItem("cart", JSON.stringify(items))
+    } catch {
+      // ignore write errors
+    }
+  }, [items])
 
   return (
     <CartContext.Provider value={{ items, addItem, removeItem, clear }}>
