@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { ShoppingCart } from "lucide-react"
+import { ShoppingCart, Trash2 } from "lucide-react"
 import {
   Sheet,
   SheetTrigger,
@@ -17,7 +17,7 @@ import { formatCurrency } from "@/lib/utils"
 import { useCart } from "@/context/cart-context"
 
 export default function CartSheet() {
-  const { items } = useCart()
+  const { items, removeItem } = useCart()
   const subtotal = items.reduce(
     (acc, item) => acc + item.price * item.quantity,
     0,
@@ -46,22 +46,36 @@ export default function CartSheet() {
           ) : (
             <ul className="space-y-4">
               {items.map((item) => (
-                <li key={item.id} className="flex items-center gap-4">
+                <li
+                  key={item.id}
+                  className="flex items-center gap-4 border rounded-lg p-2"
+                >
                   {item.image && (
                     <Image
                       src={item.image}
                       alt={item.name}
-                      width={48}
-                      height={48}
-                      className="rounded-md object-cover"
+                      width={56}
+                      height={56}
+                      className="rounded-md object-cover w-14 h-14"
                     />
                   )}
                   <div className="flex-1">
                     <p className="font-medium leading-none">{item.name}</p>
-                    <p className="text-sm text-blue-600">
-                      x{item.quantity} • {formatCurrency(item.price)}
+                    <p className="text-sm text-muted-foreground">
+                      {formatCurrency(item.price)} x {item.quantity}
+                    </p>
+                    <p className="text-sm font-semibold text-blue-600">
+                      {formatCurrency(item.price * item.quantity)}
                     </p>
                   </div>
+                  <Button
+                    onClick={() => removeItem(item.id)}
+                    variant="ghost"
+                    size="icon"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="sr-only">Eliminar</span>
+                  </Button>
                 </li>
               ))}
             </ul>
