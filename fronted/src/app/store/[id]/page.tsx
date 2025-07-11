@@ -76,7 +76,7 @@ export default function ProductPage({ params }: Props) {
     }
   }, [product, params.id])
 
-  const images =
+  const images: string[] =
     product?.images && product.images.length > 0
       ? product.images
       : product?.image
@@ -84,7 +84,7 @@ export default function ProductPage({ params }: Props) {
         : ["/placeholder.svg?height=600&width=600"]
 
   const salePrice = product?.priceSell ?? product?.price ?? 0
-  const originalPrice = +(salePrice * 1.15).toFixed(2)
+  const originalPrice = +(salePrice * 1.20).toFixed(2)
 
   const currentConfig = {
     price: salePrice,
@@ -130,19 +130,19 @@ export default function ProductPage({ params }: Props) {
                 </Badge>
               )}
               <Badge className="absolute top-4 right-4 z-10 bg-green-500 hover:bg-green-600">Envío Gratis</Badge>
-              <div className="aspect-square rounded-2xl overflow-hidden bg-white dark:bg-gray-900 shadow-lg">
+              <div className="aspect-square rounded-2xl overflow-hidden bg-white dark:bg-gray-900 shadow-lg group cursor-zoom-in">
                 <Image
                   src={images[selectedImage] || "/placeholder.svg"}
                   alt={product?.name || "Producto"}
                   width={600}
                   height={600}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                 />
               </div>
             </div>
 
             <div className="flex gap-3 overflow-x-auto pb-2">
-              {images.map((image, index) => (
+              {images.map((image: string, index: number) => (
                 <button
                   key={index}
                   onClick={() => setSelectedImage(index)}

@@ -119,3 +119,28 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Banner encima del navbar */
+.top-banner {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  overflow: hidden;
+  font-size: 0.875rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.banner-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  animation: banner-marquee 15s linear infinite;
+}
+
+@keyframes banner-marquee {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}

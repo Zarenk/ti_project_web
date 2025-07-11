@@ -263,7 +263,7 @@ export default function StorePage() {
                 <AccordionItem value="brands">
                   <AccordionTrigger className="text-base">Marcas</AccordionTrigger>
                   <AccordionContent>
-                    <div className="space-y-3">
+                    <div className="space-y-3 max-h-60 overflow-y-auto">
                       {brands.map((brand) => (
                         <div key={brand} className="flex items-center space-x-2">
                           <Checkbox
