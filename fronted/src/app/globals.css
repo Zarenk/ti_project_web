@@ -164,23 +164,24 @@
   content: "";
   position: absolute;
   inset: 0;
-  pointer-events: none;ty: 0;
+  pointer-events: none;
+  opacity: 0;
   transition: opacity 0.3s;
 }
 
 .card-stripes::before {
   background:
-    linear-gradient(to right, transparent, rgb(59 130 246), transparent) top/100% 4px no-repeat,
-    linear-gradient(to right, transparent, rgb(59 130 246), transparent) bottom/100% 4px no-repeat;
+    linear-gradient(to right, rgb(59 130 246), transparent) top/100% 4px no-repeat,
+    linear-gradient(to right, rgb(59 130 246), transparent) bottom/100% 4px no-repeat;
 }
 
 .card-stripes::after {
   background:
-    linear-gradient(to bottom, transparent, rgb(59 130 246), transparent) left/4px 100% no-repeat,
-    linear-gradient(to bottom, transparent, rgb(59 130 246), transparent) right/4px 100% no-repeat;
+    linear-gradient(to bottom, rgb(59 130 246), transparent) left/4px 100% no-repeat,
+    linear-gradient(to bottom, rgb(59 130 246), transparent) right/4px 100% no-repeat;
 }
 
-.group:hover .card-stripes::before,
-.group:hover .card-stripes::after {
+.card-stripes:hover::before,
+.card-stripes:hover::after {
   opacity: 1;
 }
