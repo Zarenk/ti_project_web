@@ -669,9 +669,12 @@ export default function ProductPage({ params }: Props) {
           {relatedProducts.length > 0 && (
             <div className="mt-16">
               <h2 className="text-2xl font-bold mb-6">Productos relacionados</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {relatedProducts.map((rp) => (
-                  <Card key={rp.id} className="group hover:shadow-lg transition-shadow duration-200">
+                  <Card
+                    key={rp.id}
+                    className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border"
+                  >
                     <Link href={`/store/${rp.id}`} className="block">
                       <CardHeader className="p-0">
                         <div className="relative overflow-hidden rounded-t-lg">
@@ -719,7 +722,9 @@ export default function ProductPage({ params }: Props) {
                         </div>
                       </CardContent>
                     </Link>
-                    <CardFooter className="p-4 pt-0">
+                    <CardFooter
+                      className="p-4 pt-0 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 transition-all"
+                    >
                       <Button
                         className="w-full"
                         onClick={() => {

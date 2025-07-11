@@ -91,7 +91,7 @@ export default function CartSheet() {
         )}
         <SheetFooter>
           <Button className="w-full" disabled={items.length === 0} asChild>
-            <Link href="#">Pagar</Link>
+            <Link href="/payment">Pagar</Link>
           </Button>
         </SheetFooter>
       </SheetContent>
