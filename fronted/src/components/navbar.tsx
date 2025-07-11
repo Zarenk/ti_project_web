@@ -20,10 +20,10 @@ export default function Navbar() {
             <Link href="/store" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Productos
             </Link>
-            <CartSheet />
             <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Iniciar sesión
             </Link>
+            <CartSheet />
             <ModeToggle />
           </div>
         </div>

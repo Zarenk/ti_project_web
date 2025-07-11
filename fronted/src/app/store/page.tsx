@@ -386,7 +386,7 @@ export default function StorePage() {
                 {filteredAndSortedProducts.map((product) => (
                   <Card
                     key={product.id}
-                    className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes"
+                    className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border"
                   >
                     <Link href={`/store/${product.id}`}
                       className="block">
