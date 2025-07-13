@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useCart } from "@/context/cart-context"
 import { CreditCard, Building2, Smartphone, Check, ShoppingCart } from "lucide-react"
 import Image from "next/image"
 
@@ -16,30 +17,7 @@ export default function Component() {
   const [paymentMethod, setPaymentMethod] = useState("visa")
   const [sameAsShipping, setSameAsShipping] = useState(true)
 
-  const orderItems = [
-    {
-      id: 1,
-      name: 'MacBook Pro 14" M3 Chip',
-      price: 1999.0,
-      quantity: 1,
-      image: "/placeholder.svg?height=80&width=80",
-    },
-    {
-      id: 2,
-      name: "Logitech MX Master 3S Mouse",
-      price: 99.99,
-      quantity: 1,
-      image: "/placeholder.svg?height=80&width=80",
-    },
-    {
-      id: 3,
-      name: "USB-C Hub 7-in-1",
-      price: 49.99,
-      quantity: 2,
-      image: "/placeholder.svg?height=80&width=80",
-    },
-  ]
-
+  const { items: orderItems } = useCart()
   const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const shipping = 15.0
   const total = subtotal + shipping
