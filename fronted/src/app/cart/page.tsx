@@ -5,6 +5,7 @@ import Image from "next/image"
 import { Minus, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import Navbar from "@/components/navbar"
 
 interface CartItem {
   id: string
@@ -72,15 +73,16 @@ export default function ShoppingCart() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
+      <Navbar />
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-light text-gray-900 mb-8 text-center">Shopping Cart</h1>
+        <h1 className="text-3xl font-light text-gray-900 mb-8 text-center">Verifique su pedido</h1>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Section - Cart Items */}
           <div className="lg:col-span-2 space-y-6">
             {cartItems.length === 0 ? (
               <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
-                <p className="text-gray-500 text-lg">Your cart is empty</p>
+                <p className="text-gray-500 text-lg">El Carrito esta vacio</p>
               </div>
             ) : (
               <>
@@ -115,12 +117,12 @@ export default function ShoppingCart() {
                           </Button>
                         </div>
 
-                        <p className="text-sky-600 font-semibold text-lg">${item.price.toFixed(2)}</p>
+                        <p className="text-sky-600 font-semibold text-lg">S/.{item.price.toFixed(2)}</p>
 
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                           {/* Quantity Selector */}
                           <div className="flex items-center space-x-3">
-                            <span className="text-sm text-gray-600 font-medium">Quantity:</span>
+                            <span className="text-sm text-gray-600 font-medium">Cantidad:</span>
                             <div className="flex items-center border border-gray-200 rounded-full">
                               <Button
                                 variant="ghost"
@@ -159,7 +161,7 @@ export default function ShoppingCart() {
 
                 {/* Coupon Section */}
                 <div className="bg-white rounded-2xl shadow-sm p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Discount Coupon</h3>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Cupon de Descuento</h3>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Input
                       type="text"
@@ -176,7 +178,7 @@ export default function ShoppingCart() {
                     </Button>
                   </div>
                   {couponApplied && <p className="text-green-600 text-sm mt-2 font-medium">✓ {couponApplied}</p>}
-                  <p className="text-xs text-gray-500 mt-2">Try: SAVE10 for 10% off or WELCOME20 for 20% off</p>
+                  <p className="text-xs text-gray-500 mt-2">Ingresa tus cupones de descuento aqui</p>
                 </div>
               </>
             )}
@@ -185,7 +187,7 @@ export default function ShoppingCart() {
           {/* Right Section - Order Summary */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl shadow-sm p-6 sticky top-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">Order Summary</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Resumen de Pedido</h2>
 
               <div className="space-y-4">
                 <div className="flex justify-between items-center py-2">
@@ -195,8 +197,8 @@ export default function ShoppingCart() {
 
                 {discount > 0 && (
                   <div className="flex justify-between items-center py-2">
-                    <span className="text-green-600">Discount ({(discount * 100).toFixed(0)}%)</span>
-                    <span className="font-medium text-green-600">-${discountAmount.toFixed(2)}</span>
+                    <span className="text-green-600">Descuento ({(discount * 100).toFixed(0)}%)</span>
+                    <span className="font-medium text-green-600">-S/.{discountAmount.toFixed(2)}</span>
                   </div>
                 )}
 
@@ -209,7 +211,7 @@ export default function ShoppingCart() {
               </div>
 
               <div className="mt-6 text-center">
-                <p className="text-sm text-gray-500">Review your items and apply any discount codes above</p>
+                <p className="text-sm text-gray-500">Revisa tus productos y aplica los códigos de descuento disponibles arriba</p>
               </div>
             </div>
           </div>
