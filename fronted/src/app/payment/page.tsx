@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
+import Navbar from "@/components/navbar"
 
 export default function Component() {
   const [paymentMethod, setPaymentMethod] = useState("visa")
@@ -24,6 +25,7 @@ export default function Component() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50">
+      <Navbar />
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8 text-center">
@@ -35,8 +37,8 @@ export default function Component() {
           {/* Main Form */}
           <div className="lg:col-span-2 space-y-6">
             {/* Billing Information */}
-            <Card className="border-blue-200 shadow-sm">
-              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg">
+            <Card className="border-blue-200 shadow-sm p-0">
+              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg p-4">
                 <CardTitle className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
                     <span className="text-sm font-bold">1</span>
@@ -93,8 +95,8 @@ export default function Component() {
             </Card>
 
             {/* Shipping Information */}
-            <Card className="border-blue-200 shadow-sm">
-              <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-t-lg">
+            <Card className="border-blue-200 shadow-sm p-0">
+              <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-t-lg p-4">
                 <CardTitle className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
                     <span className="text-sm font-bold">2</span>
@@ -160,8 +162,8 @@ export default function Component() {
             </Card>
 
             {/* Payment Method */}
-            <Card className="border-blue-200 shadow-sm">
-              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg">
+            <Card className="border-blue-200 shadow-sm p-0">
+              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg p-4">
                 <CardTitle className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
                     <span className="text-sm font-bold">3</span>
@@ -306,8 +308,8 @@ export default function Component() {
 
           {/* Order Summary */}
           <div className="lg:col-span-1">
-            <Card className="border-blue-200 shadow-lg sticky top-8">
-              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg">
+            <Card className="border-blue-200 shadow-lg sticky top-8 p-0">
+              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg p-4">
                 <CardTitle className="flex items-center gap-2">
                   <ShoppingCart className="h-5 w-5" />
                   Resumen del pedido

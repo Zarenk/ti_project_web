@@ -12,7 +12,13 @@ export default function Footer() {
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           <div>
             <div className="flex items-center gap-2 mb-6">
-                <Image src="/ti_logo_final_2024.png" alt="TechPro" width={24} height={24} className="h-6 w-6" />
+                <Image
+                  src="/ti_logo_final_2024.png"
+                  alt="TechPro"
+                  width={64}
+                  height={64}
+                  className="h-16 w-16"
+                />
               <span className="text-2xl font-bold">TI Store</span>
             </div>
             <p className="text-blue-200 mb-6">
