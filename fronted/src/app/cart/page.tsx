@@ -1,11 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import { Minus, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Navbar from "@/components/navbar"
+import { useCart } from "@/context/cart-context"
+import Link from "next/link"
 
 interface CartItem {
   id: string
@@ -15,44 +17,11 @@ interface CartItem {
   quantity: number
 }
 
-const initialCartItems: CartItem[] = [
-  {
-    id: "1",
-    name: "Wireless Bluetooth Headphones",
-    image: "/placeholder.svg?height=120&width=120",
-    price: 79.99,
-    quantity: 1,
-  },
-  {
-    id: "2",
-    name: "Premium Coffee Beans (1kg)",
-    image: "/placeholder.svg?height=120&width=120",
-    price: 24.99,
-    quantity: 2,
-  },
-  {
-    id: "3",
-    name: "Organic Cotton T-Shirt",
-    image: "/placeholder.svg?height=120&width=120",
-    price: 29.99,
-    quantity: 1,
-  },
-]
-
 export default function ShoppingCart() {
-  const [cartItems, setCartItems] = useState<CartItem[]>(initialCartItems)
+  const { items: cartItems, removeItem, updateQuantity } = useCart()
   const [couponCode, setCouponCode] = useState("")
   const [discount, setDiscount] = useState(0)
   const [couponApplied, setCouponApplied] = useState("")
-
-  const updateQuantity = (id: string, newQuantity: number) => {
-    if (newQuantity < 1) return
-    setCartItems((items) => items.map((item) => (item.id === id ? { ...item, quantity: newQuantity } : item)))
-  }
-
-  const removeItem = (id: string) => {
-    setCartItems((items) => items.filter((item) => item.id !== id))
-  }
 
   const applyCoupon = () => {
     if (couponCode.toLowerCase() === "save10") {
@@ -150,7 +119,7 @@ export default function ShoppingCart() {
                           <div className="text-right">
                             <p className="text-sm text-gray-600">Subtotal</p>
                             <p className="text-xl font-semibold text-gray-900">
-                              ${(item.price * item.quantity).toFixed(2)}
+                              S/.{(item.price * item.quantity).toFixed(2)}
                             </p>
                           </div>
                         </div>
@@ -165,7 +134,7 @@ export default function ShoppingCart() {
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Input
                       type="text"
-                      placeholder="Enter coupon code"
+                      placeholder="Ingrese el cupon de descuento"
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value)}
                       className="flex-grow rounded-xl border-gray-200 focus:border-sky-400 focus:ring-sky-400"
@@ -174,7 +143,7 @@ export default function ShoppingCart() {
                       onClick={applyCoupon}
                       className="bg-sky-500 hover:bg-sky-600 text-white rounded-xl px-8 py-2 font-medium transition-colors duration-200"
                     >
-                      Apply
+                      Aplicar
                     </Button>
                   </div>
                   {couponApplied && <p className="text-green-600 text-sm mt-2 font-medium">✓ {couponApplied}</p>}
@@ -192,7 +161,7 @@ export default function ShoppingCart() {
               <div className="space-y-4">
                 <div className="flex justify-between items-center py-2">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium text-gray-900">${subtotal.toFixed(2)}</span>
+                  <span className="font-medium text-gray-900">S/.{subtotal.toFixed(2)}</span>
                 </div>
 
                 {discount > 0 && (
@@ -205,9 +174,15 @@ export default function ShoppingCart() {
                 <div className="border-t border-gray-200 pt-4">
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-semibold text-gray-900">Total</span>
-                    <span className="text-2xl font-bold text-sky-600">${total.toFixed(2)}</span>
+                    <span className="text-2xl font-bold text-sky-600">S/.{total.toFixed(2)}</span>
                   </div>
                 </div>
+                <Button
+                  asChild
+                  className="w-full mt-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl px-8 py-2 font-medium transition-colors duration-200"
+                >
+                  <Link href="/payment">Realizar el pago</Link>
+                </Button>
               </div>
 
               <div className="mt-6 text-center">

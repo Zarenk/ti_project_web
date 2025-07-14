@@ -14,6 +14,7 @@ type CartContextType = {
   items: CartItem[]
   addItem: (item: Omit<CartItem, "quantity"> & { quantity?: number }) => void
   removeItem: (id: number) => void
+  updateQuantity: (id: number, quantity: number) => void
   clear: () => void
 }
 
@@ -52,6 +53,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems((prev) => prev.filter((p) => p.id !== id))
   }
 
+  const updateQuantity = (id: number, quantity: number) => {
+    setItems((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, quantity: Math.max(1, quantity) } : p)),
+    )
+  }
+
   const clear = () => setItems([])
 
   useEffect(() => {
@@ -64,7 +71,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [items])
 
   return (
-    <CartContext.Provider value={{ items, addItem, removeItem, clear }}>
+    <CartContext.Provider
+      value={{ items, addItem, removeItem, updateQuantity, clear }}
+    >
       {children}
     </CartContext.Provider>
   )
