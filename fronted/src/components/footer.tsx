@@ -77,7 +77,7 @@ export default function Footer() {
           </div>
 
           <div>
-            <h3 className="text-lg font-bold mb-6">Customer Service</h3>
+            <h3 className="text-lg font-bold mb-6">Servicio al Cliente</h3>
             <ul className="space-y-3 text-blue-200">
               <li>
                 <Link href="/contact" className="hover:text-white transition-colors">

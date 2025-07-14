@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { useCart } from "@/context/cart-context"
 import { CreditCard, Building2, Smartphone, Check, ShoppingCart } from "lucide-react"
 import Image from "next/image"
@@ -17,6 +17,83 @@ import Navbar from "@/components/navbar"
 export default function Component() {
   const [paymentMethod, setPaymentMethod] = useState("visa")
   const [sameAsShipping, setSameAsShipping] = useState(true)
+
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    address: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    shipFirstName: "",
+    shipLastName: "",
+    shipAddress: "",
+    shipCity: "",
+    shipPostalCode: "",
+    cardNumber: "",
+    expiry: "",
+    cvv: "",
+    cardName: "",
+  })
+
+  const [errors, setErrors] = useState<{ [key: string]: string }>({})
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    const { id, value } = e.target
+    setFormData((prev) => ({ ...prev, [id]: value }))
+  }
+
+  const handlePurchase = (e: React.FormEvent) => {
+    e.preventDefault()
+    const newErrors: { [key: string]: string } = {}
+
+    if (!formData.firstName.trim())
+      newErrors.firstName = "Ingrese sus nombres completos"
+    if (!formData.lastName.trim())
+      newErrors.lastName = "Ingrese sus apellidos"
+    if (!formData.email.trim()) newErrors.email = "Ingrese su email"
+    if (!formData.phone.trim()) newErrors.phone = "Ingrese su telefono"
+    if (!formData.address.trim())
+      newErrors.address = "Ingrese su direccion de facturacion"
+    if (!formData.city.trim()) newErrors.city = "Ingrese su ciudad"
+    if (!formData.state.trim()) newErrors.state = "Ingrese su estado o region"
+    if (!formData.postalCode.trim())
+      newErrors.postalCode = "Ingrese su codigo postal"
+
+    if (!sameAsShipping) {
+      if (!formData.shipFirstName.trim())
+        newErrors.shipFirstName = "Ingrese los nombres de envio"
+      if (!formData.shipLastName.trim())
+        newErrors.shipLastName = "Ingrese los apellidos de envio"
+      if (!formData.shipAddress.trim())
+        newErrors.shipAddress = "Ingrese la direccion de envio"
+      if (!formData.shipCity.trim())
+        newErrors.shipCity = "Ingrese la ciudad de envio"
+      if (!formData.shipPostalCode.trim())
+        newErrors.shipPostalCode = "Ingrese el codigo postal de envio"
+    }
+
+    if (!paymentMethod)
+      newErrors.paymentMethod = "Seleccione un metodo de pago"
+    if (paymentMethod === "visa") {
+      if (!formData.cardNumber.trim())
+        newErrors.cardNumber = "Ingrese el numero de tarjeta"
+      if (!formData.expiry.trim())
+        newErrors.expiry = "Ingrese la fecha de expiracion"
+      if (!formData.cvv.trim()) newErrors.cvv = "Ingrese el CVV"
+      if (!formData.cardName.trim())
+        newErrors.cardName = "Ingrese el nombre de la tarjeta"
+    }
+
+    setErrors(newErrors)
+    if (Object.keys(newErrors).length === 0) {
+      alert("Compra completada")
+    }
+  }
 
   const { items: orderItems } = useCart()
   const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
@@ -53,11 +130,29 @@ export default function Component() {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">Nombres Completos *</Label>
-                    <Input id="firstName" placeholder="John" className="border-gray-300 focus:border-blue-500" />
+                    <Input
+                      id="firstName"
+                      value={formData.firstName}
+                      onChange={handleChange}
+                      placeholder="John"
+                      className="border-gray-300 focus:border-blue-500"
+                    />
+                    {errors.firstName && (
+                      <p className="text-red-500 text-sm">{errors.firstName}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lastName">Apellidos *</Label>
-                    <Input id="lastName" placeholder="Doe" className="border-gray-300 focus:border-blue-500" />
+                    <Input
+                      id="lastName"
+                      value={formData.lastName}
+                      onChange={handleChange}
+                      placeholder="Doe"
+                      className="border-gray-300 focus:border-blue-500"
+                    />
+                    {errors.lastName && (
+                      <p className="text-red-500 text-sm">{errors.lastName}</p>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -65,30 +160,80 @@ export default function Component() {
                   <Input
                     id="email"
                     type="email"
+                    value={formData.email}
+                    onChange={handleChange}
                     placeholder="john.doe@example.com"
                     className="border-gray-300 focus:border-blue-500"
                   />
+                  {errors.email && (
+                    <p className="text-red-500 text-sm">{errors.email}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Telefono *</Label>
-                  <Input id="phone" placeholder="+51 999 999 999" className="border-gray-300 focus:border-blue-500" />
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    placeholder="+51 999 999 999"
+                    className="border-gray-300 focus:border-blue-500"
+                  />
+                  {errors.phone && (
+                    <p className="text-red-500 text-sm">{errors.phone}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="address">Direccion de Facturacion *</Label>
-                  <Input id="address" placeholder="123 Main Street" className="border-gray-300 focus:border-blue-500" />
+                  <Input
+                    id="address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    placeholder="123 Main Street"
+                    className="border-gray-300 focus:border-blue-500"
+                  />
+                  {errors.address && (
+                    <p className="text-red-500 text-sm">{errors.address}</p>
+                  )}
                 </div>
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="city">Ciudad *</Label>
-                    <Input id="city" placeholder="Lima" className="border-gray-300 focus:border-blue-500" />
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={handleChange}
+                      placeholder="Lima"
+                      className="border-gray-300 focus:border-blue-500"
+                    />
+                    {errors.city && (
+                      <p className="text-red-500 text-sm">{errors.city}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="state">Estado/Region</Label>
-                    <Input id="state" placeholder="Lima" className="border-gray-300 focus:border-blue-500" />
+                    <Input
+                      id="state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      placeholder="Lima"
+                      className="border-gray-300 focus:border-blue-500"
+                    />
+                    {errors.state && (
+                      <p className="text-red-500 text-sm">{errors.state}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="postalCode">Codigo Postal</Label>
-                    <Input id="postalCode" placeholder="20001" className="border-gray-300 focus:border-blue-500" />
+                    <Input
+                      id="postalCode"
+                      value={formData.postalCode}
+                      onChange={handleChange}
+                      placeholder="20001"
+                      className="border-gray-300 focus:border-blue-500"
+                    />
+                    {errors.postalCode && (
+                      <p className="text-red-500 text-sm">{errors.postalCode}</p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -125,35 +270,68 @@ export default function Component() {
                         <Label htmlFor="shipFirstName">Nombres Completos *</Label>
                         <Input
                           id="shipFirstName"
+                          value={formData.shipFirstName}
+                          onChange={handleChange}
                           placeholder="John"
                           className="border-gray-300 focus:border-blue-500"
                         />
+                        {errors.shipFirstName && (
+                          <p className="text-red-500 text-sm">{errors.shipFirstName}</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="shipLastName">Apellidos *</Label>
-                        <Input id="shipLastName" placeholder="Doe" className="border-gray-300 focus:border-blue-500" />
+                        <Input
+                          id="shipLastName"
+                          value={formData.shipLastName}
+                          onChange={handleChange}
+                          placeholder="Doe"
+                          className="border-gray-300 focus:border-blue-500"
+                        />
+                        {errors.shipLastName && (
+                          <p className="text-red-500 text-sm">{errors.shipLastName}</p>
+                        )}
                       </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="shipAddress">Direccion de Envio *</Label>
                       <Input
                         id="shipAddress"
+                        value={formData.shipAddress}
+                        onChange={handleChange}
                         placeholder="Avenida 123."
                         className="border-gray-300 focus:border-blue-500"
                       />
+                      {errors.shipAddress && (
+                        <p className="text-red-500 text-sm">{errors.shipAddress}</p>
+                      )}
                     </div>
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="shipCity">Ciudad *</Label>
-                        <Input id="shipCity" placeholder="Lima" className="border-gray-300 focus:border-blue-500" />
+                        <Input
+                          id="shipCity"
+                          value={formData.shipCity}
+                          onChange={handleChange}
+                          placeholder="Lima"
+                          className="border-gray-300 focus:border-blue-500"
+                        />
+                        {errors.shipCity && (
+                          <p className="text-red-500 text-sm">{errors.shipCity}</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="shipPostalCode">Codigo postal</Label>
                         <Input
                           id="shipPostalCode"
+                          value={formData.shipPostalCode}
+                          onChange={handleChange}
                           placeholder="20000"
                           className="border-gray-300 focus:border-blue-500"
                         />
+                        {errors.shipPostalCode && (
+                          <p className="text-red-500 text-sm">{errors.shipPostalCode}</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -200,27 +378,55 @@ export default function Component() {
                           <Label htmlFor="cardNumber">Numero de Tarjeta *</Label>
                           <Input
                             id="cardNumber"
+                            value={formData.cardNumber}
+                            onChange={handleChange}
                             placeholder="1234 5678 9012 3456"
                             className="border-gray-300 focus:border-blue-500"
                           />
+                          {errors.cardNumber && (
+                            <p className="text-red-500 text-sm">{errors.cardNumber}</p>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="expiry">Fecha de Expiracion *</Label>
-                            <Input id="expiry" placeholder="MM/YY" className="border-gray-300 focus:border-blue-500" />
+                            <Input
+                              id="expiry"
+                              value={formData.expiry}
+                              onChange={handleChange}
+                              placeholder="MM/YY"
+                              className="border-gray-300 focus:border-blue-500"
+                            />
+                            {errors.expiry && (
+                              <p className="text-red-500 text-sm">{errors.expiry}</p>
+                            )}
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="cvv">CVV *</Label>
-                            <Input id="cvv" placeholder="123" className="border-gray-300 focus:border-blue-500" />
+                            <Input
+                              id="cvv"
+                              value={formData.cvv}
+                              onChange={handleChange}
+                              placeholder="123"
+                              className="border-gray-300 focus:border-blue-500"
+                            />
+                            {errors.cvv && (
+                              <p className="text-red-500 text-sm">{errors.cvv}</p>
+                            )}
                           </div>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="cardName">Nombre de la Tarjeta *</Label>
                           <Input
                             id="cardName"
+                            value={formData.cardName}
+                            onChange={handleChange}
                             placeholder="John Doe"
                             className="border-gray-300 focus:border-blue-500"
                           />
+                          {errors.cardName && (
+                            <p className="text-red-500 text-sm">{errors.cardName}</p>
+                          )}
                         </div>
                       </div>
                     )}
@@ -355,7 +561,10 @@ export default function Component() {
                   </div>
                 </div>
 
-                <Button className="w-full mt-6 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-3 text-lg shadow-lg">
+                <Button
+                  onClick={handlePurchase}
+                  className="w-full mt-6 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-3 text-lg shadow-lg"
+                >
                   <Check className="h-5 w-5 mr-2" />
                   Completa tu compra
                 </Button>
