@@ -382,6 +382,31 @@ export class SalesService {
     });
   }
 
+  async findOne(id: number) {
+    const sale = await this.prisma.sales.findUnique({
+      where: { id },
+      include: {
+        user: { select: { username: true } },
+        store: { select: { name: true } },
+        client: { select: { name: true } },
+        salesDetails: {
+          include: {
+            entryDetail: { include: { product: true } },
+            storeOnInventory: true,
+          },
+        },
+        payments: { include: { paymentMethod: true } },
+        invoices: true,
+      },
+    });
+
+    if (!sale) {
+      throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
+    }
+
+    return sale;
+  }
+
   // Método para obtener las series vendidas en una venta específica
   async getSoldSeriesBySale(saleId: number) {
     // Buscar la venta con los detalles y las series asociadas

@@ -214,3 +214,9 @@ export async function getRecentSalesByRange(from: string, to: string) {
   return res.json();
 }
 
+export async function getSaleById(id: number | string) {
+  const res = await fetch(`${BACKEND_URL}/api/sales/${id}`);
+  if (!res.ok) throw new Error('Error al obtener la venta');
+  return res.json();
+}
+

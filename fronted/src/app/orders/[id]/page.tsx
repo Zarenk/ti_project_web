@@ -1,3 +1,7 @@
+"use client"
+
+import { useEffect, useState } from "react"
+
 import { ArrowLeft, Calendar, MapPin, Package, Truck, User } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -6,53 +10,64 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { getSaleById } from "@/app/dashboard/sales/sales.api"
 
-export default function OrderDetails() {
+interface Props {
+  params: { id: string }
+}
+
+export default function OrderDetails({ params }: Props) {
+  const [order, setOrder] = useState<any | null>(null)
+
+  useEffect(() => {
+    async function fetchOrder() {
+      try {
+        const data = await getSaleById(params.id)
+        setOrder(data)
+      } catch (error) {
+        console.error("Error al obtener la orden:", error)
+      }
+    }
+    fetchOrder()
+  }, [params.id])
+
+  if (!order) {
+    return <div className="p-6">Cargando...</div>
+  }
+
+  const products = order.salesDetails.map((detail: any) => ({
+    id: detail.productId,
+    name: detail.entryDetail.product.name,
+    image: detail.entryDetail.product.images?.[0] ?? "/placeholder.svg",
+    quantity: detail.quantity,
+    unitPrice: detail.price,
+    subtotal: detail.quantity * detail.price,
+  }))
+
+  const subtotal = products.reduce((s: number, p: any) => s + p.subtotal, 0)
+
   const orderData = {
-    orderNumber: "12345",
-    orderDate: "15 de Enero, 2024",
+    orderNumber: order.invoices[0]
+      ? `${order.invoices[0].serie}-${order.invoices[0].nroCorrelativo}`
+      : String(order.id),
+    orderDate: new Date(order.createdAt).toLocaleDateString("es-ES"),
     status: "Completado",
     customer: {
-      name: "María González Rodríguez",
-      email: "maria.gonzalez@email.com",
-      phone: "+34 612 345 678",
+        name: order.client.name,
+      email: order.client.email ?? "",
+      phone: order.client.phone ?? "",
     },
     shipping: {
-      address: "Calle Mayor 123, 4º B\n28013 Madrid, España",
-      method: "Envío Express",
-      estimatedDelivery: "17 de Enero, 2024",
+        address: order.client.adress ?? "",
+      method: "-",
+      estimatedDelivery: "-",
     },
-    products: [
-      {
-        id: 1,
-        name: "iPhone 15 Pro 128GB Titanio Natural",
-        image: "/placeholder.svg?height=80&width=80",
-        quantity: 1,
-        unitPrice: 1199.0,
-        subtotal: 1199.0,
-      },
-      {
-        id: 2,
-        name: "AirPods Pro (2ª generación)",
-        image: "/placeholder.svg?height=80&width=80",
-        quantity: 1,
-        unitPrice: 279.0,
-        subtotal: 279.0,
-      },
-      {
-        id: 3,
-        name: "Funda MagSafe para iPhone 15 Pro",
-        image: "/placeholder.svg?height=80&width=80",
-        quantity: 2,
-        unitPrice: 59.0,
-        subtotal: 118.0,
-      },
-    ],
+    products,
     summary: {
-      subtotal: 1596.0,
-      shipping: 9.99,
-      discount: 50.0,
-      total: 1555.99,
+        subtotal,
+      shipping: 0,
+      discount: 0,
+      total: order.total,
     },
   }
 
@@ -165,7 +180,7 @@ export default function OrderDetails() {
               </CardHeader>
               <CardContent className="pt-6">
                 <div className="space-y-4">
-                  {orderData.products.map((product, index) => (
+                  {orderData.products.map((product:any, index:any) => (
                     <div key={product.id}>
                       <div className="flex items-center space-x-4">
                         <div className="flex-shrink-0">
@@ -181,11 +196,11 @@ export default function OrderDetails() {
                           <h3 className="font-semibold text-slate-900 mb-1">{product.name}</h3>
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-slate-500">Cantidad: {product.quantity}</span>
-                            <span className="text-slate-500">€{product.unitPrice.toFixed(2)} c/u</span>
+                            <span className="text-slate-500">S/. {product.unitPrice.toFixed(2)} c/u</span>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-bold text-blue-900">€{product.subtotal.toFixed(2)}</p>
+                          <p className="font-bold text-blue-900">S/. {product.subtotal.toFixed(2)}</p>
                         </div>
                       </div>
                       {index < orderData.products.length - 1 && <Separator className="mt-4" />}
@@ -206,20 +221,20 @@ export default function OrderDetails() {
                 <div className="space-y-4">
                   <div className="flex justify-between">
                     <span className="text-slate-600">Subtotal</span>
-                    <span className="font-semibold">€{orderData.summary.subtotal.toFixed(2)}</span>
+                    <span className="font-semibold">S/. {orderData.summary.subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Envío</span>
-                    <span className="font-semibold">€{orderData.summary.shipping.toFixed(2)}</span>
+                    <span className="font-semibold">S/. {orderData.summary.shipping.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-green-600">
                     <span>Descuento</span>
-                    <span className="font-semibold">-€{orderData.summary.discount.toFixed(2)}</span>
+                    <span className="font-semibold">-S/. {orderData.summary.discount.toFixed(2)}</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between text-lg font-bold text-blue-900">
                     <span>Total</span>
-                    <span>€{orderData.summary.total.toFixed(2)}</span>
+                    <span>S/.{orderData.summary.total.toFixed(2)}</span>
                   </div>
                 </div>
 

@@ -94,4 +94,9 @@ export class SalesController {
   ) {
     return this.salesService.getRecentSales(from, to);
   }
+
+  @Get(':id')
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.salesService.findOne(id);
+  }
 }
