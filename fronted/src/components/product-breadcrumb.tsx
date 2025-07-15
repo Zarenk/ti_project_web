@@ -12,13 +12,14 @@ import {
 
 interface ProductBreadcrumbProps {
   category?: string | null
+  brand?: string | null
   productName: string
 }
 
-export default function ProductBreadcrumb({ category, productName }: ProductBreadcrumbProps) {
+export default function ProductBreadcrumb({ category, brand, productName }: ProductBreadcrumbProps) {
   return (
     <Breadcrumb className="mb-4">
-      <BreadcrumbList>
+      <BreadcrumbList className="text-xs antialiased">
         <BreadcrumbItem>
           <BreadcrumbLink asChild>
             <Link href="/">Inicio</Link>
@@ -30,6 +31,16 @@ export default function ProductBreadcrumb({ category, productName }: ProductBrea
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
                 <Link href={`/store?category=${encodeURIComponent(category)}`}>{category}</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+          </>
+        )}
+        {brand && (
+          <>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link href={`/store?brand=${encodeURIComponent(brand)}`}>{brand}</Link>
               </BreadcrumbLink>
             </BreadcrumbItem>
           </>

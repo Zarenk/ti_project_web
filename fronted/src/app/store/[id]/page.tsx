@@ -30,13 +30,13 @@ import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/progress"
 import Navbar from "@/components/navbar"
-import ProductBreadcrumb from "@/components/product-breadcrumb"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { getProduct, getProducts } from "../../dashboard/products/products.api"
 
 import { toast } from "sonner"
 import { getStoresWithProduct } from "../../dashboard/inventory/inventory.api"
 import { useCart } from "@/context/cart-context"
+import ProductBreadcrumb from "@/components/product-breadcrumb"
 
 interface Props {
   params: { id: string }
@@ -203,6 +203,7 @@ export default function ProductPage({ params }: Props) {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <ProductBreadcrumb
             category={product?.category?.name || null}
+            brand={product?.brand || null}
             productName={product?.name || ''}
         />
         <div className="grid lg:grid-cols-2 gap-12">         
