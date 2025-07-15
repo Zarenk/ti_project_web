@@ -2,11 +2,16 @@
 
 import Image from "next/image"
 import Link from "next/link"
+import { useState } from "react"
 import { ModeToggle } from "@/components/mode-toggle"
 import CartSheet from "@/components/cart-sheet"
 import TopBanner from "./top-banner"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+import { Button } from "@/components/ui/button"
 
 export default function Navbar() {
+  const [open, setOpen] = useState(false)
+
   return (
     <>
       <TopBanner />
@@ -20,9 +25,35 @@ export default function Navbar() {
             <Link href="/store" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Productos
             </Link>
-            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-              Iniciar sesión
-            </Link>
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <Link
+                  href="/login"
+                  onMouseEnter={() => setOpen(true)}
+                  onMouseLeave={() => setOpen(false)}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Iniciar Sesión
+                </Link>
+              </PopoverTrigger>
+              <PopoverContent
+                onMouseEnter={() => setOpen(true)}
+                onMouseLeave={() => setOpen(false)}
+                className="w-64 space-y-2 text-center"
+              >
+                <p className="text-sm">
+                  Regístrate para acceder a beneficios y descuentos
+                </p>
+                <Link href="/login" className="block">
+                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                    Iniciar sesión
+                  </Button>
+                </Link>
+                <Link href="/register" className="text-sm underline block">
+                  Eres Nuevo Cliente? Regístrate
+                </Link>
+              </PopoverContent>
+            </Popover>
             <CartSheet />
             <ModeToggle />
           </div>

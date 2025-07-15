@@ -10,6 +10,7 @@ import Navbar from "@/components/navbar"
 import { useCart, type CartItem } from "@/context/cart-context"
 import Link from "next/link"
 import { getProducts } from "../dashboard/products/products.api"
+import { getStoresWithProduct } from "../dashboard/inventory/inventory.api"
 import CheckoutSteps from "@/components/checkout-steps"
 
 interface Product {
@@ -26,6 +27,7 @@ export default function ShoppingCart() {
   const [discount, setDiscount] = useState(0)
   const [couponApplied, setCouponApplied] = useState("")
   const [savedItems, setSavedItems] = useState<CartItem[]>([])
+  const [stockMap, setStockMap] = useState<Record<number, number | null>>({})
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -47,6 +49,36 @@ export default function ShoppingCart() {
       // ignore
     }
   }, [savedItems])
+
+  useEffect(() => {
+    async function fetchStocks() {
+      const entries = await Promise.all(
+        cartItems.map(async (item) => {
+          try {
+            const stores = await getStoresWithProduct(item.id)
+            const total = stores.reduce(
+              (sum: number, s: any) => sum + (s.stock ?? 0),
+              0,
+            )
+            return [item.id, total] as [number, number]
+          } catch (err) {
+            console.error("Error fetching stock:", err)
+            return [item.id, null] as [number, null]
+          }
+        }),
+      )
+      const map: Record<number, number | null> = {}
+      entries.forEach(([id, stock]) => {
+        map[id] = stock
+      })
+      setStockMap(map)
+    }
+    if (cartItems.length > 0) {
+      fetchStocks()
+    } else {
+      setStockMap({})
+    }
+  }, [cartItems])
 
   useEffect(() => {
     async function fetchRecommended() {
@@ -108,6 +140,10 @@ export default function ShoppingCart() {
   const discountAmount = subtotal * discount
   const shippingEstimate = 15
   const total = subtotal - discountAmount + shippingEstimate
+  const hasOutOfStock = cartItems.some(
+    (item) =>
+      stockMap[item.id] !== undefined && (stockMap[item.id] ?? 0) <= 0,
+  )
 
   return (
     <div className="min-h-screen bg-background">
@@ -125,10 +161,13 @@ export default function ShoppingCart() {
               </div>
             ) : (
               <>
-                {cartItems.map((item) => (
+                {cartItems.map((item) => {
+                  const stock = stockMap[item.id]
+                  const outOfStock = stock !== undefined && (stock ?? 0) <= 0
+                  return (
                   <div
                     key={item.id}
-                    className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow duration-200"
+                    className={`bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow duration-200 ${outOfStock ? 'opacity-50' : ''}`}
                   >
                     <div className="flex flex-col sm:flex-row gap-4">
                       {/* Product Image */}
@@ -168,6 +207,7 @@ export default function ShoppingCart() {
                                 size="sm"
                                 onClick={() => updateQuantity(item.id, item.quantity - 1)}
                                 className="rounded-full w-8 h-8 p-0 hover:bg-sky-50 hover:text-sky-600 transition-transform active:scale-95"
+                                disabled={outOfStock || item.quantity <= 1}
                               >
                                 <Minus className="w-4 h-4" />
                               </Button>
@@ -179,6 +219,7 @@ export default function ShoppingCart() {
                                 size="sm"
                                 onClick={() => updateQuantity(item.id, item.quantity + 1)}
                                 className="rounded-full w-8 h-8 p-0 hover:bg-sky-50 hover:text-sky-600"
+                                disabled={outOfStock || (stock !== undefined && stock !== null && item.quantity >= stock)}
                               >
                                 <Plus className="w-4 h-4" />
                               </Button>
@@ -193,6 +234,9 @@ export default function ShoppingCart() {
                             </p>
                           </div>
                         </div>
+                        {outOfStock && (
+                          <p className="text-red-600 text-sm font-medium">No hay stock disponible</p>
+                        )}
                         <Button
                           variant="link"
                           size="sm"
@@ -204,7 +248,7 @@ export default function ShoppingCart() {
                       </div>
                     </div>
                   </div>
-                ))}
+                )})}
 
                 {/* Coupon Section */}
                 <div className="bg-white rounded-2xl shadow-sm p-6">
@@ -342,15 +386,29 @@ export default function ShoppingCart() {
                   </div>
                 </div>
                 <div className="space-y-2 mt-4">
-                  <Button
-                    asChild
-                    className="w-full bg-sky-500 hover:bg-sky-600 text-white rounded-xl px-8 py-2 font-medium transition-colors duration-200"
-                  >
-                    <Link href="/payment">Realizar el pago</Link>
-                  </Button>
+                  {hasOutOfStock ? (
+                    <Button
+                      className="w-full bg-sky-500 text-white rounded-xl px-8 py-2 font-medium"
+                      disabled
+                    >
+                      Realizar el pago
+                    </Button>
+                  ) : (
+                    <Button
+                      asChild
+                      className="w-full bg-sky-500 hover:bg-sky-600 text-white rounded-xl px-8 py-2 font-medium transition-colors duration-200"
+                    >
+                      <Link href="/payment">Realizar el pago</Link>
+                    </Button>
+                  )}
                   <Button asChild variant="outline" className="w-full">
                     <Link href="/store">Seguir comprando</Link>
                   </Button>
+                  {hasOutOfStock && (
+                    <p className="text-red-600 text-sm text-center">
+                      No puedes proceder con la compra porque hay productos sin stock
+                    </p>
+                  )}
                 </div>
               </div>
 
