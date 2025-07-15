@@ -5,7 +5,7 @@ import { DateRange } from "react-day-picker"
 export async function createSale(data: {
   userId: number;
   storeId: number;
-  clientId: number;
+  clientId?: number;
   total: number;
   description?: string;
   details: { productId: number; quantity: number; price: number }[];

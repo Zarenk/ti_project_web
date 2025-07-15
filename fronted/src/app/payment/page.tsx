@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import Navbar from "@/components/navbar"
+import CheckoutSteps from "@/components/checkout-steps"
 
 export default function Component() {
   const [paymentMethod, setPaymentMethod] = useState("visa")
@@ -112,6 +113,7 @@ export default function Component() {
         const payload = {
           userId: 1,
           storeId: 1,
+          clientId: 1,
           total,
           description: `Compra online de ${formData.firstName} ${formData.lastName}`,
           details,
@@ -147,6 +149,7 @@ export default function Component() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50">
       <Navbar />
       <div className="container mx-auto px-4 py-8">
+        <CheckoutSteps step={3} />
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Completa Tu Compra</h1>

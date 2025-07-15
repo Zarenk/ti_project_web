@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react"
 import Image from "next/image"
-import { Minus, Plus, X, Heart } from "lucide-react"
+import { Minus, Plus, X, Heart, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import Navbar from "@/components/navbar"
 import { useCart, type CartItem } from "@/context/cart-context"
@@ -36,6 +37,7 @@ export default function ShoppingCart() {
     }
   }, [])
   const [recommended, setRecommended] = useState<Product[]>([])
+  const [visibleStart, setVisibleStart] = useState(0)
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -51,7 +53,7 @@ export default function ShoppingCart() {
       try {
         const products = await getProducts()
         setRecommended(
-          products.slice(0, 4).map((p: any) => ({
+          products.slice(0, 12).map((p: any) => ({
             id: p.id,
             name: p.name,
             price: p.priceSell ?? p.price,
@@ -77,6 +79,16 @@ export default function ShoppingCart() {
       addItem({ id: item.id, name: item.name, price: item.price, image: item.image, quantity: item.quantity })
     }
     setSavedItems((prev) => prev.filter((s) => s.id !== id))
+  }
+
+  const showPrev = () => {
+    setVisibleStart((prev) => Math.max(prev - 4, 0))
+  }
+
+  const showNext = () => {
+    setVisibleStart((prev) =>
+      Math.min(prev + 4, Math.max(recommended.length - 4, 0))
+    )
   }
 
   const applyCoupon = () => {
@@ -237,20 +249,65 @@ export default function ShoppingCart() {
                )}
 
                {recommended.length > 0 && (
-                 <div className="bg-white rounded-2xl shadow-sm p-6">
-                   <h3 className="text-lg font-medium text-gray-900 mb-4">Te podría interesar</h3>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                     {recommended.map((rp:any) => (
-                       <div key={rp.id} className="text-center space-y-2">
-                         <Image src={rp.images[0] || "/placeholder.svg"} alt={rp.name} width={120} height={120} className="w-full h-24 object-cover rounded-lg" />
-                         <p className="text-sm font-medium line-clamp-2">{rp.name}</p>
-                         <p className="text-sky-600 font-semibold">S/.{rp.price.toFixed(2)}</p>
-                         <Button size="sm" onClick={() => addItem({ id: rp.id, name: rp.name, price: rp.price, image: rp.images[0], quantity: 1 })} className="w-full transition-transform active:scale-95">Agregar</Button>
-                       </div>
-                     ))}
-                   </div>
-                 </div>
-               )}
+                  <div className="bg-white rounded-2xl shadow-sm p-6">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Te podría interesar</h3>
+                    <div className="relative">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={showPrev}
+                        disabled={visibleStart === 0}
+                        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 hidden sm:flex"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {recommended.slice(visibleStart, visibleStart + 4).map((rp: any) => (
+                          <Card key={rp.id} className="group p-2 overflow-hidden">
+                            <Image
+                              src={rp.images[0] || "/placeholder.svg"}
+                              alt={rp.name}
+                              width={120}
+                              height={120}
+                              className="w-full h-24 object-cover rounded-lg group-hover:scale-105 transition-transform"
+                            />
+                            <div className="mt-2 space-y-1">
+                              <p className="text-sm font-medium line-clamp-2">{rp.name}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-2">{rp.description}</p>
+                              <p className="text-sky-600 font-semibold">S/.{rp.price.toFixed(2)}</p>
+                            </div>
+                            <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                size="sm"
+                                className="w-full"
+                                onClick={() =>
+                                  addItem({
+                                    id: rp.id,
+                                    name: rp.name,
+                                    price: rp.price,
+                                    image: rp.images[0],
+                                    quantity: 1,
+                                  })
+                                }
+                              >
+                                Agregar
+                              </Button>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={showNext}
+                        disabled={visibleStart + 4 >= recommended.length}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 hidden sm:flex"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -284,15 +341,17 @@ export default function ShoppingCart() {
                     <span className="text-2xl font-bold text-sky-600">S/.{total.toFixed(2)}</span>
                   </div>
                 </div>
-                <Button
-                  asChild
-                  className="w-full mt-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl px-8 py-2 font-medium transition-colors duration-200"
-                >
-                  <Link href="/payment">Realizar el pago</Link>
-                </Button>
-                <Button asChild variant="outline" className="w-full mt-2">
-                  <Link href="/store">Seguir comprando</Link>
-                </Button>
+                <div className="space-y-2 mt-4">
+                  <Button
+                    asChild
+                    className="w-full bg-sky-500 hover:bg-sky-600 text-white rounded-xl px-8 py-2 font-medium transition-colors duration-200"
+                  >
+                    <Link href="/payment">Realizar el pago</Link>
+                  </Button>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/store">Seguir comprando</Link>
+                  </Button>
+                </div>
               </div>
 
               <div className="mt-6 text-center">
