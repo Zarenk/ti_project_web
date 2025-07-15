@@ -6,18 +6,10 @@ import { Minus, Plus, X, Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Navbar from "@/components/navbar"
-import { useCart } from "@/context/cart-context"
+import { useCart, type CartItem } from "@/context/cart-context"
 import Link from "next/link"
 import { getProducts } from "../dashboard/products/products.api"
 import CheckoutSteps from "@/components/checkout-steps"
-
-interface CartItem {
-  id: number
-  name: string
-  image: string
-  price: number
-  quantity: number
-}
 
 interface Product {
   id: number
@@ -32,15 +24,17 @@ export default function ShoppingCart() {
   const [couponCode, setCouponCode] = useState("")
   const [discount, setDiscount] = useState(0)
   const [couponApplied, setCouponApplied] = useState("")
-  const [savedItems, setSavedItems] = useState<CartItem[]>(() => {
-    if (typeof window === "undefined") return []
+  const [savedItems, setSavedItems] = useState<CartItem[]>([])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
     try {
       const stored = localStorage.getItem("saved-items")
-      return stored ? (JSON.parse(stored) as CartItem[]) : []
+      setSavedItems(stored ? (JSON.parse(stored) as CartItem[]) : [])
     } catch {
-      return []
+      setSavedItems([])
     }
-  })
+  }, [])
   const [recommended, setRecommended] = useState<Product[]>([])
 
   useEffect(() => {
