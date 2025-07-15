@@ -1,7 +1,12 @@
-import { Product, ProductSpecification } from '@prisma/client'
+import { Product, ProductSpecification, ProductFeature } from '@prisma/client'
 
 export type ProductSpecInput = Omit<
   ProductSpecification,
+  'id' | 'productId' | 'createdAt' | 'updatedAt'
+>
+
+export type ProductFeatureInput = Omit<
+  ProductFeature,
   'id' | 'productId' | 'createdAt' | 'updatedAt'
 >
 
@@ -10,5 +15,6 @@ export type CreateProductDto = Omit<
   'id' | 'createdAt' | 'updatedAt' | 'specification'
 > & {
   specification?: ProductSpecInput
+  features?: ProductFeatureInput[]
   images?: string[]
 }

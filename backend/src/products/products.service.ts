@@ -14,15 +14,16 @@ export class ProductsService {
   ) {}
 
   async create(createProductDto: CreateProductDto) {
-    const { specification, images, ...data } = createProductDto
+    const { specification, images, features, ...data } = createProductDto as any
     try{
       return await this.prismaService.product.create({
         data: {
           ...data,
           images: images ?? [],
           specification: specification ? { create: specification } : undefined,
+          features: features ? { createMany: { data: features } } : undefined,
         },
-        include: { specification: true },
+        include: { specification: true, features: true },
       })
     }
     catch (error) {
@@ -125,6 +126,7 @@ export class ProductsService {
       include: {
         category: true, // Incluye la relación con la categoría
         specification: true,
+        features: true,
       },
     })
 
@@ -147,7 +149,7 @@ export class ProductsService {
             ? { upsert: { create: specification, update: specification } }
             : undefined,
         },
-        include: { specification: true },
+        include: { specification: true, features: true },
       })
   
       if(!productFound){
