@@ -51,6 +51,9 @@ model ProductSpecification {
   storage    String?
   graphics   String?
   screen     String?
+  resolution String?
+  refreshRate String?
+  connectivity String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

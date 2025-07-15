@@ -45,6 +45,9 @@ export function ProductForm({product, categories}: {product: any; categories: an
     storage: z.string().optional(),
     graphics: z.string().optional(),
     screen: z.string().optional(),
+    resolution: z.string().optional(),
+    refreshRate: z.string().optional(),
+    connectivity: z.string().optional(),
     }) //{name: "", lastname: "", age: z.number()}
 
     //inferir el tipo de dato
@@ -67,7 +70,9 @@ export function ProductForm({product, categories}: {product: any; categories: an
         storage: product?.specification?.storage || '',
         graphics: product?.specification?.graphics || '',
         screen: product?.specification?.screen || '',
-        
+        resolution: product?.specification?.resolution || '',
+        refreshRate: product?.specification?.refreshRate || '',
+        connectivity: product?.specification?.connectivity || '',
     }
     });
 
@@ -98,13 +103,16 @@ export function ProductForm({product, categories}: {product: any; categories: an
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
     try{
-        const { processor, ram, storage, graphics, screen, ...productData } = data
+        const { processor, ram, storage, graphics, screen, resolution, refreshRate, connectivity, ...productData } = data
         const spec: any = {}
         if (processor) spec.processor = processor
         if (ram) spec.ram = ram
         if (storage) spec.storage = storage
         if (graphics) spec.graphics = graphics
         if (screen) spec.screen = screen
+        if (resolution) spec.resolution = resolution
+        if (refreshRate) spec.refreshRate = refreshRate
+        if (connectivity) spec.connectivity = connectivity
 
         const cleanedImages = productData.images?.filter((img) => img.trim() !== "") ?? []
 
@@ -286,7 +294,10 @@ export function ProductForm({product, categories}: {product: any; categories: an
                         <Input placeholder='RAM' {...register('ram')} className='mb-2'></Input>
                         <Input placeholder='Almacenamiento' {...register('storage')} className='mb-2'></Input>
                         <Input placeholder='Gráficos' {...register('graphics')} className='mb-2'></Input>
-                        <Input placeholder='Pantalla' {...register('screen')}></Input>
+                        <Input placeholder='Pantalla' {...register('screen')} className='mb-2'></Input>
+                        <Input placeholder='Resolución' {...register('resolution')} className='mb-2'></Input>
+                        <Input placeholder='Tasa de refresco' {...register('refreshRate')} className='mb-2'></Input>
+                        <Input placeholder='Conectividad' {...register('connectivity')}></Input>
                     </div>
 
                     <div className="flex flex-col">
@@ -326,6 +337,9 @@ export function ProductForm({product, categories}: {product: any; categories: an
                             storage: "",
                             graphics: "",
                             screen: "",
+                            resolution: "",
+                            refreshRate: "",
+                            connectivity: "",
                         })
                     } // Restablece el estado a "Activo"})} // Restablece los campos del formulario
                     >

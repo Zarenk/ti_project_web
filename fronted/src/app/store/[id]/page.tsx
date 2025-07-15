@@ -56,6 +56,9 @@ interface RelatedProduct {
     storage?: string
     graphics?: string
     screen?: string
+    resolution?: string
+    refreshRate?: string
+    connectivity?: string
   }
 }
 
@@ -163,6 +166,10 @@ export default function ProductPage({ params }: Props) {
       ram: product?.specification?.ram ?? "",
       storage: product?.specification?.storage ?? "",
       graphics: product?.specification?.graphics ?? "",
+      screen: product?.specification?.screen ?? "",
+      resolution: product?.specification?.resolution ?? "",
+      refreshRate: product?.specification?.refreshRate ?? "",
+      connectivity: product?.specification?.connectivity ?? "",
     },
   }
 
@@ -490,19 +497,19 @@ export default function ProductPage({ params }: Props) {
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-400">Pantalla:</span>
-                        <span className="font-medium">15.6" 4K OLED</span>
+                        <span className="font-medium">{currentConfig.specs.screen}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Resolución:</span>   
-                        <span className="font-medium">3840 x 2160</span>
+                        <span className="text-gray-600 dark:text-gray-400">Resolución:</span>
+                        <span className="font-medium">{currentConfig.specs.resolution}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-400">Tasa de refresco:</span>
-                        <span className="font-medium">120Hz</span>
+                        <span className="font-medium">{currentConfig.specs.refreshRate}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-400">Conectividad:</span>
-                        <span className="font-medium">WiFi 6E, Bluetooth 5.3</span>
+                        <span className="font-medium">{currentConfig.specs.connectivity}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -719,6 +726,9 @@ export default function ProductPage({ params }: Props) {
                           {rp.specification?.storage && <p>Almacenamiento: {rp.specification.storage}</p>}
                           {rp.specification?.graphics && <p>Gráficos: {rp.specification.graphics}</p>}
                           {rp.specification?.screen && <p>Pantalla: {rp.specification.screen}</p>}
+                          {rp.specification?.resolution && <p>Resolución: {rp.specification.resolution}</p>}
+                          {rp.specification?.refreshRate && <p>Tasa de refresco: {rp.specification.refreshRate}</p>}
+                          {rp.specification?.connectivity && <p>Conectividad: {rp.specification.connectivity}</p>}
                         </div>
                       </CardContent>
                     </Link>

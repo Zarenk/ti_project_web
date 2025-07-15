@@ -37,6 +37,9 @@ interface Product {
     storage?: string
     graphics?: string
     screen?: string
+    resolution?: string
+    refreshRate?: string
+    connectivity?: string
   }
 }
 
@@ -445,6 +448,15 @@ export default function StorePage() {
                           )}
                           {product.specification?.screen && (
                             <p>Pantalla: {product.specification.screen}</p>
+                          )}
+                          {product.specification?.resolution && (
+                            <p>Resolución: {product.specification.resolution}</p>
+                          )}
+                          {product.specification?.refreshRate && (
+                            <p>Tasa de refresco: {product.specification.refreshRate}</p>
+                          )}
+                          {product.specification?.connectivity && (
+                            <p>Conectividad: {product.specification.connectivity}</p>
                           )}
                         </div>
                       </CardContent>
