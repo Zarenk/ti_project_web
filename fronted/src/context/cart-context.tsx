@@ -21,15 +21,19 @@ type CartContextType = {
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
-    if (typeof window === "undefined") return []
+  const [items, setItems] = useState<CartItem[]>([])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
     try {
       const stored = localStorage.getItem("cart")
-      return stored ? (JSON.parse(stored) as CartItem[]) : []
+      if (stored) {
+        setItems(JSON.parse(stored) as CartItem[])
+      }
     } catch {
-      return []
+      // ignore read errors
     }
-  })
+  }, [])
   const subtotal = items.reduce(
     (acc, item) => acc + item.price * item.quantity,
     0,
