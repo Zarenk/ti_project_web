@@ -30,6 +30,7 @@ import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/progress"
 import Navbar from "@/components/navbar"
+import ProductBreadcrumb from "@/components/product-breadcrumb"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { getProduct, getProducts } from "../../dashboard/products/products.api"
 
@@ -173,6 +174,10 @@ export default function ProductPage({ params }: Props) {
     },
   }
 
+  const hasSpecs = Object.values(currentConfig.specs).some(
+    (v) => v && v.toString().trim() !== ""
+  )
+
   const discountPercentage =
     currentConfig.originalPrice > currentConfig.price
       ? Math.round(
@@ -196,7 +201,11 @@ export default function ProductPage({ params }: Props) {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-2 gap-12">
+        <ProductBreadcrumb
+            category={product?.category?.name || null}
+            productName={product?.name || ''}
+        />
+        <div className="grid lg:grid-cols-2 gap-12">         
           {/* Galería de Imágenes */}
           <div className="space-y-4">
             <div className="relative">
@@ -313,24 +322,26 @@ export default function ProductPage({ params }: Props) {
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
                   {product?.description}
                 </p>
-                <div className="flex items-center gap-4 mt-4">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="w-5 h-5 text-blue-500" />
-                    <span className="text-sm font-medium">{currentConfig.specs.processor}</span>
+                {hasSpecs && (
+                  <div className="flex items-center gap-4 mt-4">
+                    <div className="flex items-center gap-2">
+                      <Cpu className="w-5 h-5 text-blue-500" />
+                      <span className="text-sm font-medium">{currentConfig.specs.processor}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <MemoryStick className="w-5 h-5 text-green-500" />
+                      <span className="text-sm font-medium">{currentConfig.specs.ram}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <HardDrive className="w-5 h-5 text-purple-500" />
+                      <span className="text-sm font-medium">{currentConfig.specs.storage}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Monitor className="w-5 h-5 text-orange-500" />
+                      <span className="text-sm font-medium">{currentConfig.specs.graphics}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <MemoryStick className="w-5 h-5 text-green-500" />
-                    <span className="text-sm font-medium">{currentConfig.specs.ram}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <HardDrive className="w-5 h-5 text-purple-500" />
-                    <span className="text-sm font-medium">{currentConfig.specs.storage}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Monitor className="w-5 h-5 text-orange-500" />
-                    <span className="text-sm font-medium">{currentConfig.specs.graphics}</span>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -460,61 +471,74 @@ export default function ProductPage({ params }: Props) {
             </TabsList>
 
             <TabsContent value="specs" className="mt-8">
-              <div className="grid md:grid-cols-2 gap-8">
-                <Card>
-                  <CardContent className="p-6">
-                    <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                      <Cpu className="w-6 h-6 text-blue-500" />
-                      Rendimiento
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Procesador:</span>
-                        <span className="font-medium">{currentConfig.specs.processor}</span>
+              {hasSpecs ? (
+                <div className="grid md:grid-cols-2 gap-8">
+                  <Card>
+                    <CardContent className="p-6">
+                      <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                        <Cpu className="w-6 h-6 text-blue-500" />
+                        Rendimiento
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Procesador:</span>
+                          <span className="font-medium">{currentConfig.specs.processor}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Memoria RAM:</span>
+                          <span className="font-medium">{currentConfig.specs.ram}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Almacenamiento:</span>
+                          <span className="font-medium">{currentConfig.specs.storage}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Gráficos:</span>
+                          <span className="font-medium">{currentConfig.specs.graphics}</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Memoria RAM:</span>
-                        <span className="font-medium">{currentConfig.specs.ram}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Almacenamiento:</span>
-                        <span className="font-medium">{currentConfig.specs.storage}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Gráficos:</span>
-                        <span className="font-medium">{currentConfig.specs.graphics}</span>
-                      </div>
-                    </div>
                   </CardContent>
                 </Card>
+              
+                <Card>
+                    <CardContent className="p-6">
+                      <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                        <Monitor className="w-6 h-6 text-green-500" />
+                        Display & Conectividad
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Pantalla:</span>
+                          <span className="font-medium">{currentConfig.specs.screen}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Resolución:</span>
+                          <span className="font-medium">{currentConfig.specs.resolution}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Tasa de refresco:</span>
+                          <span className="font-medium">{currentConfig.specs.refreshRate}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Conectividad:</span>
+                          <span className="font-medium">{currentConfig.specs.connectivity}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              
+              ) : (
 
                 <Card>
                   <CardContent className="p-6">
-                    <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                      <Monitor className="w-6 h-6 text-green-500" />
-                      Display & Conectividad
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Pantalla:</span>
-                        <span className="font-medium">{currentConfig.specs.screen}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Resolución:</span>
-                        <span className="font-medium">{currentConfig.specs.resolution}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Tasa de refresco:</span>
-                        <span className="font-medium">{currentConfig.specs.refreshRate}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Conectividad:</span>
-                        <span className="font-medium">{currentConfig.specs.connectivity}</span>
-                      </div>
-                    </div>
+                    <h3 className="text-xl font-bold mb-4">Descripción del Producto</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {product?.description}
+                    </p>
                   </CardContent>
                 </Card>
-              </div>
+              )}
             </TabsContent>
 
             <TabsContent value="features" className="mt-8">
