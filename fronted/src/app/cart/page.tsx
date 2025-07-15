@@ -2,26 +2,88 @@
 
 import { useEffect, useState } from "react"
 import Image from "next/image"
-import { Minus, Plus, X } from "lucide-react"
+import { Minus, Plus, X, Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Navbar from "@/components/navbar"
 import { useCart } from "@/context/cart-context"
 import Link from "next/link"
+import { getProducts } from "../dashboard/products/products.api"
+import CheckoutSteps from "@/components/checkout-steps"
 
 interface CartItem {
-  id: string
+  id: number
   name: string
   image: string
   price: number
   quantity: number
 }
 
+interface Product {
+  id: number
+  name: string
+  price: number
+  description: string
+  images: string[]
+}
+
 export default function ShoppingCart() {
-  const { items: cartItems, removeItem, updateQuantity } = useCart()
+  const { items: cartItems, removeItem, updateQuantity, addItem } = useCart()
   const [couponCode, setCouponCode] = useState("")
   const [discount, setDiscount] = useState(0)
   const [couponApplied, setCouponApplied] = useState("")
+  const [savedItems, setSavedItems] = useState<CartItem[]>(() => {
+    if (typeof window === "undefined") return []
+    try {
+      const stored = localStorage.getItem("saved-items")
+      return stored ? (JSON.parse(stored) as CartItem[]) : []
+    } catch {
+      return []
+    }
+  })
+  const [recommended, setRecommended] = useState<Product[]>([])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      localStorage.setItem("saved-items", JSON.stringify(savedItems))
+    } catch {
+      // ignore
+    }
+  }, [savedItems])
+
+  useEffect(() => {
+    async function fetchRecommended() {
+      try {
+        const products = await getProducts()
+        setRecommended(
+          products.slice(0, 4).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            price: p.priceSell ?? p.price,
+            description: p.description || "",
+            images: p.images || [],
+          }))
+        )
+      } catch (error) {
+        console.error("Error fetching recommended", error)
+      }
+    }
+    fetchRecommended()
+  }, [])
+
+  const saveForLater = (item: CartItem) => {
+    removeItem(item.id)
+    setSavedItems((prev) => [...prev, item])
+  }
+
+  const moveToCart = (id: number) => {
+    const item = savedItems.find((s) => s.id === id)
+    if (item) {
+      addItem({ id: item.id, name: item.name, price: item.price, image: item.image, quantity: item.quantity })
+    }
+    setSavedItems((prev) => prev.filter((s) => s.id !== id))
+  }
 
   const applyCoupon = () => {
     if (couponCode.toLowerCase() === "save10") {
@@ -38,12 +100,14 @@ export default function ShoppingCart() {
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const discountAmount = subtotal * discount
-  const total = subtotal - discountAmount
+  const shippingEstimate = 15
+  const total = subtotal - discountAmount + shippingEstimate
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <CheckoutSteps step={1} />
         <h1 className="text-3xl font-light text-gray-900 mb-8 text-center">Verifique su pedido</h1>
 
         <div className="grid lg:grid-cols-3 gap-8">
@@ -80,7 +144,7 @@ export default function ShoppingCart() {
                             variant="ghost"
                             size="sm"
                             onClick={() => removeItem(item.id)}
-                            className="text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full p-2 ml-2"
+                            className="rounded-full w-8 h-8 p-0 hover:bg-sky-50 hover:text-sky-600 transition-transform active:scale-95"
                           >
                             <X className="w-4 h-4" />
                           </Button>
@@ -97,7 +161,7 @@ export default function ShoppingCart() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                className="rounded-full w-8 h-8 p-0 hover:bg-sky-50 hover:text-sky-600"
+                                className="rounded-full w-8 h-8 p-0 hover:bg-sky-50 hover:text-sky-600 transition-transform active:scale-95"
                               >
                                 <Minus className="w-4 h-4" />
                               </Button>
@@ -123,6 +187,14 @@ export default function ShoppingCart() {
                             </p>
                           </div>
                         </div>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={() => saveForLater(item)}
+                          className="text-gray-500 hover:text-sky-600 transition-colors flex items-center gap-1 active:scale-95"
+                        >
+                          <Heart className="w-4 h-4" /> Guardar para después
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -147,8 +219,44 @@ export default function ShoppingCart() {
                     </Button>
                   </div>
                   {couponApplied && <p className="text-green-600 text-sm mt-2 font-medium">✓ {couponApplied}</p>}
-                  <p className="text-xs text-gray-500 mt-2">Ingresa tus cupones de descuento aqui</p>
-                </div>
+                <p className="text-xs text-gray-500 mt-2">Ingresa tus cupones de descuento aqui</p>
+              </div>
+
+               {savedItems.length > 0 && (
+                 <div className="bg-white rounded-2xl shadow-sm p-6">
+                   <h3 className="text-lg font-medium text-gray-900 mb-4">Guardado para más tarde</h3>
+                   <div className="space-y-4">
+                     {savedItems.map((item) => (
+                       <div key={item.id} className="flex items-center justify-between">
+                         <div className="flex items-center gap-4">
+                           <Image src={item.image || "/placeholder.svg"} alt={item.name} width={60} height={60} className="w-15 h-15 object-cover rounded-lg" />
+                           <div>
+                             <p className="font-medium">{item.name}</p>
+                             <p className="text-sm text-gray-500">S/.{item.price.toFixed(2)}</p>
+                           </div>
+                         </div>
+                         <Button size="sm" onClick={() => moveToCart(item.id)} className="bg-sky-500 hover:bg-sky-600 text-white">Mover al carrito</Button>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               )}
+
+               {recommended.length > 0 && (
+                 <div className="bg-white rounded-2xl shadow-sm p-6">
+                   <h3 className="text-lg font-medium text-gray-900 mb-4">Te podría interesar</h3>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                     {recommended.map((rp:any) => (
+                       <div key={rp.id} className="text-center space-y-2">
+                         <Image src={rp.images[0] || "/placeholder.svg"} alt={rp.name} width={120} height={120} className="w-full h-24 object-cover rounded-lg" />
+                         <p className="text-sm font-medium line-clamp-2">{rp.name}</p>
+                         <p className="text-sky-600 font-semibold">S/.{rp.price.toFixed(2)}</p>
+                         <Button size="sm" onClick={() => addItem({ id: rp.id, name: rp.name, price: rp.price, image: rp.images[0], quantity: 1 })} className="w-full transition-transform active:scale-95">Agregar</Button>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               )}
               </>
             )}
           </div>
@@ -162,6 +270,11 @@ export default function ShoppingCart() {
                 <div className="flex justify-between items-center py-2">
                   <span className="text-gray-600">Subtotal</span>
                   <span className="font-medium text-gray-900">S/.{subtotal.toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-600">Envío estimado</span>
+                  <span className="font-medium text-gray-900">S/.{shippingEstimate.toFixed(2)}</span>
                 </div>
 
                 {discount > 0 && (
@@ -182,6 +295,9 @@ export default function ShoppingCart() {
                   className="w-full mt-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl px-8 py-2 font-medium transition-colors duration-200"
                 >
                   <Link href="/payment">Realizar el pago</Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full mt-2">
+                  <Link href="/store">Seguir comprando</Link>
                 </Button>
               </div>
 
