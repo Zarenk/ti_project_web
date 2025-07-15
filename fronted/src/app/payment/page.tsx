@@ -4,6 +4,8 @@ import React, { useState } from "react"
 import { useCart } from "@/context/cart-context"
 import { CreditCard, Building2, Smartphone, Check, ShoppingCart } from "lucide-react"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
+import { createSale } from "@/app/dashboard/sales/sales.api"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,7 +49,10 @@ export default function Component() {
     setFormData((prev) => ({ ...prev, [id]: value }))
   }
 
-  const handlePurchase = (e: React.FormEvent) => {
+  const router = useRouter()
+  const { items: orderItems, clear } = useCart()
+
+  const handlePurchase = async (e: React.FormEvent) => {
     e.preventDefault()
     const newErrors: { [key: string]: string } = {}
 
@@ -91,11 +96,49 @@ export default function Component() {
 
     setErrors(newErrors)
     if (Object.keys(newErrors).length === 0) {
-      alert("Compra completada")
+      try {
+        const details = orderItems.map(item => ({
+          productId: item.id,
+          quantity: item.quantity,
+          price: item.price,
+        }))
+
+        const paymentMethodMap: Record<string, number> = {
+          visa: -3,
+          transfer: -2,
+          yape: -4,
+        }
+
+        const payload = {
+          userId: 1,
+          storeId: 1,
+          total,
+          description: `Compra online de ${formData.firstName} ${formData.lastName}`,
+          details,
+          tipoMoneda: "PEN",
+          payments: [
+            {
+              paymentMethodId: paymentMethodMap[paymentMethod] ?? -6,
+              amount: total,
+              currency: "PEN",
+            },
+          ],
+        }
+
+        const sale = await createSale(payload)
+        if (sale && sale.id) {
+          clear()
+          router.push(`/orders/${sale.id}`)
+        } else {
+          alert("No se pudo procesar la compra")
+        }
+      } catch (error) {
+        console.error("Error al crear la orden:", error)
+        alert("Ocurrió un error al procesar la compra")
+      }
     }
   }
 
-  const { items: orderItems } = useCart()
   const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const shipping = 15.0
   const total = subtotal + shipping
