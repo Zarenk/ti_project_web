@@ -11,11 +11,19 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import Navbar from "@/components/navbar"
 import CheckoutSteps from "@/components/checkout-steps"
+import { regions } from "@/lib/region"
 
 export default function Component() {
   const [paymentMethod, setPaymentMethod] = useState("visa")
@@ -262,29 +270,52 @@ export default function Component() {
                 </div>
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="city">Ciudad *</Label>
-                    <Input
-                      id="city"
-                      value={formData.city}
-                      onChange={handleChange}
-                      placeholder="Lima"
-                      className="border-gray-300 focus:border-blue-500"
-                    />
-                    {errors.city && (
-                      <p className="text-red-500 text-sm">{errors.city}</p>
+                    <Label htmlFor="state">Región *</Label>
+                    <Select
+                      value={formData.state}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, state: value, city: "" }))
+                      }
+                    >
+                      <SelectTrigger className="w-full border-gray-300 focus:border-blue-500">
+                        <SelectValue placeholder="Seleccione una región" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {regions.map((region) => (
+                          <SelectItem key={region.name} value={region.name}>
+                            {region.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.state && (
+                      <p className="text-red-500 text-sm">{errors.state}</p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="state">Estado/Region</Label>
-                    <Input
-                      id="state"
-                      value={formData.state}
-                      onChange={handleChange}
-                      placeholder="Lima"
-                      className="border-gray-300 focus:border-blue-500"
-                    />
-                    {errors.state && (
-                      <p className="text-red-500 text-sm">{errors.state}</p>
+                    <Label htmlFor="city">Ciudad *</Label>
+                    <Select
+                      value={formData.city}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, city: value }))
+                      }
+                      disabled={!formData.state}
+                    >
+                      <SelectTrigger className="w-full border-gray-300 focus:border-blue-500">
+                        <SelectValue placeholder="Seleccione una ciudad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {regions
+                          .find((r:any) => r.name === formData.state)
+                          ?.cities.map((city:any) => (
+                            <SelectItem key={city} value={city}>
+                              {city}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.city && (
+                      <p className="text-red-500 text-sm">{errors.city}</p>
                     )}
                   </div>
                   <div className="space-y-2">
