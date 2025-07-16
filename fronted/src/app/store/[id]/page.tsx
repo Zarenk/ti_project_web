@@ -171,7 +171,7 @@ export default function ProductPage({ params }: Props) {
   useEffect(() => {
     async function loadReviews() {
       try {
-        const res = await getReviews(Number(params.id))
+        const res = await getReviews(Number(id))
         setReviews(res)
         const u = getUserDataFromToken()
         if (u) {
@@ -187,7 +187,7 @@ export default function ProductPage({ params }: Props) {
       }
     }
     loadReviews()
-  }, [params.id])
+  }, [id])
 
   const images: string[] =
     product?.images && product.images.length > 0
@@ -232,8 +232,8 @@ export default function ProductPage({ params }: Props) {
     const token = localStorage.getItem('token')
     if (!token) return
     try {
-      await submitReview(Number(params.id), ratingValue, comment, token)
-      const updated = await getReviews(Number(params.id))
+      await submitReview(Number(id), ratingValue, comment, token)
+      const updated = await getReviews(Number(id))
       setReviews(updated)
       const mine = updated.find((r: any) => r.userId === userData.userId)
       setMyReview(mine)
