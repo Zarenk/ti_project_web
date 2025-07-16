@@ -1,5 +1,5 @@
 export class CreateProductoFeatureDto {
   icon?: string;
-  title: string;
+  title!: string;
   description?: string;
 }
