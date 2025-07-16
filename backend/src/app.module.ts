@@ -21,12 +21,13 @@ import { BarcodeGateway } from './barcode/barcode.gateway';
 import { GuideModule } from './guide/guide.module';
 import { ProductspecsModule } from './productspecs/productspecs.module';
 import { ProductofeaturesModule } from './productofeatures/productofeatures.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
     ProductsModule, UsersModule, CategoryModule, StoresModule, 
-    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule],
+    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule],
   controllers: [AppController],
   providers: [AppService, BarcodeGateway],
 })

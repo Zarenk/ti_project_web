@@ -188,6 +188,10 @@ const data = {
           url: "/dashboard/cashregister",
         },
         {
+          title: "Pedidos",
+          url: "/dashboard/cashregister",
+        },
+        {
           title: "Realizar Venta",
           url: "/dashboard/sales/new",
         },

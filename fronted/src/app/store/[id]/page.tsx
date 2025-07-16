@@ -32,12 +32,16 @@ import { Progress } from "@/components/progress"
 import Navbar from "@/components/navbar"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { getProduct, getProducts } from "../../dashboard/products/products.api"
+import { getReviews, submitReview } from "./reviews.api"
 
 import { toast } from "sonner"
 import { getStoresWithProduct } from "../../dashboard/inventory/inventory.api"
 import { useCart } from "@/context/cart-context"
 import ProductBreadcrumb from "@/components/product-breadcrumb"
 import { icons } from "@/lib/icons"
+import { getUserDataFromToken } from "@/lib/auth"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Props {
   params: { id: string }
@@ -76,6 +80,11 @@ export default function ProductPage({ params }: Props) {
   const [magnifierPos, setMagnifierPos] = useState({ x: 0, y: 0, width: 0, height: 0 })
   const [isImageDialogOpen, setIsImageDialogOpen] = useState(false)
   const { addItem } = useCart()
+  const [reviews, setReviews] = useState<any[]>([])
+  const [myReview, setMyReview] = useState<any | null>(null)
+  const [ratingValue, setRatingValue] = useState(5)
+  const [comment, setComment] = useState('')
+  const [userData, setUserData] = useState<{ userId: number; name: string } | null>(null)
 
   useEffect(() => {
     async function fetchProduct() {
@@ -150,6 +159,32 @@ export default function ProductPage({ params }: Props) {
     }
   }, [product])
 
+  useEffect(() => {
+    const data = getUserDataFromToken()
+    setUserData(data)
+  }, [])
+
+  useEffect(() => {
+    async function loadReviews() {
+      try {
+        const res = await getReviews(Number(params.id))
+        setReviews(res)
+        const u = getUserDataFromToken()
+        if (u) {
+          const mine = res.find((r: any) => r.userId === u.userId)
+          if (mine) {
+            setMyReview(mine)
+            setRatingValue(mine.rating)
+            setComment(mine.comment || '')
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching reviews:', err)
+      }
+    }
+    loadReviews()
+  }, [params.id])
+
   const images: string[] =
     product?.images && product.images.length > 0
       ? product.images
@@ -188,14 +223,21 @@ export default function ProductPage({ params }: Props) {
         )
       : 0
 
-  const reviews = [
-    { name: "Carlos M.", rating: 5, comment: "Excelente laptop para trabajo y gaming. La batería dura todo el día." },
-    { name: "Ana L.", rating: 5, comment: "Muy rápida y silenciosa. Perfecta para diseño gráfico." },
-    { name: "Miguel R.", rating: 4, comment: "Gran calidad de construcción. La pantalla es increíble." },
-  ]
-
-  if (!product) {
-    return <div className="p-6">Cargando...</div>
+  async function handleReviewSubmit() {
+    if (!userData) return
+    const token = localStorage.getItem('token')
+    if (!token) return
+    try {
+      await submitReview(Number(params.id), ratingValue, comment, token)
+      const updated = await getReviews(Number(params.id))
+      setReviews(updated)
+      const mine = updated.find((r: any) => r.userId === userData.userId)
+      setMyReview(mine)
+      toast.success('Reseña guardada')
+    } catch (err) {
+      console.error(err)
+      toast.error('Error al guardar la reseña')
+    }
   }
 
   return (
@@ -376,7 +418,12 @@ export default function ProductPage({ params }: Props) {
                     <Minus className="w-4 h-4" />
                   </Button>
                   <span className="px-4 py-2 font-medium">{quantity}</span>
-                  <Button variant="ghost" size="sm" onClick={() => setQuantity(quantity + 1)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setQuantity(quantity + 1)}
+                    disabled={stock !== null && (stock <= 0 || quantity >= stock)}
+                  >
                     <Plus className="w-4 h-4" />
                   </Button>
                 </div>
@@ -409,6 +456,7 @@ export default function ProductPage({ params }: Props) {
                       toast.success("Producto agregado al carrito")
                     }
                   }}
+                  disabled={stock !== null && stock <= 0}
                 >
                   <ShoppingCart className="w-5 h-5 mr-2" />
                   Agregar al Carrito
@@ -562,36 +610,34 @@ export default function ProductPage({ params }: Props) {
 
             <TabsContent value="reviews" className="mt-8">
               <div className="space-y-6">
-                <div className="flex items-center gap-8 mb-8">
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-blue-600">4.9</div>
-                    <div className="flex items-center justify-center gap-1 mt-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      ))}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">2,847 reseñas</div>
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    {[5, 4, 3, 2, 1].map((stars) => (
-                      <div key={stars} className="flex items-center gap-3">
-                        <span className="text-sm w-8">{stars}★</span>
-                        <Progress value={stars === 5 ? 85 : stars === 4 ? 12 : 2} className="flex-1" />
-                        <span className="text-sm text-gray-600 dark:text-gray-400 w-12">
-                          {stars === 5 ? "85%" : stars === 4 ? "12%" : "2%"}
-                        </span>
+                {userData && (
+                  <Card>
+                    <CardContent className="p-6 space-y-3">
+                      <h4 className="font-semibold">Tu reseña</h4>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={5}
+                          value={ratingValue}
+                          onChange={(e) => setRatingValue(Number(e.target.value))}
+                          className="w-16"
+                        />
+                        <span>/5</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                <Textarea value={comment} onChange={(e) => setComment(e.target.value)} />
+                      <Button onClick={handleReviewSubmit}>Guardar reseña</Button>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <div className="grid gap-6">
-                  {reviews.map((review, index) => (
-                    <Card key={index}>
+                  {reviews.map((review) => (
+                    <Card key={review.id} className={review.userId === userData?.userId ? 'border-blue-500' : ''}>
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between mb-3">
                           <div>
-                            <h4 className="font-semibold">{review.name}</h4>
+                            <h4 className="font-semibold">{review.user?.username}</h4>
                             <div className="flex items-center gap-1 mt-1">
                               {[...Array(review.rating)].map((_, i) => (
                                 <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
@@ -744,6 +790,7 @@ export default function ProductPage({ params }: Props) {
                           })
                           toast.success('Producto agregado al carrito')
                         }}
+                        disabled={rp.stock !== null && rp.stock <= 0}
                       >
                         Agregar al Carrito
                       </Button>
