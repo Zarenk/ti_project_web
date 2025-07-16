@@ -4,6 +4,7 @@ import Image from "next/image"
 import { Search, Filter, Package, PackageOpen, DollarSign, Tag } from "lucide-react"
 import Navbar from "@/components/navbar"
 import { useState, useMemo, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import type { CheckedState } from "@radix-ui/react-checkbox"
 
 import { Button } from "@/components/ui/button"
@@ -90,6 +91,19 @@ export default function StorePage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedBrands, setSelectedBrands] = useState<string[]>([])
   const [selectedAvailability, setSelectedAvailability] = useState<string[]>([])
+
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const paramCategory = searchParams.get('category')
+    const paramBrand = searchParams.get('brand')
+    if (paramCategory) {
+      setSelectedCategories([paramCategory])
+    }
+    if (paramBrand) {
+      setSelectedBrands([paramBrand])
+    }
+  }, [searchParams])
 
   // Obtener categorías y marcas únicas ordenadas alfanuméricamente
   const categories = [...new Set(products.map((p) => p.category))].sort((a, b) =>

@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { ModeToggle } from "@/components/mode-toggle"
 import CartSheet from "@/components/cart-sheet"
 import TopBanner from "./top-banner"
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 
 export default function Navbar() {
   const [open, setOpen] = useState(false)
+  const closeTimer = useRef<NodeJS.Timeout | null>(null)
 
   return (
     <>
@@ -29,19 +30,39 @@ export default function Navbar() {
               <PopoverTrigger asChild>
                 <Link
                   href="/login"
-                  onMouseEnter={() => setOpen(true)}
-                  onMouseLeave={() => setOpen(false)}
+                  onMouseEnter={() => {
+                    if (closeTimer.current) {
+                      clearTimeout(closeTimer.current)
+                    }
+                    setOpen(true)
+                  }}
+                  onMouseLeave={() => {
+                    if (closeTimer.current) {
+                      clearTimeout(closeTimer.current)
+                    }
+                    closeTimer.current = setTimeout(() => setOpen(false), 150)
+                  }}
                   className="text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
                   Iniciar Sesión
                 </Link>
               </PopoverTrigger>
               <PopoverContent
-                onMouseEnter={() => setOpen(true)}
-                onMouseLeave={() => setOpen(false)}
-                className="w-64 space-y-2 text-center"
+                onMouseEnter={() => {
+                  if (closeTimer.current) {
+                    clearTimeout(closeTimer.current)
+                  }
+                  setOpen(true)
+                }}
+                onMouseLeave={() => {
+                  if (closeTimer.current) {
+                    clearTimeout(closeTimer.current)
+                  }
+                  closeTimer.current = setTimeout(() => setOpen(false), 150)
+                }}
+                className="w-64 space-y-2 text-center transition-opacity duration-300"
               >
-                <p className="text-sm">
+                <p className="text-xs font-semibold">
                   Regístrate para acceder a beneficios y descuentos
                 </p>
                 <Link href="/login" className="block">
@@ -49,9 +70,12 @@ export default function Navbar() {
                     Iniciar sesión
                   </Button>
                 </Link>
-                <Link href="/register" className="text-sm underline block">
-                  Eres Nuevo Cliente? Regístrate
-                </Link>
+                <p className="text-xs font-semibold">
+                  Eres Nuevo Cliente?
+                  <Link href="/register" className="underline text-blue-600 font-bold">
+                    Regístrate
+                  </Link>
+                </p>
               </PopoverContent>
             </Popover>
             <CartSheet />

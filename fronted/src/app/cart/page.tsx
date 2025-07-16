@@ -171,7 +171,7 @@ export default function ShoppingCart() {
                   >
                     <div className="flex flex-col sm:flex-row gap-4">
                       {/* Product Image */}
-                      <div className="flex-shrink-0">
+                      <Link href={`/store/${item.id}`} className="flex-shrink-0">
                         <Image
                           src={item.image || "/placeholder.svg"}
                           alt={item.name}
@@ -179,12 +179,15 @@ export default function ShoppingCart() {
                           height={120}
                           className="w-24 h-24 sm:w-30 sm:h-30 object-cover rounded-xl"
                         />
-                      </div>
+                      </Link>
 
                       {/* Product Details */}
                       <div className="flex-grow space-y-3">
                         <div className="flex justify-between items-start">
-                          <h3 className="text-lg font-medium text-gray-900 leading-tight">{item.name}</h3>
+                          <Link href={`/store/${item.id}`}
+                            className="text-lg font-medium text-gray-900 leading-tight hover:underline">
+                            {item.name}
+                          </Link>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -278,13 +281,13 @@ export default function ShoppingCart() {
                    <div className="space-y-4">
                      {savedItems.map((item) => (
                        <div key={item.id} className="flex items-center justify-between">
-                         <div className="flex items-center gap-4">
+                         <Link href={`/store/${item.id}`} className="flex items-center gap-4">
                            <Image src={item.image || "/placeholder.svg"} alt={item.name} width={60} height={60} className="w-15 h-15 object-cover rounded-lg" />
                            <div>
-                             <p className="font-medium">{item.name}</p>
+                             <p className="font-medium hover:underline">{item.name}</p>
                              <p className="text-sm text-gray-500">S/.{item.price.toFixed(2)}</p>
                            </div>
-                         </div>
+                         </Link>
                          <Button size="sm" onClick={() => moveToCart(item.id)} className="bg-sky-500 hover:bg-sky-600 text-white">Mover al carrito</Button>
                        </div>
                      ))}

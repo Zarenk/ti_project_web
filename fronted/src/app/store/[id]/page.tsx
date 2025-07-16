@@ -38,6 +38,28 @@ import { getStoresWithProduct } from "../../dashboard/inventory/inventory.api"
 import { useCart } from "@/context/cart-context"
 import ProductBreadcrumb from "@/components/product-breadcrumb"
 
+const icons = {
+  Battery,
+  Wifi,
+  Shield,
+  HardDrive,
+  MemoryStick,
+  Monitor,
+  Cpu,
+  Truck,
+  Award,
+  Zap,
+  Package,
+  PackageOpen,
+  Maximize2,
+  Heart,
+  Star,
+  ShoppingCart,
+  Check,
+  Plus,
+  Minus,
+}
+
 interface Props {
   params: { id: string }
 }
@@ -544,46 +566,18 @@ export default function ProductPage({ params }: Props) {
 
             <TabsContent value="features" className="mt-8">
               <div className="grid md:grid-cols-3 gap-6">
-                {[
-                  {
-                    icon: Battery,
-                    title: "Batería de larga duración",
-                    description: "Hasta 12 horas de uso continuo con carga rápida en 30 minutos",
-                  },
-                  {
-                    icon: Wifi,
-                    title: "Conectividad avanzada",
-                    description: "WiFi 6E y Bluetooth 5.3 para conexiones ultra rápidas",
-                  },
-                  {
-                    icon: Shield,
-                    title: "Seguridad biométrica",
-                    description: "Lector de huellas y reconocimiento facial Windows Hello",
-                  },
-                  {
-                    icon: HardDrive,
-                    title: "Almacenamiento expandible",
-                    description: "Slot M.2 adicional para expandir hasta 4TB de almacenamiento",
-                  },
-                  {
-                    icon: MemoryStick,
-                    title: "Memoria de alta velocidad",
-                    description: "DDR5 a 5600MHz para máximo rendimiento multitarea",
-                  },
-                  {
-                    icon: Monitor,
-                    title: "Pantalla profesional",
-                    description: "100% sRGB, certificada Pantone para diseño profesional",
-                  },
-                ].map((feature, index) => (
-                  <Card key={index}>
-                    <CardContent className="p-6 text-center">
-                      <feature.icon className="w-12 h-12 mx-auto mb-4 text-blue-500" />
-                      <h3 className="font-bold mb-2">{feature.title}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{feature.description}</p>
-                    </CardContent>
-                  </Card>
-                ))}
+                {product.features?.map((feature: any) => {
+                  const IconComponent = icons[feature.icon as keyof typeof icons] || Battery
+                  return (
+                    <Card key={feature.id}>
+                      <CardContent className="p-6 text-center">
+                        <IconComponent className="w-12 h-12 mx-auto mb-4 text-blue-500" />
+                        <h3 className="font-bold mb-2">{feature.title}</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{feature.description}</p>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
             </TabsContent>
 
