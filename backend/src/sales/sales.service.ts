@@ -4,12 +4,57 @@ import { Prisma } from '@prisma/client';
 import { zonedTimeToUtc, utcToZonedTime, format as formatTz } from 'date-fns-tz'
 import { subDays, startOfDay, endOfDay } from 'date-fns'
 import { eachDayOfInterval } from 'date-fns';
+import { InventoryService } from '../inventory/inventory.service';
 
 
 @Injectable()
 export class SalesService {
 
-  constructor(private prisma: PrismaService){}
+  constructor(
+    private prisma: PrismaService,
+    private inventoryService: InventoryService,
+  ) {}
+
+  private async ensureStockInStore(
+    storeId: number,
+    productId: number,
+    quantity: number,
+    userId: number,
+  ) {
+    let destInventory = await this.prisma.storeOnInventory.findFirst({
+      where: { storeId, inventory: { productId } },
+    });
+
+    const currentStock = destInventory?.stock ?? 0;
+    if (currentStock >= quantity) {
+      return;
+    }
+
+    const required = quantity - currentStock;
+    const sourceInventory = await this.prisma.storeOnInventory.findFirst({
+      where: {
+        storeId: { not: storeId },
+        inventory: { productId },
+        stock: { gte: required },
+      },
+      orderBy: { stock: 'desc' },
+    });
+
+    if (!sourceInventory) {
+      throw new BadRequestException(
+        `Stock insuficiente para el producto con ID ${productId}.`,
+      );
+    }
+
+    await this.inventoryService.transferProduct({
+      sourceStoreId: sourceInventory.storeId,
+      destinationStoreId: storeId,
+      productId,
+      quantity: required,
+      userId,
+      description: 'Auto transfer for online sale',
+    });
+  }
 
   // Método para crear una venta
   async createSale(data: {
@@ -110,6 +155,8 @@ export class SalesService {
     // Validar stock y calcular el total
     let total = 0;
     for (const detail of details) {
+      await this.ensureStockInStore(storeId, detail.productId, detail.quantity, userId);
+      
       const storeInventory = await this.prisma.storeOnInventory.findFirst({
         where: { storeId, inventory: { productId: detail.productId } },
       });

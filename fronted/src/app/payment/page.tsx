@@ -744,17 +744,20 @@ export default function Component() {
                               <strong>Banco:</strong> Banco de Crédito del Perú (BCP)
                             </p>
                             <p>
-                              <strong>Numero de Cuenta:</strong> 123-456789-0-12
+                              <strong>Numero de Cuenta:</strong> 540-1639272047                             
                             </p>
                             <p>
-                              <strong>Titular de la Cuenta:</strong> TechStore Peru SAC
+                              <strong>Numero de Cuenta(CCI):</strong> 002-540-00163927204736
+                            </p>                           
+                            <p>
+                              <strong>Titular de la Cuenta:</strong> TECNOLOGIA INFORMATICA E.I.R.L.
                             </p>
                             <p>
                               <strong>Referencia:</strong> Orden #{Math.random().toString(36).substr(2, 9).toUpperCase()}
                             </p>
                           </div>
                           <div className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
-                            Por favor, incluya el número de referencia en la descripción de su transferencia
+                            Por favor, incluya el número de operación en la descripción de su transferencia
                           </div>
                         </div>
                       </div>
@@ -781,13 +784,13 @@ export default function Component() {
                           <h4 className="font-medium text-purple-900">Instrucciones para pagar con YAPE</h4>
                           <div className="text-sm space-y-1">
                             <p>
-                              <strong>Numero de Celular:</strong> +51 999 123 456
+                              <strong>Numero de Celular:</strong> +51 969 337 457
                             </p>
                             <p>
-                              <strong>Nombre:</strong> TechStore Peru
+                              <strong>Nombre:</strong> TECNOLOGIA INFORMATICA E.I.R.L.
                             </p>
                             <p>
-                              <strong>Monto:</strong> S/. {(total * 3.8).toFixed(2)}
+                              <strong>Monto:</strong> S/. {(total).toFixed(2)}
                             </p>
                           </div>
                           <div className="text-xs text-purple-700 bg-purple-100 p-2 rounded">
