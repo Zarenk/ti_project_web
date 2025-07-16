@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem } from '@/components/ui/select'
 import { z } from 'zod'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { IconName, icons } from '@/lib/icons'
 
 export function ProductForm({product, categories}: {product: any; categories: any}) {
 
@@ -331,7 +332,26 @@ export function ProductForm({product, categories}: {product: any; categories: an
                         <Label className='py-3 font-semibold'>Características (opcional)</Label>
                         {featureFields.map((field, index) => (
                           <div key={field.id} className="flex flex-col md:flex-row gap-2 mb-2">
-                            <Input placeholder='Icono' {...register(`features.${index}.icon` as const)} className='flex-1'/>
+                            <Select
+                              value={form.watch(`features.${index}.icon` as const)}
+                              onValueChange={(value) =>
+                                setValue(`features.${index}.icon` as const, value as IconName)
+                              }
+                            >
+                              <SelectTrigger className="flex-1">
+                                <SelectValue placeholder="Icono" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.keys(icons).map((key) => {
+                                  const Icon = icons[key as IconName]
+                                  return (
+                                    <SelectItem key={key} value={key} className="flex items-center gap-2">
+                                      <Icon className="w-4 h-4" /> {key}
+                                    </SelectItem>
+                                  )
+                                })}
+                              </SelectContent>
+                            </Select>
                             <Input placeholder='Título' {...register(`features.${index}.title` as const)} className='flex-1'/>
                             <Input placeholder='Descripción' {...register(`features.${index}.description` as const)} className='flex-1'/>
                             {index > 0 && (

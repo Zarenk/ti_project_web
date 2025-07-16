@@ -37,28 +37,7 @@ import { toast } from "sonner"
 import { getStoresWithProduct } from "../../dashboard/inventory/inventory.api"
 import { useCart } from "@/context/cart-context"
 import ProductBreadcrumb from "@/components/product-breadcrumb"
-
-const icons = {
-  Battery,
-  Wifi,
-  Shield,
-  HardDrive,
-  MemoryStick,
-  Monitor,
-  Cpu,
-  Truck,
-  Award,
-  Zap,
-  Package,
-  PackageOpen,
-  Maximize2,
-  Heart,
-  Star,
-  ShoppingCart,
-  Check,
-  Plus,
-  Minus,
-}
+import { icons } from "@/lib/icons"
 
 interface Props {
   params: { id: string }
