@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Post, Request, UseGuards } from '@nestjs/common'
 import { ReviewsService } from './reviews.service'
 import { JwtAuthGuard } from '../users/jwt-auth.guard'
+import { CreateReviewDto } from './dto/create-review.dto'
 
 @Controller()
 export class ReviewsController {
@@ -8,7 +9,7 @@ export class ReviewsController {
 
   @UseGuards(JwtAuthGuard)
   @Post('reviews')
-  create(@Request() req, @Body() body: { productId: number; rating: number; comment?: string }) {
+  create(@Request() req, @Body() body: CreateReviewDto) {
     const userId = req.user.userId
     return this.reviewsService.upsertReview({
       userId,

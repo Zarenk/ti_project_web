@@ -36,6 +36,7 @@ model Product{
 
   specification ProductSpecification?
   features      ProductFeature[]
+  reviews       Review[]
 
   // Relación con Transfer
   transfers   Transfer[] // Relación con el modelo Transfer
@@ -112,6 +113,7 @@ model User {
   sales            Sales[]
   cashTransactions CashTransaction[] // Relación con la tabla de transacciones de caja
   cashClosures     CashClosure[] // Relación con la tabla de cierres de caja
+  reviews       Review[]
 
   @@index([email])
   @@index([username])
