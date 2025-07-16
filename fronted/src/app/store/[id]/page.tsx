@@ -1,6 +1,6 @@
 "use client"
 
-import React, { use, useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -71,7 +71,7 @@ interface RelatedProduct {
 
 export default function ProductPage({ params }: Props) {
 
-  const { id } = use(params)
+  const { id } = React.use(params)
 
   const [selectedImage, setSelectedImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
