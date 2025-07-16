@@ -61,7 +61,44 @@ export default function Component() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { id, value } = e.target
-    setFormData((prev) => ({ ...prev, [id]: value }))
+    let newValue = value
+
+    switch (id) {
+      case "firstName":
+      case "lastName":
+      case "invoiceName":
+      case "razonSocial":
+      case "cardName":
+      case "shipFirstName":
+      case "shipLastName":
+        newValue = newValue.replace(/[^a-zA-Z\sÁÉÍÓÚáéíóúñÑ]/g, "")
+        break
+      case "phone":
+        newValue = newValue.replace(/[^0-9+]/g, "")
+        break
+      case "dni":
+        newValue = newValue.replace(/\D/g, "").slice(0, 8)
+        break
+      case "ruc":
+        newValue = newValue.replace(/\D/g, "").slice(0, 11)
+        break
+      case "postalCode":
+      case "shipPostalCode":
+      case "cvv":
+        newValue = newValue.replace(/\D/g, "")
+        break
+      case "cardNumber":
+        newValue = newValue.replace(/\D/g, "").slice(0, 16)
+        break
+      case "expiry":
+        newValue = newValue.replace(/[^0-9/]/g, "").slice(0, 5)
+        if (newValue.length === 2 && !newValue.includes("/")) newValue += "/"
+        break
+      default:
+        break
+    }
+
+    setFormData((prev) => ({ ...prev, [id]: newValue }))
   }
 
   const router = useRouter()
@@ -71,27 +108,57 @@ export default function Component() {
     e.preventDefault()
     const newErrors: { [key: string]: string } = {}
 
+    const nameRegex = /^[a-zA-Z\sÁÉÍÓÚáéíóúñÑ]+$/
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const phoneRegex = /^\+?\d{6,15}$/
+
     if (!formData.firstName.trim())
       newErrors.firstName = "Ingrese sus nombres completos"
+    else if (!nameRegex.test(formData.firstName.trim()))
+      newErrors.firstName = "El nombre solo debe contener letras"
+
     if (!formData.lastName.trim())
       newErrors.lastName = "Ingrese sus apellidos"
+    else if (!nameRegex.test(formData.lastName.trim()))
+      newErrors.lastName = "El apellido solo debe contener letras"
+
     if (!formData.email.trim()) newErrors.email = "Ingrese su email"
+    else if (!emailRegex.test(formData.email.trim()))
+      newErrors.email = "Ingrese un email valido"
+
     if (!formData.phone.trim()) newErrors.phone = "Ingrese su telefono"
+    else if (!phoneRegex.test(formData.phone.trim()))
+      newErrors.phone = "Ingrese un telefono valido"
+
     if (!formData.address.trim())
       newErrors.address = "Ingrese su direccion de facturacion"
     if (!formData.city.trim()) newErrors.city = "Ingrese su ciudad"
     if (!formData.state.trim()) newErrors.state = "Ingrese su estado o region"
     if (!formData.postalCode.trim())
       newErrors.postalCode = "Ingrese su codigo postal"
+    else if (!/^\d+$/.test(formData.postalCode))
+      newErrors.postalCode = "Codigo postal invalido"
 
     if (formData.invoiceType === "BOLETA") {
       if (!formData.dni.trim()) newErrors.dni = "Ingrese su DNI"
+      else if (!/^\d{8}$/.test(formData.dni))
+        newErrors.dni = "El DNI debe tener 8 digitos"
+
       if (!formData.invoiceName.trim())
         newErrors.invoiceName = "Ingrese su nombre completo"
+      else if (!nameRegex.test(formData.invoiceName.trim()))
+        newErrors.invoiceName = "El nombre solo debe contener letras"
+
     } else if (formData.invoiceType === "FACTURA") {
       if (!formData.ruc.trim()) newErrors.ruc = "Ingrese su RUC"
+      else if (!/^\d{11}$/.test(formData.ruc))
+        newErrors.ruc = "El RUC debe tener 11 digitos"
+
       if (!formData.razonSocial.trim())
         newErrors.razonSocial = "Ingrese la razon social"
+      else if (!nameRegex.test(formData.razonSocial.trim()))
+        newErrors.razonSocial = "La razon social solo debe contener letras"
+
       if (!formData.invoiceAddress.trim())
         newErrors.invoiceAddress = "Ingrese la direccion"
     }
@@ -99,12 +166,22 @@ export default function Component() {
     if (!sameAsShipping) {
       if (!formData.shipFirstName.trim())
         newErrors.shipFirstName = "Ingrese los nombres de envio"
+      else if (!nameRegex.test(formData.shipFirstName.trim()))
+        newErrors.shipFirstName = "El nombre solo debe contener letras"
+
       if (!formData.shipLastName.trim())
         newErrors.shipLastName = "Ingrese los apellidos de envio"
+      else if (!nameRegex.test(formData.shipLastName.trim()))
+        newErrors.shipLastName = "El apellido solo debe contener letras"
+
       if (!formData.shipAddress.trim())
         newErrors.shipAddress = "Ingrese la direccion de envio"
+
       if (!formData.shipCity.trim())
         newErrors.shipCity = "Ingrese la ciudad de envio"
+      else if (!nameRegex.test(formData.shipCity.trim()))
+        newErrors.shipCity = "La ciudad solo debe contener letras"
+
       if (!formData.shipPostalCode.trim())
         newErrors.shipPostalCode = "Ingrese el codigo postal de envio"
     }
@@ -112,13 +189,24 @@ export default function Component() {
     if (!paymentMethod)
       newErrors.paymentMethod = "Seleccione un metodo de pago"
     if (paymentMethod === "visa") {
-      if (!formData.cardNumber.trim())
-        newErrors.cardNumber = "Ingrese el numero de tarjeta"
+      const cardNum = formData.cardNumber.replace(/\s+/g, "")
+      if (!cardNum) newErrors.cardNumber = "Ingrese el numero de tarjeta"
+      else if (!/^\d{16}$/.test(cardNum))
+        newErrors.cardNumber = "Numero de tarjeta invalido"
+
       if (!formData.expiry.trim())
         newErrors.expiry = "Ingrese la fecha de expiracion"
+      else if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(formData.expiry))
+        newErrors.expiry = "Formato MM/YY invalido"
+
       if (!formData.cvv.trim()) newErrors.cvv = "Ingrese el CVV"
+      else if (!/^\d{3,4}$/.test(formData.cvv))
+        newErrors.cvv = "CVV invalido"
+
       if (!formData.cardName.trim())
         newErrors.cardName = "Ingrese el nombre de la tarjeta"
+      else if (!nameRegex.test(formData.cardName.trim()))
+        newErrors.cardName = "El nombre solo debe contener letras"
     }
 
     setErrors(newErrors)
