@@ -39,6 +39,12 @@ export default function Component() {
     expiry: "",
     cvv: "",
     cardName: "",
+    invoiceType: "BOLETA",
+    dni: "",
+    invoiceName: "",
+    ruc: "",
+    razonSocial: "",
+    invoiceAddress: "",
   })
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
@@ -69,6 +75,18 @@ export default function Component() {
     if (!formData.state.trim()) newErrors.state = "Ingrese su estado o region"
     if (!formData.postalCode.trim())
       newErrors.postalCode = "Ingrese su codigo postal"
+
+    if (formData.invoiceType === "BOLETA") {
+      if (!formData.dni.trim()) newErrors.dni = "Ingrese su DNI"
+      if (!formData.invoiceName.trim())
+        newErrors.invoiceName = "Ingrese su nombre completo"
+    } else if (formData.invoiceType === "FACTURA") {
+      if (!formData.ruc.trim()) newErrors.ruc = "Ingrese su RUC"
+      if (!formData.razonSocial.trim())
+        newErrors.razonSocial = "Ingrese la razon social"
+      if (!formData.invoiceAddress.trim())
+        newErrors.invoiceAddress = "Ingrese la direccion"
+    }
 
     if (!sameAsShipping) {
       if (!formData.shipFirstName.trim())
@@ -117,6 +135,7 @@ export default function Component() {
           total,
           description: `Compra online de ${formData.firstName} ${formData.lastName}`,
           details,
+          tipoComprobante: formData.invoiceType,
           tipoMoneda: "PEN",
           payments: [
             {
@@ -285,12 +304,118 @@ export default function Component() {
               </CardContent>
             </Card>
 
+            {/* Billing Document */}
+            <Card className="border-blue-200 shadow-sm p-0">
+              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg p-4">
+                <CardTitle className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-bold">2</span>
+                  </div>
+                  Facturacion
+                </CardTitle>
+                <CardDescription className="text-blue-100">Seleccione el tipo de comprobante</CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                <RadioGroup
+                  value={formData.invoiceType}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, invoiceType: value }))
+                  }
+                  className="flex gap-4"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="BOLETA" id="boleta" />
+                    <Label htmlFor="boleta">Boleta</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="FACTURA" id="factura" />
+                    <Label htmlFor="factura">Factura</Label>
+                  </div>
+                </RadioGroup>
+
+                {formData.invoiceType === "BOLETA" && (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="dni">Numero de Documento (DNI) *</Label>
+                      <Input
+                        id="dni"
+                        value={formData.dni}
+                        onChange={handleChange}
+                        placeholder="12345678"
+                        className="border-gray-300 focus:border-blue-500"
+                      />
+                      {errors.dni && (
+                        <p className="text-red-500 text-sm">{errors.dni}</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="invoiceName">Nombre Completo *</Label>
+                      <Input
+                        id="invoiceName"
+                        value={formData.invoiceName}
+                        onChange={handleChange}
+                        placeholder="John Doe"
+                        className="border-gray-300 focus:border-blue-500"
+                      />
+                      {errors.invoiceName && (
+                        <p className="text-red-500 text-sm">{errors.invoiceName}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {formData.invoiceType === "FACTURA" && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ruc">RUC *</Label>
+                      <Input
+                        id="ruc"
+                        value={formData.ruc}
+                        onChange={handleChange}
+                        placeholder="20123456789"
+                        className="border-gray-300 focus:border-blue-500"
+                      />
+                      {errors.ruc && (
+                        <p className="text-red-500 text-sm">{errors.ruc}</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="razonSocial">Razon Social *</Label>
+                      <Input
+                        id="razonSocial"
+                        value={formData.razonSocial}
+                        onChange={handleChange}
+                        placeholder="Empresa SAC"
+                        className="border-gray-300 focus:border-blue-500"
+                      />
+                      {errors.razonSocial && (
+                        <p className="text-red-500 text-sm">{errors.razonSocial}</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="invoiceAddress">Direccion *</Label>
+                      <Input
+                        id="invoiceAddress"
+                        value={formData.invoiceAddress}
+                        onChange={handleChange}
+                        placeholder="Av. Principal 123"
+                        className="border-gray-300 focus:border-blue-500"
+                      />
+                      {errors.invoiceAddress && (
+                        <p className="text-red-500 text-sm">{errors.invoiceAddress}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Shipping Information */}
             <Card className="border-blue-200 shadow-sm p-0">
               <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-t-lg p-4">
                 <CardTitle className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-bold">2</span>
+                    <span className="text-sm font-bold">3</span>
                   </div>
                   Informacion de Envio
                 </CardTitle>
@@ -390,7 +515,7 @@ export default function Component() {
               <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg p-4">
                 <CardTitle className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-bold">3</span>
+                    <span className="text-sm font-bold">4</span>
                   </div>
                   Metodo de Pago
                 </CardTitle>

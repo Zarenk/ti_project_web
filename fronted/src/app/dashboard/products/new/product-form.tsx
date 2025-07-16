@@ -48,6 +48,15 @@ export function ProductForm({product, categories}: {product: any; categories: an
     resolution: z.string().optional(),
     refreshRate: z.string().optional(),
     connectivity: z.string().optional(),
+    features: z
+      .array(
+        z.object({
+          icon: z.string().optional(),
+          title: z.string().min(1, 'Ingrese un título'),
+          description: z.string().optional(),
+        })
+      )
+      .optional(),
     }) //{name: "", lastname: "", age: z.number()}
 
     //inferir el tipo de dato
@@ -73,6 +82,11 @@ export function ProductForm({product, categories}: {product: any; categories: an
         resolution: product?.specification?.resolution || '',
         refreshRate: product?.specification?.refreshRate || '',
         connectivity: product?.specification?.connectivity || '',
+        features: product?.features?.map((f: any) => ({
+          icon: f.icon || '',
+          title: f.title || '',
+          description: f.description || '',
+        })) || [],
     }
     });
 
@@ -82,6 +96,12 @@ export function ProductForm({product, categories}: {product: any; categories: an
     append: appendImage,
     remove: removeImage,
   } = useFieldArray<ProductType, 'images'>({ control, name: 'images' });
+
+  const {
+    fields: featureFields,
+    append: appendFeature,
+    remove: removeFeature,
+  } = useFieldArray<ProductType, 'features'>({ control, name: 'features' });
 
   const router = useRouter();
   const params = useParams<{id: string}>();
@@ -103,7 +123,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
     try{
-        const { processor, ram, storage, graphics, screen, resolution, refreshRate, connectivity, ...productData } = data
+        const { processor, ram, storage, graphics, screen, resolution, refreshRate, connectivity, features, ...productData } = data
         const spec: any = {}
         if (processor) spec.processor = processor
         if (ram) spec.ram = ram
@@ -121,6 +141,13 @@ export function ProductForm({product, categories}: {product: any; categories: an
             images: cleanedImages.length > 0 ? cleanedImages : undefined,
             categoryId: Number(productData.categoryId),
             specification: Object.keys(spec).length ? spec : undefined,
+            features: features && features.length
+              ? features.map((f) => ({
+                  icon: f.icon || undefined,
+                  title: f.title,
+                  description: f.description || undefined,
+                }))
+              : undefined,
         }
 
         if(params?.id){
@@ -300,6 +327,21 @@ export function ProductForm({product, categories}: {product: any; categories: an
                         <Input placeholder='Conectividad' {...register('connectivity')}></Input>
                     </div>
 
+                    <div className="flex flex-col pt-4">
+                        <Label className='py-3 font-semibold'>Características (opcional)</Label>
+                        {featureFields.map((field, index) => (
+                          <div key={field.id} className="flex flex-col md:flex-row gap-2 mb-2">
+                            <Input placeholder='Icono' {...register(`features.${index}.icon` as const)} className='flex-1'/>
+                            <Input placeholder='Título' {...register(`features.${index}.title` as const)} className='flex-1'/>
+                            <Input placeholder='Descripción' {...register(`features.${index}.description` as const)} className='flex-1'/>
+                            {index > 0 && (
+                              <Button type='button' variant='destructive' onClick={() => removeFeature(index)}>-</Button>
+                            )}
+                          </div>
+                        ))}
+                        <Button type='button' variant='outline' onClick={() => appendFeature({ icon: '', title: '', description: '' })}>Agregar característica</Button>
+                    </div>
+
                     <div className="flex flex-col">
                         <Label className='py-3'>
                             Seleccion un estado
@@ -340,6 +382,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
                             resolution: "",
                             refreshRate: "",
                             connectivity: "",
+                            features: [],
                         })
                     } // Restablece el estado a "Activo"})} // Restablece los campos del formulario
                     >
