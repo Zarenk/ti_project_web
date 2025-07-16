@@ -7,7 +7,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class ReviewsService {
   constructor(private prisma: PrismaService) {}
 
-  upsertReview(data: { userId: number; productId: number; rating: number; comment?: string }) {
+  upsertReview(data: { userId: number; productId: number; rating: number; comment?: string | null }) {
     return this.prisma.review.upsert({
       where: { productId_userId: { productId: data.productId, userId: data.userId } },
       update: { rating: data.rating, comment: data.comment },

@@ -15,7 +15,7 @@ export class ReviewsController {
       userId,
       productId: body.productId,
       rating: body.rating,
-      comment: body.comment ?? null,
+      comment: body.comment,
     })
   }
 

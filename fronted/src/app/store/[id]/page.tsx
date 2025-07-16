@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { use, useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -37,6 +37,7 @@ import { getReviews, submitReview } from "./reviews.api"
 import { toast } from "sonner"
 import { getStoresWithProduct } from "../../dashboard/inventory/inventory.api"
 import { useCart } from "@/context/cart-context"
+import { useRouter } from "next/navigation"
 import ProductBreadcrumb from "@/components/product-breadcrumb"
 import { icons } from "@/lib/icons"
 import { getUserDataFromToken } from "@/lib/auth"
@@ -44,7 +45,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 interface RelatedProduct {
@@ -70,6 +71,8 @@ interface RelatedProduct {
 
 export default function ProductPage({ params }: Props) {
 
+  const { id } = use(params)
+
   const [selectedImage, setSelectedImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [isInWishlist, setIsInWishlist] = useState(false)
@@ -80,6 +83,7 @@ export default function ProductPage({ params }: Props) {
   const [magnifierPos, setMagnifierPos] = useState({ x: 0, y: 0, width: 0, height: 0 })
   const [isImageDialogOpen, setIsImageDialogOpen] = useState(false)
   const { addItem } = useCart()
+  const router = useRouter()
   const [reviews, setReviews] = useState<any[]>([])
   const [myReview, setMyReview] = useState<any | null>(null)
   const [ratingValue, setRatingValue] = useState(5)
@@ -89,19 +93,19 @@ export default function ProductPage({ params }: Props) {
   useEffect(() => {
     async function fetchProduct() {
       try {
-        const data = await getProduct(params.id)
+        const data = await getProduct(id)
         setProduct(data)
       } catch (error) {
         console.error("Error fetching product:", error)
       }
     }
     fetchProduct()
-  }, [params.id])
+  }, [id])
 
   useEffect(() => {
     async function fetchStock() {
       try {
-        const stores = await getStoresWithProduct(Number(params.id))
+        const stores = await getStoresWithProduct(Number(id))
         const total = stores.reduce(
           (sum: number, item: any) => sum + (item.stock ?? 0),
           0
@@ -114,7 +118,7 @@ export default function ProductPage({ params }: Props) {
     if (product) {
       fetchStock()
     }
-  }, [product, params.id])
+  }, [product, id])
 
   useEffect(() => {
     async function fetchRelated() {
@@ -471,7 +475,26 @@ export default function ProductPage({ params }: Props) {
                 </Button>
               </div>
 
-              <Button size="lg" className="w-full bg-green-600 hover:bg-green-700">
+              <Button
+                size="lg"
+                className="w-full bg-green-600 hover:bg-green-700"
+                onClick={() => {
+                  if (product) {
+                    addItem({
+                      id: product.id,
+                      name: product.name,
+                      price: product.priceSell ?? product.price,
+                      image:
+                        product.images && product.images.length > 0
+                          ? product.images[0]
+                          : product.image,
+                      quantity,
+                    })
+                    router.push("/cart")
+                  }
+                }}
+                disabled={stock !== null && stock <= 0}
+              >
                 Comprar Ahora - Envío Gratis
               </Button>
             </div>
