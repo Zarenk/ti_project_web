@@ -638,7 +638,9 @@ export default function ProductPage({ params }: Props) {
               <div className="space-y-6">
                 {userData ? (
                   <Card className="bg-white/70 dark:bg-slate-800/70 border border-blue-100">
+                    
                     <CardContent className="p-6 space-y-4">
+                      <h3 className="text-2xl font-bold text-yellow-500">Reseñas</h3>
                       <h4 className="font-semibold text-blue-700">Si te gustó el producto, bríndanos tu reseña</h4>
                       <div className="flex items-center gap-1">
                         {[...Array(5)].map((_, i) => (
