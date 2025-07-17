@@ -6,6 +6,12 @@ import { CreditCard, Building2, Smartphone, Check, ShoppingCart } from "lucide-r
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { createSale } from "@/app/dashboard/sales/sales.api"
+import {
+  createClient,
+  checkClientExists,
+  getClients,
+} from "@/app/dashboard/clients/clients.api"
+import { getUserDataFromToken } from "@/lib/auth"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -224,10 +230,38 @@ export default function Component() {
           yape: -4,
         }
 
+        const userData = getUserDataFromToken();
+        const userIdToSend = userData?.userId ?? 1;
+
+        let clientId: number | undefined = undefined;
+        if (formData.invoiceType === "BOLETA" || formData.invoiceType === "FACTURA") {
+          const typeNumber =
+            formData.invoiceType === "BOLETA" ? formData.dni.trim() : formData.ruc.trim();
+          const type = formData.invoiceType === "BOLETA" ? "DNI" : "RUC";
+          const name =
+            formData.invoiceType === "BOLETA" ? formData.invoiceName.trim() : formData.razonSocial.trim();
+
+          if (typeNumber) {
+            try {
+              const exists = await checkClientExists(typeNumber);
+              if (exists) {
+                const clients = await getClients();
+                const existing = clients.find((c: any) => c.typeNumber === typeNumber);
+                clientId = existing?.id;
+              } else {
+                const created = await createClient({ name, type, typeNumber, userId: userData?.userId });
+                clientId = created?.id;
+              }
+            } catch (err) {
+              console.error("Error obteniendo cliente:", err);
+            }
+          }
+        }
+
         const payload = {
-          userId: 1,
+          userId: userIdToSend,
           storeId: 1,
-          clientId: 1,
+          ...(clientId ? { clientId } : {}),
           total,
           description: `Compra online de ${formData.firstName} ${formData.lastName}`,
           details,

@@ -57,24 +57,29 @@ export default function CartSheet() {
                   key={item.id}
                   className="flex items-center gap-4 border rounded-lg p-2"
                 >
-                  {item.image && (
-                    <Image
-                      src={item.image}
-                      alt={item.name}
-                      width={56}
-                      height={56}
-                      className="rounded-md object-cover w-14 h-14"
-                    />
-                  )}
-                  <div className="flex-1">
-                    <p className="font-medium leading-none">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatCurrency(item.price, "PEN")} x {item.quantity}
-                    </p>
-                    <p className="text-sm font-semibold text-blue-600">
-                      {formatCurrency(item.price * item.quantity, "PEN")}
-                    </p>
-                  </div>
+                  <Link
+                    href={`/store/${item.id}`}
+                    className="flex items-center gap-4 flex-1"
+                  >
+                    {item.image && (
+                      <Image
+                        src={item.image}
+                        alt={item.name}
+                        width={56}
+                        height={56}
+                        className="rounded-md object-cover w-14 h-14"
+                      />
+                    )}
+                    <div className="flex-1">
+                      <p className="font-medium leading-none">{item.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatCurrency(item.price, "PEN")} x {item.quantity}
+                      </p>
+                      <p className="text-sm font-semibold text-blue-600">
+                        {formatCurrency(item.price * item.quantity, "PEN")}
+                      </p>
+                    </div>
+                  </Link>
                   <Button
                     onClick={() => removeItem(item.id)}
                     variant="ghost"
