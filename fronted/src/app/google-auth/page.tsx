@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSession } from 'next-auth/react';
-import { registerUser, createClient } from '../register/register.api';
 import { loginUser } from '../dashboard/users/users.api';
 import { getUserDataFromToken } from '@/lib/auth';
+import { createClient, registerUser } from '../register/register.api';
 
 export default function GoogleAuthPage() {
   const router = useRouter();

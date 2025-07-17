@@ -113,33 +113,24 @@ export class SalesService {
           throw new BadRequestException(`Método de pago no válido: ${payment.paymentMethodId}`);
         }
 
-        paymentMethod = await prisma.paymentMethod.findFirst({
-          where: { name: methodName },
-        });
+        paymentMethod = await prisma.paymentMethod.findFirst({ where: { name: methodName } });
 
         if (!paymentMethod) {
           paymentMethod = await prisma.paymentMethod.create({
             data: { name: methodName, isActive: true },
           });
         }
+      }
 
         const transaction = await prisma.cashTransaction.create({
-          data: {
-            cashRegisterId,
-            type: 'INCOME',
-            amount: new Prisma.Decimal(payment.amount),
-            description: `Venta realizada. Pago vía ${paymentMethod.name}, ${descriptionTransaction}`,
-            userId,
-          },
-        });
-
-        await prisma.cashTransactionPaymentMethod.create({
-          data: {
-            cashTransactionId: transaction.id,
-            paymentMethodId: paymentMethod.id,
-          },
-        });
-      }
+        data: {
+          cashRegisterId,
+          type: 'INCOME',
+          amount: new Prisma.Decimal(payment.amount),
+          description: `Venta realizada. Pago vía ${paymentMethod.name}, ${descriptionTransaction}`,
+          userId,
+        },
+      });
 
       await prisma.salePayment.create({
         data: {
@@ -160,7 +151,7 @@ export class SalesService {
     userId: number,
   ): Promise<string> {
 
-    const store = await this.prisma.store.findUnique({
+    const store = await prisma.store.findUnique({
       where: { id: storeId },
       select: { name: true },
     });

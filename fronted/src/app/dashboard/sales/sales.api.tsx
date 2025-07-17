@@ -29,7 +29,8 @@ export async function createSale(data: {
     });
   
     if (!response.ok) {
-      throw new Error('Error al crear la venta');
+      const errorText = await response.text();
+      throw new Error(`Error al crear la venta: ${errorText}`);
     }
   
     return await response.json();
