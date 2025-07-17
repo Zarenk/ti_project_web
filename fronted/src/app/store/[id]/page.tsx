@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -88,6 +88,7 @@ export default function ProductPage({ params }: Props) {
   const [myReview, setMyReview] = useState<any | null>(null)
   const [ratingValue, setRatingValue] = useState(5)
   const [comment, setComment] = useState('')
+  const commentRef = useRef<HTMLTextAreaElement | null>(null)
   const [userData, setUserData] = useState<{ userId: number; name: string } | null>(null)
 
   useEffect(() => {
@@ -231,12 +232,14 @@ export default function ProductPage({ params }: Props) {
     if (!userData) return
     const token = localStorage.getItem('token')
     if (!token) return
+    const text = commentRef.current?.value || ''
     try {
-      await submitReview(Number(id), ratingValue, comment, token)
+      await submitReview(Number(id), ratingValue, text, token)
       const updated = await getReviews(Number(id))
       setReviews(updated)
       const mine = updated.find((r: any) => r.userId === userData.userId)
       setMyReview(mine)
+      setComment(text)
       toast.success('Reseña guardada')
     } catch (err) {
       console.error(err)
@@ -633,10 +636,10 @@ export default function ProductPage({ params }: Props) {
 
             <TabsContent value="reviews" className="mt-8">
               <div className="space-y-6">
-                {userData && (
+                {userData ? (
                   <Card className="bg-white/70 dark:bg-slate-800/70 border border-blue-100">
                     <CardContent className="p-6 space-y-4">
-                      <h4 className="font-semibold text-blue-700">Tu reseña</h4>
+                      <h4 className="font-semibold text-blue-700">Si te gustó el producto, bríndanos tu reseña</h4>
                       <div className="flex items-center gap-1">
                         {[...Array(5)].map((_, i) => (
                           <Star
@@ -647,14 +650,30 @@ export default function ProductPage({ params }: Props) {
                         ))}
                       </div>
                     <Textarea
-                        value={comment}
-                        onChange={(e) => setComment(e.target.value)}
+                        defaultValue={comment}
+                        onBlur={(e) => setComment(e.target.value)}
+                        ref={commentRef}
                         placeholder="Escribe tu opinión"
                         className="bg-white/60 dark:bg-slate-800/60"
                       />
                       <Button className="bg-blue-500 hover:bg-blue-600 text-white" onClick={handleReviewSubmit}>
                         Guardar reseña
                       </Button>
+                    </CardContent>
+                  </Card>
+                  ) : (
+                  <Card className="bg-white/70 dark:bg-slate-800/70 border border-blue-100">
+                    <CardContent className="p-6 space-y-4 text-center">
+                      <h4 className="font-semibold text-blue-700">Si te gustó el producto, bríndanos tu reseña</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Para dejar una reseña necesitas iniciar sesión o registrarte.</p>
+                      <div className="flex justify-center gap-4">
+                        <Button asChild className="bg-blue-500 hover:bg-blue-600 text-white">
+                          <Link href="/login">Iniciar Sesión</Link>
+                        </Button>
+                        <Button asChild variant="outline">
+                          <Link href="/register">Registrarse</Link>
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 )}
