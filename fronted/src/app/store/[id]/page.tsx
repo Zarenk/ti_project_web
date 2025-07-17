@@ -616,7 +616,7 @@ export default function ProductPage({ params }: Props) {
 
             <TabsContent value="features" className="mt-8">
               <div className="grid md:grid-cols-3 gap-6">
-                {product.features?.map((feature: any) => {
+                {product?.features?.map((feature: any) => {
                   const IconComponent = icons[feature.icon as keyof typeof icons] || Battery
                   return (
                     <Card key={feature.id}>
@@ -634,45 +634,64 @@ export default function ProductPage({ params }: Props) {
             <TabsContent value="reviews" className="mt-8">
               <div className="space-y-6">
                 {userData && (
-                  <Card>
-                    <CardContent className="p-6 space-y-3">
-                      <h4 className="font-semibold">Tu reseña</h4>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          max={5}
-                          value={ratingValue}
-                          onChange={(e) => setRatingValue(Number(e.target.value))}
-                          className="w-16"
-                        />
-                        <span>/5</span>
+                  <Card className="bg-white/70 dark:bg-slate-800/70 border border-blue-100">
+                    <CardContent className="p-6 space-y-4">
+                      <h4 className="font-semibold text-blue-700">Tu reseña</h4>
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            onClick={() => setRatingValue(i + 1)}
+                            className={`w-6 h-6 cursor-pointer transition-colors ${i < ratingValue ? 'text-blue-500 fill-blue-500' : 'text-gray-300'}`}
+                          />
+                        ))}
                       </div>
-                <Textarea value={comment} onChange={(e) => setComment(e.target.value)} />
-                      <Button onClick={handleReviewSubmit}>Guardar reseña</Button>
+                    <Textarea
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                        placeholder="Escribe tu opinión"
+                        className="bg-white/60 dark:bg-slate-800/60"
+                      />
+                      <Button className="bg-blue-500 hover:bg-blue-600 text-white" onClick={handleReviewSubmit}>
+                        Guardar reseña
+                      </Button>
                     </CardContent>
                   </Card>
                 )}
 
                 <div className="grid gap-6">
                   {reviews.map((review) => (
-                    <Card key={review.id} className={review.userId === userData?.userId ? 'border-blue-500' : ''}>
-                      <CardContent className="p-6">
-                        <div className="flex items-start justify-between mb-3">
+                    <Card
+                      key={review.id}
+                      className={`${
+                        review.userId === userData?.userId ? 'border-l-4 border-blue-500 bg-blue-50/30' : 'bg-white/60 dark:bg-slate-800/60'
+                      }`}
+                    >
+                      <CardContent className="p-6 space-y-2">
+                        <div className="flex items-start justify-between">
                           <div>
-                            <h4 className="font-semibold">{review.user?.username}</h4>
+                            <h4 className="font-semibold text-blue-800">{review.user?.username}</h4>
                             <div className="flex items-center gap-1 mt-1">
-                              {[...Array(review.rating)].map((_, i) => (
-                                <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                              {[...Array(5)].map((_, i) => (
+                                <Star
+                                  key={i}
+                                  className={`w-4 h-4 ${i < review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
+                                />
                               ))}
                             </div>
                           </div>
+                          <span className="text-xs text-gray-500">
+                            {new Date(review.createdAt).toLocaleDateString()}
+                          </span>
                           <Badge variant="secondary">Compra verificada</Badge>
                         </div>
-                         <p className="text-gray-700 dark:text-gray-300">{review.comment}</p>
+                        {review.comment && (
+                          <p className="text-gray-700 dark:text-gray-300">{review.comment}</p>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
+                  {reviews.length === 0 && <p className="text-sm text-gray-500">Aún no hay reseñas</p>}
                 </div>
               </div>
             </TabsContent>
