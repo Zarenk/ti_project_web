@@ -1,37 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TI Project Web
 
-## Getting Started
+This repository contains a full stack web application composed of a **NestJS** backend and a **Next.js** front‑end. The project provides an inventory and sales management system that can also serve as an online store.
 
-First, run the development server:
+## Project Structure
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **backend/** – API server built with NestJS and Prisma.
+- **fronted/** – Web client built with Next.js using the app router.
+
+## Setup
+
+1. Install **Node.js** (v18 or later) and **npm**.
+2. Clone the repository and install dependencies for each part:
+   ```bash
+   git clone <repo>
+   cd ti_project_web
+   cd backend && npm install
+   cd ../fronted && npm install
+   ```
+3. Configure environment variables.
+
+### Backend environment
+Create a `backend/.env` file with at least the following keys:
+
+```
+DATABASE_URL=postgresql://user:pass@localhost:5432/dbname
+JWT_SECRET=your-secret
+SUNAT_CLIENT_ID=<id>
+SUNAT_CLIENT_SECRET=<secret>
+SUNAT_USERNAME=<username>
+SUNAT_PASSWORD=<password>
+PORT=4000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run database migrations and start the server:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cd backend
+npx prisma migrate dev
+npm run start:dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Front-end environment
+Create a `fronted/.env.local` file with the URL of the backend:
 
-## Learn More
+```
+NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+```
 
-To learn more about Next.js, take a look at the following resources:
+Start the development server:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+cd fronted
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Configuring Stores
+The system supports multiple stores. For online purchases the front‑end expects a store with ID **1** representing the web sales channel (commonly named **"WEB POS"**). Make sure to create this store in the backend either through the API or directly in the database before processing online orders.
 
-## Deploy on Vercel
+Additional physical stores can be created using the `/stores` endpoints exposed by the API.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
+---
+This README provides a minimal overview; see the READMEs inside `backend/` and `fronted/` for framework‑specific commands.

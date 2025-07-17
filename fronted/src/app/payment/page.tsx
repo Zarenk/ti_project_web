@@ -30,6 +30,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import Navbar from "@/components/navbar"
 import CheckoutSteps from "@/components/checkout-steps"
 import { regions } from "@/lib/region"
+import { DEFAULT_STORE_ID } from "@/lib/config"
 
 export default function Component() {
   const [paymentMethod, setPaymentMethod] = useState("visa")
@@ -260,7 +261,7 @@ export default function Component() {
 
         const payload = {
           userId: userIdToSend,
-          storeId: 1,
+          storeId: DEFAULT_STORE_ID,
           ...(clientId ? { clientId } : {}),
           total,
           description: `Compra online de ${formData.firstName} ${formData.lastName}`,

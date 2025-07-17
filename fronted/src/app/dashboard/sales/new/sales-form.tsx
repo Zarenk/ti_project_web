@@ -318,11 +318,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
         const transformedDetails = selectedProducts.map((product) => ({
           productId: product.id, // Usar `id` como `productId`
           quantity: product.quantity,
-          description: product.name,
           price: Number(product.price),
-          total: Number(product.quantity * product.price),
-          subTotal: Number((product.quantity * product.price) / 1.18), // Ajusta según tu lógica de IGV
-          igv: Number((product.quantity * product.price) - (product.quantity * product.price) / 1.18),
           series: product.series || [], // Incluir las series seleccionadas
         }));
 
@@ -370,15 +366,12 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
           clientId,
           total,
           description: data.description,
-          createdAt: createdAt ? createdAt.toISOString() : null, // Formato ISO para la fecha
           payments,
           details: transformedDetails,
           tipoMoneda: data.tipo_moneda,
           source: 'POS',
           ...(data.tipoComprobante !== "SIN COMPROBANTE" && { // Solo incluir si no es "SIN COMPROBANTE"
             tipoComprobante: data.tipoComprobante,
-            serie: serieInvoice,
-            correlativo: correlativoInvoice,
           }),
         };
 
