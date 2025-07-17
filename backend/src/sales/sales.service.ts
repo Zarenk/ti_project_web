@@ -15,6 +15,31 @@ export class SalesService {
     private inventoryService: InventoryService,
   ) {}
 
+  private async ensureCashRegister(storeId: number, userId: number) {
+    let cashRegister = await this.prisma.cashRegister.findFirst({
+      where: {
+        storeId,
+        status: 'ACTIVE',
+      },
+    });
+
+    if (!cashRegister) {
+      cashRegister = await this.prisma.cashRegister.create({
+        data: {
+          storeId,
+          name: `Caja Principal - Tienda ${storeId} - ${Date.now()}`,
+          initialBalance: 0,
+          currentBalance: 0,
+          status: 'ACTIVE',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+    }
+
+    return cashRegister;
+  }
+
   private async ensureStockInStore(
     storeId: number,
     productId: number,
@@ -56,6 +81,216 @@ export class SalesService {
     });
   }
 
+  private async processPayments(
+    prisma: Prisma.TransactionClient,
+    payments: { paymentMethodId: number; amount: number; currency: string }[],
+    saleId: number,
+    cashRegisterId: number,
+    descriptionTransaction: string,
+    userId: number,
+  ) {
+    for (const payment of payments) {
+      if (payment.paymentMethodId === null || payment.paymentMethodId === undefined) {
+        throw new BadRequestException('Debe proporcionar un paymentMethodId válido.');
+      }
+
+      let paymentMethod = await prisma.paymentMethod.findUnique({
+        where: { id: payment.paymentMethodId },
+      });
+
+      if (!paymentMethod) {
+        const defaultNames: Record<number, string> = {
+          [-1]: 'EN EFECTIVO',
+          [-2]: 'TRANSFERENCIA',
+          [-3]: 'PAGO CON VISA',
+          [-4]: 'YAPE',
+          [-5]: 'PLIN',
+          [-6]: 'OTRO MEDIO DE PAGO',
+        };
+
+        const methodName = defaultNames[payment.paymentMethodId];
+        if (!methodName) {
+          throw new BadRequestException(`Método de pago no válido: ${payment.paymentMethodId}`);
+        }
+
+        paymentMethod = await prisma.paymentMethod.findFirst({
+          where: { name: methodName },
+        });
+
+        if (!paymentMethod) {
+          paymentMethod = await prisma.paymentMethod.create({
+            data: { name: methodName, isActive: true },
+          });
+        }
+
+        const transaction = await prisma.cashTransaction.create({
+          data: {
+            cashRegisterId,
+            type: 'INCOME',
+            amount: new Prisma.Decimal(payment.amount),
+            description: `Venta realizada. Pago vía ${paymentMethod.name}, ${descriptionTransaction}`,
+            userId,
+          },
+        });
+
+        await prisma.cashTransactionPaymentMethod.create({
+          data: {
+            cashTransactionId: transaction.id,
+            paymentMethodId: paymentMethod.id,
+          },
+        });
+      }
+
+      await prisma.salePayment.create({
+        data: {
+          salesId: saleId,
+          paymentMethodId: paymentMethod.id,
+          amount: payment.amount,
+          currency: payment.currency,
+        },
+      });
+    }
+  }
+
+  private async createSaleDetails(
+    prisma: Prisma.TransactionClient,
+    saleId: number,
+    details: { productId: number; quantity: number; price: number; series?: string[] }[],
+    storeId: number,
+    userId: number,
+  ): Promise<string> {
+
+    const store = await this.prisma.store.findUnique({
+      where: { id: storeId },
+      select: { name: true },
+    });
+    const storeName = store?.name ?? 'Desconocido';
+    let descriptionTransaction = 'Venta registrada: ';
+
+    for (const detail of details) {
+      const storeInventory = await prisma.storeOnInventory.findFirst({
+        where: { storeId, inventory: { productId: detail.productId } },
+      });
+
+      if (!storeInventory) {
+        throw new NotFoundException(
+          `No se encontró inventario para el producto con ID ${detail.productId} en la tienda con ID ${storeId}.`,
+        );
+      }
+
+      const product = await this.prisma.product.findUnique({
+        where: { id: detail.productId },
+      });
+
+      if (!product) {
+        throw new NotFoundException(`No se encontró el producto con ID ${detail.productId}.`);
+      }
+
+      descriptionTransaction += `${product.name} - Cantidad: ${detail.quantity}, Precio Unitario: ${detail.price}`;
+      if (detail.series && detail.series.length > 0) {
+        descriptionTransaction += `, Series: ${detail.series.join(', ')}`;
+      }
+      descriptionTransaction += '; ';
+
+      const entryDetail = await prisma.entryDetail.findFirst({
+        where: { productId: detail.productId },
+      });
+
+      if (!entryDetail) {
+        throw new NotFoundException(
+          `No se encontró un detalle de entrada para el producto con ID ${detail.productId}.`,
+        );
+      }
+
+      await prisma.salesDetail.create({
+        data: {
+          salesId: saleId,
+          entryDetailId: entryDetail.id,
+          storeOnInventoryId: storeInventory.id,
+          productId: detail.productId,
+          quantity: detail.quantity,
+          price: detail.price,
+        },
+      });
+
+      if (detail.series && detail.series.length > 0) {
+        for (const serial of detail.series) {
+          const series = await prisma.entryDetailSeries.findFirst({
+            where: {
+              serial,
+              entryDetail: {
+                productId: detail.productId,
+                entry: { storeId },
+              },
+            },
+          });
+
+          if (!series) {
+            throw new NotFoundException(
+              `La serie ${serial} no se encontró para el producto con ID ${detail.productId} en la tienda con ID ${storeId}.`,
+            );
+          }
+
+          await prisma.entryDetailSeries.update({
+            where: { id: series.id },
+            data: { status: 'inactive' },
+          });
+        }
+      }
+
+      await prisma.storeOnInventory.update({
+        where: { id: storeInventory.id },
+        data: { stock: storeInventory.stock - detail.quantity },
+      });
+
+      await prisma.inventoryHistory.create({
+        data: {
+          inventoryId: storeInventory.inventoryId,
+          userId,
+          action: 'sales',
+          description: `Venta realizada en la tienda ${storeName}`,
+          stockChange: -detail.quantity,
+          previousStock: storeInventory.stock,
+          newStock: storeInventory.stock - detail.quantity,
+        },
+      });
+    }
+
+    return descriptionTransaction;
+  }
+
+  private async createInvoiceIfNeeded(
+    prisma: Prisma.TransactionClient,
+    saleId: number,
+    total: number,
+    tipoComprobante?: string,
+    tipoMoneda?: string,
+  ) {
+    if (tipoComprobante && tipoComprobante !== 'SIN COMPROBANTE') {
+      const serie = tipoComprobante === 'FACTURA' ? 'F001' : 'B001';
+      const lastInvoice = await prisma.invoiceSales.findFirst({
+        where: { tipoComprobante },
+        orderBy: { nroCorrelativo: 'desc' },
+      });
+
+      const nuevoCorrelativo = lastInvoice ? parseInt(lastInvoice.nroCorrelativo) + 1 : 1;
+
+      await prisma.invoiceSales.create({
+        data: {
+          salesId: saleId,
+          serie,
+          nroCorrelativo: nuevoCorrelativo.toString().padStart(3, '0'),
+          tipoComprobante,
+          tipoMoneda: tipoMoneda || 'PEN',
+          total,
+          fechaEmision: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+    }
+  }
+
   // Método para crear una venta
   async createSale(data: {
     userId: number;
@@ -63,7 +298,7 @@ export class SalesService {
     clientId?: number;
     total: number;
     description?: string;
-    details: { productId: number; quantity: number; price: number, series?: string[] }[];
+    details: { productId: number; quantity: number; price: number; series?: string[] }[];
     tipoComprobante?: string; // Tipo de comprobante (factura, boleta, etc.)
     tipoMoneda: string;
     payments: { paymentMethodId: number; amount: number; currency: string }[];
@@ -81,53 +316,13 @@ export class SalesService {
       source = 'POS',
     } = data;
 
-    // Validar que la tienda exista
-    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
-    if (!store) {
-      throw new NotFoundException(`La tienda con ID ${storeId} no existe.`);
-    }
+    const cashRegister = await this.ensureCashRegister(storeId, userId);
 
-    // Buscar la caja activa de la tienda
-    let cashRegister = await this.prisma.cashRegister.findFirst({
-      where: {
-        storeId,
-        status: 'ACTIVE',
-      },
-    });
-
-    if (!cashRegister) {
-      console.log(`No se encontró una caja activa para la tienda con ID ${storeId}. Creando una nueva caja...`);
-
-      // Crear una nueva caja
-      cashRegister = await this.prisma.cashRegister.create({
-        data: {
-          storeId,
-          name: `Caja Principal - Tienda ${storeId} - ${Date.now()}`, // Nombre descriptivo
-          initialBalance: 0, // Saldo inicial
-          currentBalance: 0, // Saldo actual
-          status: 'ACTIVE', // Estado activo
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      });
-
-      console.log('Nueva caja creada:', cashRegister);
-    }
-
-    console.log('Caja activa encontrada:', cashRegister);
-
-    if (!cashRegister) {
-      throw new BadRequestException(`No hay una caja activa para la tienda con ID ${storeId}.`);
-    }
-
-    // Al inicio de createSale:
-    let clientIdToUse = clientId; // Usa directamente el clientId recibido
+    let clientIdToUse = clientId;
 
     if (!clientIdToUse) {
-      // Solo si NO mandan clientId:
-      let genericUser = await this.prisma.user.findFirst({
-        where: { username: 'generic_user' },
-      });
+
+      let genericUser = await this.prisma.user.findFirst({ where: { username: 'generic_user' } });
 
       if (!genericUser) {
         genericUser = await this.prisma.user.create({
@@ -143,9 +338,7 @@ export class SalesService {
       }
 
       // Buscar o crear el cliente "Sin Cliente"
-      let genericClient = await this.prisma.client.findFirst({
-        where: { name: 'Sin Cliente' },
-      });
+      let genericClient = await this.prisma.client.findFirst({ where: { name: 'Sin Cliente' } });
 
       if (!genericClient) {
         genericClient = await this.prisma.client.create({
@@ -195,211 +388,24 @@ export class SalesService {
         },
       });
 
-      // Construir la descripción dinámica
-      let descriptionTransaction = 'Venta registrada: ';
+      const descriptionTransaction = await this.createSaleDetails(
+        prisma,
+        sale.id,
+        details,
+        storeId,
+        userId,
+      );
 
-      // Crear los detalles de la venta y actualizar el stock
-      for (const detail of details) {
-        const storeInventory = await prisma.storeOnInventory.findFirst({
-          where: { storeId, inventory: { productId: detail.productId } },
-        });
-
-        // Validar que el inventario exista
-        if (!storeInventory) {
-          throw new NotFoundException(
-            `No se encontró inventario para el producto con ID ${detail.productId} en la tienda con ID ${storeId}.`
-          );
-        }
-
-        // Obtener el producto asociado al detalle
-        const product = await this.prisma.product.findUnique({
-          where: { id: detail.productId },
-        });
-
-        if (!product) {
-          throw new NotFoundException(`No se encontró el producto con ID ${detail.productId}.`);
-        }
-
-        // Agregar información del producto al campo description
-        descriptionTransaction += `${product.name} - Cantidad: ${detail.quantity}, Precio Unitario: ${detail.price}`;
-
-        // Agregar las series si existen
-        if (detail.series && detail.series.length > 0) {
-          descriptionTransaction += `, Series: ${detail.series.join(', ')}`;
-        }
-
-        descriptionTransaction += '; '; // Separar cada producto con un punto y coma
-
-        // Validar que el detalle de entrada exista
-        const entryDetail = await prisma.entryDetail.findFirst({
-          where: { productId: detail.productId },
-        });
-
-        if (!entryDetail) {
-          throw new NotFoundException(
-            `No se encontró un detalle de entrada para el producto con ID ${detail.productId}.`
-          );
-        }
-
-        // Crear el detalle de la venta
-        await prisma.salesDetail.create({
-          data: {
-            salesId: sale.id, // ID de la venta creada
-            entryDetailId: entryDetail.id, // ID del detalle de entrada
-            storeOnInventoryId: storeInventory.id, // ID del inventario de la tienda
-            productId: detail.productId,
-            quantity: detail.quantity,
-            price: detail.price,
-          },
-        });
-
-        // Dar de baja las series seleccionadas
-        if (detail.series && detail.series.length > 0) {
-          for (const serial of detail.series) {
-            // Verificar si la serie existe en el inventario de la tienda
-            const series = await prisma.entryDetailSeries.findFirst({
-              where: {
-                serial,
-                entryDetail: {
-                  productId: detail.productId,
-                  entry: {
-                    storeId: data.storeId,
-                  },
-                },
-              },
-            });
-
-            if (!series) {
-              throw new NotFoundException(
-                `La serie ${serial} no se encontró para el producto con ID ${detail.productId} en la tienda con ID ${data.storeId}.`
-              );
-            }
-
-            // Actualizar el estado de la serie a "inactive" en lugar de eliminarla
-            await prisma.entryDetailSeries.update({
-              where: { id: series.id },
-              data: { status: "inactive" }, // Cambiar el estado a "inactive"
-            });
-          }
-        }
-
-        // Registrar el pago
-        for (const payment of payments) {
-          if (payment.paymentMethodId === null || payment.paymentMethodId === undefined) {
-            throw new BadRequestException('Debe proporcionar un paymentMethodId válido.');
-          }
-        
-          let paymentMethod = await prisma.paymentMethod.findUnique({
-            where: { id: payment.paymentMethodId },
-          });
-        
-          if (!paymentMethod) {
-            const defaultNames: Record<number, string> = {
-              [-1]: 'EN EFECTIVO',
-              [-2]: 'TRANSFERENCIA',
-              [-3]: 'PAGO CON VISA',
-              [-4]: 'YAPE',
-              [-5]: 'PLIN',
-              [-6]: 'OTRO MEDIO DE PAGO',
-            };
-        
-            const methodName = defaultNames[payment.paymentMethodId];
-            if (!methodName) {
-              throw new BadRequestException(`Método de pago no válido: ${payment.paymentMethodId}`);
-            }
-        
-            // 🔥 Buscar primero por nombre (no solo por ID)
-            paymentMethod = await prisma.paymentMethod.findFirst({
-              where: { name: methodName },
-            });
-        
-            if (!paymentMethod) {
-              // 🔥 Si no existe por nombre, recién crearlo
-              paymentMethod = await prisma.paymentMethod.create({
-                data: { name: methodName, isActive: true },
-              });
-            }
-            
-            // Registrar la transacción en la caja
-            const transaction = await prisma.cashTransaction.create({
-              data: {
-                cashRegisterId: cashRegister.id,
-                type: 'INCOME',
-                amount: new Prisma.Decimal(payment.amount),
-                description: `Venta realizada. Pago vía ${paymentMethod.name}, ${descriptionTransaction}`,
-                userId,
-              },
-            });
-
-            await prisma.cashTransactionPaymentMethod.create({
-              data: {
-                cashTransactionId: transaction.id,
-                paymentMethodId: paymentMethod.id, // Aquí garantizado que existe
-              },
-            });
-          } 
-        
-          const salePayment = await prisma.salePayment.create({
-            data: {
-              salesId: sale.id,
-              paymentMethodId: paymentMethod.id,
-              amount: payment.amount,
-              currency: payment.currency,
-            },
-          });
-        }
-
-        // Actualizar el stock en la tienda
-        await prisma.storeOnInventory.update({
-          where: { id: storeInventory.id },
-          data: { stock: storeInventory.stock - detail.quantity },
-        });
-
-        // Registrar el movimiento en el historial de inventario
-        await prisma.inventoryHistory.create({
-          data: {
-            inventoryId: storeInventory.inventoryId,
-            userId,
-            action: 'sales',
-            description: `Venta realizada en la tienda ${store.name}`,
-            stockChange: -detail.quantity,
-            previousStock: storeInventory.stock,
-            newStock: storeInventory.stock - detail.quantity,
-          },
-        });
-      }
-      // **Condición para verificar si se debe generar un comprobante**
-      if (data.tipoComprobante && data.tipoComprobante !== 'SIN COMPROBANTE') {
-
-        // Determinar la serie según el tipo de comprobante
-        const serie = data.tipoComprobante === 'FACTURA' ? 'F001' : 'B001'; // Cambia 'B001' por la serie deseada para otros comprobantes
-        // Obtener la última serie y correlativo para el tipo de comprobante
-        const lastInvoice = await prisma.invoiceSales.findFirst({
-          where: { tipoComprobante: data.tipoComprobante },
-          orderBy: { nroCorrelativo: 'desc' },
-        });
-
-        // Generar el nuevo correlativo
-        const nuevoCorrelativo = lastInvoice
-          ? parseInt(lastInvoice.nroCorrelativo) + 1
-          : 1;
-
-        if (data.tipoComprobante && data.tipoComprobante !== "SIN COMPROBANTE") {
-          await prisma.invoiceSales.create({
-            data: {
-              salesId: sale.id, // Relacionar la factura con la venta creada
-              serie: serie, // Puedes ajustar la lógica para generar la serie
-              nroCorrelativo: nuevoCorrelativo.toString().padStart(3, '0'), // Formatear el correlativo con ceros a la izquierda
-              tipoComprobante: data.tipoComprobante, // Tipo de comprobante (factura, boleta, etc.)
-              tipoMoneda: data.tipoMoneda || 'PEN', // Moneda
-              total, // Total de la venta
-              fechaEmision: new Date(), // Fecha de emisión
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            },
-          });
-        }
-      }
+      await this.processPayments(
+        prisma,
+        payments,
+        sale.id,
+        cashRegister.id,
+        descriptionTransaction,
+        userId,
+      );
+      
+      await this.createInvoiceIfNeeded(prisma, sale.id, total, tipoComprobante, tipoMoneda);
 
       // Actualizar el saldo de la caja
       await this.prisma.cashRegister.update({

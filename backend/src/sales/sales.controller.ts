@@ -1,67 +1,72 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, BadRequestException, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, BadRequestException, Query, UseGuards } from '@nestjs/common';
 import { SalesService } from './sales.service';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { CreateSaleDto } from './dto/create-sale.dto';
 
 @Controller('sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Post()
-  async createSale(@Body() body: {
-    userId: number;
-    storeId: number;
-    clientId: number;
-    total: number;
-    description?: string;
-    details: { productId: number; quantity: number; price: number }[];
-    tipoComprobante?: string; // Tipo de comprobante (factura, boleta, etc.)
-    tipoMoneda: string;
-    payments: { paymentMethodId: number; amount: number; currency: string }[]; // 🔥 AÑADIDO
-    source?: 'POS' | 'WEB';
-  }) {
-    return this.salesService.createSale(body);
+  async createSale(@Body() createSaleDto: CreateSaleDto) {
+    return this.salesService.createSale(createSaleDto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
   async findAllSales() {
     return this.salesService.findAllSales();
   }
 
   // Endpoint para obtener las series vendidas en una venta específica
+  @UseGuards(JwtAuthGuard)
   @Get(':saleId/sold-series')
   async getSoldSeriesBySale(@Param('saleId', ParseIntPipe) saleId: number) {
     return this.salesService.getSoldSeriesBySale(saleId);
   }
 
-  @Get("monthly-total")
+  @UseGuards(JwtAuthGuard)
+  @Get('monthly-total')
   async getMonthlySalesTotal() {
     return this.salesService.getMonthlySalesTotal();
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('revenue-by-category/from/:startDate/to/:endDate')
   getRevenueByCategoryByRange(
     @Param('startDate') startDate: string,
     @Param('endDate') endDate: string,
   ) {
-    return this.salesService.getRevenueByCategory(new Date(startDate), new Date(endDate));
+    return this.salesService.getRevenueByCategory(
+      new Date(startDate),
+      new Date(endDate),
+    );
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('chart/:from/:to')
   async getSalesChartByDateRange(
     @Param('from') from: string,
     @Param('to') to: string,
   ) {
-    return this.salesService.getDailySalesByDateRange(new Date(from), new Date(to));
+    return this.salesService.getDailySalesByDateRange(
+      new Date(from),
+      new Date(to),
+    );
   }
 
   // En el controlador
+  @UseGuards(JwtAuthGuard)
   @Get('top-products/from/:startDate/to/:endDate')
   getTopProductsByRange(
     @Param('startDate') startDate: string,
-    @Param('endDate') endDate: string
+    @Param('endDate') endDate: string,
   ) {
     return this.salesService.getTopProducts(10, startDate, endDate);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('top-products/type/:type')
   getTopProductsByType(@Param('type') type: string) {
     const now = new Date();
@@ -70,7 +75,11 @@ export class SalesController {
 
     switch (type) {
       case 'month':
-        return this.salesService.getTopProducts(10, startOfMonth.toISOString(), endOfMonth.toISOString());
+        return this.salesService.getTopProducts(
+          10,
+          startOfMonth.toISOString(),
+          endOfMonth.toISOString(),
+        );
       case 'all':
         return this.salesService.getTopProducts(10);
       default:
@@ -78,24 +87,25 @@ export class SalesController {
     }
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('monthly-count')
   async getMonthlySalesCount() {
     return this.salesService.getMonthlySalesCount();
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('monthly-clients')
   getMonthlyClientStats() {
     return this.salesService.getMonthlyClientStats();
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('recent/:from/:to')
-  async getRecentSales(
-    @Param('from') from: string,
-    @Param('to') to: string,
-  ) {
+  async getRecentSales(@Param('from') from: string, @Param('to') to: string) {
     return this.salesService.getRecentSales(from, to);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.salesService.findOne(id);
