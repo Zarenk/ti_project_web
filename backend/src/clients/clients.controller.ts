@@ -12,12 +12,13 @@ export class ClientController {
   @Post()
   @ApiOperation({summary: 'Create a client'})    // Swagger 
   create(@Body() createClientDto: CreateClientDto) {
-    const formattedClientDto = {
-      ...createClientDto,
-      type: createClientDto.type || '', // Ensure 'type' is always a string
-      typeNumber: createClientDto.typeNumber || '', // Ensure 'typeNumber' is always a string
+    const clientData = {
+      name: createClientDto.name,
+      type: createClientDto.type || '',
+      typeNumber: createClientDto.typeNumber || '',
+      userId: createClientDto.userId,
     };
-    return this.clientService.create(formattedClientDto);
+    return this.clientService.create(clientData);
   }
 
   @Post('verify-or-create-products')

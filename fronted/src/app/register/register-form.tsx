@@ -38,7 +38,15 @@ export default function RegisterForm() {
   };
 
   const handleGoogle = async () => {
-    await signIn('google', { callbackUrl: '/google-auth' });
+    if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+      toast.error('Google OAuth no está configurado');
+      return;
+    }
+    try {
+      await signIn('google', { callbackUrl: '/google-auth' });
+    } catch (error) {
+      toast.error('Error al conectar con Google');
+    }
   };
 
   return (
