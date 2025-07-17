@@ -30,7 +30,6 @@ class SaleDetailDto {
 
 class PaymentDto {
   @IsNumber()
-  @IsPositive()
   paymentMethodId!: number;
 
   @IsNumber()

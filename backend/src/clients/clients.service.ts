@@ -11,7 +11,7 @@ export class ClientService {
     private prismaService: PrismaService,
   ) {}
 
-  async create(data: { name: string; type: string; typeNumber: string; userId?: number }) {
+  async create(data: { name: string; type: string; typeNumber: string; userId?: number; image?: string }) {
     const userId = data.userId || (await this.createGenericUser()); // Crear un usuario genérico si no se proporciona uno
   
     return this.prismaService.client.create({
@@ -20,6 +20,7 @@ export class ClientService {
         type: data.type,
         typeNumber: data.typeNumber,
         userId,
+        image: data.image,
       },
     });
   }

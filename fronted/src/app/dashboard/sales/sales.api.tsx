@@ -41,8 +41,16 @@ export async function createSale(data: {
 }
 
 export async function getSales() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
   try{
-    const response = await fetch(`${BACKEND_URL}/api/sales`);
+    const response = await fetch(`${BACKEND_URL}/api/sales`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     if (!response.ok) {
       throw new Error('Error al obtener las ventas');
     }
@@ -54,7 +62,13 @@ export async function getSales() {
 }
 
 export async function getMonthlySalesTotal() {
-  const response = await fetch(`${BACKEND_URL}/api/sales/monthly-total`);
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  const response = await fetch(`${BACKEND_URL}/api/sales/monthly-total`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!response.ok) throw new Error("Error al obtener ventas mensuales");
   return await response.json(); // { total, growth }
 }
@@ -168,7 +182,16 @@ export async function getPaymentMethods() {
 }
 
 export async function getRevenueByCategoryByRange(from: string, to: string) {
-  const response = await fetch(`${BACKEND_URL}/api/sales/revenue-by-category/from/${from}/to/${to}`);
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  const response = await fetch(
+    `${BACKEND_URL}/api/sales/revenue-by-category/from/${from}/to/${to}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
   if (!response.ok) {
     throw new Error("Error al obtener los ingresos por categoría");
   }
@@ -176,7 +199,14 @@ export async function getRevenueByCategoryByRange(from: string, to: string) {
 }
 
 export async function getSalesByDateParams(from: string, to: string) {
-  const response = await fetch(`${BACKEND_URL}/api/sales/chart/${from}/${to}`);
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  const response = await fetch(`${BACKEND_URL}/api/sales/chart/${from}/${to}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    });
   if (!response.ok) throw new Error('Error al obtener gráfico de ventas');
   return response.json();
 }
@@ -194,7 +224,13 @@ export async function getTopProducts(params: { from?: string; to?: string; type?
     throw new Error("Faltan parámetros: se requiere 'type' o 'from' y 'to'");
   }
 
-  const response = await fetch(`${BACKEND_URL}${endpoint}`);
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  const response = await fetch(`${BACKEND_URL}${endpoint}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 
   if (!response.ok) {
     throw new Error("Error al obtener top de productos");
@@ -204,25 +240,48 @@ export async function getTopProducts(params: { from?: string; to?: string; type?
 }
 
 export async function getMonthlySalesCount() {
-  const response = await fetch(`${BACKEND_URL}/api/sales/monthly-count`);
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  const response = await fetch(`${BACKEND_URL}/api/sales/monthly-count`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!response.ok) throw new Error("Error al obtener el conteo mensual de ventas");
   return await response.json(); // { count: number, growth: number | null }
 }
 
 export async function getMonthlyClientsStats() {
-  const response = await fetch(`${BACKEND_URL}/api/sales/monthly-clients`);
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  const response = await fetch(`${BACKEND_URL}/api/sales/monthly-clients`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!response.ok) throw new Error("Error al obtener estadísticas de clientes");
   return response.json(); // { total: number, growth: number | null }
 }
 
 export async function getRecentSalesByRange(from: string, to: string) {
-  const res = await fetch(`${BACKEND_URL}/api/sales/recent/${from}/${to}`);
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  const res = await fetch(`${BACKEND_URL}/api/sales/recent/${from}/${to}`,
+    { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error("Error al obtener ventas recientes");
   return res.json();
 }
 
 export async function getSaleById(id: number | string) {
-  const res = await fetch(`${BACKEND_URL}/api/sales/${id}`);
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  const res = await fetch(`${BACKEND_URL}/api/sales/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!res.ok) throw new Error('Error al obtener la venta');
   return res.json();
 }

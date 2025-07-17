@@ -15,7 +15,7 @@ export async function registerUser(email: string, username: string, password: st
   return res.json(); // devuelve el usuario creado
 }
 
-export async function createClient(data: { name: string; userId: number }) {
+export async function createClient(data: { name: string; userId?: number; image?: string; type?: string; typeNumber?: string }) {
   const res = await fetch(`${BACKEND_URL}/api/clients`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
