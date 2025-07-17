@@ -67,8 +67,19 @@ export class SalesService {
     tipoComprobante?: string; // Tipo de comprobante (factura, boleta, etc.)
     tipoMoneda: string;
     payments: { paymentMethodId: number; amount: number; currency: string }[];
+    source?: 'POS' | 'WEB';
   }) {
-    const { userId, storeId, clientId, description, details, payments, tipoComprobante, tipoMoneda } = data;
+    const {
+      userId,
+      storeId,
+      clientId,
+      description,
+      details,
+      payments,
+      tipoComprobante,
+      tipoMoneda,
+      source = 'POS',
+    } = data;
 
     // Validar que la tienda exista
     const store = await this.prisma.store.findUnique({ where: { id: storeId } });
@@ -156,7 +167,7 @@ export class SalesService {
     let total = 0;
     for (const detail of details) {
       await this.ensureStockInStore(storeId, detail.productId, detail.quantity, userId);
-      
+
       const storeInventory = await this.prisma.storeOnInventory.findFirst({
         where: { storeId, inventory: { productId: detail.productId } },
       });
@@ -180,6 +191,7 @@ export class SalesService {
           clientId: clientIdToUse, // Si no hay cliente, se guarda como null
           total,
           description,
+          source,
         },
       });
 

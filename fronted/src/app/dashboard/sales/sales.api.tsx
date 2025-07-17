@@ -12,6 +12,7 @@ export async function createSale(data: {
   tipoComprobante?: string; // Tipo de comprobante (factura, boleta, etc.)
   tipoMoneda: string;
   payments: { paymentMethodId: number; amount: number; currency: string }[];
+  source?: 'POS' | 'WEB';
 }) {
   try{
     const response = await fetch(`${BACKEND_URL}/api/sales`, {

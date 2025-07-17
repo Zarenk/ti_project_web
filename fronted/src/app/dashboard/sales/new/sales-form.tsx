@@ -374,6 +374,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
           payments,
           details: transformedDetails,
           tipoMoneda: data.tipo_moneda,
+          source: 'POS',
           ...(data.tipoComprobante !== "SIN COMPROBANTE" && { // Solo incluir si no es "SIN COMPROBANTE"
             tipoComprobante: data.tipoComprobante,
             serie: serieInvoice,

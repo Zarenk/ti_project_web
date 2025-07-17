@@ -348,6 +348,7 @@ model Sales {
   clientId    Int       // Cliente asociado a la venta
   total       Float     // Total de la venta
   description String?   // Descripción opcional
+  source      SaleSource @default(POS)
   createdAt   DateTime  @default(now()) // Fecha de la venta
   updatedAt   DateTime  @updatedAt
 
@@ -363,6 +364,7 @@ model Sales {
   @@index([storeId])
   @@index([clientId])
   @@index([createdAt])
+  @@index([source])
 }
 
 model PaymentMethod {
@@ -512,6 +514,11 @@ enum CashTransactionType {
   INCOME
   EXPENSE
   TRANSFER
+}
+
+enum SaleSource {
+  POS
+  WEB
 }
 
 model ShippingGuide {

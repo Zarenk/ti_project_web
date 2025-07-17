@@ -240,6 +240,7 @@ export default function Component() {
               currency: "PEN",
             },
           ],
+          source: 'WEB',
         }
 
         const sale = await createSale(payload)

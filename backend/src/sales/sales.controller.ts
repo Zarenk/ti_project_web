@@ -16,6 +16,7 @@ export class SalesController {
     tipoComprobante?: string; // Tipo de comprobante (factura, boleta, etc.)
     tipoMoneda: string;
     payments: { paymentMethodId: number; amount: number; currency: string }[]; // 🔥 AÑADIDO
+    source?: 'POS' | 'WEB';
   }) {
     return this.salesService.createSale(body);
   }

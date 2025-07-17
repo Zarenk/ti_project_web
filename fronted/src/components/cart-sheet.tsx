@@ -18,7 +18,7 @@ import { useCart } from "@/context/cart-context"
 import { useEffect, useState } from "react"
 
 export default function CartSheet() {
-  const { items, removeItem } = useCart()
+  const { items, removeItem, clear } = useCart()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -97,6 +97,14 @@ export default function CartSheet() {
           </div>
         )}
         <SheetFooter>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={clear}
+            disabled={!mounted || items.length === 0}
+          >
+            Limpiar carrito de compras
+          </Button>
           <Button className="w-full" disabled={!mounted || items.length === 0} asChild>
             <Link href="/cart">Pagar</Link>
           </Button>
