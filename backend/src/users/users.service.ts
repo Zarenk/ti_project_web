@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -26,6 +26,10 @@ export class UsersService {
   }
 
   async register(data: { email: string; username: string; password: string; role: string }) {
+    const existing = await this.prismaService.user.findUnique({ where: { email: data.email } });
+    if (existing) {
+      throw new BadRequestException('El correo ya está registrado');
+    }
     const hashedPassword = await bcrypt.hash(data.password, 10);
     return this.prismaService.user.create({
       data: {

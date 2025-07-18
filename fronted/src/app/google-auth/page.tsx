@@ -9,6 +9,7 @@ import { createClient, registerUser } from '../register/register.api';
 export default function GoogleAuthPage() {
   const router = useRouter();
   const [image, setImage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function processLogin() {
@@ -24,24 +25,31 @@ export default function GoogleAuthPage() {
       try {
         const user = await registerUser(email, name, email);
         await createClient({ name, userId: user.id, image: img });
-      } catch (_) {
-        // ignore errors on registration/creation (user may exist)
+      } catch (err: any) {
+        if (err.message?.includes('registrado')) {
+          setError('El correo ya está registrado');
+        }
       }
       try {
         await loginUser(email, email);
         const data = getUserDataFromToken();
         if (data) {
-          try { await createClient({ name, userId: data.userId, image: img }); } catch (_) {}
+          try {
+            await createClient({ name, userId: data.userId, image: img });
+          } catch (_) {}
         }
-      } catch (_) {}
-      router.push('/dashboard');
+        router.push('/store');
+        return;
+      } catch (err: any) {
+        setError(err.message || 'No se pudo iniciar sesión');
+      }
     }
     processLogin();
   }, [router]);
 
   return (
     <div className="p-4 text-center">
-      <p>Procesando autenticación...</p>
+      {error ? <p className="text-red-500">{error}</p> : <p>Procesando autenticación...</p>}
       {image && (
         <img
           src={image}
