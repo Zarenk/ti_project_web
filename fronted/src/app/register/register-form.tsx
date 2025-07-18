@@ -1,5 +1,4 @@
 'use client';
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -10,26 +9,45 @@ import Link from 'next/link';
 import { registerUser, createClient } from './register.api';
 import { loginUser } from '../dashboard/users/users.api';
 import { signIn } from 'next-auth/react';
-import { getUserDataFromToken } from '@/lib/auth';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+const registerSchema = z
+  .object({
+    fullName: z
+      .string({ required_error: 'El nombre es obligatorio' })
+      .min(1, 'El nombre es obligatorio'),
+    email: z
+      .string({ required_error: 'El correo es obligatorio' })
+      .email('Correo electrónico inválido'),
+    password: z
+      .string({ required_error: 'La contraseña es obligatoria' })
+      .min(6, 'La contraseña debe tener al menos 6 caracteres'),
+    confirmPassword: z
+      .string({ required_error: 'Confirma tu contraseña' })
+      .min(6, 'Confirma tu contraseña'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Las contraseñas no coinciden',
+  });
+
+type RegisterType = z.infer<typeof registerSchema>;
 
 export default function RegisterForm() {
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const router = useRouter();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<RegisterType>({ resolver: zodResolver(registerSchema) });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password !== confirmPassword) {
-      toast.error('Las contraseñas no coinciden');
-      return;
-    }
-
+  const onSubmit = async (data: RegisterType) => {
     try {
-      const user = await registerUser(email, fullName, password);
-      await createClient({ name: fullName, userId: user.id });
-      await loginUser(email, password);
+      const user = await registerUser(data.email, data.fullName, data.password);
+      await createClient({ name: data.fullName, userId: user.id });
+      await loginUser(data.email, data.password);
       toast.success('Registro exitoso');
       router.push('/dashboard');
     } catch (error: any) {
@@ -56,22 +74,26 @@ export default function RegisterForm() {
             <h1 className="text-2xl font-bold text-slate-800 mb-2">Crear cuenta</h1>
             <p className="text-slate-600">Completa tus datos para registrarte</p>
           </div>
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-2">
               <Label htmlFor="fullName" className="text-slate-700 font-medium">Nombre completo</Label>
-              <Input id="fullName" type="text" placeholder="Ingresa tu nombre completo" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
+              <Input id="fullName" type="text" placeholder="Ingresa tu nombre completo" {...register('fullName')} className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
+              {errors.fullName && <p className="text-red-500 text-sm">{errors.fullName.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="email" className="text-slate-700 font-medium">Correo electrónico</Label>
-              <Input id="email" type="email" placeholder="tu@ejemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
+              <Input id="email" type="email" placeholder="tu@ejemplo.com" {...register('email')} className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
+              {errors.email && <p className="text-red-500 text-sm">{errors.email.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password" className="text-slate-700 font-medium">Contraseña</Label>
-              <Input id="password" type="password" placeholder="Crea una contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
+              <Input id="password" type="password" placeholder="Crea una contraseña" {...register('password')} className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
+              {errors.password && <p className="text-red-500 text-sm">{errors.password.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword" className="text-slate-700 font-medium">Confirmar contraseña</Label>
-              <Input id="confirmPassword" type="password" placeholder="Confirma tu contraseña" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
+              <Input id="confirmPassword" type="password" placeholder="Confirma tu contraseña" {...register('confirmPassword')} className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
+              {errors.confirmPassword && <p className="text-red-500 text-sm">{errors.confirmPassword.message}</p>}
             </div>
             <Button type="submit" className="w-full h-12 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200">Registrarse</Button>
           </form>
@@ -81,12 +103,28 @@ export default function RegisterForm() {
               <span className="bg-white px-4 text-sm text-slate-500 font-medium">o regístrate con</span>
             </div>
           </div>
-          <Button variant="outline" onClick={handleGoogle} className="w-full h-12 border-2 border-slate-200 hover:border-blue-300 hover:bg-blue-50 rounded-lg font-semibold text-slate-700 transition-all duration-200 bg-transparent">
+          <Button
+            variant="outline"
+            onClick={handleGoogle}
+            className="w-full h-12 border-2 border-slate-200 hover:border-blue-300 hover:bg-blue-50 rounded-lg font-semibold text-slate-700 transition-all duration-200 bg-transparent"
+          >
             <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.971 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              <path
+                fill="#4285F4"
+                d="M23.494 12.275c0-.855-.073-1.677-.21-2.47H12v4.675h6.373a6.681 6.681 0 0 1-2.886 4.382v3.638h4.666c2.734-2.515 4.336-6.214 4.336-10.225z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 24c3.464 0 6.372-1.14 8.497-3.085l-4.567-3.611a9.958 9.958 0 0 1-3.93.882c-3.846 0-7.107-2.59-8.27-6.044H.606v3.792C2.425 20.897 6.843 24 12 24z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M3.733 8.169a9.993 9.993 0 0 1 0-4.337L.606 1.848A11.99 11.99 0 0 0 0 12c0 1.841.315 3.612.892 5.213l3.32-2.514a9.952 9.952 0 0 1-.479-3.529z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 4.594c1.415 0 2.707.488 3.728 1.39l2.797-2.797C16.728 1.067 14.48 0 12 0 7.637 0 3.915 2.362 2.289 5.883l3.35 2.58C7.207 6.389 9.425 4.594 12 4.594z"
+              />
             </svg>
             Continuar con Google
           </Button>

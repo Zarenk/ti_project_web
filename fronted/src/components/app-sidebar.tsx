@@ -140,7 +140,7 @@ const data = {
         },
         {
           title: "Nuevo Usuario",
-          url: "#",
+          url: "/dashboard/users/new",
         },
         {
           title: "Ver Usuarios",

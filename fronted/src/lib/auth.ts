@@ -6,10 +6,11 @@ import { jwtDecode } from "jwt-decode";
  */
 interface UserTokenPayload {
     sub: number;
-    username: string; // 👈 asegurarte que tu token tenga este campo (nombre del usuario)
-  }
-  
-  export function getUserDataFromToken(): { userId: number; name: string } | null {
+    username: string;
+    role?: string;
+}
+
+export function getUserDataFromToken(): { userId: number; name: string; role?: string } | null {
     if (typeof window === "undefined") return null;
   
     const token = localStorage.getItem("token");
@@ -20,6 +21,7 @@ interface UserTokenPayload {
       return {
         userId: decoded.sub,
         name: decoded.username,
+        role: decoded.role,
       };
     } catch (error) {
       console.error("Error decoding token:", error);
