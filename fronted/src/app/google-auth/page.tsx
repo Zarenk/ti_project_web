@@ -31,8 +31,11 @@ export default function GoogleAuthPage() {
         setSuccess('Registro completado con éxito');
         await new Promise((r) => setTimeout(r, 1000));
       } catch (err: any) {
+        setSuccess(null);
         if (err.message?.includes('registrado')) {
           setError('El correo ya está registrado');
+        } else {
+          setError(err.message || 'Error al registrar usuario');
         }
       }
       try {
@@ -49,7 +52,11 @@ export default function GoogleAuthPage() {
         router.push('/store');
         return;
       } catch (err: any) {
+        setSuccess(null);
         setError(err.message || 'No se pudo iniciar sesión');
+        await new Promise((r) => setTimeout(r, 1500));
+        router.push('/register');
+        return;
       }
     }
     processLogin();
