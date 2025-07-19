@@ -21,6 +21,20 @@ export class ClientController {
     return this.clientService.create(clientData);
   }
 
+  // Registro público sin validaciones de documento
+  @Post('self-register')
+  @ApiOperation({ summary: 'Self register client' })
+  selfRegister(@Body() createClientDto: CreateClientDto) {
+    const clientData = {
+      name: createClientDto.name,
+      type: createClientDto.type,
+      typeNumber: createClientDto.typeNumber,
+      userId: createClientDto.userId,
+      image: createClientDto.image,
+    };
+    return this.clientService.selfRegister(clientData);
+  }
+
   @Post('verify-or-create-products')
   async verifyOrCreateProducts(
     @Body() clients: { name: string; type?: string; typerNumber?: string; userId: number }[],

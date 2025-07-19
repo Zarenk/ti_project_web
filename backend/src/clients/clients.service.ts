@@ -79,6 +79,27 @@ export class ClientService {
     return createdClients;
   }
 
+  /**
+   * Registro rápido de clientes desde el formulario público.
+   * No realiza comprobaciones de número o tipo de documento.
+   */
+  async selfRegister(data: { name: string; userId: number; type?: string; typeNumber?: string; image?: string }) {
+    try {
+      return await this.prismaService.client.create({
+        data: {
+          name: data.name,
+          type: data.type || '',
+          typeNumber: data.typeNumber || '',
+          userId: data.userId,
+          image: data.image,
+        },
+      });
+    } catch (error) {
+      console.error('Error en el backend:', error);
+      throw new InternalServerErrorException('Error al registrar el cliente');
+    }
+  }
+
   // client.service.ts
   async checkIfExists(typeNumber: string): Promise<boolean> {
     const client = await this.prismaService.client.findUnique({

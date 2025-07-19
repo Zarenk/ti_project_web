@@ -16,7 +16,7 @@ export async function registerUser(email: string, username: string, password: st
 }
 
 export async function createClient(data: { name: string; userId?: number; image?: string; type?: string; typeNumber?: string }) {
-  const res = await fetch(`${BACKEND_URL}/api/clients`, {
+  const res = await fetch(`${BACKEND_URL}/api/clients/self-register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
