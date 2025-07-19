@@ -84,17 +84,24 @@ export class ClientService {
    * No realiza comprobaciones de número o tipo de documento.
    */
   async selfRegister(data: { name: string; userId: number; type?: string | null; typeNumber?: string | null; image?: string | null }) {
+    // Si el usuario ya tiene cliente simplemente devuélvelo
+    const existing = await this.prismaService.client.findUnique({ where: { userId: data.userId } });
+    if (existing) return existing;
+    
     try {
       return await this.prismaService.client.create({
         data: {
           name: data.name,
-          type: data.type || '',
-          typeNumber: data.typeNumber || '',
+          type: data.type ?? null,
+          typeNumber: data.typeNumber ?? null,
           userId: data.userId,
-          image: data.image,
+          image: data.image ?? null,
         },
       });
     } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Ya existe un cliente con esos datos');
+      }
       console.error('Error en el backend:', error);
       throw new InternalServerErrorException('Error al registrar el cliente');
     }

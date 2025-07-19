@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
-import { registerUser, createClient } from './register.api';
+import { registerUser } from './register.api';
 import { loginUser } from '../dashboard/users/users.api';
 import { signIn } from 'next-auth/react';
 import { useForm } from 'react-hook-form';
@@ -46,8 +46,7 @@ export default function RegisterForm() {
 
   const onSubmit = async (data: RegisterType) => {
     try {
-      const user = await registerUser(data.email, data.fullName, data.password);
-      await createClient({ name: data.fullName, userId: user.id });
+      await registerUser(data.email, data.fullName, data.password, data.fullName);
       await loginUser(data.email, data.password);
       toast.success('Registro exitoso');
       router.push('/dashboard');

@@ -22,6 +22,23 @@ export class UsersController {
     return this.usersService.register(body);
   }
 
+  // Registro público de usuarios desde la web
+  @Post('self-register')
+  async publicRegister(
+    @Body()
+    body: {
+      email: string;
+      username: string;
+      password: string;
+      name: string;
+      image?: string | null;
+      type?: string | null;
+      typeNumber?: string | null;
+    },
+  ) {
+    return this.usersService.publicRegister(body);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('profile')
   getProfile(@Request() req) {

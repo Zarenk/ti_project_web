@@ -38,7 +38,7 @@ export class UsersService {
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
-    
+
     try {
       return await this.prismaService.user.create({
         data: {
@@ -55,6 +55,37 @@ export class UsersService {
       console.error('Error en el backend:', error);
       throw new InternalServerErrorException('Error al registrar el usuario');
     }
+  }
+
+  async publicRegister(data: { email: string; username: string; password: string; name: string; image?: string | null; type?: string | null; typeNumber?: string | null }) {
+    const user = await this.register({
+      email: data.email,
+      username: data.username,
+      password: data.password,
+      role: 'CLIENT',
+    });
+
+    try {
+      await this.prismaService.client.create({
+        data: {
+          name: data.name,
+          userId: user.id,
+          image: data.image ?? null,
+          type: data.type ?? null,
+          typeNumber: data.typeNumber ?? null,
+        },
+      });
+    } catch (error) {
+      // Si falla la creación del cliente, eliminamos el usuario recién creado
+      await this.prismaService.user.delete({ where: { id: user.id } });
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Ya existe un cliente con esos datos');
+      }
+      console.error('Error en el backend:', error);
+      throw new InternalServerErrorException('Error al registrar el usuario');
+    }
+
+    return user;
   }
 
   async findOne(userId: number) {

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { getSession } from 'next-auth/react';
 import { loginUser } from '../dashboard/users/users.api';
 import { getUserDataFromToken } from '@/lib/auth';
-import { createClient, registerUser } from '../register/register.api';
+import { registerUser } from '../register/register.api';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -26,8 +26,7 @@ export default function GoogleAuthPage() {
       const img = session.user.image || undefined;
       setImage(session.user.image || null);
       try {
-        const user = await registerUser(email, name, email);
-        await createClient({ name, userId: user.id, image: img });
+        await registerUser(email, name, email, name);
         setSuccess('Registro completado con éxito');
         await new Promise((r) => setTimeout(r, 1000));
       } catch (err: any) {
@@ -42,9 +41,6 @@ export default function GoogleAuthPage() {
         await loginUser(email, email);
         const data = getUserDataFromToken();
         if (data) {
-          try {
-            await createClient({ name, userId: data.userId, image: img });
-          } catch (_) {}
         }
         setError(null);
         setSuccess('Autenticación exitosa');
