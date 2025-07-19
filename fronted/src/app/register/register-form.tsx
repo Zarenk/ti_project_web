@@ -41,6 +41,7 @@ export default function RegisterForm() {
     register,
     handleSubmit,
     formState: { errors },
+    setError,
   } = useForm<RegisterType>({ resolver: zodResolver(registerSchema) });
 
   const onSubmit = async (data: RegisterType) => {
@@ -51,7 +52,11 @@ export default function RegisterForm() {
       toast.success('Registro exitoso');
       router.push('/dashboard');
     } catch (error: any) {
-      toast.error(error.message || 'Error al registrarse');
+      if (error.message && error.message.toLowerCase().includes('correo')) {
+        setError('email', { type: 'manual', message: error.message });
+      } else {
+        toast.error(error.message || 'Error al registrarse');
+      }
     }
   };
 
