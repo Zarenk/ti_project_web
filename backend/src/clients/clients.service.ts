@@ -83,7 +83,7 @@ export class ClientService {
    * Registro rápido de clientes desde el formulario público.
    * No realiza comprobaciones de número o tipo de documento.
    */
-  async selfRegister(data: { name: string; userId: number; type?: string; typeNumber?: string; image?: string }) {
+  async selfRegister(data: { name: string; userId: number; type?: string | null; typeNumber?: string | null; image?: string | null }) {
     try {
       return await this.prismaService.client.create({
         data: {

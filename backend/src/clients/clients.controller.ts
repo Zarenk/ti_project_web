@@ -27,10 +27,10 @@ export class ClientController {
   selfRegister(@Body() createClientDto: CreateClientDto) {
     const clientData = {
       name: createClientDto.name,
-      type: createClientDto.type,
-      typeNumber: createClientDto.typeNumber,
+      type: createClientDto.type ?? undefined,
+      typeNumber: createClientDto.typeNumber ?? undefined,
       userId: createClientDto.userId,
-      image: createClientDto.image,
+      image: createClientDto.image ?? undefined,
     };
     return this.clientService.selfRegister(clientData);
   }
