@@ -7,7 +7,7 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { createSale } from "@/app/dashboard/sales/sales.api"
 import {
-  createClient,
+  selfRegisterClient,
   checkClientExists,
   getClients,
 } from "@/app/dashboard/clients/clients.api"
@@ -303,7 +303,12 @@ export default function Component() {
                 const existing = clients.find((c: any) => c.typeNumber === typeNumber);
                 clientId = existing?.id;
               } else {
-                const created = await createClient({ name, type, typeNumber, userId: userData?.userId });
+                const created = await selfRegisterClient({
+                  name,
+                  type,
+                  typeNumber,
+                  userId: userIdToSend,
+                });
                 clientId = created?.id;
               }
             } catch (err) {

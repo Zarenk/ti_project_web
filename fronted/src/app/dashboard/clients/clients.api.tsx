@@ -45,6 +45,31 @@ export async function createClient(productData: any){
     return data;
 }
 
+// Registro de cliente vinculado a un usuario existente. Si el usuario ya tiene
+// cliente simplemente se devuelve el registrado.
+export async function selfRegisterClient(data: {
+  name: string
+  userId: number
+  type?: string
+  typeNumber?: string
+  image?: string
+}) {
+  const res = await fetch(`${BACKEND_URL}/api/clients/self-register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!res.ok) {
+    const errorData = await res.json()
+    throw { response: { status: res.status, data: errorData } }
+  }
+
+  return res.json()
+}
+
 export async function verifyOrCreateClients(clients: { name: string; type: string; typeNumber: string; idUser: number }[]){
   try{
     const res = await fetch(`${BACKEND_URL}/api/clients/verify-or-create-clients`,{
