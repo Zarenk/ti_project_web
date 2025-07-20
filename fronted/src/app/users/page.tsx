@@ -15,6 +15,7 @@ import Link from "next/link"
 import { getUserProfile } from "../dashboard/users/users.api"
 import { getClients, updateClient } from "../dashboard/clients/clients.api"
 import { getSales } from "../dashboard/sales/sales.api"
+import Navbar from "@/components/navbar"
 
 export default function UserPanel() {
   const [isEditing, setIsEditing] = useState(false)
@@ -106,6 +107,7 @@ export default function UserPanel() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-white">
+      <Navbar />
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
         <div className="mb-8">
@@ -117,8 +119,8 @@ export default function UserPanel() {
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-6">
             {/* Mis Datos */}
-            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg">
+            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm p-0">
+              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg p-4">
                 <CardTitle className="flex items-center gap-2">
                   <User className="h-5 w-5" />
                   Mis Datos
@@ -236,8 +238,8 @@ export default function UserPanel() {
             </Card>
 
             {/* Historial de Pedidos */}
-            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-              <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-t-lg">
+            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm p-0">
+              <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-t-lg p-4">
                 <CardTitle className="flex items-center gap-2">
                   <Package className="h-5 w-5" />
                   Historial de Pedidos
@@ -289,8 +291,8 @@ export default function UserPanel() {
           {/* Right Column */}
           <div className="space-y-6">
             {/* Imagen de Perfil */}
-            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg">
+            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm p-0">
+              <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg p-4">
                 <CardTitle className="flex items-center gap-2">
                   <Camera className="h-5 w-5" />
                   Imagen de Perfil
@@ -316,8 +318,8 @@ export default function UserPanel() {
             </Card>
 
             {/* Otros Datos */}
-            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-              <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-t-lg">
+            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm p-0">
+              <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-t-lg p-4">
                 <CardTitle className="flex items-center gap-2">
                   <Calendar className="h-5 w-5" />
                   Otros Datos

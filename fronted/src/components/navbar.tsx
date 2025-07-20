@@ -2,16 +2,25 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { ModeToggle } from "@/components/mode-toggle"
 import CartSheet from "@/components/cart-sheet"
 import TopBanner from "./top-banner"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
+import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 
 export default function Navbar() {
   const [open, setOpen] = useState(false)
   const closeTimer = useRef<NodeJS.Timeout | null>(null)
+  const [userName, setUserName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isTokenValid()) {
+      const data = getUserDataFromToken()
+      setUserName(data?.name ?? null)
+    }
+  }, [])
 
   return (
     <>
@@ -26,10 +35,36 @@ export default function Navbar() {
             <Link href="/store" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Productos
             </Link>
-            <Popover open={open} onOpenChange={setOpen}>
-              <PopoverTrigger asChild>
-                <Link
-                  href="/login"
+            {userName ? (
+              <Link
+                href="/users"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                Bienvenido, {userName}
+              </Link>
+            ) : (
+              <Popover open={open} onOpenChange={setOpen}>
+                <PopoverTrigger asChild>
+                  <Link
+                    href="/login"
+                    onMouseEnter={() => {
+                      if (closeTimer.current) {
+                        clearTimeout(closeTimer.current)
+                      }
+                      setOpen(true)
+                    }}
+                    onMouseLeave={() => {
+                      if (closeTimer.current) {
+                        clearTimeout(closeTimer.current)
+                      }
+                      closeTimer.current = setTimeout(() => setOpen(false), 150)
+                    }}
+                    className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    Iniciar Sesión
+                  </Link>
+                </PopoverTrigger>
+                <PopoverContent
                   onMouseEnter={() => {
                     if (closeTimer.current) {
                       clearTimeout(closeTimer.current)
@@ -42,42 +77,25 @@ export default function Navbar() {
                     }
                     closeTimer.current = setTimeout(() => setOpen(false), 150)
                   }}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                  className="w-64 space-y-2 text-center transition-opacity duration-300"
                 >
-                  Iniciar Sesión
-                </Link>
-              </PopoverTrigger>
-              <PopoverContent
-                onMouseEnter={() => {
-                  if (closeTimer.current) {
-                    clearTimeout(closeTimer.current)
-                  }
-                  setOpen(true)
-                }}
-                onMouseLeave={() => {
-                  if (closeTimer.current) {
-                    clearTimeout(closeTimer.current)
-                  }
-                  closeTimer.current = setTimeout(() => setOpen(false), 150)
-                }}
-                className="w-64 space-y-2 text-center transition-opacity duration-300"
-              >
-                <p className="text-xs font-semibold">
-                  Regístrate para acceder a beneficios y descuentos
-                </p>
-                <Link href="/login" className="block">
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                    Iniciar sesión
-                  </Button>
-                </Link>
-                <p className="text-xs font-semibold">
-                  Eres Nuevo Cliente?
-                  <Link href="/register" className="underline text-blue-600 font-bold">
-                    Regístrate
+                  <p className="text-xs font-semibold">
+                    Regístrate para acceder a beneficios y descuentos
+                  </p>
+                  <Link href="/login" className="block">
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                      Iniciar sesión
+                    </Button>  
                   </Link>
-                </p>
-              </PopoverContent>
-            </Popover>
+                  <p className="text-xs font-semibold">
+                    Eres Nuevo Cliente?
+                    <Link href="/register" className="underline text-blue-600 font-bold">
+                      Regístrate
+                    </Link>
+                  </p>
+                </PopoverContent>
+              </Popover>
+            )}
             <CartSheet />
             <ModeToggle />
           </div>
