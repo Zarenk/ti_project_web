@@ -9,17 +9,20 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { signIn } from 'next-auth/react';
+import { useAuth } from '@/context/auth-context';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const router = useRouter();
+  const { refreshUser } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
       await loginUser(email, password);
+      refreshUser();
       toast.success('Inicio de sesión exitoso');
 
       router.push('/users'); // Redirige al panel de usuario después del login

@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner";
 import { CartProvider } from "@/context/cart-context";
 import ConditionalFooter from "@/components/conditional-footer";
+import { AuthProvider } from "@/context/auth-context";
 
 export const dynamic = "force-dynamic";
 
@@ -39,11 +40,13 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
         >
-          <CartProvider>
-              <Toaster position="top-right" richColors /> {/* Configuración de Sonner */}
-              {children}
-              <ConditionalFooter />
-          </CartProvider>
+          <AuthProvider>
+            <CartProvider>
+                <Toaster position="top-right" richColors /> {/* Configuración de Sonner */}
+                {children}
+                <ConditionalFooter />
+            </CartProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

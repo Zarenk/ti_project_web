@@ -7,9 +7,11 @@ import { getUserDataFromToken } from '@/lib/auth';
 import { registerUser } from '../register/register.api';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/context/auth-context';
 
 export default function GoogleAuthPage() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -39,6 +41,7 @@ export default function GoogleAuthPage() {
       }
       try {
         await loginUser(email, email);
+        refreshUser();
         const data = getUserDataFromToken();
         if (data) {
         }

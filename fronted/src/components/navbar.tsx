@@ -3,24 +3,30 @@
 import Image from "next/image"
 import Link from "next/link"
 import { useState, useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useCart } from "@/context/cart-context"
 import { ModeToggle } from "@/components/mode-toggle"
 import CartSheet from "@/components/cart-sheet"
 import TopBanner from "./top-banner"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
-import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
+import { useAuth } from "@/context/auth-context"
 
 export default function Navbar() {
   const [open, setOpen] = useState(false)
   const closeTimer = useRef<NodeJS.Timeout | null>(null)
-  const [userName, setUserName] = useState<string | null>(null)
+  const { userName, refreshUser } = useAuth()
+  const router = useRouter()
+  const { items } = useCart()
 
   useEffect(() => {
-    if (isTokenValid()) {
-      const data = getUserDataFromToken()
-      setUserName(data?.name ?? null)
-    }
-  }, [])
+    refreshUser()
+  }, [refreshUser])
+
+  const handleLogout = () => {
+    localStorage.removeItem("token")
+    router.push("/login")
+  }
 
   return (
     <>
@@ -36,12 +42,49 @@ export default function Navbar() {
               Productos
             </Link>
             {userName ? (
-              <Link
-                href="/users"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground"
-              >
-                Bienvenido, {userName}
-              </Link>
+              <Popover open={open} onOpenChange={setOpen}>
+                <PopoverTrigger asChild>
+                  <Link
+                    href="/users"
+                    onMouseEnter={() => {
+                      if (closeTimer.current) {
+                        clearTimeout(closeTimer.current)
+                      }
+                      setOpen(true)
+                    }}
+                    onMouseLeave={() => {
+                      if (closeTimer.current) {
+                        clearTimeout(closeTimer.current)
+                      }
+                      closeTimer.current = setTimeout(() => setOpen(false), 150)
+                    }}
+                    className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    Bienvenido, {userName}
+                  </Link>
+                </PopoverTrigger>
+                <PopoverContent
+                  onMouseEnter={() => {
+                    if (closeTimer.current) {
+                      clearTimeout(closeTimer.current)
+                    }
+                    setOpen(true)
+                  }}
+                  onMouseLeave={() => {
+                    if (closeTimer.current) {
+                      clearTimeout(closeTimer.current)
+                    }
+                    closeTimer.current = setTimeout(() => setOpen(false), 150)
+                  }}
+                  className="w-48 space-y-2 text-center transition-opacity duration-300"
+                >
+                  <p className="text-sm font-medium">{userName}</p>
+                  <p className="text-xs">Orden activa: {items.length > 0 ? 'Sí' : 'No'}</p>
+                  <Button onClick={handleLogout} className="w-full bg-red-600 hover:bg-red-700 text-white">
+                    Cerrar Sesión
+                  </Button>
+                </PopoverContent>
+              </Popover>
             ) : (
               <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger asChild>
