@@ -15,7 +15,7 @@ import { useAuth } from "@/context/auth-context"
 export default function Navbar() {
   const [open, setOpen] = useState(false)
   const closeTimer = useRef<NodeJS.Timeout | null>(null)
-  const { userName, refreshUser } = useAuth()
+  const { userName, refreshUser, logout } = useAuth()
   const router = useRouter()
   const { items } = useCart()
 
@@ -24,7 +24,7 @@ export default function Navbar() {
   }, [refreshUser])
 
   const handleLogout = () => {
-    localStorage.removeItem("token")
+    logout()
     router.push("/login")
   }
 

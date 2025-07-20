@@ -21,11 +21,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       setUserName(null)
     }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("authchange"))
+    }
   }
 
   const logout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("token")
+      window.dispatchEvent(new Event("authchange"))
     }
     setUserName(null)
   }

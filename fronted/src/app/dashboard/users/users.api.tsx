@@ -33,7 +33,7 @@ export async function getUserProfile() {
   }
 
   try {
-    const response = await fetch(`${BACKEND_URL}/users/profile`, {
+    const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

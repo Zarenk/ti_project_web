@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { registerUser } from './register.api';
 import { loginUser } from '../dashboard/users/users.api';
+import { useAuth } from '@/context/auth-context';
 import { signIn } from 'next-auth/react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -37,6 +38,7 @@ type RegisterType = z.infer<typeof registerSchema>;
 
 export default function RegisterForm() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const {
     register,
     handleSubmit,
@@ -48,6 +50,7 @@ export default function RegisterForm() {
     try {
       await registerUser(data.email, data.fullName, data.password, data.fullName);
       await loginUser(data.email, data.password);
+      refreshUser();
       toast.success('Registro exitoso');
       router.push('/users');
     } catch (error: any) {

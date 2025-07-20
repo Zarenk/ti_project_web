@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, ReactNode, useEffect } from "react"
+import { getUserDataFromToken } from "@/lib/auth"
 
 export type CartItem = {
   id: number
@@ -22,18 +23,45 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
+  const [cartKey, setCartKey] = useState("cart-guest")
 
+    const getKey = () => {
+      const data = getUserDataFromToken()
+      return data ? `cart-${data.userId}` : "cart-guest"
+    }
+
+    const loadCart = (key: string) => {
+      if (typeof window === "undefined") return
+      try {
+        const stored = localStorage.getItem(key)
+        setItems(stored ? (JSON.parse(stored) as CartItem[]) : [])
+      } catch {
+        // ignore read errors
+        setItems([])
+      }
+    }
+  
   useEffect(() => {
     if (typeof window === "undefined") return
-    try {
-      const stored = localStorage.getItem("cart")
-      if (stored) {
-        setItems(JSON.parse(stored) as CartItem[])
-      }
-    } catch {
-      // ignore read errors
+    const key = getKey()
+    setCartKey(key)
+    loadCart(key)
+    const handleAuth = () => {
+      const newKey = getKey()
+      setCartKey(newKey)
+      loadCart(newKey)
     }
-  }, [])
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "token") handleAuth()
+    }
+    window.addEventListener("authchange", handleAuth)
+    window.addEventListener("storage", handleStorage)
+    return () => {
+      window.removeEventListener("authchange", handleAuth)
+      window.removeEventListener("storage", handleStorage)
+    }
+  }, [])  
+
   const subtotal = items.reduce(
     (acc, item) => acc + item.price * item.quantity,
     0,
@@ -68,11 +96,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
-      localStorage.setItem("cart", JSON.stringify(items))
+      localStorage.setItem(cartKey, JSON.stringify(items))
     } catch {
       // ignore write errors
     }
-  }, [items])
+  }, [items, cartKey])
 
   return (
     <CartContext.Provider

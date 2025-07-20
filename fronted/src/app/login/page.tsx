@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import LoginForm from './login-form';
+import Link from 'next/link';
 
 export default function LoginPage() {
   return (
@@ -14,13 +15,16 @@ export default function LoginPage() {
         <CardContent>
           <LoginForm />
         </CardContent>
-        <CardFooter className="justify-center">
+        <CardFooter className="justify-center flex flex-col gap-2">
           <p className="text-sm">
             ¿No tienes una cuenta?{' '}
-            <a href="/register" className="font-semibold underline">
+            <Link href="/register" className="font-semibold underline">
               Regístrate aquí
-            </a>
+            </Link>
           </p>
+          <Link href="/" className="text-sm font-semibold underline">
+            Volver al inicio
+          </Link>
         </CardFooter>
       </Card>
     </div>
