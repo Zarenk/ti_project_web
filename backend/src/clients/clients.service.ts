@@ -137,29 +137,32 @@ export class ClientService {
   }
 
   async update(id: number, updateClientDto: UpdateClientDto) {
-    try{
-      const productFound = await this.prismaService.product.update({
-        where: {id: Number(id)},  
-        data: updateClientDto
-      })
-  
-      if(!productFound){
-        throw new NotFoundException(`Client with id ${id} not found`)
-      }
-  
-      return productFound;
-    } catch (error){
+    try {
+      const updatedClient = await this.prismaService.client.update({
+        where: { id: Number(id) },
+        data: updateClientDto,
+      });
+
+      return updatedClient;
+    } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
+        error.code === 'P2002'
       ) {
         throw new ConflictException(
           `El cliente con el nombre "${updateClientDto.name}" ya existe.`
         );
       }
-      console.error("Error en el backend:", error);
-      throw error; // Lanza otros errores no manejados
-    }    
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`Client with id ${id} not found`);
+      }
+
+      console.error('Error en el backend:', error);
+      throw new InternalServerErrorException('Error al actualizar el cliente');
+    }  
   }
 
   async updateMany(clients: UpdateClientDto[]) {
