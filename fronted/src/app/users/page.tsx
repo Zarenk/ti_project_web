@@ -79,7 +79,7 @@ export default function UserPanel() {
     email: "",
     telefono: "",
     direccion: "",
-    tipoDocumento: "",
+    tipoDocumento: "DNI",
     numeroDocumento: "",
   })
   const [orderHistory, setOrderHistory] = useState<any[]>([])
@@ -126,7 +126,7 @@ export default function UserPanel() {
             email: profile.email || '',
             telefono: '',
             direccion: '',
-            tipoDocumento: '',
+            tipoDocumento: 'DNI',
             numeroDocumento: '',
           })
         }

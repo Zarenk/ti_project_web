@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useCallback, useMemo } from "react"
 import { useCart } from "@/context/cart-context"
 import { CreditCard, Building2, Smartphone, Check, ShoppingCart } from "lucide-react"
 import Image from "next/image"
@@ -64,11 +64,10 @@ export default function Component() {
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    const { id, value } = e.target
-    let newValue = value
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const { id, value } = e.target
+      let newValue = value
 
     switch (id) {
       case "firstName":
@@ -106,10 +105,16 @@ export default function Component() {
     }
 
     setFormData((prev) => ({ ...prev, [id]: newValue }))
-  }
+  },
+  [])
 
   const router = useRouter()
   const { items: orderItems, clear } = useCart()
+
+  const orderReference = useMemo(
+    () => Math.random().toString(36).substr(2, 9).toUpperCase(),
+    [],
+  )
 
   const handlePurchase = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -292,9 +297,12 @@ export default function Component() {
     }
   }
 
-  const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const subtotal = useMemo(
+    () => orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    [orderItems],
+  )
   const shipping = 15.0
-  const total = subtotal + shipping
+  const total = useMemo(() => subtotal + shipping, [subtotal])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50">
