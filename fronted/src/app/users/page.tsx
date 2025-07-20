@@ -28,16 +28,6 @@ export default function UserPanel() {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [registrationDate, setRegistrationDate] = useState<string>('')
   const [lastAccess, setLastAccess] = useState<string>('')
-  const [userData, setUserData] = useState({
-    nombre: "",
-    email: "",
-    telefono: "",
-    direccion: "",
-    tipoDocumento: "",
-    numeroDocumento: "",
-  })
-
-  const [orderHistory, setOrderHistory] = useState<any[]>([])
 
   const documentTypes = ["DNI", "CARNET DE EXTRANJERIA", "OTRO"] as const
 
@@ -53,18 +43,31 @@ export default function UserPanel() {
     direccion: z
       .string()
       .max(200, "La dirección no puede tener más de 200 caracteres"),
-    tipoDocumento: z.enum(documentTypes, {
-      required_error: "Selecciona un tipo de documento",
-    }),
-    numeroDocumento: z.string().refine((val, ctx) => {
-      if (ctx.parent.tipoDocumento === "DNI") {
-        return /^\d{8}$/.test(val)
-      }
-      return /^\d{1,20}$/.test(val)
-    }, "Número de documento inválido"),
+    tipoDocumento: z
+      .union([z.enum(documentTypes), z.literal("")])
+      .refine((val) => val !== "", { message: "Selecciona un tipo de documento" }),
+    numeroDocumento: z.string().refine(
+      (val, ctx) => {
+        if (ctx.parent.tipoDocumento === "DNI") {
+          return /^\d{8}$/.test(val)
+        }
+        return /^\d{1,20}$/.test(val)
+      },
+      { message: "Número de documento inválido" }
+    ),
   })
 
   type UserFormType = z.infer<typeof userSchema>
+
+  const [userData, setUserData] = useState<UserFormType>({
+    nombre: "",
+    email: "",
+    telefono: "",
+    direccion: "",
+    tipoDocumento: "",
+    numeroDocumento: "",
+  })
+  const [orderHistory, setOrderHistory] = useState<any[]>([])
 
   const form = useForm<UserFormType>({
     resolver: zodResolver(userSchema),
