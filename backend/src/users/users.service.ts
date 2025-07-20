@@ -74,6 +74,7 @@ export class UsersService {
           image: data.image ?? null,
           type: data.type ?? null,
           typeNumber: data.typeNumber ?? null,
+          email: data.email,
         },
       });
     } catch (error) {
@@ -93,6 +94,13 @@ export class UsersService {
     return this.prismaService.user.findUnique({
       where: { id: userId },
       select: { id: true, username: true }, // Selecciona solo los campos necesarios
+    });
+  }
+
+  async getProfile(userId: number) {
+    return this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, email: true, role: true },
     });
   }
 

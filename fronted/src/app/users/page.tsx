@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Camera, Edit, Eye, Package, User, Calendar, Clock, Mail, Phone, MapPin } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -13,13 +13,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
 import { getUserProfile, updateUser } from "../dashboard/users/users.api"
-import { getClients, updateClient } from "../dashboard/clients/clients.api"
+import { getClients, updateClient, uploadClientImage } from "../dashboard/clients/clients.api"
 import { getSales } from "../dashboard/sales/sales.api"
 import Navbar from "@/components/navbar"
 
 export default function UserPanel() {
   const [isEditing, setIsEditing] = useState(false)
   const [clientId, setClientId] = useState<number | null>(null)
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [userData, setUserData] = useState({
     nombre: "",
     email: "",
@@ -39,16 +40,24 @@ export default function UserPanel() {
         const client = clients.find((c: any) => c.userId === profile.userId)
         if (client) {
           setClientId(client.id)
+          setImageUrl(client.image || null)
           setUserData({
             nombre: client.name || profile.username,
-            email: client.email || '',
+            email: client.email || profile.email || '',
             telefono: client.phone || '',
             direccion: client.adress || '',
             tipoDocumento: client.type || '',
             numeroDocumento: client.typeNumber || '',
           })
         } else {
-          setUserData((d) => ({ ...d, nombre: profile.username }))
+          setUserData({
+            nombre: profile.username,
+            email: profile.email || '',
+            telefono: '',
+            direccion: '',
+            tipoDocumento: '',
+            numeroDocumento: '',
+          })
         }
 
         const sales = await getSales()
@@ -105,9 +114,16 @@ export default function UserPanel() {
     }
   }
 
-  const handleImageChange = () => {
-    // Aquí iría la lógica para cambiar la imagen de perfil
-    console.log("Cambiar imagen de perfil")
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !clientId) return
+    try {
+      const { url } = await uploadClientImage(file)
+      await updateClient(String(clientId), { image: url })
+      setImageUrl(url)
+    } catch (error) {
+      console.error('Error uploading image', error)
+    }
   }
 
   return (
@@ -306,13 +322,29 @@ export default function UserPanel() {
               <CardContent className="p-6 text-center">
                 <div className="flex flex-col items-center space-y-4">
                   <Avatar className="h-32 w-32 border-4 border-blue-200 shadow-lg">
-                    <AvatarImage src="/placeholder.svg?height=128&width=128" alt="Foto de perfil" />
-                    <AvatarFallback className="bg-blue-100 text-blue-800 text-2xl font-bold">MG</AvatarFallback>
+                    <AvatarImage src={imageUrl || '/placeholder.svg?height=128&width=128'} alt="Foto de perfil" />
+                    <AvatarFallback className="bg-blue-100 text-blue-800 text-2xl font-bold">
+                      {userData.nombre
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .substring(0, 2)
+                        .toUpperCase()}
+                    </AvatarFallback>
                   </Avatar>
-                  <Button onClick={handleImageChange} className="bg-cyan-600 hover:bg-cyan-700 text-white w-full">
-                    <Camera className="h-4 w-4 mr-2" />
-                    Cambiar imagen de perfil
-                  </Button>
+                  <input
+                    id="profileImage"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                  <label htmlFor="profileImage" className="w-full">
+                    <Button type="button" className="bg-cyan-600 hover:bg-cyan-700 text-white w-full">
+                      <Camera className="h-4 w-4 mr-2" />
+                      Cambiar imagen de perfil
+                    </Button>
+                  </label>
                   <p className="text-sm text-gray-600">
                     Formatos permitidos: JPG, PNG, GIF
                     <br />

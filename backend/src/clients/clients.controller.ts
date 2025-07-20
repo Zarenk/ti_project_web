@@ -1,5 +1,8 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException } from '@nestjs/common';
-
+import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UseInterceptors, UploadedFile, Req } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { Request } from 'express';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ClientService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
@@ -67,6 +70,32 @@ export class ClientController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateClientDto: UpdateClientDto) {
     return this.clientService.update(+id, updateClientDto);
+  }
+
+  @Post('upload-image')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads/clients',
+        filename: (req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `${unique}${extname(file.originalname)}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+          return cb(new BadRequestException('Solo se permiten imagenes'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadImage(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
+    if (!file) {
+      throw new BadRequestException('No se proporcionó ninguna imagen');
+    }
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    return { url: `${baseUrl}/uploads/clients/${file.filename}` };
   }
 
   @Patch()

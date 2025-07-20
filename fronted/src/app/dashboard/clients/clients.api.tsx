@@ -172,3 +172,19 @@ export const deleteClients = async (ids: string[]) => {
     throw error;
   }
 };
+
+export async function uploadClientImage(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${BACKEND_URL}/api/clients/upload-image`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error('Error al subir la imagen');
+  }
+
+  return res.json() as Promise<{ url: string }>;
+}
