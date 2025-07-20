@@ -304,6 +304,36 @@ export default function Component() {
   const shipping = 15.0
   const total = useMemo(() => subtotal + shipping, [subtotal])
 
+  const orderItemElements = useMemo(
+    () =>
+      orderItems.map((item) => (
+        <div
+          key={item.id}
+          className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg"
+        >
+          <Image
+            src={item.image || "/placeholder.svg"}
+            alt={item.name}
+            width={60}
+            height={60}
+            className="rounded-md object-cover"
+          />
+          <div className="flex-1 min-w-0">
+            <h4 className="font-medium text-sm text-gray-900 truncate">
+              {item.name}
+            </h4>
+            <p className="text-sm text-gray-500">Cantidad: {item.quantity}</p>
+          </div>
+          <div className="text-right">
+            <p className="font-medium text-gray-900">
+              ${(item.price * item.quantity).toFixed(2)}
+            </p>
+          </div>
+        </div>
+      )),
+    [orderItems],
+  )
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50">
       <Navbar />
@@ -859,26 +889,7 @@ export default function Component() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
-                <div className="space-y-4">
-                  {orderItems.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <Image
-                        src={item.image || "/placeholder.svg"}
-                        alt={item.name}
-                        width={60}
-                        height={60}
-                        className="rounded-md object-cover"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-sm text-gray-900 truncate">{item.name}</h4>
-                        <p className="text-sm text-gray-500">Cantidad: {item.quantity}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium text-gray-900">${(item.price * item.quantity).toFixed(2)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <div className="space-y-4">{orderItemElements}</div>
 
                 <Separator className="my-6" />
 
