@@ -14,15 +14,23 @@ export class ClientService {
   async create(data: { name: string; type: string; typeNumber: string; userId?: number; image?: string }) {
     const userId = data.userId || (await this.createGenericUser()); // Crear un usuario genérico si no se proporciona uno
   
-    return this.prismaService.client.create({
-      data: {
-        name: data.name,
-        type: data.type,
-        typeNumber: data.typeNumber,
-        userId,
-        image: data.image,
-      },
-    });
+    try {
+      return await this.prismaService.client.create({
+        data: {
+          name: data.name,
+          type: data.type,
+          typeNumber: data.typeNumber,
+          userId,
+          image: data.image,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Ya existe un cliente con esos datos');
+      }
+      console.error('Error en el backend:', error);
+      throw new InternalServerErrorException('Error al crear el cliente');
+    }
   }
   
   private async createGenericUser() {
