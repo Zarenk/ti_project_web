@@ -8,6 +8,7 @@ interface UserTokenPayload {
     sub: number;
     username: string;
     role?: string;
+    iat?: number;
 }
 
 export function getUserDataFromToken(): { userId: number; name: string; role?: string } | null {
@@ -49,5 +50,23 @@ export function getUserDataFromToken(): { userId: number; name: string; role?: s
     } catch (error) {
       console.error("Error decoding token:", error);
       return false;
+    }
+  }
+
+  export function getLastAccessFromToken(): Date | null {
+    if (typeof window === "undefined") return null;
+
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+
+    try {
+      const decoded = jwtDecode<UserTokenPayload>(token);
+      if (decoded.iat) {
+        return new Date(decoded.iat * 1000);
+      }
+      return null;
+    } catch (error) {
+      console.error("Error decoding token:", error);
+      return null;
     }
   }

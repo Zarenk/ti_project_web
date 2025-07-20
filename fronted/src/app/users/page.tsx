@@ -13,14 +13,18 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
 import { getUserProfile, updateUser } from "../dashboard/users/users.api"
-import { getClients, updateClient, uploadClientImage } from "../dashboard/clients/clients.api"
+import { getLastAccessFromToken } from "@/lib/auth"
+import { getClients, updateClient, uploadClientImage, createClient } from "../dashboard/clients/clients.api"
 import { getSales } from "../dashboard/sales/sales.api"
 import Navbar from "@/components/navbar"
 
 export default function UserPanel() {
   const [isEditing, setIsEditing] = useState(false)
   const [clientId, setClientId] = useState<number | null>(null)
+  const [userId, setUserId] = useState<number | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [registrationDate, setRegistrationDate] = useState<string>('')
+  const [lastAccess, setLastAccess] = useState<string>('')
   const [userData, setUserData] = useState({
     nombre: "",
     email: "",
@@ -36,8 +40,16 @@ export default function UserPanel() {
     async function loadData() {
       try {
         const profile = await getUserProfile()
+        setRegistrationDate(
+          new Date(profile.createdAt).toLocaleDateString('es-ES')
+        )
+        const last = getLastAccessFromToken()
+        if (last) {
+          setLastAccess(last.toLocaleString('es-ES'))
+        }
+        setUserId(profile.id)
         const clients = await getClients()
-        const client = clients.find((c: any) => c.userId === profile.userId)
+        const client = clients.find((c: any) => c.userId === profile.id)
         if (client) {
           setClientId(client.id)
           setImageUrl(client.image || null)
@@ -61,7 +73,7 @@ export default function UserPanel() {
         }
 
         const sales = await getSales()
-        const userSales = sales.filter((s: any) => s.client?.userId === profile.userId)
+        const userSales = sales.filter((s: any) => s.client?.userId === profile.id)
         const history = userSales.map((s: any) => ({
           id: s.id,
           numero: s.invoices && s.invoices[0] ? `${s.invoices[0].serie}-${s.invoices[0].nroCorrelativo}` : `#${s.id}`,
@@ -98,19 +110,39 @@ export default function UserPanel() {
     } catch (error) {
       console.error('Error saving user info:', error)
     }
-    if (clientId) {
-      try {
+    try {
+      if (clientId) {
         await updateClient(String(clientId), {
           name: userData.nombre,
           email: userData.email,
           phone: userData.telefono,
           adress: userData.direccion,
-          type: userData.tipoDocumento,
-          typeNumber: userData.numeroDocumento,
+          type: userData.tipoDocumento || null,
+          typeNumber: userData.numeroDocumento || null,
         })
-      } catch (error) {
-        console.error('Error saving client info:', error)
+      } else if (userId) {
+        const newClient = await createClient({
+          name: userData.nombre,
+          email: userData.email,
+          phone: userData.telefono,
+          adress: userData.direccion,
+          type: userData.tipoDocumento || null,
+          typeNumber: userData.numeroDocumento || null,
+          userId,
+        })
+
+        // Guarda el resto de datos que no se manejan en create
+        await updateClient(String(newClient.id), {
+          email: userData.email,
+          phone: userData.telefono,
+          adress: userData.direccion,
+          type: userData.tipoDocumento || null,
+          typeNumber: userData.numeroDocumento || null,
+        })
+        setClientId(newClient.id)
       }
+      } catch (error) {
+      console.error('Error saving client info:', error)
     }
   }
 
@@ -369,7 +401,7 @@ export default function UserPanel() {
                       <Calendar className="h-4 w-4 text-blue-600" />
                       <span className="text-blue-900 font-medium">Fecha de registro</span>
                     </div>
-                    <span className="text-gray-700">15/03/2023</span>
+                    <span className="text-gray-700">{registrationDate}</span>
                   </div>
                   <Separator className="bg-blue-200" />
                   <div className="flex items-center justify-between p-3 bg-cyan-50 rounded-lg">
@@ -377,7 +409,7 @@ export default function UserPanel() {
                       <Clock className="h-4 w-4 text-cyan-600" />
                       <span className="text-blue-900 font-medium">Último acceso</span>
                     </div>
-                    <span className="text-gray-700">Hoy, 14:30</span>
+                    <span className="text-gray-700">{lastAccess}</span>
                   </div>
                   <Separator className="bg-blue-200" />
                   <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
