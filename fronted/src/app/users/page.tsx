@@ -1,12 +1,15 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { Camera, Edit, Eye, Package, User, Calendar, Clock, Mail, Phone, MapPin } from "lucide-react"
-
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -35,6 +38,44 @@ export default function UserPanel() {
   })
 
   const [orderHistory, setOrderHistory] = useState<any[]>([])
+
+  const documentTypes = ["DNI", "CARNET DE EXTRANJERIA", "OTRO"] as const
+
+  const userSchema = z.object({
+    nombre: z
+      .string()
+      .min(1, "El nombre es obligatorio")
+      .regex(/^[a-zA-ZÀ-ÿ\s]+$/, "El nombre solo puede contener letras y espacios"),
+    email: z.string().email("Correo electrónico inválido"),
+    telefono: z
+      .string()
+      .regex(/^\d+$/, "El teléfono solo puede contener números"),
+    direccion: z
+      .string()
+      .max(200, "La dirección no puede tener más de 200 caracteres"),
+    tipoDocumento: z.enum(documentTypes, {
+      required_error: "Selecciona un tipo de documento",
+    }),
+    numeroDocumento: z.string().refine((val, ctx) => {
+      if (ctx.parent.tipoDocumento === "DNI") {
+        return /^\d{8}$/.test(val)
+      }
+      return /^\d{1,20}$/.test(val)
+    }, "Número de documento inválido"),
+  })
+
+  type UserFormType = z.infer<typeof userSchema>
+
+  const form = useForm<UserFormType>({
+    resolver: zodResolver(userSchema),
+    defaultValues: userData,
+  })
+
+  const watchNombre = form.watch('nombre')
+
+  useEffect(() => {
+    form.reset(userData)
+  }, [userData])
 
   useEffect(() => {
     async function loadData() {
@@ -102,26 +143,59 @@ export default function UserPanel() {
     }
   }
 
-  const handleSave = async () => {
-    setIsEditing(false)
+  const handleSave = form.handleSubmit(async (values) => {
     // Aquí iría la lógica para guardar los datos
     try {
-      await updateUser({ email: userData.email, username: userData.nombre })
+      await updateUser({ email: values.email, username: values.nombre })
     } catch (error) {
       console.error('Error saving user info:', error)
     }
     try {
       if (clientId) {
         await updateClient(String(clientId), {
-          name: userData.nombre,
-          email: userData.email,
-          phone: userData.telefono,
-          adress: userData.direccion,
-          type: userData.tipoDocumento || null,
-          typeNumber: userData.numeroDocumento || null,
+          name: values.nombre,
+          email: values.email,
+          phone: values.telefono,
+          adress: values.direccion,
+          type: values.tipoDocumento || null,
+          typeNumber: values.numeroDocumento || null,
         })
       } else if (userId) {
         const newClient = await createClient({
+          name: values.nombre,
+          email: values.email,
+          phone: values.telefono,
+          adress: values.direccion,
+          type: values.tipoDocumento || null,
+          typeNumber: values.numeroDocumento || null,
+          userId,
+        })
+
+        // Guarda el resto de datos que no se manejan en create
+        await updateClient(String(newClient.id), {
+          email: values.email,
+          phone: values.telefono,
+          adress: values.direccion,
+          type: values.tipoDocumento || null,
+          typeNumber: values.numeroDocumento || null,
+        })
+        setClientId(newClient.id)
+      }
+      setUserData(values)
+      setIsEditing(false)
+    } catch (error) {
+      console.error('Error saving client info:', error)
+    }
+  })
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      let currentId = clientId
+      if (!currentId && userId) {
+        const created = await createClient({
           name: userData.nombre,
           email: userData.email,
           phone: userData.telefono,
@@ -130,32 +204,23 @@ export default function UserPanel() {
           typeNumber: userData.numeroDocumento || null,
           userId,
         })
-
-        // Guarda el resto de datos que no se manejan en create
-        await updateClient(String(newClient.id), {
-          email: userData.email,
-          phone: userData.telefono,
-          adress: userData.direccion,
-          type: userData.tipoDocumento || null,
-          typeNumber: userData.numeroDocumento || null,
-        })
-        setClientId(newClient.id)
+        currentId = created.id
+        setClientId(created.id)
       }
-      } catch (error) {
-      console.error('Error saving client info:', error)
-    }
-  }
 
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !clientId) return
-    try {
+      if (!currentId) return
+
       const { url } = await uploadClientImage(file)
-      await updateClient(String(clientId), { image: url })
+      await updateClient(String(currentId), { image: url })
       setImageUrl(url)
     } catch (error) {
       console.error('Error uploading image', error)
     }
+  }
+
+  const handleCancel = () => {
+    form.reset(userData)
+    setIsEditing(false)
   }
 
   return (
@@ -189,11 +254,13 @@ export default function UserPanel() {
                       <User className="absolute left-3 top-3 h-4 w-4 text-blue-500" />
                       <Input
                         id="nombre"
-                        value={userData.nombre}
-                        onChange={(e) => setUserData({ ...userData, nombre: e.target.value })}
+                        {...form.register('nombre')}
                         disabled={!isEditing}
                         className="pl-10 border-blue-200 focus:border-blue-500"
                       />
+                      {form.formState.errors.nombre && (
+                        <p className="text-red-500 text-sm">{form.formState.errors.nombre.message}</p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -204,11 +271,13 @@ export default function UserPanel() {
                       <Mail className="absolute left-3 top-3 h-4 w-4 text-blue-500" />
                       <Input
                         id="email"
-                        value={userData.email}
-                        onChange={(e) => setUserData({ ...userData, email: e.target.value })}
+                        {...form.register('email')}
                         disabled={!isEditing}
                         className="pl-10 border-blue-200 focus:border-blue-500"
                       />
+                      {form.formState.errors.email && (
+                        <p className="text-red-500 text-sm">{form.formState.errors.email.message}</p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -219,11 +288,13 @@ export default function UserPanel() {
                       <Phone className="absolute left-3 top-3 h-4 w-4 text-blue-500" />
                       <Input
                         id="telefono"
-                        value={userData.telefono}
-                        onChange={(e) => setUserData({ ...userData, telefono: e.target.value })}
+                        {...form.register('telefono')}
                         disabled={!isEditing}
                         className="pl-10 border-blue-200 focus:border-blue-500"
                       />
+                      {form.formState.errors.telefono && (
+                        <p className="text-red-500 text-sm">{form.formState.errors.telefono.message}</p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -234,24 +305,36 @@ export default function UserPanel() {
                       <MapPin className="absolute left-3 top-3 h-4 w-4 text-blue-500" />
                       <Input
                         id="direccion"
-                        value={userData.direccion}
-                        onChange={(e) => setUserData({ ...userData, direccion: e.target.value })}
+                        {...form.register('direccion')}
                         disabled={!isEditing}
                         className="pl-10 border-blue-200 focus:border-blue-500"
                       />
+                      {form.formState.errors.direccion && (
+                        <p className="text-red-500 text-sm">{form.formState.errors.direccion.message}</p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="tipoDocumento" className="text-blue-900 font-medium">
                       Tipo de documento
                     </Label>
-                    <Input
-                      id="tipoDocumento"
-                      value={userData.tipoDocumento}
-                      onChange={(e) => setUserData({ ...userData, tipoDocumento: e.target.value })}
+                    <Select
+                      value={form.watch('tipoDocumento')}
+                      onValueChange={(value) => form.setValue('tipoDocumento', value as (typeof documentTypes)[number])}
                       disabled={!isEditing}
-                      className="border-blue-200 focus:border-blue-500"
-                    />
+                    >
+                     <SelectTrigger className="border-blue-200 focus:border-blue-500">
+                        <SelectValue placeholder="Selecciona" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="DNI">DNI</SelectItem>
+                        <SelectItem value="CARNET DE EXTRANJERIA">CARNET DE EXTRANJERIA</SelectItem>
+                        <SelectItem value="OTRO">OTRO</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {form.formState.errors.tipoDocumento && (
+                      <p className="text-red-500 text-sm">{form.formState.errors.tipoDocumento.message}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="numeroDocumento" className="text-blue-900 font-medium">
@@ -259,16 +342,24 @@ export default function UserPanel() {
                     </Label>
                     <Input
                       id="numeroDocumento"
-                      value={userData.numeroDocumento}
-                      onChange={(e) => setUserData({ ...userData, numeroDocumento: e.target.value })}
+                      {...form.register('numeroDocumento')}
                       disabled={!isEditing}
                       className="border-blue-200 focus:border-blue-500"
                     />
+                    {form.formState.errors.numeroDocumento && (
+                      <p className="text-red-500 text-sm">{form.formState.errors.numeroDocumento.message}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2 mt-6">
                   {!isEditing ? (
-                    <Button onClick={() => setIsEditing(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+                    <Button
+                      onClick={() => {
+                        form.reset(userData)
+                        setIsEditing(true)
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
                       <Edit className="h-4 w-4 mr-2" />
                       Editar
                     </Button>
@@ -278,7 +369,7 @@ export default function UserPanel() {
                         Guardar
                       </Button>
                       <Button
-                        onClick={() => setIsEditing(false)}
+                        onClick={handleCancel}
                         variant="outline"
                         className="border-blue-300 text-blue-700 hover:bg-blue-50"
                       >
@@ -356,7 +447,7 @@ export default function UserPanel() {
                   <Avatar className="h-32 w-32 border-4 border-blue-200 shadow-lg">
                     <AvatarImage src={imageUrl || '/placeholder.svg?height=128&width=128'} alt="Foto de perfil" />
                     <AvatarFallback className="bg-blue-100 text-blue-800 text-2xl font-bold">
-                      {userData.nombre
+                      {(watchNombre || '')
                         .split(' ')
                         .map((n) => n[0])
                         .join('')
