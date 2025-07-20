@@ -138,12 +138,13 @@ export default function ShoppingCart() {
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const discountAmount = subtotal * discount
-  const shippingEstimate = 15
+  const shippingEstimate = cartItems.length === 0 ? 0 : 15
   const total = subtotal - discountAmount + shippingEstimate
   const hasOutOfStock = cartItems.some(
     (item) =>
       stockMap[item.id] !== undefined && (stockMap[item.id] ?? 0) <= 0,
   )
+  const canCheckout = cartItems.length > 0 && !hasOutOfStock
 
   return (
     <div className="min-h-screen bg-background">
@@ -389,19 +390,19 @@ export default function ShoppingCart() {
                   </div>
                 </div>
                 <div className="space-y-2 mt-4">
-                  {hasOutOfStock ? (
-                    <Button
-                      className="w-full bg-sky-500 text-white rounded-xl px-8 py-2 font-medium"
-                      disabled
-                    >
-                      Realizar el pago
-                    </Button>
-                  ) : (
+                  {canCheckout ? (
                     <Button
                       asChild
                       className="w-full bg-sky-500 hover:bg-sky-600 text-white rounded-xl px-8 py-2 font-medium transition-colors duration-200"
                     >
                       <Link href="/payment">Realizar el pago</Link>
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full bg-sky-500 text-white rounded-xl px-8 py-2 font-medium"
+                      disabled
+                    >
+                      Realizar el pago
                     </Button>
                   )}
                   <Button asChild variant="outline" className="w-full">
