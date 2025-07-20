@@ -22,7 +22,7 @@ export default function LoginForm() {
       await loginUser(email, password);
       toast.success('Inicio de sesión exitoso');
 
-      router.push('/dashboard'); // Redirige al dashboard después del login
+      router.push('/users'); // Redirige al panel de usuario después del login
     } catch (error: any) {
       toast.error(error.message || 'Error al iniciar sesión');
     }
@@ -39,7 +39,7 @@ export default function LoginForm() {
       toast.error('Error al conectar con Google');
     }
   };
-  
+
   return (
     <div className="flex flex-col gap-4">
       <form onSubmit={handleLogin} className="flex flex-col gap-4">

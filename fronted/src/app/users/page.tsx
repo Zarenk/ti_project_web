@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Camera, Edit, Eye, Package, User, Calendar, Clock, Mail, Phone, MapPin } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -11,22 +11,61 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
+import Link from "next/link"
+import { getUserProfile } from "../dashboard/users/users.api"
+import { getClients, updateClient } from "../dashboard/clients/clients.api"
+import { getSales } from "../dashboard/sales/sales.api"
 
 export default function UserPanel() {
   const [isEditing, setIsEditing] = useState(false)
+  const [clientId, setClientId] = useState<number | null>(null)
   const [userData, setUserData] = useState({
-    nombre: "María González",
-    email: "maria.gonzalez@email.com",
-    telefono: "+34 612 345 678",
-    direccion: "Calle Mayor 123, 28001 Madrid, España",
+    nombre: "",
+    email: "",
+    telefono: "",
+    direccion: "",
+    tipoDocumento: "",
+    numeroDocumento: "",
   })
 
-  const orderHistory = [
-    { numero: "#ORD-2024-001", fecha: "15/01/2024", estado: "Entregado", total: "€89.99" },
-    { numero: "#ORD-2024-002", fecha: "28/01/2024", estado: "En tránsito", total: "€156.50" },
-    { numero: "#ORD-2024-003", fecha: "05/02/2024", estado: "Procesando", total: "€234.75" },
-    { numero: "#ORD-2024-004", fecha: "12/02/2024", estado: "Entregado", total: "€67.25" },
-  ]
+  const [orderHistory, setOrderHistory] = useState<any[]>([])
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const profile = await getUserProfile()
+        const clients = await getClients()
+        const client = clients.find((c: any) => c.userId === profile.userId)
+        if (client) {
+          setClientId(client.id)
+          setUserData({
+            nombre: client.name || profile.username,
+            email: client.email || '',
+            telefono: client.phone || '',
+            direccion: client.adress || '',
+            tipoDocumento: client.type || '',
+            numeroDocumento: client.typeNumber || '',
+          })
+        } else {
+          setUserData((d) => ({ ...d, nombre: profile.username }))
+        }
+
+        const sales = await getSales()
+        const userSales = sales.filter((s: any) => s.client?.userId === profile.userId)
+        const history = userSales.map((s: any) => ({
+          id: s.id,
+          numero: s.invoices && s.invoices[0] ? `${s.invoices[0].serie}-${s.invoices[0].nroCorrelativo}` : `#${s.id}`,
+          fecha: new Date(s.createdAt).toLocaleDateString('es-ES'),
+          estado: 'Completado',
+          total: `S/. ${s.total.toFixed(2)}`,
+        }))
+        setOrderHistory(history)
+      } catch (error) {
+        console.error('Error loading user panel:', error)
+      }
+    }
+    loadData()
+  }, [])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -41,9 +80,23 @@ export default function UserPanel() {
     }
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsEditing(false)
     // Aquí iría la lógica para guardar los datos
+    if (clientId) {
+      try {
+        await updateClient(String(clientId), {
+          name: userData.nombre,
+          email: userData.email,
+          phone: userData.telefono,
+          adress: userData.direccion,
+          type: userData.tipoDocumento,
+          typeNumber: userData.numeroDocumento,
+        })
+      } catch (error) {
+        console.error('Error saving client info:', error)
+      }
+    }
   }
 
   const handleImageChange = () => {
@@ -133,6 +186,30 @@ export default function UserPanel() {
                       />
                     </div>
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tipoDocumento" className="text-blue-900 font-medium">
+                      Tipo de documento
+                    </Label>
+                    <Input
+                      id="tipoDocumento"
+                      value={userData.tipoDocumento}
+                      onChange={(e) => setUserData({ ...userData, tipoDocumento: e.target.value })}
+                      disabled={!isEditing}
+                      className="border-blue-200 focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="numeroDocumento" className="text-blue-900 font-medium">
+                      Número de documento
+                    </Label>
+                    <Input
+                      id="numeroDocumento"
+                      value={userData.numeroDocumento}
+                      onChange={(e) => setUserData({ ...userData, numeroDocumento: e.target.value })}
+                      disabled={!isEditing}
+                      className="border-blue-200 focus:border-blue-500"
+                    />
+                  </div>
                 </div>
                 <div className="flex gap-2 mt-6">
                   {!isEditing ? (
@@ -179,8 +256,8 @@ export default function UserPanel() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {orderHistory.map((order, index) => (
-                        <TableRow key={index} className="hover:bg-blue-50/50">
+                      {orderHistory.map((order) => (
+                        <TableRow key={order.id} className="hover:bg-blue-50/50">
                           <TableCell className="font-medium text-blue-800">{order.numero}</TableCell>
                           <TableCell className="text-gray-700">{order.fecha}</TableCell>
                           <TableCell>
@@ -189,12 +266,15 @@ export default function UserPanel() {
                           <TableCell className="font-semibold text-green-700">{order.total}</TableCell>
                           <TableCell>
                             <Button
+                              asChild
                               size="sm"
                               variant="outline"
                               className="border-blue-300 text-blue-700 hover:bg-blue-50 bg-transparent"
                             >
-                              <Eye className="h-4 w-4 mr-1" />
-                              Ver
+                              <Link href={`/orders/${order.id}`} className="flex items-center">
+                                <Eye className="h-4 w-4 mr-1" />
+                                Ver
+                              </Link>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -266,7 +346,7 @@ export default function UserPanel() {
                       <Package className="h-4 w-4 text-blue-600" />
                       <span className="text-blue-900 font-medium">Total de pedidos</span>
                     </div>
-                    <span className="text-gray-700 font-semibold">24</span>
+                    <span className="text-gray-700 font-semibold">{orderHistory.length}</span>
                   </div>
                 </div>
               </CardContent>

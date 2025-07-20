@@ -49,7 +49,7 @@ export default function RegisterForm() {
       await registerUser(data.email, data.fullName, data.password, data.fullName);
       await loginUser(data.email, data.password);
       toast.success('Registro exitoso');
-      router.push('/dashboard');
+      router.push('/users');
     } catch (error: any) {
       if (error.message && error.message.toLowerCase().includes('correo')) {
         setError('email', { type: 'manual', message: error.message });
