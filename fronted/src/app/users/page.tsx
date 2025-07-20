@@ -350,7 +350,8 @@ export default function UserPanel() {
                       className="border-blue-200 focus:border-blue-500"
                     />
                     {form.formState.errors.numeroDocumento && (
-                      <p className="text-red-500 text-sm">{form.formState.errors.numeroDocumento.message}</p>
+                      <p className="text-red-500 text-sm">
+                        {form.formState.errors.numeroDocumento.message}</p>
                     )}
                   </div>
                 </div>
