@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useCallback, useMemo } from "react"
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import { useCart } from "@/context/cart-context"
 import { CreditCard, Building2, Smartphone, Check, ShoppingCart } from "lucide-react"
 import Image from "next/image"
@@ -31,6 +31,91 @@ import Navbar from "@/components/navbar"
 import CheckoutSteps from "@/components/checkout-steps"
 import { regions } from "@/lib/region"
 import { DEFAULT_STORE_ID } from "@/lib/config"
+
+function sanitizeInput(id: string, value: string) {
+  let newValue = value
+  switch (id) {
+    case "firstName":
+    case "lastName":
+    case "invoiceName":
+    case "razonSocial":
+    case "cardName":
+    case "shipFirstName":
+    case "shipLastName":
+      newValue = newValue.replace(/[^a-zA-Z\sÁÉÍÓÚáéíóúñÑ]/g, "")
+      break
+    case "phone":
+      newValue = newValue.replace(/[^0-9+]/g, "")
+      break
+    case "dni":
+      newValue = newValue.replace(/\D/g, "").slice(0, 8)
+      break
+    case "ruc":
+      newValue = newValue.replace(/\D/g, "").slice(0, 11)
+      break
+    case "postalCode":
+    case "shipPostalCode":
+    case "cvv":
+      newValue = newValue.replace(/\D/g, "")
+      break
+    case "cardNumber":
+      newValue = newValue.replace(/\D/g, "").slice(0, 16)
+      break
+    case "expiry":
+      newValue = newValue.replace(/[^0-9/]/g, "").slice(0, 5)
+      if (newValue.length === 2 && !newValue.includes("/")) newValue += "/"
+      break
+    default:
+      break
+  }
+  return newValue
+}
+
+function useDebouncedCallback<T extends (...args: any[]) => void>(
+  callback: T,
+  delay: number,
+) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current)
+    }
+  }, [])
+
+  return useCallback(
+    (...args: Parameters<T>) => {
+      if (timer.current) clearTimeout(timer.current)
+      timer.current = setTimeout(() => {
+        callback(...args)
+      }, delay)
+    },
+    [callback, delay],
+  )
+}
+
+type DebouncedInputProps = React.ComponentProps<typeof Input> & {
+  id: string
+  onDebouncedChange: (value: string) => void
+}
+
+function DebouncedInput({ id, onDebouncedChange, value, ...props }: DebouncedInputProps) {
+  const [localValue, setLocalValue] = useState(String(value ?? ""))
+
+  useEffect(() => {
+    setLocalValue(String(value ?? ""))
+  }, [value])
+
+  const debouncedChange = useDebouncedCallback(onDebouncedChange, 200)
+
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const val = sanitizeInput(id, e.target.value)
+    setLocalValue(val)
+    debouncedChange(val)
+  }
+
+  return <Input {...props} id={id} value={localValue} onChange={handleInput} />
+}
 
 export default function Component() {
   const [paymentMethod, setPaymentMethod] = useState("visa")
@@ -65,48 +150,11 @@ export default function Component() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
   const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      const { id, value } = e.target
-      let newValue = value
-
-    switch (id) {
-      case "firstName":
-      case "lastName":
-      case "invoiceName":
-      case "razonSocial":
-      case "cardName":
-      case "shipFirstName":
-      case "shipLastName":
-        newValue = newValue.replace(/[^a-zA-Z\sÁÉÍÓÚáéíóúñÑ]/g, "")
-        break
-      case "phone":
-        newValue = newValue.replace(/[^0-9+]/g, "")
-        break
-      case "dni":
-        newValue = newValue.replace(/\D/g, "").slice(0, 8)
-        break
-      case "ruc":
-        newValue = newValue.replace(/\D/g, "").slice(0, 11)
-        break
-      case "postalCode":
-      case "shipPostalCode":
-      case "cvv":
-        newValue = newValue.replace(/\D/g, "")
-        break
-      case "cardNumber":
-        newValue = newValue.replace(/\D/g, "").slice(0, 16)
-        break
-      case "expiry":
-        newValue = newValue.replace(/[^0-9/]/g, "").slice(0, 5)
-        if (newValue.length === 2 && !newValue.includes("/")) newValue += "/"
-        break
-      default:
-        break
-    }
-
-    setFormData((prev) => ({ ...prev, [id]: newValue }))
-  },
-  [])
+  (id: string, value: string) => {
+      setFormData((prev) => ({ ...prev, [id]: value }))
+    },
+    [],
+  )
 
   const router = useRouter()
   const { items: orderItems, clear } = useCart()
@@ -365,10 +413,10 @@ export default function Component() {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">Nombres Completos *</Label>
-                    <Input
+                    <DebouncedInput
                       id="firstName"
                       value={formData.firstName}
-                      onChange={handleChange}
+                      onDebouncedChange={(val) => handleChange("firstName", val)}
                       placeholder="John"
                       className="border-gray-300 focus:border-blue-500"
                     />
@@ -378,10 +426,10 @@ export default function Component() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lastName">Apellidos *</Label>
-                    <Input
+                    <DebouncedInput
                       id="lastName"
                       value={formData.lastName}
-                      onChange={handleChange}
+                      onDebouncedChange={(val) => handleChange("lastName", val)}
                       placeholder="Doe"
                       className="border-gray-300 focus:border-blue-500"
                     />
@@ -392,11 +440,11 @@ export default function Component() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email *</Label>
-                  <Input
+                  <DebouncedInput
                     id="email"
                     type="email"
                     value={formData.email}
-                    onChange={handleChange}
+                    onDebouncedChange={(val) => handleChange("email", val)}
                     placeholder="john.doe@example.com"
                     className="border-gray-300 focus:border-blue-500"
                   />
@@ -406,10 +454,10 @@ export default function Component() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Telefono *</Label>
-                  <Input
+                  <DebouncedInput
                     id="phone"
                     value={formData.phone}
-                    onChange={handleChange}
+                    onDebouncedChange={(val) => handleChange("phone", val)}
                     placeholder="+51 999 999 999"
                     className="border-gray-300 focus:border-blue-500"
                   />
@@ -419,10 +467,10 @@ export default function Component() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="address">Direccion de Facturacion *</Label>
-                  <Input
+                  <DebouncedInput
                     id="address"
                     value={formData.address}
-                    onChange={handleChange}
+                    onDebouncedChange={(val) => handleChange("address", val)}
                     placeholder="123 Main Street"
                     className="border-gray-300 focus:border-blue-500"
                   />
@@ -482,10 +530,10 @@ export default function Component() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="postalCode">Codigo Postal</Label>
-                    <Input
+                    <DebouncedInput
                       id="postalCode"
                       value={formData.postalCode}
-                      onChange={handleChange}
+                      onDebouncedChange={(val) => handleChange("postalCode", val)}
                       placeholder="20001"
                       className="border-gray-300 focus:border-blue-500"
                     />
@@ -530,10 +578,10 @@ export default function Component() {
                   <div className="grid md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="dni">Numero de Documento (DNI) *</Label>
-                      <Input
+                      <DebouncedInput
                         id="dni"
                         value={formData.dni}
-                        onChange={handleChange}
+                        onDebouncedChange={(val) => handleChange("dni", val)}
                         placeholder="12345678"
                         className="border-gray-300 focus:border-blue-500"
                       />
@@ -543,10 +591,10 @@ export default function Component() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="invoiceName">Nombre Completo *</Label>
-                      <Input
+                      <DebouncedInput
                         id="invoiceName"
                         value={formData.invoiceName}
-                        onChange={handleChange}
+                        onDebouncedChange={(val) => handleChange("invoiceName", val)}
                         placeholder="John Doe"
                         className="border-gray-300 focus:border-blue-500"
                       />
@@ -561,10 +609,10 @@ export default function Component() {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="ruc">RUC *</Label>
-                      <Input
+                      <DebouncedInput 
                         id="ruc"
                         value={formData.ruc}
-                        onChange={handleChange}
+                        onDebouncedChange={(val) => handleChange("ruc", val)}
                         placeholder="20123456789"
                         className="border-gray-300 focus:border-blue-500"
                       />
@@ -574,10 +622,10 @@ export default function Component() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="razonSocial">Razon Social *</Label>
-                      <Input
+                      <DebouncedInput
                         id="razonSocial"
                         value={formData.razonSocial}
-                        onChange={handleChange}
+                        onDebouncedChange={(val) => handleChange("razonSocial", val)}
                         placeholder="Empresa SAC"
                         className="border-gray-300 focus:border-blue-500"
                       />
@@ -587,10 +635,10 @@ export default function Component() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="invoiceAddress">Direccion *</Label>
-                      <Input
+                      <DebouncedInput
                         id="invoiceAddress"
                         value={formData.invoiceAddress}
-                        onChange={handleChange}
+                        onDebouncedChange={(val) => handleChange("invoiceAddress", val)}
                         placeholder="Av. Principal 123"
                         className="border-gray-300 focus:border-blue-500"
                       />
@@ -632,10 +680,10 @@ export default function Component() {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="shipFirstName">Nombres Completos *</Label>
-                        <Input
+                        <DebouncedInput
                           id="shipFirstName"
                           value={formData.shipFirstName}
-                          onChange={handleChange}
+                          onDebouncedChange={(val) => handleChange("shipFirstName", val)}
                           placeholder="John"
                           className="border-gray-300 focus:border-blue-500"
                         />
@@ -645,10 +693,10 @@ export default function Component() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="shipLastName">Apellidos *</Label>
-                        <Input
+                        <DebouncedInput
                           id="shipLastName"
                           value={formData.shipLastName}
-                          onChange={handleChange}
+                          onDebouncedChange={(val) => handleChange("shipLastName", val)}
                           placeholder="Doe"
                           className="border-gray-300 focus:border-blue-500"
                         />
@@ -659,10 +707,10 @@ export default function Component() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="shipAddress">Direccion de Envio *</Label>
-                      <Input
+                      <DebouncedInput
                         id="shipAddress"
                         value={formData.shipAddress}
-                        onChange={handleChange}
+                        onDebouncedChange={(val) => handleChange("shipAddress", val)}
                         placeholder="Avenida 123."
                         className="border-gray-300 focus:border-blue-500"
                       />
@@ -673,10 +721,10 @@ export default function Component() {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="shipCity">Ciudad *</Label>
-                        <Input
+                        <DebouncedInput
                           id="shipCity"
                           value={formData.shipCity}
-                          onChange={handleChange}
+                          onDebouncedChange={(val) => handleChange("shipCity", val)}
                           placeholder="Lima"
                           className="border-gray-300 focus:border-blue-500"
                         />
@@ -686,10 +734,10 @@ export default function Component() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="shipPostalCode">Codigo postal</Label>
-                        <Input
+                        <DebouncedInput
                           id="shipPostalCode"
                           value={formData.shipPostalCode}
-                          onChange={handleChange}
+                          onDebouncedChange={(val) => handleChange("shipPostalCode", val)}
                           placeholder="20000"
                           className="border-gray-300 focus:border-blue-500"
                         />
@@ -740,10 +788,10 @@ export default function Component() {
                       <div className="ml-8 space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="space-y-2">
                           <Label htmlFor="cardNumber">Numero de Tarjeta *</Label>
-                          <Input
+                          <DebouncedInput
                             id="cardNumber"
                             value={formData.cardNumber}
-                            onChange={handleChange}
+                            onDebouncedChange={(val) => handleChange("cardNumber", val)}  
                             placeholder="1234 5678 9012 3456"
                             className="border-gray-300 focus:border-blue-500"
                           />
@@ -754,10 +802,10 @@ export default function Component() {
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="expiry">Fecha de Expiracion *</Label>
-                            <Input
+                            <DebouncedInput
                               id="expiry"
                               value={formData.expiry}
-                              onChange={handleChange}
+                              onDebouncedChange={(val) => handleChange("expiry", val)}
                               placeholder="MM/YY"
                               className="border-gray-300 focus:border-blue-500"
                             />
@@ -767,10 +815,10 @@ export default function Component() {
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="cvv">CVV *</Label>
-                            <Input
+                            <DebouncedInput
                               id="cvv"
                               value={formData.cvv}
-                              onChange={handleChange}
+                              onDebouncedChange={(val) => handleChange("cvv", val)}
                               placeholder="123"
                               className="border-gray-300 focus:border-blue-500"
                             />
@@ -781,10 +829,10 @@ export default function Component() {
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="cardName">Nombre de la Tarjeta *</Label>
-                          <Input
+                          <DebouncedInput
                             id="cardName"
                             value={formData.cardName}
-                            onChange={handleChange}
+                            onDebouncedChange={(val) => handleChange("cardName", val)}
                             placeholder="John Doe"
                             className="border-gray-300 focus:border-blue-500"
                           />

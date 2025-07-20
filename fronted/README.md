@@ -37,14 +37,17 @@ Run database migrations and start the server:
 ```bash
 cd backend
 npx prisma migrate dev
+npm run seed:web # create WEB POS store if missing
 npm run start:dev
 ```
 
 ### Front-end environment
-Create a `fronted/.env.local` file with the URL of the backend:
+Create a `fronted/.env.local` file with the following variables:
 
 ```
 NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+# ID of the store used for online purchases
+NEXT_PUBLIC_STORE_ID=1
 ```
 
 Start the development server:
@@ -55,7 +58,7 @@ npm run dev
 ```
 
 ## Configuring Stores
-The system supports multiple stores. For online purchases the front‑end expects a store with ID **1** representing the web sales channel (commonly named **"WEB POS"**). Make sure to create this store in the backend either through the API or directly in the database before processing online orders.
+The system supports multiple stores. For online purchases the front‑end expects a store representing the web sales channel (commonly named **"WEB POS"**). Configure the ID of this store through the `NEXT_PUBLIC_STORE_ID` variable. Make sure the store exists in the backend before processing online orders.
 
 Additional physical stores can be created using the `/stores` endpoints exposed by the API.
 
