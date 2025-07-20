@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -26,35 +26,50 @@ export default function UserPanel() {
   const [clientId, setClientId] = useState<number | null>(null)
   const [userId, setUserId] = useState<number | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [registrationDate, setRegistrationDate] = useState<string>('')
   const [lastAccess, setLastAccess] = useState<string>('')
 
   const documentTypes = ["DNI", "CARNET DE EXTRANJERIA", "OTRO"] as const
 
-  const userSchema = z.object({
-    nombre: z
-      .string()
-      .min(1, "El nombre es obligatorio")
-      .regex(/^[a-zA-ZÀ-ÿ\s]+$/, "El nombre solo puede contener letras y espacios"),
-    email: z.string().email("Correo electrónico inválido"),
-    telefono: z
-      .string()
-      .regex(/^\d+$/, "El teléfono solo puede contener números"),
-    direccion: z
-      .string()
-      .max(200, "La dirección no puede tener más de 200 caracteres"),
-    tipoDocumento: z
-      .union([z.enum(documentTypes), z.literal("")])
-      .refine((val) => val !== "", { message: "Selecciona un tipo de documento" }),
-    numeroDocumento: z.string().refine(
-      (val, ctx) => {
-        if (ctx.parent.tipoDocumento === "DNI") {
-          return /^\d{8}$/.test(val)
+  const userSchema = z
+    .object({
+      nombre: z
+        .string()
+        .min(1, "El nombre es obligatorio")
+        .regex(/^[a-zA-ZÀ-ÿ\s]+$/, "El nombre solo puede contener letras y espacios"),
+      email: z.string().email("Correo electrónico inválido"),
+      telefono: z
+        .string()
+        .regex(/^\d+$/, "El teléfono solo puede contener números"),
+      direccion: z
+        .string()
+        .max(200, "La dirección no puede tener más de 200 caracteres"),
+      tipoDocumento: z
+        .union([z.enum(documentTypes), z.literal("")])
+        .refine((val) => val !== "", {
+          message: "Selecciona un tipo de documento",
+        }),
+      numeroDocumento: z.string(),
+    })
+    .superRefine((values, ctx) => {
+      if (values.tipoDocumento === "DNI") {
+        if (!/^\d{8}$/.test(values.numeroDocumento)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["numeroDocumento"],
+            message: "Número de documento inválido",
+          })
         }
-        return /^\d{1,20}$/.test(val)
-      },
-      { message: "Número de documento inválido" }
-    ),
+  } else {
+        if (!/^\d{1,20}$/.test(values.numeroDocumento)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["numeroDocumento"],
+            message: "Número de documento inválido",
+          })
+        }
+      }
   })
 
   type UserFormType = z.infer<typeof userSchema>
@@ -323,10 +338,15 @@ export default function UserPanel() {
                     </Label>
                     <Select
                       value={form.watch('tipoDocumento')}
-                      onValueChange={(value) => form.setValue('tipoDocumento', value as (typeof documentTypes)[number])}
+                      onValueChange={(value) =>
+                        form.setValue(
+                          'tipoDocumento',
+                          value as (typeof documentTypes)[number]
+                        )
+                      }
                       disabled={!isEditing}
                     >
-                     <SelectTrigger className="border-blue-200 focus:border-blue-500">
+                     <SelectTrigger className="border-blue-200 focus:border-blue-500 w-full">
                         <SelectValue placeholder="Selecciona" />
                       </SelectTrigger>
                       <SelectContent>
@@ -460,18 +480,21 @@ export default function UserPanel() {
                     </AvatarFallback>
                   </Avatar>
                   <input
+                    ref={fileInputRef}
                     id="profileImage"
                     type="file"
                     accept="image/*"
                     onChange={handleImageChange}
                     className="hidden"
                   />
-                  <label htmlFor="profileImage" className="w-full">
-                    <Button type="button" className="bg-cyan-600 hover:bg-cyan-700 text-white w-full">
-                      <Camera className="h-4 w-4 mr-2" />
-                      Cambiar imagen de perfil
-                    </Button>
-                  </label>
+                  <Button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="bg-cyan-600 hover:bg-cyan-700 text-white w-full"
+                  >
+                    <Camera className="h-4 w-4 mr-2" />
+                    Cambiar imagen de perfil
+                  </Button>
                   <p className="text-sm text-gray-600">
                     Formatos permitidos: JPG, PNG, GIF
                     <br />
