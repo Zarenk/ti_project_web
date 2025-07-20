@@ -1,8 +1,8 @@
-import { Controller, Post, Body, Request, UseGuards, Get, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Body, Request, UseGuards, Get, NotFoundException, Patch } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ApiResponse } from '@nestjs/swagger';
-
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Controller('users')
 export class UsersController {
@@ -58,8 +58,14 @@ export class UsersController {
   }
 
   @Get()
-  @ApiResponse({status: 200, description: 'Return all users'}) // Swagger 
+  @ApiResponse({status: 200, description: 'Return all users'}) // Swagger
     findAll() {
       return this.usersService.findAll();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  updateProfile(@Request() req, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(req.user.userId, updateUserDto);
   }
 }

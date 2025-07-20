@@ -459,6 +459,7 @@ export default function ProductPage({ params }: Props) {
                           product.images && product.images.length > 0
                             ? product.images[0]
                             : product.image,
+                        quantity,
                       })
                       toast.success("Producto agregado al carrito")
                     }

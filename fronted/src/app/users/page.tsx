@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
-import { getUserProfile } from "../dashboard/users/users.api"
+import { getUserProfile, updateUser } from "../dashboard/users/users.api"
 import { getClients, updateClient } from "../dashboard/clients/clients.api"
 import { getSales } from "../dashboard/sales/sales.api"
 import Navbar from "@/components/navbar"
@@ -84,6 +84,11 @@ export default function UserPanel() {
   const handleSave = async () => {
     setIsEditing(false)
     // Aquí iría la lógica para guardar los datos
+    try {
+      await updateUser({ email: userData.email, username: userData.nombre })
+    } catch (error) {
+      console.error('Error saving user info:', error)
+    }
     if (clientId) {
       try {
         await updateClient(String(clientId), {

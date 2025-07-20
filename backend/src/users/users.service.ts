@@ -4,6 +4,7 @@ import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -97,5 +98,39 @@ export class UsersService {
 
   findAll() {
     return this.prismaService.user.findMany()
+  }
+
+  async update(id: number, data: UpdateUserDto) {
+    if (data.email) {
+      const existing = await this.prismaService.user.findUnique({
+        where: { email: data.email },
+      });
+      if (existing && existing.id !== id) {
+        throw new BadRequestException('El correo ya está registrado');
+      }
+    }
+
+    if (data.username) {
+      const existing = await this.prismaService.user.findUnique({
+        where: { username: data.username },
+      });
+      if (existing && existing.id !== id) {
+        throw new BadRequestException('El nombre de usuario ya está registrado');
+      }
+    }
+
+    if (data.password) {
+      data.password = await bcrypt.hash(data.password, 10);
+    }
+
+    try {
+      return await this.prismaService.user.update({
+        where: { id },
+        data,
+      });
+    } catch (error) {
+      console.error('Error en el backend:', error);
+      throw new InternalServerErrorException('Error al actualizar el usuario');
+    }
   }
 }

@@ -3,6 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { useState, useRef, useEffect } from "react"
+import { UserIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCart } from "@/context/cart-context"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -18,6 +19,22 @@ export default function Navbar() {
   const { userName, refreshUser, logout } = useAuth()
   const router = useRouter()
   const { items } = useCart()
+
+  const handleMouseEnter = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current)
+    }
+    setOpen(true)
+  }
+
+  const handleMouseLeave = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current)
+    }
+    closeTimer.current = setTimeout(() => setOpen(false), 150)
+  }
+
+  const hasActiveOrder = items.length > 0
 
   useEffect(() => {
     refreshUser()
@@ -46,41 +63,22 @@ export default function Navbar() {
                 <PopoverTrigger asChild>
                   <Link
                     href="/users"
-                    onMouseEnter={() => {
-                      if (closeTimer.current) {
-                        clearTimeout(closeTimer.current)
-                      }
-                      setOpen(true)
-                    }}
-                    onMouseLeave={() => {
-                      if (closeTimer.current) {
-                        clearTimeout(closeTimer.current)
-                      }
-                      closeTimer.current = setTimeout(() => setOpen(false), 150)
-                    }}
-                    className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                    onMouseEnter={handleMouseEnter}
+                    onMouseLeave={handleMouseLeave}
+                    className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
                   >
-                    Bienvenido, {userName}
+                    <UserIcon className="size-4" />
+                    {userName}
                   </Link>
                 </PopoverTrigger>
                 <PopoverContent
-                  onMouseEnter={() => {
-                    if (closeTimer.current) {
-                      clearTimeout(closeTimer.current)
-                    }
-                    setOpen(true)
-                  }}
-                  onMouseLeave={() => {
-                    if (closeTimer.current) {
-                      clearTimeout(closeTimer.current)
-                    }
-                    closeTimer.current = setTimeout(() => setOpen(false), 150)
-                  }}
+                  onMouseEnter={handleMouseEnter}
+                  onMouseLeave={handleMouseLeave}
                   className="w-48 space-y-2 text-center transition-opacity duration-300"
                 >
                   <p className="text-sm font-medium">{userName}</p>
-                  <p className="text-xs">Orden activa: {items.length > 0 ? 'Sí' : 'No'}</p>
-                  <Button onClick={handleLogout} className="w-full bg-red-600 hover:bg-red-700 text-white">
+                  <p className="text-xs">Orden activa: {hasActiveOrder ? 'Sí' : 'No'}</p>
+                  <Button onClick={handleLogout} variant="outline" className="w-full">
                     Cerrar Sesión
                   </Button>
                 </PopoverContent>
@@ -90,36 +88,16 @@ export default function Navbar() {
                 <PopoverTrigger asChild>
                   <Link
                     href="/login"
-                    onMouseEnter={() => {
-                      if (closeTimer.current) {
-                        clearTimeout(closeTimer.current)
-                      }
-                      setOpen(true)
-                    }}
-                    onMouseLeave={() => {
-                      if (closeTimer.current) {
-                        clearTimeout(closeTimer.current)
-                      }
-                      closeTimer.current = setTimeout(() => setOpen(false), 150)
-                    }}
+                    onMouseEnter={handleMouseEnter}
+                    onMouseLeave={handleMouseLeave}
                     className="text-sm font-medium text-muted-foreground hover:text-foreground"
                   >
                     Iniciar Sesión
                   </Link>
                 </PopoverTrigger>
                 <PopoverContent
-                  onMouseEnter={() => {
-                    if (closeTimer.current) {
-                      clearTimeout(closeTimer.current)
-                    }
-                    setOpen(true)
-                  }}
-                  onMouseLeave={() => {
-                    if (closeTimer.current) {
-                      clearTimeout(closeTimer.current)
-                    }
-                    closeTimer.current = setTimeout(() => setOpen(false), 150)
-                  }}
+                  onMouseEnter={handleMouseEnter}
+                  onMouseLeave={handleMouseLeave}
                   className="w-64 space-y-2 text-center transition-opacity duration-300"
                 >
                   <p className="text-xs font-semibold">

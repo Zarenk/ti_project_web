@@ -98,5 +98,23 @@ export async function createUser(
   }
 
   return res.json();
+}
 
+export async function updateUser(data: { email?: string; username?: string; password?: string }) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+
+  const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.message || 'Error al actualizar usuario');
+  }
+
+  return res.json();
 }
