@@ -141,6 +141,41 @@ export default function ExcelUploadPage() {
         <h1 className="text-2xl font-bold">Subir Inventario por Excel</h1>
       </div>
 
+      <div className="mb-6 space-y-2">
+        <h2 className="font-semibold">Formato de la hoja Excel</h2>
+        <div className="overflow-auto border rounded">
+          <table className="min-w-full text-sm">
+            <thead className="bg-muted">
+              <tr>
+                <th className="px-2 py-1">nombre</th>
+                <th className="px-2 py-1">categoria</th>
+                <th className="px-2 py-1">descripcion</th>
+                <th className="px-2 py-1">precioCompra</th>
+                <th className="px-2 py-1">precioVenta</th>
+                <th className="px-2 py-1">stock</th>
+                <th className="px-2 py-1">serie</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="px-2 py-1">Laptop XYZ</td>
+                <td className="px-2 py-1">Laptops</td>
+                <td className="px-2 py-1">Descripción opcional</td>
+                <td className="px-2 py-1">1500</td>
+                <td className="px-2 py-1">1700</td>
+                <td className="px-2 py-1">5</td>
+                <td className="px-2 py-1">ABC123, DEF456</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          La primera fila debe contener exactamente estos encabezados. La columna
+          <code> serie</code> es opcional y acepta varios números separados por
+          comas.
+        </p>
+      </div>
+
       <Input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} />
       <Button className="mt-4" onClick={handleUpload}>Procesar Archivo</Button>
       <Button variant="outline" onClick={() => router.back()}>Volver</Button>

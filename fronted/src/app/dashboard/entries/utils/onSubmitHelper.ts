@@ -2,7 +2,7 @@ import { toast } from "sonner"
 import { createProvider } from "../../providers/providers.api";
 import { verifyOrCreateProducts } from "../../products/products.api";
 import { createEntry, uploadGuiaPdf, uploadPdf } from "../entries.api";
-
+import { updateProductPriceSell } from "../../inventory/inventory.api";
 
 export async function handleFormSubmission({
   data,
@@ -80,6 +80,22 @@ export async function handleFormSubmission({
     }));
 
     const verifiedProducts = await verifyOrCreateProducts(productsToVerify);
+
+    // Actualizar precio de venta si es necesario
+    await Promise.all(
+      selectedProducts.map(async (product: any) => {
+        const verified = verifiedProducts.find((vp: any) => vp.name === product.name);
+        if (verified && product.priceSell && product.priceSell > 0) {
+          try {
+            if (!verified.priceSell || verified.priceSell !== product.priceSell) {
+              await updateProductPriceSell(verified.id, product.priceSell);
+            }
+          } catch (err) {
+            console.error('Error al actualizar precio de venta:', err);
+          }
+        }
+      })
+    );
 
     const updatedProducts = selectedProducts.map((product: any) => {
       const verifiedProduct = verifiedProducts.find((vp: any) => vp.name === product.name);

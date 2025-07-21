@@ -287,14 +287,20 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     );
   
     if (existingProduct) {
-      // Si el producto ya existe, actualiza la cantidad
+      // Si el producto ya existe, actualiza la cantidad y el precio de venta si corresponde
+      const newPriceSell = Number(form.getValues("priceSell") || 0);
       setSelectedProducts((prev) =>
         prev.map((product) =>
           product.id === currentProduct.id
-            ? { ...product,
-              quantity: product.quantity + quantity, 
-              series: [...(product.series || []), ...(series || [])], // Agregar series
-            }
+            ? {
+                ...product,
+                quantity: product.quantity + quantity,
+                series: [...(product.series || []), ...(series || [])], // Agregar series
+                priceSell:
+                  product.priceSell && product.priceSell > 0
+                    ? product.priceSell
+                    : newPriceSell,
+              }
             : product
         )
       );
@@ -307,7 +313,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           id: currentProduct.id,
           name: currentProduct.name,
           price: currentProduct.price,
-          priceSell: currentProduct.priceSell,
+          priceSell: Number(form.getValues("priceSell") || currentProduct.priceSell),
           quantity,
           category_name: categoryName || "Sin categoria", // Incluye el nombre de la categoría
           series: [...(series || [])], // Agregar series

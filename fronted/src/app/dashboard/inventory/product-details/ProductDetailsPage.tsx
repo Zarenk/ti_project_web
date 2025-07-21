@@ -83,7 +83,9 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
     )
   : { USD: 0, PEN: 0 };
 
-  const totalStock = entries.reduce((sum, entry) => sum + entry.quantity, 0) - sales.reduce((sum, sale) => sum + sale.quantity, 0);
+  // Utilizar directamente el stock calculado en el backend para mantener la
+  // misma cifra que se muestra en la vista general del inventario.
+  const totalStock = product.stock;
 
   // Calcular la última fecha de actualización entre todas las tiendas
   const latestUpdateAt = product.storeOnInventory.reduce(

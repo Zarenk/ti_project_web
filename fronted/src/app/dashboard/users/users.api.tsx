@@ -3,7 +3,7 @@ export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localh
 // Función para realizar el login
 export async function loginUser(email: string, password: string) {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/users/login`, {
+    const response = await fetch('/api/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getUserDataFromToken, isTokenValid } from "@/lib/auth";
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { Separator } from "@/components/ui/separator";
@@ -18,9 +19,11 @@ export default function Page({children}: {children: React.ReactNode}) {
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
+    const data = getUserDataFromToken();
+    if (!data || !isTokenValid()) {
       router.push("/login");
+    } else if (data.role === "CLIENT") {
+      router.push("/users");
     }
   }, [router]);
 

@@ -1,12 +1,10 @@
+"use client";
+
 import { columns } from './columns';
 import { DataTable } from './data-table';
 import { getSales } from './sales.api';
 
-
-
 export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
-
-
 
 export default async function Page() {
 
