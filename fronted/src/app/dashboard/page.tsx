@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { BarChart3, Box, DollarSign, Package, ShoppingCart, TrendingUp, Truck, Users } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react";
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api";
 import { getMonthlySalesTotal } from "./sales/sales.api"
 
@@ -17,6 +18,8 @@ export default function WelcomeDashboard() {
   const [monthlySales, setMonthlySales] = useState<{ total: number; growth: number | null } | null>(null);
 
   const [lowStockItems, setLowStockItems] = useState<{ productId: number; productName: string; storeName: string; stock: number }[]>([]);
+
+  const router = useRouter()
 
 
 //------------------------------- USE EFFECT --------------------------------//
@@ -45,8 +48,12 @@ useEffect(() => {
       ]);
       setTotalInventory(inventoryData);
       setMonthlySales(salesData);
-    } catch (error) {
-      console.error("Error cargando datos:", error);
+    } catch (error: any) {
+      if (error.message === 'Unauthorized') {
+        router.push('/unauthorized')
+      } else {
+        console.error('Error cargando datos:', error)
+      }
     } finally {
       setLoading(false);
     }

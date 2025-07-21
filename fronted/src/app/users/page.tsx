@@ -20,6 +20,7 @@ import { getLastAccessFromToken } from "@/lib/auth"
 import { getClients, updateClient, uploadClientImage, createClient } from "../dashboard/clients/clients.api"
 import { getSales } from "../dashboard/sales/sales.api"
 import Navbar from "@/components/navbar"
+import { useRouter } from "next/navigation"
 
 export default function UserPanel() {
   const [isEditing, setIsEditing] = useState(false)
@@ -29,6 +30,7 @@ export default function UserPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [registrationDate, setRegistrationDate] = useState<string>('')
   const [lastAccess, setLastAccess] = useState<string>('')
+  const router = useRouter()
 
   const documentTypes = ["DNI", "CARNET DE EXTRANJERIA", "OTRO"] as const
 
@@ -141,8 +143,12 @@ export default function UserPanel() {
           total: `S/. ${s.total.toFixed(2)}`,
         }))
         setOrderHistory(history)
-      } catch (error) {
-        console.error('Error loading user panel:', error)
+      } catch (error: any) {
+        if (error.message === 'Unauthorized') {
+          router.push('/unauthorized')
+        } else {
+          console.error('Error loading user panel:', error)
+        }
       }
     }
     loadData()

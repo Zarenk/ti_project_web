@@ -1,32 +1,40 @@
 "use client";
 
-import { columns } from './columns';
-import { DataTable } from './data-table';
-import { getSales } from './sales.api';
+import { useEffect, useState } from "react";
+import { columns } from "./columns";
+import { DataTable } from "./data-table";
+import { getSales } from "./sales.api";
 
 export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
 
-export default async function Page() {
+export default function Page() {
+  const [sales, setSales] = useState<any[]>([]);
 
-  //consulta al API
-  const sales = await getSales()
-  //console.log(stores)
-
-  //para el label chiquito de la categoria
-  const mappedData = sales.map((store:any) => ({
-    ...store,
-  }));
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const data = await getSales();
+        const mapped = data.map((sale: any) => ({ ...sale }));
+        setSales(mapped);
+      } catch (error) {
+        console.error("Error al obtener las ventas:", error);
+      }
+    };
+    fetchData();
+  }, []);
 
   return (
     <>
-      <section className='py-2 sm:py-6'>
-        <div className='container mx-auto px-1 sm:px-6 lg:px-8'>
-          <h1 className='px-5 text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6'>Historial de Ventas</h1>
+      <section className="py-2 sm:py-6">
+        <div className="container mx-auto px-1 sm:px-6 lg:px-8">
+          <h1 className="px-5 text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6">
+            Historial de Ventas
+          </h1>
           <div className="overflow-x-auto">
-            <DataTable columns={columns} data={mappedData}></DataTable>
-          </div>          
+            <DataTable columns={columns} data={sales} />
+          </div>      
         </div>
       </section>
     </>
-  )
+  );
 }

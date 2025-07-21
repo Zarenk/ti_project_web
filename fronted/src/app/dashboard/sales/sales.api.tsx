@@ -76,19 +76,22 @@ export async function getSales() {
   if (!token) {
     throw new Error('No se encontró un token de autenticación');
   }
-  try{
+  try {
     const response = await fetch(`${BACKEND_URL}/api/sales`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    });
+    })
     if (!response.ok) {
-      throw new Error('Error al obtener las ventas');
+      if (response.status === 403) {
+        throw new Error('Unauthorized')
+      }
+      throw new Error('Error al obtener las ventas')
     }
-    return await response.json();
-  }
-  catch(error){
-    console.error('Error al obtener las ventas:', error);
+    return await response.json()
+  } catch (error) {
+    console.error('Error al obtener las ventas:', error)
+    throw error
   }
 }
 
@@ -99,9 +102,16 @@ export async function getMonthlySalesTotal() {
   }
   const response = await fetch(`${BACKEND_URL}/api/sales/monthly-total`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) throw new Error("Error al obtener ventas mensuales");
-  return await response.json(); // { total, growth }
+  })
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('Unauthorized')
+    }
+    throw new Error('Error al obtener ventas mensuales')
+  }
+
+  return await response.json() // { total, growth }
 }
 
 export async function getProductsByStore(storeId: number) {

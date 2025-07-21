@@ -27,7 +27,7 @@ export class SalesService {
 
     const { store, cashRegister, clientIdToUse } = await prepareSaleContext(this.prisma, storeId, clientId);
 
-    // Validar stock y calcular el total
+    // Validar stock, calcular el total y preparar las asignaciones de inventario
     const allocations: SaleAllocation[] = [];
     let total = 0;
     for (const detail of details) {
@@ -41,6 +41,7 @@ export class SalesService {
         );
       }
 
+      allocations.push({ detail, storeInventory });
       total += detail.quantity * detail.price;
     }
 
