@@ -40,6 +40,37 @@ export async function createSale(data: {
   }
 }
 
+export async function createWebSale(data: {
+  userId: number;
+  storeId?: number;
+  clientId?: number;
+  total: number;
+  description?: string;
+  details: { productId: number; quantity: number; price: number }[];
+  tipoComprobante?: string;
+  tipoMoneda: string;
+  payments: { paymentMethodId: number; amount: number; currency: string }[];
+  source?: 'WEB';
+}) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  const response = await fetch(`${BACKEND_URL}/api/web-sales`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Error al crear la venta web: ${errorText}`);
+  }
+  return await response.json();
+}
+
 export async function getSales() {
   const token = localStorage.getItem('token');
   if (!token) {

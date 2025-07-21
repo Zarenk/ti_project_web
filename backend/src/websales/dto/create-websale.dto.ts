@@ -1,0 +1,77 @@
+import { IsArray, IsIn, IsNumber, IsOptional, IsPositive, IsString, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class WebSaleDetailDto {
+  @IsNumber()
+  @IsPositive()
+  productId!: number;
+
+  @IsNumber()
+  @IsPositive()
+  quantity!: number;
+
+  @IsNumber()
+  @IsPositive()
+  price!: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  series?: string[];
+}
+
+class WebPaymentDto {
+  @IsNumber()
+  paymentMethodId!: number;
+
+  @IsNumber()
+  @IsPositive()
+  amount!: number;
+
+  @IsString()
+  currency!: string;
+}
+
+export class CreateWebSaleDto {
+  @IsNumber()
+  @IsPositive()
+  userId!: number;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  storeId?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  clientId?: number;
+
+  @IsNumber()
+  total!: number;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WebSaleDetailDto)
+  details!: WebSaleDetailDto[];
+
+  @IsOptional()
+  @IsString()
+  tipoComprobante?: string;
+
+  @IsString()
+  tipoMoneda!: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WebPaymentDto)
+  payments!: WebPaymentDto[];
+
+  @IsOptional()
+  @IsIn(['WEB'])
+  source?: 'WEB';
+}

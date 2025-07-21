@@ -5,7 +5,7 @@ import { useCart } from "@/context/cart-context"
 import { CreditCard, Building2, Smartphone, Check, ShoppingCart } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { createSale } from "@/app/dashboard/sales/sales.api"
+import { createWebSale } from "@/app/dashboard/sales/sales.api"
 import {
   selfRegisterClient,
   checkClientExists,
@@ -336,7 +336,7 @@ export default function Component() {
           source: 'WEB',
         }
 
-        const sale = await createSale(payload)
+        const sale = await createWebSale(payload)
         if (sale && sale.id) {
           clear()
           router.push(`/orders/${sale.id}`)
