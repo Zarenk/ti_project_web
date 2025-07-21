@@ -31,6 +31,14 @@
 $ npm install
 ```
 
+## Environment variables
+
+Create a `.env` file in the `backend` directory with the following variable:
+
+```env
+JWT_SECRET=<your-secret-here>
+```
+
 ## Compile and run the project
 
 ```bash

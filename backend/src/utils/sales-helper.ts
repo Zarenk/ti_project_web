@@ -132,9 +132,16 @@ export async function executeSale(prisma: PrismaService, params: {
       }
       descriptionTransaction += '; ';
 
-      const entryDetail = await prismaTx.entryDetail.findFirst({ where: { productId: detail.productId } });
+      const entryDetail = await prismaTx.entryDetail.findFirst({
+        where: {
+          productId: detail.productId,
+          entry: { storeId: storeInventory.storeId },
+        },
+      });
       if (!entryDetail) {
-        throw new NotFoundException(`No se encontró un detalle de entrada para el producto con ID ${detail.productId}.`);
+        throw new NotFoundException(
+          `No se encontró un detalle de entrada para el producto con ID ${detail.productId} en la tienda ${storeInventory.storeId}.`,
+        );
       }
 
       await prismaTx.salesDetail.create({

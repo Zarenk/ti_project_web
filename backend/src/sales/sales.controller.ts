@@ -1,38 +1,46 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, BadRequestException, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  ParseIntPipe,
+  BadRequestException,
+  UseGuards,
+} from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { RolesGuard } from 'src/users/roles.guard';
+import { Roles } from 'src/users/roles.decorator';
 
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'EMPLOYEE')
 @Controller('sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
-  @UseGuards(JwtAuthGuard)
   @Post()
   async createSale(@Body() createSaleDto: CreateSaleDto) {
     return this.salesService.createSale(createSaleDto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get()
   async findAllSales() {
     return this.salesService.findAllSales();
   }
 
   // Endpoint para obtener las series vendidas en una venta específica
-  @UseGuards(JwtAuthGuard)
   @Get(':saleId/sold-series')
   async getSoldSeriesBySale(@Param('saleId', ParseIntPipe) saleId: number) {
     return this.salesService.getSoldSeriesBySale(saleId);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('monthly-total')
   async getMonthlySalesTotal() {
     return this.salesService.getMonthlySalesTotal();
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('revenue-by-category/from/:startDate/to/:endDate')
   getRevenueByCategoryByRange(
     @Param('startDate') startDate: string,
@@ -44,7 +52,6 @@ export class SalesController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('chart/:from/:to')
   async getSalesChartByDateRange(
     @Param('from') from: string,
@@ -57,7 +64,6 @@ export class SalesController {
   }
 
   // En el controlador
-  @UseGuards(JwtAuthGuard)
   @Get('top-products/from/:startDate/to/:endDate')
   getTopProductsByRange(
     @Param('startDate') startDate: string,
@@ -66,7 +72,6 @@ export class SalesController {
     return this.salesService.getTopProducts(10, startDate, endDate);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('top-products/type/:type')
   getTopProductsByType(@Param('type') type: string) {
     const now = new Date();
@@ -87,25 +92,21 @@ export class SalesController {
     }
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('monthly-count')
   async getMonthlySalesCount() {
     return this.salesService.getMonthlySalesCount();
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('monthly-clients')
   getMonthlyClientStats() {
     return this.salesService.getMonthlyClientStats();
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('recent/:from/:to')
   async getRecentSales(@Param('from') from: string, @Param('to') to: string) {
     return this.salesService.getRecentSales(from, to);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.salesService.findOne(id);
