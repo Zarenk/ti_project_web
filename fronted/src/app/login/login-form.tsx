@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { signIn } from 'next-auth/react';
 import { useAuth } from '@/context/auth-context';
+import { getUserDataFromToken } from '@/lib/auth';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
@@ -25,7 +26,12 @@ export default function LoginForm() {
       refreshUser();
       toast.success('Inicio de sesión exitoso');
 
-      router.push('/users'); // Redirige al panel de usuario después del login
+      const data = getUserDataFromToken();
+      if (data?.role === 'ADMIN' || data?.role === 'EMPLOYEE') {
+        router.push('/dashboard');
+      } else {
+        router.push('/users');
+      }
     } catch (error: any) {
       toast.error(error.message || 'Error al iniciar sesión');
     }
