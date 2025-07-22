@@ -429,7 +429,7 @@ export default function StorePage() {
                         <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{product.description}</p>
                         <span className="text-sm text-muted-foreground mb-2 block">{product.brand}</span>
                         <div className="flex items-center justify-between">
-                          <span className="text-2xl font-bold text-green-600">${product.price.toFixed(2)}</span>
+                          <span className="text-2xl font-bold text-green-600">S/.{product.price.toFixed(2)}</span>
                         </div>
                         <p
                           className={`text-xs mt-1 flex items-center gap-1 ${

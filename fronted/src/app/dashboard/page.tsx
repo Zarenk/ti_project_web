@@ -8,6 +8,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api";
 import { getMonthlySalesTotal } from "./sales/sales.api"
+import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 
 export default function WelcomeDashboard() {
 
@@ -41,6 +42,11 @@ useEffect(() => {
 
 useEffect(() => {
   async function fetchData() {
+    const data = getUserDataFromToken();
+    if (!data || !isTokenValid() || (data.role !== 'ADMIN' && data.role !== 'EMPLOYEE')) {
+      router.push('/unauthorized');
+      return;
+    }
     try {
       const [inventoryData, salesData] = await Promise.all([
         getTotalInventory(),
@@ -50,9 +56,9 @@ useEffect(() => {
       setMonthlySales(salesData);
     } catch (error: any) {
       if (error.message === 'Unauthorized') {
-        router.push('/unauthorized')
+        router.push('/unauthorized');
       } else {
-        console.error('Error cargando datos:', error)
+        console.error('Error cargando datos:', error);
       }
     } finally {
       setLoading(false);

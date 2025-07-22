@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useEffect, useState } from "react"
 import {
   AudioWaveform,
   BookOpen,
@@ -27,6 +28,7 @@ import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
+import { getUserProfile } from "../app/dashboard/users/users.api"
 import {
   Sidebar,
   SidebarContent,
@@ -35,13 +37,8 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 
-// This is sample data.
+// Static navigation data
 const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
   teams: [
     {
       name: "Tecnologia Informatica",
@@ -229,6 +226,28 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
+  const [user, setUser] = useState({
+    name: "",
+    email: "",
+    avatar: "/logo_ti.png",
+  })
+
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const profile = await getUserProfile()
+        setUser({
+          name: profile.username,
+          email: profile.email,
+          avatar: "/logo_ti.png",
+        })
+      } catch (error) {
+        console.error("Error fetching user profile:", error)
+      }
+    }
+    fetchProfile()
+  }, [])
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -239,7 +258,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavProjects projects={data.projects} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

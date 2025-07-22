@@ -24,7 +24,7 @@ export function SeriesModal({ isOpen, onClose, series }: SeriesModalProps) {
           {series.length > 0 ? (
             <ul className="list-disc pl-5">
               {series.map((serie, index) => (
-                <li key={index} className="text-gray-100">
+                <li key={index} className="text-gray-900 dark:text-gray-100">
                   {serie}
                 </li>
               ))}

@@ -327,3 +327,8 @@ export async function getSaleById(id: number | string) {
   return res.json();
 }
 
+export async function getWebSaleById(id: number | string) {
+  const res = await fetch(`${BACKEND_URL}/api/web-sales/${id}`)
+  if (!res.ok) throw new Error('Error al obtener la venta web')
+  return res.json()
+}

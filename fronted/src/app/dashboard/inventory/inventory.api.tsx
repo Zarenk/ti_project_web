@@ -271,10 +271,15 @@ export async function getAllProductsByStore(storeId: number, queryParams: string
 
 export async function getTotalInventory() {
   try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('No se encontró un token de autenticación');
+    }
     const response = await fetch(`${BACKEND_URL}/api/inventory/total-inventory`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
       },
     });
 
@@ -291,8 +296,17 @@ export async function getTotalInventory() {
 
 export async function getLowStockItems() {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/inventory/low-stock-items`);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('No se encontró un token de autenticación');
+    }
+    const response = await fetch(`${BACKEND_URL}/api/inventory/low-stock-items`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (!response.ok) {
+      if (response.status === 403) {
+        throw new Error('Unauthorized');
+      }
       throw new Error('Error al obtener los productos sin stock');
     }
     return await response.json();

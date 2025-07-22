@@ -49,10 +49,10 @@ export function AddSeriesDialog({
     <AlertDialog open={isOpen} onOpenChange={onClose}>
       <AlertDialogContent className="max-w-lg">
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-lg font-bold text-gray-100">
+          <AlertDialogTitle className="text-lg font-bold text-gray-900 dark:text-gray-100">
             Seleccionar Series
           </AlertDialogTitle>
-          <AlertDialogDescription className="text-sm text-gray-100">
+          <AlertDialogDescription className="text-sm text-gray-700 dark:text-gray-300">
             Selecciona las series que deseas usar para este producto. Puedes seleccionar hasta {quantity} series.
           </AlertDialogDescription>
   
@@ -74,11 +74,11 @@ export function AddSeriesDialog({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-100">No hay series disponibles para este producto.</p>
+            <p className="text-sm text-gray-700 dark:text-gray-300">No hay series disponibles para este producto.</p>
           )}
         </div>
         <AlertDialogFooter>
-          <AlertDialogCancel className="bg-gray-200 hover:bg-gray-300 text-gray-100">
+          <AlertDialogCancel className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:text-gray-100">
             Cancelar
           </AlertDialogCancel>
           <AlertDialogAction

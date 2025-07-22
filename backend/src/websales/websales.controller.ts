@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post } from '@nestjs/common';
 import { WebSalesService } from './websales.service';
 import { CreateWebSaleDto } from './dto/create-websale.dto';
 
@@ -9,5 +9,10 @@ export class WebSalesController {
   @Post()
   async create(@Body() dto: CreateWebSaleDto) {
     return this.webSalesService.createWebSale(dto);
+  }
+
+  @Get(':id')
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.webSalesService.getWebSaleById(id);
   }
 }

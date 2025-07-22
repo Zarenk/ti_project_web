@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 
 import { ArrowLeft, Calendar, MapPin, Package, Truck, User } from "lucide-react"
 import Image from "next/image"
@@ -10,26 +11,24 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { getSaleById } from "@/app/dashboard/sales/sales.api"
+import { getWebSaleById } from "@/app/dashboard/sales/sales.api"
 
-interface Props {
-  params: { id: string }
-}
-
-export default function OrderDetails({ params }: Props) {
+export default function OrderDetails() {
+  const params = useParams()
+  const id = Array.isArray(params.id) ? params.id[0] : params.id
   const [order, setOrder] = useState<any | null>(null)
 
   useEffect(() => {
     async function fetchOrder() {
       try {
-        const data = await getSaleById(params.id)
+        const data = await getWebSaleById(id as string)
         setOrder(data)
       } catch (error) {
         console.error("Error al obtener la orden:", error)
       }
     }
-    fetchOrder()
-  }, [params.id])
+    if (id) fetchOrder()
+  }, [id])
 
   if (!order) {
     return <div className="p-6">Cargando...</div>

@@ -21,7 +21,7 @@ export default function Page({children}: {children: React.ReactNode}) {
   useEffect(() => {
     const data = getUserDataFromToken();
     if (!data || !isTokenValid()) {
-      router.push("/login");
+      router.push("/unauthorized");
     } else if (data.role === "CLIENT") {
       router.push("/users");
     }

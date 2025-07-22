@@ -62,4 +62,25 @@ export class WebSalesService {
       
     });
   }
+
+  async getWebSaleById(id: number) {
+    const sale = await this.prisma.sales.findUnique({
+      where: { id },
+      include: {
+        client: true,
+        salesDetails: {
+          include: {
+            entryDetail: { include: { product: true } },
+          },
+        },
+        invoices: true,
+      },
+    });
+
+    if (!sale) {
+      throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
+    }
+
+    return sale;
+  }
 }

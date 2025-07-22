@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
 import { getUserProfile, updateUser } from "../dashboard/users/users.api"
-import { getLastAccessFromToken } from "@/lib/auth"
+import { getLastAccessFromToken, getUserDataFromToken, isTokenValid } from "@/lib/auth"
 import { getClients, updateClient, uploadClientImage, createClient } from "../dashboard/clients/clients.api"
 import { getSales } from "../dashboard/sales/sales.api"
 import Navbar from "@/components/navbar"
@@ -31,6 +31,14 @@ export default function UserPanel() {
   const [registrationDate, setRegistrationDate] = useState<string>('')
   const [lastAccess, setLastAccess] = useState<string>('')
   const router = useRouter()
+
+  useEffect(() => {
+    const data = getUserDataFromToken()
+    if (!data || !isTokenValid() || data.role !== 'CLIENT') {
+      router.replace('/login')
+      return
+    }
+  }, [router])
 
   const documentTypes = ["DNI", "CARNET DE EXTRANJERIA", "OTRO"] as const
 
