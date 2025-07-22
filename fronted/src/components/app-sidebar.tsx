@@ -218,7 +218,7 @@ const data = {
     },
     {
       name: "Pagina Web",
-      url: "#",
+      url: "/store",
       icon: Globe,
     },
   ],

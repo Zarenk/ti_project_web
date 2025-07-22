@@ -34,8 +34,12 @@ export default function UserPanel() {
 
   useEffect(() => {
     const data = getUserDataFromToken()
-    if (!data || !isTokenValid() || data.role !== 'CLIENT') {
+    if (!data || !isTokenValid()) {
       router.replace('/login')
+      return
+    }
+    if (data.role?.toUpperCase().trim() !== 'CLIENT') {
+      router.replace('/dashboard')
       return
     }
   }, [router])
@@ -107,6 +111,15 @@ export default function UserPanel() {
 
   useEffect(() => {
     async function loadData() {
+      const session = getUserDataFromToken()
+      if (!session || !isTokenValid()) {
+        router.replace('/login')
+        return
+      }
+      if (session.role?.toUpperCase().trim() !== 'CLIENT') {
+        router.replace('/dashboard')
+        return
+      }
       try {
         const profile = await getUserProfile()
         setRegistrationDate(

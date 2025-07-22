@@ -2,7 +2,7 @@ import { getAllPurchasePrices, getInventoryWithCurrency, getProductEntries, getS
 import ProductDetailsPage from "../ProductDetailsPage";
 
 export const dynamicParams = true;
-export const dynamic = "force-static"; // o "auto"
+export const dynamic = "force-dynamic"; // ensure fresh data on each request
 
 interface Props {
   params: Promise<{ id: string }>;

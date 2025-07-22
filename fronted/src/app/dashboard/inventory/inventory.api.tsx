@@ -20,6 +20,7 @@ export async function getInventory() {
 export async function getAllPurchasePrices() {
   const response = await fetch(`${BACKEND_URL}/api/inventory/purchase-prices`, {
     method: 'GET',
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
     },
@@ -109,6 +110,7 @@ export async function getInventoryWithCurrency() {
   try {
     const response = await fetch(`${BACKEND_URL}/api/inventory/with-currency`, {
       method: 'GET',
+      cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -126,8 +128,11 @@ export async function getInventoryWithCurrency() {
 }
 
 export async function getStockDetailsByStoreAndCurrency() {
-  try{
-    const response = await fetch(`${BACKEND_URL}/api/inventory/stock-details-by-store-and-currency`);
+  try {
+    const response = await fetch(
+      `${BACKEND_URL}/api/inventory/stock-details-by-store-and-currency`,
+      { cache: 'no-store' }
+    );
     if (!response.ok) {
       throw new Error('Error al obtener los detalles de stock por tienda y moneda');
     }
@@ -140,8 +145,11 @@ export async function getStockDetailsByStoreAndCurrency() {
 }
 
 export async function getProductEntries(productId: number) {
-  try{
-    const response = await fetch(`${BACKEND_URL}/api/inventory/product-entries/${productId}`);
+  try {
+    const response = await fetch(
+      `${BACKEND_URL}/api/inventory/product-entries/${productId}`,
+      { cache: 'no-store' }
+    );
     if (!response.ok) {
       throw new Error('Error al obtener las entradas del producto');
     }
@@ -154,7 +162,10 @@ export async function getProductEntries(productId: number) {
 
 export async function getSeriesByProductAndStore(storeId: number, productId: number) {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/inventory/series-by-product-and-store/${storeId}/${productId}`);
+    const response = await fetch(
+      `${BACKEND_URL}/api/inventory/series-by-product-and-store/${storeId}/${productId}`,
+      { cache: "no-store" }
+    );
     if (!response.ok) {
       throw new Error("Error al obtener las series del producto en la tienda");
     }
