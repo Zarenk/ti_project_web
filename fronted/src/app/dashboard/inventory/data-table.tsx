@@ -182,10 +182,10 @@ return (
           </div>            
         </div>
         <div className="gap-2">
-            <label className="text-sm text-gray-600">
+            <label className="text-sm text-muted-foreground">
                 Total de datos: {table.getRowModel().rows.length}
                 </label>
-                <label className="text-sm text-gray-600 pb-2 sm:pb-0">
+                <label className="text-sm text-muted-foreground pb-2 sm:pb-0">
                 {totalSelectedRows} de{" "}
                 {table.getFilteredRowModel().rows.length} fila(s) seleccionadas.
             </label>

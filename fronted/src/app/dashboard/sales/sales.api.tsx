@@ -95,6 +95,28 @@ export async function getSales() {
   }
 }
 
+export async function getMySales() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/sales/my`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!response.ok) {
+      if (response.status === 403) {
+        throw new Error('Unauthorized')
+      }
+      throw new Error('Error al obtener las ventas')
+    }
+    return await response.json()
+  } catch (error) {
+    console.error('Error al obtener las ventas:', error)
+    throw error
+  }
+}
+
 export async function getMonthlySalesTotal() {
   const token = localStorage.getItem('token');
   if (!token) {
@@ -228,7 +250,7 @@ export async function getRevenueByCategoryByRange(from: string, to: string) {
     throw new Error('No se encontró un token de autenticación');
   }
   const response = await fetch(
-    `${BACKEND_URL}/api/sales/revenue-by-category/from/${from}/to/${to}`,
+    `${BACKEND_URL}/api/sales/revenue-by-category/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`,
     {
       headers: { Authorization: `Bearer ${token}` },
     },
@@ -244,7 +266,7 @@ export async function getSalesByDateParams(from: string, to: string) {
   if (!token) {
     throw new Error('No se encontró un token de autenticación');
   }
-  const response = await fetch(`${BACKEND_URL}/api/sales/chart/${from}/${to}`,
+  const response = await fetch(`${BACKEND_URL}/api/sales/chart/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
     {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -309,7 +331,7 @@ export async function getRecentSalesByRange(from: string, to: string) {
   if (!token) {
     throw new Error('No se encontró un token de autenticación');
   }
-  const res = await fetch(`${BACKEND_URL}/api/sales/recent/${from}/${to}`,
+  const res = await fetch(`${BACKEND_URL}/api/sales/recent/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
     { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error("Error al obtener ventas recientes");
   return res.json();

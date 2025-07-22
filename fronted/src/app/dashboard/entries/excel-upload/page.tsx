@@ -94,11 +94,30 @@ export default function ExcelUploadPage() {
 
   const router = useRouter()
 
-  const handleUpload = async () => {
+const handleUpload = async () => {
     if (!file) return
     try {
       const response = await importExcelFile(file)
-      setPreviewData(response.preview)
+      const preview = response.preview
+
+      const erroresPorFila = validarFilas(preview)
+      const errores = Object.values(erroresPorFila).flat()
+      const indicesConError = Object.keys(erroresPorFila).map((idx) => parseInt(idx))
+
+      const seriesDuplicadas = encontrarSeriesDuplicadas(preview)
+      if (seriesDuplicadas.length > 0) {
+        errores.push(`Series duplicadas en el archivo: ${seriesDuplicadas.join(', ')}`)
+      }
+
+      setErroresValidacion(errores)
+      setFilasConError(indicesConError)
+
+      if (errores.length > 0) {
+        setPreviewData(null)
+        return
+      }
+
+      setPreviewData(preview)
     } catch (error) {
       console.error('Error al subir el archivo:', error)
     }

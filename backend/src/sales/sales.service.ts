@@ -89,6 +89,37 @@ export class SalesService {
     });
   }
 
+  async findSalesByUser(userId: number) {
+    return this.prisma.sales.findMany({
+      where: { userId },
+      include: {
+        user: true,
+        store: true,
+        client: true,
+        salesDetails: {
+          include: {
+            entryDetail: {
+              include: {
+                product: true,
+              },
+            },
+            storeOnInventory: {
+              include: {
+                inventory: {
+                  include: {
+                    product: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        invoices: true,
+        payments: true,
+      },
+    });
+  }
+
   async findOne(id: number) {
     const sale = await this.prisma.sales.findUnique({
       where: { id },

@@ -238,10 +238,10 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
       </div>      
       {/* Aquí agregamos el contador de datos */}
       <div className="py-2 px-4 flex items-center space-x-4">
-          <label className="text-sm text-gray-600">
+          <label className="text-sm text-muted-foreground">
             Total de datos: {table.getRowModel().rows.length}
           </label>
-          <label className="text-sm text-gray-600">
+          <label className="text-sm text-muted-foreground">
             {table.getFilteredSelectedRowModel().rows.length} de{" "}
             {table.getFilteredRowModel().rows.length} fila(s) seleccionadas.
           </label>

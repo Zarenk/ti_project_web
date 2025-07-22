@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import { getRevenueByCategoryByRange } from "../sales.api"
 import { DateRange } from "react-day-picker"
+import { endOfDay } from "date-fns"
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"]
 
@@ -26,8 +27,8 @@ export function RevenueByCategory({ dateRange }: { dateRange: DateRange }) {
       try {
         if (!dateRange?.from || !dateRange?.to) return;
   
-        const from = dateRange.from.toISOString().split("T")[0];
-        const to = dateRange.to.toISOString().split("T")[0];
+        const from = dateRange.from.toISOString();
+        const to = endOfDay(dateRange.to).toISOString();
   
         const revenueData = await getRevenueByCategoryByRange(from, to);
         const withPercent = calculateDataWithPercentage(revenueData);

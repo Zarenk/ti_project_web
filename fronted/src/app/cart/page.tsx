@@ -157,7 +157,7 @@ export default function ShoppingCart() {
           {/* Left Section - Cart Items */}
           <div className="lg:col-span-2 space-y-6">
             {cartItems.length === 0 ? (
-              <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
+              <div className="bg-card rounded-2xl shadow-sm p-8 text-center">
                 <p className="text-gray-500 text-lg">El Carrito esta vacio</p>
               </div>
             ) : (
@@ -168,7 +168,7 @@ export default function ShoppingCart() {
                   return (
                   <div
                     key={item.id}
-                    className={`bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow duration-200 ${outOfStock ? 'opacity-50' : ''}`}
+                    className={`bg-card rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow duration-200 ${outOfStock ? 'opacity-50' : ''}`}
                   >
                     <div className="flex flex-col sm:flex-row gap-4">
                       {/* Product Image */}
@@ -255,7 +255,7 @@ export default function ShoppingCart() {
                 )})}
 
                 {/* Coupon Section */}
-                <div className="bg-white rounded-2xl shadow-sm p-6">
+                <div className="bg-card rounded-2xl shadow-sm p-6">
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Cupon de Descuento</h3>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Input
@@ -277,7 +277,7 @@ export default function ShoppingCart() {
               </div>
 
                {savedItems.length > 0 && (
-                 <div className="bg-white rounded-2xl shadow-sm p-6">
+                 <div className="bg-card rounded-2xl shadow-sm p-6">
                    <h3 className="text-lg font-medium text-gray-900 mb-4">Guardado para más tarde</h3>
                    <div className="space-y-4">
                      {savedItems.map((item) => (
@@ -297,7 +297,7 @@ export default function ShoppingCart() {
                )}
 
                {recommended.length > 0 && (
-                  <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <div className="bg-card rounded-2xl shadow-sm p-6">
                     <h3 className="text-lg font-medium text-gray-900 mb-4">Te podría interesar</h3>
                     <div className="relative">
                       <Button
@@ -362,7 +362,7 @@ export default function ShoppingCart() {
 
           {/* Right Section - Order Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-sm p-6 sticky top-8">
+            <div className="bg-card rounded-2xl shadow-sm p-6 sticky top-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-6">Resumen de Pedido</h2>
 
               <div className="space-y-4">

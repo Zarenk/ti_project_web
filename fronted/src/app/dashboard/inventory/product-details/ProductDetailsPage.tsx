@@ -178,54 +178,24 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
           {stockDetails ? (
             <>
               <p className="text-sm mb-2">
-                <strong>Total: </strong> 
-                USD: {Math.max(0, Math.floor(entries.reduce((sum, entry) => entry.tipoMoneda === "USD" ? sum + entry.quantity : sum, 0)))}, 
-                PEN: {Math.max(0, Math.floor(
-                  entries.reduce((sum, entry) => entry.tipoMoneda === "PEN" ? sum + entry.quantity : sum, 0) -
-                  sales.reduce((sum, sale) => sum + sale.quantity, 0)
-                ))}
+                <strong>Total: </strong>
+                USD: {Math.floor(stockDetails.totalByCurrency.USD)},
+                PEN: {Math.floor(stockDetails.totalByCurrency.PEN)}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {Object.entries(stockDetails.stockByStoreAndCurrency)
               .sort(([, a], [, b]) => a.storeName.localeCompare(b.storeName)) // Orden alfabético por storeName
-              .map(([storeId, { storeName, USD, PEN }]) => {
-                  // Filtrar las salidas que pertenecen a esta tienda
-                  const storeSales = sales.filter((sale) => sale.storeName === storeName);
-
-                  // Calcular el total de salidas en PEN para esta tienda
-                  const totalSales = storeSales.reduce((sum, sale) => sum + sale.quantity, 0);
-
-                  // Inicializar variables para el stock actualizado
-                  let remainingSales = totalSales;
-                  let updatedPEN = PEN;
-                  let updatedUSD = USD;
-
-                  // Restar del stock en PEN primero
-                  if (remainingSales > 0) {
-                    const deductedPEN = Math.min(remainingSales, updatedPEN);
-                    updatedPEN -= deductedPEN;
-                    remainingSales -= deductedPEN;
-                  }
-
-                  // Si quedan salidas pendientes, restar directamente del stock en USD
-                  if (remainingSales > 0) {
-                    const deductedUSD = Math.min(remainingSales, updatedUSD);
-                    updatedUSD -= deductedUSD;
-                    remainingSales -= deductedUSD; // No se realiza conversión
-                  }
-
-                  return (
-                    <div key={storeId} className="border rounded-md p-4 shadow-sm">
-                      <p className="font-medium">{storeName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        USD: {Math.floor(updatedUSD)} | PEN: {Math.floor(updatedPEN)} | TOTAL: {Math.floor(updatedUSD + updatedPEN)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Series: {series.find((s) => s.storeId === parseInt(storeId, 10))?.series.join(", ") || "No disponibles"}
-                      </p>
-                    </div>
-                  );
-                })}
+                .map(([storeId, { storeName, USD, PEN }]) => (
+                  <div key={storeId} className="border rounded-md p-4 shadow-sm">
+                    <p className="font-medium">{storeName}</p>
+                    <p className="text-sm text-muted-foreground">
+                      USD: {Math.floor(USD)} | PEN: {Math.floor(PEN)} | TOTAL: {Math.floor(USD + PEN)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Series: {series.find((s) => s.storeId === parseInt(storeId, 10))?.series.join(", ") || "No disponibles"}
+                    </p>
+                  </div>
+                ))}
               </div>
             </>
           ) : (

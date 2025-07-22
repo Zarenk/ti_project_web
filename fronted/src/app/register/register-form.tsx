@@ -76,7 +76,7 @@ export default function RegisterForm() {
 
   return (
     <div className="w-full max-w-md">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
+      <div className="bg-card rounded-2xl shadow-xl border border-slate-200 p-8">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-slate-800 mb-2">Crear cuenta</h1>
             <p className="text-slate-600">Completa tus datos para registrarte</p>

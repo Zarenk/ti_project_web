@@ -267,7 +267,7 @@ export default function ProductPage({ params }: Props) {
               )}
               <Badge className="absolute top-4 right-4 z-10 bg-green-500 hover:bg-green-600">Envío Gratis</Badge>
               <div
-                className="aspect-square rounded-2xl overflow-hidden bg-white dark:bg-gray-900 shadow-lg group cursor-zoom-in relative"
+                className="aspect-square rounded-2xl overflow-hidden bg-card shadow-lg group cursor-zoom-in relative"
                 onMouseEnter={() => setShowMagnifier(true)}
                 onMouseLeave={() => setShowMagnifier(false)}
                 onMouseMove={(e) => {
@@ -280,7 +280,7 @@ export default function ProductPage({ params }: Props) {
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="absolute bottom-4 right-4 z-20 bg-white/70 dark:bg-gray-800/70 hover:bg-white dark:hover:bg-gray-800 rounded-full"
+                  className="absolute bottom-4 right-4 z-20 bg-card/70 hover:bg-card rounded-full"
                   onClick={() => setIsImageDialogOpen(true)}
                 >
                   <Maximize2 className="w-5 h-5" />
@@ -365,7 +365,7 @@ export default function ProductPage({ params }: Props) {
 
             {/* Información del Modelo */}
             <div className="space-y-4">
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-sm border">
+              <div className="bg-card p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center gap-3 mb-3">
                   <Badge className="bg-blue-500 hover:bg-blue-600">{product?.brand}</Badge>
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{product?.name}</h2>
@@ -397,7 +397,7 @@ export default function ProductPage({ params }: Props) {
             </div>
 
             {/* Precio y Cantidad */}
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-sm border">
+            <div className="bg-card p-6 rounded-xl shadow-sm border">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <div className="flex items-center gap-3">
@@ -505,28 +505,28 @@ export default function ProductPage({ params }: Props) {
 
             {/* Beneficios */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg shadow-sm">
+              <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm">
                 <Truck className="w-6 h-6 text-green-500" />
                 <div>
                   <p className="font-medium text-sm">Envío Gratis</p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">Entrega en 24-48h</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg shadow-sm">
+              <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm">
                 <Shield className="w-6 h-6 text-blue-500" />
                 <div>
                   <p className="font-medium text-sm">Garantía 1 año</p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">Soporte técnico</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg shadow-sm">
+              <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm">
                 <Award className="w-6 h-6 text-purple-500" />
                 <div>
                   <p className="font-medium text-sm">Calidad Premium</p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">Certificado ISO</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg shadow-sm">
+              <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm">
                 <Zap className="w-6 h-6 text-yellow-500" />
                 <div>
                   <p className="font-medium text-sm">Setup Gratis</p>
@@ -638,7 +638,7 @@ export default function ProductPage({ params }: Props) {
             <TabsContent value="reviews" className="mt-8">
               <div className="space-y-6">
                 {userData ? (
-                  <Card className="bg-white/70 dark:bg-slate-800/70 border border-blue-100">
+                  <Card className="bg-card/70 border border-blue-100">
                     
                     <CardContent className="p-6 space-y-4">
                       <h3 className="text-2xl font-bold text-yellow-500">Reseñas</h3>
@@ -657,7 +657,7 @@ export default function ProductPage({ params }: Props) {
                         onBlur={(e) => setComment(e.target.value)}
                         ref={commentRef}
                         placeholder="Escribe tu opinión"
-                        className="bg-white/60 dark:bg-slate-800/60"
+                        className="bg-card/60"
                       />
                       <Button className="bg-blue-500 hover:bg-blue-600 text-white" onClick={handleReviewSubmit}>
                         Guardar reseña
@@ -665,7 +665,7 @@ export default function ProductPage({ params }: Props) {
                     </CardContent>
                   </Card>
                   ) : (
-                  <Card className="bg-white/70 dark:bg-slate-800/70 border border-blue-100">
+                  <Card className="bg-card/70 border border-blue-100">
                     <CardContent className="p-6 space-y-4 text-center">
                       <h4 className="font-semibold text-blue-700">Si te gustó el producto, bríndanos tu reseña</h4>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Para dejar una reseña necesitas iniciar sesión o registrarte.</p>
@@ -686,7 +686,7 @@ export default function ProductPage({ params }: Props) {
                     <Card
                       key={review.id}
                       className={`${
-                        review.userId === userData?.userId ? 'border-l-4 border-blue-500 bg-blue-50/30' : 'bg-white/60 dark:bg-slate-800/60'
+                        review.userId === userData?.userId ? 'border-l-4 border-blue-500 bg-blue-50/30' : 'bg-card/60'
                       }`}
                     >
                       <CardContent className="p-6 space-y-2">

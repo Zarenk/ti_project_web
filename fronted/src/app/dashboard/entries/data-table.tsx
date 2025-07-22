@@ -480,10 +480,10 @@ details: { product: string; quantity: number; price: number, series:string }[];
         </div>
       {/* Aquí agregamos el contador de datos */}
       <div className="py-2 px-4 flex flex-col sm:flex-row items-start sm:items-center space-x-4">
-          <label className="text-sm text-gray-600">
+          <label className="text-sm text-muted-foreground">
             Total de datos: {table.getRowModel().rows.length}
           </label>
-          <label className="text-sm text-gray-600 pb-2 sm:pb-0">
+          <label className="text-sm text-muted-foreground pb-2 sm:pb-0">
             {totalSelectedRows} de{" "}
             {table.getFilteredRowModel().rows.length} fila(s) seleccionadas.
           </label>

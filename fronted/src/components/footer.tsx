@@ -142,9 +142,9 @@ export default function Footer() {
           <div className="flex items-center gap-4 text-blue-200">
             <span>Pagos seguros a través de</span>
             <div className="flex gap-2">
-              <div className="bg-white text-blue-900 px-2 py-1 rounded text-xs font-bold">VISA</div>
-              <div className="bg-white text-blue-900 px-2 py-1 rounded text-xs font-bold">MC</div>
-              <div className="bg-white text-blue-900 px-2 py-1 rounded text-xs font-bold">AMEX</div>
+              <div className="bg-card text-blue-900 px-2 py-1 rounded text-xs font-bold">VISA</div>
+              <div className="bg-card text-blue-900 px-2 py-1 rounded text-xs font-bold">MC</div>
+              <div className="bg-card text-blue-900 px-2 py-1 rounded text-xs font-bold">AMEX</div>
             </div>
           </div>
         </div>

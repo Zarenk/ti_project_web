@@ -18,6 +18,7 @@ import {
 import { SaleDetailModal } from "./components/SalesDetailModal"
 import { getRecentSalesByRange } from "../sales.api"
 import { DateRange } from "react-day-picker"
+import { endOfDay } from "date-fns"
 
 interface Props {
   dateRange: DateRange
@@ -31,8 +32,8 @@ export function SalesTable({ dateRange }: Props) {
 
   useEffect(() => {
     if (dateRange?.from && dateRange?.to) {
-      const from = dateRange.from.toISOString().split("T")[0]
-      const to = dateRange.to.toISOString().split("T")[0]
+      const from = dateRange.from.toISOString()
+      const to = endOfDay(dateRange.to).toISOString()
 
       getRecentSalesByRange(from, to)
         .then(setSales)
@@ -79,7 +80,7 @@ export function SalesTable({ dateRange }: Props) {
   }
 
   return (
-    <div className="rounded-xl border bg-white dark:bg-gray-900 shadow-md overflow-hidden">
+    <div className="rounded-xl border bg-card shadow-md overflow-hidden">
       <div className="p-4 border-b">
         <h2 className="text-lg font-semibold">Últimas Ventas</h2>
         <p className="text-sm text-muted-foreground">Top 10 ventas más recientes registradas</p>

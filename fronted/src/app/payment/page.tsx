@@ -405,7 +405,7 @@ export default function Component() {
             <Card className="border-blue-200 shadow-sm p-0">
               <CardHeader className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-t-lg p-4">
                 <CardTitle className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 bg-card/20 rounded-full flex items-center justify-center">
                     <span className="text-sm font-bold">1</span>
                   </div>
                   Detalles de facturación

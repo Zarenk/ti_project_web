@@ -88,7 +88,7 @@ export default function LoginForm() {
       <div className="relative my-4">
         <Separator className="bg-slate-200" />
         <div className="absolute inset-0 flex justify-center">
-          <span className="bg-white px-4 text-sm text-slate-500 font-medium">
+          <span className="bg-card px-4 text-sm text-slate-500 font-medium">
             o inicia sesión con
           </span>
         </div>

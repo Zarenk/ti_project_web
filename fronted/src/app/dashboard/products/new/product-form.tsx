@@ -289,17 +289,17 @@ export function ProductForm({product, categories}: {product: any; categories: an
                             onValueChange={(value) => setValue("categoryId", value, { shouldValidate: true })
                         }
                         >                      
-                            <SelectTrigger className="border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <SelectTrigger className="border border-border rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 <SelectValue placeholder="Seleccione una categoría">
                                     {categories.find((category: any) => String(category.id) === form.watch("categoryId"))?.name || "Seleccione una categoria"}
                                 </SelectValue>
                             </SelectTrigger>
-                            <SelectContent className="bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-400 rounded-lg max-h-60 overflow-y-auto">
+                            <SelectContent className="bg-card text-foreground border border-border rounded-lg max-h-60 overflow-y-auto">
                             {categories.map((category: any) => (
                                 <SelectItem 
                                 key={category.id} 
                                 value={String(category.id)}
-                                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                                className="px-4 py-2 hover:bg-muted dark:hover:bg-muted/50 cursor-pointer"
                                 >
                                 {category.name}
                                 </SelectItem>

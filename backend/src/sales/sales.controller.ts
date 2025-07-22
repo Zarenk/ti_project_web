@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   BadRequestException,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
@@ -100,6 +101,12 @@ export class SalesController {
   @Get('monthly-clients')
   getMonthlyClientStats() {
     return this.salesService.getMonthlyClientStats();
+  }
+
+  @Get('my')
+  @Roles('CLIENT')
+  async getMySales(@Req() req) {
+    return this.salesService.findSalesByUser(req.user.userId);
   }
 
   @Get('recent/:from/:to')
