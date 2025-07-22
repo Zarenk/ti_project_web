@@ -754,6 +754,7 @@ export class InventoryService {
           quantity: series.length > 0 ? series.length : parsedStock,
           price: parsedPrecioCompra,
           priceInSoles: parsedPrecioCompra,
+          inventoryId: inventory.id,
         },
       })
 

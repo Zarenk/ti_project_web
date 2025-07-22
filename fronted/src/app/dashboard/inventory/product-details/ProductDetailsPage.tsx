@@ -87,6 +87,9 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
   // misma cifra que se muestra en la vista general del inventario.
   const totalStock = product.stock;
 
+  // Series disponibles en todas las tiendas
+  const availableSeries = series.flatMap((item) => item.series);
+
   // Calcular la última fecha de actualización entre todas las tiendas
   const latestUpdateAt = product.storeOnInventory.reduce(
     (latest: Date, store: any) =>
@@ -160,6 +163,7 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
                     {totalStock}
                   </span>
                 </p>
+                <p><strong>Series Disponibles:</strong> {availableSeries.length > 0 ? availableSeries.join(', ') : 'No disponibles'}</p>
                 <p><strong>Fecha de Ingreso:</strong> {new Date(product.createdAt).toLocaleDateString()}</p>
                 <p><strong>Última Actualización:</strong> {latestUpdateAt.toLocaleDateString()}</p>
             </div>
