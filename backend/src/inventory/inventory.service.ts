@@ -10,7 +10,7 @@ import { Buffer } from 'buffer';
 @Injectable()
 export class InventoryService {
   [x: string]: any;
-  constructor(private prisma: PrismaService){}
+  constructor(private prisma: PrismaService) {}
 
   parseExcel(filePath: string): any[] {
     const workbook = xlsx.readFile(filePath);
@@ -100,7 +100,7 @@ export class InventoryService {
   
       // Normalizar el precio en soles
       const priceInSoles =
-        entry.entry.tipoMoneda === "USD"
+        entry.entry.tipoMoneda === 'USD'
           ? entry.priceInSoles // Usar priceInSoles si la entrada está en dólares
           : entry.price; // Usar price si la entrada está en soles
   
@@ -142,7 +142,14 @@ export class InventoryService {
     description?: string;
     userId: number; // ID del usuario que realiza la transferencia
   }) {
-    const { sourceStoreId, destinationStoreId, productId, quantity, description, userId } = transferDto;
+    const {
+      sourceStoreId,
+      destinationStoreId,
+      productId,
+      quantity,
+      description,
+      userId,
+    } = transferDto;
 
     // Validar que la tienda de origen tenga suficiente stock
     const sourceStoreInventory = await this.prisma.storeOnInventory.findFirst({
@@ -160,9 +167,10 @@ export class InventoryService {
     });
 
     // Actualizar el stock en la tienda de destino
-    const destinationStoreInventory = await this.prisma.storeOnInventory.findFirst({
-      where: { storeId: destinationStoreId, inventory: { productId } },
-    });
+    const destinationStoreInventory =
+      await this.prisma.storeOnInventory.findFirst({
+        where: { storeId: destinationStoreId, inventory: { productId } },
+      });
 
     if (destinationStoreInventory) {
       // Si ya existe el producto en la tienda de destino, actualizar el stock
@@ -221,12 +229,21 @@ export class InventoryService {
           {
             inventoryId: destinationStoreInventory
             ? destinationStoreInventory.inventoryId
-            : (await this.prisma.inventory.findFirst({ where: { productId } }))?.id ?? (() => {
-                throw new Error(`No se encontró un inventoryId para el producto ${productId}`);
-              })(),
+              : ((
+                  await this.prisma.inventory.findFirst({
+                    where: { productId },
+                  })
+                )?.id ??
+                (() => {
+                  throw new Error(
+                    `No se encontró un inventoryId para el producto ${productId}`,
+                  );
+                })()),
             action: 'transfer-in', // Acción de entrada
             stockChange: quantity,
-            previousStock: destinationStoreInventory ? destinationStoreInventory.stock : 0,
+            previousStock: destinationStoreInventory
+              ? destinationStoreInventory.stock
+              : 0,
             newStock: destinationStoreInventory
               ? destinationStoreInventory.stock + quantity
               : quantity,
@@ -237,7 +254,9 @@ export class InventoryService {
 
     } catch (error) {
       console.error('Error al registrar el traslado:', error);
-      throw new Error('No se pudo registrar el traslado en la tabla de transferencias');
+      throw new Error(
+        'No se pudo registrar el traslado en la tabla de transferencias',
+      );
     }
     return { message: 'Traslado realizado con éxito' };
   }
@@ -254,7 +273,7 @@ export class InventoryService {
             storeId,
           },
         },
-        status: "active", // Filtrar solo series activas     
+        status: 'active', // Filtrar solo series activas     
       },
       select: {
         serial: true, // Devuelve solo los números de serie
@@ -276,6 +295,7 @@ export class InventoryService {
         entryDetails: {
           include: {
             entry: true, // Incluye información de la entrada
+            salesDetails: true, // Necesario para calcular stock restante
           },
         },
         storeOnInventory: {
@@ -295,13 +315,18 @@ export class InventoryService {
       // Agrupar los detalles de entrada por tienda
       const stockByStore = item.storeOnInventory.map((storeInventory) => {
         const stockByCurrency = item.entryDetails
-          .filter((entryDetail) => entryDetail.entry.storeId === storeInventory.storeId)
+          .filter((detail) => detail.entry.storeId === storeInventory.storeId)
           .reduce(
-            (acc, entryDetail) => {
-              if (entryDetail.entry.tipoMoneda === "USD") {
-                acc.USD += entryDetail.quantity;
-              } else if (entryDetail.entry.tipoMoneda === "PEN") {
-                acc.PEN += entryDetail.quantity;
+            (acc, detail) => {
+              const sold = detail.salesDetails.reduce(
+                (s, sd) => s + sd.quantity,
+                0,
+              );
+              const remaining = detail.quantity - sold;
+              if (detail.entry.tipoMoneda === 'USD') {
+                acc.USD += remaining;
+              } else if (detail.entry.tipoMoneda === 'PEN') {
+                acc.PEN += remaining;
               }
               return acc;
             },
@@ -343,9 +368,11 @@ export class InventoryService {
   
       // Acumular las cantidades totales por moneda
       item.entryDetails.forEach((detail) => {
+        const sold = detail.salesDetails.reduce((s, sd) => s + sd.quantity, 0);
+        const remaining = detail.quantity - sold;
         const currency = detail.entry.tipoMoneda;
         if (currency) {
-          acc[productId].totalByCurrency[currency] += detail.quantity;
+          acc[productId].totalByCurrency[currency] += remaining;
         }
       });
   
@@ -369,9 +396,15 @@ export class InventoryService {
   
         // Sumar las cantidades por moneda para esta tienda
         entryDetailsForStore.forEach((detail) => {
+          const sold = detail.salesDetails.reduce(
+            (s, sd) => s + sd.quantity,
+            0,
+          );
+          const remaining = detail.quantity - sold;
           const currency = detail.entry.tipoMoneda;
           if (currency) {
-            acc[productId].stockByStoreAndCurrency[storeId][currency] += detail.quantity;
+            acc[productId].stockByStoreAndCurrency[storeId][currency] +=
+              remaining;
           }
         });
       });
@@ -449,7 +482,7 @@ export class InventoryService {
   //
 
    // Obtener las salidas de un producto específico
-   async getProductSales(productId: number) {
+  async getProductSales(productId: number) {
     const sales = await this.prisma.salesDetail.findMany({
       where: { productId },
       include: {
@@ -526,7 +559,7 @@ export class InventoryService {
       // Sumar el stock de todas las tiendas
       acc[productName].totalStock += item.storeOnInventory.reduce(
         (sum, store) => sum + store.stock,
-        0
+        0,
       );
 
       return acc;
@@ -545,18 +578,21 @@ export class InventoryService {
     });
   
     // Para agrupar por productId y evitar duplicados
-    const groupedByProduct = new Map<number, {
-      productId: number;
-      productName: string;
-      totalStock: number;
-    }>();
+    const groupedByProduct = new Map<
+      number,
+      {
+        productId: number;
+        productName: string;
+        totalStock: number;
+      }
+    >();
   
     for (const inventory of inventories) {
       const productId = inventory.product.id;
       const productName = inventory.product.name;
       const totalStock = inventory.storeOnInventory.reduce(
         (sum, storeInv) => sum + storeInv.stock,
-        0
+        0,
       );
   
       // Si el producto ya está en el Map, sumar el stock

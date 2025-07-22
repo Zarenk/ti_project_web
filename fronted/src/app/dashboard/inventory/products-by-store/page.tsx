@@ -118,8 +118,15 @@ export default function ProductsByStorePage() {
 
   // Filtrar productos por término de búsqueda
   useEffect(() => {
-    const filtered = products.filter((item) =>
-      item.inventory.product.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+    const deduped = Array.from(
+      new Map(
+        products.map((item) => [item.inventory.product.id, item])
+      ).values()
+    );
+    const filtered = deduped.filter((item) =>
+      item.inventory.product.name
+        .toLowerCase()
+        .includes(debouncedSearchTerm.toLowerCase())
     );
     setTotalItems(filtered.length);
   
@@ -283,7 +290,7 @@ export default function ProductsByStorePage() {
           </TableHeader>
           <TableBody>
             {filteredProducts.map((item) => (
-              <TableRow key={item.inventory.product.id}>
+              <TableRow key={item.id}>
                 <TableCell className="text-sm">{item.inventory.product.name}</TableCell>
                 <TableCell className="text-sm">
                   {item.inventory.product.category?.name || "Sin categoría"}
