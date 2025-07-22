@@ -1,8 +1,25 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import LoginForm from './login-form';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { isTokenValid, getUserDataFromToken } from '@/lib/auth';
 
 export default function LoginPage() {
+
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isTokenValid()) {
+      const data = getUserDataFromToken();
+      if (data?.role === 'ADMIN' || data?.role === 'EMPLOYEE') {
+        router.replace('/dashboard');
+      } else {
+        router.replace('/users');
+      }
+    }
+  }, [router]);
+
   return (
     <div className="flex items-center justify-center min-h-screen p-3">
       <Card className="w-full max-w-md">

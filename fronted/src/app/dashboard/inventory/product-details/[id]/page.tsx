@@ -21,13 +21,17 @@ export default async function ProductDetails({ params, searchParams }: Props) {
     getProductEntries(parseInt(id, 10)), // Obtener las entradas del producto
   ]);
 
-  // Buscar el producto por ID
-  const product = inventoryData.find((item: any) => item.product.id === parseInt(id, 10));
+  // Reunir todos los registros de inventario que correspondan al producto
+  const productInventories = inventoryData.filter(
+    (item: any) => item.product.id === parseInt(id, 10)
+  );
+
+  const product = productInventories[0];
   const stockDetails = stockDetailsData.find((item: any) => item.productId === parseInt(id, 10));
   const priceInfo = purchasePrices.find((p: any) => p.productId === parseInt(id, 10));
 
   // Validar si los datos existen
-  if (!product || !priceInfo) {
+   if (!productInventories.length || !priceInfo) {
     return (
       <div className="p-4">
         <h1 className="text-2xl font-bold mb-4">Producto no encontrado</h1>
@@ -50,17 +54,38 @@ export default async function ProductDetails({ params, searchParams }: Props) {
       )
   : [];
 
+  const aggregatedStoreOnInventory = productInventories.flatMap(
+    (inv: any) => inv.storeOnInventory
+  );
+
+  const totalStock = aggregatedStoreOnInventory.reduce(
+    (acc: number, store: any) => acc + store.stock,
+    0
+  );
+
+  const createdAt = productInventories.reduce(
+    (earliest: Date, inv: any) =>
+      new Date(inv.createdAt) < new Date(earliest) ? inv.createdAt : earliest,
+    productInventories[0].createdAt
+  );
+
+  const updateAt = productInventories.reduce(
+    (latest: Date, inv: any) =>
+      new Date(inv.updatedAt) > new Date(latest) ? inv.updatedAt : latest,
+    productInventories[0].updatedAt
+  );
+
   const productFormatted = {
     id: product.product.id,
     name: product.product.name,
     category: product.product.category.name,
     priceSell: product.product.priceSell,
-    createdAt: product.createdAt,
-    updateAt: product.updatedAt,
-    stock: product.storeOnInventory.reduce((acc: number, store: any) => acc + store.stock, 0),
+    createdAt,
+    updateAt,
+    stock: totalStock,
     highestPurchasePrice,
     lowestPurchasePrice,
-    ...product,
+    storeOnInventory: aggregatedStoreOnInventory,
   };
 
   return <ProductDetailsPage 

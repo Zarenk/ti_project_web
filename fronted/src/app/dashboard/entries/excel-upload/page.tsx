@@ -58,6 +58,31 @@ function validarFilas(previewData: any[]): Record<number, string[]> {
     return errores
 }
 
+function encontrarSeriesDuplicadas(data: any[]): string[] {
+  const vistas = new Set<string>()
+  const duplicadas = new Set<string>()
+
+  data.forEach((fila) => {
+    if (!fila.serie) return
+    const series = Array.isArray(fila.serie)
+      ? fila.serie
+      : (fila.serie as string)
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+
+    series.forEach((serial: string) => {
+      if (vistas.has(serial)) {
+        duplicadas.add(serial)
+      } else {
+        vistas.add(serial)
+      }
+    })
+  })
+
+  return Array.from(duplicadas)
+}
+
 export default function ExcelUploadPage() {
   const [file, setFile] = useState<File | null>(null)
   const [previewData, setPreviewData] = useState<any[] | null>(null)
@@ -92,6 +117,11 @@ export default function ExcelUploadPage() {
     const erroresPorFila = validarFilas(previewData)
     const errores = Object.values(erroresPorFila).flat()
     const indicesConError = Object.keys(erroresPorFila).map((idx) => parseInt(idx))
+
+    const seriesDuplicadas = encontrarSeriesDuplicadas(previewData)
+    if (seriesDuplicadas.length > 0) {
+      errores.push(`Series duplicadas en el archivo: ${seriesDuplicadas.join(', ')}`)
+    }
 
     setErroresValidacion(errores)
     setFilasConError(indicesConError)
