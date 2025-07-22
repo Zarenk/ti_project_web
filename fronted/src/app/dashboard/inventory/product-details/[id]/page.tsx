@@ -77,6 +77,7 @@ export default async function ProductDetails({ params, searchParams }: Props) {
 
   const productFormatted = {
     id: product.product.id,
+    inventoryId: product.id,
     name: product.product.name,
     category: product.product.category.name,
     priceSell: product.product.priceSell,

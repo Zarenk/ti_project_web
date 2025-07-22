@@ -9,7 +9,11 @@ import UpdateCategoryDialog from "./inventory-product-details-components/UpdateC
 import { QRCodeCanvas } from "qrcode.react";
 
 interface ProductDetailsPageProps {
-  product: any;
+  product: {
+    id: number; // productId
+    inventoryId: number; // inventory record id
+    [key: string]: any;
+  };
   stockDetails: {
     totalByCurrency: { USD: number; PEN: number };
     stockByStoreAndCurrency: Record<string, { storeName: string; USD: number; PEN: number }>;
@@ -40,8 +44,8 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
   useEffect(() => {
     async function fetchRealProductId() {
       try {
-        if (product?.id) {
-          const data = await getProductByInventoryId(product.id); // Llama al API con el inventoryId
+        if (product?.inventoryId) {
+          const data = await getProductByInventoryId(product.inventoryId); // Llama al API con el inventoryId
           setRealProductId(data.productId); // Guarda el productId verdadero
         }
       } catch (error) {
