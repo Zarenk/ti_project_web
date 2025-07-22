@@ -751,7 +751,7 @@ export class InventoryService {
         data: {
           entryId: entry.id,
           productId: product.id,
-          quantity: series.length > 0 ? series.length : parsedStock,
+          quantity: parsedStock,
           price: parsedPrecioCompra,
           priceInSoles: parsedPrecioCompra,
           inventoryId: inventory.id,
