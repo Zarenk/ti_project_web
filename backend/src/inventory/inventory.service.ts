@@ -467,6 +467,7 @@ export class InventoryService {
       createdAt: sale.createdAt,
       quantity: sale.quantity,
       price: sale.price,
+      series: sale.series,
       storeName: sale.sale.store.name,
       clientName: sale.sale.client?.name || "Sin cliente",
     }));

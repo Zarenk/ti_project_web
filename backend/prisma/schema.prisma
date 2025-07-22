@@ -400,6 +400,7 @@ model SalesDetail {
   entryDetailId Int          // Relación con el detalle de la entrada
   storeOnInventoryId Int // Relación con el inventario de la tienda
   productId   Int       // Producto relacionado
+  series      String[] // Arreglo de series
   quantity    Int       // Cantidad de productos vendidos
   price       Float     // Precio unitario del producto
   createdAt   DateTime  @default(now())

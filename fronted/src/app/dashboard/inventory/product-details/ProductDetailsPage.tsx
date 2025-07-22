@@ -261,6 +261,9 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
                   <p><strong>Precio:</strong> S/. {sale.price.toFixed(2)}</p>
                   <p><strong>Tienda:</strong> {sale.storeName}</p>
                   <p><strong>Cliente:</strong> {sale.clientName}</p>
+                  {sale.series && sale.series.length > 0 && (
+                    <p><strong>Series:</strong> {sale.series.join(', ')}</p>
+                  )}
                 </div>
               ))}
             </div>

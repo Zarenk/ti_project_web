@@ -124,8 +124,7 @@ export class SalesService {
           include: {
             entryDetail: {
               include: {
-                product: true, // Incluir el producto a través de EntryDetail
-                series: true,  // Incluir las series asociadas al detalle de entrada
+                product: true,
               },
             },
           },
@@ -141,10 +140,7 @@ export class SalesService {
     const soldSeries = sale.salesDetails.map((detail) => ({
       productId: detail.entryDetail.product.id, // Acceder al producto a través de EntryDetail
       productName: detail.entryDetail.product.name,
-      series: detail.entryDetail.series.map((serie) => ({
-        serial: serie.serial,
-        status: serie.status,
-      })),
+      series: detail.series ?? [],
     }));
   
     return {

@@ -152,6 +152,7 @@ export async function executeSale(prisma: PrismaService, params: {
           productId: detail.productId,
           quantity: detail.quantity,
           price: detail.price,
+          series: detail.series ?? [],
         },
       });
 
