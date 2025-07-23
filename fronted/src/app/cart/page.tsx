@@ -151,14 +151,14 @@ export default function ShoppingCart() {
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <CheckoutSteps step={1} />
-        <h1 className="text-3xl font-light text-gray-900 mb-8 text-center">Verifique su pedido</h1>
+        <h1 className="text-3xl font-light text-foreground mb-8 text-center">Verifique su pedido</h1>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Section - Cart Items */}
           <div className="lg:col-span-2 space-y-6">
             {cartItems.length === 0 ? (
               <div className="bg-card rounded-2xl shadow-sm p-8 text-center">
-                <p className="text-gray-500 text-lg">El Carrito esta vacio</p>
+                <p className="text-muted-foreground text-lg">El Carrito esta vacio</p>
               </div>
             ) : (
               <>
@@ -186,7 +186,7 @@ export default function ShoppingCart() {
                       <div className="flex-grow space-y-3">
                         <div className="flex justify-between items-start">
                           <Link href={`/store/${item.id}`}
-                            className="text-lg font-medium text-gray-900 leading-tight hover:underline">
+                            className="text-lg font-medium text-foreground leading-tight hover:underline">
                             {item.name}
                           </Link>
                           <Button
@@ -204,8 +204,8 @@ export default function ShoppingCart() {
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                           {/* Quantity Selector */}
                           <div className="flex items-center space-x-3">
-                            <span className="text-sm text-gray-600 font-medium">Cantidad:</span>
-                            <div className="flex items-center border border-gray-200 rounded-full">
+                            <span className="text-sm text-muted-foreground font-medium">Cantidad:</span>
+                            <div className="flex items-center border border-border rounded-full">
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -232,8 +232,8 @@ export default function ShoppingCart() {
 
                           {/* Subtotal */}
                           <div className="text-right">
-                            <p className="text-sm text-gray-600">Subtotal</p>
-                            <p className="text-xl font-semibold text-gray-900">
+                            <p className="text-sm text-muted-foreground">Subtotal</p>
+                            <p className="text-xl font-semibold text-foreground">
                               S/.{(item.price * item.quantity).toFixed(2)}
                             </p>
                           </div>
@@ -242,11 +242,11 @@ export default function ShoppingCart() {
                           <p className="text-red-600 text-sm font-medium">No hay stock disponible</p>
                         )}
                         <Button
-                          variant="link"
-                          size="sm"
-                          onClick={() => saveForLater(item)}
-                          className="text-gray-500 hover:text-sky-600 transition-colors flex items-center gap-1 active:scale-95"
-                        >
+                            variant="link"
+                            size="sm"
+                            onClick={() => saveForLater(item)}
+                            className="text-muted-foreground hover:text-sky-600 transition-colors flex items-center gap-1 active:scale-95"
+                          >
                           <Heart className="w-4 h-4" /> Guardar para después
                         </Button>
                       </div>
@@ -256,14 +256,14 @@ export default function ShoppingCart() {
 
                 {/* Coupon Section */}
                 <div className="bg-card rounded-2xl shadow-sm p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Cupon de Descuento</h3>
+                  <h3 className="text-lg font-medium text-foreground mb-4">Cupon de Descuento</h3>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Input
                       type="text"
                       placeholder="Ingrese el cupon de descuento"
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value)}
-                      className="flex-grow rounded-xl border-gray-200 focus:border-sky-400 focus:ring-sky-400"
+                      className="flex-grow rounded-xl border-border focus:border-sky-400 focus:ring-sky-400"
                     />
                     <Button
                       onClick={applyCoupon}
@@ -273,12 +273,12 @@ export default function ShoppingCart() {
                     </Button>
                   </div>
                   {couponApplied && <p className="text-green-600 text-sm mt-2 font-medium">✓ {couponApplied}</p>}
-                <p className="text-xs text-gray-500 mt-2">Ingresa tus cupones de descuento aqui</p>
+                <p className="text-xs text-muted-foreground mt-2">Ingresa tus cupones de descuento aqui</p>
               </div>
 
                {savedItems.length > 0 && (
                  <div className="bg-card rounded-2xl shadow-sm p-6">
-                   <h3 className="text-lg font-medium text-gray-900 mb-4">Guardado para más tarde</h3>
+                   <h3 className="text-lg font-medium text-foreground mb-4">Guardado para más tarde</h3>
                    <div className="space-y-4">
                      {savedItems.map((item) => (
                        <div key={item.id} className="flex items-center justify-between">
@@ -286,7 +286,7 @@ export default function ShoppingCart() {
                            <Image src={item.image || "/placeholder.svg"} alt={item.name} width={60} height={60} className="w-15 h-15 object-cover rounded-lg" />
                            <div>
                              <p className="font-medium hover:underline">{item.name}</p>
-                             <p className="text-sm text-gray-500">S/.{item.price.toFixed(2)}</p>
+                             <p className="text-sm text-muted-foreground">S/.{item.price.toFixed(2)}</p>
                            </div>
                          </Link>
                          <Button size="sm" onClick={() => moveToCart(item.id)} className="bg-sky-500 hover:bg-sky-600 text-white">Mover al carrito</Button>
@@ -298,7 +298,7 @@ export default function ShoppingCart() {
 
                {recommended.length > 0 && (
                   <div className="bg-card rounded-2xl shadow-sm p-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Te podría interesar</h3>
+                    <h3 className="text-lg font-medium text-foreground mb-4">Te podría interesar</h3>
                     <div className="relative">
                       <Button
                         variant="outline"
@@ -363,17 +363,17 @@ export default function ShoppingCart() {
           {/* Right Section - Order Summary */}
           <div className="lg:col-span-1">
             <div className="bg-card rounded-2xl shadow-sm p-6 sticky top-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">Resumen de Pedido</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-6">Resumen de Pedido</h2>
 
               <div className="space-y-4">
                 <div className="flex justify-between items-center py-2">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium text-gray-900">S/.{subtotal.toFixed(2)}</span>
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium text-foreground">S/.{subtotal.toFixed(2)}</span>
                 </div>
 
                 <div className="flex justify-between items-center py-2">
-                  <span className="text-gray-600">Envío estimado</span>
-                  <span className="font-medium text-gray-900">S/.{shippingEstimate.toFixed(2)}</span>
+                  <span className="text-muted-foreground">Envío estimado</span>
+                  <span className="font-medium text-foreground">S/.{shippingEstimate.toFixed(2)}</span>
                 </div>
 
                 {discount > 0 && (
@@ -383,9 +383,9 @@ export default function ShoppingCart() {
                   </div>
                 )}
 
-                <div className="border-t border-gray-200 pt-4">
+                <div className="border-t border-border pt-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-semibold text-gray-900">Total</span>
+                    <span className="text-lg font-semibold text-foreground">Total</span>
                     <span className="text-2xl font-bold text-sky-600">S/.{total.toFixed(2)}</span>
                   </div>
                 </div>
@@ -417,7 +417,7 @@ export default function ShoppingCart() {
               </div>
 
               <div className="mt-6 text-center">
-                <p className="text-sm text-gray-500">Revisa tus productos y aplica los códigos de descuento disponibles arriba</p>
+                <p className="text-sm text-muted-foreground">Revisa tus productos y aplica los códigos de descuento disponibles arriba</p>
               </div>
             </div>
           </div>
