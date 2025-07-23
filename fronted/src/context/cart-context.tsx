@@ -25,8 +25,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
   const [cartKey, setCartKey] = useState("cart-guest")
 
-    const getKey = () => {
-      const data = getUserDataFromToken()
+    const getKey = async () => {
+      const data = await getUserDataFromToken()
       return data ? `cart-${data.userId}` : "cart-guest"
     }
 
@@ -43,22 +43,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
   
   useEffect(() => {
     if (typeof window === "undefined") return
-    const key = getKey()
-    setCartKey(key)
-    loadCart(key)
+    getKey().then((key) => {
+      setCartKey(key)
+      loadCart(key)
+    })
     const handleAuth = () => {
-      const newKey = getKey()
-      setCartKey(newKey)
-      loadCart(newKey)
-    }
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === "token") handleAuth()
+      getKey().then((newKey) => {
+        setCartKey(newKey)
+        loadCart(newKey)
+      })
     }
     window.addEventListener("authchange", handleAuth)
-    window.addEventListener("storage", handleStorage)
     return () => {
       window.removeEventListener("authchange", handleAuth)
-      window.removeEventListener("storage", handleStorage)
     }
   }, [])  
 

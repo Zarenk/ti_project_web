@@ -19,12 +19,15 @@ export default function Page({children}: {children: React.ReactNode}) {
   const router = useRouter();
 
   useEffect(() => {
-    const data = getUserDataFromToken();
-    if (!data || !isTokenValid()) {
-      router.push("/unauthorized");
-    } else if (data.role === "CLIENT") {
-      router.push("/users");
+    async function check() {
+      const data = await getUserDataFromToken();
+      if (!data || !(await isTokenValid())) {
+        router.push("/unauthorized");
+      } else if (data.role === "CLIENT") {
+        router.push("/users");
+      }
     }
+    check();
   }, [router]);
 
   return (

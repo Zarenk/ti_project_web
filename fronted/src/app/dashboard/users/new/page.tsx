@@ -10,10 +10,13 @@ export default function UserNewPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const data = getUserDataFromToken();
-    if (!data || !isTokenValid() || data.role !== 'ADMIN') {
-      router.replace('/dashboard');
+    async function check() {
+      const data = await getUserDataFromToken();
+      if (!data || !(await isTokenValid()) || data.role !== 'ADMIN') {
+        router.replace('/dashboard');
+      }
     }
+    check();
   }, [router]);
 
   return (

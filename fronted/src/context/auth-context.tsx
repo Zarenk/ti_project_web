@@ -36,13 +36,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshUser()
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === "token") {
-        refreshUser()
-      }
-    }
-    window.addEventListener("storage", handleStorage)
-    return () => window.removeEventListener("storage", handleStorage)
   }, [])
 
   return (

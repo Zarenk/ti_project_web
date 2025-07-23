@@ -33,15 +33,18 @@ export default function UserPanel() {
   const router = useRouter()
 
   useEffect(() => {
-    const data = getUserDataFromToken()
-    if (!data || !isTokenValid()) {
-      router.replace('/login')
-      return
+    async function check() {
+      const data = await getUserDataFromToken()
+      if (!data || !(await isTokenValid())) {
+        router.replace('/login')
+        return
+      }
+      if (data.role?.toUpperCase().trim() !== 'CLIENT') {
+        router.replace('/dashboard')
+        return
+      }
     }
-    if (data.role?.toUpperCase().trim() !== 'CLIENT') {
-      router.replace('/dashboard')
-      return
-    }
+    check()
   }, [router])
 
   const documentTypes = ["DNI", "CARNET DE EXTRANJERIA", "OTRO"] as const
@@ -111,8 +114,8 @@ export default function UserPanel() {
 
   useEffect(() => {
     async function loadData() {
-      const session = getUserDataFromToken()
-      if (!session || !isTokenValid()) {
+      const session = await getUserDataFromToken()
+      if (!session || !(await isTokenValid())) {
         router.replace('/login')
         return
       }

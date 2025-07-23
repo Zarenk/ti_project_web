@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "sonner"
 import { createCashClosure, createCashRegister, getActiveCashRegister } from "../cashregister.api"
-import { getUserDataFromToken } from "@/lib/auth"; // o "@/utils/auth" donde lo tengas
+import { getUserDataFromToken, type UserTokenPayload } from "@/lib/auth"; // o "@/utils/auth" donde lo tengas
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 
 const formSchema = z.object({
@@ -49,8 +49,13 @@ export default function CashClosureForm({
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [discrepancy, setDiscrepancy] = useState<number | null>(null)
-  const userData = getUserDataFromToken(); // 👈 Obtenemos los datos
+  const [userData, setUserData] = useState<UserTokenPayload | null>(null)
   const [showOpenNewCashDialog, setShowOpenNewCashDialog] = useState(false);
+
+  useEffect(() => {
+    getUserDataFromToken().then(setUserData)
+  }, [])
+  
   const [lastCountedAmount, setLastCountedAmount] = useState<number>(0);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 

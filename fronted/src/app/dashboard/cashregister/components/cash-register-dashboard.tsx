@@ -27,13 +27,16 @@ export default function CashRegisterDashboard() {
 
   // Validar sesión
   useEffect(() => {
-    const userData = getUserDataFromToken();
-    if (!userData || !isTokenValid()) {
-      router.replace("/login");
-    } else {
-      setUserId(userData.userId);
+    async function check() {
+      const userData = await getUserDataFromToken();
+      if (!userData || !(await isTokenValid())) {
+        router.replace("/login");
+      } else {
+        setUserId(userData.userId);
+      }
+      setCheckingSession(false);
     }
-    setCheckingSession(false);
+    check();
   }, [router]);
 
   // -------------------- HOOKS PRINCIPALES --------------------
@@ -99,7 +102,7 @@ export default function CashRegisterDashboard() {
   
     try {
       const res = await getActiveCashRegister(storeId);
-      const userData = getUserDataFromToken();
+      const userData = await getUserDataFromToken();
   
       setActiveCashRegisterId(res.id);
       setBalance(Number(res.currentBalance));

@@ -42,8 +42,8 @@ useEffect(() => {
 
 useEffect(() => {
   async function fetchData() {
-    const data = getUserDataFromToken();
-    if (!data || !isTokenValid() || (data.role !== 'ADMIN' && data.role !== 'EMPLOYEE')) {
+    const data = await getUserDataFromToken();
+    if (!data || !(await isTokenValid()) || (data.role !== 'ADMIN' && data.role !== 'EMPLOYEE')) {
       router.push('/unauthorized');
       return;
     }

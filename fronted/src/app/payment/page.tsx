@@ -320,7 +320,7 @@ export default function Component() {
           yape: -4,
         }
 
-        const userData = getUserDataFromToken();
+         const userData = await getUserDataFromToken();
         const userIdToSend = userData?.userId ?? 1;
 
         let clientId: number | undefined = undefined;

@@ -165,8 +165,7 @@ export default function ProductPage({ params }: Props) {
   }, [product])
 
   useEffect(() => {
-    const data = getUserDataFromToken()
-    setUserData(data)
+    getUserDataFromToken().then(setUserData)
   }, [])
 
   useEffect(() => {
@@ -174,7 +173,7 @@ export default function ProductPage({ params }: Props) {
       try {
         const res = await getReviews(Number(id))
         setReviews(res)
-        const u = getUserDataFromToken()
+        const u = await getUserDataFromToken()
         if (u) {
           const mine = res.find((r: any) => r.userId === u.userId)
           if (mine) {

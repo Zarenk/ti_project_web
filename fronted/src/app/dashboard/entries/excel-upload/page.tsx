@@ -125,7 +125,7 @@ const handleUpload = async () => {
 
   const handleCommit = async () => {
 
-    const userData = getUserDataFromToken()
+    const userData = await getUserDataFromToken()
     if (!userData) {
         alert('No se pudo obtener el usuario. Inicia sesión nuevamente.')
         return
