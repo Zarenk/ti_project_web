@@ -23,10 +23,10 @@ export default function LoginForm() {
 
     try {
       await loginUser(email, password);
-      refreshUser();
+      await refreshUser();
       toast.success('Inicio de sesión exitoso');
 
-      const data = getUserDataFromToken();
+      const data = await getUserDataFromToken();
       if (data?.role === 'ADMIN' || data?.role === 'EMPLOYEE') {
         router.push('/dashboard');
       } else {

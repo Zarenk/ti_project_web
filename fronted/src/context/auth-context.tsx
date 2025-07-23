@@ -5,7 +5,7 @@ import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 
 type AuthContextType = {
   userName: string | null
-  refreshUser: () => void
+  refreshUser: () => Promise<void>
   logout: () => void
 }
 
@@ -14,9 +14,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string | null>(null)
 
-  const refreshUser = () => {
-    if (isTokenValid()) {
-      const data = getUserDataFromToken()
+  const refreshUser = async () => {
+    if (await isTokenValid()) {
+      const data = await getUserDataFromToken()
       setUserName(data?.name ?? null)
     } else {
       setUserName(null)
@@ -29,7 +29,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     await fetch('/api/logout', { method: 'POST' })
     if (typeof window !== "undefined") {
-      localStorage.removeItem("token")
       window.dispatchEvent(new Event("authchange"))
     }
     setUserName(null)

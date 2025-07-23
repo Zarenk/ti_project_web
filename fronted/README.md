@@ -46,6 +46,7 @@ Create a `fronted/.env.local` file with the following variables:
 
 ```
 NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+JWT_SECRET=2kQ1oLQuQrsNNA5YfVjfo1sS9STiQMMf
 # ID of the store used for online purchases
 NEXT_PUBLIC_STORE_ID=1
 ```

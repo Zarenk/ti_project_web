@@ -16,7 +16,6 @@ export async function loginUser(email: string, password: string) {
       throw new Error(errorData.message || 'Error al iniciar sesión');
     }
     const data = await response.json();
-    localStorage.setItem('token', data.access_token); // Guarda el token en localStorage
     return data;
   } catch (error: any) {
     console.error('Error en loginUser:', error.message);

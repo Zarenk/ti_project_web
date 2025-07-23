@@ -12,14 +12,17 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (isTokenValid()) {
-      const data = getUserDataFromToken();
-      if (data?.role === 'ADMIN' || data?.role === 'EMPLOYEE') {
-        router.replace('/dashboard');
-      } else {
-        router.replace('/users');
+    async function check() {
+      if (await isTokenValid()) {
+        const data = await getUserDataFromToken();
+        if (data?.role === 'ADMIN' || data?.role === 'EMPLOYEE') {
+          router.replace('/dashboard');
+        } else {
+          router.replace('/users');
+        }
       }
     }
+    check();
   }, [router]);
 
   return (

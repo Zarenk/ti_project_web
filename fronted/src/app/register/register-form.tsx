@@ -50,7 +50,7 @@ export default function RegisterForm() {
     try {
       await registerUser(data.email, data.fullName, data.password, data.fullName);
       await loginUser(data.email, data.password);
-      refreshUser();
+      await refreshUser();
       toast.success('Registro exitoso');
       router.push('/users');
     } catch (error: any) {

@@ -39,8 +39,8 @@ export default function GoogleAuthPage() {
       }
       try {
         await loginUser(email, email);
-        refreshUser();
-        const data = getUserDataFromToken();
+        await refreshUser();
+        const data = await getUserDataFromToken();
         if (data) {
         }
         setError(null);

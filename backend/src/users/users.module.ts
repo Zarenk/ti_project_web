@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -7,6 +7,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './JwtStrategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ConfigService } from '@nestjs/config';
+import { SimpleCookieMiddleware } from './simple-cookie.middleware';
 
 @Module({
   imports: [
@@ -23,4 +24,8 @@ import { ConfigService } from '@nestjs/config';
   providers: [UsersService, PrismaService, JwtStrategy, JwtAuthGuard],
   exports: [JwtAuthGuard],
 })
-export class UsersModule {}
+export class UsersModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(SimpleCookieMiddleware).forRoutes('*');
+  }
+}
