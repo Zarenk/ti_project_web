@@ -57,6 +57,16 @@ cd fronted
 npm run dev
 ```
 
+### Shipping information
+Web orders now store shipping details. When creating a web sale you can send the following optional fields:
+
+- `shippingName`
+- `shippingAddress`
+- `city`
+- `postalCode`
+- `phone`
+
+
 ## Configuring Stores
 The system supports multiple stores. For online purchases the front‑end expects a store representing the web sales channel (commonly named **"WEB POS"**). Configure the ID of this store through the `NEXT_PUBLIC_STORE_ID` variable. Make sure the store exists in the backend before processing online orders.
 

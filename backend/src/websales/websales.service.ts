@@ -22,6 +22,11 @@ export class WebSalesService {
       payments,
       tipoComprobante,
       tipoMoneda,
+      shippingName,
+      shippingAddress,
+      city,
+      postalCode,
+      phone,
     } = data;
 
     const { store, cashRegister, clientIdToUse } = await prepareSaleContext(this.prisma, storeId, clientId);
@@ -46,7 +51,7 @@ export class WebSalesService {
       total += detail.quantity * detail.price;
     }
 
-    return executeSale(this.prisma, {
+    const sale = await executeSale(this.prisma, {
       userId,
       storeId,
       clientId: clientIdToUse,
@@ -61,6 +66,21 @@ export class WebSalesService {
       getStoreName: ({ storeInventory }) => storeInventory.store.name,
       
     });
+
+    if (shippingName && shippingAddress && city && postalCode) {
+      await this.prisma.orders.create({
+        data: {
+          salesId: sale.id,
+          shippingName,
+          shippingAddress,
+          city,
+          postalCode,
+          phone,
+        },
+      });
+    }
+
+    return sale;
   }
 
   async getWebSaleById(id: number) {
@@ -74,6 +94,7 @@ export class WebSalesService {
           },
         },
         invoices: true,
+        order: true,
       },
     });
 

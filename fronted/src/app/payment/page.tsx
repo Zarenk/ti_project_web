@@ -358,6 +358,13 @@ export default function Component() {
               currency: "PEN",
             },
           ],
+          shippingName: sameAsShipping
+            ? `${formData.firstName} ${formData.lastName}`
+            : `${formData.shipFirstName} ${formData.shipLastName}`,
+          shippingAddress: sameAsShipping ? formData.address : formData.shipAddress,
+          city: sameAsShipping ? formData.city : formData.shipCity,
+          postalCode: sameAsShipping ? formData.postalCode : formData.shipPostalCode,
+          phone: formData.phone,
           source: 'WEB',
         }
 

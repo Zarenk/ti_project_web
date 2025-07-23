@@ -91,7 +91,7 @@ export class SalesService {
 
   async findSalesByUser(userId: number) {
     return this.prisma.sales.findMany({
-      where: { userId },
+      where: { client: { userId } },
       include: {
         user: true,
         store: true,

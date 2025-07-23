@@ -74,4 +74,24 @@ export class CreateWebSaleDto {
   @IsOptional()
   @IsIn(['WEB'])
   source?: 'WEB';
+
+  @IsOptional()
+  @IsString()
+  shippingName?: string;
+
+  @IsOptional()
+  @IsString()
+  shippingAddress?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  postalCode?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
 }

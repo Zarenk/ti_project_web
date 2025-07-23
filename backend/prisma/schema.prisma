@@ -359,6 +359,7 @@ model Sales {
   invoices InvoiceSales[] // Relación con las facturas de venta
   payments      SalePayment[]   // 👈 Relación con tabla intermedia
   shippingGuides ShippingGuide[]
+  order         Orders?
 
   @@index([userId])
   @@index([storeId])
@@ -430,6 +431,22 @@ model InvoiceSales {
 
   sales       Sales     @relation(fields: [salesId], references: [id], onDelete:  Cascade) // Relación con Entry
   @@unique([tipoComprobante, serie, nroCorrelativo]) // Restricción única compuesta
+}
+
+model Orders {
+  id             Int      @id @default(autoincrement())
+  salesId        Int      @unique
+  shippingName   String
+  shippingAddress String
+  city           String
+  postalCode     String
+  phone          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sale           Sales    @relation(fields: [salesId], references: [id])
+
+  @@index([salesId])
 }
 
 model TipoCambio {

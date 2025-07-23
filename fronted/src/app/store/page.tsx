@@ -4,6 +4,7 @@ import Image from "next/image"
 import { Search, Filter, Package, PackageOpen, DollarSign, Tag } from "lucide-react"
 import Navbar from "@/components/navbar"
 import { useState, useMemo, useEffect } from "react"
+
 import { useSearchParams } from "next/navigation"
 import type { CheckedState } from "@radix-ui/react-checkbox"
 

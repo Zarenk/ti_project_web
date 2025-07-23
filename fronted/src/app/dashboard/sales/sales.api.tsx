@@ -50,6 +50,11 @@ export async function createWebSale(data: {
   tipoComprobante?: string;
   tipoMoneda: string;
   payments: { paymentMethodId: number; amount: number; currency: string }[];
+  shippingName?: string;
+  shippingAddress?: string;
+  city?: string;
+  postalCode?: string;
+  phone?: string;
   source?: 'WEB';
 }) {
   const token = localStorage.getItem('token');

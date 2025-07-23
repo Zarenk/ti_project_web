@@ -53,12 +53,13 @@ export default function OrderDetails() {
     orderDate: new Date(order.createdAt).toLocaleDateString("es-ES"),
     status: "Completado",
     customer: {
-        name: order.client.name,
+      name: order.client.name,
       email: order.client.email ?? "",
       phone: order.client.phone ?? "",
     },
     shipping: {
-        address: order.client.adress ?? "",
+      name: order.order?.shippingName ?? `${order.client.name}`,
+      address: order.order?.shippingAddress ?? order.client.adress ?? "",
       method: "-",
       estimatedDelivery: "-",
     },
@@ -94,8 +95,8 @@ export default function OrderDetails() {
           {/* Left Column - Order Info & Customer Details */}
           <div className="lg:col-span-2 space-y-6">
             {/* Order Information */}
-            <Card className="border-blue-100 dark:border-blue-700 shadow-sm">
-              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700">
+            <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
                 <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
                   <Package className="w-5 h-5 mr-2" />
                   Información del Pedido
@@ -123,8 +124,8 @@ export default function OrderDetails() {
             </Card>
 
             {/* Customer Details */}
-            <Card className="border-blue-100 dark:border-blue-700 shadow-sm">
-              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700">
+            <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
                 <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
                   <User className="w-5 h-5 mr-2" />
                   Datos del Cliente
@@ -149,8 +150,8 @@ export default function OrderDetails() {
             </Card>
 
             {/* Shipping Details */}
-            <Card className="border-blue-100 dark:border-blue-700 shadow-sm">
-              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700">
+            <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
                 <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
                   <Truck className="w-5 h-5 mr-2" />
                   Detalles de Envío
@@ -162,7 +163,10 @@ export default function OrderDetails() {
                     <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">Dirección de Envío</p>
                     <div className="flex items-start">
                       <MapPin className="w-4 h-4 mr-2 mt-1 text-slate-400 dark:text-slate-500" />
-                      <p className="text-slate-700 dark:text-slate-300 whitespace-pre-line">{orderData.shipping.address}</p>
+                      <div>
+                        <p className="font-semibold">{orderData.shipping.name}</p>
+                        <p className="text-slate-700 dark:text-slate-300 whitespace-pre-line">{orderData.shipping.address}</p>
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-3">
@@ -180,8 +184,8 @@ export default function OrderDetails() {
             </Card>
 
             {/* Product List */}
-            <Card className="border-blue-100 dark:border-blue-700 shadow-sm">
-              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700">
+            <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
                 <CardTitle className="text-blue-900 dark:text-blue-100">Productos Pedidos</CardTitle>
               </CardHeader>
               <CardContent className="p-6">
@@ -219,8 +223,8 @@ export default function OrderDetails() {
 
           {/* Right Column - Order Summary */}
           <div className="lg:col-span-1">
-            <Card className="border-blue-100 dark:border-blue-700 shadow-sm sticky top-8">
-              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700">
+            <Card className="border-blue-100 dark:border-blue-700 shadow-sm sticky top-8 pt-0">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
                 <CardTitle className="text-blue-900 dark:text-blue-100">Resumen del Pedido</CardTitle>
               </CardHeader>
               <CardContent className="p-6">
