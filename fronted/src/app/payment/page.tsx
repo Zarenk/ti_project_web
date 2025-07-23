@@ -406,7 +406,7 @@ export default function Component() {
           </div>
           <div className="text-right">
             <p className="font-medium text-gray-900 dark:text-gray-100">
-              ${(item.price * item.quantity).toFixed(2)}
+              S/.{(item.price * item.quantity).toFixed(2)}
             </p>
           </div>
         </div>
