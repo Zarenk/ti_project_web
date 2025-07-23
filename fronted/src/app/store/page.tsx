@@ -4,10 +4,8 @@ import Image from "next/image"
 import { Search, Filter, Package, PackageOpen, DollarSign, Tag } from "lucide-react"
 import Navbar from "@/components/navbar"
 import { useState, useMemo, useEffect } from "react"
-
 import { useSearchParams } from "next/navigation"
 import type { CheckedState } from "@radix-ui/react-checkbox"
-
 import { Button } from "@/components/ui/button"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Input } from "@/components/ui/input"
@@ -87,7 +85,17 @@ export default function StorePage() {
     fetchProducts()
   }, [])
 
+  const [searchInput, setSearchInput] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearchTerm(searchInput)
+    }, 1000)
+
+    return () => clearTimeout(handler)
+  }, [searchInput])
+
   const [sortBy, setSortBy] = useState("name")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedBrands, setSelectedBrands] = useState<string[]>([])
@@ -205,6 +213,7 @@ export default function StorePage() {
     setSelectedCategories([])
     setSelectedBrands([])
     setSelectedAvailability([])
+    setSearchInput("")
     setSearchTerm("")
     setSortBy("name")
   }
@@ -226,8 +235,8 @@ export default function StorePage() {
                 <Input
                   type="text"
                   placeholder="Buscar productos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   className="pl-10"
                 />
               </div>

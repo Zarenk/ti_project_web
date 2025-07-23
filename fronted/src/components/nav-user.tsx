@@ -104,7 +104,7 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuItem>
               <LogOut />
-              Log out
+              Cerrar Sesion
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

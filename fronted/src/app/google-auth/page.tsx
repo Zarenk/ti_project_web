@@ -33,9 +33,7 @@ export default function GoogleAuthPage() {
         await new Promise((r) => setTimeout(r, 1000));
       } catch (err: any) {
         setSuccess(null);
-        if (err.message?.includes('registrado')) {
-          setError('El correo ya está registrado');
-        } else {
+        if (!err.message?.includes('registrado')) {
           setError(err.message || 'Error al registrar usuario');
         }
       }

@@ -422,7 +422,10 @@ export default function Component() {
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-gray-900 dark:to-gray-950">
+    <div
+      aria-busy={isProcessing}
+      className={`min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-gray-900 dark:to-gray-950 ${isProcessing ? 'pointer-events-none' : ''}`}
+    >
       {isProcessing && <ProcessingOverlay />}
       <Navbar />
       <div className="container mx-auto px-4 py-8">
