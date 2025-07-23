@@ -4,6 +4,7 @@ import Image from "next/image"
 import { Search, Filter, Package, PackageOpen, DollarSign, Tag } from "lucide-react"
 import Navbar from "@/components/navbar"
 import { useState, useMemo, useEffect } from "react"
+import { useDebounce } from "@/app/hooks/useDebounce"
 import { useSearchParams } from "next/navigation"
 import type { CheckedState } from "@radix-ui/react-checkbox"
 import { Button } from "@/components/ui/button"
@@ -85,17 +86,9 @@ export default function StorePage() {
     fetchProducts()
   }, [])
 
-  const [searchInput, setSearchInput] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setSearchTerm(searchInput)
-    }, 1000)
-
-    return () => clearTimeout(handler)
-  }, [searchInput])
-
+  const debouncedSearchTerm = useDebounce(searchTerm, 300)
   const [sortBy, setSortBy] = useState("name")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedBrands, setSelectedBrands] = useState<string[]>([])
@@ -155,9 +148,9 @@ export default function StorePage() {
     const filtered = products.filter((product: Product) => {
       // Filtro por búsqueda
       const matchesSearch =
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.brand.toLowerCase().includes(searchTerm.toLowerCase())
+        product.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        product.description.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        product.brand.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
 
       // Filtro por categoría
       const matchesCategory =
@@ -201,7 +194,7 @@ export default function StorePage() {
     return filtered
   }, [
     products,
-    searchTerm,
+    debouncedSearchTerm,
     sortBy,
     selectedCategories,
     selectedBrands,
@@ -213,7 +206,6 @@ export default function StorePage() {
     setSelectedCategories([])
     setSelectedBrands([])
     setSelectedAvailability([])
-    setSearchInput("")
     setSearchTerm("")
     setSortBy("name")
   }
@@ -235,8 +227,8 @@ export default function StorePage() {
                 <Input
                   type="text"
                   placeholder="Buscar productos..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
