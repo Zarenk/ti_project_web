@@ -85,6 +85,14 @@ export class CreateWebSaleDto {
 
   @IsOptional()
   @IsString()
+  shippingMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  estimatedDelivery?: string;
+
+  @IsOptional()
+  @IsString()
   city?: string;
 
   @IsOptional()

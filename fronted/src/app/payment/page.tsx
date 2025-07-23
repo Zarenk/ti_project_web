@@ -146,6 +146,16 @@ export default function Component() {
   const [pickupInStore, setPickupInStore] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
+  const handleSameAsShippingChange = (checked: boolean) => {
+    setSameAsShipping(Boolean(checked))
+    if (checked) setPickupInStore(false)
+  }
+
+  const handlePickupInStoreChange = (checked: boolean) => {
+    setPickupInStore(Boolean(checked))
+    if (checked) setSameAsShipping(false)
+  }
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -248,7 +258,7 @@ export default function Component() {
         newErrors.invoiceAddress = "Ingrese la direccion"
     }
 
-    if (!pickupInStore && !sameAsShipping) {
+    if (!sameAsShipping && !pickupInStore) {
       if (!formData.shipFirstName.trim())
         newErrors.shipFirstName = "Ingrese los nombres de envio"
       else if (!nameRegex.test(formData.shipFirstName.trim()))
@@ -365,14 +375,28 @@ export default function Component() {
               currency: "PEN",
             },
           ],
-          shippingName: sameAsShipping
-            ? `${formData.firstName} ${formData.lastName}`
-            : `${formData.shipFirstName} ${formData.shipLastName}`,
-          shippingAddress,
+          shippingName: pickupInStore
+            ? 'RECOJO EN TIENDA'
+            : sameAsShipping
+              ? `${formData.firstName} ${formData.lastName}`
+              : `${formData.shipFirstName} ${formData.shipLastName}`,
+          shippingAddress: pickupInStore
+            ? 'RECOJO EN TIENDA'
+            : sameAsShipping
+              ? formData.address
+              : formData.shipAddress,
           shippingMethod: pickupInStore ? 'RECOJO EN TIENDA' : 'ENVIO A DOMICILIO',
           estimatedDelivery: '24 a 72 horas',
-          city: sameAsShipping ? formData.city : formData.shipCity,
-          postalCode: sameAsShipping ? formData.postalCode : formData.shipPostalCode,
+          city: pickupInStore
+            ? ''
+            : sameAsShipping
+              ? formData.city
+              : formData.shipCity,
+          postalCode: pickupInStore
+            ? ''
+            : sameAsShipping
+              ? formData.postalCode
+              : formData.shipPostalCode,
           phone: formData.phone,
           source: 'WEB',
           code: orderReference,
@@ -720,7 +744,7 @@ export default function Component() {
                   <Checkbox
                     id="sameAsShipping"
                     checked={sameAsShipping}
-                    onCheckedChange={(checked) => setSameAsShipping(Boolean(checked))}
+                    onCheckedChange={handleSameAsShippingChange}
                     className="border-blue-500 data-[state=checked]:bg-blue-600"
                   />
                   <Label htmlFor="sameAsShipping" className="text-sm font-medium">
@@ -733,6 +757,18 @@ export default function Component() {
                     id="pickupInStore"
                     checked={pickupInStore}
                     onCheckedChange={(checked) => setPickupInStore(Boolean(checked))}
+                    className="border-blue-500 data-[state=checked]:bg-blue-600"
+                  />
+                  <Label htmlFor="pickupInStore" className="text-sm font-medium">
+                    Recojo en tienda
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="pickupInStore"
+                    checked={pickupInStore}
+                    onCheckedChange={handlePickupInStoreChange}
                     className="border-blue-500 data-[state=checked]:bg-blue-600"
                   />
                   <Label htmlFor="pickupInStore" className="text-sm font-medium">
