@@ -11,8 +11,23 @@ export class WebSalesController {
     return this.webSalesService.createWebSale(dto);
   }
 
+  @Post('order')
+  async createOrder(@Body() dto: CreateWebSaleDto) {
+    return this.webSalesService.createWebOrder(dto);
+  }
+
+  @Post('order/:id/complete')
+  async completeOrder(@Param('id', ParseIntPipe) id: number) {
+    return this.webSalesService.completeWebOrder(id);
+  }
+
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     return this.webSalesService.getWebSaleById(id);
+  }
+
+  @Get('order/:id')
+  async findOrder(@Param('id', ParseIntPipe) id: number) {
+    return this.webSalesService.getWebOrderById(id);
   }
 }

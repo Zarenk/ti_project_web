@@ -5,7 +5,7 @@ import { useCart } from "@/context/cart-context"
 import { CreditCard, Building2, Smartphone, Check, ShoppingCart } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { createWebSale } from "@/app/dashboard/sales/sales.api"
+import { createWebOrder } from "@/app/dashboard/sales/sales.api"
 import {
   selfRegisterClient,
   checkClientExists,
@@ -368,10 +368,10 @@ export default function Component() {
           source: 'WEB',
         }
 
-        const sale = await createWebSale(payload)
-        if (sale && sale.id) {
+        const order = await createWebOrder(payload)
+        if (order && order.id) {
           clear()
-          router.push(`/orders/${sale.id}`)
+          router.push(`/pending-orders/${order.id}`)
         } else {
           alert("No se pudo procesar la compra")
         }

@@ -76,44 +76,44 @@ export default function RegisterForm() {
 
   return (
     <div className="w-full max-w-md">
-      <div className="bg-card rounded-2xl shadow-xl border border-slate-200 p-8">
+      <div className="bg-card rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8">
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-slate-800 mb-2">Crear cuenta</h1>
-            <p className="text-slate-600">Completa tus datos para registrarte</p>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">Crear cuenta</h1>
+            <p className="text-slate-600 dark:text-slate-300">Completa tus datos para registrarte</p>
           </div>
           <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-2">
-              <Label htmlFor="fullName" className="text-slate-700 font-medium">Nombre completo</Label>
+              <Label htmlFor="fullName" className="text-slate-700 dark:text-slate-300 font-medium">Nombre completo</Label>
               <Input id="fullName" type="text" placeholder="Ingresa tu nombre completo" {...register('fullName')} className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
               {errors.fullName && <p className="text-red-500 text-sm">{errors.fullName.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-700 font-medium">Correo electrónico</Label>
+              <Label htmlFor="email" className="text-slate-700 dark:text-slate-300 font-medium">Correo electrónico</Label>
               <Input id="email" type="email" placeholder="tu@ejemplo.com" {...register('email')} className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
               {errors.email && <p className="text-red-500 text-sm">{errors.email.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-700 font-medium">Contraseña</Label>
+              <Label htmlFor="password" className="text-slate-700 dark:text-slate-300 font-medium">Contraseña</Label>
               <Input id="password" type="password" placeholder="Crea una contraseña" {...register('password')} className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
               {errors.password && <p className="text-red-500 text-sm">{errors.password.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-slate-700 font-medium">Confirmar contraseña</Label>
+              <Label htmlFor="confirmPassword" className="text-slate-700 dark:text-slate-300 font-medium">Confirmar contraseña</Label>
               <Input id="confirmPassword" type="password" placeholder="Confirma tu contraseña" {...register('confirmPassword')} className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
               {errors.confirmPassword && <p className="text-red-500 text-sm">{errors.confirmPassword.message}</p>}
             </div>
             <Button type="submit" className="w-full h-12 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200">Registrarse</Button>
           </form>
           <div className="relative my-8">
-            <Separator className="bg-slate-200" />
+            <Separator className="bg-slate-200 dark:bg-slate-700" />
             <div className="absolute inset-0 flex justify-center">
-              <span className="bg-white px-4 text-sm text-slate-500 font-medium">o regístrate con</span>
+              <span className="bg-card px-4 text-sm text-slate-500 dark:text-slate-400 font-medium">o regístrate con</span>
             </div>
           </div>
           <Button
             variant="outline"
             onClick={handleGoogle}
-            className="w-full h-12 border-2 border-slate-200 hover:border-blue-300 hover:bg-blue-50 rounded-lg font-semibold text-slate-700 transition-all duration-200 bg-transparent"
+            className="w-full h-12 border-2 border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg font-semibold text-slate-700 dark:text-slate-200 transition-all duration-200 bg-transparent"
           >
             <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
               <path
@@ -136,9 +136,9 @@ export default function RegisterForm() {
             Continuar con Google
           </Button>
           <div className="text-center mt-8">
-            <p className="text-slate-600">
+            <p className="text-slate-600 dark:text-slate-300">
               ¿Ya tienes cuenta?{' '}
-              <Link href="/login" className="text-blue-600 hover:text-cyan-500 font-semibold hover:underline transition-colors duration-200">Inicia sesión</Link>
+              <Link href="/login" className="text-blue-600 dark:text-blue-400 hover:text-cyan-500 dark:hover:text-cyan-400 font-semibold hover:underline transition-colors duration-200">Inicia sesión</Link>
             </p>
           </div>
         </div>

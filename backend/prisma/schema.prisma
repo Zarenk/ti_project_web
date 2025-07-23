@@ -435,7 +435,9 @@ model InvoiceSales {
 
 model Orders {
   id             Int      @id @default(autoincrement())
-  salesId        Int      @unique
+  salesId        Int?     @unique
+  status         OrderStatus @default(PENDING)
+  payload        Json?
   shippingName   String
   shippingAddress String
   city           String
@@ -444,7 +446,7 @@ model Orders {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  sale           Sales    @relation(fields: [salesId], references: [id])
+  sale           Sales?   @relation(fields: [salesId], references: [id])
 
   @@index([salesId])
 }
@@ -537,6 +539,11 @@ enum CashTransactionType {
 enum SaleSource {
   POS
   WEB
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
 }
 
 model ShippingGuide {

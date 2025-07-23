@@ -12,7 +12,23 @@ import {
 export class WebSalesService {
   constructor(private prisma: PrismaService) {}
 
-  async createWebSale(data: CreateWebSaleDto) {
+  async createWebOrder(data: CreateWebSaleDto) {
+    const { shippingName, shippingAddress, city, postalCode, phone } = data;
+    const order = await this.prisma.orders.create({
+      data: {
+        status: 'PENDING',
+        shippingName: shippingName ?? '',
+        shippingAddress: shippingAddress ?? '',
+        city: city ?? '',
+        postalCode: postalCode ?? '',
+        phone,
+        payload: data as unknown as Prisma.JsonObject,
+      },
+    });
+    return order;
+  }
+
+  async createWebSale(data: CreateWebSaleDto, skipOrder = false) {
     const {
       userId,
       storeId = 1,
@@ -67,7 +83,7 @@ export class WebSalesService {
       
     });
 
-    if (shippingName && shippingAddress && city && postalCode) {
+    if (!skipOrder && shippingName && shippingAddress && city && postalCode) {
       await this.prisma.orders.create({
         data: {
           salesId: sale.id,
@@ -76,9 +92,34 @@ export class WebSalesService {
           city,
           postalCode,
           phone,
+          status: 'COMPLETED',
         },
       });
     }
+
+    return sale;
+  }
+
+  async getWebOrderById(id: number) {
+    const order = await this.prisma.orders.findUnique({ where: { id } });
+    if (!order) {
+      throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
+    }
+    return order;
+  }
+
+  async completeWebOrder(id: number) {
+    const order = await this.prisma.orders.findUnique({ where: { id } });
+    if (!order || order.status !== 'PENDING' || !order.payload) {
+      throw new BadRequestException('Orden no válida para completar');
+    }
+
+    const sale = await this.createWebSale(order.payload as any, true);
+
+    await this.prisma.orders.update({
+      where: { id },
+      data: { status: 'COMPLETED', salesId: sale.id },
+    });
 
     return sale;
   }
@@ -104,4 +145,5 @@ export class WebSalesService {
 
     return sale;
   }
+
 }

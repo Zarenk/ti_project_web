@@ -76,6 +76,38 @@ export async function createWebSale(data: {
   return await response.json();
 }
 
+export async function createWebOrder(data: any) {
+  const response = await fetch(`${BACKEND_URL}/api/web-sales/order`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Error al crear la orden web: ${errorText}`);
+  }
+  return await response.json();
+}
+
+export async function completeWebOrder(id: number) {
+  const response = await fetch(`${BACKEND_URL}/api/web-sales/order/${id}/complete`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Error al completar la orden: ${errorText}`);
+  }
+  return await response.json();
+}
+
+export async function getWebOrderById(id: number | string) {
+  const res = await fetch(`${BACKEND_URL}/api/web-sales/order/${id}`);
+  if (!res.ok) throw new Error('Error al obtener la orden web');
+  return res.json();
+}
+
 export async function getSales() {
   const token = localStorage.getItem('token');
   if (!token) {
