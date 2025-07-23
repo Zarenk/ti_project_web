@@ -18,8 +18,7 @@ import Link from "next/link"
 import { getUserProfile, updateUser } from "../dashboard/users/users.api"
 import { getLastAccessFromToken, getUserDataFromToken, isTokenValid } from "@/lib/auth"
 import { getClients, updateClient, uploadClientImage, createClient } from "../dashboard/clients/clients.api"
-import { getSales } from "../dashboard/sales/sales.api"
-import { getMySales } from "../dashboard/sales/sales.api"
+import { getMySales, getOrdersByUser } from "../dashboard/sales/sales.api"
 import Navbar from "@/components/navbar"
 import { useRouter } from "next/navigation"
 
@@ -157,13 +156,31 @@ export default function UserPanel() {
 
         const sales = await getMySales()
         const userSales = sales.filter((s: any) => s.client?.userId === profile.id)
-        const history = userSales.map((s: any) => ({
+        const historySales = userSales.map((s: any) => ({
           id: s.id,
           numero: s.invoices && s.invoices[0] ? `${s.invoices[0].serie}-${s.invoices[0].nroCorrelativo}` : `#${s.id}`,
           fecha: new Date(s.createdAt).toLocaleDateString('es-ES'),
+          date: new Date(s.createdAt),
           estado: 'Completado',
           total: `S/. ${s.total.toFixed(2)}`,
+          link: `/orders/${s.id}`,
         }))
+
+        const orders = await getOrdersByUser(profile.id)
+        const historyOrders = orders.map((o: any) => {
+          const payload = o.payload as any
+          return {
+            id: o.id,
+            numero: `#${o.id}`,
+            fecha: new Date(o.createdAt).toLocaleDateString('es-ES'),
+            date: new Date(o.createdAt),
+            estado: o.status === 'PENDING' ? 'Pendiente' : 'Completado',
+            total: `S/. ${(payload.total ?? 0).toFixed(2)}`,
+            link: `/pending-orders/${o.id}`,
+          }
+        })
+
+        const history = [...historySales, ...historyOrders].sort((a, b) => b.date.getTime() - a.date.getTime())
         setOrderHistory(history)
       } catch (error: any) {
         if (error.message === 'Unauthorized') {
@@ -183,6 +200,10 @@ export default function UserPanel() {
       case "En tránsito":
         return "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700"
       case "Procesando":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-200 dark:border-yellow-700"
+      case "Completado":
+        return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-200 dark:border-green-700"
+      case "Pendiente":
         return "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-200 dark:border-yellow-700"
       default:
         return "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
@@ -469,7 +490,7 @@ export default function UserPanel() {
                               variant="outline"
                               className="border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-800 bg-transparent"
                             >
-                              <Link href={`/orders/${order.id}`} className="flex items-center">
+                              <Link href={order.link} className="flex items-center">
                                 <Eye className="h-4 w-4 mr-1" />
                                 Ver
                               </Link>

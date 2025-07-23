@@ -108,6 +108,18 @@ export class WebSalesService {
     return order;
   }
 
+  async getWebOrdersByUser(userId: number) {
+    return this.prisma.orders.findMany({
+      where: {
+        payload: {
+          path: ['userId'],
+          equals: userId,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async completeWebOrder(id: number) {
     const order = await this.prisma.orders.findUnique({ where: { id } });
     if (!order || order.status !== 'PENDING' || !order.payload) {

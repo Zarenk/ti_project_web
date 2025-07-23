@@ -108,6 +108,12 @@ export async function getWebOrderById(id: number | string) {
   return res.json();
 }
 
+export async function getOrdersByUser(id: number | string) {
+  const res = await fetch(`${BACKEND_URL}/api/web-sales/order/by-user/${id}`);
+  if (!res.ok) throw new Error('Error al obtener las ordenes del usuario');
+  return res.json();
+}
+
 export async function getSales() {
   const token = localStorage.getItem('token');
   if (!token) {

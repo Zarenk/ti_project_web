@@ -30,4 +30,9 @@ export class WebSalesController {
   async findOrder(@Param('id', ParseIntPipe) id: number) {
     return this.webSalesService.getWebOrderById(id);
   }
+
+  @Get('order/by-user/:id')
+  async findOrdersByUser(@Param('id', ParseIntPipe) id: number) {
+    return this.webSalesService.getWebOrdersByUser(id);
+  }
 }
