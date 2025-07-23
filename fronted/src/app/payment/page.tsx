@@ -143,6 +143,7 @@ function DebouncedInput({ id, onDebouncedChange, value, ...props }: DebouncedInp
 export default function Component() {
   const [paymentMethod, setPaymentMethod] = useState("visa")
   const [sameAsShipping, setSameAsShipping] = useState(true)
+  const [pickupInStore, setPickupInStore] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -247,7 +248,7 @@ export default function Component() {
         newErrors.invoiceAddress = "Ingrese la direccion"
     }
 
-    if (!sameAsShipping) {
+    if (!pickupInStore && !sameAsShipping) {
       if (!formData.shipFirstName.trim())
         newErrors.shipFirstName = "Ingrese los nombres de envio"
       else if (!nameRegex.test(formData.shipFirstName.trim()))
@@ -342,6 +343,12 @@ export default function Component() {
           }
         }
 
+        const shippingAddress = pickupInStore
+          ? 'RECOJO EN TIENDA'
+          : sameAsShipping
+          ? formData.address
+          : formData.shipAddress
+
         const payload = {
           userId: userIdToSend,
           storeId: DEFAULT_STORE_ID,
@@ -361,11 +368,14 @@ export default function Component() {
           shippingName: sameAsShipping
             ? `${formData.firstName} ${formData.lastName}`
             : `${formData.shipFirstName} ${formData.shipLastName}`,
-          shippingAddress: sameAsShipping ? formData.address : formData.shipAddress,
+          shippingAddress,
+          shippingMethod: pickupInStore ? 'RECOJO EN TIENDA' : 'ENVIO A DOMICILIO',
+          estimatedDelivery: '24 a 72 horas',
           city: sameAsShipping ? formData.city : formData.shipCity,
           postalCode: sameAsShipping ? formData.postalCode : formData.shipPostalCode,
           phone: formData.phone,
           source: 'WEB',
+          code: orderReference,
         }
 
         const order = await createWebOrder(payload)
@@ -388,8 +398,8 @@ export default function Component() {
     () => orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
     [orderItems],
   )
-  const shipping = 15.0
-  const total = useMemo(() => subtotal + shipping, [subtotal])
+  const shipping = pickupInStore ? 0 : 15.0
+  const total = useMemo(() => subtotal + shipping, [subtotal, shipping])
 
   const orderItemElements = useMemo(
     () =>
@@ -718,7 +728,19 @@ export default function Component() {
                   </Label>
                 </div>
 
-                {!sameAsShipping && (
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="pickupInStore"
+                    checked={pickupInStore}
+                    onCheckedChange={(checked) => setPickupInStore(Boolean(checked))}
+                    className="border-blue-500 data-[state=checked]:bg-blue-600"
+                  />
+                  <Label htmlFor="pickupInStore" className="text-sm font-medium">
+                    Recojo en tienda
+                  </Label>
+                </div>
+
+                {!sameAsShipping && !pickupInStore && (
                   <div className="space-y-4 pt-4">
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -918,7 +940,7 @@ export default function Component() {
                               <strong>Titular de la Cuenta:</strong> TECNOLOGIA INFORMATICA E.I.R.L.
                             </p>
                             <p>
-                              <strong>Referencia:</strong> Orden #{Math.random().toString(36).substr(2, 9).toUpperCase()}
+                              <strong>Referencia:</strong> Orden #{orderReference}
                             </p>
                           </div>
                           <div className="text-xs text-blue-700 dark:text-blue-100 bg-blue-100 dark:bg-blue-900 p-2 rounded">

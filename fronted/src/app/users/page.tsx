@@ -171,7 +171,7 @@ export default function UserPanel() {
           const payload = o.payload as any
           return {
             id: o.id,
-            numero: `#${o.id}`,
+            numero: `#${o.code}`,
             fecha: new Date(o.createdAt).toLocaleDateString('es-ES'),
             date: new Date(o.createdAt),
             estado: o.status === 'PENDING' ? 'Pendiente' : 'Completado',

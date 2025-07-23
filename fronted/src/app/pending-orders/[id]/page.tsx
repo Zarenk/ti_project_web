@@ -44,10 +44,16 @@ export default function OrderDetails() {
 
   const subtotal = products.reduce((s: number, p: any) => s + p.subtotal, 0)
 
+  const statusText = order.status === "PENDING" ? "Pendiente" : "Completado"
+  const statusColor =
+    order.status === "PENDING"
+      ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900 dark:text-yellow-200"
+      : "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900 dark:text-green-200"
+
   const orderData = {
-    orderNumber: String(order.id),
+    orderNumber: order.code,
     orderDate: new Date(order.createdAt).toLocaleDateString("es-ES"),
-    status: order.status,
+    status: statusText,
     customer: {
       name: payload.firstName ? `${payload.firstName} ${payload.lastName}` : '',
       email: payload.email ?? "",
@@ -56,8 +62,8 @@ export default function OrderDetails() {
     shipping: {
       name: order.shippingName,
       address: order.shippingAddress,
-      method: "-",
-      estimatedDelivery: "-",
+      method: payload.shippingMethod ?? "-",
+      estimatedDelivery: payload.estimatedDelivery ?? "-",
     },
     products,
     summary: {
@@ -113,7 +119,7 @@ export default function OrderDetails() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Estado</p>
-                    <Badge className="bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900 dark:text-green-200">{orderData.status}</Badge>
+                    <Badge className={statusColor}>{orderData.status}</Badge>
                   </div>
                 </div>
               </CardContent>

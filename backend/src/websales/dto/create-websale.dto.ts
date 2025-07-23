@@ -94,4 +94,8 @@ export class CreateWebSaleDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  code?: string;
 }

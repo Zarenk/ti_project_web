@@ -49,7 +49,7 @@ export default function OrderDetails() {
   const orderData = {
     orderNumber: order.invoices[0]
       ? `${order.invoices[0].serie}-${order.invoices[0].nroCorrelativo}`
-      : String(order.id),
+      : order.order?.code,
     orderDate: new Date(order.createdAt).toLocaleDateString("es-ES"),
     status: "Completado",
     customer: {

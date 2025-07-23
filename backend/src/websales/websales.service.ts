@@ -13,7 +13,7 @@ export class WebSalesService {
   constructor(private prisma: PrismaService) {}
 
   async createWebOrder(data: CreateWebSaleDto) {
-    const { shippingName, shippingAddress, city, postalCode, phone } = data;
+    const { shippingName, shippingAddress, city, postalCode, phone, code } = data;
     const order = await this.prisma.orders.create({
       data: {
         status: 'PENDING',
@@ -22,6 +22,7 @@ export class WebSalesService {
         city: city ?? '',
         postalCode: postalCode ?? '',
         phone,
+        code: code ?? Math.random().toString(36).substr(2, 9).toUpperCase(),
         payload: data as unknown as Prisma.JsonObject,
       },
     });
@@ -43,6 +44,7 @@ export class WebSalesService {
       city,
       postalCode,
       phone,
+      code,
     } = data;
 
     const { store, cashRegister, clientIdToUse } = await prepareSaleContext(this.prisma, storeId, clientId);
@@ -92,6 +94,7 @@ export class WebSalesService {
           city,
           postalCode,
           phone,
+          code: code ?? Math.random().toString(36).substr(2, 9).toUpperCase(),
           status: 'COMPLETED',
         },
       });

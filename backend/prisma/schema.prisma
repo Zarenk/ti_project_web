@@ -435,6 +435,7 @@ model InvoiceSales {
 
 model Orders {
   id             Int      @id @default(autoincrement())
+  code           String   @unique
   salesId        Int?     @unique
   status         OrderStatus @default(PENDING)
   payload        Json?
