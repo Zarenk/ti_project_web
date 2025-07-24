@@ -27,7 +27,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
-    await fetch('/api/logout', { method: 'POST' })
+    await fetch('/api/logout', { method: 'POST', credentials: 'include' })
+    if (typeof window !== "undefined") {
+      localStorage.removeItem('token')
+    }
+    if (typeof window !== "undefined") {
+      localStorage.removeItem('token')
+    }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("authchange"))
     }

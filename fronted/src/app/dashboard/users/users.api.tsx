@@ -9,6 +9,7 @@ export async function loginUser(email: string, password: string) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ email, password }),
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -16,6 +17,9 @@ export async function loginUser(email: string, password: string) {
       throw new Error(errorData.message || 'Error al iniciar sesión');
     }
     const data = await response.json();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('token', data.access_token);
+    }
     return data;
   } catch (error: any) {
     console.error('Error en loginUser:', error.message);
@@ -25,27 +29,35 @@ export async function loginUser(email: string, password: string) {
 
 // Función para obtener el perfil del usuario autenticado
 export async function getUserProfile() {
-  const token = localStorage.getItem('token'); // Obtén el token del localStorage
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-  if (!token) {
-    throw new Error('No se encontró un token de autenticación');
+  if (token) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error: any) {
+      console.error('Error en getUserProfile:', error.message);
+      throw error;
+    }
   }
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`, // Envía el token en el encabezado Authorization
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
+    const res = await fetch('/api/login');
+    if (!res.ok) {
+      const errorData = await res.json();
       throw new Error(errorData.message || 'Error al obtener el perfil del usuario');
     }
 
-    return await response.json();
+    return await res.json();
   } catch (error: any) {
     console.error('Error en getUserProfile:', error.message);
     throw error;
