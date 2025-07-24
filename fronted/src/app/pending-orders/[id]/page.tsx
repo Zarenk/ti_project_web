@@ -9,9 +9,12 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import Navbar from "@/components/navbar"
 import { getWebOrderById, uploadOrderProofs } from "@/app/dashboard/sales/sales.api"
+import { toast } from "sonner"
 
 export default function OrderDetails() {
   const params = useParams()
@@ -93,16 +96,21 @@ export default function OrderDetails() {
   }
 
   const handleSendProof = async () => {
-    if (!id || files.length === 0) return
+    if (!id) return
+    if (files.length === 0) {
+      toast.warning('Seleccione una o más imágenes')
+      return
+    }
     try {
       setIsUploading(true)
       await uploadOrderProofs(id, files, description)
-      alert('Comprobante enviado')
+      toast.success('Comprobante enviado')
       setFiles([])
       setDescription('')
     } catch (err) {
       console.error(err)
-      alert('Error al subir el comprobante')
+      const message = err instanceof Error ? err.message : 'Error al subir el comprobante'
+      toast.error(message)
     } finally {
       setIsUploading(false)
     }
@@ -305,9 +313,8 @@ export default function OrderDetails() {
                 </div>
               </CardContent>
             </Card>
-          </div>
 
-          {/* Payment Proof */}
+            {/* Payment Proof */}
             <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
               <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
                 <CardTitle className="text-blue-900 dark:text-blue-100">Comprobante de Pago</CardTitle>
@@ -325,12 +332,23 @@ export default function OrderDetails() {
                     ))}
                   </div>
                 )}
-                <input type="file" multiple onChange={handleFileChange} className="w-full" />
-                <textarea
+                <label
+                  htmlFor="proof-files"
+                  className="block w-full border-2 border-dashed border-blue-300 dark:border-blue-700 rounded-md p-4 text-center cursor-pointer bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-100"
+                >
+                  Seleccionar imágenes
+                </label>
+                <Input
+                  id="proof-files"
+                  type="file"
+                  multiple
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   maxLength={200}
-                  className="w-full border rounded p-2"
                   placeholder="Descripción (opcional, máximo 200 caracteres)"
                 />
                 <Button
@@ -342,6 +360,10 @@ export default function OrderDetails() {
                 </Button>
               </CardContent>
             </Card>
+
+          </div>
+
+          
 
           {/* Right Column - Order Summary */}
           <div className="lg:col-span-1">
