@@ -1,3 +1,5 @@
+import { jwtDecode } from 'jwt-decode'
+
 export interface UserTokenPayload {
   userId: number
   name: string
@@ -29,6 +31,23 @@ export async function isTokenValid(): Promise<boolean> {
   }
 }
 
+export function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null
+  const stored = localStorage.getItem('token')
+  if (stored) return stored
+  const match = document.cookie.match(/(?:^|; )token=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 export function getLastAccessFromToken(): Date | null {
-  return null
+  const token = getAuthToken()
+  if (!token) return null
+  try {
+    const decoded: { iat?: number } = jwtDecode(token)
+    if (!decoded.iat) return null
+    return new Date(decoded.iat * 1000)
+  } catch (error) {
+    console.error('Error decoding token:', error)
+    return null
+  }
 }

@@ -1,6 +1,7 @@
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 import { DateRange } from "react-day-picker"
+import { getAuthToken } from "@/lib/auth"
 
 export async function createSale(data: {
   userId: number;
@@ -139,9 +140,9 @@ export async function getSales() {
 }
 
 export async function getMySales() {
-  const token = localStorage.getItem('token');
+  const token = getAuthToken()
   if (!token) {
-    throw new Error('No se encontró un token de autenticación');
+    throw new Error('No se encontró un token de autenticación')
   }
   try {
     const response = await fetch(`${BACKEND_URL}/api/sales/my`, {
