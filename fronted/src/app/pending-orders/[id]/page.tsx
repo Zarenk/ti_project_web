@@ -21,8 +21,17 @@ export default function OrderDetails() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id
   const [order, setOrder] = useState<any | null>(null)
   const [files, setFiles] = useState<File[]>([])
+  const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [description, setDescription] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+
+  useEffect(() => {
+    const urls = files.map((file) => URL.createObjectURL(file))
+    setPreviewUrls(urls)
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [files])
 
   useEffect(() => {
     async function fetchOrder() {
@@ -345,6 +354,18 @@ export default function OrderDetails() {
                   onChange={handleFileChange}
                   className="hidden"
                 />
+                {previewUrls.length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {previewUrls.map((url, idx) => (
+                      <img
+                        key={idx}
+                        src={url}
+                        alt={`Vista previa ${idx + 1}`}
+                        className="w-20 h-20 object-cover rounded"
+                      />
+                    ))}
+                  </div>
+                )}
                 <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}

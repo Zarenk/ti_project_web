@@ -38,5 +38,5 @@ export async function GET(request: Request) {
     return NextResponse.json(data, { status: res.status })
   }
 
-  return NextResponse.json(data)
+  return NextResponse.json({ ...data, access_token: token })
 }
