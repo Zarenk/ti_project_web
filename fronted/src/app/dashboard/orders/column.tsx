@@ -4,7 +4,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { completeWebOrder } from "../dashboard/sales/sales.api";
+import { completeWebOrder } from "../sales/sales.api";
 
 export type Order = {
   id: number;

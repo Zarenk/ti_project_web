@@ -18,7 +18,15 @@ export async function getOrders(params: { status?: string; from?: string; to?: s
       credentials: 'include',
     }
   );
-  if (!res.ok) throw new Error('Error al obtener las ordenes');
+  if (!res.ok) {
+    let message = 'Error al obtener las ordenes';
+    try {
+      message = await res.text();
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
   return res.json();
 }
 

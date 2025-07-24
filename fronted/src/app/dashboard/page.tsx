@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation"
 import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api";
 import { getMonthlySalesTotal } from "./sales/sales.api";
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
-import { getOrdersCount } from "../orders/orders.api"
+import { getOrdersCount } from "./orders/orders.api"
 
 export default function WelcomeDashboard() {
 

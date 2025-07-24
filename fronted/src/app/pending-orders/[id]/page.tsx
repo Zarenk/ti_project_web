@@ -24,6 +24,7 @@ export default function OrderDetails() {
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [description, setDescription] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
 
   useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file))
@@ -113,6 +114,8 @@ export default function OrderDetails() {
     try {
       setIsUploading(true)
       await uploadOrderProofs(id, files, description)
+      const updated = await getWebOrderById(id as string)
+      setOrder(updated)
       toast.success('Comprobante enviado')
       setFiles([])
       setDescription('')
@@ -331,14 +334,17 @@ export default function OrderDetails() {
               <CardContent className="p-6 space-y-4">
                 {payload.proofImages && payload.proofImages.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
-                    {payload.proofImages.map((url: string, idx: number) => (
-                      <img
-                        key={idx}
-                        src={url}
-                        alt={`Comprobante ${idx + 1}`}
-                        className="w-20 h-20 object-cover rounded"
-                      />
-                    ))}
+                    {payload.proofImages.map((url: string, idx: number) => {
+                      const imgUrl = url.startsWith('http') ? url : `${BACKEND_URL}${url}`
+                      return (
+                        <img
+                          key={idx}
+                          src={imgUrl}
+                          alt={`Comprobante ${idx + 1}`}
+                          className="w-20 h-20 object-cover rounded"
+                        />
+                      )
+                    })}
                   </div>
                 )}
                 <label
