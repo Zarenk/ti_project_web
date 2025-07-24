@@ -68,7 +68,10 @@ export class WebSalesController {
     if (!files || files.length === 0) {
       throw new BadRequestException('No se proporcionaron imagenes');
     }
-    const urls = files.map((f) => `/uploads/order-proofs/${f.filename}`);
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const urls = files.map(
+      (f) => `${baseUrl}/uploads/order-proofs/${f.filename}`,
+    );
     return this.webSalesService.addOrderProofs(id, urls, description);
   }
 

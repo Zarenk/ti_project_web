@@ -150,7 +150,10 @@ export class WebSalesService {
     }
 
     const payload = (order.payload as any) || {};
-    payload.proofImages = images;
+    const existing = Array.isArray(payload.proofImages)
+      ? payload.proofImages
+      : [];
+    payload.proofImages = [...existing, ...images];
     if (description) payload.proofDescription = description;
 
     await this.prisma.orders.update({

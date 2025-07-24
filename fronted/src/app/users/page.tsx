@@ -17,7 +17,13 @@ import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
 import { getUserProfile, updateUser } from "../dashboard/users/users.api"
 import { getLastAccessFromToken, getUserDataFromToken, isTokenValid } from "@/lib/auth"
-import { getClients, updateClient, uploadClientImage, createClient } from "../dashboard/clients/clients.api"
+import {
+  getClients,
+  updateClient,
+  uploadClientImage,
+  createClient,
+  selfRegisterClient,
+} from "../dashboard/clients/clients.api"
 import { getMySales, getOrdersByUser } from "../dashboard/sales/sales.api"
 import Navbar from "@/components/navbar"
 import { useRouter } from "next/navigation"
@@ -262,17 +268,20 @@ export default function UserPanel() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // Mostrar una vista previa inmediata mientras se sube la imagen
+    const previewUrl = URL.createObjectURL(file)
+    setImageUrl(previewUrl)
+
     try {
+      const { url } = await uploadClientImage(file)
       let currentId = clientId
       if (!currentId && userId) {
-        const created = await createClient({
-          name: userData.nombre,
-          email: userData.email,
-          phone: userData.telefono,
-          adress: userData.direccion,
-          type: userData.tipoDocumento || null,
-          typeNumber: userData.numeroDocumento || null,
+        // Crea el cliente si aún no existe
+        const created = await selfRegisterClient({
+          name: userData.nombre || 'Cliente',
           userId,
+          type: userData.tipoDocumento || undefined,
+          typeNumber: userData.numeroDocumento || undefined,
         })
         currentId = created.id
         setClientId(created.id)
@@ -280,11 +289,12 @@ export default function UserPanel() {
 
       if (!currentId) return
 
-      const { url } = await uploadClientImage(file)
       await updateClient(String(currentId), { image: url })
       setImageUrl(url)
     } catch (error) {
       console.error('Error uploading image', error)
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
