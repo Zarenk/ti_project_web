@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
 
@@ -21,7 +22,8 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const token = request.headers.get('cookie')?.match(/token=([^;]+)/)?.[1]
+  const token = (await cookies()).get('token')?.value ||
+    request.headers.get('cookie')?.match(/token=([^;]+)/)?.[1]
   if (!token) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
