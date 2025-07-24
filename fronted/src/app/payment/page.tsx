@@ -756,18 +756,6 @@ export default function Component() {
                   <Checkbox
                     id="pickupInStore"
                     checked={pickupInStore}
-                    onCheckedChange={(checked) => setPickupInStore(Boolean(checked))}
-                    className="border-blue-500 data-[state=checked]:bg-blue-600"
-                  />
-                  <Label htmlFor="pickupInStore" className="text-sm font-medium">
-                    Recojo en tienda
-                  </Label>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="pickupInStore"
-                    checked={pickupInStore}
                     onCheckedChange={handlePickupInStoreChange}
                     className="border-blue-500 data-[state=checked]:bg-blue-600"
                   />
