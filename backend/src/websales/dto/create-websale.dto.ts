@@ -15,6 +15,10 @@ class WebSaleDetailDto {
   price!: number;
 
   @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   series?: string[];
@@ -82,6 +86,18 @@ export class CreateWebSaleDto {
   @IsOptional()
   @IsString()
   shippingAddress?: string;
+
+  @IsOptional()
+  @IsString()
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
 
   @IsOptional()
   @IsString()

@@ -310,6 +310,7 @@ export default function Component() {
       try {
         const details = orderItems.map(item => ({
           productId: item.id,
+          name: item.name,
           quantity: item.quantity,
           price: item.price,
         }))
@@ -363,6 +364,9 @@ export default function Component() {
           userId: userIdToSend,
           storeId: DEFAULT_STORE_ID,
           ...(clientId ? { clientId } : {}),
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          email: formData.email.trim(),
           total,
           description: `Compra online de ${formData.firstName} ${formData.lastName}`,
           details,

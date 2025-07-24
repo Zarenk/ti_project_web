@@ -37,6 +37,7 @@ export default function OrderDetails() {
   const payload = order.payload as any
   const products = payload.details.map((detail: any) => ({
     id: detail.productId,
+    name: detail.name,
     quantity: detail.quantity,
     unitPrice: detail.price,
     subtotal: detail.quantity * detail.price,
@@ -197,7 +198,9 @@ export default function OrderDetails() {
                       <div className="flex items-center space-x-4">
                         <div className="flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">Producto {product.id}</h3>
+                          <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
+                            {product.name || `Producto ${product.id}`}
+                          </h3>
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-slate-500 dark:text-slate-400">Cantidad: {product.quantity}</span>
                             <span className="text-slate-500 dark:text-slate-400">S/. {product.unitPrice.toFixed(2)} c/u</span>
