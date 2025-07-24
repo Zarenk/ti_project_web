@@ -161,4 +161,43 @@ export class WebSalesService {
     return sale;
   }
 
+  async getOrders(params: {
+    status?: string;
+    from?: string;
+    to?: string;
+    clientId?: string;
+    code?: string;
+  }) {
+    const where: Prisma.OrdersWhereInput = {};
+
+    if (params.status) {
+      where.status = params.status as any;
+    }
+    if (params.from && params.to) {
+      where.createdAt = {
+        gte: new Date(params.from),
+        lte: new Date(params.to),
+      };
+    }
+    if (params.clientId) {
+      const idNum = parseInt(params.clientId, 10);
+      if (!isNaN(idNum)) {
+        where.payload = { path: ['userId'], equals: idNum } as any;
+      }
+    }
+    if (params.code) {
+      where.code = { contains: params.code };
+    }
+
+    return this.prisma.orders.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getOrderCount(status?: string) {
+    return this.prisma.orders.count({
+      where: status ? { status: status as any } : undefined,
+    });
+  }
 }

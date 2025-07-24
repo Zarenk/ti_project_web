@@ -7,8 +7,9 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api";
-import { getMonthlySalesTotal } from "./sales/sales.api"
+import { getMonthlySalesTotal } from "./sales/sales.api";
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
+import { getOrdersCount } from "../orders/orders.api"
 
 export default function WelcomeDashboard() {
 
@@ -19,6 +20,7 @@ export default function WelcomeDashboard() {
   const [monthlySales, setMonthlySales] = useState<{ total: number; growth: number | null } | null>(null);
 
   const [lowStockItems, setLowStockItems] = useState<{ productId: number; productName: string; storeName: string; stock: number }[]>([]);
+  const [pendingOrders, setPendingOrders] = useState(0);
 
   const router = useRouter()
 
@@ -82,6 +84,18 @@ useEffect(() => {
   fetchLowStockItems();
 }, []);
 
+useEffect(() => {
+  async function fetchPending() {
+    try {
+      const data = await getOrdersCount('PENDING');
+      setPendingOrders(data.count);
+    } catch (error) {
+      console.error('Error al cargar ordenes pendientes:', error);
+    }
+  }
+  fetchPending();
+}, []);
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
       <div className="flex flex-col">
@@ -135,16 +149,18 @@ useEffect(() => {
                 <p className="text-xs text-muted-foreground">Productos que necesitan reabastecimiento</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Ordenes Pendientes</CardTitle>
-                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">Sin Ordenes</div>
-                <p className="text-xs text-muted-foreground">Ordenes que necesitan ser atendidas</p>
-              </CardContent>
-            </Card>
+            <Link href="/dashboard/orders" className="block">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Ordenes Pendientes</CardTitle>
+                  <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{pendingOrders}</div>
+                  <p className="text-xs text-muted-foreground">Ordenes que necesitan ser atendidas</p>
+                </CardContent>
+              </Card>
+            </Link>
           </div>
           <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
             <Card className="xl:col-span-2">

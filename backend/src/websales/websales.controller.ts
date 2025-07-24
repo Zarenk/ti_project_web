@@ -1,6 +1,9 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { WebSalesService } from './websales.service';
 import { CreateWebSaleDto } from './dto/create-websale.dto';
+import { JwtAuthGuard } from '../users/jwt-auth.guard';
+import { RolesGuard } from '../users/roles.guard';
+import { Roles } from '../users/roles.decorator';
 
 @Controller('web-sales')
 export class WebSalesController {
@@ -34,5 +37,26 @@ export class WebSalesController {
   @Get('order/by-user/:id')
   async findOrdersByUser(@Param('id', ParseIntPipe) id: number) {
     return this.webSalesService.getWebOrdersByUser(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('orders')
+  async getOrders(
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('clientId') clientId?: string,
+    @Query('code') code?: string,
+  ) {
+    return this.webSalesService.getOrders({ status, from, to, clientId, code });
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('orders/count')
+  async getOrdersCount(@Query('status') status?: string) {
+    const count = await this.webSalesService.getOrderCount(status);
+    return { count };
   }
 }
