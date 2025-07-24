@@ -122,4 +122,25 @@ export class CreateWebSaleDto {
   @IsOptional()
   @IsString()
   code?: string;
+
+  // Datos para emisión del comprobante
+  @IsOptional()
+  @IsString()
+  dni?: string;
+
+  @IsOptional()
+  @IsString()
+  invoiceName?: string;
+
+  @IsOptional()
+  @IsString()
+  ruc?: string;
+
+  @IsOptional()
+  @IsString()
+  razonSocial?: string;
+
+  @IsOptional()
+  @IsString()
+  invoiceAddress?: string;
 }

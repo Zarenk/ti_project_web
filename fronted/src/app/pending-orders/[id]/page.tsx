@@ -174,35 +174,43 @@ export default function OrderDetails() {
                     <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Tipo de Comprobante</p>
                     <p className="text-slate-700 dark:text-slate-300 font-semibold">{orderData.billing.type}</p>
                   </div>
-                  {orderData.billing.dni && (
-                    <div>
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">DNI</p>
-                      <p className="text-slate-700 dark:text-slate-300">{orderData.billing.dni}</p>
-                    </div>
+                  {orderData.billing.type === "BOLETA" && (
+                    <>
+                      {orderData.billing.dni && (
+                        <div>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">DNI</p>
+                          <p className="text-slate-700 dark:text-slate-300">{orderData.billing.dni}</p>
+                        </div>
+                      )}
+                      {orderData.billing.name && (
+                        <div>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Nombre Completo</p>
+                          <p className="text-slate-700 dark:text-slate-300">{orderData.billing.name}</p>
+                        </div>
+                      )}
+                    </>
                   )}
-                  {orderData.billing.name && (
-                    <div>
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Nombre Completo</p>
-                      <p className="text-slate-700 dark:text-slate-300">{orderData.billing.name}</p>
-                    </div>
-                  )}
-                  {orderData.billing.ruc && (
-                    <div>
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">RUC</p>
-                      <p className="text-slate-700 dark:text-slate-300">{orderData.billing.ruc}</p>
-                    </div>
-                  )}
-                  {orderData.billing.razonSocial && (
-                    <div>
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Razón Social</p>
-                      <p className="text-slate-700 dark:text-slate-300">{orderData.billing.razonSocial}</p>
-                    </div>
-                  )}
-                  {orderData.billing.address && (
-                    <div>
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Dirección</p>
-                      <p className="text-slate-700 dark:text-slate-300 whitespace-pre-line">{orderData.billing.address}</p>
-                    </div>
+                  {orderData.billing.type === "FACTURA" && (
+                    <>
+                      {orderData.billing.ruc && (
+                        <div>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">RUC</p>
+                          <p className="text-slate-700 dark:text-slate-300">{orderData.billing.ruc}</p>
+                        </div>
+                      )}
+                      {orderData.billing.razonSocial && (
+                        <div>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Razón Social</p>
+                          <p className="text-slate-700 dark:text-slate-300">{orderData.billing.razonSocial}</p>
+                        </div>
+                      )}
+                      {orderData.billing.address && (
+                        <div>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Dirección</p>
+                          <p className="text-slate-700 dark:text-slate-300 whitespace-pre-line">{orderData.billing.address}</p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </CardContent>
