@@ -37,6 +37,8 @@ Create a `.env` file in the `backend` directory with the following variable:
 
 ```env
 JWT_SECRET=<your-secret-here>
+# Allowed origins for CORS, comma separated
+CORS_ORIGIN=http://localhost:3000
 ```
 
 ## Compile and run the project

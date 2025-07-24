@@ -103,6 +103,27 @@ export async function completeWebOrder(id: number) {
   return await response.json();
 }
 
+export async function uploadOrderProofs(
+  id: number | string,
+  files: File[],
+  description: string,
+) {
+  const formData = new FormData();
+  files.forEach((f) => formData.append('files', f));
+  formData.append('description', description);
+
+  const res = await fetch(`${BACKEND_URL}/api/web-sales/order/${id}/proofs`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error('Error al subir las pruebas de pago');
+  }
+
+  return res.json();
+}
+
 export async function getWebOrderById(id: number | string) {
   const res = await fetch(`${BACKEND_URL}/api/web-sales/order/${id}`);
   if (!res.ok) throw new Error('Error al obtener la orden web');

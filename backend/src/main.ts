@@ -36,8 +36,12 @@ async function bootstrap() {
   app.use(bodyParser.json({ limit: '10mb' })); // Aumenta el límite a 10 MB
   app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
+  const allowedOrigins =
+    process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()) ||
+    ['http://localhost:3000'];
+
   app.enableCors({
-    origin: '*', // Permitir todas las solicitudes (puedes restringirlo a tu red local si es necesario)
+    origin: allowedOrigins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });

@@ -11,12 +11,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import Navbar from "@/components/navbar"
-import { getWebOrderById } from "@/app/dashboard/sales/sales.api"
+import { getWebOrderById, uploadOrderProofs } from "@/app/dashboard/sales/sales.api"
 
 export default function OrderDetails() {
   const params = useParams()
   const id = Array.isArray(params.id) ? params.id[0] : params.id
   const [order, setOrder] = useState<any | null>(null)
+  const [files, setFiles] = useState<File[]>([])
+  const [description, setDescription] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
 
   useEffect(() => {
     async function fetchOrder() {
@@ -81,6 +84,28 @@ export default function OrderDetails() {
       discount: 0,
       total: payload.total,
     },
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFiles(Array.from(e.target.files))
+    }
+  }
+
+  const handleSendProof = async () => {
+    if (!id || files.length === 0) return
+    try {
+      setIsUploading(true)
+      await uploadOrderProofs(id, files, description)
+      alert('Comprobante enviado')
+      setFiles([])
+      setDescription('')
+    } catch (err) {
+      console.error(err)
+      alert('Error al subir el comprobante')
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   return (
@@ -281,6 +306,42 @@ export default function OrderDetails() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Payment Proof */}
+            <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
+                <CardTitle className="text-blue-900 dark:text-blue-100">Comprobante de Pago</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                {payload.proofImages && payload.proofImages.length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {payload.proofImages.map((url: string, idx: number) => (
+                      <img
+                        key={idx}
+                        src={url}
+                        alt={`Comprobante ${idx + 1}`}
+                        className="w-20 h-20 object-cover rounded"
+                      />
+                    ))}
+                  </div>
+                )}
+                <input type="file" multiple onChange={handleFileChange} className="w-full" />
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  maxLength={200}
+                  className="w-full border rounded p-2"
+                  placeholder="Descripción (opcional, máximo 200 caracteres)"
+                />
+                <Button
+                  onClick={handleSendProof}
+                  disabled={isUploading}
+                  className="w-full bg-blue-900 hover:bg-blue-800 text-white dark:bg-blue-700 dark:hover:bg-blue-600"
+                >
+                  {isUploading ? 'Enviando...' : 'Enviar comprobante'}
+                </Button>
+              </CardContent>
+            </Card>
 
           {/* Right Column - Order Summary */}
           <div className="lg:col-span-1">

@@ -139,6 +139,28 @@ export class WebSalesService {
     return sale;
   }
 
+  async addOrderProofs(
+    id: number,
+    images: string[],
+    description?: string,
+  ) {
+    const order = await this.prisma.orders.findUnique({ where: { id } });
+    if (!order) {
+      throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
+    }
+
+    const payload = (order.payload as any) || {};
+    payload.proofImages = images;
+    if (description) payload.proofDescription = description;
+
+    await this.prisma.orders.update({
+      where: { id },
+      data: { payload },
+    });
+
+    return { success: true };
+  }
+
   async getWebSaleById(id: number) {
     const sale = await this.prisma.sales.findUnique({
       where: { id },
