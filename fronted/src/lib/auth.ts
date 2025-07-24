@@ -7,8 +7,10 @@ export interface UserTokenPayload {
 }
 
 export async function getUserDataFromToken(): Promise<UserTokenPayload | null> {
+  const token = getAuthToken()
+  if (!token) return null
   try {
-    const res = await fetch('/api/login')
+    const res = await fetch('/api/login', { credentials: 'include' })
     if (!res.ok) return null
     const data = await res.json()
     return {
@@ -23,8 +25,10 @@ export async function getUserDataFromToken(): Promise<UserTokenPayload | null> {
 }
 
 export async function isTokenValid(): Promise<boolean> {
+  const token = getAuthToken()
+  if (!token) return false
   try {
-    const res = await fetch('/api/login')
+    const res = await fetch('/api/login', { credentials: 'include' })
     return res.ok
   } catch {
     return false

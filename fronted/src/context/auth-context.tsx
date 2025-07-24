@@ -32,9 +32,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('token')
     }
     if (typeof window !== "undefined") {
-      localStorage.removeItem('token')
-    }
-    if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("authchange"))
     }
     setUserName(null)

@@ -140,16 +140,12 @@ export async function getSales() {
 }
 
 export async function getMySales() {
-  const token = getAuthToken()
-  if (!token) {
-    throw new Error('No se encontró un token de autenticación')
-  }
   try {
-    const response = await fetch(`${BACKEND_URL}/api/sales/my`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const response = await fetch('/api/sales/my', {
+      credentials: 'include',
     })
     if (!response.ok) {
-      if (response.status === 403) {
+      if (response.status === 401 || response.status === 403) {
         throw new Error('Unauthorized')
       }
       throw new Error('Error al obtener las ventas')
