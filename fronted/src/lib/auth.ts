@@ -6,13 +6,6 @@ export interface UserTokenPayload {
 
 export async function getUserDataFromToken(): Promise<UserTokenPayload | null> {
   try {
-    // Avoid a request if the cookie is missing on the client
-    if (typeof document !== 'undefined') {
-      const hasToken = document.cookie
-        .split('; ')
-        .some((c) => c.startsWith('token='))
-      if (!hasToken) return null
-    }
     const res = await fetch('/api/login')
     if (!res.ok) return null
     const data = await res.json()
@@ -29,13 +22,6 @@ export async function getUserDataFromToken(): Promise<UserTokenPayload | null> {
 
 export async function isTokenValid(): Promise<boolean> {
   try {
-    // Skip the request if we know the cookie doesn't exist on the client
-    if (typeof document !== 'undefined') {
-      const hasToken = document.cookie
-        .split('; ')
-        .some((c) => c.startsWith('token='))
-      if (!hasToken) return false
-    }
     const res = await fetch('/api/login')
     return res.ok
   } catch {
