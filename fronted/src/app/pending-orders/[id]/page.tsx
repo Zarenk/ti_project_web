@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 
-import { ArrowLeft, Calendar, MapPin, Package, Truck, User } from "lucide-react"
+import { ArrowLeft, Calendar, MapPin, Package, Truck, User, FileText } from "lucide-react"
 import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
@@ -60,6 +60,14 @@ export default function OrderDetails() {
       email: payload.email ?? "",
       phone: payload.phone ?? "",
     },
+    billing: {
+      type: payload.tipoComprobante ?? "",
+      dni: payload.dni ?? "",
+      name: payload.invoiceName ?? "",
+      ruc: payload.ruc ?? "",
+      razonSocial: payload.razonSocial ?? "",
+      address: payload.invoiceAddress ?? "",
+    },
     shipping: {
       name: order.shippingName,
       address: order.shippingAddress,
@@ -99,7 +107,7 @@ export default function OrderDetails() {
           <div className="lg:col-span-2 space-y-6">
             {/* Order Information */}
             <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
-              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
                 <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
                   <Package className="w-5 h-5 mr-2" />
                   Información del Pedido
@@ -128,7 +136,7 @@ export default function OrderDetails() {
 
             {/* Customer Details */}
             <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
-              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
                 <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
                   <User className="w-5 h-5 mr-2" />
                   Datos del Cliente
@@ -152,9 +160,57 @@ export default function OrderDetails() {
               </CardContent>
             </Card>
 
+            {/* Billing Details */}
+            <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
+                <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
+                  <FileText className="w-5 h-5 mr-2" />
+                  Datos de Facturación
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Tipo de Comprobante</p>
+                    <p className="text-slate-700 dark:text-slate-300 font-semibold">{orderData.billing.type}</p>
+                  </div>
+                  {orderData.billing.dni && (
+                    <div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">DNI</p>
+                      <p className="text-slate-700 dark:text-slate-300">{orderData.billing.dni}</p>
+                    </div>
+                  )}
+                  {orderData.billing.name && (
+                    <div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Nombre Completo</p>
+                      <p className="text-slate-700 dark:text-slate-300">{orderData.billing.name}</p>
+                    </div>
+                  )}
+                  {orderData.billing.ruc && (
+                    <div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">RUC</p>
+                      <p className="text-slate-700 dark:text-slate-300">{orderData.billing.ruc}</p>
+                    </div>
+                  )}
+                  {orderData.billing.razonSocial && (
+                    <div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Razón Social</p>
+                      <p className="text-slate-700 dark:text-slate-300">{orderData.billing.razonSocial}</p>
+                    </div>
+                  )}
+                  {orderData.billing.address && (
+                    <div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Dirección</p>
+                      <p className="text-slate-700 dark:text-slate-300 whitespace-pre-line">{orderData.billing.address}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Shipping Details */}
             <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
-              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
                 <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
                   <Truck className="w-5 h-5 mr-2" />
                   Detalles de Envío
@@ -188,7 +244,7 @@ export default function OrderDetails() {
 
             {/* Product List */}
             <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
-              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
                 <CardTitle className="text-blue-900 dark:text-blue-100">Productos Pedidos</CardTitle>
               </CardHeader>
               <CardContent className="p-6">
@@ -221,7 +277,7 @@ export default function OrderDetails() {
           {/* Right Column - Order Summary */}
           <div className="lg:col-span-1">
             <Card className="border-blue-100 dark:border-blue-700 shadow-sm sticky top-8 pt-0">
-              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
+              <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
                 <CardTitle className="text-blue-900 dark:text-blue-100">Resumen del Pedido</CardTitle>
               </CardHeader>
               <CardContent className="p-6">
