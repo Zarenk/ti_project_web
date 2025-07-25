@@ -9,7 +9,9 @@ import { useRouter } from "next/navigation"
 import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api";
 import { getMonthlySalesTotal } from "./sales/sales.api";
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
-import { getOrdersCount } from "./orders/orders.api"
+import { getOrdersCount, getRecentOrders } from "./orders/orders.api"
+import { formatDistanceToNow } from "date-fns"
+import { es } from "date-fns/locale"
 
 export default function WelcomeDashboard() {
 
@@ -21,6 +23,7 @@ export default function WelcomeDashboard() {
 
   const [lowStockItems, setLowStockItems] = useState<{ productId: number; productName: string; storeName: string; stock: number }[]>([]);
   const [pendingOrders, setPendingOrders] = useState(0);
+  const [recentOrders, setRecentOrders] = useState<{ id: number; code: string; createdAt: string }[]>([]);
 
   const router = useRouter()
 
@@ -94,6 +97,18 @@ useEffect(() => {
     }
   }
   fetchPending();
+}, []);
+
+useEffect(() => {
+  async function fetchRecent() {
+    try {
+      const data = await getRecentOrders(5);
+      setRecentOrders(data);
+    } catch (error) {
+      console.error('Error al cargar actividad de ordenes:', error);
+    }
+  }
+  fetchRecent();
 }, []);
 
   return (
@@ -238,15 +253,19 @@ useEffect(() => {
                 <CardDescription>Ultimas actualizaciones del inventario y ordenes</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-6">
-                <div className="flex items-center space-x-4">
-                  <div className="rounded-full bg-muted p-2">
-                    <Users className="h-4 w-4" />
+                {recentOrders.map((o) => (
+                  <div key={o.id} className="flex items-center space-x-4">
+                    <div className="rounded-full bg-muted p-2">
+                      <Users className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium leading-none">Nueva orden #{o.code}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(o.createdAt), { addSuffix: true, locale: es })}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium leading-none">New order #1093</p>
-                    <p className="text-xs text-muted-foreground">2 minutes ago</p>
-                  </div>
-                </div>
+                ))}
                 <div className="flex items-center space-x-4">
                   <div className="rounded-full bg-muted p-2">
                     <Package className="h-4 w-4" />

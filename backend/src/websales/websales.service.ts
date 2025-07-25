@@ -225,4 +225,27 @@ export class WebSalesService {
       where: status ? { status: status as any } : undefined,
     });
   }
+
+  async getRecentOrders(params: {
+    from?: string;
+    to?: string;
+    limit?: number;
+  }) {
+    const where: Prisma.OrdersWhereInput = {};
+
+    if (params.from && params.to) {
+      where.createdAt = {
+        gte: new Date(params.from),
+        lte: new Date(params.to),
+      };
+    }
+
+    const take = params.limit ?? 10;
+
+    return this.prisma.orders.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take,
+    });
+  }
 }

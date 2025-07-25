@@ -40,3 +40,18 @@ export async function getOrdersCount(status?: string) {
   if (!res.ok) throw new Error('Error al obtener el conteo de ordenes');
   return res.json();
 }
+
+export async function getRecentOrders(limit = 5) {
+  const qs = new URLSearchParams();
+  qs.append('limit', limit.toString());
+  const token = getAuthToken();
+  const res = await fetch(
+    `${BACKEND_URL}/api/web-sales/orders/recent?${qs.toString()}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      credentials: 'include',
+    },
+  );
+  if (!res.ok) throw new Error('Error al obtener actividad de ordenes');
+  return res.json();
+}

@@ -97,6 +97,18 @@ export class WebSalesController {
     return { count };
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('orders/recent')
+  async getRecentOrders(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const lim = limit ? parseInt(limit, 10) : undefined;
+    return this.webSalesService.getRecentOrders({ from, to, limit: lim });
+  }
+
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     return this.webSalesService.getWebSaleById(id);

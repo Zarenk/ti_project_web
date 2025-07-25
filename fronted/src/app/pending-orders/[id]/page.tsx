@@ -14,12 +14,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import Navbar from "@/components/navbar"
 import { getWebOrderById, uploadOrderProofs } from "@/app/dashboard/sales/sales.api"
+import { getProduct } from "@/app/dashboard/products/products.api"
 import { toast } from "sonner"
 
 export default function OrderDetails() {
   const params = useParams()
   const id = Array.isArray(params.id) ? params.id[0] : params.id
   const [order, setOrder] = useState<any | null>(null)
+  const [products, setProducts] = useState<any[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [description, setDescription] = useState('')
@@ -46,18 +48,39 @@ export default function OrderDetails() {
     if (id) fetchOrder()
   }, [id])
 
+  useEffect(() => {
+    async function fetchProducts() {
+      if (!order) return
+      const payload = order.payload as any
+      const list = await Promise.all(
+        payload.details.map(async (detail: any) => {
+          let image: string | null = null
+          try {
+            const p = await getProduct(String(detail.productId))
+            image = Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : null
+          } catch (err) {
+            console.error('Error fetching product', detail.productId, err)
+          }
+          return {
+            id: detail.productId,
+            name: detail.name,
+            quantity: detail.quantity,
+            unitPrice: detail.price,
+            subtotal: detail.quantity * detail.price,
+            image,
+          }
+        })
+      )
+      setProducts(list)
+    }
+    fetchProducts()
+  }, [order])
+
   if (!order) {
     return <div className="p-6">Cargando...</div>
   }
 
   const payload = order.payload as any
-  const products = payload.details.map((detail: any) => ({
-    id: detail.productId,
-    name: detail.name,
-    quantity: detail.quantity,
-    unitPrice: detail.price,
-    subtotal: detail.quantity * detail.price,
-  }))
 
   const subtotal = products.reduce((s: number, p: any) => s + p.subtotal, 0)
 
@@ -75,6 +98,7 @@ export default function OrderDetails() {
       name: payload.firstName ? `${payload.firstName} ${payload.lastName}` : '',
       email: payload.email ?? "",
       phone: payload.phone ?? "",
+      dni: payload.personalDni ?? "",
     },
     billing: {
       type: payload.tipoComprobante ?? "",
@@ -143,8 +167,16 @@ export default function OrderDetails() {
               Volver a Mis Pedidos
             </Link>
           </Button>
-          <h1 className="text-3xl font-bold text-blue-900 dark:text-blue-200 mb-2">Detalle del Pedido</h1>
-          <p className="text-slate-600 dark:text-slate-300">Revisa los detalles de tu pedido en proceso</p>
+          <h1 className="text-3xl font-bold text-blue-900 dark:text-blue-200 mb-2">
+            Detalle del Pedido
+            <span className="text-xl font-normal ml-2">#{orderData.orderNumber}</span>
+          </h1>
+          <p className="mt-2 text-slate-600 dark:text-slate-300">
+            ¡Gracias por tu compra! Tu orden ha sido generada con éxito y está siendo procesada.
+            Pronto recibirás una confirmación por correo electrónico con todos los detalles de tu pedido.
+            Si tienes alguna pregunta o deseas hacer seguimiento, no dudes en contactarnos.
+            Valoramos tu confianza y estamos comprometidos a ofrecerte el mejor servicio mientras tu orden está en proceso.
+          </p>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
@@ -193,6 +225,12 @@ export default function OrderDetails() {
                     <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Nombre</p>
                     <p className="font-semibold text-slate-700 dark:text-slate-300">{orderData.customer.name}</p>
                   </div>
+                  {orderData.customer.dni && (
+                    <div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">DNI</p>
+                      <p className="text-slate-700 dark:text-slate-300">{orderData.customer.dni}</p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Email</p>
                     <p className="text-slate-700 dark:text-slate-300">{orderData.customer.email}</p>
@@ -302,24 +340,30 @@ export default function OrderDetails() {
               </CardHeader>
               <CardContent className="p-6">
                 <div className="space-y-4">
-                  {orderData.products.map((product:any, index:any) => (
+                  {products.map((product:any, index:any) => (
                     <div key={product.id}>
-                      <div className="flex items-center space-x-4">
-                        <div className="flex-shrink-0" />
+                      <div className="flex items-center gap-4">
+                        {product.image && (
+                          <img
+                            src={product.image}
+                            alt={product.name}
+                            className="w-16 h-16 object-cover rounded-md border"
+                          />
+                        )}
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
                             {product.name || `Producto ${product.id}`}
                           </h3>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-slate-500 dark:text-slate-400">Cantidad: {product.quantity}</span>
-                            <span className="text-slate-500 dark:text-slate-400">S/. {product.unitPrice.toFixed(2)} c/u</span>
+                          <div className="text-sm text-slate-500 dark:text-slate-400">
+                            Cantidad: {product.quantity}
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right space-y-1">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">S/. {product.unitPrice.toFixed(2)} c/u</p>
                           <p className="font-bold text-blue-900 dark:text-blue-100">S/. {product.subtotal.toFixed(2)}</p>
                         </div>
                       </div>
-                      {index < orderData.products.length - 1 && <Separator className="mt-4" />}
+                      {index < products.length - 1 && <Separator className="mt-4" />}
                     </div>
                   ))}
                 </div>
