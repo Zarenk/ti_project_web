@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import Navbar from "@/components/navbar";
 import { getWebOrderById, getWebSaleById } from "@/app/dashboard/sales/sales.api";
 import { getProduct } from "@/app/dashboard/products/products.api";
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth";
@@ -164,16 +163,14 @@ export default function OrderDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
-      <Navbar />
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="max-w-4xl mx-auto p-6">
         <div className="mb-8">
-          <Button variant="ghost" className="mb-4 text-blue-900 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:text-blue-100 dark:hover:bg-blue-800">
-            <Link href="/dashboard/orders" className="flex items-center">
+          <Link href="/dashboard/orders" className="flex items-center">
+            <Button variant="outline" className="shadow-sm mb-4">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Volver a Órdenes
-            </Link>
-          </Button>
+            </Button>
+          </Link>
           <h1 className="text-3xl font-bold text-blue-900 dark:text-blue-200 mb-2">
             Detalle de la Orden <span className="text-xl font-normal ml-2">#{orderData.orderNumber}</span>
           </h1>
@@ -424,7 +421,6 @@ export default function OrderDetailPage() {
                 </div>
               </CardContent>
             </Card>
-          </div>
         </div>
       </div>
     </div>
