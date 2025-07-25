@@ -16,8 +16,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { getWebOrderById, getWebSaleById } from "@/app/dashboard/sales/sales.api";
+import { getWebOrderById, getWebSaleById, completeWebOrder, rejectWebOrder } from "@/app/dashboard/sales/sales.api";
 import { getProduct } from "@/app/dashboard/products/products.api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth";
 
 export default function OrderDetailPage() {
@@ -27,6 +38,8 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<any | null>(null);
   const [sale, setSale] = useState<any | null>(null);
   const [products, setProducts] = useState<any[]>([]);
+  const [openComplete, setOpenComplete] = useState(false);
+  const [openReject, setOpenReject] = useState(false);
   const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
   useEffect(() => {
@@ -414,7 +427,82 @@ export default function OrderDetailPage() {
                   </div>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                  {order.status === "PENDING" && (
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        className="w-full bg-green-700 hover:bg-green-800 text-white"
+                        onClick={() => setOpenComplete(true)}
+                      >
+                        Completar Orden
+                      </Button>
+                      <Button
+                        className="w-full bg-red-600 hover:bg-red-700 text-white"
+                        onClick={() => setOpenReject(true)}
+                      >
+                        Denegar Orden
+                      </Button>
+                    </div>
+                  )}
+
+                  <AlertDialog open={openComplete} onOpenChange={setOpenComplete}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Deseas completar esta orden?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Confirma que el cliente realizó el depósito o envió la información de pago necesaria.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={async () => {
+                            try {
+                              await completeWebOrder(order.id);
+                              toast.success("Orden completada");
+                              router.push("/dashboard/orders");
+                            } catch {
+                              toast.error("Error al completar la orden");
+                            } finally {
+                              setOpenComplete(false);
+                            }
+                          }}
+                        >
+                          Confirmar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+
+                  <AlertDialog open={openReject} onOpenChange={setOpenReject}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Denegar esta orden?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Marca la orden como denegada por falta de información.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={async () => {
+                            try {
+                              await rejectWebOrder(order.id);
+                              toast.success("Orden denegada");
+                              router.push("/dashboard/orders");
+                            } catch {
+                              toast.error("Error al denegar la orden");
+                            } finally {
+                              setOpenReject(false);
+                            }
+                          }}
+                        >
+                          Confirmar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  
                   <Button asChild className="w-full bg-blue-900 hover:bg-blue-800 text-white dark:bg-blue-700 dark:hover:bg-blue-600">
                     <Link href="/dashboard/orders">Volver a Órdenes</Link>
                   </Button>

@@ -186,7 +186,7 @@ const data = {
         },
         {
           title: "Pedidos",
-          url: "/dashboard/cashregister",
+          url: "/dashboard/orders",
         },
         {
           title: "Realizar Venta",
