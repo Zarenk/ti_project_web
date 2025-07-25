@@ -68,7 +68,8 @@ export class WebSalesController {
     if (!files || files.length === 0) {
       throw new BadRequestException('No se proporcionaron imagenes');
     }
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl =
+      process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
     const urls = files.map(
       (f) => `${baseUrl}/uploads/order-proofs/${f.filename}`,
     );

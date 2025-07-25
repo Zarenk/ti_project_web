@@ -71,6 +71,7 @@ function sanitizeInput(id: string, value: string) {
       newValue = newValue.replace(/[^0-9+]/g, "")
       break
     case "dni":
+    case "personalDni":
       newValue = newValue.replace(/\D/g, "").slice(0, 8)
       break
     case "ruc":
@@ -160,6 +161,7 @@ export default function Component() {
     firstName: "",
     lastName: "",
     email: "",
+    personalDni: "",
     phone: "",
     address: "",
     city: "",
@@ -199,6 +201,39 @@ export default function Component() {
     [],
   )
 
+  // Prefill form with existing client data if user is logged in
+  useEffect(() => {
+    async function loadClientData() {
+      try {
+        const user = await getUserDataFromToken()
+        if (!user) return
+        const clients = await getClients()
+        const client = clients.find((c: any) => c.userId === user.userId)
+        if (client) {
+          const [first, ...lastParts] = (client.name ?? '').split(' ')
+          setFormData((prev) => ({
+            ...prev,
+            firstName: prev.firstName || first,
+            lastName: prev.lastName || lastParts.join(' '),
+            email: prev.email || client.email || '',
+            phone: prev.phone || client.phone || '',
+            address: prev.address || client.adress || '',
+            invoiceName: prev.invoiceName || client.name || '',
+            invoiceAddress: prev.invoiceAddress || client.adress || '',
+            invoiceType: client.type === 'RUC' ? 'FACTURA' : 'BOLETA',
+            dni: client.type === 'DNI' ? client.typeNumber || '' : prev.dni,
+            ruc: client.type === 'RUC' ? client.typeNumber || '' : prev.ruc,
+            razonSocial:
+              client.type === 'RUC' ? client.name || '' : prev.razonSocial,
+          }))
+        }
+      } catch (err) {
+        console.error('Error cargando datos del cliente:', err)
+      }
+    }
+    loadClientData()
+  }, [])
+
   const handlePurchase = async (e: React.FormEvent) => {
     e.preventDefault()
     const newErrors: { [key: string]: string } = {}
@@ -224,6 +259,10 @@ export default function Component() {
     if (!formData.phone.trim()) newErrors.phone = "Ingrese su telefono"
     else if (!phoneRegex.test(formData.phone.trim()))
       newErrors.phone = "Ingrese un telefono valido"
+
+    if (!formData.personalDni.trim()) newErrors.personalDni = "Ingrese su DNI"
+    else if (!/^\d{8}$/.test(formData.personalDni))
+      newErrors.personalDni = "El DNI debe tener 8 digitos"
 
     if (!formData.address.trim())
       newErrors.address = "Ingrese su direccion de facturacion"
@@ -367,6 +406,7 @@ export default function Component() {
           firstName: formData.firstName.trim(),
           lastName: formData.lastName.trim(),
           email: formData.email.trim(),
+          personalDni: formData.personalDni.trim(),
           dni: formData.dni.trim(),
           invoiceName: formData.invoiceName.trim(),
           ruc: formData.ruc.trim(),
@@ -536,6 +576,19 @@ export default function Component() {
                   />
                   {errors.email && (
                     <p className="text-red-500 text-sm">{errors.email}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="personalDni">DNI *</Label>
+                  <DebouncedInput
+                    id="personalDni"
+                    value={formData.personalDni}
+                    onDebouncedChange={(val) => handleChange("personalDni", val)}
+                    placeholder="12345678"
+                    className="border-gray-300 focus:border-blue-500"
+                  />
+                  {errors.personalDni && (
+                    <p className="text-red-500 text-sm">{errors.personalDni}</p>
                   )}
                 </div>
                 <div className="space-y-2">

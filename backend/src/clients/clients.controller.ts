@@ -94,7 +94,8 @@ export class ClientController {
     if (!file) {
       throw new BadRequestException('No se proporcionó ninguna imagen');
     }
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl =
+      process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
     return { url: `${baseUrl}/uploads/clients/${file.filename}` };
   }
 

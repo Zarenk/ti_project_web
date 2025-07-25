@@ -39,6 +39,8 @@ Create a `.env` file in the `backend` directory with the following variable:
 JWT_SECRET=<your-secret-here>
 # Allowed origins for CORS, comma separated
 CORS_ORIGIN=http://localhost:3000
+# Public URL used to generate absolute links to uploaded files
+PUBLIC_URL=http://localhost:4000
 ```
 
 ## Compile and run the project
