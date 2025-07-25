@@ -3,6 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { toast } from "sonner";
 import { completeWebOrder, rejectWebOrder } from "../sales/sales.api";
 import {
@@ -67,79 +68,84 @@ export const columns: ColumnDef<Order>[] = [
       const [openComplete, setOpenComplete] = useState(false);
       const [openReject, setOpenReject] = useState(false);
 
-      if (row.original.status !== "PENDING") return null;
-
       return (
         <div className="flex gap-2">
-          <Button size="sm" onClick={() => setOpenComplete(true)}>
-            Completar
+          <Button size="sm" variant="outline" asChild>
+            <Link href={`/dashboard/orders/${row.original.id}`}>Ver</Link>
           </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={() => setOpenReject(true)}
-          >
-            Rechazar
-          </Button>
+          {row.original.status === "PENDING" && (
+            <>
+              <Button size="sm" onClick={() => setOpenComplete(true)}>
+                Completar
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setOpenReject(true)}
+              >
+                Rechazar
+              </Button>
 
-          <AlertDialog open={openComplete} onOpenChange={setOpenComplete}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  ¿Deseas completar esta orden?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  Confirma que el cliente realizó el depósito o envió la
-                  información de pago necesaria.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={async () => {
-                    try {
-                      await completeWebOrder(row.original.id);
-                      toast.success("Orden completada");
-                    } catch {
-                      toast.error("Error al completar la orden");
-                    } finally {
-                      setOpenComplete(false);
-                    }
-                  }}
-                >
-                  Confirmar
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+              <AlertDialog open={openComplete} onOpenChange={setOpenComplete}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      ¿Deseas completar esta orden?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Confirma que el cliente realizó el depósito o envió la
+                      información de pago necesaria.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        try {
+                          await completeWebOrder(row.original.id);
+                          toast.success("Orden completada");
+                        } catch {
+                          toast.error("Error al completar la orden");
+                        } finally {
+                          setOpenComplete(false);
+                        }
+                      }}
+                    >
+                      Confirmar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
 
-          <AlertDialog open={openReject} onOpenChange={setOpenReject}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>¿Rechazar esta orden?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Marca la orden como denegada por falta de información.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={async () => {
-                    try {
-                      await rejectWebOrder(row.original.id);
-                      toast.success("Orden rechazada");
-                    } catch {
-                      toast.error("Error al rechazar la orden");
-                    } finally {
-                      setOpenReject(false);
-                    }
-                  }}
-                >
-                  Confirmar
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+              <AlertDialog open={openReject} onOpenChange={setOpenReject}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>¿Rechazar esta orden?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Marca la orden como denegada por falta de información.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        try {
+                          await rejectWebOrder(row.original.id);
+                          toast.success("Orden rechazada");
+                        } catch {
+                          toast.error("Error al rechazar la orden");
+                        } finally {
+                          setOpenReject(false);
+                        }
+                      }}
+                    >
+                      Confirmar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
+          )}
         </div>
       );
     },
