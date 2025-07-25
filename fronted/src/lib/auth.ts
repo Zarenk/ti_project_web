@@ -8,6 +8,11 @@ export interface UserTokenPayload {
 
 export async function getUserDataFromToken(): Promise<UserTokenPayload | null> {
   let token = getAuthToken()
+  const hasCookie =
+    typeof document !== 'undefined' && /(?:^|; )token=/.test(document.cookie)
+
+  if (!token && !hasCookie) return null
+
   try {
     const res = await fetch('/api/login', { credentials: 'include' })
     if (!res.ok) return null
@@ -29,6 +34,11 @@ export async function getUserDataFromToken(): Promise<UserTokenPayload | null> {
 
 export async function isTokenValid(): Promise<boolean> {
   const token = getAuthToken()
+  const hasCookie =
+    typeof document !== 'undefined' && /(?:^|; )token=/.test(document.cookie)
+
+  if (!token && !hasCookie) return false
+  
   try {
     const res = await fetch('/api/login', { credentials: 'include' })
     if (res.ok) {

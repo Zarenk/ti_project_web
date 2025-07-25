@@ -270,6 +270,7 @@ export default function UserPanel() {
 
     // Mostrar una vista previa inmediata mientras se sube la imagen
     const previewUrl = URL.createObjectURL(file)
+    // Mantenemos la vista previa hasta confirmar que la subida fue exitosa
     setImageUrl(previewUrl)
 
     try {
@@ -290,9 +291,12 @@ export default function UserPanel() {
       if (!currentId) return
 
       await updateClient(String(currentId), { image: url })
+      // Liberamos la URL previa y actualizamos con la definitiva
+      URL.revokeObjectURL(previewUrl)
       setImageUrl(url)
     } catch (error) {
       console.error('Error uploading image', error)
+      // Si ocurre un error, mantenemos la vista previa para que el usuario vea la imagen seleccionada
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
@@ -531,7 +535,13 @@ export default function UserPanel() {
               <CardContent className="p-6 text-center">
                 <div className="flex flex-col items-center space-y-4">
                   <Avatar className="h-32 w-32 border-4 border-blue-200 dark:border-blue-700 shadow-lg">
-                    <AvatarImage src={imageUrl || '/placeholder.svg?height=128&width=128'} alt="Foto de perfil" />
+                    <AvatarImage
+                      src={imageUrl || '/placeholder.svg?height=128&width=128'}
+                      alt="Foto de perfil"
+                      onError={(e) => {
+                        e.currentTarget.src = '/placeholder.svg?height=128&width=128'
+                      }}
+                    />
                     <AvatarFallback className="bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 text-2xl font-bold">
                       {(watchNombre || '')
                         .split(' ')

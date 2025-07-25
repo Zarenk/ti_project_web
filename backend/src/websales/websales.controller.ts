@@ -75,21 +75,6 @@ export class WebSalesController {
     return this.webSalesService.addOrderProofs(id, urls, description);
   }
 
-  @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.webSalesService.getWebSaleById(id);
-  }
-
-  @Get('order/:id')
-  async findOrder(@Param('id', ParseIntPipe) id: number) {
-    return this.webSalesService.getWebOrderById(id);
-  }
-
-  @Get('order/by-user/:id')
-  async findOrdersByUser(@Param('id', ParseIntPipe) id: number) {
-    return this.webSalesService.getWebOrdersByUser(id);
-  }
-
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Get('orders')
@@ -109,5 +94,20 @@ export class WebSalesController {
   async getOrdersCount(@Query('status') status?: string) {
     const count = await this.webSalesService.getOrderCount(status);
     return { count };
+  }
+
+  @Get(':id')
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.webSalesService.getWebSaleById(id);
+  }
+
+  @Get('order/:id')
+  async findOrder(@Param('id', ParseIntPipe) id: number) {
+    return this.webSalesService.getWebOrderById(id);
+  }
+
+  @Get('order/by-user/:id')
+  async findOrdersByUser(@Param('id', ParseIntPipe) id: number) {
+    return this.webSalesService.getWebOrdersByUser(id);
   }
 }
