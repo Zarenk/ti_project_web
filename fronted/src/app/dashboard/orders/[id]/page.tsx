@@ -175,6 +175,21 @@ export default function OrderDetailPage() {
     proofDescription: payload.proofDescription ?? "",
   };
 
+  const invoice =
+    sale && Array.isArray(sale.invoices) && sale.invoices.length > 0
+      ? sale.invoices[0]
+      : null;
+
+  const invoiceData = invoice
+    ? {
+        type: invoice.tipoComprobante,
+        serie: invoice.serie,
+        number: invoice.nroCorrelativo,
+        date: invoice.fechaEmision,
+        total: invoice.total ?? sale?.total ?? 0,
+      }
+    : null;
+
   return (
     <div className="max-w-4xl mx-auto p-6">
         <div className="mb-8">
@@ -399,6 +414,45 @@ export default function OrderDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {invoiceData && (
+              <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
+                <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
+                  <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
+                    <FileText className="w-5 h-5 mr-2" />
+                    Comprobante Emitido
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Tipo</p>
+                    <p className="font-semibold text-slate-700 dark:text-slate-300">{invoiceData.type}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Serie</p>
+                    <p className="text-slate-700 dark:text-slate-300">{invoiceData.serie}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Número</p>
+                    <p className="text-slate-700 dark:text-slate-300">{invoiceData.number}</p>
+                  </div>
+                  {invoiceData.date && (
+                    <div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Fecha de Emisión</p>
+                      <p className="text-slate-700 dark:text-slate-300">
+                        {new Date(invoiceData.date).toLocaleString('es-ES')}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total</p>
+                    <p className="font-semibold text-slate-700 dark:text-slate-300">
+                      S/. {Number(invoiceData.total).toFixed(2)}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           <div className="lg:col-span-1">
@@ -502,7 +556,7 @@ export default function OrderDetailPage() {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                  
+
                   <Button asChild className="w-full bg-blue-900 hover:bg-blue-800 text-white dark:bg-blue-700 dark:hover:bg-blue-600">
                     <Link href="/dashboard/orders">Volver a Órdenes</Link>
                   </Button>

@@ -87,7 +87,7 @@ export const createIndependentTransaction = async (data: {
   return await response.json();
 };
 
-export async function getActiveCashRegister(storeId: number): Promise<{ id: number; name: string; currentBalance: number; initialBalance: number; }> {
+export async function getActiveCashRegister(storeId: number): Promise<{ id: number; name: string; currentBalance: number; initialBalance: number; } | null> {
   const token = localStorage.getItem('token'); // Obtén el token del localStorage
 
   if (!token) {
@@ -104,6 +104,9 @@ export async function getActiveCashRegister(storeId: number): Promise<{ id: numb
     });
 
     if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
       throw new Error('No se pudo obtener la caja activa.');
     }
 

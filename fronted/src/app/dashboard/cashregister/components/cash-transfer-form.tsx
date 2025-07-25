@@ -66,19 +66,24 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
   }, []);
 
   useEffect(() => {
-    if (storeId !== null) { // Verificar que storeId no sea null
+    if (storeId !== null) {
       async function fetchCashRegister() {
         try {
-          if (storeId !== null) { // Asegurarse de que storeId no sea null
-            const cashRegister = await getActiveCashRegister(storeId); // Usar el storeId pasado como prop
-            setCashRegisterId(cashRegister.id); // Establece el ID de la caja activa
+          const cashRegister = await getActiveCashRegister(storeId!);
+          if (cashRegister && cashRegister.id !== undefined) {
+            setCashRegisterId(cashRegister.id);
+          } else {
+            setCashRegisterId(null);
           }
         } catch (error) {
           console.error('Error al obtener la caja activa:', error);
+          setCashRegisterId(null);
         }
       }
   
       fetchCashRegister();
+      } else {
+      setCashRegisterId(null);
     }
   }, [storeId]);
 
@@ -138,7 +143,9 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
       }
 
       if (!cashRegisterId) {
-        throw new Error("No se pudo obtener el ID de la caja activa.");
+        toast.error("No hay una caja activa para esta tienda.");
+        setIsSubmitting(false);
+        return;
       }
       
       const type = values.type === "deposit" ? "INCOME" : "EXPENSE";
@@ -273,7 +280,10 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
           )}
         />
 
-        <Button type="submit" disabled={isSubmitting} className="w-full">
+        {cashRegisterId === null && (
+          <p className="text-sm text-red-500">No hay una caja activa para esta tienda.</p>
+        )}
+        <Button type="submit" disabled={isSubmitting || cashRegisterId === null} className="w-full">
           <ArrowDownUp className="mr-2 h-4 w-4" />
           Guardar Transaccion
         </Button>

@@ -104,10 +104,17 @@ export default function CashRegisterDashboard() {
       const res = await getActiveCashRegister(storeId);
       const userData = await getUserDataFromToken();
   
-      setActiveCashRegisterId(res.id);
-      setBalance(Number(res.currentBalance));
-      setInitialBalance(Number(res.initialBalance));
-      setHasCashRegister(true);
+      if (res) {
+        setActiveCashRegisterId(res.id);
+        setBalance(Number(res.currentBalance));
+        setInitialBalance(Number(res.initialBalance));
+        setHasCashRegister(true);
+      } else {
+        setActiveCashRegisterId(null);
+        setBalance(0);
+        setInitialBalance(0);
+        setHasCashRegister(false);
+      }
   
       return userData?.name ?? null; // 👈 garantizamos que es string o null
     } catch (error) {
@@ -121,10 +128,11 @@ export default function CashRegisterDashboard() {
   };
 
   const handleRequestOpenCashRegister = () => {
-    if (!storeId || closures.length === 0) return;
-  
-    const lastClosureAmount = Number(closures[0].closingBalance || 0);
-    setInitialAmountToOpen(lastClosureAmount); // pre-fill
+    if (!storeId) return;
+
+    const lastClosureAmount =
+      closures.length > 0 ? Number(closures[0].closingBalance || 0) : 0;
+    setInitialAmountToOpen(lastClosureAmount); // pre-fill with last closure or 0
     setShowOpenCashDialog(true); // abre el diálogo
   };
 
@@ -163,10 +171,17 @@ export default function CashRegisterDashboard() {
 
       getActiveCashRegister(storeId)
       .then((res) => {
-        setActiveCashRegisterId(res.id);
-        setBalance(Number(res.currentBalance));
-        setInitialBalance(Number(res.initialBalance)); // ✅ Aquí lo guardas
-        setHasCashRegister(true);
+        if (res) {
+          setActiveCashRegisterId(res.id);
+          setBalance(Number(res.currentBalance));
+          setInitialBalance(Number(res.initialBalance)); // ✅ Aquí lo guardas
+          setHasCashRegister(true);
+        } else {
+          setActiveCashRegisterId(null);
+          setBalance(0);
+          setInitialBalance(0); // ✅ También lo limpias si no hay caja
+          setHasCashRegister(false);
+        }
       })
       .catch(() => {
         setActiveCashRegisterId(null);
@@ -282,7 +297,13 @@ export default function CashRegisterDashboard() {
   useEffect(() => {
     if (storeId !== null) {
       getActiveCashRegister(storeId)
-        .then((res) => setActiveCashRegisterId(res.id))
+        .then((res) => {
+          if (res) {
+            setActiveCashRegisterId(res.id);
+          } else {
+            setActiveCashRegisterId(null);
+          }
+        })
         .catch(() => setActiveCashRegisterId(null));
     }
   }, [storeId]);
