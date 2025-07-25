@@ -41,7 +41,11 @@ export async function getOrdersCount(status?: string) {
   return res.json();
 }
 
-export async function getRecentOrders(limit = 5) {
+// Fetches the most recent orders from the backend. The backend already
+// defaults to returning the last 10 orders when no limit is provided, so we
+// mirror that behaviour here by using 10 as the default value. This ensures
+// the recent activity section displays at most the latest ten movements.
+export async function getRecentOrders(limit = 10) {
   const qs = new URLSearchParams();
   qs.append('limit', limit.toString());
   const token = getAuthToken();

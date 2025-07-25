@@ -19,7 +19,7 @@ export default function OrdersPage() {
         return;
       }
       try {
-        const data = await getOrders({ status: "PENDING" });
+        const data = await getOrders();
         const mapped = data.map((o: any) => ({
           id: o.id,
           code: o.code,
@@ -39,7 +39,7 @@ export default function OrdersPage() {
   return (
     <section className="py-2 sm:py-6">
       <div className="container mx-auto px-1 sm:px-6 lg:px-8">
-        <h1 className="px-5 text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6">Ordenes Pendientes</h1>
+        <h1 className="px-5 text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6">Órdenes</h1>
         <DataTable columns={columns} data={orders} />
       </div>
     </section>

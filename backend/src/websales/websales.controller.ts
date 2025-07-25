@@ -40,6 +40,11 @@ export class WebSalesController {
   async completeOrder(@Param('id', ParseIntPipe) id: number) {
     return this.webSalesService.completeWebOrder(id);
   }
+  
+  @Post('order/:id/reject')
+  async rejectOrder(@Param('id', ParseIntPipe) id: number) {
+    return this.webSalesService.rejectWebOrder(id);
+  }
 
   @Post('order/:id/proofs')
   @UseInterceptors(

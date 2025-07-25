@@ -139,6 +139,18 @@ export class WebSalesService {
     return sale;
   }
 
+  async rejectWebOrder(id: number) {
+    const order = await this.prisma.orders.findUnique({ where: { id } });
+    if (!order || order.status !== 'PENDING') {
+      throw new BadRequestException('Orden no válida para rechazar');
+    }
+    await this.prisma.orders.update({
+      where: { id },
+      data: { status: 'DENIED' },
+    });
+    return { success: true };
+  }
+
   async addOrderProofs(
     id: number,
     images: string[],

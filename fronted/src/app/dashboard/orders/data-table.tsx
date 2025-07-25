@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { DateRange } from "react-day-picker";
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import { useMemo, useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTablePagination } from "@/components/data-table-pagination";
 
 interface DataTableProps<TData, TValue> {
@@ -34,9 +35,13 @@ export function DataTable<TData extends { createdAt: string; code: string; clien
 }: DataTableProps<TData, TValue>) {
   const [search, setSearch] = useState("");
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
+  const [status, setStatus] = useState<string>("PENDING");
 
   const filteredData = useMemo(() => {
     let result = data;
+    if (status && status !== "ALL") {
+      result = result.filter((item) => (item as any).status === status);
+    }
     if (selectedDateRange?.from && selectedDateRange?.to) {
       const from = new Date(selectedDateRange.from);
       const to = new Date(selectedDateRange.to);
@@ -53,7 +58,7 @@ export function DataTable<TData extends { createdAt: string; code: string; clien
       );
     }
     return result;
-  }, [data, search, selectedDateRange]);
+  }, [data, search, selectedDateRange, status]);
 
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
@@ -75,11 +80,12 @@ export function DataTable<TData extends { createdAt: string; code: string; clien
     setSelectedDateRange(range);
   };
 
-  const isFiltered = !!search || !!selectedDateRange;
+  const isFiltered = !!search || !!selectedDateRange || status !== "PENDING";
 
   const handleResetFilters = () => {
     setSearch("");
     setSelectedDateRange(undefined);
+    setStatus("PENDING");
   };
 
   return (
@@ -91,6 +97,17 @@ export function DataTable<TData extends { createdAt: string; code: string; clien
           onChange={(e) => setSearch(e.target.value)}
           className="w-full sm:w-1/3"
         />
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="PENDING">Pendientes</SelectItem>
+            <SelectItem value="COMPLETED">Completadas</SelectItem>
+            <SelectItem value="DENIED">Denegadas</SelectItem>
+            <SelectItem value="ALL">Todas</SelectItem>
+          </SelectContent>
+        </Select>
         <CalendarDatePicker
           className="h-9 w-[250px]"
           variant="outline"

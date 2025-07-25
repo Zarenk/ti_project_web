@@ -23,7 +23,9 @@ export default function WelcomeDashboard() {
 
   const [lowStockItems, setLowStockItems] = useState<{ productId: number; productName: string; storeName: string; stock: number }[]>([]);
   const [pendingOrders, setPendingOrders] = useState(0);
-  const [recentOrders, setRecentOrders] = useState<{ id: number; code: string; createdAt: string }[]>([]);
+  // Holds recent activity items. For now it contains recent orders, but the
+  // structure allows adding more activity types in the future.
+  const [recentActivity, setRecentActivity] = useState<{ id: number; code: string; createdAt: string }[]>([]);
 
   const router = useRouter()
 
@@ -102,8 +104,9 @@ useEffect(() => {
 useEffect(() => {
   async function fetchRecent() {
     try {
-      const data = await getRecentOrders(5);
-      setRecentOrders(data);
+      // Request the last ten records from the backend
+      const data = await getRecentOrders(10);
+      setRecentActivity(data);
     } catch (error) {
       console.error('Error al cargar actividad de ordenes:', error);
     }
@@ -211,7 +214,7 @@ useEffect(() => {
                     </div>
                   </div>
                   <Button variant="outline" size="sm" asChild>
-                    <Link href="/dashboard/sales/new">Procesar</Link>
+                    <Link href="/dashboard/orders">Procesar</Link>
                   </Button>
                 </div>
                 <div className="flex items-center justify-between space-x-4">
@@ -253,7 +256,7 @@ useEffect(() => {
                 <CardDescription>Ultimas actualizaciones del inventario y ordenes</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-6">
-                {recentOrders.map((o) => (
+                {recentActivity.slice(0, 10).map((o) => (
                   <div key={o.id} className="flex items-center space-x-4">
                     <div className="rounded-full bg-muted p-2">
                       <Users className="h-4 w-4" />

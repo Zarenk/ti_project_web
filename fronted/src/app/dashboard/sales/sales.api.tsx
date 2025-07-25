@@ -103,6 +103,17 @@ export async function completeWebOrder(id: number) {
   return await response.json();
 }
 
+export async function rejectWebOrder(id: number) {
+  const response = await fetch(`${BACKEND_URL}/api/web-sales/order/${id}/reject`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Error al rechazar la orden: ${errorText}`);
+  }
+  return await response.json();
+}
+
 export async function uploadOrderProofs(
   id: number | string,
   files: File[],

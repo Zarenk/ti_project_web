@@ -545,6 +545,7 @@ enum SaleSource {
 enum OrderStatus {
   PENDING
   COMPLETED
+  DENIED
 }
 
 model ShippingGuide {
