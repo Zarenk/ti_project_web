@@ -101,6 +101,10 @@ export class CreateWebSaleDto {
 
   @IsOptional()
   @IsString()
+  personalDni?: string;
+
+  @IsOptional()
+  @IsString()
   shippingMethod?: string;
 
   @IsOptional()

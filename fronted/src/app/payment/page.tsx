@@ -218,6 +218,9 @@ export default function Component() {
             email: prev.email || client.email || '',
             phone: prev.phone || client.phone || '',
             address: prev.address || client.adress || '',
+            personalDni:
+              prev.personalDni ||
+              (client.type === 'DNI' ? client.typeNumber || '' : ''),
             invoiceName: prev.invoiceName || client.name || '',
             invoiceAddress: prev.invoiceAddress || client.adress || '',
             invoiceType: client.type === 'RUC' ? 'FACTURA' : 'BOLETA',
@@ -233,6 +236,13 @@ export default function Component() {
     }
     loadClientData()
   }, [])
+
+  // Mantener sincronizado el DNI de facturación con el DNI personal
+  useEffect(() => {
+    if (formData.invoiceType === 'BOLETA' && !formData.dni) {
+      setFormData((prev) => ({ ...prev, dni: formData.personalDni }));
+    }
+  }, [formData.personalDni, formData.invoiceType]);
 
   const handlePurchase = async (e: React.FormEvent) => {
     e.preventDefault()
