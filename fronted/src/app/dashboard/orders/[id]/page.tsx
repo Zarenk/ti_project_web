@@ -190,6 +190,14 @@ export default function OrderDetailPage() {
       }
     : null;
 
+  const invoicePdfUrl = invoiceData
+    ? `${BACKEND_URL}/api/sunat/pdf/${
+        invoiceData.type.toLowerCase() === 'boleta' ? 'boleta' : 'factura'
+      }/20519857538-${
+        invoiceData.type.toLowerCase() === 'boleta' ? '03' : '01'
+      }-${invoiceData.serie}-${invoiceData.number}.pdf`
+    : null;  
+
   return (
     <div className="max-w-4xl mx-auto p-6">
         <div className="mb-8">
@@ -450,6 +458,16 @@ export default function OrderDetailPage() {
                       S/. {Number(invoiceData.total).toFixed(2)}
                     </p>
                   </div>
+                  {invoicePdfUrl && (
+                    <a
+                      href={invoicePdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline"
+                    >
+                      Descargar PDF
+                    </a>
+                  )}
                 </CardContent>
               </Card>
             )}

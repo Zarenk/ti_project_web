@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 
-import { ArrowLeft, Calendar, MapPin, Package, Truck, User } from "lucide-react"
+import { ArrowLeft, Calendar, FileText, MapPin, Package, Truck, User } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 
@@ -71,6 +71,26 @@ export default function OrderDetails() {
       total: order.total,
     },
   }
+
+  const invoice = order.invoices && order.invoices.length > 0 ? order.invoices[0] : null
+
+  const invoiceData = invoice
+    ? {
+        type: invoice.tipoComprobante,
+        serie: invoice.serie,
+        number: invoice.nroCorrelativo,
+        date: invoice.fechaEmision,
+        total: invoice.total ?? order.total,
+      }
+    : null
+
+  const invoicePdfUrl = invoiceData
+    ? `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/sunat/pdf/${
+        invoiceData.type.toLowerCase() === 'boleta' ? 'boleta' : 'factura'
+      }/20519857538-${
+        invoiceData.type.toLowerCase() === 'boleta' ? '03' : '01'
+      }-${invoiceData.serie}-${invoiceData.number}.pdf`
+    : null
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
@@ -219,6 +239,51 @@ export default function OrderDetails() {
                 </div>
               </CardContent>
             </Card>
+
+            {invoiceData && (
+              <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
+                <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
+                  <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
+                    <FileText className="w-5 h-5 mr-2" />
+                    Comprobante Emitido
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Tipo</p>
+                    <p className="font-semibold text-slate-700 dark:text-slate-300">{invoiceData.type}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Serie</p>
+                    <p className="text-slate-700 dark:text-slate-300">{invoiceData.serie}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Número</p>
+                    <p className="text-slate-700 dark:text-slate-300">{invoiceData.number}</p>
+                  </div>
+                  {invoiceData.date && (
+                    <div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Fecha de Emisión</p>
+                      <p className="text-slate-700 dark:text-slate-300">{new Date(invoiceData.date).toLocaleString('es-ES')}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total</p>
+                    <p className="font-semibold text-slate-700 dark:text-slate-300">S/. {Number(invoiceData.total).toFixed(2)}</p>
+                  </div>
+                  {invoicePdfUrl && (
+                    <a
+                      href={invoicePdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline"
+                    >
+                      Descargar PDF
+                    </a>
+                  )}
+                </CardContent>
+              </Card>
+            )}                         
           </div>
 
           {/* Right Column - Order Summary */}
