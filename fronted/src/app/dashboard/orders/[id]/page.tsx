@@ -11,6 +11,10 @@ import {
   Truck,
   User,
   FileText,
+  ShoppingCart,
+  Receipt,
+  Clipboard,
+  Banknote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -174,6 +178,11 @@ export default function OrderDetailPage() {
     proofImages: Array.isArray(payload.proofImages) ? payload.proofImages : [],
     proofDescription: payload.proofDescription ?? "",
   };
+
+  const totalPaid = orderData.payments.reduce(
+    (sum: number, p: any) => sum + Number(p.amount),
+    0
+  );
 
   const invoice =
     sale && Array.isArray(sale.invoices) && sale.invoices.length > 0
@@ -363,7 +372,10 @@ export default function OrderDetailPage() {
 
             <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
               <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
-                <CardTitle className="text-blue-900 dark:text-blue-100">Productos Pedidos</CardTitle>
+                <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
+                  <ShoppingCart className="w-5 h-5 mr-2" />
+                  Productos Pedidos
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
                 <div className="space-y-4">
@@ -393,7 +405,10 @@ export default function OrderDetailPage() {
 
             <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
               <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
-                <CardTitle className="text-blue-900 dark:text-blue-100">Comprobante de Pago</CardTitle>
+                <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
+                  <Receipt className="w-5 h-5 mr-2" />
+                  Comprobante de Pago
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-4">
                 {orderData.proofImages.length > 0 && (
@@ -412,13 +427,32 @@ export default function OrderDetailPage() {
                   </p>
                 )}
                 {orderData.payments.length > 0 && (
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {orderData.payments.map((p: any, idx: number) => (
-                      <p key={idx} className="text-sm text-slate-700 dark:text-slate-300">
-                        {p.method}: S/. {Number(p.amount).toFixed(2)}
-                      </p>
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between text-sm text-slate-700 dark:text-slate-300"
+                      >
+                        <span className="flex items-center">
+                          <Banknote className="w-4 h-4 mr-1" />
+                          {p.method}
+                        </span>
+                        <span>S/. {Number(p.amount).toFixed(2)}</span>
+                      </div>
                     ))}
+                    <Separator />
+                    <div className="flex justify-between font-semibold">
+                      <span>Total Pagado</span>
+                      <span>S/. {totalPaid.toFixed(2)}</span>
+                    </div>
                   </div>
+                )}
+                {orderData.payments.length === 0 &&
+                  orderData.proofImages.length === 0 &&
+                  !orderData.proofDescription && (
+                    <p className="text-sm text-slate-500">
+                      No se proporcionó comprobante de pago.
+                    </p>
                 )}
               </CardContent>
             </Card>
@@ -476,7 +510,10 @@ export default function OrderDetailPage() {
           <div className="lg:col-span-1">
             <Card className="border-blue-100 dark:border-blue-700 shadow-sm sticky top-8 pt-0">
               <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
-                <CardTitle className="text-blue-900 dark:text-blue-100">Resumen del Pedido</CardTitle>
+                <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
+                  <Clipboard className="w-5 h-5 mr-2" />
+                  Resumen del Pedido
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
                 <div className="space-y-4">

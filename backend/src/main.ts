@@ -9,6 +9,9 @@ import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   
   const app = await NestFactory.create(AppModule);
+  // Serve static files before applying the global prefix so they remain
+  // accessible without "/api" in the path
+  app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
   // PARA COLOCAR PREVIAMENTE EN LA URL /API/
   app.setGlobalPrefix('api');
   // Habilitar la validación global de DTOs
@@ -45,9 +48,6 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
-
-  // Servir archivos estáticos desde la carpeta "uploads"
-  app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 
   await app.listen(process.env.PORT ?? 4000, '0.0.0.0');
 }
