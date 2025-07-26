@@ -24,8 +24,10 @@ export class CashregisterController {
   async getCashRegisterBalance(@Param('storeId', ParseIntPipe) storeId: number) {
     const cashRegister = await this.cashregisterService.getCashRegisterBalance(storeId);
 
+    // En lugar de devolver un 404 cuando no existe caja activa, respondemos con
+    // null para que el cliente maneje el estado adecuadamente.
     if (!cashRegister) {
-      throw new NotFoundException(`No se encontró una caja activa para la tienda con ID ${storeId}.`);
+      return null;
     }
 
     return { currentBalance: cashRegister.currentBalance };
@@ -49,8 +51,9 @@ export class CashregisterController {
   async getActiveCashRegister(@Param('storeId') storeId: number) {
     const cashRegister = await this.cashregisterService.getActiveCashRegister(storeId);
 
+    // Si no hay caja activa simplemente devuelve null. El cliente decidirá qué hacer.
     if (!cashRegister) {
-      throw new NotFoundException(`No se encontró una caja activa para la tienda con ID ${storeId}.`);
+      return null;
     }
 
     return cashRegister;

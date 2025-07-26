@@ -45,11 +45,8 @@
         },
       });
     
-      if (!cashRegister) {
-        throw new NotFoundException(`No se encontró una caja activa para la tienda con ID ${storeId}.`);
-      }
-    
-      return cashRegister;
+      // Si no existe una caja activa simplemente retorna null para evitar un 404
+      return cashRegister || null;
     }
 
     async getTransactionsByStoreAndDate(storeId: number, startOfDay: Date, endOfDay: Date) {

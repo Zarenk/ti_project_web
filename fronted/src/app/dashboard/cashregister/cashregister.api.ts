@@ -13,12 +13,17 @@ export async function getCashRegisterBalance(storeId: number) {
     });
 
     if (!response.ok) {
-      // 👇 Aquí no intentes hacer response.json(), simplemente lanza el error
       if (response.status === 404) return null;
+      throw new Error('Error al obtener el balance');
     }
 
     const data = await response.json();
-    return Number(data.currentBalance ?? 0); // 👈 Siempre convertir a número aquí
+    // Si el backend devuelve null significa que no hay caja activa
+    if (data === null || data.currentBalance === null || data.currentBalance === undefined) {
+      return null;
+    }
+
+    return Number(data.currentBalance ?? 0);
   } catch (error: any) {
     console.error('Error al obtener el balance de la caja:', error.message || error);
     throw error;
@@ -110,8 +115,15 @@ export async function getActiveCashRegister(storeId: number): Promise<{ id: numb
       throw new Error('No se pudo obtener la caja activa.');
     }
 
-    console.log('Response de la caja activa:', response); // 👈 Verifica la respuesta aquí
-    return await response.json();
+    const data = await response.json();
+
+    // Si el backend responde null no existe caja activa
+    if (data === null) {
+      return null;
+    }
+
+    console.log('Response de la caja activa:', data);
+    return data;
   } catch (error) {
     console.error('Error al obtener la caja activa:', error);
     throw new Error('Error al obtener la caja activa. Por favor, intente nuevamente.');
