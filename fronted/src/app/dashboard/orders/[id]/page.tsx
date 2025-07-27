@@ -419,7 +419,9 @@ export default function OrderDetailPage() {
                 {orderData.proofImages.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
                     {orderData.proofImages.map((url: string, idx: number) => {
-                      const imgUrl = url.startsWith("http") ? url : `${BACKEND_URL}${url}`;
+                      const imgUrl = url.startsWith("http")
+                        ? url
+                        : `${BACKEND_URL}${url.startsWith("/") ? "" : "/"}${url}`;
                       return (
                         <img key={idx} src={imgUrl} alt={`Comprobante ${idx + 1}`} className="w-20 h-20 object-cover rounded" />
                       );

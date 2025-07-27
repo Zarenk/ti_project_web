@@ -379,7 +379,9 @@ export default function OrderDetails() {
                 {payload.proofImages && payload.proofImages.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
                     {payload.proofImages.map((url: string, idx: number) => {
-                      const imgUrl = url.startsWith('http') ? url : `${BACKEND_URL}${url}`
+                      const imgUrl = url.startsWith('http')
+                        ? url
+                        : `${BACKEND_URL}${url.startsWith('/') ? '' : '/'}${url}`
                       return (
                         <img
                           key={idx}
