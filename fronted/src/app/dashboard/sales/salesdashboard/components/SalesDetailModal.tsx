@@ -19,7 +19,7 @@ export function SaleDetailModal({ sale, open, onClose }: { sale: any, open: bool
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2 text-sm">
-          <p><strong>Vendedor:</strong> {sale.user}</p>
+          <p><strong>Vendedor:</strong> {sale.source === "WEB" ? "Venta Online" : sale.user}</p>
           <p><strong>Tienda:</strong> {sale.store}</p>
           <p><strong>Cliente:</strong> {sale.client}</p>
           <p><strong>Total:</strong> S/ {sale.total.toFixed(2)}</p>

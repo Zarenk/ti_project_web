@@ -103,7 +103,9 @@ export function SalesTable({ dateRange }: Props) {
             {sortedSales.map((sale) => (
               <TableRow key={sale.id} className="hover:bg-muted transition cursor-pointer" onClick={() => setSelectedSale(sale)}>
                 <TableCell className="font-semibold">{sale.id}</TableCell>
-                <TableCell className="hidden sm:table-cell truncate">{sale.user}</TableCell>
+                <TableCell className="hidden sm:table-cell truncate">
+                  {sale.source === "WEB" ? "Venta Online" : sale.user}
+                </TableCell>
                 <TableCell className="hidden sm:table-cell truncate">{sale.store}</TableCell>
                 <TableCell className="hidden sm:table-cell truncate">{sale.client}</TableCell>
                 <TableCell className="hidden md:table-cell text-xs text-muted-foreground">

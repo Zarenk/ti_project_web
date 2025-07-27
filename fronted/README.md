@@ -51,6 +51,13 @@ JWT_SECRET=2kQ1oLQuQrsNNA5YfVjfo1sS9STiQMMf
 NEXT_PUBLIC_STORE_ID=1
 ```
 
+`NEXT_PUBLIC_BACKEND_URL` **must** point to the public URL of the backend when
+building the front‑end. It is used to construct links for files served under
+`/uploads`, such as order payment proofs. Example:
+
+```env
+NEXT_PUBLIC_BACKEND_URL=https://api.example.com
+```
 Start the development server:
 
 ```bash
