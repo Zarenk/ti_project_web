@@ -451,6 +451,7 @@ export class SalesService {
         user: sale.user.username,
         store: sale.store.name,
         client: sale.client.name,
+        source: sale.source,
         total: sale.total,
         createdAt: sale.createdAt,
         products: sale.salesDetails.map((detail) => ({

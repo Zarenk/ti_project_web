@@ -26,7 +26,6 @@ export default function OrderDetails() {
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [description, setDescription] = useState('')
   const [isUploading, setIsUploading] = useState(false)
-  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
 
   useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file))
@@ -379,9 +378,7 @@ export default function OrderDetails() {
                 {payload.proofImages && payload.proofImages.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
                     {payload.proofImages.map((url: string, idx: number) => {
-                      const imgUrl = url.startsWith('http')
-                        ? url
-                        : `${BACKEND_URL}${url.startsWith('/') ? '' : '/'}${url}`
+                      const imgUrl = `/api/image?url=${encodeURIComponent(url)}`
                       return (
                         <img
                           key={idx}

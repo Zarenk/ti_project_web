@@ -1,7 +1,6 @@
 import { getAuthToken } from '@/lib/auth';
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 export async function getOrders(params: { status?: string; from?: string; to?: string; clientId?: string; code?: string } = {}) {
   const qs = new URLSearchParams();
