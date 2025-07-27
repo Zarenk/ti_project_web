@@ -8,9 +8,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 })
   }
 
-  const target = url.startsWith('http')
-    ? url
-    : `${BACKEND_URL}${url.startsWith('/') ? '' : '/'}${url}`
+  // Allow clients to pass paths starting with `/api`.
+  // The backend exposes uploads without the `/api` prefix, so remove it if present.
+  const cleanUrl = url.replace(/^\/api/, '')
+
+  const target = cleanUrl.startsWith('http')
+    ? cleanUrl
+    : `${BACKEND_URL}${cleanUrl.startsWith('/') ? '' : '/'}${cleanUrl}`
 
   const res = await fetch(target)
 
