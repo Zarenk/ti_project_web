@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { getWebOrderById, getWebSaleById, completeWebOrder, rejectWebOrder } from "@/app/dashboard/sales/sales.api";
+import { getWebOrderById, getWebSaleById, completeWebOrder, rejectWebOrder, sendInvoiceToSunat } from "@/app/dashboard/sales/sales.api";
 import { getProduct } from "@/app/dashboard/products/products.api";
 import {
   AlertDialog,
@@ -33,6 +33,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { InvoiceDocument } from "@/app/dashboard/sales/components/pdf/InvoiceDocument";
+import { numeroALetrasCustom } from "@/app/dashboard/sales/components/utils/numeros-a-letras";
+import QRCode from "qrcode";
+import { pdf } from "@react-pdf/renderer";
+import { uploadPdfToServer } from "@/lib/utils";
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth";
 
 export default function OrderDetailPage() {
@@ -567,8 +572,77 @@ export default function OrderDetailPage() {
                         <AlertDialogAction
                           onClick={async () => {
                             try {
-                              await completeWebOrder(order.id);
+                              const createdSale = await completeWebOrder(order.id);
                               toast.success("Orden completada");
+
+                              const invoice =
+                                createdSale && Array.isArray(createdSale.invoices) && createdSale.invoices.length > 0
+                                  ? createdSale.invoices[0]
+                                  : null;
+
+                              if (invoice) {
+                                const invoicePayload = {
+                                  saleId: createdSale.id,
+                                  serie: invoice.serie,
+                                  correlativo: invoice.nroCorrelativo,
+                                  documentType:
+                                    invoice.tipoComprobante === "FACTURA" ? "invoice" : "boleta",
+                                  tipoMoneda: invoice.tipoMoneda ?? "PEN",
+                                  total: invoice.total ?? createdSale.total,
+                                  fechaEmision: invoice.fechaEmision,
+                                  cliente: {
+                                    razonSocial: createdSale.client?.name ?? "",
+                                    ruc: createdSale.client?.typeNumber ?? "",
+                                    dni: createdSale.client?.typeNumber ?? "",
+                                    nombre: createdSale.client?.name ?? "",
+                                    tipoDocumento: createdSale.client?.type ?? "",
+                                  },
+                                  emisor: {
+                                    razonSocial: createdSale.store?.name ?? "",
+                                    adress: createdSale.store?.adress ?? "",
+                                    ruc: 20519857538,
+                                  },
+                                  items: createdSale.salesDetails.map((d: any) => ({
+                                    cantidad: d.quantity,
+                                    descripcion: d.entryDetail.product.name,
+                                    series: d.series ?? [],
+                                    precioUnitario: Number(d.price),
+                                    subtotal: Number((d.price * d.quantity) / 1.18),
+                                    igv: Number(d.price * d.quantity - (d.price * d.quantity) / 1.18),
+                                    total: Number(d.price * d.quantity),
+                                  })),
+                                } as any;
+
+                                const sunatResp = await sendInvoiceToSunat(invoicePayload);
+                                const totalTexto = numeroALetrasCustom(invoicePayload.total, invoicePayload.tipoMoneda);
+                                const qrData = `Representación impresa de la ${invoicePayload.documentType.toUpperCase()} ELECTRÓNICA\nN° ${invoicePayload.serie}-${invoicePayload.correlativo}`;
+                                const qrCode = await QRCode.toDataURL(qrData);
+                                const blob = await pdf(
+                                  <InvoiceDocument
+                                    data={invoicePayload}
+                                    qrCode={qrCode}
+                                    importeEnLetras={totalTexto}
+                                  />
+                                ).toBlob();
+                                await uploadPdfToServer({
+                                  blob,
+                                  ruc: 20519857538,
+                                  tipoComprobante: invoicePayload.documentType,
+                                  serie: invoicePayload.serie,
+                                  correlativo: invoicePayload.correlativo,
+                                });
+
+                                if (
+                                  sunatResp.message &&
+                                  sunatResp.message.toLowerCase().includes("exitosamente")
+                                ) {
+                                  toast.success("Factura enviada a la SUNAT correctamente.");
+                                } else if (sunatResp.message) {
+                                  toast.error(`Error al enviar la factura a la SUNAT: ${sunatResp.message}`);
+                                } else {
+                                  toast.error("Error desconocido al enviar la factura a la SUNAT.");
+                                }
+                              }
                               router.push("/dashboard/orders");
                             } catch {
                               toast.error("Error al completar la orden");

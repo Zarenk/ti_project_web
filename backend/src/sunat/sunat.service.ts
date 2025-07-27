@@ -95,7 +95,7 @@ export class SunatService {
   }
 
   getComprobantePdfPath(tipo: 'boleta' | 'factura', filename: string): string {
-    const basePath = path.resolve(__dirname, '../..', 'comprobantes/pdf', tipo);
+    const basePath = path.resolve(process.cwd(), 'comprobantes/pdf', tipo);
     const filePath = path.join(basePath, filename);
 
     console.log('🔍 Buscando PDF en:', filePath); // 👈 Aquí lo agregas
