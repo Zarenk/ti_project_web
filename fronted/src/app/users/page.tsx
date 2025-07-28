@@ -24,7 +24,7 @@ import {
   createClient,
   selfRegisterClient,
 } from "../dashboard/clients/clients.api"
-import { getMySales, getOrdersByUser } from "../dashboard/sales/sales.api"
+import { getOrdersByUser } from "../dashboard/sales/sales.api"
 import Navbar from "@/components/navbar"
 import { useRouter } from "next/navigation"
 
@@ -163,18 +163,6 @@ export default function UserPanel() {
           })
         }
 
-        const sales = await getMySales()
-        const userSales = sales.filter((s: any) => s.client?.userId === profile.id)
-        const historySales = userSales.map((s: any) => ({
-          id: s.id,
-          numero: s.invoices && s.invoices[0] ? `${s.invoices[0].serie}-${s.invoices[0].nroCorrelativo}` : `#${s.id}`,
-          fecha: new Date(s.createdAt).toLocaleDateString('es-ES'),
-          date: new Date(s.createdAt),
-          estado: 'Completado',
-          total: `S/. ${s.total.toFixed(2)}`,
-          link: `/orders/${s.id}`,
-        }))
-
         const orders = await getOrdersByUser(profile.id)
         const historyOrders = orders.map((o: any) => {
           const payload = o.payload as any
@@ -189,8 +177,7 @@ export default function UserPanel() {
           }
         })
 
-        const history = [...historySales, ...historyOrders].sort((a, b) => b.date.getTime() - a.date.getTime())
-        setOrderHistory(history)
+        setOrderHistory(historyOrders)
       } catch (error: any) {
         if (error.message === 'Unauthorized') {
           router.push('/unauthorized')

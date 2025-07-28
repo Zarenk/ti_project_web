@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import Navbar from "@/components/navbar"
-import { getWebOrderById, uploadOrderProofs } from "@/app/dashboard/sales/sales.api"
+import { getWebOrderById, getWebSaleById, uploadOrderProofs } from "@/app/dashboard/sales/sales.api"
 import { getProduct } from "@/app/dashboard/products/products.api"
 import { toast } from "sonner"
 
@@ -21,6 +21,7 @@ export default function OrderDetails() {
   const params = useParams()
   const id = Array.isArray(params.id) ? params.id[0] : params.id
   const [order, setOrder] = useState<any | null>(null)
+  const [sale, setSale] = useState<any | null>(null)
   const [products, setProducts] = useState<any[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
@@ -75,6 +76,22 @@ export default function OrderDetails() {
     fetchProducts()
   }, [order])
 
+  useEffect(() => {
+    async function fetchSale() {
+      if (order && order.status === 'COMPLETED' && order.salesId) {
+        try {
+          const data = await getWebSaleById(order.salesId)
+          setSale(data)
+        } catch (err) {
+          console.error('Error fetching sale', err)
+        }
+      } else {
+        setSale(null)
+      }
+    }
+    fetchSale()
+  }, [order])
+
   if (!order) {
     return <div className="p-6">Cargando...</div>
   }
@@ -121,6 +138,26 @@ export default function OrderDetails() {
       total: payload.total,
     },
   }
+
+  const invoice = sale?.invoices && sale.invoices.length > 0 ? sale.invoices[0] : null
+
+  const invoiceData = invoice
+    ? {
+        type: invoice.tipoComprobante,
+        serie: invoice.serie,
+        number: invoice.nroCorrelativo,
+        date: invoice.fechaEmision,
+        total: invoice.total ?? sale.total,
+      }
+    : null
+
+  const invoicePdfUrl = invoiceData
+    ? `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/sunat/pdf/${
+        invoiceData.type.toLowerCase() === 'boleta' ? 'boleta' : 'factura'
+      }/20519857538-${
+        invoiceData.type.toLowerCase() === 'boleta' ? '03' : '01'
+      }-${invoiceData.serie}-${invoiceData.number}.pdf`
+    : null
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -171,10 +208,9 @@ export default function OrderDetails() {
             <span className="text-xl font-normal ml-2">#{orderData.orderNumber}</span>
           </h1>
           <p className="mt-2 text-slate-600 dark:text-slate-300">
-            ¡Gracias por tu compra! Tu orden ha sido generada con éxito y está siendo procesada.
-            Pronto recibirás una confirmación por correo electrónico con todos los detalles de tu pedido.
-            Si tienes alguna pregunta o deseas hacer seguimiento, no dudes en contactarnos.
-            Valoramos tu confianza y estamos comprometidos a ofrecerte el mejor servicio mientras tu orden está en proceso.
+            {order.status === 'PENDING'
+              ? '¡Gracias por tu compra! Tu orden ha sido generada con éxito y está siendo procesada. Pronto recibirás una confirmación por correo electrónico con todos los detalles de tu pedido. Si tienes alguna pregunta o deseas hacer seguimiento, no dudes en contactarnos. Valoramos tu confianza y estamos comprometidos a ofrecerte el mejor servicio mientras tu orden está en proceso.'
+              : 'Tu orden ha sido completada satisfactoriamente. Gracias por confiar en nosotros.'}
           </p>
         </div>
 
@@ -368,6 +404,51 @@ export default function OrderDetails() {
                 </div>
               </CardContent>
             </Card>
+
+            {invoiceData && (
+              <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
+                <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4 items-center">
+                  <CardTitle className="flex items-center text-blue-900 dark:text-blue-100">
+                    <FileText className="w-5 h-5 mr-2" />
+                    Comprobante Emitido
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Tipo</p>
+                    <p className="font-semibold text-slate-700 dark:text-slate-300">{invoiceData.type}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Serie</p>
+                    <p className="text-slate-700 dark:text-slate-300">{invoiceData.serie}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Número</p>
+                    <p className="text-slate-700 dark:text-slate-300">{invoiceData.number}</p>
+                  </div>
+                  {invoiceData.date && (
+                    <div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Fecha de Emisión</p>
+                      <p className="text-slate-700 dark:text-slate-300">{new Date(invoiceData.date).toLocaleString('es-ES')}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total</p>
+                    <p className="font-semibold text-slate-700 dark:text-slate-300">S/. {Number(invoiceData.total).toFixed(2)}</p>
+                  </div>
+                  {invoicePdfUrl && (
+                    <a
+                      href={invoicePdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline"
+                    >
+                      Descargar PDF
+                    </a>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Payment Proof */}
             <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0">
