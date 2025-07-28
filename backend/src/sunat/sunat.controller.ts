@@ -5,7 +5,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
-
+import { resolveBackendPath } from 'src/utils/path-utils';
 
 function generarNombreUnico(destino: string, original: string): string {
   const nombreSinExtension = path.parse(original).name;
@@ -97,7 +97,7 @@ export class SunatController {
           // Detectar tipo desde el nombre del archivo (ej: 20519857538-01-F001-007.pdf)
           const tipo = nombre.includes('-01-') ? 'factura' : 'boleta';
   
-          const dir = path.resolve(process.cwd(), 'comprobantes/pdf', tipo);
+          const dir = resolveBackendPath('comprobantes/pdf', tipo);
   
           // Crear la carpeta si no existe
           if (!fs.existsSync(dir)) {
@@ -109,7 +109,7 @@ export class SunatController {
         filename: (req, file, cb) => {
           const nombre = file.originalname;
           const tipo = nombre.includes('-01-') ? 'factura' : 'boleta';
-          const dir = path.resolve(process.cwd(), 'comprobantes/pdf', tipo);
+          const dir = resolveBackendPath('comprobantes/pdf', tipo);
           const nombreSeguro = generarNombreUnico(dir, nombre);
           cb(null, nombreSeguro);
         },

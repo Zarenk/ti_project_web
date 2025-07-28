@@ -7,6 +7,7 @@ import { sendToSunat } from './utils/sunat-client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as path from 'path';
 import * as fs from 'fs';
+import { resolveBackendPath } from 'src/utils/path-utils';
 
 @Injectable()
 export class SunatService {
@@ -95,7 +96,7 @@ export class SunatService {
   }
 
   getComprobantePdfPath(tipo: 'boleta' | 'factura', filename: string): string {
-    const basePath = path.resolve(process.cwd(), 'comprobantes/pdf', tipo);
+    const basePath = resolveBackendPath('comprobantes/pdf', tipo);
     const filePath = path.join(basePath, filename);
 
     console.log('🔍 Buscando PDF en:', filePath); // 👈 Aquí lo agregas

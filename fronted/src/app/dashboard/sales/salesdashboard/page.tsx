@@ -14,6 +14,7 @@ import { SalesChart } from "./sales-chart"
 import { DateRange } from "react-day-picker"
 import { getMonthlyClientsStats, getMonthlySalesCount, getMonthlySalesTotal } from "../sales.api"
 import { TopProductsTable } from "./top-products-table"
+import { TopClientsTable } from "./top-clients-table"
 
 export default function SalesDashboard() {
     const [dateRange, setDateRange] = useState<DateRange>({
