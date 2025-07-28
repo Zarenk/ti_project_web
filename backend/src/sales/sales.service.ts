@@ -482,4 +482,73 @@ export class SalesService {
     });
   }
 
+  async getTopClients(limit = 10, from?: string, to?: string) {
+    const timeZone = 'America/Lima';
+    const where: any = {};
+
+    if (from && to) {
+      where.createdAt = {
+        gte: zonedTimeToUtc(new Date(from), timeZone),
+        lte: zonedTimeToUtc(endOfDay(new Date(to)), timeZone),
+      };
+    }
+
+    const grouped = await this.prisma.sales.groupBy({
+      by: ['clientId'],
+      where,
+      _sum: { total: true },
+      _count: { _all: true },
+      orderBy: { _sum: { total: 'desc' } },
+      take: limit,
+    });
+
+    const clientIds = grouped.map((g) => g.clientId);
+
+    const [clients, sales] = await Promise.all([
+      this.prisma.client.findMany({
+        where: { id: { in: clientIds } },
+        select: { id: true, name: true },
+      }),
+      this.prisma.sales.findMany({
+        where: { clientId: { in: clientIds }, ...where },
+        include: {
+          salesDetails: {
+            include: {
+              entryDetail: { include: { product: true } },
+            },
+          },
+          invoices: true,
+        },
+      }),
+    ]);
+
+    return grouped.map((g) => {
+      const client = clients.find((c) => c.id === g.clientId);
+      const clientSales = sales.filter((s) => s.clientId === g.clientId);
+      return {
+        clientId: g.clientId,
+        clientName: client?.name ?? 'Desconocido',
+        totalAmount: g._sum.total ?? 0,
+        salesCount: g._count._all ?? 0,
+        sales: clientSales.map((s) => ({
+          id: s.id,
+          total: s.total,
+          createdAt: s.createdAt,
+          invoice: s.invoices[0]
+            ? {
+                serie: s.invoices[0].serie,
+                nroCorrelativo: s.invoices[0].nroCorrelativo,
+                tipoComprobante: s.invoices[0].tipoComprobante,
+              }
+            : null,
+          products: s.salesDetails.map((d) => ({
+            name: d.entryDetail.product.name,
+            quantity: d.quantity,
+            price: d.price,
+          })),
+        })),
+      };
+    });
+  }
+
 }

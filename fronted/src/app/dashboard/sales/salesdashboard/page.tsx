@@ -7,14 +7,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 
 import { TopProductsChart } from "./top-products-chart"
-import { TopProductsTable } from "./top-products-table"
-
 import { DatePickerWithRange } from "./date-range-picker"
 import { RevenueByCategory } from "./revenue-by-category"
 import { SalesTable } from "./sales-table"
 import { SalesChart } from "./sales-chart"
 import { DateRange } from "react-day-picker"
 import { getMonthlyClientsStats, getMonthlySalesCount, getMonthlySalesTotal } from "../sales.api"
+import { TopProductsTable } from "./top-products-table"
 
 export default function SalesDashboard() {
     const [dateRange, setDateRange] = useState<DateRange>({
@@ -214,15 +213,7 @@ export default function SalesDashboard() {
           <TopProductsTable dateRange={dateRange} />
         </TabsContent>
         <TabsContent value="customers" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer Analytics</CardTitle>
-              <CardDescription>Customer acquisition and retention metrics</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Customer analytics data will be displayed here</p>
-            </CardContent>
-          </Card>
+          <TopClientsTable dateRange={dateRange} />
         </TabsContent>
         <TabsContent value="transactions" className="space-y-4">
           <Card>

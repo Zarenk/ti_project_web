@@ -399,6 +399,22 @@ export async function getMonthlyClientsStats() {
   return response.json(); // { total: number, growth: number | null }
 }
 
+export async function getTopClients(params: { from?: string; to?: string }) {
+  let query = '';
+  if (params.from && params.to) {
+    query = `?from=${encodeURIComponent(params.from)}&to=${encodeURIComponent(params.to)}`;
+  }
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  const res = await fetch(`${BACKEND_URL}/api/sales/top-clients${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Error al obtener top clientes');
+  return res.json();
+}
+
 export async function getRecentSalesByRange(from: string, to: string) {
   const token = localStorage.getItem('token');
   if (!token) {

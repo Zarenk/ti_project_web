@@ -8,6 +8,7 @@ import {
   BadRequestException,
   UseGuards,
   Req,
+  Query,
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
@@ -101,6 +102,11 @@ export class SalesController {
   @Get('monthly-clients')
   getMonthlyClientStats() {
     return this.salesService.getMonthlyClientStats();
+  }
+
+  @Get('top-clients')
+  getTopClients(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.salesService.getTopClients(10, from, to);
   }
 
   @Get('my')
