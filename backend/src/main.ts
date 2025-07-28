@@ -11,7 +11,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   // Serve static files before applying the global prefix so they remain
   // accessible without "/api" in the path
-  app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
   // PARA COLOCAR PREVIAMENTE EN LA URL /API/
   app.setGlobalPrefix('api');
   // Habilitar la validación global de DTOs
