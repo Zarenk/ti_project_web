@@ -314,18 +314,27 @@ export class SalesService {
   
     const details = await this.prisma.salesDetail.findMany({
       where: filters,
+      include: { sale: true },
     });
   
-    const salesMap: Record<number, number> = {};
+    const statsMap: Record<number, { quantity: number; revenue: number; lastSale: Date }> = {};
     for (const detail of details) {
-      if (!salesMap[detail.productId]) {
-        salesMap[detail.productId] = 0;
+      if (!statsMap[detail.productId]) {
+        statsMap[detail.productId] = {
+          quantity: 0,
+          revenue: 0,
+          lastSale: detail.sale.createdAt,
+        };
       }
-      salesMap[detail.productId] += detail.quantity;
+      statsMap[detail.productId].quantity += detail.quantity;
+      statsMap[detail.productId].revenue += detail.quantity * detail.price;
+      if (detail.sale.createdAt > statsMap[detail.productId].lastSale) {
+        statsMap[detail.productId].lastSale = detail.sale.createdAt;
+      }
     }
   
-    const sorted = Object.entries(salesMap)
-      .sort((a, b) => b[1] - a[1])
+    const sorted = Object.entries(statsMap)
+      .sort((a, b) => b[1].quantity - a[1].quantity)
       .slice(0, limit);
   
     const productIds = sorted.map(([productId]) => Number(productId));
@@ -335,11 +344,14 @@ export class SalesService {
       },
     });
   
-    return sorted.map(([productId, totalSales]) => {
+    return sorted.map(([productId, stats]) => {
       const product = products.find(p => p.id === Number(productId));
       return {
+        productId: Number(productId),
         name: product?.name || "Producto desconocido",
-        sales: totalSales,
+        sales: stats.quantity,
+        revenue: stats.revenue,
+        lastSale: stats.lastSale,
       };
     });
   }

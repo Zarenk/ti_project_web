@@ -371,7 +371,8 @@ export async function getTopProducts(params: { from?: string; to?: string; type?
     throw new Error("Error al obtener top de productos");
   }
 
-  return await response.json(); // [{ name: string, sales: number }]
+  // [{ productId, name, sales, revenue, lastSale }]
+  return await response.json();
 }
 
 export async function getMonthlySalesCount() {

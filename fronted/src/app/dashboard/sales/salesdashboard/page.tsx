@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 
 import { TopProductsChart } from "./top-products-chart"
+import { TopProductsTable } from "./top-products-table"
 
 import { DatePickerWithRange } from "./date-range-picker"
 import { RevenueByCategory } from "./revenue-by-category"
@@ -210,15 +211,7 @@ export default function SalesDashboard() {
           </div>
         </TabsContent>
         <TabsContent value="products" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Product Performance</CardTitle>
-              <CardDescription>Detailed analysis of product sales and inventory</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Product performance data will be displayed here</p>
-            </CardContent>
-          </Card>
+          <TopProductsTable dateRange={dateRange} />
         </TabsContent>
         <TabsContent value="customers" className="space-y-4">
           <Card>
