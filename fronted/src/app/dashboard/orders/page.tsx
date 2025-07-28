@@ -1,15 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "./data-table";
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth";
-import { columns } from "./column";
+import { getColumns } from "./column";
 import { getOrders } from "./orders.api";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const router = useRouter();
+
+  const handleStatusUpdate = useCallback((id: number, status: string) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, status } : o))
+    );
+  }, []);
+
+  const columns = useMemo(() => getColumns(handleStatusUpdate), [handleStatusUpdate]);
 
   useEffect(() => {
     async function fetchData() {

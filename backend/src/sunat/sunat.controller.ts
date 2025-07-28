@@ -110,8 +110,8 @@ export class SunatController {
           const nombre = file.originalname;
           const tipo = nombre.includes('-01-') ? 'factura' : 'boleta';
           const dir = resolveBackendPath('comprobantes/pdf', tipo);
-          const nombreSeguro = generarNombreUnico(dir, nombre);
-          cb(null, nombreSeguro);
+          // Mantener el nombre original para que coincida con {ruc}-{tipo}-{serie}-{correlativo}.pdf
+          cb(null, nombre);
         },
       }),
       fileFilter: (req, file, cb) => {

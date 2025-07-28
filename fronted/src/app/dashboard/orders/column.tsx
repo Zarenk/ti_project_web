@@ -32,7 +32,10 @@ export type Order = {
   status: string;
 };
 
-export const columns: ColumnDef<Order>[] = [
+export function getColumns(
+  onStatusUpdate?: (id: number, status: string) => void
+): ColumnDef<Order>[] {
+  return [
   {
     accessorKey: "code",
     header: "Orden",
@@ -109,6 +112,9 @@ export const columns: ColumnDef<Order>[] = [
                         try {
                           const createdSale = await completeWebOrder(row.original.id);
                           toast.success("Orden completada");
+                          if (onStatusUpdate) {
+                            onStatusUpdate(row.original.id, "COMPLETED");
+                          }
                           const invoice =
                             createdSale && Array.isArray(createdSale.invoices) && createdSale.invoices.length > 0
                               ? createdSale.invoices[0]
@@ -204,6 +210,9 @@ export const columns: ColumnDef<Order>[] = [
                         try {
                           await rejectWebOrder(row.original.id);
                           toast.success("Orden rechazada");
+                          if (onStatusUpdate) {
+                            onStatusUpdate(row.original.id, "DENIED");
+                          }
                         } catch {
                           toast.error("Error al rechazar la orden");
                         } finally {
@@ -223,3 +232,4 @@ export const columns: ColumnDef<Order>[] = [
     },
   },
 ];
+}
