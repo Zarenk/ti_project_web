@@ -19,6 +19,12 @@ import {
   Cpu,
   Gamepad2,
   Headphones,
+  Keyboard,
+  Mouse,
+  Tablet,
+  Printer,
+  Smartphone,
+  Server,
   Truck,
   Shield,
   Headset,
@@ -31,6 +37,7 @@ import {
   Twitter,
   Instagram,
   Youtube,
+  ChevronLeft,
   ChevronRight,
   type LucideIcon,
 } from "lucide-react"
@@ -103,6 +110,7 @@ export default function Homepage() {
   }, [])
 
   const [categories, setCategories] = useState<HomeCategory[]>([])
+  const [categoryIndex, setCategoryIndex] = useState(0)
 
   const iconMap: Record<string, LucideIcon> = {
     Laptops: Laptop,
@@ -111,6 +119,13 @@ export default function Homepage() {
     Almacenamiento: HardDrive,
     Gaming: Gamepad2,
     Accesorios: Headphones,
+    Monitores: Monitor,
+    Teclados: Keyboard,
+    Mouses: Mouse,
+    Tablets: Tablet,
+    Impresoras: Printer,
+    Smartphones: Smartphone,
+    Servidores: Server,
   }
 
   useEffect(() => {
@@ -129,6 +144,26 @@ export default function Homepage() {
     }
     fetchCategoriesData()
   }, [])
+
+  const nextCategories = () =>
+    setCategoryIndex((i) =>
+      categories.length > 0 ? (i + 6) % categories.length : i,
+    )
+  const prevCategories = () =>
+    setCategoryIndex((i) =>
+      categories.length > 0 ? (i - 6 + categories.length) % categories.length : i,
+    )
+
+  const visibleCategories =
+    categories.length <= 6
+      ? categories
+      : [
+          ...categories.slice(categoryIndex, categoryIndex + 6),
+          ...
+            (categoryIndex + 6 > categories.length
+              ? categories.slice(0, (categoryIndex + 6) % categories.length)
+              : []),
+        ]
 
   const benefits = [
     {
@@ -238,23 +273,43 @@ export default function Homepage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-            {categories.map((category, index) => (
-              <Card
-                key={index}
-                className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-sky-100 hover:border-sky-200"
-              >
-                <CardContent className="p-6 text-center">
-                  <div className="w-16 h-16 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                    <category.icon className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors">
-                    {category.name}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">{category.count}+ productos</p>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="relative">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+              {visibleCategories.map((category, index) => (
+                <Card
+                  key={index}
+                  className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-sky-100 hover:border-sky-200"
+                >
+                  <CardContent className="p-6 text-center">
+                    <div className="w-16 h-16 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
+                      <category.icon className="w-8 h-8 text-white" />
+                    </div>
+                    <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors">
+                      {category.name}
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{category.count}+ productos</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            {categories.length > 6 && (
+              <>
+                <button
+                  aria-label="Anterior"
+                  onClick={prevCategories}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  aria-label="Siguiente"
+                  onClick={nextCategories}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </section>
