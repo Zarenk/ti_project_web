@@ -55,6 +55,9 @@ export default function Navbar() {
             <span>Tienda TI</span>       
           </Link>
           <div className="flex items-center gap-4">
+            <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+              Inicio
+            </Link>
             <Link href="/store" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Productos
             </Link>
