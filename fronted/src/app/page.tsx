@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import MotionProductCard from "@/components/MotionProductCard"
 import {
   ShoppingCart,
   User,
@@ -45,15 +45,28 @@ export default function Homepage() {
   interface FeaturedProduct {
     id: number
     name: string
+    description: string
     price: number
-    image: string
-    brand?: string | null
+    brand: string
+    category: string
+    images: string[]
+    stock: number | null
+    specification?: {
+      processor?: string
+      ram?: string
+      storage?: string
+      graphics?: string
+      screen?: string
+      resolution?: string
+      refreshRate?: string
+      connectivity?: string
+    }
   }
 
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([])
-  const { addItem } = useCart()
+  const [heroProduct, setHeroProduct] = useState<FeaturedProduct | null>(null)
 
-  useEffect(() => {
+   useEffect(() => {
     async function fetchFeatured() {
       try {
         const products = await getProducts()
@@ -63,10 +76,14 @@ export default function Homepage() {
           .map((p) => ({
             id: p.id,
             name: p.name,
-            price: p.priceSell ?? p.price,
-            image: p.images[0],
-            brand: p.brand ?? null,
-          }))
+            description: p.description || "",
+            price: p.priceSell ?? p.price,           
+            brand: p.brand || "Sin marca",
+            category: p.category?.name || "Sin categoría",
+            images: p.images || [],
+            stock: p.stock ?? null,
+            specification: p.specification ?? undefined,
+          })) as FeaturedProduct[]
         setFeaturedProducts(selected)
       } catch (error) {
         console.error("Error fetching featured products:", error)
@@ -161,12 +178,25 @@ export default function Homepage() {
             </div>
             <div className="relative">
               <Image
-                src="/placeholder.svg?height=500&width=600&text=Hero+Banner+Laptops"
-                alt="Laptops y componentes de alta calidad"
+                src={
+                  heroProduct?.images[0] ||
+                  "/placeholder.svg?height=500&width=600&text=Hero+Banner"
+                }
+                alt={heroProduct?.name || "Producto"}
                 width={600}
                 height={500}
                 className="rounded-2xl shadow-2xl"
               />
+              {heroProduct && (
+                <div className="absolute -top-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
+                  <p className="font-semibold text-gray-800 dark:text-gray-100">
+                    {heroProduct.name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    {formatCurrency(heroProduct.price, "PEN")}
+                  </p>
+                </div>
+              )}
               <div className="absolute -bottom-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
                 <div className="flex items-center space-x-3">
                   <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
@@ -195,50 +225,7 @@ export default function Homepage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {featuredProducts.map((product) => (
-              <Card
-                key={product.id}
-                className="group hover:shadow-xl transition-all duration-300 border-sky-100 hover:border-sky-200"
-              >
-                <CardContent className="p-6">
-                  <div className="relative mb-4">
-                    <Image
-                      src={product.image || "/placeholder.svg"}
-                      alt={product.name}
-                      width={300}
-                      height={300}
-                      className="w-full h-48 object-cover rounded-lg group-hover:scale-105 transition-transform duration-300"
-                    />
-                    {product.brand && (
-                      <Badge className="absolute top-3 left-3 bg-blue-500 text-white">
-                        {product.brand}
-                      </Badge>
-                    )}
-                  </div>
-                  <h3 className="font-semibold text-lg text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors">
-                    {product.name}
-                  </h3>
-                  <div className="flex items-center space-x-2 mb-4">
-                    <span className="text-2xl font-bold text-sky-600">
-                      {formatCurrency(product.price, "PEN")}
-                    </span>
-                  </div>
-                  <Button
-                    className="w-full bg-sky-500 hover:bg-sky-600 text-white"
-                    onClick={() => {
-                      addItem({
-                        id: product.id,
-                        name: product.name,
-                        price: product.price,
-                        image: product.image,
-                      })
-                      toast.success("Producto agregado al carrito")
-                    }}
-                  >
-                    <ShoppingCart className="w-4 h-4 mr-2" />
-                    Agregar al carrito
-                  </Button>
-                </CardContent>
-              </Card>
+              <MotionProductCard key={product.id} product={product} />
             ))}
           </div>
         </div>
