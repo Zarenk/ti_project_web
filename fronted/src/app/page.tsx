@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import MotionProductCard from "@/components/MotionProductCard"
+import HeroSlideshow from "@/components/HeroSlideshow"
 import {
   ShoppingCart,
   User,
@@ -64,13 +65,13 @@ export default function Homepage() {
   }
 
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([])
-  const [heroProduct, setHeroProduct] = useState<FeaturedProduct | null>(null)
+  const [heroProducts, setHeroProducts] = useState<FeaturedProduct[]>([])
 
    useEffect(() => {
-    async function fetchFeatured() {
+    async function fetchProductsData() {
       try {
         const products = await getProducts()
-        const selected = (products as any[])
+        const withImages = (products as any[])
           .filter((p) => p.images && p.images.length > 0)
           .slice(0, 6)
           .map((p) => ({
@@ -84,12 +85,13 @@ export default function Homepage() {
             stock: p.stock ?? null,
             specification: p.specification ?? undefined,
           })) as FeaturedProduct[]
-        setFeaturedProducts(selected)
+        setHeroProducts(withImages)
+        setFeaturedProducts(withImages.slice(0, 6))
       } catch (error) {
         console.error("Error fetching featured products:", error)
       }
     }
-    fetchFeatured()
+    fetchProductsData()
   }, [])
 
   const categories = [
@@ -176,39 +178,7 @@ export default function Homepage() {
                 </Button>
               </div>
             </div>
-            <div className="relative">
-              <Image
-                src={
-                  heroProduct?.images[0] ||
-                  "/placeholder.svg?height=500&width=600&text=Hero+Banner"
-                }
-                alt={heroProduct?.name || "Producto"}
-                width={600}
-                height={500}
-                className="rounded-2xl shadow-2xl"
-              />
-              {heroProduct && (
-                <div className="absolute -top-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
-                  <p className="font-semibold text-gray-800 dark:text-gray-100">
-                    {heroProduct.name}
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    {formatCurrency(heroProduct.price, "PEN")}
-                  </p>
-                </div>
-              )}
-              <div className="absolute -bottom-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <Shield className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-800 dark:text-gray-100">Garantía extendida</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">Hasta 3 años</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <HeroSlideshow products={heroProducts} />
           </div>
         </div>
       </section>
