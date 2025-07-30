@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -33,58 +33,47 @@ import {
   ChevronRight,
 } from "lucide-react"
 import Navbar from "@/components/navbar"
+import { useCart } from "@/context/cart-context"
+import { toast } from "sonner"
+import { formatCurrency } from "@/lib/utils"
+import { getProducts } from "./dashboard/products/products.api"
 
 export default function Homepage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [email, setEmail] = useState("")
 
-  const featuredProducts = [
-    {
-      id: 1,
-      name: "Laptop Gaming ASUS ROG",
-      price: "S/ 3,299",
-      originalPrice: "S/ 3,799",
-      image: "/placeholder.svg?height=300&width=300&text=ASUS+ROG+Laptop",
-      badge: "Oferta",
-    },
-    {
-      id: 2,
-      name: "PC Gamer Intel Core i7",
-      price: "S/ 2,899",
-      image: "/placeholder.svg?height=300&width=300&text=PC+Gamer+i7",
-      badge: "Nuevo",
-    },
-    {
-      id: 3,
-      name: "MacBook Air M2",
-      price: "S/ 4,199",
-      image: "/placeholder.svg?height=300&width=300&text=MacBook+Air+M2",
-      badge: "Popular",
-    },
-    {
-      id: 4,
-      name: "Tarjeta Gráfica RTX 4060",
-      price: "S/ 1,299",
-      originalPrice: "S/ 1,499",
-      image: "/placeholder.svg?height=300&width=300&text=RTX+4060",
-      badge: "Oferta",
-    },
-    {
-      id: 5,
-      name: "Monitor 4K 27 pulgadas",
-      price: "S/ 899",
-      image: "/placeholder.svg?height=300&width=300&text=Monitor+4K+27",
-      badge: "Nuevo",
-    },
-    {
-      id: 6,
-      name: "SSD NVMe 1TB",
-      price: "S/ 299",
-      originalPrice: "S/ 349",
-      image: "/placeholder.svg?height=300&width=300&text=SSD+NVMe+1TB",
-      badge: "Oferta",
-    },
-  ]
+  interface FeaturedProduct {
+    id: number
+    name: string
+    price: number
+    image: string
+    brand?: string | null
+  }
+
+  const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([])
+  const { addItem } = useCart()
+
+  useEffect(() => {
+    async function fetchFeatured() {
+      try {
+        const products = await getProducts()
+        const selected = (products as any[])
+          .filter((p) => p.images && p.images.length > 0)
+          .slice(0, 6)
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            price: p.priceSell ?? p.price,
+            image: p.images[0],
+            brand: p.brand ?? null,
+          }))
+        setFeaturedProducts(selected)
+      } catch (error) {
+        console.error("Error fetching featured products:", error)
+      }
+    }
+    fetchFeatured()
+  }, [])
 
   const categories = [
     { name: "Laptops", icon: Laptop, count: "150+ productos" },
@@ -219,28 +208,32 @@ export default function Homepage() {
                       height={300}
                       className="w-full h-48 object-cover rounded-lg group-hover:scale-105 transition-transform duration-300"
                     />
-                    <Badge
-                      className={`absolute top-3 left-3 ${
-                        product.badge === "Oferta"
-                          ? "bg-red-500"
-                          : product.badge === "Nuevo"
-                            ? "bg-green-500"
-                            : "bg-blue-500"
-                      } text-white`}
-                    >
-                      {product.badge}
-                    </Badge>
+                    {product.brand && (
+                      <Badge className="absolute top-3 left-3 bg-blue-500 text-white">
+                        {product.brand}
+                      </Badge>
+                    )}
                   </div>
                   <h3 className="font-semibold text-lg text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors">
                     {product.name}
                   </h3>
                   <div className="flex items-center space-x-2 mb-4">
-                    <span className="text-2xl font-bold text-sky-600">{product.price}</span>
-                    {product.originalPrice && (
-                      <span className="text-lg text-gray-400 line-through">{product.originalPrice}</span>
-                    )}
+                    <span className="text-2xl font-bold text-sky-600">
+                      {formatCurrency(product.price, "PEN")}
+                    </span>
                   </div>
-                  <Button className="w-full bg-sky-500 hover:bg-sky-600 text-white">
+                  <Button
+                    className="w-full bg-sky-500 hover:bg-sky-600 text-white"
+                    onClick={() => {
+                      addItem({
+                        id: product.id,
+                        name: product.name,
+                        price: product.price,
+                        image: product.image,
+                      })
+                      toast.success("Producto agregado al carrito")
+                    }}
+                  >
                     <ShoppingCart className="w-4 h-4 mr-2" />
                     Agregar al carrito
                   </Button>
