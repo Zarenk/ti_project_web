@@ -618,20 +618,26 @@ export default function ProductPage({ params }: Props) {
             </TabsContent>
 
             <TabsContent value="features" className="mt-8">
-              <div className="grid md:grid-cols-3 gap-6">
-                {product?.features?.map((feature: any) => {
-                  const IconComponent = icons[feature.icon as keyof typeof icons] || Battery
-                  return (
-                    <Card key={feature.id}>
-                      <CardContent className="p-6 text-center">
-                        <IconComponent className="w-12 h-12 mx-auto mb-4 text-blue-500" />
-                        <h3 className="font-bold mb-2">{feature.title}</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{feature.description}</p>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
-              </div>
+              {product?.features && product.features.length > 0 ? (
+                <div className="grid md:grid-cols-3 gap-6">
+                  {product.features.map((feature: any) => {
+                    const IconComponent = icons[feature.icon as keyof typeof icons] || Battery
+                    return (
+                      <Card key={feature.id}>
+                        <CardContent className="p-6 text-center">
+                          <IconComponent className="w-12 h-12 mx-auto mb-4 text-blue-500" />
+                          <h3 className="font-bold mb-2">{feature.title}</h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">{feature.description}</p>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+                  Características no disponibles
+                </p>
+              )}
             </TabsContent>
 
             <TabsContent value="reviews" className="mt-8">

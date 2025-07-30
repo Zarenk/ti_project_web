@@ -36,11 +36,11 @@ export default function ContactPage() {
 
   return (
     
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-white">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-white dark:from-slate-900 dark:via-slate-950 dark:to-slate-950">
     <Navbar />
       {/* Header Section */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-cyan-500 py-16 px-4">
-        <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+      <div className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-700 dark:to-cyan-700 py-16 px-4">
+        <div className="absolute inset-0 bg-white/10 dark:bg-black/20 backdrop-blur-sm"></div>
         <div className="relative max-w-7xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 animate-fade-in">Contáctanos</h1>
           <p className="text-xl md:text-2xl text-blue-100 max-w-3xl mx-auto leading-relaxed">
@@ -48,7 +48,7 @@ export default function ContactPage() {
             solicitud de soporte técnico.
           </p>
         </div>
-        <div className="absolute -bottom-1 left-0 right-0 h-20 bg-gradient-to-t from-blue-50 to-transparent"></div>
+        <div className="absolute -bottom-1 left-0 right-0 h-20 bg-gradient-to-t from-blue-50 to-transparent dark:from-slate-900"></div>
       </div>
 
       {/* Main Content */}
@@ -56,15 +56,15 @@ export default function ContactPage() {
         <div className="grid lg:grid-cols-3 gap-12">
           {/* Contact Form */}
           <div className="lg:col-span-2">
-            <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm hover:shadow-2xl transition-all duration-300">
+            <Card className="shadow-xl border-0 bg-card/80 backdrop-blur-sm hover:shadow-2xl transition-all duration-300">
               <CardHeader className="pb-8">
-                <CardTitle className="text-2xl font-semibold text-gray-800 flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center">
+                <CardTitle className="text-2xl font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-800 dark:to-cyan-800 rounded-full flex items-center justify-center">
                     <Mail className="w-4 h-4 text-white" />
                   </div>
                   Envíanos un mensaje
                 </CardTitle>
-                <p className="text-gray-600 mt-2">
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
                   Completa el formulario y nos pondremos en contacto contigo lo antes posible.
                 </p>
               </CardHeader>
@@ -72,7 +72,7 @@ export default function ContactPage() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="space-y-2 group">
-                      <Label htmlFor="nombre" className="text-sm font-medium text-gray-700">
+                      <Label htmlFor="nombre" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Nombre completo *
                       </Label>
                       <Input
@@ -82,12 +82,12 @@ export default function ContactPage() {
                         required
                         value={formData.nombre}
                         onChange={handleInputChange}
-                        className="h-12 border-gray-200 focus:border-blue-400 focus:ring-blue-400 rounded-lg transition-all duration-200 group-hover:border-blue-300"
+                        className="h-12 rounded-lg border-blue-200 dark:border-blue-700 focus:border-blue-500"
                         placeholder="Tu nombre completo"
                       />
                     </div>
                     <div className="space-y-2 group">
-                      <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                      <Label htmlFor="email" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Correo electrónico *
                       </Label>
                       <Input
@@ -97,7 +97,7 @@ export default function ContactPage() {
                         required
                         value={formData.email}
                         onChange={handleInputChange}
-                        className="h-12 border-gray-200 focus:border-blue-400 focus:ring-blue-400 rounded-lg transition-all duration-200 group-hover:border-blue-300"
+                        className="h-12 rounded-lg border-blue-200 dark:border-blue-700 focus:border-blue-500"
                         placeholder="tu@email.com"
                       />
                     </div>
@@ -105,7 +105,7 @@ export default function ContactPage() {
 
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="space-y-2 group">
-                      <Label htmlFor="telefono" className="text-sm font-medium text-gray-700">
+                      <Label htmlFor="telefono" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Teléfono
                       </Label>
                       <Input
@@ -114,12 +114,12 @@ export default function ContactPage() {
                         type="tel"
                         value={formData.telefono}
                         onChange={handleInputChange}
-                        className="h-12 border-gray-200 focus:border-blue-400 focus:ring-blue-400 rounded-lg transition-all duration-200 group-hover:border-blue-300"
+                        className="h-12 rounded-lg border-blue-200 dark:border-blue-700 focus:border-blue-500"
                         placeholder="+1 (555) 123-4567"
                       />
                     </div>
                     <div className="space-y-2 group">
-                      <Label htmlFor="asunto" className="text-sm font-medium text-gray-700">
+                      <Label htmlFor="asunto" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Asunto *
                       </Label>
                       <Input
@@ -129,14 +129,14 @@ export default function ContactPage() {
                         required
                         value={formData.asunto}
                         onChange={handleInputChange}
-                        className="h-12 border-gray-200 focus:border-blue-400 focus:ring-blue-400 rounded-lg transition-all duration-200 group-hover:border-blue-300"
+                        className="h-12 rounded-lg border-blue-200 dark:border-blue-700 focus:border-blue-500"
                         placeholder="¿En qué podemos ayudarte?"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2 group">
-                    <Label htmlFor="mensaje" className="text-sm font-medium text-gray-700">
+                    <Label htmlFor="mensaje" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                       Mensaje *
                     </Label>
                     <Textarea
@@ -146,14 +146,14 @@ export default function ContactPage() {
                       value={formData.mensaje}
                       onChange={handleInputChange}
                       rows={6}
-                      className="border-gray-200 focus:border-blue-400 focus:ring-blue-400 rounded-lg transition-all duration-200 group-hover:border-blue-300 resize-none"
+                      className="border-blue-200 dark:border-blue-700 focus:border-blue-500 rounded-lg resize-none"
                       placeholder="Cuéntanos más detalles sobre tu consulta..."
                     />
                   </div>
 
                   <Button
                     type="submit"
-                    className="w-full h-12 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-medium rounded-lg transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg"
+                    className="w-full h-12 bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-700 dark:to-cyan-700 hover:from-blue-600 hover:to-cyan-600 text-white font-medium rounded-lg transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg"
                   >
                     <Send className="w-4 h-4 mr-2" />
                     Enviar mensaje
@@ -166,18 +166,18 @@ export default function ContactPage() {
           {/* Contact Information Sidebar */}
           <div className="space-y-6">
             {/* Contact Details Card */}
-            <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm hover:shadow-2xl transition-all duration-300">
+            <Card className="shadow-xl border-0 bg-card/80 backdrop-blur-sm hover:shadow-2xl transition-all duration-300">
               <CardHeader>
-                <CardTitle className="text-xl font-semibold text-gray-800">Información de contacto</CardTitle>
+                <CardTitle className="text-xl font-semibold text-gray-800 dark:text-gray-100">Información de contacto</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex items-start gap-4 p-4 rounded-lg bg-blue-50/50 hover:bg-blue-50 transition-colors duration-200 group">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
+                <div className="flex items-start gap-4 p-4 rounded-lg bg-blue-50/50 hover:bg-blue-50 dark:bg-blue-900/50 dark:hover:bg-blue-900 transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-800 dark:to-cyan-800 rounded-full flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
                     <MapPin className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="font-medium text-gray-800 mb-1">Dirección</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">
+                    <h3 className="font-medium text-gray-800 dark:text-gray-100 mb-1">Dirección</h3>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
                       Av. Tecnología 123, Piso 15
                       <br />
                       Ciudad Empresarial
@@ -187,38 +187,38 @@ export default function ContactPage() {
                   </div>
                 </div>
 
-                <div className="flex items-start gap-4 p-4 rounded-lg bg-cyan-50/50 hover:bg-cyan-50 transition-colors duration-200 group">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
+                <div className="flex items-start gap-4 p-4 rounded-lg bg-cyan-50/50 hover:bg-cyan-50 dark:bg-cyan-900/50 dark:hover:bg-cyan-900 transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-800 dark:to-cyan-800 rounded-full flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
                     <Phone className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="font-medium text-gray-800 mb-1">Teléfono</h3>
-                    <p className="text-gray-600 text-sm">+52 (55) 1234-5678</p>
+                    <h3 className="font-medium text-gray-800 dark:text-gray-100 mb-1">Teléfono</h3>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">+52 (55) 1234-5678</p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-4 p-4 rounded-lg bg-blue-50/50 hover:bg-blue-50 transition-colors duration-200 group">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
+                <div className="flex items-start gap-4 p-4 rounded-lg bg-blue-50/50 hover:bg-blue-50 dark:bg-blue-900/50 dark:hover:bg-blue-900 transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-800 dark:to-cyan-800 rounded-full flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
                     <Mail className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="font-medium text-gray-800 mb-1">Correo de atención</h3>
-                    <p className="text-gray-600 text-sm">contacto@empresa.com</p>
+                    <h3 className="font-medium text-gray-800 dark:text-gray-100 mb-1">Correo de atención</h3>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">contacto@empresa.com</p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-4 p-4 rounded-lg bg-cyan-50/50 hover:bg-cyan-50 transition-colors duration-200 group">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
+                <div className="flex items-start gap-4 p-4 rounded-lg bg-cyan-50/50 hover:bg-cyan-50 dark:bg-cyan-900/50 dark:hover:bg-cyan-900 transition-colors duration-200 group">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-800 dark:to-cyan-800 rounded-full flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
                     <Clock className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="font-medium text-gray-800 mb-1">Horario de atención</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">
+                    <h3 className="font-medium text-gray-800 dark:text-gray-100 mb-1">Horario de atención</h3>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
                       Lunes a Viernes
                       <br />
-                      9:00 AM - 6:00 PM
+                      11:00 AM - 8:00 PM
                       <br />
-                      <span className="text-xs text-gray-500">(Hora del Centro)</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">(Hora del Centro)</span>
                     </p>
                   </div>
                 </div>
@@ -226,7 +226,7 @@ export default function ContactPage() {
             </Card>
 
             {/* Quick Response Card */}
-            <Card className="shadow-xl border-0 bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:shadow-2xl transition-all duration-300">
+            <Card className="shadow-xl border-0 bg-gradient-to-br from-blue-500 to-cyan-500 dark:from-blue-800 dark:to-cyan-800 text-white hover:shadow-2xl transition-all duration-300">
               <CardContent className="p-6">
                 <h3 className="font-semibold text-lg mb-3">Respuesta rápida</h3>
                 <p className="text-blue-100 text-sm leading-relaxed mb-4">
@@ -244,21 +244,21 @@ export default function ContactPage() {
 
       {/* Footer Wave */}
       <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-cyan-500"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-800 dark:to-cyan-800"></div>
         <svg className="relative w-full h-20" viewBox="0 0 1200 120" preserveAspectRatio="none">
           <path
             d="M0,0V46.29c47.79,22.2,103.59,32.17,158,28,70.36-5.37,136.33-33.31,206.8-37.5C438.64,32.43,512.34,53.67,583,72.05c69.27,18,138.3,24.88,209.4,13.08,36.15-6,69.85-17.84,104.45-29.34C989.49,25,1113-14.29,1200,52.47V0Z"
             opacity=".25"
-            className="fill-blue-50"
+            className="fill-blue-50 dark:fill-slate-800"
           ></path>
           <path
             d="M0,0V15.81C13,36.92,27.64,56.86,47.69,72.05,99.41,111.27,165,111,224.58,91.58c31.15-10.15,60.09-26.07,89.67-39.8,40.92-19,84.73-46,130.83-49.67,36.26-2.85,70.9,9.42,98.6,31.56,31.77,25.39,62.32,62,103.63,73,40.44,10.79,81.35-6.69,119.13-24.28s75.16-39,116.92-43.05c59.73-5.85,113.28,22.88,168.9,38.84,30.2,8.66,59,6.17,87.09-7.5,22.43-10.89,48-26.93,60.65-49.24V0Z"
             opacity=".5"
-            className="fill-blue-50"
+            className="fill-blue-50 dark:fill-slate-800"
           ></path>
           <path
             d="M0,0V5.63C149.93,59,314.09,71.32,475.83,42.57c43-7.64,84.23-20.12,127.61-26.46,59-8.63,112.48,12.24,165.56,35.4C827.93,77.22,886,95.24,951.2,90c86.53-7,172.46-45.71,248.8-84.81V0Z"
-            className="fill-blue-50"
+            className="fill-blue-50 dark:fill-slate-800"
           ></path>
         </svg>
       </div>
