@@ -12,6 +12,43 @@ import {
 export class WebSalesService {
   constructor(private prisma: PrismaService) {}
 
+  async payWithCulqi(token: string, amount: number, order: CreateWebSaleDto) {
+    const secret = process.env.CULQI_SECRET_KEY;
+    if (!secret) {
+      throw new BadRequestException('CULQI_SECRET_KEY not configured');
+    }
+
+    const chargeRes = await fetch('https://api.culqi.com/v2/charges', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify({
+        amount: Math.round(amount * 100),
+        currency_code: 'PEN',
+        email: order.email ?? 'cliente@example.com',
+        source_id: token,
+      }),
+    });
+
+    const charge = await chargeRes.json();
+
+    if (!chargeRes.ok) {
+      throw new BadRequestException(
+        charge?.merchant_message || 'Culqi charge failed',
+      );
+    }
+
+    if (order.payments && order.payments.length > 0) {
+      order.payments[0].transactionId = charge.id;
+    }
+
+    const createdOrder = await this.createWebOrder(order);
+    const sale = await this.completeWebOrder(createdOrder.id);
+    return sale;
+  }
+
   async createWebOrder(data: CreateWebSaleDto) {
     const { shippingName, shippingAddress, city, postalCode, phone, code } = data;
     const order = await this.prisma.orders.create({

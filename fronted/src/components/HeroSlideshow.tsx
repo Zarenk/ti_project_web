@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Image from "next/image"
+import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
 import { ChevronLeft, ChevronRight, Shield } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
@@ -58,16 +59,28 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
           transition={{ type: "tween" }}
           className="relative"
         >
-          <Image
-            src={
-              product?.images[0] ||
-              "/placeholder.svg?height=500&width=600&text=Hero+Banner"
-            }
-            alt={product?.name || "Producto"}
-            width={600}
-            height={500}
-            className="w-full aspect-[6/5] object-cover object-center rounded-2xl shadow-2xl"
-          />
+          {product ? (
+            <Link href={`/store/${product.id}`}>
+              <Image
+                src={
+                  product.images[0] ||
+                  "/placeholder.svg?height=500&width=600&text=Hero+Banner"
+                }
+                alt={product.name}
+                width={600}
+                height={500}
+                className="w-full aspect-[6/5] object-cover object-center rounded-2xl shadow-2xl"
+              />
+            </Link>
+          ) : (
+            <Image
+              src="/placeholder.svg?height=500&width=600&text=Hero+Banner"
+              alt="Producto"
+              width={600}
+              height={500}
+              className="w-full aspect-[6/5] object-cover object-center rounded-2xl shadow-2xl"
+            />
+          )}
           {product && (
             <div className="absolute -top-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
               <p className="font-semibold text-gray-800 dark:text-gray-100">

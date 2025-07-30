@@ -83,7 +83,12 @@ export async function executeSale(prisma: PrismaService, params: {
   clientId: number;
   description?: string;
   allocations: SaleAllocation[];
-  payments: { paymentMethodId: number; amount: number; currency: string }[];
+  payments: {
+    paymentMethodId: number;
+    amount: number;
+    currency: string;
+    transactionId?: string;
+  }[];
   tipoComprobante?: string;
   tipoMoneda: string;
   cashRegister: any;
@@ -218,6 +223,7 @@ export async function executeSale(prisma: PrismaService, params: {
             paymentMethodId: paymentMethod.id,
             amount: payment.amount,
             currency: payment.currency,
+            transactionId: payment.transactionId,
           },
         });
       }

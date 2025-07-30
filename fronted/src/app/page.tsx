@@ -171,12 +171,12 @@ export default function Homepage() {
     {
       icon: Truck,
       title: "Envíos a todo el Perú",
-      description: "Entrega rápida y segura en 24-48 horas",
+      description: "Entrega rápida y segura en 24-72 horas",
     },
     {
       icon: Shield,
       title: "Garantía asegurada",
-      description: "Hasta 3 años de garantía en todos nuestros productos",
+      description: "Hasta 3 años de garantía extendida en todos nuestros productos",
     },
     {
       icon: Headset,

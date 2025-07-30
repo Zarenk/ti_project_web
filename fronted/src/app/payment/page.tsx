@@ -5,7 +5,7 @@ import { useCart } from "@/context/cart-context"
 import { CreditCard, Building2, Smartphone, Check, ShoppingCart } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { createWebOrder } from "@/app/dashboard/sales/sales.api"
+import { createWebOrder, payWithCulqi } from "@/app/dashboard/sales/sales.api"
 import {
   selfRegisterClient,
   checkClientExists,
@@ -146,6 +146,17 @@ export default function Component() {
   const [sameAsShipping, setSameAsShipping] = useState(true)
   const [pickupInStore, setPickupInStore] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+
+  useEffect(() => {
+    if (paymentMethod !== 'visa') return
+    if (!document.getElementById('culqi-js')) {
+      const s = document.createElement('script')
+      s.id = 'culqi-js'
+      s.src = 'https://checkout.culqi.com/js/v4'
+      s.async = true
+      document.body.appendChild(s)
+    }
+  }, [paymentMethod])
 
   const handleSameAsShippingChange = (checked: boolean) => {
     setSameAsShipping(Boolean(checked))
@@ -461,7 +472,35 @@ export default function Component() {
           code: orderReference,
         }
 
-        const order = await createWebOrder(payload)
+        let order: any
+        if (paymentMethod === 'visa') {
+          try {
+            const [expM, expY] = formData.expiry.split('/')
+            const tokenRes = await fetch('https://secure.culqi.com/v2/tokens', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${process.env.NEXT_PUBLIC_CULQI_PUBLIC_KEY || process.env.CULQI_PUBLIC_KEY}`,
+              },
+              body: JSON.stringify({
+                card_number: formData.cardNumber,
+                cvv: formData.cvv,
+                expiration_month: expM,
+                expiration_year: `20${expY}`,
+                email: formData.email.trim(),
+              }),
+            })
+            const tokenData = await tokenRes.json()
+            if (!tokenRes.ok) throw new Error(tokenData.user_message)
+            order = await payWithCulqi(tokenData.id, total, payload)
+          } catch (err) {
+            console.error('Error Culqi:', err)
+            alert('No se pudo procesar el pago con tarjeta')
+            return
+          }
+        } else {
+          order = await createWebOrder(payload)
+        }
         if (order && order.id) {
           clear()
           router.push(`/pending-orders/${order.id}`)

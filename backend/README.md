@@ -41,6 +41,9 @@ JWT_SECRET=<your-secret-here>
 CORS_ORIGIN=http://localhost:3000
 # Public URL used to generate absolute links to uploaded files
 PUBLIC_URL=http://localhost:4000
+# Keys for Culqi payments
+CULQI_PUBLIC_KEY=
+CULQI_SECRET_KEY=
 ```
 
 ## Compile and run the project

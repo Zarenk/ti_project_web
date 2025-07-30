@@ -36,6 +36,15 @@ export class WebSalesController {
     return this.webSalesService.createWebOrder(dto);
   }
 
+  @Post('payments/culqi')
+  async payCulqi(
+    @Body('token') token: string,
+    @Body('amount') amount: number,
+    @Body('order') order: CreateWebSaleDto,
+  ) {
+    return this.webSalesService.payWithCulqi(token, amount, order);
+  }
+
   @Post('order/:id/complete')
   async completeOrder(@Param('id', ParseIntPipe) id: number) {
     return this.webSalesService.completeWebOrder(id);

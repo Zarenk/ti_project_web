@@ -38,6 +38,10 @@ class PaymentDto {
 
   @IsString()
   currency!: string;
+
+  @IsOptional()
+  @IsString()
+  transactionId?: string;
 }
 
 export class CreateSaleDto {

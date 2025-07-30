@@ -92,6 +92,19 @@ export async function createWebOrder(data: any) {
   return await response.json();
 }
 
+export async function payWithCulqi(token: string, amount: number, order: any) {
+  const res = await fetch(`${BACKEND_URL}/api/payments/culqi`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, amount, order }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Error al procesar pago: ${text}`);
+  }
+  return res.json();
+}
+
 export async function completeWebOrder(id: number) {
   const response = await fetch(`${BACKEND_URL}/api/web-sales/order/${id}/complete`, {
     method: 'POST',
