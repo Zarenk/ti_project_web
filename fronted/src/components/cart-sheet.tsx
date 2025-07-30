@@ -33,7 +33,7 @@ export default function CartSheet() {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="ghost" className="relative">
+        <Button className="relative bg-sky-500 hover:bg-sky-600 text-white">
           <ShoppingCart className="w-5 h-5" />
           <span className="ml-2">Carrito</span>
           {mounted && items.length > 0 && (

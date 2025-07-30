@@ -140,102 +140,18 @@ export default function Homepage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white">
-      <Navbar/>
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-sky-100 sticky top-0 z-50">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-to-r from-sky-400 to-blue-500 rounded-lg flex items-center justify-center">
-                <Monitor className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-800">TechStore</span>
-            </Link>
-
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center space-x-8">
-              <Link href="/" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
-                Inicio
-              </Link>
-              <Link href="/productos" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
-                Productos
-              </Link>
-              <Link href="/ofertas" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
-                Ofertas
-              </Link>
-              <Link href="/nosotros" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
-                Nosotros
-              </Link>
-              <Link href="/contacto" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
-                Contacto
-              </Link>
-            </nav>
-
-            {/* Right side buttons */}
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="hidden md:flex items-center space-x-2 text-gray-700 hover:text-sky-600"
-              >
-                <User className="w-4 h-4" />
-                <span>Iniciar sesión</span>
-              </Button>
-              <Button size="sm" className="relative bg-sky-500 hover:bg-sky-600 text-white">
-                <ShoppingCart className="w-4 h-4" />
-                <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-                  3
-                </Badge>
-              </Button>
-
-              {/* Mobile menu button */}
-              <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-                {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </Button>
-            </div>
-          </div>
-
-          {/* Mobile Navigation */}
-          {isMenuOpen && (
-            <div className="md:hidden py-4 border-t border-sky-100">
-              <nav className="flex flex-col space-y-4">
-                <Link href="/" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
-                  Inicio
-                </Link>
-                <Link href="/productos" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
-                  Productos
-                </Link>
-                <Link href="/ofertas" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
-                  Ofertas
-                </Link>
-                <Link href="/nosotros" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
-                  Nosotros
-                </Link>
-                <Link href="/contacto" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
-                  Contacto
-                </Link>
-                <Button variant="outline" size="sm" className="w-fit bg-transparent">
-                  <User className="w-4 h-4 mr-2" />
-                  Iniciar sesión
-                </Button>
-              </nav>
-            </div>
-          )}
-        </div>
-      </header>
-
+    <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-gray-950 dark:to-black">
+      <Navbar />
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-r from-sky-100 via-blue-50 to-sky-100 py-20">
+      <section className="relative bg-gradient-to-r from-sky-100 via-blue-50 to-sky-100 py-20 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800">
         <div className="container mx-auto px-4">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-8">
               <div className="space-y-4">
-                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800 leading-tight">
+                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800 dark:text-gray-100 leading-tight">
                   Potencia tu productividad con nuestras <span className="text-sky-600">laptops y componentes</span>
                 </h1>
-                <p className="text-xl text-gray-600 leading-relaxed">
+                <p className="text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
                   Equipos de alto rendimiento para trabajo, estudio y gaming. Encuentra la tecnología perfecta para tus
                   necesidades.
                 </p>
@@ -262,14 +178,14 @@ export default function Homepage() {
                 height={500}
                 className="rounded-2xl shadow-2xl"
               />
-              <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-xl shadow-lg">
+              <div className="absolute -bottom-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
                 <div className="flex items-center space-x-3">
                   <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
                     <Shield className="w-6 h-6 text-green-600" />
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-800">Garantía extendida</p>
-                    <p className="text-sm text-gray-600">Hasta 3 años</p>
+                    <p className="font-semibold text-gray-800 dark:text-gray-100">Garantía extendida</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Hasta 3 años</p>
                   </div>
                 </div>
               </div>
@@ -279,11 +195,11 @@ export default function Homepage() {
       </section>
 
       {/* Featured Products */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-white dark:bg-gray-900">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Productos destacados</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Productos destacados</h2>
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
               Descubre nuestra selección de equipos más populares con las mejores ofertas
             </p>
           </div>
@@ -315,7 +231,7 @@ export default function Homepage() {
                       {product.badge}
                     </Badge>
                   </div>
-                  <h3 className="font-semibold text-lg text-gray-800 mb-2 group-hover:text-sky-600 transition-colors">
+                  <h3 className="font-semibold text-lg text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors">
                     {product.name}
                   </h3>
                   <div className="flex items-center space-x-2 mb-4">
@@ -336,11 +252,11 @@ export default function Homepage() {
       </section>
 
       {/* Categories */}
-      <section className="py-20 bg-gradient-to-b from-sky-50 to-white">
+      <section className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Explora por categoría</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Explora por categoría</h2>
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
               Encuentra exactamente lo que necesitas en nuestras categorías especializadas
             </p>
           </div>
@@ -355,10 +271,10 @@ export default function Homepage() {
                   <div className="w-16 h-16 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
                     <category.icon className="w-8 h-8 text-white" />
                   </div>
-                  <h3 className="font-semibold text-gray-800 mb-2 group-hover:text-sky-600 transition-colors">
+                  <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors">
                     {category.name}
                   </h3>
-                  <p className="text-sm text-gray-600">{category.count}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">{category.count}</p>
                 </CardContent>
               </Card>
             ))}
@@ -367,11 +283,11 @@ export default function Homepage() {
       </section>
 
       {/* Benefits */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-white dark:bg-gray-900">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">¿Por qué comprar con nosotros?</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">¿Por qué comprar con nosotros?</h2>
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
               Ofrecemos la mejor experiencia de compra con servicios que marcan la diferencia
             </p>
           </div>
@@ -382,8 +298,8 @@ export default function Homepage() {
                 <div className="w-20 h-20 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
                   <benefit.icon className="w-10 h-10 text-white" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-3">{benefit.title}</h3>
-                <p className="text-gray-600 leading-relaxed">{benefit.description}</p>
+                <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-3">{benefit.title}</h3>
+                <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{benefit.description}</p>
               </div>
             ))}
           </div>
@@ -391,11 +307,11 @@ export default function Homepage() {
       </section>
 
       {/* Testimonials */}
-      <section className="py-20 bg-gradient-to-b from-sky-50 to-white">
+      <section className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Lo que dicen nuestros clientes</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Lo que dicen nuestros clientes</h2>
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
               Miles de clientes satisfechos confían en nosotros para sus necesidades tecnológicas
             </p>
           </div>
@@ -409,10 +325,10 @@ export default function Homepage() {
                       <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
                     ))}
                   </div>
-                  <p className="text-gray-700 mb-6 leading-relaxed italic">"{testimonial.comment}"</p>
+                  <p className="text-gray-700 dark:text-gray-300 mb-6 leading-relaxed italic">"{testimonial.comment}"</p>
                   <div>
-                    <p className="font-semibold text-gray-800">{testimonial.name}</p>
-                    <p className="text-sm text-gray-600">{testimonial.location}</p>
+                    <p className="font-semibold text-gray-800 dark:text-gray-100">{testimonial.name}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{testimonial.location}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -436,7 +352,7 @@ export default function Homepage() {
                   placeholder="Tu correo electrónico"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="flex-1 bg-white text-gray-800 border-0"
+                  className="flex-1 bg-white dark:bg-gray-800 dark:text-gray-100 text-gray-800 border-0"
                 />
                 <Button className="bg-white text-sky-600 hover:bg-sky-50 px-8">Suscribirme</Button>
               </div>
@@ -470,146 +386,6 @@ export default function Homepage() {
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-16">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center space-x-2 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-r from-sky-400 to-blue-500 rounded-lg flex items-center justify-center">
-                  <Monitor className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-xl font-bold">TechStore</span>
-              </div>
-              <p className="text-gray-400 leading-relaxed mb-6">
-                Tu tienda de confianza para laptops, computadoras y componentes de alta calidad en Perú.
-              </p>
-              <div className="flex space-x-4">
-                <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white p-2">
-                  <Facebook className="w-5 h-5" />
-                </Button>
-                <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white p-2">
-                  <Twitter className="w-5 h-5" />
-                </Button>
-                <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white p-2">
-                  <Instagram className="w-5 h-5" />
-                </Button>
-                <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white p-2">
-                  <Youtube className="w-5 h-5" />
-                </Button>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-6">Enlaces rápidos</h3>
-              <ul className="space-y-3">
-                <li>
-                  <Link href="/productos" className="text-gray-400 hover:text-white transition-colors">
-                    Productos
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/ofertas" className="text-gray-400 hover:text-white transition-colors">
-                    Ofertas
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/nosotros" className="text-gray-400 hover:text-white transition-colors">
-                    Nosotros
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/contacto" className="text-gray-400 hover:text-white transition-colors">
-                    Contacto
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/soporte" className="text-gray-400 hover:text-white transition-colors">
-                    Soporte técnico
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-6">Categorías</h3>
-              <ul className="space-y-3">
-                <li>
-                  <Link href="/laptops" className="text-gray-400 hover:text-white transition-colors">
-                    Laptops
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/computadoras" className="text-gray-400 hover:text-white transition-colors">
-                    Computadoras
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/componentes" className="text-gray-400 hover:text-white transition-colors">
-                    Componentes
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/gaming" className="text-gray-400 hover:text-white transition-colors">
-                    Gaming
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/accesorios" className="text-gray-400 hover:text-white transition-colors">
-                    Accesorios
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-6">Información</h3>
-              <ul className="space-y-3">
-                <li>
-                  <Link href="/envios" className="text-gray-400 hover:text-white transition-colors">
-                    Información de envíos
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/garantia" className="text-gray-400 hover:text-white transition-colors">
-                    Garantía
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/devoluciones" className="text-gray-400 hover:text-white transition-colors">
-                    Devoluciones
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/pagos" className="text-gray-400 hover:text-white transition-colors">
-                    Métodos de pago
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/faq" className="text-gray-400 hover:text-white transition-colors">
-                    Preguntas frecuentes
-                  </Link>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-800 mt-12 pt-8">
-            <div className="flex flex-col md:flex-row justify-between items-center">
-              <p className="text-gray-400 text-sm">© 2024 TechStore Perú. Todos los derechos reservados.</p>
-              <div className="flex space-x-6 mt-4 md:mt-0">
-                <Link href="/privacidad" className="text-gray-400 hover:text-white text-sm transition-colors">
-                  Aviso de privacidad
-                </Link>
-                <Link href="/terminos" className="text-gray-400 hover:text-white text-sm transition-colors">
-                  Términos y condiciones
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }
