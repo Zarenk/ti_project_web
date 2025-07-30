@@ -32,12 +32,14 @@ import {
   Instagram,
   Youtube,
   ChevronRight,
+  type LucideIcon,
 } from "lucide-react"
 import Navbar from "@/components/navbar"
 import { useCart } from "@/context/cart-context"
 import { toast } from "sonner"
 import { formatCurrency } from "@/lib/utils"
 import { getProducts } from "./dashboard/products/products.api"
+import { getCategoriesWithCount } from "./dashboard/categories/categories.api"
 
 export default function Homepage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -62,6 +64,12 @@ export default function Homepage() {
       refreshRate?: string
       connectivity?: string
     }
+  }
+
+  interface HomeCategory {
+    name: string
+    icon: LucideIcon
+    count: number
   }
 
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([])
@@ -94,14 +102,33 @@ export default function Homepage() {
     fetchProductsData()
   }, [])
 
-  const categories = [
-    { name: "Laptops", icon: Laptop, count: "150+ productos" },
-    { name: "Computadoras", icon: Monitor, count: "80+ productos" },
-    { name: "Tarjetas Gráficas", icon: Cpu, count: "45+ productos" },
-    { name: "Almacenamiento", icon: HardDrive, count: "120+ productos" },
-    { name: "Gaming", icon: Gamepad2, count: "200+ productos" },
-    { name: "Accesorios", icon: Headphones, count: "300+ productos" },
-  ]
+  const [categories, setCategories] = useState<HomeCategory[]>([])
+
+  const iconMap: Record<string, LucideIcon> = {
+    Laptops: Laptop,
+    Computadoras: Monitor,
+    "Tarjetas Gráficas": Cpu,
+    Almacenamiento: HardDrive,
+    Gaming: Gamepad2,
+    Accesorios: Headphones,
+  }
+
+  useEffect(() => {
+    async function fetchCategoriesData() {
+      try {
+        const data = await getCategoriesWithCount()
+        const mapped = data.map((cat: any) => ({
+          name: cat.name,
+          icon: iconMap[cat.name] || HardDrive,
+          count: cat.productCount,
+        }))
+        setCategories(mapped)
+      } catch (error) {
+        console.error("Error fetching categories:", error)
+      }
+    }
+    fetchCategoriesData()
+  }, [])
 
   const benefits = [
     {
@@ -224,7 +251,7 @@ export default function Homepage() {
                   <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors">
                     {category.name}
                   </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">{category.count}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">{category.count}+ productos</p>
                 </CardContent>
               </Card>
             ))}

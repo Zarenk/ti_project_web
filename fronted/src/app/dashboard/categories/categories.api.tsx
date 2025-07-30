@@ -147,3 +147,18 @@ export async function updateCategory(id: string, newCategory: any){
 
     return await res.json()
 }
+
+export async function getCategoriesWithCount() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/category/with-count`, {
+      cache: 'no-store',
+    })
+    if (!response.ok) {
+      throw new Error('Error al obtener las categorías con conteo')
+    }
+    return await response.json()
+  } catch (error) {
+    console.error('Error al obtener las categorías con conteo:', error)
+    return []
+  }
+}

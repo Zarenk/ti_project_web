@@ -68,6 +68,22 @@ export class CategoryService {
     })
   }
 
+  async findAllWithProductCount() {
+    const categories = await this.prismaService.category.findMany({
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { products: true } } },
+    })
+
+    return categories.map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      description: cat.description,
+      status: cat.status,
+      image: cat.image,
+      productCount: cat._count.products,
+    }))
+  }
+
   async findOne(id: number) {
 
     if (!id || typeof id !== 'number') {

@@ -66,7 +66,7 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
             alt={product?.name || "Producto"}
             width={600}
             height={500}
-            className="w-full aspect-[6/5] object-cover rounded-2xl shadow-2xl"
+            className="w-full aspect-[6/5] object-cover object-center rounded-2xl shadow-2xl"
           />
           {product && (
             <div className="absolute -top-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">

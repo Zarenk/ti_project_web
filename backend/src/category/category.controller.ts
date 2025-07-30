@@ -25,9 +25,14 @@ export class CategoryController {
     }
   
     @Get()
-    @ApiResponse({status: 200, description: 'Return all categories'}) // Swagger 
+    @ApiResponse({status: 200, description: 'Return all categories'}) // Swagger
     findAll() {
       return this.categoryService.findAll();
+    }
+
+    @Get('with-count')
+    findAllWithCount() {
+      return this.categoryService.findAllWithProductCount();
     }
   
     @Get(':id')
