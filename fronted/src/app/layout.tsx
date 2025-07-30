@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { CartProvider } from "@/context/cart-context";
 import ConditionalFooter from "@/components/conditional-footer";
 import { AuthProvider } from "@/context/auth-context";
+import WhatsappButton from "@/components/whatsapp-button";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default function RootLayout({
             <CartProvider>
                 <Toaster position="top-right" richColors /> {/* Configuración de Sonner */}
                 {children}
+                <WhatsappButton />
                 <ConditionalFooter />
             </CartProvider>
           </AuthProvider>

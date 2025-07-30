@@ -5,6 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { AnimatePresence, motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import MotionProductCard from "@/components/MotionProductCard"
 import HeroSlideshow from "@/components/HeroSlideshow"
@@ -111,6 +112,7 @@ export default function Homepage() {
 
   const [categories, setCategories] = useState<HomeCategory[]>([])
   const [categoryIndex, setCategoryIndex] = useState(0)
+  const [direction, setDirection] = useState(0)
 
   const iconMap: Record<string, LucideIcon> = {
     Laptops: Laptop,
@@ -274,40 +276,55 @@ export default function Homepage() {
           </div>
 
           <div className="relative">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-              {visibleCategories.map((category, index) => (
-                <Card
-                  key={index}
-                  className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-sky-100 hover:border-sky-200"
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={categoryIndex}
+                initial={{ x: direction > 0 ? 300 : -300, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: direction > 0 ? -300 : 300, opacity: 0 }}
+                transition={{ type: "tween" }}
+                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6"
                 >
-                  <CardContent className="p-6 text-center">
-                    <div className="w-16 h-16 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                      <category.icon className="w-8 h-8 text-white" />
-                    </div>
-                    <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors">
-                      {category.name}
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">{category.count}+ productos</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                {visibleCategories.map((category, index) => (
+                  <Link
+                    key={index}
+                    href={`/store?category=${encodeURIComponent(category.name)}`}
+                  >
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <Card className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-sky-100 hover:border-sky-200">
+                        <CardContent className="p-6 text-center">
+                          <div className="w-16 h-16 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
+                            <category.icon className="w-8 h-8 text-white" />
+                          </div>
+                          <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors">
+                            {category.name}
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">{category.count}+ productos</p>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  </Link>
+                ))}
+              </motion.div>
+            </AnimatePresence>
             {categories.length > 6 && (
               <>
-                <button
+                <motion.button
                   aria-label="Anterior"
                   onClick={prevCategories}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[150%] bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+                  whileTap={{ scale: 0.9 }}
                 >
                   <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
+                </motion.button>
+                <motion.button
                   aria-label="Siguiente"
                   onClick={nextCategories}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[150%] bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+                  whileTap={{ scale: 0.9 }}
                 >
                   <ChevronRight className="w-5 h-5" />
-                </button>
+                </motion.button>
               </>
             )}
           </div>
@@ -387,32 +404,6 @@ export default function Homepage() {
                   className="flex-1 bg-white dark:bg-gray-800 dark:text-gray-100 text-gray-800 border-0"
                 />
                 <Button className="bg-white text-sky-600 hover:bg-sky-50 px-8">Suscribirme</Button>
-              </div>
-            </div>
-            <div className="space-y-6">
-              <h3 className="text-2xl font-semibold mb-6">Información de contacto</h3>
-              <div className="space-y-4">
-                <div className="flex items-center space-x-4">
-                  <Phone className="w-6 h-6 text-sky-200" />
-                  <div>
-                    <p className="font-semibold">Teléfono</p>
-                    <p className="text-sky-100">+51 1 234-5678</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <Mail className="w-6 h-6 text-sky-200" />
-                  <div>
-                    <p className="font-semibold">Correo</p>
-                    <p className="text-sky-100">info@techstore.pe</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <MapPin className="w-6 h-6 text-sky-200" />
-                  <div>
-                    <p className="font-semibold">Dirección</p>
-                    <p className="text-sky-100">Av. Tecnología 123, Lima, Perú</p>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
