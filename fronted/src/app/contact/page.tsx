@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import Navbar from "@/components/navbar"
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
+
 export default function ContactPage() {
   const [formData, setFormData] = useState({
     nombre: "",
@@ -28,10 +30,25 @@ export default function ContactPage() {
     }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Form submitted:", formData)
-    // Here you would typically send the data to your backend
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+      if (res.ok) {
+        alert('Mensaje enviado')
+        setFormData({ nombre: '', email: '', telefono: '', asunto: '', mensaje: '' })
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Error al enviar mensaje')
+      }
+    } catch (err) {
+      console.error('Error sending message:', err)
+      alert('Error al enviar mensaje')
+    }
   }
 
   return (

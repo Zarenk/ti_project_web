@@ -23,12 +23,13 @@ import { ProductspecsModule } from './productspecs/productspecs.module';
 import { ProductofeaturesModule } from './productofeatures/productofeatures.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { WebsalesModule } from './websales/websales.module';
+import { ContactModule } from './contact/contact.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
     ProductsModule, UsersModule, CategoryModule, StoresModule, 
-    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule, WebsalesModule],
+    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule, WebsalesModule, ContactModule],
   controllers: [AppController],
   providers: [AppService, BarcodeGateway],
 })

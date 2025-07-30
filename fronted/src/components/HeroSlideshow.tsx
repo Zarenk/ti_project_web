@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { AnimatePresence, motion } from "framer-motion"
+import { AnimatePresence, motion, useMotionValue } from "framer-motion"
 import { ChevronLeft, ChevronRight, Shield } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 
@@ -48,6 +48,22 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
 
   const product = products[index]
 
+  const offsetX = useMotionValue(0)
+  const offsetY = useMotionValue(0)
+
+  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width - 0.5) * 20
+    const y = ((e.clientY - rect.top) / rect.height - 0.5) * 20
+    offsetX.set(x)
+    offsetY.set(y)
+  }
+
+  const resetMove = () => {
+    offsetX.set(0)
+    offsetY.set(0)
+  }
+
   return (
     <div className="relative">
       <AnimatePresence mode="wait">
@@ -59,28 +75,35 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
           transition={{ type: "tween" }}
           className="relative"
         >
-          {product ? (
-            <Link href={`/store/${product.id}`}>
+          <motion.div
+            onMouseMove={handleMove}
+            onMouseLeave={resetMove}
+            style={{ x: offsetX, y: offsetY }}
+            className="cursor-pointer"
+          >
+            {product ? (
+              <Link href={`/store/${product.id}`}>
+                <Image
+                  src={
+                    product.images[0] ||
+                    "/placeholder.svg?height=500&width=600&text=Hero+Banner"
+                  }
+                  alt={product.name}
+                  width={600}
+                  height={500}
+                  className="w-full aspect-[6/5] object-cover object-center rounded-2xl shadow-2xl"
+                />
+              </Link>
+            ) : (
               <Image
-                src={
-                  product.images[0] ||
-                  "/placeholder.svg?height=500&width=600&text=Hero+Banner"
-                }
-                alt={product.name}
+                src="/placeholder.svg?height=500&width=600&text=Hero+Banner"
+                alt="Producto"
                 width={600}
                 height={500}
                 className="w-full aspect-[6/5] object-cover object-center rounded-2xl shadow-2xl"
               />
-            </Link>
-          ) : (
-            <Image
-              src="/placeholder.svg?height=500&width=600&text=Hero+Banner"
-              alt="Producto"
-              width={600}
-              height={500}
-              className="w-full aspect-[6/5] object-cover object-center rounded-2xl shadow-2xl"
-            />
-          )}
+            )}
+          </motion.div>
           {product && (
             <div className="absolute -top-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
               <p className="font-semibold text-gray-800 dark:text-gray-100">
@@ -109,14 +132,14 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
           <button
             aria-label="Anterior"
             onClick={prev}
-            className="absolute top-1/2 left-0 -translate-x-full -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+            className="absolute top-1/2 left-0 -translate-x-[150%] -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
           <button
             aria-label="Siguiente"
             onClick={next}
-            className="absolute top-1/2 right-0 translate-x-full -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+            className="absolute top-1/2 right-0 translate-x-[150%] -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
           >
             <ChevronRight className="w-6 h-6" />
           </button>

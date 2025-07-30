@@ -44,6 +44,13 @@ PUBLIC_URL=http://localhost:4000
 # Keys for Culqi payments
 CULQI_PUBLIC_KEY=
 CULQI_SECRET_KEY=
+# SMTP server for contact form
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=username
+SMTP_PASS=password
+# Destination address for contact emails
+CONTACT_EMAIL=contact@example.com
 ```
 
 ## Compile and run the project
