@@ -8,7 +8,7 @@ import { useDebounce } from "@/app/hooks/useDebounce"
 import { useSearchParams } from "next/navigation"
 import type { CheckedState } from "@radix-ui/react-checkbox"
 import { Button } from "@/components/ui/button"
-import { ModeToggle } from "@/components/mode-toggle"
+import CatalogPagination from "@/components/catalog-pagination"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -47,6 +47,8 @@ interface Product {
 export default function StorePage() {
   const [products, setProducts] = useState<Product[]>([])
   const { addItem } = useCart()
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(12)
 
   useEffect(() => {
     async function fetchProducts() {
@@ -200,6 +202,23 @@ export default function StorePage() {
     selectedBrands,
     selectedAvailability,
   ])
+
+  const totalPages = Math.ceil(filteredAndSortedProducts.length / pageSize) || 1
+
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredAndSortedProducts.slice(start, start + pageSize)
+  }, [filteredAndSortedProducts, currentPage, pageSize])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearchTerm, sortBy, selectedCategories, selectedBrands, selectedAvailability, pageSize])
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [totalPages, currentPage])
 
   // Función para limpiar filtros
   const clearFilters = () => {
@@ -402,7 +421,7 @@ export default function StorePage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredAndSortedProducts.map((product) => (
+                {paginatedProducts.map((product) => (
                   <Card
                     key={product.id}
                     className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border"
@@ -500,6 +519,13 @@ export default function StorePage() {
                 ))}
               </div>
             )}
+            <CatalogPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
           </main>
         </div>
       </div>

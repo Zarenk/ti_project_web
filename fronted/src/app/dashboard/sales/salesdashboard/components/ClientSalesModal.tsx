@@ -7,7 +7,7 @@ export function ClientSalesModal({ client, open, onClose }: { client: any; open:
   if (!client) return null;
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Ventas de {client.clientName}</DialogTitle>
         </DialogHeader>

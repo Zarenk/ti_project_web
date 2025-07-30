@@ -1,11 +1,615 @@
-import React from 'react'
-import Navbar from '@/components/navbar'
+"use client"
 
-export default function HomePage() {
+import { useState } from "react"
+import Image from "next/image"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import {
+  ShoppingCart,
+  User,
+  Menu,
+  X,
+  Laptop,
+  Monitor,
+  HardDrive,
+  Cpu,
+  Gamepad2,
+  Headphones,
+  Truck,
+  Shield,
+  Headset,
+  CreditCard,
+  Star,
+  Phone,
+  Mail,
+  MapPin,
+  Facebook,
+  Twitter,
+  Instagram,
+  Youtube,
+  ChevronRight,
+} from "lucide-react"
+import Navbar from "@/components/navbar"
+
+export default function Homepage() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [email, setEmail] = useState("")
+
+  const featuredProducts = [
+    {
+      id: 1,
+      name: "Laptop Gaming ASUS ROG",
+      price: "S/ 3,299",
+      originalPrice: "S/ 3,799",
+      image: "/placeholder.svg?height=300&width=300&text=ASUS+ROG+Laptop",
+      badge: "Oferta",
+    },
+    {
+      id: 2,
+      name: "PC Gamer Intel Core i7",
+      price: "S/ 2,899",
+      image: "/placeholder.svg?height=300&width=300&text=PC+Gamer+i7",
+      badge: "Nuevo",
+    },
+    {
+      id: 3,
+      name: "MacBook Air M2",
+      price: "S/ 4,199",
+      image: "/placeholder.svg?height=300&width=300&text=MacBook+Air+M2",
+      badge: "Popular",
+    },
+    {
+      id: 4,
+      name: "Tarjeta Gráfica RTX 4060",
+      price: "S/ 1,299",
+      originalPrice: "S/ 1,499",
+      image: "/placeholder.svg?height=300&width=300&text=RTX+4060",
+      badge: "Oferta",
+    },
+    {
+      id: 5,
+      name: "Monitor 4K 27 pulgadas",
+      price: "S/ 899",
+      image: "/placeholder.svg?height=300&width=300&text=Monitor+4K+27",
+      badge: "Nuevo",
+    },
+    {
+      id: 6,
+      name: "SSD NVMe 1TB",
+      price: "S/ 299",
+      originalPrice: "S/ 349",
+      image: "/placeholder.svg?height=300&width=300&text=SSD+NVMe+1TB",
+      badge: "Oferta",
+    },
+  ]
+
+  const categories = [
+    { name: "Laptops", icon: Laptop, count: "150+ productos" },
+    { name: "Computadoras", icon: Monitor, count: "80+ productos" },
+    { name: "Tarjetas Gráficas", icon: Cpu, count: "45+ productos" },
+    { name: "Almacenamiento", icon: HardDrive, count: "120+ productos" },
+    { name: "Gaming", icon: Gamepad2, count: "200+ productos" },
+    { name: "Accesorios", icon: Headphones, count: "300+ productos" },
+  ]
+
+  const benefits = [
+    {
+      icon: Truck,
+      title: "Envíos a todo el Perú",
+      description: "Entrega rápida y segura en 24-48 horas",
+    },
+    {
+      icon: Shield,
+      title: "Garantía asegurada",
+      description: "Hasta 3 años de garantía en todos nuestros productos",
+    },
+    {
+      icon: Headset,
+      title: "Soporte técnico",
+      description: "Atención especializada 24/7 para resolver tus dudas",
+    },
+    {
+      icon: CreditCard,
+      title: "Pagos seguros",
+      description: "Múltiples métodos de pago con máxima seguridad",
+    },
+  ]
+
+  const testimonials = [
+    {
+      name: "Carlos Mendoza",
+      rating: 5,
+      comment: "Excelente servicio y productos de calidad. Mi laptop gaming llegó perfecta y funciona increíble.",
+      location: "Lima, Perú",
+    },
+    {
+      name: "María González",
+      rating: 5,
+      comment: "Compré una PC para mi oficina y el soporte técnico fue excepcional. Muy recomendado.",
+      location: "Arequipa, Perú",
+    },
+    {
+      name: "Diego Ramírez",
+      rating: 5,
+      comment: "Los mejores precios del mercado y entrega súper rápida. Ya es mi tienda de confianza.",
+      location: "Trujillo, Perú",
+    },
+  ]
+
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <div>HOLA PAGININ</div>
+    <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white">
+      <Navbar/>
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-sky-100 sticky top-0 z-50">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
+            <Link href="/" className="flex items-center space-x-2">
+              <div className="w-10 h-10 bg-gradient-to-r from-sky-400 to-blue-500 rounded-lg flex items-center justify-center">
+                <Monitor className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-xl font-bold text-gray-800">TechStore</span>
+            </Link>
+
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center space-x-8">
+              <Link href="/" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
+                Inicio
+              </Link>
+              <Link href="/productos" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
+                Productos
+              </Link>
+              <Link href="/ofertas" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
+                Ofertas
+              </Link>
+              <Link href="/nosotros" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
+                Nosotros
+              </Link>
+              <Link href="/contacto" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
+                Contacto
+              </Link>
+            </nav>
+
+            {/* Right side buttons */}
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden md:flex items-center space-x-2 text-gray-700 hover:text-sky-600"
+              >
+                <User className="w-4 h-4" />
+                <span>Iniciar sesión</span>
+              </Button>
+              <Button size="sm" className="relative bg-sky-500 hover:bg-sky-600 text-white">
+                <ShoppingCart className="w-4 h-4" />
+                <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                  3
+                </Badge>
+              </Button>
+
+              {/* Mobile menu button */}
+              <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+                {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* Mobile Navigation */}
+          {isMenuOpen && (
+            <div className="md:hidden py-4 border-t border-sky-100">
+              <nav className="flex flex-col space-y-4">
+                <Link href="/" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
+                  Inicio
+                </Link>
+                <Link href="/productos" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
+                  Productos
+                </Link>
+                <Link href="/ofertas" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
+                  Ofertas
+                </Link>
+                <Link href="/nosotros" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
+                  Nosotros
+                </Link>
+                <Link href="/contacto" className="text-gray-700 hover:text-sky-600 transition-colors font-medium">
+                  Contacto
+                </Link>
+                <Button variant="outline" size="sm" className="w-fit bg-transparent">
+                  <User className="w-4 h-4 mr-2" />
+                  Iniciar sesión
+                </Button>
+              </nav>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <section className="relative bg-gradient-to-r from-sky-100 via-blue-50 to-sky-100 py-20">
+        <div className="container mx-auto px-4">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="space-y-8">
+              <div className="space-y-4">
+                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800 leading-tight">
+                  Potencia tu productividad con nuestras <span className="text-sky-600">laptops y componentes</span>
+                </h1>
+                <p className="text-xl text-gray-600 leading-relaxed">
+                  Equipos de alto rendimiento para trabajo, estudio y gaming. Encuentra la tecnología perfecta para tus
+                  necesidades.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button size="lg" className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 text-lg">
+                  Ver productos
+                  <ChevronRight className="w-5 h-5 ml-2" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="border-sky-300 text-sky-600 hover:bg-sky-50 px-8 py-3 text-lg bg-transparent"
+                >
+                  Ofertas especiales
+                </Button>
+              </div>
+            </div>
+            <div className="relative">
+              <Image
+                src="/placeholder.svg?height=500&width=600&text=Hero+Banner+Laptops"
+                alt="Laptops y componentes de alta calidad"
+                width={600}
+                height={500}
+                className="rounded-2xl shadow-2xl"
+              />
+              <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-xl shadow-lg">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <Shield className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-800">Garantía extendida</p>
+                    <p className="text-sm text-gray-600">Hasta 3 años</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Featured Products */}
+      <section className="py-20 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Productos destacados</h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Descubre nuestra selección de equipos más populares con las mejores ofertas
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {featuredProducts.map((product) => (
+              <Card
+                key={product.id}
+                className="group hover:shadow-xl transition-all duration-300 border-sky-100 hover:border-sky-200"
+              >
+                <CardContent className="p-6">
+                  <div className="relative mb-4">
+                    <Image
+                      src={product.image || "/placeholder.svg"}
+                      alt={product.name}
+                      width={300}
+                      height={300}
+                      className="w-full h-48 object-cover rounded-lg group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <Badge
+                      className={`absolute top-3 left-3 ${
+                        product.badge === "Oferta"
+                          ? "bg-red-500"
+                          : product.badge === "Nuevo"
+                            ? "bg-green-500"
+                            : "bg-blue-500"
+                      } text-white`}
+                    >
+                      {product.badge}
+                    </Badge>
+                  </div>
+                  <h3 className="font-semibold text-lg text-gray-800 mb-2 group-hover:text-sky-600 transition-colors">
+                    {product.name}
+                  </h3>
+                  <div className="flex items-center space-x-2 mb-4">
+                    <span className="text-2xl font-bold text-sky-600">{product.price}</span>
+                    {product.originalPrice && (
+                      <span className="text-lg text-gray-400 line-through">{product.originalPrice}</span>
+                    )}
+                  </div>
+                  <Button className="w-full bg-sky-500 hover:bg-sky-600 text-white">
+                    <ShoppingCart className="w-4 h-4 mr-2" />
+                    Agregar al carrito
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Categories */}
+      <section className="py-20 bg-gradient-to-b from-sky-50 to-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Explora por categoría</h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Encuentra exactamente lo que necesitas en nuestras categorías especializadas
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+            {categories.map((category, index) => (
+              <Card
+                key={index}
+                className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-sky-100 hover:border-sky-200"
+              >
+                <CardContent className="p-6 text-center">
+                  <div className="w-16 h-16 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
+                    <category.icon className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="font-semibold text-gray-800 mb-2 group-hover:text-sky-600 transition-colors">
+                    {category.name}
+                  </h3>
+                  <p className="text-sm text-gray-600">{category.count}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Benefits */}
+      <section className="py-20 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">¿Por qué comprar con nosotros?</h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Ofrecemos la mejor experiencia de compra con servicios que marcan la diferencia
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {benefits.map((benefit, index) => (
+              <div key={index} className="text-center group">
+                <div className="w-20 h-20 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
+                  <benefit.icon className="w-10 h-10 text-white" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-3">{benefit.title}</h3>
+                <p className="text-gray-600 leading-relaxed">{benefit.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="py-20 bg-gradient-to-b from-sky-50 to-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Lo que dicen nuestros clientes</h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Miles de clientes satisfechos confían en nosotros para sus necesidades tecnológicas
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {testimonials.map((testimonial, index) => (
+              <Card key={index} className="border-sky-100 hover:shadow-lg transition-shadow duration-300">
+                <CardContent className="p-8">
+                  <div className="flex items-center mb-4">
+                    {[...Array(testimonial.rating)].map((_, i) => (
+                      <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
+                    ))}
+                  </div>
+                  <p className="text-gray-700 mb-6 leading-relaxed italic">"{testimonial.comment}"</p>
+                  <div>
+                    <p className="font-semibold text-gray-800">{testimonial.name}</p>
+                    <p className="text-sm text-gray-600">{testimonial.location}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Newsletter & Contact */}
+      <section className="py-20 bg-gradient-to-r from-sky-500 to-blue-600 text-white">
+        <div className="container mx-auto px-4">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">Suscríbete y recibe ofertas exclusivas</h2>
+              <p className="text-xl text-sky-100 mb-8">
+                Mantente al día con las últimas novedades, ofertas especiales y lanzamientos de productos
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Input
+                  type="email"
+                  placeholder="Tu correo electrónico"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="flex-1 bg-white text-gray-800 border-0"
+                />
+                <Button className="bg-white text-sky-600 hover:bg-sky-50 px-8">Suscribirme</Button>
+              </div>
+            </div>
+            <div className="space-y-6">
+              <h3 className="text-2xl font-semibold mb-6">Información de contacto</h3>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-4">
+                  <Phone className="w-6 h-6 text-sky-200" />
+                  <div>
+                    <p className="font-semibold">Teléfono</p>
+                    <p className="text-sky-100">+51 1 234-5678</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <Mail className="w-6 h-6 text-sky-200" />
+                  <div>
+                    <p className="font-semibold">Correo</p>
+                    <p className="text-sky-100">info@techstore.pe</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <MapPin className="w-6 h-6 text-sky-200" />
+                  <div>
+                    <p className="font-semibold">Dirección</p>
+                    <p className="text-sky-100">Av. Tecnología 123, Lima, Perú</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-16">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div>
+              <div className="flex items-center space-x-2 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-r from-sky-400 to-blue-500 rounded-lg flex items-center justify-center">
+                  <Monitor className="w-6 h-6 text-white" />
+                </div>
+                <span className="text-xl font-bold">TechStore</span>
+              </div>
+              <p className="text-gray-400 leading-relaxed mb-6">
+                Tu tienda de confianza para laptops, computadoras y componentes de alta calidad en Perú.
+              </p>
+              <div className="flex space-x-4">
+                <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white p-2">
+                  <Facebook className="w-5 h-5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white p-2">
+                  <Twitter className="w-5 h-5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white p-2">
+                  <Instagram className="w-5 h-5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white p-2">
+                  <Youtube className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold mb-6">Enlaces rápidos</h3>
+              <ul className="space-y-3">
+                <li>
+                  <Link href="/productos" className="text-gray-400 hover:text-white transition-colors">
+                    Productos
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/ofertas" className="text-gray-400 hover:text-white transition-colors">
+                    Ofertas
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/nosotros" className="text-gray-400 hover:text-white transition-colors">
+                    Nosotros
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/contacto" className="text-gray-400 hover:text-white transition-colors">
+                    Contacto
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/soporte" className="text-gray-400 hover:text-white transition-colors">
+                    Soporte técnico
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold mb-6">Categorías</h3>
+              <ul className="space-y-3">
+                <li>
+                  <Link href="/laptops" className="text-gray-400 hover:text-white transition-colors">
+                    Laptops
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/computadoras" className="text-gray-400 hover:text-white transition-colors">
+                    Computadoras
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/componentes" className="text-gray-400 hover:text-white transition-colors">
+                    Componentes
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/gaming" className="text-gray-400 hover:text-white transition-colors">
+                    Gaming
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/accesorios" className="text-gray-400 hover:text-white transition-colors">
+                    Accesorios
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold mb-6">Información</h3>
+              <ul className="space-y-3">
+                <li>
+                  <Link href="/envios" className="text-gray-400 hover:text-white transition-colors">
+                    Información de envíos
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/garantia" className="text-gray-400 hover:text-white transition-colors">
+                    Garantía
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/devoluciones" className="text-gray-400 hover:text-white transition-colors">
+                    Devoluciones
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/pagos" className="text-gray-400 hover:text-white transition-colors">
+                    Métodos de pago
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/faq" className="text-gray-400 hover:text-white transition-colors">
+                    Preguntas frecuentes
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-800 mt-12 pt-8">
+            <div className="flex flex-col md:flex-row justify-between items-center">
+              <p className="text-gray-400 text-sm">© 2024 TechStore Perú. Todos los derechos reservados.</p>
+              <div className="flex space-x-6 mt-4 md:mt-0">
+                <Link href="/privacidad" className="text-gray-400 hover:text-white text-sm transition-colors">
+                  Aviso de privacidad
+                </Link>
+                <Link href="/terminos" className="text-gray-400 hover:text-white text-sm transition-colors">
+                  Términos y condiciones
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

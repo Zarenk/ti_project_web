@@ -27,6 +27,7 @@ import {
 import { getOrdersByUser } from "../dashboard/sales/sales.api"
 import Navbar from "@/components/navbar"
 import { useRouter } from "next/navigation"
+import SimplePagination from "@/components/simple-pagination"
 
 export default function UserPanel() {
   const [isEditing, setIsEditing] = useState(false)
@@ -106,6 +107,16 @@ export default function UserPanel() {
     numeroDocumento: "",
   })
   const [orderHistory, setOrderHistory] = useState<any[]>([])
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(5)
+  const displayedOrders = orderHistory.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  )
+
+  useEffect(() => {
+    setPage(1)
+  }, [pageSize, orderHistory.length])
 
   const form = useForm<UserFormType>({
     resolver: zodResolver(userSchema),
@@ -479,7 +490,7 @@ export default function UserPanel() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {orderHistory.map((order) => (
+                      {displayedOrders.map((order) => (
                         <TableRow key={order.id} className="hover:bg-blue-50/50 dark:hover:bg-blue-800/50">
                           <TableCell className="font-medium text-blue-800 dark:text-blue-200">{order.numero}</TableCell>
                           <TableCell className="text-gray-700 dark:text-gray-300">{order.fecha}</TableCell>
@@ -504,6 +515,15 @@ export default function UserPanel() {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+                <div className="py-4">
+                  <SimplePagination
+                    page={page}
+                    pageSize={pageSize}
+                    totalItems={orderHistory.length}
+                    onPageChange={setPage}
+                    onPageSizeChange={setPageSize}
+                  />
                 </div>
               </CardContent>
             </Card>

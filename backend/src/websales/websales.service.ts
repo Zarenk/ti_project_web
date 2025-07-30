@@ -69,7 +69,7 @@ export class WebSalesService {
       total += detail.quantity * detail.price;
     }
 
-    const sale = await executeSale(this.prisma, {
+    const createdSale = await executeSale(this.prisma, {
       userId,
       storeId,
       clientId: clientIdToUse,
@@ -88,7 +88,7 @@ export class WebSalesService {
     if (!skipOrder && shippingName && shippingAddress && city && postalCode) {
       await this.prisma.orders.create({
         data: {
-          salesId: sale.id,
+          salesId: createdSale.id,
           shippingName,
           shippingAddress,
           city,
@@ -98,6 +98,27 @@ export class WebSalesService {
           status: 'COMPLETED',
         },
       });
+    }
+
+    const sale = await this.prisma.sales.findUnique({
+      where: { id: createdSale.id },
+      include: {
+        client: true,
+        store: true,
+        salesDetails: {
+          include: {
+            entryDetail: { include: { product: true } },
+          },
+        },
+        invoices: true,
+        order: true,
+      },
+    });
+
+    if (!sale) {
+      throw new NotFoundException(
+        `No se encontró la venta recién creada con ID ${createdSale.id}.`,
+      );
     }
 
     return sale;
@@ -136,7 +157,22 @@ export class WebSalesService {
       data: { status: 'COMPLETED', salesId: sale.id },
     });
 
-    return sale;
+    const enrichedSale = await this.prisma.sales.findUnique({
+      where: { id: sale.id },
+      include: {
+        client: true,
+        store: true,
+        salesDetails: {
+          include: {
+            entryDetail: { include: { product: true } },
+          },
+        },
+        invoices: true,
+        order: true,
+      },
+    });
+
+    return enrichedSale;
   }
 
   async rejectWebOrder(id: number) {
