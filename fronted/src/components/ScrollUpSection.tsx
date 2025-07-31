@@ -18,11 +18,21 @@ export default function ScrollUpSection({
     offset: ["start end", "end start"],
   })
 
-  // Move elements more drastically to emphasize the upward motion
-  const y = useTransform(scrollYProgress, [0, 1], ["100px", "-100px"])
+  // Subtle upward movement combined with a reveal effect
+  const y = useTransform(scrollYProgress, [0, 1], ["50px", "-50px"])
+  const opacity = useTransform(scrollYProgress, [0, 0.2], [0, 1])
+  const clipPath = useTransform(
+    scrollYProgress,
+    [0, 1],
+    ["inset(100% 0 0 0)", "inset(0% 0 0 0)"]
+  )
 
   return (
-    <motion.section ref={ref} style={{ y }} className={className}>
+    <motion.section
+      ref={ref}
+      style={{ y, opacity, clipPath }}
+      className={className}
+    >
       {children}
     </motion.section>
   )

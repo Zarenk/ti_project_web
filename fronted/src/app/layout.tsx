@@ -7,6 +7,7 @@ import { CartProvider } from "@/context/cart-context";
 import ConditionalFooter from "@/components/conditional-footer";
 import { AuthProvider } from "@/context/auth-context";
 import WhatsappButton from "@/components/whatsapp-button";
+import ChatButton from "@/components/ChatButton";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,7 @@ export default function RootLayout({
                 <Toaster position="top-right" richColors /> {/* Configuración de Sonner */}
                 {children}
                 <WhatsappButton />
+                <ChatButton />
                 <ConditionalFooter />
             </CartProvider>
           </AuthProvider>
