@@ -121,11 +121,11 @@ export default function Footer() {
               </div>
               <div className="flex items-center gap-3">
                 <Mail className="h-5 w-5" />
-                <span>titecnot@tecnoin.com</span>
+                <span>tecnologiatitacna@gmail.com</span>
               </div>
               <div className="flex items-center gap-3">
                 <MapPin className="h-5 w-5" />
-                <span>C.C Mercadillo Bolognesi K367 TACNA-PERU</span>
+                <span>Av. Coronel Mendoza 1945 C.C. Mercadillo Bolognesi K-367 Primera Fila Tacna - Peru</span>
               </div>
               <div className="flex items-center gap-3">
                 <Headphones className="h-5 w-5" />

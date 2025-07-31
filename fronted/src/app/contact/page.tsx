@@ -193,11 +193,11 @@ export default function ContactPage() {
                   <div>
                     <h3 className="font-medium text-gray-800 dark:text-gray-100 mb-1">Dirección</h3>
                     <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
-                      Av. Tecnología 123, Piso 15
+                      Av. Coronel Mendoza 1945 C.C. Mercadillo Bolognesi K-367 Primera Fila
                       <br />
-                      Ciudad Empresarial
+                      Tacna
                       <br />
-                      CP 12345, México
+                      Peru
                     </p>
                   </div>
                 </div>
@@ -208,7 +208,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className="font-medium text-gray-800 dark:text-gray-100 mb-1">Teléfono</h3>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm">+52 (55) 1234-5678</p>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">+51 949 426 294</p>
                   </div>
                 </div>
 
@@ -218,7 +218,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className="font-medium text-gray-800 dark:text-gray-100 mb-1">Correo de atención</h3>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm">contacto@empresa.com</p>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">tecnologiatitacna@gmail.com</p>
                   </div>
                 </div>
 
@@ -229,11 +229,11 @@ export default function ContactPage() {
                   <div>
                     <h3 className="font-medium text-gray-800 dark:text-gray-100 mb-1">Horario de atención</h3>
                     <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
-                      Lunes a Viernes
+                      Lunes a Sabados
                       <br />
                       11:00 AM - 8:00 PM
                       <br />
-                      <span className="text-xs text-gray-500 dark:text-gray-400">(Hora del Centro)</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">(UTC -5)</span>
                     </p>
                   </div>
                 </div>
