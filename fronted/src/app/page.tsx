@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import MotionProductCard from "@/components/MotionProductCard"
 import HeroSlideshow from "@/components/HeroSlideshow"
+import ScrollUpSection from "@/components/ScrollUpSection"
 import {
   ShoppingCart,
   User,
@@ -48,7 +49,6 @@ import { toast } from "sonner"
 import { formatCurrency } from "@/lib/utils"
 import { getProducts } from "./dashboard/products/products.api"
 import { getCategoriesWithCount } from "./dashboard/categories/categories.api"
-import ScrollUpSection from "@/components/ScrollUpSection"
 
 export default function Homepage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -249,7 +249,7 @@ export default function Homepage() {
       </section>
 
       {/* Featured Products */}
-      <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
+      <section className="py-20 bg-white dark:bg-gray-900">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Productos destacados</h2>
@@ -264,10 +264,10 @@ export default function Homepage() {
             ))}
           </div>
         </div>
-      </ScrollUpSection>
+      </section>
 
       {/* Categories */}
-      <ScrollUpSection className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
+      <section className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Explora por categoría</h2>
@@ -330,10 +330,10 @@ export default function Homepage() {
             )}
           </div>
         </div>
-      </ScrollUpSection>
+      </section>
 
       {/* Benefits */}
-      <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
+      <section className="py-20 bg-white dark:bg-gray-900">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">¿Por qué comprar con nosotros?</h2>
@@ -354,10 +354,10 @@ export default function Homepage() {
             ))}
           </div>
         </div>
-      </ScrollUpSection>
+      </section>
 
       {/* Testimonials */}
-      <ScrollUpSection className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
+      <section className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Lo que dicen nuestros clientes</h2>
@@ -385,10 +385,10 @@ export default function Homepage() {
             ))}
           </div>
         </div>
-      </ScrollUpSection>
+      </section>
 
       {/* Newsletter & Contact */}
-      <ScrollUpSection className="py-20 bg-gradient-to-r from-sky-500 to-blue-600 text-white">
+      <section className="py-20 bg-gradient-to-r from-sky-500 to-blue-600 text-white">
         <div className="container mx-auto px-4">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
@@ -409,7 +409,7 @@ export default function Homepage() {
             </div>
           </div>
         </div>
-      </ScrollUpSection>
+      </section>
     </div>
   )
 }
