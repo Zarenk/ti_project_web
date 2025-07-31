@@ -1,7 +1,7 @@
 "use client"
 
-import { useRef } from "react"
-import { motion, useScroll, useTransform } from "framer-motion"
+import { useEffect, useRef, useState } from "react"
+import clsx from "clsx"
 
 interface ScrollUpSectionProps {
   children: React.ReactNode
@@ -12,28 +12,32 @@ export default function ScrollUpSection({
   children,
   className,
 }: ScrollUpSectionProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start end", "end start"],
-  })
+  const ref = useRef<HTMLElement>(null)
+  const [visible, setVisible] = useState(false)
 
-  // Subtle upward movement combined with a reveal effect
-  const y = useTransform(scrollYProgress, [0, 1], ["50px", "-50px"])
-  const opacity = useTransform(scrollYProgress, [0, 0.2], [0, 1])
-  const clipPath = useTransform(
-    scrollYProgress,
-    [0, 1],
-    ["inset(100% 0 0 0)", "inset(0% 0 0 0)"]
-  )
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setVisible(entry.isIntersecting)
+      },
+      { threshold: 0.2 }
+    )
+
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   return (
-    <motion.section
+    <section
       ref={ref}
-      style={{ y, opacity, clipPath }}
-      className={className}
+      className={clsx("scroll-up-section", className, {
+        "is-visible": visible,
+      })}
     >
       {children}
-    </motion.section>
+    </section>
   )
 }

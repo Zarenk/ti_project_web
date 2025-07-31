@@ -249,7 +249,7 @@ export default function Homepage() {
       </section>
 
       {/* Featured Products */}
-      <section className="py-20 bg-white dark:bg-gray-900">
+      <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Productos destacados</h2>
@@ -264,10 +264,10 @@ export default function Homepage() {
             ))}
           </div>
         </div>
-      </section>
+      </ScrollUpSection>
 
       {/* Categories */}
-      <section className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
+      <ScrollUpSection className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Explora por categoría</h2>
@@ -330,10 +330,10 @@ export default function Homepage() {
             )}
           </div>
         </div>
-      </section>
+      </ScrollUpSection>
 
       {/* Benefits */}
-      <section className="py-20 bg-white dark:bg-gray-900">
+      <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">¿Por qué comprar con nosotros?</h2>
@@ -354,10 +354,10 @@ export default function Homepage() {
             ))}
           </div>
         </div>
-      </section>
+      </ScrollUpSection>
 
       {/* Testimonials */}
-      <section className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
+      <ScrollUpSection className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Lo que dicen nuestros clientes</h2>
@@ -385,10 +385,10 @@ export default function Homepage() {
             ))}
           </div>
         </div>
-      </section>
+      </ScrollUpSection>
 
       {/* Newsletter & Contact */}
-      <section className="py-20 bg-gradient-to-r from-sky-500 to-blue-600 text-white">
+      <ScrollUpSection className="py-20 bg-gradient-to-r from-sky-500 to-blue-600 text-white">
         <div className="container mx-auto px-4">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
@@ -409,7 +409,7 @@ export default function Homepage() {
             </div>
           </div>
         </div>
-      </section>
+      </ScrollUpSection>
     </div>
   )
 }

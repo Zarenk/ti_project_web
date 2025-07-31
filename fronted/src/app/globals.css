@@ -185,3 +185,24 @@
 .card-stripes:hover::after {
   opacity: 1;
 }
+
+/* Scroll reveal animation for sections */
+.scroll-up-section {
+  opacity: 0;
+  transform: translateY(40px);
+}
+
+.scroll-up-section.is-visible {
+  animation: slide-fade-up 0.6s ease-out forwards;
+}
+
+@keyframes slide-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}  
