@@ -12,6 +12,7 @@ import TopBanner from "./top-banner"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/context/auth-context"
+import { useTheme } from "next-themes"
 
 export default function Navbar() {
   const [open, setOpen] = useState(false)
@@ -19,6 +20,8 @@ export default function Navbar() {
   const { userName, refreshUser, logout } = useAuth()
   const router = useRouter()
   const { items } = useCart()
+  const { theme } = useTheme()
+  const logoSrc = theme === "dark" ? "/ti_logo_final_blanco.png" : "/logo_ti.png"
 
   const handleMouseEnter = () => {
     if (closeTimer.current) {
@@ -51,8 +54,8 @@ export default function Navbar() {
       <nav className="bg-background shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold text-foreground">
-            <Image src="/logo_ti.png" alt="TI" width={64} height={64} className="h-16 w-16" />
-            <span>Tienda TI</span>       
+            <Image src={logoSrc} alt="TI" width={64} height={64} className="h-16 w-16" />
+            <span>Tienda TI</span>   
           </Link>
           <div className="flex items-center gap-4">
             <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground">

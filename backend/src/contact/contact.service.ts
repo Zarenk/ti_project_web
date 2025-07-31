@@ -1,4 +1,5 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
 
 interface ContactDto {
@@ -11,22 +12,26 @@ interface ContactDto {
 
 @Injectable()
 export class ContactService {
-  private transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+  private transporter;
+
+  constructor(private configService: ConfigService) {
+    this.transporter = nodemailer.createTransport({
+      host: this.configService.get<string>('SMTP_HOST'),
+      port: Number(this.configService.get<string>('SMTP_PORT')) || 587,
+      secure: false,
+      auth: {
+        user: this.configService.get<string>('SMTP_USER'),
+        pass: this.configService.get<string>('SMTP_PASS'),
+      },
+    });
+  }
 
   async sendContactEmail(data: ContactDto) {
     const text = `Nombre: ${data.nombre}\nEmail: ${data.email}\nTel\u00E9fono: ${data.telefono ?? ''}\n\n${data.mensaje}`;
     try {
       await this.transporter.sendMail({
-        from: `\"Web Contact\" <${process.env.SMTP_USER}>`,
-        to: process.env.CONTACT_EMAIL,
+        from: `\"Web Contact\" <${this.configService.get<string>('SMTP_USER')}>`,
+        to: this.configService.get<string>('CONTACT_EMAIL'),
         subject: `Contacto: ${data.asunto}`,
         text,
       });
