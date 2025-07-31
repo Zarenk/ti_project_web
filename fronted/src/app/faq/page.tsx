@@ -1,6 +1,7 @@
 "use client"
 
-import { ChevronDown, HelpCircle, Mail, Phone } from "lucide-react"
+import { HelpCircle, Mail, Phone } from "lucide-react"
+import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -93,7 +94,6 @@ export default function Component() {
                     <span className="font-semibold text-gray-800 dark:text-gray-100 text-lg pr-4 group-hover:text-soft-blue-700 dark:group-hover:text-blue-300 transition-colors">
                       {faq.question}
                     </span>
-                    <ChevronDown className="h-5 w-5 text-soft-blue-600 dark:text-blue-300 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                   </AccordionTrigger>
                   <AccordionContent className="pb-6 pt-2">
                     <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-base">{faq.answer}</p>
@@ -105,28 +105,34 @@ export default function Component() {
         </Card>
 
         {/* Contact Section */}
-        <Card className="bg-gradient-to-r from-soft-blue-500 to-soft-blue-600 dark:from-blue-800 dark:to-blue-900 text-white shadow-xl border-0">
+        <Card className="bg-gradient-to-r from-soft-blue-100 to-soft-blue-200 dark:from-blue-800 dark:to-blue-900 text-gray-800 dark:text-white shadow-xl border-0">
           <CardContent className="p-8 text-center">
             <h3 className="text-2xl font-bold mb-4">¿Aún tienes preguntas?</h3>
-            <p className="text-soft-blue-100 dark:text-blue-200 mb-6 text-lg">
+            <p className="text-gray-700 dark:text-blue-200 mb-6 text-lg">
               Nuestro equipo de atención al cliente está listo para ayudarte
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button
+                asChild
                 variant="secondary"
                 size="lg"
                 className="bg-white text-soft-blue-600 hover:bg-soft-blue-50 dark:bg-blue-700 dark:text-white dark:hover:bg-blue-600 font-semibold px-8 py-3 rounded-full transition-all duration-200 hover:scale-105"
               >
-                <Mail className="w-5 h-5 mr-2" />
-                Contáctanos aquí
+                <Link href="/contact">
+                  <Mail className="w-5 h-5 mr-2" />
+                  Contáctanos aquí
+                </Link>
               </Button>
               <Button
+                asChild
                 variant="outline"
                 size="lg"
                 className="border-white text-white hover:bg-white hover:text-soft-blue-600 dark:border-blue-200 dark:text-blue-200 dark:hover:bg-blue-800 dark:hover:text-white font-semibold px-8 py-3 rounded-full transition-all duration-200 hover:scale-105 bg-transparent"
               >
-                <Phone className="w-5 h-5 mr-2" />
-                Llamar ahora
+                <Link href="https://wa.me/51949426294" target="_blank" rel="noopener noreferrer">
+                  <Phone className="w-5 h-5 mr-2" />
+                  Llamar ahora
+                </Link>
               </Button>
             </div>
           </CardContent>
