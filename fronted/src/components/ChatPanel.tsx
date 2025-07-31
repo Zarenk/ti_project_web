@@ -39,7 +39,7 @@ export default function ChatPanel({ onClose }: { onClose: () => void }) {
   }, [messages]);
 
   return (
-    <div className="fixed bottom-24 right-6 z-50 w-80 max-h-[60vh] flex flex-col bg-white rounded-md shadow-lg border">
+    <div className="fixed bottom-36 right-6 z-50 w-80 max-h-[60vh] flex flex-col bg-white rounded-md shadow-lg border">
       <div className="p-2 border-b flex justify-between items-center">
         <span className="font-semibold">Chat</span>
         <button onClick={onClose} className="text-sm">×</button>
