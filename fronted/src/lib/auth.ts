@@ -14,7 +14,10 @@ export async function getUserDataFromToken(): Promise<UserTokenPayload | null> {
   if (!token && !hasCookie) return null
 
   try {
-    const res = await fetch('/api/login', { credentials: 'include' })
+    const res = await fetch('/api/login', {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
     if (!res.ok) return null
     const data = await res.json()
     if (!token && data.access_token && typeof window !== 'undefined') {

@@ -21,7 +21,11 @@ export default function Navbar() {
   const router = useRouter()
   const { items } = useCart()
   const { theme } = useTheme()
-  const logoSrc = theme === "dark" ? "/ti_logo_final_blanco.png" : "/logo_ti.png"
+  const [logoSrc, setLogoSrc] = useState("/logo_ti.png")
+
+  useEffect(() => {
+    setLogoSrc(theme === "dark" ? "/ti_logo_final_blanco.png" : "/logo_ti.png")
+  }, [theme])
 
   const handleMouseEnter = () => {
     if (closeTimer.current) {
@@ -55,7 +59,7 @@ export default function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold text-foreground">
             <Image src={logoSrc} alt="TI" width={64} height={64} className="h-16 w-16" />
-            <span>Tienda TI</span>   
+            <span>Tienda TI</span>
           </Link>
           <div className="flex items-center gap-4">
             <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground">

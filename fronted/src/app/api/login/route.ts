@@ -22,8 +22,15 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const token = (await cookies()).get('token')?.value ||
-    request.headers.get('cookie')?.match(/token=([^;]+)/)?.[1]
+  let token = request.headers
+    .get('authorization')
+    ?.replace(/^Bearer\s+/i, '')
+
+  if (!token) {
+    token =
+      (await cookies()).get('token')?.value ||
+      request.headers.get('cookie')?.match(/token=([^;]+)/)?.[1]
+  }
   if (!token) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
