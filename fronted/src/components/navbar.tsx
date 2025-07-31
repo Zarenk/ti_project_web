@@ -61,6 +61,9 @@ export default function Navbar() {
             <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Inicio
             </Link>
+            <Link href="/faq" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+              FAQ
+            </Link>
             <Link href="/contact" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Contacto
             </Link>
