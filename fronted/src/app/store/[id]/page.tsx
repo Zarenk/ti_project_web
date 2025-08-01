@@ -43,6 +43,8 @@ import { icons } from "@/lib/icons"
 import { getUserDataFromToken } from "@/lib/auth"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { toggleFavorite, getFavorites } from "@/app/favorites/favorites.api"
 
 interface Props {
   params: Promise<{ id: string }>
@@ -169,6 +171,19 @@ export default function ProductPage({ params }: Props) {
   }, [])
 
   useEffect(() => {
+    async function checkFav() {
+      if (!product) return
+      try {
+        const favs = await getFavorites()
+        setIsInWishlist(favs.some((f: any) => f.productId === product.id))
+      } catch (err) {
+        console.error('Error checking favorites:', err)
+      }
+    }
+    checkFav()
+  }, [product])
+
+  useEffect(() => {
     async function loadReviews() {
       try {
         const res = await getReviews(Number(id))
@@ -243,6 +258,16 @@ export default function ProductPage({ params }: Props) {
     } catch (err) {
       console.error(err)
       toast.error('Error al guardar la reseña')
+    }
+  }
+
+  async function handleToggleFavorite() {
+    if (!product) return
+    try {
+      await toggleFavorite(product.id)
+      setIsInWishlist((prev) => !prev)
+    } catch (err) {
+      console.error('Error toggling favorite:', err)
     }
   }
 
@@ -468,14 +493,19 @@ export default function ProductPage({ params }: Props) {
                   <ShoppingCart className="w-5 h-5 mr-2" />
                   Agregar al Carrito
                 </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => setIsInWishlist(!isInWishlist)}
-                  className={isInWishlist ? "text-red-500 border-red-500" : ""}
-                >
-                  <Heart className={`w-5 h-5 ${isInWishlist ? "fill-current" : ""}`} />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={handleToggleFavorite}
+                      className={isInWishlist ? "text-red-500 border-red-500" : ""}
+                    >
+                      <Heart className={`w-5 h-5 ${isInWishlist ? "fill-current" : ""}`} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Agregar a favoritos</TooltipContent>
+                </Tooltip>
               </div>
 
               <Button

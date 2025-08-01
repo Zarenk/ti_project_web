@@ -37,6 +37,7 @@ model Product{
   specification ProductSpecification?
   features      ProductFeature[]
   reviews       Review[]
+  favorites     Favorite[]
 
   // Relación con Transfer
   transfers   Transfer[] // Relación con el modelo Transfer
@@ -115,6 +116,7 @@ model User {
   cashClosures     CashClosure[] // Relación con la tabla de cierres de caja
   reviews       Review[]
   chatMessages  ChatMessage[] // Relación con el modelo ChatMessage
+  favorites     Favorite[]
 
   @@index([email])
   @@index([username])
@@ -608,4 +610,18 @@ model ChatMessage {
   user      User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
+}
+
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  productId Int
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
 }

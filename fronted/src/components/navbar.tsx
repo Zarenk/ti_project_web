@@ -74,6 +74,9 @@ export default function Navbar() {
             <Link href="/store" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Productos
             </Link>
+            <Link href="/favorites" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+              Favoritos
+            </Link>
             {userName ? (
               <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger asChild>
