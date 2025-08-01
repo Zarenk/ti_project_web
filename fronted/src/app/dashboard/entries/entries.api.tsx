@@ -199,3 +199,13 @@ export const checkSeries = async (serial: string): Promise<{ exists: boolean }> 
   }
 };
 //
+
+export async function getRecentEntries(limit = 5) {
+  const response = await fetch(`${BACKEND_URL}/api/entries/recent?limit=${limit}`, {
+    cache: 'no-store',
+  })
+  if (!response.ok) {
+    throw new Error('Error al obtener los últimos ingresos')
+  }
+  return response.json()
+}

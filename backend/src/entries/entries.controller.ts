@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UseInterceptors, UploadedFile, Query } from '@nestjs/common';
 import { EntriesService } from './entries.service';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
@@ -158,5 +158,10 @@ export class EntriesController {
     return this.entriesService.deleteEntries(ids);
   }
 
+  @Get('recent')
+  async findRecent(@Query('limit') limit = '5') {
+    const take = parseInt(limit, 10)
+    return this.entriesService.findRecentEntries(isNaN(take) ? 5 : take)
+  }
   
 }

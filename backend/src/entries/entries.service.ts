@@ -403,6 +403,37 @@ export class EntriesService {
   }
   //
 
+  async findRecentEntries(limit: number) {
+    const details = await this.prisma.entryDetail.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit * 3,
+      include: {
+        product: { include: { category: true } },
+        entry: true,
+        inventory: { include: { storeOnInventory: true } },
+      },
+    })
+
+    const result: any[] = []
+    for (const d of details) {
+      const stock = d.inventory?.storeOnInventory.reduce((s, i) => s + i.stock, 0) || 0
+      if (stock > 0) {
+        result.push({
+          id: d.product.id,
+          name: d.product.name,
+          description: d.product.description ?? '',
+          price: d.product.priceSell ?? d.product.price,
+          brand: d.product.brand ?? 'Sin marca',
+          category: d.product.category?.name ?? 'Sin categoría',
+          images: d.product.images ?? [],
+          stock,
+        })
+        if (result.length >= limit) break
+      }
+    }
+    return result
+  }
+
   // Actualizar una entrada con un PDF
   async updateEntryPdf(entryId: number, pdfUrl: string) {
     const entry = await this.prisma.entry.findUnique({ where: { id: entryId } });

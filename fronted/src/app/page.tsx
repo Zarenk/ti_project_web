@@ -49,6 +49,7 @@ import { toast } from "sonner"
 import { formatCurrency } from "@/lib/utils"
 import { getProducts } from "./dashboard/products/products.api"
 import { getCategoriesWithCount } from "./dashboard/categories/categories.api"
+import { getRecentEntries } from "./dashboard/entries/entries.api"
 
 export default function Homepage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -98,8 +99,22 @@ export default function Homepage() {
     count: number
   }
 
+  interface RecentProduct {
+    id: number
+    name: string
+    description: string
+    price: number
+    brand: string
+    category: string
+    images: string[]
+    stock: number
+  }
+
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([])
   const [heroProducts, setHeroProducts] = useState<FeaturedProduct[]>([])
+  const [recentProducts, setRecentProducts] = useState<RecentProduct[]>([])
+  const [recentIndex, setRecentIndex] = useState(0)
+  const [recentDirection, setRecentDirection] = useState(0)
 
   useEffect(() => {
     async function fetchProductsData() {
@@ -126,6 +141,18 @@ export default function Homepage() {
       }
     }
     fetchProductsData()
+  }, [])
+
+  useEffect(() => {
+    async function fetchRecent() {
+      try {
+        const data = await getRecentEntries(5)
+        setRecentProducts(data)
+      } catch (error) {
+        console.error('Error fetching recent entries:', error)
+      }
+    }
+    fetchRecent()
   }, [])
 
   const [categories, setCategories] = useState<HomeCategory[]>([])
@@ -185,6 +212,33 @@ export default function Homepage() {
               : []),
         ]
 
+  const nextRecent = () => {
+    setRecentDirection(1)
+    setRecentIndex((i) =>
+      recentProducts.length > 0 ? (i + 1) % recentProducts.length : i,
+    )
+  }
+
+  const prevRecent = () => {
+    setRecentDirection(-1)
+    setRecentIndex((i) =>
+      recentProducts.length > 0
+        ? (i - 1 + recentProducts.length) % recentProducts.length
+        : i,
+    )
+  }
+
+  const visibleRecent =
+    recentProducts.length <= 4
+      ? recentProducts
+      : [
+          ...recentProducts.slice(recentIndex, recentIndex + 4),
+          ...(recentIndex + 4 > recentProducts.length
+            ? recentProducts.slice(0, (recentIndex + 4) % recentProducts.length)
+            : []),
+        ]
+
+
   const benefits = [
     {
       icon: Truck,
@@ -232,6 +286,54 @@ export default function Homepage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-gray-950 dark:to-black">
       <Navbar />
+
+      {/* Últimos ingresos */}
+      <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">
+              Últimos ingresos
+            </h2>
+          </div>
+          <div className="relative">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={recentIndex}
+                initial={{ x: recentDirection > 0 ? 300 : -300, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: recentDirection > 0 ? -300 : 300, opacity: 0 }}
+                transition={{ type: 'tween' }}
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"
+              >
+                {visibleRecent.map((product) => (
+                  <MotionProductCard key={product.id} product={product} />
+                ))}
+              </motion.div>
+            </AnimatePresence>
+            {recentProducts.length > 4 && (
+              <>
+                <motion.button
+                  aria-label="Anterior"
+                  onClick={prevRecent}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[150%] bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+                  whileTap={{ scale: 0.9 }}
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </motion.button>
+                <motion.button
+                  aria-label="Siguiente"
+                  onClick={nextRecent}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[150%] bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+                  whileTap={{ scale: 0.9 }}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </motion.button>
+              </>
+            )}
+          </div>
+        </div>
+      </ScrollUpSection>
+
       {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-sky-100 via-blue-50 to-sky-100 py-20 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800">
         <div className="container mx-auto px-4">
