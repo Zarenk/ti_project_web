@@ -1,15 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import Image from "next/image"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { AnimatePresence, motion } from "framer-motion"
-import { Card, CardContent } from "@/components/ui/card"
-import MotionProductCard from "@/components/MotionProductCard"
-import HeroSlideshow from "@/components/HeroSlideshow"
-import ScrollUpSection from "@/components/ScrollUpSection"
+import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Card, CardContent } from '@/components/ui/card';
+import MotionProductCard from '@/components/MotionProductCard';
+import HeroSlideshow from '@/components/HeroSlideshow';
+import ScrollUpSection from '@/components/ScrollUpSection';
 import {
   ShoppingCart,
   User,
@@ -54,6 +54,23 @@ export default function Homepage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [email, setEmail] = useState("")
 
+  const handleSubscribe = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      toast.success('Suscripción exitosa');
+      setEmail('');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al suscribirse');
+    }
+  };
+
   interface FeaturedProduct {
     id: number
     name: string
@@ -84,7 +101,7 @@ export default function Homepage() {
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([])
   const [heroProducts, setHeroProducts] = useState<FeaturedProduct[]>([])
 
-   useEffect(() => {
+  useEffect(() => {
     async function fetchProductsData() {
       try {
         const products = await getProducts()
@@ -390,23 +407,32 @@ export default function Homepage() {
       {/* Newsletter & Contact */}
       <ScrollUpSection className="py-20 bg-gradient-to-r from-sky-500 to-blue-600 text-white">
         <div className="container mx-auto px-4">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">Suscríbete y recibe ofertas exclusivas</h2>
-              <p className="text-xl text-sky-100 mb-8">
-                Mantente al día con las últimas novedades, ofertas especiales y lanzamientos de productos
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Input
-                  type="email"
-                  placeholder="Tu correo electrónico"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="flex-1 bg-white dark:bg-gray-800 dark:text-gray-100 text-gray-800 border-0"
-                />
-                <Button className="bg-white text-sky-600 hover:bg-sky-50 px-8">Suscribirme</Button>
-              </div>
-            </div>
+          <div className="max-w-md mx-auto text-center">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Suscríbete y recibe ofertas exclusivas
+            </h2>
+            <p className="text-xl text-sky-100 mb-8">
+              Mantente al día con las últimas novedades, ofertas especiales y
+              lanzamientos de productos
+            </p>
+            <form
+              onSubmit={handleSubscribe}
+              className="flex flex-col sm:flex-row gap-4"
+            >
+              <Input
+                type="email"
+                placeholder="Tu correo electrónico"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="flex-1 bg-white dark:bg-gray-800 dark:text-gray-100 text-gray-800 border-0"
+              />
+              <Button
+                type="submit"
+                className="bg-white text-sky-600 hover:bg-sky-50 px-8"
+              >
+                Suscribirme
+              </Button>
+            </form>
           </div>
         </div>
       </ScrollUpSection>

@@ -77,6 +77,12 @@ Web orders now store shipping details. When creating a web sale you can send the
 - `postalCode`
 - `phone`
 
+### Newsletter
+
+The home page includes a simple newsletter form. Submissions are forwarded to the
+backend endpoint `/api/newsletter` which stores the email in the database. No new
+environment variables are required – just keep `NEXT_PUBLIC_BACKEND_URL`
+pointing to your backend and run the Prisma migrations.
 
 ## Configuring Stores
 The system supports multiple stores. For online purchases the front‑end expects a store representing the web sales channel (commonly named **"WEB POS"**). Configure the ID of this store through the `NEXT_PUBLIC_STORE_ID` variable. Make sure the store exists in the backend before processing online orders.

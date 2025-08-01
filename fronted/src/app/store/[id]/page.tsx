@@ -44,7 +44,7 @@ import { getUserDataFromToken } from "@/lib/auth"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { toggleFavorite, getFavorites } from "@/app/favorites/favorites.api"
+import { getFavorites, toggleFavorite } from "@/app/api/favorites/favorites.api"
 
 interface Props {
   params: Promise<{ id: string }>
