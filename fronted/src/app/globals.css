@@ -188,7 +188,8 @@
 
 /* Scroll reveal animation for sections */
 .scroll-up-section {
-  opacity: 0;
+  /* start slightly faded so the upcoming sections are visible */
+  opacity: 0.4;
   transform: translateY(40px);
 }
 
@@ -198,7 +199,7 @@
 
 @keyframes slide-fade-up {
   from {
-    opacity: 0;
+    opacity: 0.4;
     transform: translateY(40px);
   }
   to {

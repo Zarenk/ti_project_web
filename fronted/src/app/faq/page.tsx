@@ -118,10 +118,10 @@ export default function Component() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button
-                asChild
-                variant="secondary"
-                size="lg"
-                className="bg-white text-soft-blue-600 hover:bg-soft-blue-50 dark:bg-blue-700 dark:text-white dark:hover:bg-blue-600 font-semibold px-8 py-3 rounded-full transition-all duration-200 hover:scale-105"
+                  asChild
+                  variant="secondary"
+                  size="lg"
+                  className="bg-white text-soft-blue-600 border border-soft-blue-600 hover:bg-soft-blue-50 dark:bg-blue-700 dark:text-white dark:border-blue-200 dark:hover:bg-blue-600 font-semibold px-8 py-3 rounded-full transition-all duration-200 hover:scale-105"
               >
                 <Link href="/contact">
                   <Mail className="w-5 h-5 mr-2" />
@@ -129,10 +129,10 @@ export default function Component() {
                 </Link>
               </Button>
               <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className="border-white text-white hover:bg-white hover:text-soft-blue-600 dark:border-blue-200 dark:text-blue-200 dark:hover:bg-blue-800 dark:hover:text-white font-semibold px-8 py-3 rounded-full transition-all duration-200 hover:scale-105 bg-transparent"
+                  asChild
+                  variant="outline"
+                  size="lg"
+                  className="border-soft-blue-600 text-soft-blue-600 hover:bg-soft-blue-50 hover:text-soft-blue-700 dark:border-blue-200 dark:text-blue-200 dark:hover:bg-blue-800 dark:hover:text-white font-semibold px-8 py-3 rounded-full transition-all duration-200 hover:scale-105 bg-transparent"
               >
                 <Link href="https://wa.me/51949426294" target="_blank" rel="noopener noreferrer">
                   <Phone className="w-5 h-5 mr-2" />
