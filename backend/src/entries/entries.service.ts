@@ -404,34 +404,40 @@ export class EntriesService {
   //
 
   async findRecentEntries(limit: number) {
-    const details = await this.prisma.entryDetail.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: limit * 3,
-      include: {
-        product: { include: { category: true } },
-        entry: true,
-        inventory: { include: { storeOnInventory: true } },
-      },
-    })
+    try {
+      const details = await this.prisma.entryDetail.findMany({
+        where: { inventoryId: { not: null } },
+        orderBy: { createdAt: 'desc' },
+        take: limit * 3,
+        include: {
+          product: { include: { category: true } },
+          inventory: { include: { storeOnInventory: true } },
+        },
+      })
 
-    const result: any[] = []
-    for (const d of details) {
-      const stock = d.inventory?.storeOnInventory.reduce((s, i) => s + i.stock, 0) || 0
-      if (stock > 0) {
-        result.push({
-          id: d.product.id,
-          name: d.product.name,
-          description: d.product.description ?? '',
-          price: d.product.priceSell ?? d.product.price,
-          brand: d.product.brand ?? 'Sin marca',
-          category: d.product.category?.name ?? 'Sin categoría',
-          images: d.product.images ?? [],
-          stock,
-        })
-        if (result.length >= limit) break
+      const result: any[] = []
+      for (const d of details) {
+        const stock =
+          d.inventory?.storeOnInventory.reduce((s, i) => s + i.stock, 0) || 0
+        if (stock > 0) {
+          result.push({
+            id: d.product.id,
+            name: d.product.name,
+            description: d.product.description ?? '',
+            price: d.product.priceSell ?? d.product.price,
+            brand: d.product.brand ?? 'Sin marca',
+            category: d.product.category?.name ?? 'Sin categoría',
+            images: d.product.images ?? [],
+            stock,
+          })
+          if (result.length >= limit) break
+        }
       }
+      return result
+    } catch (error) {
+      console.error('Error fetching recent entries:', error)
+      throw new Error('Failed to fetch recent entries')
     }
-    return result
   }
 
   // Actualizar una entrada con un PDF
