@@ -57,9 +57,18 @@ export default function Navbar() {
       <TopBanner />
       <nav className="bg-background shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold text-foreground">
-            <Image src={logoSrc} alt="TI" width={64} height={64} className="h-16 w-16" />
-            <span>Tienda TI</span>
+          <Link
+            href="/"
+            className="flex items-center gap-2 font-bold text-foreground group hover:text-sky-600 transition-colors"
+          >
+            <Image
+              src={logoSrc}
+              alt="TI"
+              width={64}
+              height={64}
+              className="h-16 w-16 transition duration-300 group-hover:brightness-110 group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.7)]"
+            />
+            <span className="transition-colors duration-300 group-hover:text-sky-600">Tienda TI</span>
           </Link>
           <div className="flex items-center gap-4">
             <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground">
