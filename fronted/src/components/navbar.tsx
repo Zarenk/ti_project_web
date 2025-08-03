@@ -82,13 +82,7 @@ export default function Navbar() {
             </Link>
             <Link href="/store" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Productos
-            </Link>
-            <Link
-              href="/favorites"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Heart className="h-5 w-5 transition-transform duration-200 hover:scale-110" />
-            </Link>
+            </Link>        
             {userName ? (
               <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger asChild>
@@ -148,6 +142,12 @@ export default function Navbar() {
                 </PopoverContent>
               </Popover>
             )}
+            <Link
+              href="/favorites"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Heart className="h-5 w-5 transition-transform duration-200 hover:scale-110" />
+            </Link>
             <CartSheet />
             <ModeToggle />
           </div>

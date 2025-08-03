@@ -12,7 +12,11 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
-
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
 import { formatCurrency } from "@/lib/utils"
 import { useCart } from "@/context/cart-context"
 import { useEffect, useState } from "react"
@@ -32,17 +36,26 @@ export default function CartSheet() {
 
   return (
     <Sheet>
-      <SheetTrigger asChild>
-        <Button className="relative bg-sky-500 hover:bg-sky-600 text-white">
-          <ShoppingCart className="w-5 h-5" />
-          <span className="ml-2">Carrito</span>
-          {mounted && items.length > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center">
-              {items.length}
-            </span>
-          )}
-        </Button>
-      </SheetTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <SheetTrigger asChild>
+            <Button className="relative bg-sky-500 hover:bg-sky-600 text-white">
+              <ShoppingCart className="w-5 h-5" />
+              <span className="ml-2">Carrito</span>
+              {mounted && items.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center">
+                  {items.length}
+                </span>
+              )}
+            </Button>
+          </SheetTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {mounted && items.length > 0
+            ? `${items.length} item${items.length > 1 ? "s" : ""} en tu carrito`
+            : "Tu carrito está vacío"}
+        </TooltipContent>
+      </Tooltip>
       <SheetContent side="right" className="flex flex-col">
         <SheetHeader>
           <SheetTitle>Carrito de Compras</SheetTitle>
