@@ -1,6 +1,13 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react"
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+  useCallback,
+} from "react"
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 
 type AuthContextType = {
@@ -14,7 +21,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string | null>(null)
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     if (await isTokenValid()) {
       const data = await getUserDataFromToken()
       setUserName(data?.name ?? null)
@@ -24,18 +31,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("authchange"))
     }
-  }
+  }, [])
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await fetch('/api/logout', { method: 'POST', credentials: 'include' })
     if (typeof window !== "undefined") {
       localStorage.removeItem('token')
-    }
-    if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("authchange"))
     }
     setUserName(null)
-  }
+  }, [])
 
   useEffect(() => {
     refreshUser()

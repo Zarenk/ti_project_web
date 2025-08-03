@@ -507,13 +507,13 @@ export default function Homepage() {
       </ScrollUpSection>
 
       {/* Newsletter & Contact */}
-      <ScrollUpSection className="py-20 bg-gradient-to-r from-sky-500 to-blue-600 text-white">
+      <ScrollUpSection className="py-20 bg-gradient-to-r from-blue-700 to-blue-800 text-white">
         <div className="container mx-auto px-4">
           <div className="max-w-md mx-auto text-center">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
               Suscríbete y recibe ofertas exclusivas
             </h2>
-            <p className="text-xl text-sky-100 mb-8">
+            <p className="text-xl text-blue-100 mb-8">
               Mantente al día con las últimas novedades, ofertas especiales y
               lanzamientos de productos
             </p>
@@ -530,7 +530,7 @@ export default function Homepage() {
               />
               <Button
                 type="submit"
-                className="bg-white text-sky-600 hover:bg-sky-50 px-8"
+                className="bg-white text-blue-700 hover:bg-blue-50 px-8"
               >
                 Suscribirme
               </Button>

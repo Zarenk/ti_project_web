@@ -418,7 +418,7 @@ export class EntriesService {
       const result: any[] = []
       for (const d of details) {
         const stock =
-          d.inventory?.storeOnInventory.reduce((s, i) => s + i.stock, 0) || 0
+          d.inventory?.storeOnInventory?.reduce((s, i) => s + i.stock, 0) ?? 0
         if (stock > 0) {
           result.push({
             id: d.product.id,
