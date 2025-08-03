@@ -1,8 +1,13 @@
+"use client"
+
 import Image from "next/image"
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { useCart } from "@/context/cart-context"
+import { toast } from "sonner"
 
 interface Product {
   id: number
@@ -27,6 +32,7 @@ interface Product {
 
 export default function MotionProductCard({ product }: { product: Product }) {
   const [open, setOpen] = useState(false)
+  const { addItem } = useCart()
 
   return (
     <motion.div layout onClick={() => setOpen(!open)} className="cursor-pointer">
@@ -72,6 +78,23 @@ export default function MotionProductCard({ product }: { product: Product }) {
             {product.stock !== null && product.stock > 0 ? "Stock:" : "Sin stock"}
             {product.stock !== null && product.stock > 0 && ` ${product.stock}`}
           </p>
+          {product.stock !== null && product.stock > 0 && (
+            <Button
+              className="w-full mt-2 hidden group-hover:block"
+              onClick={(e) => {
+                e.stopPropagation()
+                addItem({
+                  id: product.id,
+                  name: product.name,
+                  price: product.price,
+                  image: product.images[0],
+                })
+                toast.success("Producto agregado al carrito")
+              }}
+            >
+              Agregar al Carrito
+            </Button>
+          )}
           <AnimatePresence initial={false}>
             {open && (
               <motion.div
