@@ -5,6 +5,8 @@ import MotionProductCard from '@/components/MotionProductCard'
 import { isTokenValid } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
 import { getFavorites } from './favorite.api'
+import { Loader2 } from 'lucide-react'
+import { motion } from 'framer-motion'
 
 export default function FavoritesPage() {
   const [favorites, setFavorites] = useState<any[]>([])
@@ -35,7 +37,21 @@ export default function FavoritesPage() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-6">Mis Favoritos</h1>
         {isLoading ? (
-          <p>Cargando...</p>
+          <div className="flex flex-col items-center py-10">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+            >
+              <Loader2 className="h-10 w-10 text-primary" />
+            </motion.div>
+            <motion.p
+              className="mt-2 text-sm"
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ repeat: Infinity, duration: 2 }}
+            >
+              Cargando...
+            </motion.p>
+          </div>
         ) : favorites.length === 0 ? (
           <p>No tienes productos en favoritos.</p>
         ) : (
