@@ -9,6 +9,7 @@ export async function getFavorites() {
   const token = getToken()
   const res = await fetch('/api/favorites', {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
     cache: 'no-store',
   })
   if (!res.ok) throw new Error('Error')
@@ -21,6 +22,7 @@ export async function toggleFavorite(productId: number) {
   const res = await fetch('/api/favorites', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    credentials: 'include',
     body: JSON.stringify({ productId }),
   })
   if (!res.ok) throw new Error('Error')
@@ -33,6 +35,7 @@ export async function removeFavorite(productId: number) {
   const res = await fetch(`/api/favorites/${productId}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
+    credentials: 'include',
   })
   if (!res.ok) throw new Error('Error')
   return res.json()
