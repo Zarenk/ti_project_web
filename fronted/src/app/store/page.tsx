@@ -1,9 +1,10 @@
 "use client"
 
 import Image from "next/image"
-import { Search, Filter, Package, PackageOpen, DollarSign, Tag } from "lucide-react"
+import { Search, Filter, Package, PackageOpen, DollarSign, Tag, Loader2 } from "lucide-react"
 import Navbar from "@/components/navbar"
 import { useState, useMemo, useEffect } from "react"
+import { motion } from "framer-motion"
 import { useDebounce } from "@/app/hooks/useDebounce"
 import { useSearchParams } from "next/navigation"
 import type { CheckedState } from "@radix-ui/react-checkbox"
@@ -49,9 +50,12 @@ export default function StorePage() {
   const { addItem } = useCart()
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(12)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    let isMounted = true
     async function fetchProducts() {
+      setIsLoading(true)
       try {
         const fetchedProducts = await getProducts()
         const mapped = await Promise.all(
@@ -80,12 +84,21 @@ export default function StorePage() {
           })
         ) as Product[]
         setProducts(mapped)
+        if (isMounted) {
+          setProducts(mapped)
+        }
       } catch (error) {
         console.error("Error fetching products:", error)
-      }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+      }}     
     }
 
     fetchProducts()
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   const [searchTerm, setSearchTerm] = useState("")
@@ -370,7 +383,9 @@ export default function StorePage() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Package className="h-4 w-4" />
-                  {filteredAndSortedProducts.length} productos encontrados
+                  {isLoading
+                    ? 'Cargando...'
+                    : `${filteredAndSortedProducts.length} productos encontrados`}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -413,7 +428,23 @@ export default function StorePage() {
             </div>
 
             {/* Grid de productos */}
-            {filteredAndSortedProducts.length === 0 ? (
+            {isLoading ? (
+              <div className="flex flex-col items-center py-10">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                >
+                  <Loader2 className="h-10 w-10 text-primary" />
+                </motion.div>
+                <motion.p
+                  className="mt-2 text-sm"
+                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  transition={{ repeat: Infinity, duration: 2 }}
+                >
+                  Cargando...
+                </motion.p>
+              </div>
+            ) : filteredAndSortedProducts.length === 0 ? (
               <div className="text-center py-12">
                 <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-foreground mb-2">No se encontraron productos</h3>
