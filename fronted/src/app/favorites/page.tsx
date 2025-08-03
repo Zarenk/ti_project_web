@@ -8,6 +8,7 @@ import { getFavorites } from './favorite.api'
 
 export default function FavoritesPage() {
   const [favorites, setFavorites] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
@@ -21,6 +22,8 @@ export default function FavoritesPage() {
         setFavorites(data)
       } catch (err) {
         console.error('Error fetching favorites:', err)
+      } finally {
+        setIsLoading(false)
       }
     }
     load()
@@ -31,7 +34,9 @@ export default function FavoritesPage() {
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-6">Mis Favoritos</h1>
-        {favorites.length === 0 ? (
+        {isLoading ? (
+          <p>Cargando...</p>
+        ) : favorites.length === 0 ? (
           <p>No tienes productos en favoritos.</p>
         ) : (
           <div className="grid md:grid-cols-3 gap-6">
