@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react";
+import Image from "next/image";
 import { MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatPanel from "./ChatPanel";
@@ -38,9 +39,12 @@ export default function ChatButton() {
           </AnimatePresence>
           <button
             onClick={() => setOpen(!open)}
-            className="bg-blue-500 text-white p-4 rounded-full shadow-lg flex items-center justify-center"
+            className="relative bg-blue-500 text-white p-4 rounded-full shadow-lg flex items-center justify-center"
           >
             <MessageSquare className="w-6 h-6" />
+            <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full overflow-hidden border-2 border-white">
+              <Image src="/ti_logo_final_blanco.png" alt="Logo" width={24} height={24} className="object-cover" />
+            </span>
           </button>
         </div>
       </motion.div>
