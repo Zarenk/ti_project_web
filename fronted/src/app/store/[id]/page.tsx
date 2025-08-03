@@ -33,7 +33,6 @@ import Navbar from "@/components/navbar"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { getProduct, getProducts } from "../../dashboard/products/products.api"
 import { getReviews, submitReview } from "./reviews.api"
-
 import { toast } from "sonner"
 import { getStoresWithProduct } from "../../dashboard/inventory/inventory.api"
 import { useCart } from "@/context/cart-context"
@@ -44,7 +43,7 @@ import { getUserDataFromToken } from "@/lib/auth"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { getFavorites, toggleFavorite } from "@/app/api/favorites/favorites.api"
+import { getFavorites, toggleFavorite } from "@/app/favorites/favorite.api"
 
 interface Props {
   params: Promise<{ id: string }>

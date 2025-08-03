@@ -159,6 +159,8 @@ export default function OrderDetails() {
       }-${invoiceData.serie}-${invoiceData.number}.pdf`
     : null
 
+  const isCompleted = order.status === 'COMPLETED'
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       setFiles(Array.from(e.target.files))
@@ -471,44 +473,52 @@ export default function OrderDetails() {
                     })}
                   </div>
                 )}
-                <label
-                  htmlFor="proof-files"
-                  className="block w-full border-2 border-dashed border-blue-300 dark:border-blue-700 rounded-md p-4 text-center cursor-pointer bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-100"
-                >
-                  Seleccionar imágenes
-                </label>
-                <Input
-                  id="proof-files"
-                  type="file"
-                  multiple
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                {previewUrls.length > 0 && (
-                  <div className="flex gap-2 flex-wrap">
-                    {previewUrls.map((url, idx) => (
-                      <img
-                        key={idx}
-                        src={url}
-                        alt={`Vista previa ${idx + 1}`}
-                        className="w-20 h-20 object-cover rounded"
-                      />
-                    ))}
-                  </div>
+                {isCompleted ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Este pedido ya ha sido completado, no es posible enviar un comprobante.
+                  </p>
+                ) : (
+                  <>
+                    <label
+                      htmlFor="proof-files"
+                      className="block w-full border-2 border-dashed border-blue-300 dark:border-blue-700 rounded-md p-4 text-center cursor-pointer bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-100"
+                    >
+                      Seleccionar imágenes
+                    </label>
+                    <Input
+                      id="proof-files"
+                      type="file"
+                      multiple
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                    {previewUrls.length > 0 && (
+                      <div className="flex gap-2 flex-wrap">
+                        {previewUrls.map((url, idx) => (
+                          <img
+                            key={idx}
+                            src={url}
+                            alt={`Vista previa ${idx + 1}`}
+                            className="w-20 h-20 object-cover rounded"
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <Textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      maxLength={200}
+                      placeholder="Descripción (opcional, máximo 200 caracteres)"
+                    />
+                    <Button
+                      onClick={handleSendProof}
+                      disabled={isUploading}
+                      className="w-full bg-blue-900 hover:bg-blue-800 text-white dark:bg-blue-700 dark:hover:bg-blue-600"
+                    >
+                      {isUploading ? 'Enviando...' : 'Enviar comprobante'}
+                    </Button>
+                  </>
                 )}
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  maxLength={200}
-                  placeholder="Descripción (opcional, máximo 200 caracteres)"
-                />
-                <Button
-                  onClick={handleSendProof}
-                  disabled={isUploading}
-                  className="w-full bg-blue-900 hover:bg-blue-800 text-white dark:bg-blue-700 dark:hover:bg-blue-600"
-                >
-                  {isUploading ? 'Enviando...' : 'Enviar comprobante'}
-                </Button>
               </CardContent>
             </Card>
 

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Camera, Edit, Eye, Package, User, Calendar, Clock, Mail, Phone, MapPin } from "lucide-react"
+import { Camera, Edit, Eye, Package, User, Calendar, Clock, Mail, Phone, MapPin, Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -617,6 +617,23 @@ export default function UserPanel() {
                     <span className="text-gray-700 dark:text-gray-300 font-semibold">{orderHistory.length}</span>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+            {/* Favoritos */}
+            <Card className="shadow-lg border-0 bg-card/80 backdrop-blur-sm p-0">
+              <CardHeader className="bg-gradient-to-r from-pink-600 to-rose-600 dark:from-pink-800 dark:to-rose-800 text-white rounded-t-lg p-4">
+                <CardTitle className="flex items-center gap-2">
+                  <Heart className="h-5 w-5" />
+                  Favoritos
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <Link href="/favorites">
+                  <Button className="w-full bg-pink-600 dark:bg-pink-800 hover:bg-pink-700 dark:hover:bg-pink-900 text-white flex items-center gap-2">
+                    <Heart className="h-4 w-4" />
+                    Ver favoritos
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           </div>

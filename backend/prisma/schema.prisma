@@ -453,6 +453,19 @@ model Orders {
   sale           Sales?   @relation(fields: [salesId], references: [id])
 
   @@index([salesId])
+  OrderTracking OrderTracking[]
+}
+
+model OrderTracking {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  status      String
+  description String
+  createdAt   DateTime @default(now())
+
+  order       Orders   @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
 }
 
 model TipoCambio {

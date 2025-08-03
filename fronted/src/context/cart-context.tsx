@@ -1,7 +1,8 @@
 "use client"
 
 import { createContext, useContext, useState, ReactNode, useEffect } from "react"
-import { getUserDataFromToken } from "@/lib/auth"
+import { getAuthToken, getUserDataFromToken } from "@/lib/auth"
+import { jwtDecode } from "jwt-decode"
 
 export type CartItem = {
   id: number
@@ -26,20 +27,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cartKey, setCartKey] = useState("cart-guest")
 
     const getKey = async () => {
-      const data = await getUserDataFromToken()
-      return data ? `cart-${data.userId}` : "cart-guest"
-    }
+    const token = getAuthToken()
+    if (!token) return "cart-guest"
+    try {
+      const decoded: { userId?: number } = jwtDecode(token)
+      if (decoded.userId) return `cart-${decoded.userId}`
+    } catch {}
+    const data = await getUserDataFromToken()
+    return data ? `cart-${data.userId}` : "cart-guest"
+  }
 
     const loadCart = (key: string) => {
-      if (typeof window === "undefined") return
-      try {
-        const stored = localStorage.getItem(key)
-        setItems(stored ? (JSON.parse(stored) as CartItem[]) : [])
-      } catch {
-        // ignore read errors
-        setItems([])
-      }
+    if (typeof window === "undefined") return
+    try {
+      const stored = localStorage.getItem(key)
+      setItems(stored ? (JSON.parse(stored) as CartItem[]) : [])
+    } catch {
+      // ignore read errors
+      setItems([])
     }
+  }
   
   useEffect(() => {
     if (typeof window === "undefined") return

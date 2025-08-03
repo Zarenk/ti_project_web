@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { useState, useRef, useEffect } from "react"
-import { UserIcon } from "lucide-react"
+import { UserIcon, Heart } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCart } from "@/context/cart-context"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -83,8 +83,11 @@ export default function Navbar() {
             <Link href="/store" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Productos
             </Link>
-            <Link href="/favorites" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-              Favoritos
+            <Link
+              href="/favorites"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Heart className="h-5 w-5 transition-transform duration-200 hover:scale-110" />
             </Link>
             {userName ? (
               <Popover open={open} onOpenChange={setOpen}>

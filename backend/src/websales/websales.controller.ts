@@ -131,6 +131,11 @@ export class WebSalesController {
     return this.webSalesService.getWebOrderById(id);
   }
 
+  @Get('order/by-code/:code')
+  async findOrderByCode(@Param('code') code: string) {
+    return this.webSalesService.getWebOrderByCode(code);
+  }
+
   @Get('order/by-user/:id')
   async findOrdersByUser(@Param('id', ParseIntPipe) id: number) {
     return this.webSalesService.getWebOrdersByUser(id);

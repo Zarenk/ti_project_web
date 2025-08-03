@@ -7,7 +7,7 @@ function getToken() {
 
 export async function getFavorites() {
   const token = getToken()
-  const res = await fetch('/api/favorites', {
+  const res = await fetch('/favorites', {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     cache: 'no-store',
   })
@@ -18,7 +18,7 @@ export async function getFavorites() {
 export async function toggleFavorite(productId: number) {
   const token = getToken()
   if (!token) throw new Error('Unauthorized')
-  const res = await fetch('/api/favorites', {
+  const res = await fetch('/favorites', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ productId }),
@@ -30,7 +30,7 @@ export async function toggleFavorite(productId: number) {
 export async function removeFavorite(productId: number) {
   const token = getToken()
   if (!token) throw new Error('Unauthorized')
-  const res = await fetch(`/api/favorites/${productId}`, {
+  const res = await fetch(`/favorites/${productId}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   })

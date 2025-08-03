@@ -2,9 +2,9 @@
 import React, { useEffect, useState } from 'react'
 import Navbar from '@/components/navbar'
 import MotionProductCard from '@/components/MotionProductCard'
-import { getFavorites } from './favorites.api'
 import { isTokenValid } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
+import { getFavorites } from './favorite.api'
 
 export default function FavoritesPage() {
   const [favorites, setFavorites] = useState<any[]>([])

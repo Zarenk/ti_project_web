@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getAuthToken } from '@/lib/auth';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
@@ -201,11 +202,23 @@ export const checkSeries = async (serial: string): Promise<{ exists: boolean }> 
 //
 
 export async function getRecentEntries(limit = 5) {
-  const response = await fetch(`${BACKEND_URL}/api/entries/recent?limit=${limit}`, {
+  const token = getAuthToken();
+  const res = await fetch(`${BACKEND_URL}/api/entries/recent?limit=${limit}`, {
     cache: 'no-store',
-  })
-  if (!response.ok) {
-    throw new Error('Error al obtener los últimos ingresos')
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    credentials: 'include',
+  });
+  if (res.status === 401) {
+    return [];
   }
-  return response.json()
+  if (!res.ok) {
+    let message = 'Error al obtener los últimos ingresos';
+    try {
+      message = await res.text();
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+  return res.json();
 }

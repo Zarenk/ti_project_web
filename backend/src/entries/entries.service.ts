@@ -1,4 +1,12 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+  InternalServerErrorException,
+  HttpException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -11,6 +19,23 @@ export class EntriesService {
     private prisma: PrismaService,
     private categoryService: CategoryService,
   ) {}
+
+  private handlePrismaError(error: any): never {
+    console.error('Prisma error:', error);
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2025'
+    ) {
+      throw new NotFoundException(error.meta?.cause ?? 'No data found');
+    }
+    if (
+      error instanceof Prisma.PrismaClientInitializationError &&
+      error.errorCode === 'P1000'
+    ) {
+      throw new UnauthorizedException('Database authentication failed');
+    }
+    throw new InternalServerErrorException('Unexpected database error');
+  }
 
   // Crear una nueva entrada con detalles
   async createEntry(data: {
@@ -208,132 +233,83 @@ export class EntriesService {
       return entry;
     });
     }catch (error: any) {
-      console.error("Error en la transacción:", error);
-      throw new BadRequestException("Ocurrió un error al procesar la entrada.");
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.handlePrismaError(error);
     }
   } 
   //
 
   // Listar todas las entradas
   async findAllEntries() {
-    const entries = await this.prisma.entry.findMany({
-      include: { details: { include: { product: true, series: true, }, }, provider: true, user: true, store: true },
-    });
-    // Transformar los datos para incluir las series en cada detalle
-    const transformedEntries = entries.map((entry) => ({
-      ...entry,
-      details: entry.details.map((detail) => ({
-        ...detail,
-        product_name: detail.product.name, // Asegúrate de incluir el nombre del producto
-        series: detail.series.map((s) => s.serial), // Extraer solo los números de serie
-      })),
-    }));
+    try {
+      const entries = await this.prisma.entry.findMany({
+        include: { details: { include: { product: true, series: true, }, }, provider: true, user: true, store: true },
+      });
+      // Transformar los datos para incluir las series en cada detalle
+      const transformedEntries = entries.map((entry) => ({
+        ...entry,
+        details: entry.details.map((detail) => ({
+          ...detail,
+          product_name: detail.product.name, // Asegúrate de incluir el nombre del producto
+          series: detail.series.map((s) => s.serial), // Extraer solo los números de serie
+        })),
+      }));
 
-    return transformedEntries;
+      return transformedEntries;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.handlePrismaError(error);
+    }
   }
   //
 
   // Obtener una entrada específica por ID
   async findEntryById(id: number) {
-    const entry = await this.prisma.entry.findUnique({
-      where: { id },
-      include: { details: { include: { product: true, series: true, }, }, provider: true, user: true, store: true },
-    });
+    try {
+      const entry = await this.prisma.entry.findUnique({
+        where: { id },
+        include: { details: { include: { product: true, series: true, }, }, provider: true, user: true, store: true },
+      });
 
     if (!entry) {
       throw new NotFoundException(`La entrada con ID ${id} no existe.`);
     }
 
     // Transformar los datos para incluir las series en cada detalle
-    const transformedEntry = {
-      ...entry,
-      details: entry.details.map((detail) => ({
-        ...detail,
-        product_name: detail.product.name, // Asegúrate de incluir el nombre del producto
-        series: detail.series.map((s) => s.serial), // Extraer solo los números de serie
-      })),
-    };
+      const transformedEntry = {
+        ...entry,
+        details: entry.details.map((detail) => ({
+          ...detail,
+          product_name: detail.product.name, // Asegúrate de incluir el nombre del producto
+          series: detail.series.map((s) => s.serial), // Extraer solo los números de serie
+        })),
+      };
 
-    return transformedEntry;
+      return transformedEntry;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.handlePrismaError(error);
+    }
   }
   //
 
   //ELIMINAR ENTRADA
   async deleteEntry(id: number) {
-    const entry = await this.prisma.entry.findUnique({
-      where: { id },
-      include: { details: {include: {series:true}} },
-    });
-  
+    try {
+      const entry = await this.prisma.entry.findUnique({
+        where: { id },
+        include: { details: { include: { series: true } } },
+      });
+
     if (!entry) {
-      throw new NotFoundException(`La entrada con ID ${id} no existe.`);
-    }
-
-    // Eliminar series asociadas
-    for (const detail of entry.details) {
-      await this.prisma.entryDetailSeries.deleteMany({
-        where: { entryDetailId: detail.id },
-      });
-    }
-  
-    // Actualizar el inventario restando las cantidades de los productos
-    for (const detail of entry.details) {
-      // Verificar si el producto existe en el inventario de la tienda
-      const storeInventory = await this.prisma.storeOnInventory.findFirst({
-        where: {
-          storeId: entry.storeId,
-          inventory: { productId: detail.productId },
-        },
-      });
-
-      if (!storeInventory) {
-        throw new NotFoundException(
-          `No se encontró el inventario para el producto con ID ${detail.productId} en la tienda con ID ${entry.storeId}.`
-        );
-       }
-
-    // Actualizar el stock en StoreOnInventory
-    await this.prisma.storeOnInventory.update({
-      where: { id: storeInventory.id },
-      data: { stock: { decrement: detail.quantity } },
-    });
-
-    // Registrar el cambio en el historial
-    await this.prisma.inventoryHistory.create({
-      data: {
-        inventoryId: storeInventory.inventoryId,
-        action: "delete",
-        stockChange: -detail.quantity,
-        previousStock: storeInventory.stock,
-        newStock: storeInventory.stock - detail.quantity,
-        userId: entry.userId, // Registrar el usuario que realizó el cambio
-      },
-    });
-  }
-  
-    // Eliminar la entrada
-    return this.prisma.entry.delete({ where: { id } });
-  }
-  //
-
-  // ELIMINAR ENTRADAS
-  async deleteEntries(ids: number[]) {
-    if (!Array.isArray(ids) || ids.length === 0) {
-      throw new BadRequestException('No se proporcionaron IDs válidos para eliminar.');
-    }
-
-    // Obtener las entradas con sus detalles
-    const entries = await this.prisma.entry.findMany({
-      where: { id: { in: ids } },
-      include: { details: {include:{series: true}} },
-    });
-
-    if (entries.length === 0) {
-      throw new NotFoundException('No se encontraron entradas con los IDs proporcionados.');
-    }
-
-    // Actualizar el inventario restando las cantidades de los productos
-    for (const entry of entries) {
+        throw new NotFoundException(`La entrada con ID ${id} no existe.`);
+      }  
 
       // Eliminar series asociadas
       for (const detail of entry.details) {
@@ -375,31 +351,112 @@ export class EntriesService {
           },
         });
       }
+
+      // Eliminar la entrada
+        return this.prisma.entry.delete({ where: { id } });
+      } catch (error) {
+        if (error instanceof HttpException) {
+          throw error;
+        }
+        this.handlePrismaError(error);
+      }
     }
 
-    // Eliminar las entradas
-    const deletedEntries = await this.prisma.entry.deleteMany({
-      where: { id: { in: ids } },
-    });
+  // ELIMINAR ENTRADAS
+  async deleteEntries(ids: number[]) {
+    try {
+      if (!Array.isArray(ids) || ids.length === 0) {
+        throw new BadRequestException('No se proporcionaron IDs válidos para eliminar.');
+      }
 
-    return {
-      message: `${deletedEntries.count} entrada(s) eliminada(s) correctamente.`,
-    };
+      // Obtener las entradas con sus detalles
+      const entries = await this.prisma.entry.findMany({
+        where: { id: { in: ids } },
+        include: { details: { include: { series: true } } },
+      });
+
+      if (entries.length === 0) {
+        throw new NotFoundException('No se encontraron entradas con los IDs proporcionados.');
+      }
+
+      // Actualizar el inventario restando las cantidades de los productos
+      for (const entry of entries) {
+        // Eliminar series asociadas
+        for (const detail of entry.details) {
+          await this.prisma.entryDetailSeries.deleteMany({
+            where: { entryDetailId: detail.id },
+          });
+        }
+
+        for (const detail of entry.details) {
+          // Verificar si el producto existe en el inventario de la tienda
+          const storeInventory = await this.prisma.storeOnInventory.findFirst({
+            where: {
+              storeId: entry.storeId,
+              inventory: { productId: detail.productId },
+            },
+          });
+
+          if (!storeInventory) {
+            throw new NotFoundException(
+              `No se encontró el inventario para el producto con ID ${detail.productId} en la tienda con ID ${entry.storeId}.`
+            );
+          }
+
+          // Actualizar el stock en StoreOnInventory
+          await this.prisma.storeOnInventory.update({
+            where: { id: storeInventory.id },
+            data: { stock: { decrement: detail.quantity } },
+          });
+          // Registrar el cambio en el historial
+          await this.prisma.inventoryHistory.create({
+            data: {
+              inventoryId: storeInventory.inventoryId,
+              action: "delete",
+              stockChange: -detail.quantity,
+              previousStock: storeInventory.stock,
+              newStock: storeInventory.stock - detail.quantity,
+              userId: entry.userId, // Registrar el usuario que realizó el cambio
+            },
+          });
+        }
+      }
+
+      // Eliminar las entradas
+      const deletedEntries = await this.prisma.entry.deleteMany({
+        where: { id: { in: ids } },
+      });
+
+      return {
+        message: `${deletedEntries.count} entrada(s) eliminada(s) correctamente.`,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.handlePrismaError(error);
+    }
   }
-  //
 
   // Obtener todas las entradas de una tienda específica
   async findAllByStore(storeId: number) {
-    // Verificar que la tienda exista
-    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
-    if (!store) {
-      throw new NotFoundException(`La tienda con ID ${storeId} no existe.`);
-    }
+    try {
+      // Verificar que la tienda exista
+      const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+      if (!store) {
+        throw new NotFoundException(`La tienda con ID ${storeId} no existe.`);
+      }
 
     return this.prisma.entry.findMany({
-      where: { storeId },
-      include: { details: true, provider: true, user: true },
-    });
+        where: { storeId },
+        include: { details: true, provider: true, user: true },
+      });
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.handlePrismaError(error);
+    }
   }
   //
 
@@ -413,7 +470,7 @@ export class EntriesService {
           product: { include: { category: true } },
           inventory: { include: { storeOnInventory: true } },
         },
-      })
+      });
 
       const result: any[] = []
       for (const d of details) {
@@ -442,29 +499,43 @@ export class EntriesService {
 
   // Actualizar una entrada con un PDF
   async updateEntryPdf(entryId: number, pdfUrl: string) {
-    const entry = await this.prisma.entry.findUnique({ where: { id: entryId } });
-  
-    if (!entry) {
-      throw new NotFoundException(`La entrada con ID ${entryId} no existe.`);
+    try {
+      const entry = await this.prisma.entry.findUnique({ where: { id: entryId } });
+
+      if (!entry) {
+        throw new NotFoundException(`La entrada con ID ${entryId} no existe.`);
+      }
+
+      return this.prisma.entry.update({
+        where: { id: entryId },
+        data: { pdfUrl },
+      });
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.handlePrismaError(error);
     }
-  
-    return this.prisma.entry.update({
-      where: { id: entryId },
-      data: { pdfUrl },
-    });
   }
 
   // Actualizar una entrada con un PDF_GUIA
   async updateEntryPdfGuia(entryId: number, guiaUrl: string) {
-    const entry = await this.prisma.entry.findUnique({ where: { id: entryId } });
-  
-    if (!entry) {
-      throw new NotFoundException(`La entrada con ID ${entryId} no existe.`);
+    try {
+      const entry = await this.prisma.entry.findUnique({ where: { id: entryId } });
+
+      if (!entry) {
+        throw new NotFoundException(`La entrada con ID ${entryId} no existe.`);
+      }
+
+      return this.prisma.entry.update({
+        where: { id: entryId },
+        data: { guiaUrl },
+      });
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.handlePrismaError(error);
     }
-  
-    return this.prisma.entry.update({
-      where: { id: entryId },
-      data: { guiaUrl },
-    });
   }
 }

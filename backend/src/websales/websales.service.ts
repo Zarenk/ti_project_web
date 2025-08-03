@@ -169,6 +169,16 @@ export class WebSalesService {
     return order;
   }
 
+   async getWebOrderByCode(code: string) {
+    const order = await this.prisma.orders.findUnique({ where: { code } });
+    if (!order) {
+      throw new NotFoundException(
+        `No se encontró la orden con código ${code}.`,
+      );
+    }
+    return order;
+  }
+
   async getWebOrdersByUser(userId: number) {
     return this.prisma.orders.findMany({
       where: {

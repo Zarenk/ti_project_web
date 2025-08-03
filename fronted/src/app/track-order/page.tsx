@@ -1,0 +1,57 @@
+"use client"
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Navbar from "@/components/navbar";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { getWebOrderByCode } from "@/app/dashboard/sales/sales.api";
+
+export default function TrackOrderPage() {
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setLoading(true);
+    try {
+      const order = await getWebOrderByCode(code.trim());
+      if (order.status === "PENDING") {
+        router.push(`/pending-orders/${order.id}`);
+      } else if (order.status === "COMPLETED" && order.salesId) {
+        router.push(`/orders/${order.salesId}`);
+      } else {
+        toast.error("Orden no encontrada");
+      }
+    } catch (err) {
+      toast.error("Orden no encontrada");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
+      <Navbar />
+      <div className="container mx-auto px-4 py-8 max-w-md">
+        <h1 className="text-2xl font-bold mb-4 text-blue-900 dark:text-blue-200">
+          Seguimiento de Pedido
+        </h1>
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <Input
+            placeholder="Ingresa tu código de pedido"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className="flex-1"
+          />
+          <Button type="submit" disabled={loading}>
+            Buscar
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}

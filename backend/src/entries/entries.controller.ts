@@ -31,8 +31,8 @@ export class EntriesController {
     return this.entriesService.createEntry(body);
   }
 
-  // Endpoint para crear una nueva entrada
-  @Post()
+  // Endpoint para registrar historial de inventario
+  @Post('history')
   async createHistory(
     @Body()
     body: {
@@ -130,9 +130,13 @@ export class EntriesController {
   }
 
   // Endpoint para obtener una entrada específica por ID
-  @Get(':id')
+  @Get('by-id/:id')
   async findEntryById(@Param('id') id: string) {
-    return this.entriesService.findEntryById(Number(id));
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) {
+      throw new BadRequestException('El ID de la entrada debe ser un número válido.');
+    }
+    return this.entriesService.findEntryById(numericId);
   }
 
   @Get('store/:storeId')
