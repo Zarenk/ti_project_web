@@ -18,6 +18,15 @@ export async function buildCatalogExcel(
   items: CatalogItem[],
   outputPath: string,
 ): Promise<void> {
+  const workbook = populateWorkbook(items);
+  await workbook.xlsx.writeFile(outputPath);
+}
+
+/**
+ * Creates a workbook populated with the catalog data.
+ * @param items Data used to populate the worksheet
+ */
+function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Catalog');
 
@@ -75,7 +84,33 @@ export async function buildCatalogExcel(
     insertLogo(item.cpuLogo, 'E');
   });
 
-  await workbook.xlsx.writeFile(outputPath);
+  return workbook;
+}
+
+/**
+ * Builds an Excel catalog and returns the document as a Buffer instead of
+ * writing it to disk.
+ *
+ * @param filters Query parameters used to filter the catalog
+ * @returns Buffer containing the generated xlsx file
+ */
+export async function exportCatalogExcel(
+  filters: Record<string, any>,
+): Promise<Buffer> {
+  const items: CatalogItem[] = [
+    {
+      name: Object.keys(filters).length
+        ? JSON.stringify(filters)
+        : 'Catálogo',
+      price: 0,
+      brandLogo: '',
+      gpuLogo: '',
+      cpuLogo: '',
+    },
+  ];
+  const workbook = populateWorkbook(items);
+  const arrayBuffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 export default buildCatalogExcel;

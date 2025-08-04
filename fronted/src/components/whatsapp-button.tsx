@@ -25,7 +25,7 @@ function WhatsappButtonContent() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="fixed bottom-6 right-6 z-50"
+      className="fixed bottom-22 right-6 z-50"
     >
       <Link
         href="https://wa.me/51949426294"
@@ -45,7 +45,7 @@ function WhatsappButtonContent() {
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
               className="absolute right-full mr-2 hidden sm:block bg-green-500 text-white px-3 py-1 rounded-md shadow-lg whitespace-nowrap text-xs"
             >
-              Comunícate con nosotros
+              Comunícate con nosotros por Whatsapp
             </motion.span>
           )}
         </AnimatePresence>

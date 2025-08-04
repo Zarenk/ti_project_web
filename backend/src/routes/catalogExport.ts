@@ -3,8 +3,8 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
-import { exportCatalogPdf } from './pdfExport';
-import { exportCatalogExcel } from './excelExport';
+import { exportCatalogPdf } from '../catalog/pdfExport';
+import { exportCatalogExcel } from '../catalog/excelExport';
 
 @Controller('catalog/export')
 @UseGuards(JwtAuthGuard, RolesGuard)

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable } from "./data-table"
 import { columns, History } from "./columns"
+import { getUserHistory } from "./history.api"
 
 interface HistoryEntry {
   id: number
@@ -57,9 +58,7 @@ export default function UserHistory() {
   
       setLoading(true)
       try {
-        const res = await fetch(`http://localhost:4000/api/entries/history/users/${id}`)
-        if (!res.ok) throw new Error("Error al obtener el historial del usuario")
-        const data = await res.json()
+        const data = await getUserHistory(id)
         const mapped = data.map((entry: HistoryEntry) => ({
           id: entry.id,
           username: entry.user.username,

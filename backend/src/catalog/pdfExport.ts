@@ -31,3 +31,36 @@ export async function pdfExport(
     await browser.close();
   }
 }
+
+/**
+ * Build a simple catalog PDF using the generic {@link pdfExport} helper.
+ * The current implementation renders the provided filter values inside a
+ * basic HTML template and returns the resulting PDF as a Buffer.
+ *
+ * @param filters Query parameters used to filter the catalog.
+ * @returns Buffer containing a valid PDF document.
+ */
+export async function exportCatalogPdf(
+  filters: Record<string, any>,
+): Promise<Buffer> {
+  const template = `<!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Catálogo</title>
+    </head>
+    <body>
+      <h1>Catálogo</h1>
+      <p>Generado el {{date}}</p>
+      <pre>{{filters}}</pre>
+    </body>
+  </html>`;
+
+  return pdfExport(
+    {
+      date: new Date().toLocaleString(),
+      filters: JSON.stringify(filters, null, 2),
+    },
+    template,
+  );
+}
