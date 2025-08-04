@@ -12,6 +12,8 @@ import { ShoppingCart, Heart } from "lucide-react"
 import { toggleFavorite } from "@/app/favorites/favorite.api"
 import Link from "next/link"
 
+const MotionButton = motion(Button)
+
 interface Product {
   id: number
   name: string
@@ -147,22 +149,26 @@ export default function MotionProductCard({ product, withActions = false }: Moti
         </Link>
         {withActions && (
           <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            <Button
+            <MotionButton
               size="sm"
               onClick={handleAddToCart}
-              className="bg-sky-500 hover:bg-sky-600 text-white pointer-events-auto"
+              whileHover={{ scale: 1.1, cursor: "grab" }}
+              whileTap={{ scale: 0.95, cursor: "grabbing" }}
+              className="bg-sky-500 hover:bg-sky-600 text-white pointer-events-auto cursor-grab active:cursor-grabbing"
             >
               <ShoppingCart className="w-4 h-4 mr-1" />
               Agregar al carrito
-            </Button>
-            <Button
+            </MotionButton>
+            <MotionButton
               size="icon"
               variant="outline"
               onClick={handleToggleFavorite}
-              className={`pointer-events-auto ${isFavorite ? "text-red-500 border-red-500" : ""}`}
+              whileHover={{ scale: 1.1, cursor: "grab" }}
+              whileTap={{ scale: 0.95, cursor: "grabbing" }}
+              className={`pointer-events-auto cursor-grab active:cursor-grabbing ${isFavorite ? "text-red-500 border-red-500" : ""}`}
             >
               <Heart className={`w-4 h-4 ${isFavorite ? "fill-current" : ""}`} />
-            </Button>
+            </MotionButton>
           </div>
         )}
       </Card>

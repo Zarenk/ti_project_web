@@ -2,14 +2,20 @@ import { Controller, Get, Post, Body, Param, ParseIntPipe } from '@nestjs/common
 import { ChatService } from './chat.service';
 import { CreateChatDto } from './dto/create-chat.dto';
 import { UpdateChatDto } from './dto/update-chat.dto';
+import { ChatGateway } from './chat.gateway';
 
 @Controller('chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly chatGateway: ChatGateway,
+  ) {}
 
   @Post()
-  create(@Body() dto: CreateChatDto) {
-    return this.chatService.addMessage(dto);
+  async create(@Body() dto: CreateChatDto) {
+    const message = await this.chatService.addMessage(dto);
+    this.chatGateway.server.emit('chat:receive', message);
+    return message;
   }
 
   @Get('unanswered')

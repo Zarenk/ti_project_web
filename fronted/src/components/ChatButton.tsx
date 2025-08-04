@@ -71,7 +71,7 @@ function ChatButtonContent() {
 
   return (
     <>
-      {open && <ChatPanel onClose={() => setOpen(false)} />}
+      <AnimatePresence>{open && <ChatPanel onClose={() => setOpen(false)} />}</AnimatePresence>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

@@ -2,24 +2,27 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
-import {
-  getMessages,
-  getUnansweredMessages,
-  sendMessage,
-  getClients,
-} from './messages.api';
+import { getUnansweredMessages, sendMessage, getClients } from './messages.api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import socket, { cn } from '@/lib/utils';
+
+interface Message {
+  id: number;
+  clientId: number;
+  senderId: number;
+  text: string;
+  createdAt: string;
+}
 
 export default function Page() {
   const { userId, userName } = useAuth();
   const [clients, setClients] = useState<any[]>([]);
   const [pending, setPending] = useState<number[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
 
@@ -40,11 +43,25 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    if (selected !== null) {
-      getMessages(selected)
-        .then(setHistory)
-        .catch((err) => console.error(err));
-    }
+    if (selected === null) return;
+
+    const receiveHandler = (msg: Message) => {
+      if (msg.clientId === selected) {
+        setHistory((prev) => [...prev, msg]);
+      }
+    };
+    const historyHandler = (msgs: Message[]) => {
+      setHistory(msgs.filter((m) => m.clientId === selected));
+    };
+
+    socket.emit('chat:history', { clientId: selected });
+    socket.on('chat:receive', receiveHandler);
+    socket.on('chat:history', historyHandler);
+
+    return () => {
+      socket.off('chat:receive', receiveHandler);
+      socket.off('chat:history', historyHandler);
+    };
   }, [selected]);
 
   const handleSend = async () => {

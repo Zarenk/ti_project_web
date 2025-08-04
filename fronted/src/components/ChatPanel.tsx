@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { X, Send } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import socket, { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
 
@@ -59,7 +60,12 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
   }, [messages]);
 
   return (
-    <div className="fixed bottom-36 right-6 z-50">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="fixed bottom-36 right-6 z-50"
+    >
       <Card className="w-80 h-[400px] flex flex-col shadow-lg overflow-hidden">
         <div className="bg-blue-500 text-white p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -77,29 +83,35 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
           </Button>
         </div>
         <div className="flex-1 p-4 space-y-2 overflow-y-auto bg-background">
-          {messages.map((m, idx) => (
-            <div
-              key={idx}
-              className={cn(
-                "flex",
-                m.senderId === userId ? "justify-end" : "justify-start"
-              )}
-            >
-              <div
+          <AnimatePresence initial={false}>
+            {messages.map((m, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ duration: 0.2 }}
                 className={cn(
-                  "p-2 rounded-lg max-w-[80%]",
-                  m.senderId === userId
-                    ? "bg-blue-500 text-white"
-                    : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                  "flex",
+                  m.senderId === userId ? "justify-end" : "justify-start"
                 )}
               >
-                <p>{m.text}</p>
-                <span className="block mt-1 text-[10px] opacity-70">
-                  {new Date(m.createdAt).toLocaleTimeString()}
-                </span>
-              </div>
-            </div>
-          ))}
+                <div
+                    className={cn(
+                      "p-2 rounded-lg max-w-[80%]",
+                      m.senderId === userId
+                        ? "bg-blue-500 text-white"
+                        : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                    )}
+                  >
+                    <p>{m.text}</p>
+                    <span className="block mt-1 text-[10px] opacity-70">
+                      {new Date(m.createdAt).toLocaleTimeString()}
+                    </span>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
           <div ref={messagesEndRef} />
         </div>
         <form
@@ -117,11 +129,17 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
             className="flex-1"
             aria-label="Escribe tu mensaje"
           />
-          <Button type="submit" className="bg-blue-500 hover:bg-blue-600 text-white" aria-label="Enviar mensaje">
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.05 }}
+            type="submit"
+            className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-md"
+            aria-label="Enviar mensaje"
+          >
             <Send className="h-4 w-4" />
-          </Button>
+          </motion.button>
         </form>
       </Card>
-    </div>
+    </motion.div>
   );
 }
