@@ -15,6 +15,7 @@ import {
   ChevronUp,
   ChevronDown
 } from "lucide-react"
+import SimplePagination from "@/components/simple-pagination"
 import { SaleDetailModal } from "./components/SalesDetailModal"
 import { getRecentSalesByRange } from "../sales.api"
 import { DateRange } from "react-day-picker"
@@ -29,6 +30,12 @@ export function SalesTable({ dateRange }: Props) {
   const [sortKey, setSortKey] = useState<string>("createdAt")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [selectedSale, setSelectedSale] = useState<any | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(5)
+
+  useEffect(() => {
+    setPage(1)
+  }, [pageSize, sales.length])
 
   useEffect(() => {
     if (dateRange?.from && dateRange?.to) {
@@ -72,6 +79,8 @@ export function SalesTable({ dateRange }: Props) {
     return 0
   })
 
+  const displayedSales = sortedSales.slice((page - 1) * pageSize, page * pageSize)
+
   const getSortIcon = (key: string) => {
     if (sortKey !== key) return <ArrowUpDown className="h-4 w-4 ml-1" />
     return sortDirection === "asc"
@@ -83,7 +92,7 @@ export function SalesTable({ dateRange }: Props) {
     <div className="rounded-xl border bg-card shadow-md overflow-hidden">
       <div className="p-4 border-b">
         <h2 className="text-lg font-semibold">Últimas Ventas</h2>
-        <p className="text-sm text-muted-foreground">Top 10 ventas más recientes registradas</p>
+        <p className="text-sm text-muted-foreground">Ventas más recientes registradas</p>
       </div>
       <div className="w-full overflow-x-auto">
         <Table className="w-full text-sm">
@@ -100,8 +109,8 @@ export function SalesTable({ dateRange }: Props) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedSales.map((sale) => (
-              <TableRow key={sale.id} className="hover:bg-muted transition cursor-pointer" onClick={() => setSelectedSale(sale)}>
+            {displayedSales.map((sale) => (
+                <TableRow key={sale.id} className="hover:bg-muted transition cursor-pointer" onClick={() => setSelectedSale(sale)}>
                 <TableCell className="font-semibold">{sale.id}</TableCell>
                 <TableCell className="hidden sm:table-cell truncate">
                   {sale.source === "WEB" ? "Venta Online" : sale.user}
@@ -145,7 +154,17 @@ export function SalesTable({ dateRange }: Props) {
         </Table>
       </div>
 
+        <div className="py-2">
+          <SimplePagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={sortedSales.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+        </div>
+
       <SaleDetailModal sale={selectedSale} open={!!selectedSale} onClose={() => setSelectedSale(null)} />
-    </div>
+      </div>
   )
 }

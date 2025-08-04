@@ -551,4 +551,36 @@ export class SalesService {
     });
   }
 
+  async getSalesTransactions(from?: Date, to?: Date) {
+    const where: Prisma.SalesWhereInput = {};
+
+    if (from || to) {
+      where.createdAt = {};
+      if (from) {
+        // Greater than or equal to the start date
+        where.createdAt.gte = from;
+      }
+      if (to) {
+        // Less than or equal to the end date
+        where.createdAt.lte = to;
+      }
+    }
+
+    return this.prisma.sales.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: true,
+        payments: { include: { paymentMethod: true } },
+        salesDetails: {
+          include: {
+            entryDetail: {
+              include: { product: true },
+            },
+          },
+        },
+      },
+    });
+  }
+
 }

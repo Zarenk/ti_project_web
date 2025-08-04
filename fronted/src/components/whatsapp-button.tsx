@@ -4,9 +4,17 @@ import Link from "next/link"
 import { MessageCircle } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useState } from "react"
+import { usePathname } from "next/navigation"
+import { useAuth } from "@/context/auth-context"
 
 export default function WhatsappButton() {
   const [hovered, setHovered] = useState(false)
+  const pathname = usePathname()
+  const { role } = useAuth()
+
+  if (pathname.startsWith("/dashboard") || role !== "CLIENT") {
+    return null
+  }
 
   return (
     <motion.div

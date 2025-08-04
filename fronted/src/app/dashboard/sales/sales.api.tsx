@@ -464,3 +464,18 @@ export async function getWebSaleById(id: number | string) {
   if (!res.ok) throw new Error('Error al obtener la venta web')
   return res.json()
 }
+
+export async function getSalesTransactions(from?: string, to?: string) {
+  const qs = new URLSearchParams()
+  if (from) qs.append('from', from)
+  if (to) qs.append('to', to)
+  const token = getAuthToken()
+  const res = await fetch(
+    `${BACKEND_URL}/api/sales/transactions${qs.toString() ? `?${qs.toString()}` : ''}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    },
+  )
+  if (!res.ok) throw new Error('Error al obtener las transacciones')
+  return res.json()
+}

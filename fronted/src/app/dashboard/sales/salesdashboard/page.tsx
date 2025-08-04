@@ -12,9 +12,11 @@ import { RevenueByCategory } from "./revenue-by-category"
 import { SalesTable } from "./sales-table"
 import { SalesChart } from "./sales-chart"
 import { DateRange } from "react-day-picker"
-import { getMonthlyClientsStats, getMonthlySalesCount, getMonthlySalesTotal } from "../sales.api"
+import { getMonthlyClientsStats, getMonthlySalesCount, getMonthlySalesTotal, getSalesTransactions } from "../sales.api"
 import { TopProductsTable } from "./top-products-table"
 import { TopClientsTable } from "./top-clients-table"
+import { endOfDay } from "date-fns"
+import TransactionHistoryTable from "../components/TransactionHistoryTable"
 
 export default function SalesDashboard() {
     const [dateRange, setDateRange] = useState<DateRange>({
@@ -28,6 +30,7 @@ export default function SalesDashboard() {
     const [countGrowth, setCountGrowth] = useState<number | null>(null);
     const [monthlyClients, setMonthlyClients] = useState(0);
     const [clientGrowth, setClientGrowth] = useState<number | null>(null);
+    const [transactions, setTransactions] = useState<any[]>([]);
 
     useEffect(() => {
       const fetchMonthlySales = async () => {
@@ -65,6 +68,16 @@ export default function SalesDashboard() {
           })
           .catch(console.error);
       }, []);
+
+      useEffect(() => {
+        if (dateRange?.from && dateRange?.to) {
+          const from = dateRange.from.toISOString();
+          const to = endOfDay(dateRange.to).toISOString();
+          getSalesTransactions(from, to)
+            .then(setTransactions)
+            .catch(console.error);
+        }
+      }, [dateRange]);
 
   return (
     <div className="flex flex-col gap-5 p-6">
@@ -222,8 +235,8 @@ export default function SalesDashboard() {
               <CardTitle>Transaction History</CardTitle>
               <CardDescription>Complete record of all sales transactions</CardDescription>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Transaction history will be displayed here</p>
+            <CardContent className="overflow-x-auto">
+              <TransactionHistoryTable transactions={transactions} />
             </CardContent>
           </Card>
         </TabsContent>

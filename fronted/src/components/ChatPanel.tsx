@@ -75,13 +75,15 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
             <X className="h-5 w-5" />
           </Button>
         </div>
-        <div className="flex-1 p-4 space-y-2 overflow-y-auto bg-white">
+        <div className="flex-1 p-4 space-y-2 overflow-y-auto bg-background">
           {messages.map((m, idx) => (
             <div key={idx} className={cn("flex", m.userId === userId ? "justify-end" : "justify-start")}>
               <div
                 className={cn(
                   "p-2 rounded-lg max-w-[80%]",
-                  m.userId === userId ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-800"
+                  m.userId === userId
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
                 )}
               >
                 <p>{m.text}</p>
@@ -98,7 +100,7 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
             e.preventDefault();
             send();
           }}
-          className="p-4 border-t flex items-center gap-2 bg-white"
+          className="p-4 border-t flex items-center gap-2 bg-background"
         >
           <Input
             placeholder="Escribe tu mensaje..."

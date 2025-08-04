@@ -109,6 +109,17 @@ export class SalesController {
     return this.salesService.getTopClients(10, from, to);
   }
 
+  @Get('transactions')
+  getSalesTransactions(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.salesService.getSalesTransactions(
+      from ? new Date(from) : undefined,
+      to ? new Date(to) : undefined,
+    );
+  }
+
   @Get('my')
   @Roles('CLIENT')
   async getMySales(@Req() req) {
