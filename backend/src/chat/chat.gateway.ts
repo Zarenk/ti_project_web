@@ -1,5 +1,11 @@
-import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, OnGatewayConnection } from '@nestjs/websockets';
-import { Server } from 'socket.io';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  SubscribeMessage,
+  MessageBody,
+  OnGatewayConnection,
+} from '@nestjs/websockets';
+import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
 
 @WebSocketGateway({
@@ -14,14 +20,14 @@ export class ChatGateway implements OnGatewayConnection {
 
   constructor(private chatService: ChatService) {}
 
-  handleConnection() {
-    const history = this.chatService.getMessages();
-    this.server.emit('chat:history', history);
+  async handleConnection(client: Socket) {
+    const history = await this.chatService.getMessages();
+    client.emit('chat:history', history);
   }
 
   @SubscribeMessage('chat:send')
-  handleMessage(@MessageBody() payload: { userId: number; text: string }) {
-    const message = this.chatService.addMessage(payload);
+  async handleMessage(@MessageBody() payload: { userId: number; text: string }) {
+    const message = await this.chatService.addMessage(payload);
     this.server.emit('chat:receive', message);
   }
 }

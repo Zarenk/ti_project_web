@@ -11,6 +11,7 @@ import {
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 
 type AuthContextType = {
+  userId: number | null
   userName: string | null
   refreshUser: () => Promise<void>
   logout: () => void
@@ -20,13 +21,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string | null>(null)
+  const [userId, setUserId] = useState<number | null>(null)
 
   const refreshUser = useCallback(async () => {
     if (await isTokenValid()) {
       const data = await getUserDataFromToken()
       setUserName(data?.name ?? null)
+      setUserId(data?.userId ?? null)
     } else {
       setUserName(null)
+      setUserId(null)
     }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("authchange"))
@@ -40,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.dispatchEvent(new Event("authchange"))
     }
     setUserName(null)
+    setUserId(null)
   }, [])
 
   useEffect(() => {
@@ -47,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ userName, refreshUser, logout }}>
+    <AuthContext.Provider value={{ userId, userName, refreshUser, logout }}>
       {children}
     </AuthContext.Provider>
   )

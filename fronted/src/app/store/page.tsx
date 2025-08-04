@@ -528,24 +528,26 @@ export default function StorePage() {
                       </CardContent>
                     </Link>
 
-                    <CardFooter
-                      className="p-4 pt-0 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 transition-all"
-                    >
-                      <Button
-                        className="w-full"
-                        onClick={() => {
-                          addItem({
-                            id: product.id,
-                            name: product.name,
-                            price: product.price,
-                            image: product.images[0],
-                          })
-                          toast.success("Producto agregado al carrito")
-                        }}
+                    {product.stock !== null && product.stock > 0 && (
+                      <CardFooter
+                        className="p-4 pt-0 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 transition-all"
                       >
-                        Agregar al Carrito
-                      </Button>
-                    </CardFooter>
+                        <Button
+                          className="w-full"
+                          onClick={() => {
+                            addItem({
+                              id: product.id,
+                              name: product.name,
+                              price: product.price,
+                              image: product.images[0],
+                            })
+                            toast.success("Producto agregado al carrito")
+                          }}
+                        >
+                          Agregar al Carrito
+                        </Button>
+                      </CardFooter>
+                    )}
                   </Card>
                 ))}
               </div>

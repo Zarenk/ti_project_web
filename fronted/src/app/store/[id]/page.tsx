@@ -469,29 +469,30 @@ export default function ProductPage({ params }: Props) {
               </div>
 
               <div className="flex gap-3 mb-4">
-                <Button
-                  size="lg"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700"
-                  onClick={() => {
-                    if (product) {
-                      addItem({
-                        id: product.id,
-                        name: product.name,
-                        price: product.priceSell ?? product.price,
-                        image:
-                          product.images && product.images.length > 0
-                            ? product.images[0]
-                            : product.image,
-                        quantity,
-                      })
-                      toast.success("Producto agregado al carrito")
-                    }
-                  }}
-                  disabled={stock !== null && stock <= 0}
-                >
-                  <ShoppingCart className="w-5 h-5 mr-2" />
-                  Agregar al Carrito
-                </Button>
+                {stock !== null && stock > 0 && (
+                  <Button
+                    size="lg"
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                    onClick={() => {
+                      if (product) {
+                        addItem({
+                          id: product.id,
+                          name: product.name,
+                          price: product.priceSell ?? product.price,
+                          image:
+                            product.images && product.images.length > 0
+                              ? product.images[0]
+                              : product.image,
+                          quantity,
+                        })
+                        toast.success("Producto agregado al carrito")
+                      }
+                    }}
+                  >
+                    <ShoppingCart className="w-5 h-5 mr-2" />
+                    Agregar al Carrito
+                  </Button>
+                )}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -507,28 +508,29 @@ export default function ProductPage({ params }: Props) {
                 </Tooltip>
               </div>
 
-              <Button
-                size="lg"
-                className="w-full bg-green-600 hover:bg-green-700"
-                onClick={() => {
-                  if (product) {
-                    addItem({
-                      id: product.id,
-                      name: product.name,
-                      price: product.priceSell ?? product.price,
-                      image:
-                        product.images && product.images.length > 0
-                          ? product.images[0]
-                          : product.image,
-                      quantity,
-                    })
-                    router.push("/cart")
-                  }
-                }}
-                disabled={stock !== null && stock <= 0}
-              >
-                Comprar Ahora - Envío Gratis
-              </Button>
+              {stock !== null && stock > 0 && (
+                <Button
+                  size="lg"
+                  className="w-full bg-green-600 hover:bg-green-700"
+                  onClick={() => {
+                    if (product) {
+                      addItem({
+                        id: product.id,
+                        name: product.name,
+                        price: product.priceSell ?? product.price,
+                        image:
+                          product.images && product.images.length > 0
+                            ? product.images[0]
+                            : product.image,
+                        quantity,
+                      })
+                      router.push("/cart")
+                    }
+                  }}
+                >
+                  Comprar Ahora - Envío Gratis
+                </Button>               
+              )}
             </div>
 
             {/* Beneficios */}
@@ -874,25 +876,26 @@ export default function ProductPage({ params }: Props) {
                         </div>
                       </CardContent>
                     </Link>
-                    <CardFooter
-                      className="p-4 pt-0 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 transition-all"
-                    >
-                      <Button
-                        className="w-full"
-                        onClick={() => {
-                          addItem({
-                            id: rp.id,
-                            name: rp.name,
-                            price: rp.price,
-                            image: rp.images[0],
-                          })
-                          toast.success('Producto agregado al carrito')
-                        }}
-                        disabled={rp.stock !== null && rp.stock <= 0}
+                    {rp.stock !== null && rp.stock > 0 && (
+                      <CardFooter
+                        className="p-4 pt-0 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 transition-all"
                       >
-                        Agregar al Carrito
-                      </Button>
-                    </CardFooter>
+                      <Button
+                          className="w-full"
+                          onClick={() => {
+                            addItem({
+                              id: rp.id,
+                              name: rp.name,
+                              price: rp.price,
+                              image: rp.images[0],
+                            })
+                            toast.success('Producto agregado al carrito')
+                          }}
+                        >
+                          Agregar al Carrito
+                        </Button>
+                      </CardFooter>
+                    )}
                   </Card>
                 ))}
               </div>

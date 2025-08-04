@@ -1,22 +1,19 @@
 import { Injectable } from '@nestjs/common';
 
-interface Message {
-  userId: number;
-  text: string;
-  createdAt: Date;
-}
+import { PrismaService } from '../prisma/prisma.service';
+import { ChatMessage } from '@prisma/client';
 
 @Injectable()
 export class ChatService {
-  private messages: Message[] = [];
+  constructor(private prisma: PrismaService) {}
 
-  addMessage(message: { userId: number; text: string }): Message {
-    const msg = { ...message, createdAt: new Date() };
-    this.messages.push(msg);
-    return msg;
+  async addMessage(message: { userId: number; text: string }): Promise<ChatMessage> {
+    return this.prisma.chatMessage.create({ data: message });
   }
 
-  getMessages() {
-    return this.messages;
+  async getMessages(): Promise<ChatMessage[]> {
+    return this.prisma.chatMessage.findMany({
+      orderBy: { createdAt: 'asc' },
+    });
   }
 }

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { X, Send } from "lucide-react";
 import socket, { cn } from "@/lib/utils";
+import { useAuth } from "@/context/auth-context";
 
 interface Message {
   userId: number;
@@ -14,10 +15,17 @@ interface Message {
   createdAt: string;
 }
 
-export default function ChatPanel({ onClose }: { onClose: () => void }) {
+interface ChatPanelProps {
+  onClose: () => void;
+  userId?: number;
+}
+
+export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { userId: contextUserId } = useAuth();
+  const userId = propUserId ?? contextUserId ?? 1;
 
   useEffect(() => {
     socket.on("chat:receive", (msg: Message) => {
@@ -34,7 +42,7 @@ export default function ChatPanel({ onClose }: { onClose: () => void }) {
 
   const send = () => {
     if (text.trim()) {
-      socket.emit("chat:send", { userId: 1, text });
+      socket.emit("chat:send", { userId, text });
       setText("");
     }
   };
@@ -63,11 +71,11 @@ export default function ChatPanel({ onClose }: { onClose: () => void }) {
         </div>
         <div className="flex-1 p-4 space-y-2 overflow-y-auto bg-white">
           {messages.map((m, idx) => (
-            <div key={idx} className={cn("flex", m.userId === 1 ? "justify-end" : "justify-start")}>
+            <div key={idx} className={cn("flex", m.userId === userId ? "justify-end" : "justify-start")}>
               <div
                 className={cn(
                   "p-2 rounded-lg max-w-[80%]",
-                  m.userId === 1 ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-800"
+                  m.userId === userId ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-800"
                 )}
               >
                 <p>{m.text}</p>

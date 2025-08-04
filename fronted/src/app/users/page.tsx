@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Camera, Edit, Eye, Package, User, Calendar, Clock, Mail, Phone, MapPin, Heart } from "lucide-react"
+import { Camera, Edit, Eye, Package, User, Calendar, Clock, Mail, Phone, MapPin, Heart, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -28,6 +28,8 @@ import { getOrdersByUser } from "../dashboard/sales/sales.api"
 import Navbar from "@/components/navbar"
 import { useRouter } from "next/navigation"
 import SimplePagination from "@/components/simple-pagination"
+import { motion } from "framer-motion"
+import { getFavorites } from "../favorites/favorite.api"
 
 export default function UserPanel() {
   const [isEditing, setIsEditing] = useState(false)
@@ -38,6 +40,7 @@ export default function UserPanel() {
   const [registrationDate, setRegistrationDate] = useState<string>('')
   const [lastAccess, setLastAccess] = useState<string>('')
   const router = useRouter()
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     async function check() {
@@ -114,9 +117,21 @@ export default function UserPanel() {
     page * pageSize
   )
 
+  const [favorites, setFavorites] = useState<any[]>([])
+  const [favPage, setFavPage] = useState(1)
+  const favPageSize = 3
+  const displayedFavorites = favorites.slice(
+    (favPage - 1) * favPageSize,
+    favPage * favPageSize
+  )
+
   useEffect(() => {
     setPage(1)
   }, [pageSize, orderHistory.length])
+
+  useEffect(() => {
+    setFavPage(1)
+  }, [favorites.length])
 
   const form = useForm<UserFormType>({
     resolver: zodResolver(userSchema),
@@ -131,6 +146,7 @@ export default function UserPanel() {
 
   useEffect(() => {
     async function loadData() {
+      setIsLoading(true)
       const session = await getUserDataFromToken()
       if (!session || !(await isTokenValid())) {
         router.replace('/login')
@@ -189,12 +205,24 @@ export default function UserPanel() {
         })
 
         setOrderHistory(historyOrders)
+
+        try {
+          const favs = await getFavorites()
+          setFavorites(favs)
+        } catch (err) {
+          console.error('Error fetching favorites:', err)
+        }
+
+        const favs = await getFavorites()
+        setFavorites(favs)
       } catch (error: any) {
         if (error.message === 'Unauthorized') {
           router.push('/unauthorized')
         } else {
           console.error('Error loading user panel:', error)
         }
+      } finally {
+        setIsLoading(false)
       }
     }
     loadData()
@@ -308,12 +336,29 @@ export default function UserPanel() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-white dark:from-slate-900 dark:via-slate-950 dark:to-slate-950">
       <Navbar />
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-blue-900 dark:text-blue-200 mb-2">Panel de Usuario</h1>
-          <p className="text-blue-600 dark:text-blue-300">Gestiona tu información personal y revisa tu actividad</p>
+      {isLoading ? (
+        <div className="flex flex-col items-center py-10">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+          >
+            <Loader2 className="h-10 w-10 text-primary" />
+          </motion.div>
+          <motion.p
+            className="mt-2 text-sm"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+          >
+            Cargando...
+          </motion.p>
         </div>
+        ) : (
+        <div className="container mx-auto px-4 py-8 max-w-7xl">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-blue-900 dark:text-blue-200 mb-2">Panel de Usuario</h1>
+            <p className="text-blue-600 dark:text-blue-300">Gestiona tu información personal y revisa tu actividad</p>
+          </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column */}
@@ -627,18 +672,61 @@ export default function UserPanel() {
                   Favoritos
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6">
-                <Link href="/favorites">
-                  <Button className="w-full bg-pink-600 dark:bg-pink-800 hover:bg-pink-700 dark:hover:bg-pink-900 text-white flex items-center gap-2">
-                    <Heart className="h-4 w-4" />
-                    Ver favoritos
-                  </Button>
-                </Link>
+              <CardContent className="p-0">
+                {favorites.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                    No tienes productos en favoritos.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-pink-50 dark:bg-pink-900/50">
+                          <TableHead className="text-pink-900 dark:text-pink-100 font-semibold">Producto</TableHead>
+                          <TableHead className="text-pink-900 dark:text-pink-100 font-semibold">Precio</TableHead>
+                          <TableHead className="text-pink-900 dark:text-pink-100 font-semibold">Acción</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {favorites.slice(0, 5).map((fav) => (
+                          <TableRow key={fav.id} className="hover:bg-pink-50/50 dark:hover:bg-pink-800/50">
+                            <TableCell className="font-medium text-pink-800 dark:text-pink-200">{fav.product.name}</TableCell>
+                            <TableCell className="text-gray-700 dark:text-gray-300">
+                              S/. {(fav.product.priceSell ?? fav.product.price).toFixed(2)}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="outline"
+                                className="border-pink-300 dark:border-pink-700 text-pink-700 dark:text-pink-300 hover:bg-pink-50 dark:hover:bg-pink-800 bg-transparent"
+                              >
+                                <Link href={`/store/${fav.product.id}`} className="flex items-center">
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  Ver
+                                </Link>
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+                <div className="p-4">
+                  <Link href="/favorites">
+                    <Button className="w-full bg-pink-600 dark:bg-pink-800 hover:bg-pink-700 dark:hover:bg-pink-900 text-white flex items-center gap-2">
+                      <Heart className="h-4 w-4" />
+                      Ver todos
+                    </Button>
+                  </Link>
+                </div>
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
+    )}
     </div>
   )
 }
