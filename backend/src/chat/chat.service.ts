@@ -11,8 +11,9 @@ export class ChatService {
     return this.prisma.chatMessage.create({ data: message });
   }
 
-  async getMessages(): Promise<ChatMessage[]> {
+  async getMessages(userId: number): Promise<ChatMessage[]> {
     return this.prisma.chatMessage.findMany({
+      where: { userId },
       orderBy: { createdAt: 'asc' },
     });
   }

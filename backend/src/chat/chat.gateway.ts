@@ -4,6 +4,7 @@ import {
   SubscribeMessage,
   MessageBody,
   OnGatewayConnection,
+  ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
@@ -20,14 +21,23 @@ export class ChatGateway implements OnGatewayConnection {
 
   constructor(private chatService: ChatService) {}
 
-  async handleConnection(client: Socket) {
-    const history = await this.chatService.getMessages();
+  async handleConnection() {}
+
+  @SubscribeMessage('chat:history')
+  async handleHistory(
+    @MessageBody() data: { userId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const history = await this.chatService.getMessages(data.userId);
     client.emit('chat:history', history);
   }
 
   @SubscribeMessage('chat:send')
-  async handleMessage(@MessageBody() payload: { userId: number; text: string }) {
+  async handleMessage(
+    @MessageBody() payload: { userId: number; text: string },
+    @ConnectedSocket() client: Socket,
+  ) {
     const message = await this.chatService.addMessage(payload);
-    this.server.emit('chat:receive', message);
+    client.emit('chat:receive', message);
   }
 }

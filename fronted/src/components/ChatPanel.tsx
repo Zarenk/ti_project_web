@@ -28,17 +28,23 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
   const userId = propUserId ?? contextUserId ?? 1;
 
   useEffect(() => {
-    socket.on("chat:receive", (msg: Message) => {
-      setMessages((prev) => [...prev, msg]);
-    });
-    socket.on("chat:history", (history: Message[]) => {
-      setMessages(history);
-    });
-    return () => {
-      socket.off("chat:receive");
-      socket.off("chat:history");
+    const receiveHandler = (msg: Message) => {
+      if (msg.userId === userId) {
+        setMessages((prev) => [...prev, msg]);
+      }
     };
-  }, []);
+    const historyHandler = (history: Message[]) => {
+      setMessages(history.filter((m) => m.userId === userId));
+    };
+
+    socket.emit("chat:history", { userId });
+    socket.on("chat:receive", receiveHandler);
+    socket.on("chat:history", historyHandler);
+    return () => {
+      socket.off("chat:receive", receiveHandler);
+      socket.off("chat:history", historyHandler);
+    };
+  }, [userId]);
 
   const send = () => {
     if (text.trim()) {
