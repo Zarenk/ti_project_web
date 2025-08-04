@@ -30,6 +30,21 @@ export async function getMessages(clientId: number) {
   return res.json();
 }
 
+export async function getClients() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+  const res = await fetch(`${BACKEND_URL}/api/clients`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error('Error al obtener los clientes');
+  }
+  return res.json();
+}
+
 export async function sendMessage(data: {
   clientId: number;
   senderId: number;
