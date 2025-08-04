@@ -17,6 +17,9 @@ interface Props {
 export default function UpdateCategoryDialog({ productId, defaultCategoryId }: Props) {
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number>(defaultCategoryId);
+  const currentCategoryName = categories.find(
+    (c) => c.id === defaultCategoryId
+  )?.name;
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -66,13 +69,18 @@ export default function UpdateCategoryDialog({ productId, defaultCategoryId }: P
         <AlertDialogContent>
             <form onSubmit={handleSubmit}>
             <AlertDialogHeader>
-                <AlertDialogTitle>Actualizar Categoría</AlertDialogTitle>
-                <AlertDialogDescription>
-                Seleccione una nueva categoría para el producto.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
+                  <AlertDialogTitle>Actualizar Categoría</AlertDialogTitle>
+                  <AlertDialogDescription>
+                  Seleccione una nueva categoría para el producto.
+                  </AlertDialogDescription>
+                  {currentCategoryName && (
+                    <p className="mt-2 text-sm">
+                      Categoría Actual: "{currentCategoryName}"
+                    </p>
+                  )}
+              </AlertDialogHeader>
 
-            <div className="mt-4 space-y-2">
+              <div className="mt-4 space-y-2">
                 <div className="flex flex-col gap-2">
                     <label
                     htmlFor="category"
@@ -85,18 +93,18 @@ export default function UpdateCategoryDialog({ productId, defaultCategoryId }: P
                     onValueChange={(value) => setSelectedCategory(Number(value))}
                     >
                     <SelectTrigger id="category" className="w-full">
-                        <SelectValue placeholder="Seleccione una categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {categories.map((category) => (
-                        <SelectItem key={category.id} value={String(category.id)}>
-                            {category.name}
-                        </SelectItem>
-                        ))}
-                    </SelectContent>
-                    </Select>
-                </div>
-            </div>
+                          <SelectValue placeholder="Seleccione una categoría" />
+                      </SelectTrigger>
+                      <SelectContent side="bottom">
+                          {categories.map((category) => (
+                          <SelectItem key={category.id} value={String(category.id)}>
+                              {category.name}
+                          </SelectItem>
+                          ))}
+                      </SelectContent>
+                      </Select>
+                  </div>
+              </div>
 
             <AlertDialogFooter className="mt-6">
                 <AlertDialogCancel asChild>

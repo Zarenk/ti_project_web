@@ -176,6 +176,17 @@ const data = {
       ],
     },
     {
+      title: "Catálogo",
+      url: "/dashboard/catalog",
+      icon: Link,
+      items: [
+        {
+          title: "Exportar Catálogo",
+          url: "/dashboard/catalog",
+        },
+      ],
+    },
+    {
       title: "Ventas",
       url: "#",
       icon: ShoppingCart,

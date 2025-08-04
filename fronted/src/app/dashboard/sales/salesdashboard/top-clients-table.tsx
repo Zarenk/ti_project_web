@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { motion, AnimatePresence } from "framer-motion";
 import { DateRange } from "react-day-picker";
 import { getTopClients } from "../sales.api";
 import { ClientSalesModal } from "./components/ClientSalesModal";
@@ -56,17 +57,23 @@ export function TopClientsTable({ dateRange }: Props) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.map((c) => (
-            <TableRow
-              key={c.clientId}
-              className="hover:bg-muted cursor-pointer"
-              onClick={() => setSelected(c)}
-            >
-              <TableCell className="font-medium">{c.clientName}</TableCell>
-              <TableCell className="text-right">{c.salesCount}</TableCell>
-              <TableCell className="text-right">S/ {c.totalAmount.toFixed(2)}</TableCell>
-            </TableRow>
-          ))}
+          <AnimatePresence>
+            {data.map((c) => (
+              <motion.tr
+                key={c.clientId}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                transition={{ duration: 0.2 }}
+                className="hover:bg-muted cursor-pointer"
+                onClick={() => setSelected(c)}
+              >
+                <TableCell className="font-medium">{c.clientName}</TableCell>
+                <TableCell className="text-right">{c.salesCount}</TableCell>
+                <TableCell className="text-right">S/ {c.totalAmount.toFixed(2)}</TableCell>
+              </motion.tr>
+            ))}
+          </AnimatePresence>
         </TableBody>
       </Table>
       <ClientSalesModal client={selected} open={!!selected} onClose={() => setSelected(null)} />
