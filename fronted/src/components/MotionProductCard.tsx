@@ -1,13 +1,16 @@
 "use client"
 
 import Image from "next/image"
-import Link from "next/link"
+import { useState } from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/context/cart-context"
 import { toast } from "sonner"
+import { ShoppingCart, Heart } from "lucide-react"
+import { toggleFavorite } from "@/app/favorites/favorite.api"
+import Link from "next/link"
 
 interface Product {
   id: number
@@ -30,13 +33,48 @@ interface Product {
   }
 }
 
-export default function MotionProductCard({ product }: { product: Product }) {
+interface MotionProductCardProps {
+  product: Product
+  withActions?: boolean
+}
+
+export default function MotionProductCard({ product, withActions = false }: MotionProductCardProps) {
+
   const { addItem } = useCart()
+  const [isFavorite, setIsFavorite] = useState(false)
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    addItem({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      image: product.images[0],
+      quantity: 1,
+    })
+    toast.success("Producto agregado al carrito")
+  }
+
+  const handleToggleFavorite = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    try {
+      await toggleFavorite(product.id)
+      setIsFavorite((prev) => !prev)
+      toast.success(
+        isFavorite ? "Eliminado de favoritos" : "Agregado a favoritos",
+      )
+    } catch (err) {
+      console.error("Error toggling favorite:", err)
+      toast.error("No se pudo actualizar favoritos")
+    }
+  }
 
   return (
     <motion.div layout>
-      <Link href={`/store/${product.id}`} className="block">
-        <Card className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border">
+      <Card className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border">
+        <Link href={`/store/${product.id}`} className="block">
           <CardHeader className="p-0">
             <div className="relative overflow-hidden rounded-t-lg">
               <Image
@@ -54,16 +92,16 @@ export default function MotionProductCard({ product }: { product: Product }) {
                 {product.category}
               </Badge>
             </div>
-            <h3 className="font-semibold text-base sm:text-lg mb-1 break-words whitespace-normal">
-              {product.name}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-              {product.description}
-            </p>
-            <span className="text-sm text-muted-foreground mb-2 block">
-              {product.brand}
-            </span>
-          <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-base sm:text-lg mb-1 break-words whitespace-normal">
+                {product.name}
+              </h3>
+              <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                {product.description}
+              </p>
+              <span className="text-sm text-muted-foreground mb-2 block">
+                {product.brand}
+              </span>
+            <div className="flex items-center justify-between">
               <span className="text-2xl font-bold text-green-600">
                 S/.{product.price.toFixed(2)}
               </span>
@@ -106,8 +144,28 @@ export default function MotionProductCard({ product }: { product: Product }) {
               )}
             </div>
           </CardContent>
-        </Card>
-      </Link>
+        </Link>
+        {withActions && (
+          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            <Button
+              size="sm"
+              onClick={handleAddToCart}
+              className="bg-sky-500 hover:bg-sky-600 text-white pointer-events-auto"
+            >
+              <ShoppingCart className="w-4 h-4 mr-1" />
+              Agregar al carrito
+            </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={handleToggleFavorite}
+              className={`pointer-events-auto ${isFavorite ? "text-red-500 border-red-500" : ""}`}
+            >
+              <Heart className={`w-4 h-4 ${isFavorite ? "fill-current" : ""}`} />
+            </Button>
+          </div>
+        )}
+      </Card>
     </motion.div>
   )
 }
