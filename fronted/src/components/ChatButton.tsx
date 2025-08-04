@@ -16,17 +16,22 @@ interface Message {
 }
 
 export default function ChatButton() {
-  const [open, setOpen] = useState(false);
-  const [hovered, setHovered] = useState(false);
   const pathname = usePathname();
   const { role } = useAuth();
-  const [unread, setUnread] = useState(0);
-  const { userId: contextUserId } = useAuth();
-  const userId = contextUserId ?? 1;
 
   if (pathname.startsWith("/dashboard") || role !== "CLIENT") {
     return null;
   }
+
+  return <ChatButtonContent />;
+}
+
+function ChatButtonContent() {
+  const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const { userId: contextUserId } = useAuth();
+  const userId = contextUserId ?? 1;
 
   useEffect(() => {
     const handleReceive = (msg: Message) => {

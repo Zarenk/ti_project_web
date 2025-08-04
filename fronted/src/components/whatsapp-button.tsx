@@ -8,13 +8,18 @@ import { usePathname } from "next/navigation"
 import { useAuth } from "@/context/auth-context"
 
 export default function WhatsappButton() {
-  const [hovered, setHovered] = useState(false)
   const pathname = usePathname()
   const { role } = useAuth()
 
   if (pathname.startsWith("/dashboard") || role !== "CLIENT") {
     return null
   }
+
+  return <WhatsappButtonContent />
+}
+
+function WhatsappButtonContent() {
+  const [hovered, setHovered] = useState(false)
 
   return (
     <motion.div
