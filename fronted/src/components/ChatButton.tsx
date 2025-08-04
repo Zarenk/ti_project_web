@@ -10,7 +10,8 @@ import { useAuth } from "@/context/auth-context";
 import { usePathname } from "next/navigation";
 
 interface Message {
-  userId: number;
+  clientId: number;
+  senderId: number;
   text: string;
   createdAt: string;
 }
@@ -35,7 +36,7 @@ function ChatButtonContent() {
 
   useEffect(() => {
     const handleReceive = (msg: Message) => {
-      if (msg.userId === userId && !open) {
+      if (msg.clientId === userId && msg.senderId !== userId && !open) {
         setUnread((prev) => prev + 1);
       }
     };
@@ -43,13 +44,16 @@ function ChatButtonContent() {
       if (!open) {
         const lastRead = Number(localStorage.getItem("chatLastRead") || 0);
         const count = history.filter(
-          (m) => m.userId === userId && new Date(m.createdAt).getTime() > lastRead
+          (m) =>
+            m.clientId === userId &&
+            m.senderId !== userId &&
+            new Date(m.createdAt).getTime() > lastRead
         ).length;
         setUnread(count);
       }
     };
 
-    socket.emit("chat:history", { userId });
+    socket.emit("chat:history", { clientId: userId });
     socket.on("chat:receive", handleReceive);
     socket.on("chat:history", handleHistory);
     return () => {
@@ -96,7 +100,7 @@ function ChatButtonContent() {
             whileHover={{ scale: 1.1, rotate: 6 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setOpen(!open)}
-            className="relative bg-blue-500 text-white p-4 rounded-full shadow-lg flex items-center justify-center group-hover:animate-bounce"
+            className="relative bg-blue-500 text-white p-4 rounded-full shadow-lg flex items-center justify-center group-hover:animate-bounce cursor-pointer"
           >
             <MessageSquare className="w-6 h-6" />
             {unread > 0 ? (

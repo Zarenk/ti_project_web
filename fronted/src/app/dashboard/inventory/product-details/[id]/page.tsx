@@ -6,13 +6,14 @@ export const dynamic = "force-dynamic"; // ensure fresh data on each request
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams?: { [key: string]: string };
+  searchParams?: Promise<{ [key: string]: string }>;
 }
 
 export default async function ProductDetails({ params, searchParams }: Props) {
 
   const resolvedParams = await params; // ✅ igual que en categorías
   const id = resolvedParams.id;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
 
   const [inventoryData, stockDetailsData, purchasePrices, productEntries] = await Promise.all([
     getInventoryWithCurrency(),
@@ -80,6 +81,7 @@ export default async function ProductDetails({ params, searchParams }: Props) {
     inventoryId: product.id,
     name: product.product.name,
     category: product.product.category.name,
+    categoryId: product.product.category.id,
     priceSell: product.product.priceSell,
     createdAt,
     updateAt,
@@ -89,11 +91,13 @@ export default async function ProductDetails({ params, searchParams }: Props) {
     storeOnInventory: aggregatedStoreOnInventory,
   };
 
-  return <ProductDetailsPage 
-  product={productFormatted} 
-  stockDetails={stockDetails} 
-  entries={productEntries} 
-  series={series}
-  searchParams={searchParams}
-  />;
+  return (
+    <ProductDetailsPage
+      product={productFormatted}
+      stockDetails={stockDetails}
+      entries={productEntries}
+      series={series}
+      searchParams={resolvedSearchParams}
+    />
+  );
 }

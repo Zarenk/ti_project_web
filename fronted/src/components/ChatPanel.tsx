@@ -10,7 +10,8 @@ import socket, { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
 
 interface Message {
-  userId: number;
+  clientId: number;
+  senderId: number;
   text: string;
   createdAt: string;
 }
@@ -29,15 +30,15 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
 
   useEffect(() => {
     const receiveHandler = (msg: Message) => {
-      if (msg.userId === userId) {
+      if (msg.clientId === userId) {
         setMessages((prev) => [...prev, msg]);
       }
     };
     const historyHandler = (history: Message[]) => {
-      setMessages(history.filter((m) => m.userId === userId));
+      setMessages(history.filter((m) => m.clientId === userId));
     };
 
-    socket.emit("chat:history", { userId });
+    socket.emit("chat:history", { clientId: userId });
     socket.on("chat:receive", receiveHandler);
     socket.on("chat:history", historyHandler);
     return () => {
@@ -48,7 +49,7 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
 
   const send = () => {
     if (text.trim()) {
-      socket.emit("chat:send", { userId, text });
+      socket.emit("chat:send", { clientId: userId, senderId: userId, text });
       setText("");
     }
   };
@@ -77,11 +78,17 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
         </div>
         <div className="flex-1 p-4 space-y-2 overflow-y-auto bg-background">
           {messages.map((m, idx) => (
-            <div key={idx} className={cn("flex", m.userId === userId ? "justify-end" : "justify-start")}>
+            <div
+              key={idx}
+              className={cn(
+                "flex",
+                m.senderId === userId ? "justify-end" : "justify-start"
+              )}
+            >
               <div
                 className={cn(
                   "p-2 rounded-lg max-w-[80%]",
-                  m.userId === userId
+                  m.senderId === userId
                     ? "bg-blue-500 text-white"
                     : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
                 )}
