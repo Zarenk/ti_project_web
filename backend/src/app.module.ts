@@ -28,13 +28,15 @@ import { ChatModule } from './chat/chat.module';
 import { FavoritesModule } from './favorites/favorites.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { OrdertrackingModule } from './ordertracking/ordertracking.module';
+import { CatalogexportModule } from './catalogexport/catalogexport.module';
+import { CatalogExportController } from './routes/catalogExport';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
     ProductsModule, UsersModule, CategoryModule, StoresModule, 
-    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule, WebsalesModule, ContactModule, ChatModule, FavoritesModule, NewsletterModule, OrdertrackingModule],
-  controllers: [AppController],
+    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule, WebsalesModule, ContactModule, ChatModule, FavoritesModule, NewsletterModule, OrdertrackingModule, CatalogexportModule],
+  controllers: [AppController, CatalogExportController],
   providers: [AppService, BarcodeGateway],
 })
 export class AppModule {}
