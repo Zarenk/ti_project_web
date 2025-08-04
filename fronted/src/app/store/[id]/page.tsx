@@ -241,6 +241,12 @@ export default function ProductPage({ params }: Props) {
         )
       : 0
 
+  const averageRating =
+    reviews.length > 0
+      ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length
+      : 0
+  const roundedRating = Math.round(averageRating)
+
   async function handleReviewSubmit() {
     if (!userData) return
     const token = localStorage.getItem('token')
@@ -379,9 +385,18 @@ export default function ProductPage({ params }: Props) {
               <div className="flex items-center gap-4 mb-4">
                 <div className="flex items-center gap-1">
                   {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                    <Star
+                      key={i}
+                      className={`w-5 h-5 ${
+                        i < roundedRating
+                          ? "fill-yellow-400 text-yellow-400"
+                          : "text-gray-300"
+                      }`}
+                    />
                   ))}
-                  <span className="text-sm text-gray-600 dark:text-gray-400 ml-2">(4.9) • 2,847 reseñas</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400 ml-2">
+                    ({averageRating.toFixed(1)}) • {reviews.length} reseñas
+                  </span>
                 </div>
               </div>
             </div>
@@ -396,7 +411,7 @@ export default function ProductPage({ params }: Props) {
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
                   {product?.description}
                 </p>
-                {hasSpecs && (
+                {hasSpecs ? (
                   <div className="flex items-center gap-4 mt-4">
                     <div className="flex items-center gap-2">
                       <Cpu className="w-5 h-5 text-blue-500" />
@@ -415,6 +430,10 @@ export default function ProductPage({ params }: Props) {
                       <span className="text-sm font-medium">{currentConfig.specs.graphics}</span>
                     </div>
                   </div>
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-4">
+                    Especificaciones no disponibles
+                  </p>
                 )}
               </div>
             </div>
@@ -639,9 +658,9 @@ export default function ProductPage({ params }: Props) {
 
                 <Card>
                   <CardContent className="p-6">
-                    <h3 className="text-xl font-bold mb-4">Descripción del Producto</h3>
+                    <h3 className="text-xl font-bold mb-4">Especificaciones</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {product?.description}
+                      Especificaciones no disponibles
                     </p>
                   </CardContent>
                 </Card>

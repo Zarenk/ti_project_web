@@ -25,19 +25,23 @@ export class ChatGateway implements OnGatewayConnection {
 
   @SubscribeMessage('chat:history')
   async handleHistory(
-    @MessageBody() data: { userId: number },
+    @MessageBody() data: { clientId: number },
     @ConnectedSocket() client: Socket,
   ) {
-    const history = await this.chatService.getMessages(data.userId);
+    const history = await this.chatService.getMessages(data.clientId);
     client.emit('chat:history', history);
   }
 
   @SubscribeMessage('chat:send')
   async handleMessage(
-    @MessageBody() payload: { userId: number; text: string },
+    @MessageBody() payload: {
+      clientId: number;
+      senderId: number;
+      text: string;
+    },
     @ConnectedSocket() client: Socket,
   ) {
     const message = await this.chatService.addMessage(payload);
-    client.emit('chat:receive', message);
+    this.server.emit('chat:receive', message);
   }
 }

@@ -115,7 +115,8 @@ model User {
   cashTransactions CashTransaction[] // Relación con la tabla de transacciones de caja
   cashClosures     CashClosure[] // Relación con la tabla de cierres de caja
   reviews       Review[]
-  chatMessages  ChatMessage[] // Relación con el modelo ChatMessage
+  clientMessages ChatMessage[] @relation("ClientMessages")
+  sentMessages   ChatMessage[] @relation("SenderMessages")
   favorites     Favorite[]
 
   @@index([email])
@@ -616,13 +617,16 @@ model Review {
 
 model ChatMessage {
   id        Int      @id @default(autoincrement())
-  userId    Int
+  clientId  Int
+  senderId  Int
   text      String
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id])
+  client User @relation("ClientMessages", fields: [clientId], references: [id])
+  sender User @relation("SenderMessages", fields: [senderId], references: [id])
 
-  @@index([userId])
+  @@index([clientId])
+  @@index([senderId])
 }
 
 model Favorite {
