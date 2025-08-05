@@ -22,17 +22,32 @@ function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
     doc.on('data', (b) => buffers.push(b));
     doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-    items.forEach((item) => {
-      doc.fontSize(16).text(item.name);
-      if (item.description) {
-        doc.moveDown(0.5);
-        doc.fontSize(12).text(item.description);
-      }
-      if (item.price) {
-        doc.moveDown(0.25);
-        doc.fontSize(12).text(`Price: ${item.price}`);
-      }
+    const grouped = items.reduce<Record<string, CatalogItem[]>>((acc, item) => {
+      const category = item.categoryName || 'Sin categoría';
+      if (!acc[category]) acc[category] = [];
+      acc[category].push(item);
+      return acc;
+    }, {});
+
+    const entries = Object.entries(grouped);
+    entries.forEach(([category, items], idx) => {
+      doc.fontSize(18).text(category);
       doc.moveDown();
+      items.forEach((item) => {
+        doc.fontSize(16).text(item.name);
+        if (item.description) {
+          doc.moveDown(0.5);
+          doc.fontSize(12).text(item.description);
+        }
+        if (item.price) {
+          doc.moveDown(0.25);
+          doc.fontSize(12).text(`Price: ${item.price}`);
+        }
+        doc.moveDown();
+      });
+      if (idx < entries.length - 1) {
+        doc.addPage();
+      }
     });
 
     doc.end();
@@ -42,6 +57,6 @@ function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
 export async function exportCatalogPdf(
   filters: Record<string, any>,
 ): Promise<Buffer> {
-  const items = getCatalogItems(filters);
+  const items = await getCatalogItems(filters);
   return itemsToPdf(items);
 }

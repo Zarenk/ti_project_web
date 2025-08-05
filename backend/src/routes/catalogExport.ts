@@ -20,14 +20,21 @@ export class CatalogExportController {
     if (format === 'pdf') {
       const buffer = await exportCatalogPdf(filters);
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename="catalog.pdf"');
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename="catalog.pdf"',
+      );
       res.send(buffer);
     } else if (format === 'excel') {
-      // You need to fetch or build the products array here; this is a placeholder example:
-      const products: { name: string; price: number }[] = []; // Replace with actual data source
-      const buffer = await exportCatalogExcel(products);
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', 'attachment; filename="catalog.xlsx"');
+      const { buffer } = await exportCatalogExcel(filters);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename="catalog.xlsx"',
+      );
       res.send(buffer);
     } else {
       res.status(400).send('Formato no soportado');
