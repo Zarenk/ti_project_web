@@ -6,6 +6,8 @@ export interface CatalogItemProps {
   price?: string
   imageUrl?: string
   logos?: string[]
+  brand?: string
+  logoUrls?: string[]
 }
 
 export function CatalogItem({
@@ -14,6 +16,7 @@ export function CatalogItem({
   price,
   imageUrl,
   logos,
+  logoUrls,
 }: CatalogItemProps) {
   return (
     <div className="catalog-item flex flex-col overflow-hidden rounded-lg bg-white shadow-md transition-shadow hover:shadow-lg">

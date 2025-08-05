@@ -76,6 +76,7 @@ export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
         onOpenChange={setOpen}
         title="Categorías"
         description="Busca y selecciona"
+        draggable
       >
         <CommandInput placeholder="Buscar categoría" />
         <div className="flex items-center justify-between px-3 py-2 text-sm">
