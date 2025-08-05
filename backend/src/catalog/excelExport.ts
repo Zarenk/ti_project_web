@@ -1,13 +1,8 @@
 import path from 'path';
 import ExcelJS from 'exceljs';
-
-export interface CatalogItem {
-  name: string;
-  price: number;
-  brandLogo: string; // path to image file
-  gpuLogo: string; // path to image file
-  cpuLogo: string; // path to image file
-}
+import type { CatalogItem } from './catalogData';
+import { getCatalogItems } from './catalogData';
+import { renderCatalogHtml } from './pdfExport';
 
 /**
  * Builds an Excel catalog file with styled headers, formatted cells and logos.
@@ -60,23 +55,23 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
     const rowNumber = row.number;
     const insertLogo = (file: string, column: string) => {
       if (!file) return;
-      // Only allow supported extensions for ExcelJS
-      const ext = path.extname(file).slice(1).toLowerCase();
-      let excelExt: 'jpeg' | 'png' | 'gif';
-      if (ext === 'jpg' || ext === 'jpeg') {
-        excelExt = 'jpeg';
-      } else if (ext === 'png') {
-        excelExt = 'png';
-      } else if (ext === 'gif') {
-        excelExt = 'gif';
-      } else {
-        throw new Error(`Unsupported image extension: ${ext}`);
+      try {
+        // Only allow supported extensions for ExcelJS
+        const ext = path.extname(file).slice(1).toLowerCase();
+        let excelExt: 'jpeg' | 'png' | 'gif';
+        if (ext === 'jpg' || ext === 'jpeg') {
+          excelExt = 'jpeg';
+        } else if (ext === 'png') {
+          excelExt = 'png';
+        } else if (ext === 'gif') {
+          excelExt = 'gif';
+        } else {
+          // Skip unsupported formats (e.g. svg)
+          return;
+        }
+      } catch {
+        // Ignore logos that cannot be inserted
       }
-      const imageId = workbook.addImage({
-        filename: file,
-        extension: excelExt,
-      });
-      worksheet.addImage(imageId, `${column}${rowNumber}:${column}${rowNumber}`);
     };
 
     insertLogo(item.brandLogo, 'C');
@@ -95,19 +90,15 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
  * @returns Buffer containing the generated xlsx file
  */
 export async function exportCatalogExcel(
-  filters: Record<string, any>,
+  products: { name: string; price: number }[],
 ): Promise<Buffer> {
-  const items: CatalogItem[] = [
-    {
-      name: Object.keys(filters).length
-        ? JSON.stringify(filters)
-        : 'Catálogo',
-      price: 0,
-      brandLogo: '',
-      gpuLogo: '',
-      cpuLogo: '',
-    },
-  ];
+  const items: CatalogItem[] = products.map((p) => ({
+    name: p.name,
+    price: p.price,
+    brandLogo: '',
+    gpuLogo: '',
+    cpuLogo: '',
+  }));
   const workbook = populateWorkbook(items);
   const arrayBuffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(arrayBuffer);

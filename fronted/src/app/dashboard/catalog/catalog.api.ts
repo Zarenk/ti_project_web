@@ -6,7 +6,8 @@ export async function exportCatalog(format: 'pdf' | 'excel', params: Record<stri
   const qs = new URLSearchParams({ format });
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null) {
-      qs.append(key, String(value));
+      const serialized = Array.isArray(value) ? value.join(',') : String(value);
+      qs.append(key, serialized);
     }
   }
 
@@ -21,4 +22,12 @@ export async function exportCatalog(format: 'pdf' | 'excel', params: Record<stri
   }
 
   return res.blob();
+}
+
+export async function getCategories() {
+  const res = await fetch(`${BACKEND_URL}/api/category`, { cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error('Error al obtener las categorías');
+  }
+  return res.json();
 }

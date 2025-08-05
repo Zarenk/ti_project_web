@@ -30,6 +30,7 @@ import { NewsletterModule } from './newsletter/newsletter.module';
 import { OrdertrackingModule } from './ordertracking/ordertracking.module';
 import { CatalogexportModule } from './catalogexport/catalogexport.module';
 import { CatalogExportController } from './routes/catalogExport';
+import { PrismaService } from './prisma/prisma.service';
 
 @Module({
   imports: [
@@ -37,6 +38,6 @@ import { CatalogExportController } from './routes/catalogExport';
     ProductsModule, UsersModule, CategoryModule, StoresModule, 
     ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule, WebsalesModule, ContactModule, ChatModule, FavoritesModule, NewsletterModule, OrdertrackingModule, CatalogexportModule],
   controllers: [AppController, CatalogExportController],
-  providers: [AppService, BarcodeGateway],
+  providers: [AppService, BarcodeGateway, PrismaService],
 })
 export class AppModule {}

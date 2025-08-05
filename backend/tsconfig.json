@@ -17,6 +17,7 @@
     "esModuleInterop": true,
     "strict": true,
     "moduleResolution": "node",
+    "jsx": "react-jsx",
     "module": "commonjs",
     //
     "skipLibCheck": true,

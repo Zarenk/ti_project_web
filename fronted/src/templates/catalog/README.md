@@ -10,6 +10,10 @@ Este directorio contiene componentes de React reutilizables para renderizar cat�
 - Usa clases de TailwindCSS para el estilo; evita estilos en línea salvo que sea imprescindible para exportación.
 - Los archivos siguen convención *kebab-case* y exportan componentes nombrados.
 
+## Tipos de imagen admitidos
+
+Los logos deben proporcionarse en formato **JPEG**, **PNG** o **GIF**. Los archivos **SVG** u otros formatos no compatibles se omiten durante la exportación.
+
 ## Ejemplo de uso
 
 ```ts

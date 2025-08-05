@@ -11,6 +11,7 @@ import socket, { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
 
 interface Message {
+  id: number;
   clientId: number;
   senderId: number;
   text: string;
@@ -84,9 +85,9 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
         </div>
         <div className="flex-1 p-4 space-y-2 overflow-y-auto bg-background">
           <AnimatePresence initial={false}>
-            {messages.map((m, idx) => (
+            {messages.map((m) => (
               <motion.div
-                key={idx}
+                key={m.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
