@@ -1,6 +1,7 @@
 "use client";
 
 import { renderToStaticMarkup } from "react-dom/server";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CatalogTemplate } from "@/templates/catalog/catalog-template";
 import type { CatalogItemProps } from "@/templates/catalog/catalog-item";
 import { brandAssets } from "@/catalog/brandAssets";
@@ -64,10 +65,17 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
   const html = renderToStaticMarkup(<CatalogTemplate items={items} />);
 
   return (
-    <iframe
-      className="w-full h-[600px] rounded-xl border shadow-sm"
-      srcDoc={html}
-    />
+    <Card>
+      <CardHeader>
+        <CardTitle>Vista previa del catálogo</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <iframe
+          className="w-full h-[600px] rounded-xl border shadow-sm"
+          srcDoc={html}
+        />
+      </CardContent>
+    </Card>
   );
 }
 

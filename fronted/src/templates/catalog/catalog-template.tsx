@@ -22,8 +22,8 @@ export function CatalogTemplate({
         />
         <style>{`body { font-family: 'Inter', sans-serif; }`}</style>
       </head>
-      <body className="bg-gray-50 p-6">
-        <main className="catalog-grid grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <body className="bg-gray-100 p-6">
+        <main className="catalog-grid mx-auto grid max-w-7xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item, index) => (
             <CatalogItem key={index} {...item} />
           ))}
