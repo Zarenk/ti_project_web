@@ -1,8 +1,6 @@
 import path from 'path';
 import ExcelJS from 'exceljs';
 import type { CatalogItem } from './catalogData';
-import { getCatalogItems } from './catalogData';
-import { renderCatalogHtml } from './pdfExport';
 
 /**
  * Builds an Excel catalog file with styled headers, formatted cells and logos.
@@ -69,14 +67,35 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
           // Skip unsupported formats (e.g. svg)
           return;
         }
+
+        const imageId = workbook.addImage({ filename: file, extension: excelExt });
+        const colNumber = worksheet.getColumn(column).number;
+        const tl: ExcelJS.Anchor = {
+          col: colNumber - 1,
+          row: rowNumber - 1,
+          nativeCol: colNumber - 1,
+          nativeRow: rowNumber - 1,
+          nativeColOff: 0,
+          nativeRowOff: 0,
+        };
+        const br: ExcelJS.Anchor = {
+          col: colNumber,
+          row: rowNumber,
+          nativeCol: colNumber,
+          nativeRow: rowNumber,
+          nativeColOff: 0,
+          nativeRowOff: 0,
+        };
+        worksheet.addImage(imageId, { tl, br, editAs: 'oneCell' });
+
       } catch {
         // Ignore logos that cannot be inserted
       }
     };
 
-    insertLogo(item.brandLogo, 'C');
-    insertLogo(item.gpuLogo, 'D');
-    insertLogo(item.cpuLogo, 'E');
+    insertLogo(item.brandLogo ?? '', 'C');
+    insertLogo(item.gpuLogo ?? '', 'D');
+    insertLogo(item.cpuLogo ?? '', 'E');
   });
 
   return workbook;

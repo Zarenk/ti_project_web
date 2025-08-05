@@ -3,6 +3,7 @@ import { renderToString } from 'react-dom/server';
 import CatalogTemplate from './catalog-template';
 import type { CatalogItem } from './catalogData';
 import { getCatalogItems } from './catalogData';
+import PDFDocument from 'pdfkit';
 
 export function renderCatalogHtml(items: CatalogItem[]): string {
   const templateItems = items.map((item) => ({
@@ -14,26 +15,33 @@ export function renderCatalogHtml(items: CatalogItem[]): string {
   return renderToString(<CatalogTemplate items={templateItems} />);
 }
 
-async function htmlToPdf(html: string): Promise<Buffer> {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
+  return new Promise((resolve) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const buffers: Buffer[] = [];
+    doc.on('data', (b) => buffers.push(b));
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
+
+    items.forEach((item) => {
+      doc.fontSize(16).text(item.name);
+      if (item.description) {
+        doc.moveDown(0.5);
+        doc.fontSize(12).text(item.description);
+      }
+      if (item.price) {
+        doc.moveDown(0.25);
+        doc.fontSize(12).text(`Price: ${item.price}`);
+      }
+      doc.moveDown();
+    });
+
+    doc.end();
   });
-  try {
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdf = await page.pdf({ format: 'A4' });
-    await page.close();
-    return pdf;
-  } finally {
-    await browser.close();
-  }
 }
 
 export async function exportCatalogPdf(
   filters: Record<string, any>,
 ): Promise<Buffer> {
   const items = getCatalogItems(filters);
-  const html = renderCatalogHtml(items);
-  return htmlToPdf(html);
+  return itemsToPdf(items);
 }

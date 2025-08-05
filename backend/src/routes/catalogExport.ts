@@ -23,7 +23,9 @@ export class CatalogExportController {
       res.setHeader('Content-Disposition', 'attachment; filename="catalog.pdf"');
       res.send(buffer);
     } else if (format === 'excel') {
-      const { buffer } = await exportCatalogExcel(filters);
+      // You need to fetch or build the products array here; this is a placeholder example:
+      const products: { name: string; price: number }[] = []; // Replace with actual data source
+      const buffer = await exportCatalogExcel(products);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', 'attachment; filename="catalog.xlsx"');
       res.send(buffer);
