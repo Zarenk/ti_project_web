@@ -15,10 +15,15 @@ export function CatalogTemplate({
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
-        <title>{title}</title>
+        <script src="https://cdn.tailwindcss.com" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+        <style>{`body { font-family: 'Inter', sans-serif; }`}</style>
       </head>
-      <body>
-        <main className="catalog-grid grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <body className="bg-gray-50 p-6">
+        <main className="catalog-grid grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item, index) => (
             <CatalogItem key={index} {...item} />
           ))}

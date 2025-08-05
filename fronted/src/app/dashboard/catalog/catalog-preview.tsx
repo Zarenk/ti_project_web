@@ -31,7 +31,12 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
 
   const html = renderToStaticMarkup(<CatalogTemplate items={items} />);
 
-  return <iframe className="w-full h-96 border" srcDoc={html} />;
+  return (
+    <iframe
+      className="w-full h-[600px] rounded-xl border shadow-sm"
+      srcDoc={html}
+    />
+  );
 }
 
 export default CatalogPreview;
