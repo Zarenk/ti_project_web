@@ -1,6 +1,6 @@
 import path from 'path';
 import ExcelJS from 'exceljs';
-import type { CatalogItem } from './catalogData';
+import { getCatalogItems, type CatalogItem } from './catalogData';
 
 /**
  * Builds an Excel catalog file with styled headers, formatted cells and logos.
@@ -70,22 +70,14 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
 
         const imageId = workbook.addImage({ filename: file, extension: excelExt });
         const colNumber = worksheet.getColumn(column).number;
-        const tl: ExcelJS.Anchor = {
+        const tl = new (ExcelJS as any).Anchor(worksheet, {
           col: colNumber - 1,
           row: rowNumber - 1,
-          nativeCol: colNumber - 1,
-          nativeRow: rowNumber - 1,
-          nativeColOff: 0,
-          nativeRowOff: 0,
-        };
-        const br: ExcelJS.Anchor = {
+        });
+        const br = new (ExcelJS as any).Anchor(worksheet, {
           col: colNumber,
           row: rowNumber,
-          nativeCol: colNumber,
-          nativeRow: rowNumber,
-          nativeColOff: 0,
-          nativeRowOff: 0,
-        };
+        });
         worksheet.addImage(imageId, { tl, br, editAs: 'oneCell' });
 
       } catch {
@@ -109,18 +101,12 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
  * @returns Buffer containing the generated xlsx file
  */
 export async function exportCatalogExcel(
-  products: { name: string; price: number }[],
-): Promise<Buffer> {
-  const items: CatalogItem[] = products.map((p) => ({
-    name: p.name,
-    price: p.price,
-    brandLogo: '',
-    gpuLogo: '',
-    cpuLogo: '',
-  }));
+  filters: Record<string, any>,
+): Promise<{ buffer: Buffer }> {
+  const items: CatalogItem[] = getCatalogItems(filters);
   const workbook = populateWorkbook(items);
   const arrayBuffer = await workbook.xlsx.writeBuffer();
-  return Buffer.from(arrayBuffer);
+  return { buffer: Buffer.from(arrayBuffer) };
 }
 
 export default buildCatalogExcel;
