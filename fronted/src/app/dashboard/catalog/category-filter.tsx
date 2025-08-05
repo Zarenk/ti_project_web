@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
+import { X, Tag } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   CommandItem,
   CommandEmpty,
 } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { getCategories } from "./catalog.api";
 
 interface Category {
@@ -62,6 +63,11 @@ export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
         })}
         <Button variant="outline" onClick={() => setOpen(true)}>
           Seleccionar categorías
+          {selected.length > 0 && (
+            <span className="ml-2 text-muted-foreground">
+              ({selected.length})
+            </span>
+          )}
         </Button>
       </div>
 
@@ -72,7 +78,19 @@ export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
         description="Busca y selecciona"
       >
         <CommandInput placeholder="Buscar categoría" />
-        <CommandList>
+        <div className="flex items-center justify-between px-3 py-2 text-sm">
+          <span>Seleccionadas: {selected.length}</span>
+          {selected.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onChange([])}
+            >
+              Limpiar
+            </Button>
+          )}
+        </div>
+        <CommandList className="grid gap-2 p-2">
           <CommandEmpty>No se encontraron resultados.</CommandEmpty>
           <AnimatePresence>
             {categories.map((cat) => (
@@ -82,14 +100,23 @@ export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
                 <CommandItem
                   value={cat.name}
                   onSelect={() => toggle(cat.id)}
-                  className="flex items-center gap-2"
+                  className={cn(
+                    "flex items-center justify-between rounded-md border p-2",
+                    selected.includes(cat.id) &&
+                      "bg-accent text-accent-foreground"
+                  )}
                 >
+                  <div className="flex items-center gap-2">
+                    <Tag className="size-4" />
+                    <span>{cat.name}</span>
+                  </div>
                   <Checkbox checked={selected.includes(cat.id)} />
-                  <span>{cat.name}</span>
                 </CommandItem>
               </motion.div>
             ))}

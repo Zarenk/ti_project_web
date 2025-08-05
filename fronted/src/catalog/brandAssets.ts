@@ -9,6 +9,7 @@ export const brandAssets: BrandAssets = {
   brands: {
     apple: '/assets/logos/apple.svg',
     dell: '/assets/logos/dell.svg',
+    hp: '/assets/logos/hp.svg',
   },
   gpus: {
     nvidia: '/assets/logos/nvidia.svg',

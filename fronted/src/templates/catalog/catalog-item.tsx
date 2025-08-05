@@ -5,6 +5,7 @@ export interface CatalogItemProps {
   description?: string
   price?: string
   imageUrl?: string
+  logos?: string[]
 }
 
 export function CatalogItem({
@@ -12,6 +13,7 @@ export function CatalogItem({
   description,
   price,
   imageUrl,
+  logos,
 }: CatalogItemProps) {
   return (
     <div className="catalog-item flex flex-col overflow-hidden rounded-lg bg-white shadow-md transition-shadow hover:shadow-lg">
@@ -30,6 +32,13 @@ export function CatalogItem({
           <p className="text-sm text-gray-600">{description}</p>
         )}
         {price && <p className="text-sm font-bold text-gray-900">{price}</p>}
+        {logos && logos.length > 0 && (
+          <div className="flex justify-center gap-2">
+            {logos.map((logo, idx) => (
+              <img key={idx} src={logo} alt="logo" className="h-6" />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
