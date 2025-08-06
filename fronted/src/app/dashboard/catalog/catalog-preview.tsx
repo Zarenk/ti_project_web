@@ -15,6 +15,10 @@ interface Product {
   imageUrl?: string;
   images?: string[];
   brand?: string;
+  category?: {
+    id: number;
+    name: string;
+  };
   specification?: {
     processor?: string;
     graphics?: string;
@@ -54,28 +58,39 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     return logos;
   }
 
-  const items: CatalogItemProps[] = products.map((p) => {
+  const grouped: Record<string, CatalogItemProps[]> = {};
+  for (const p of products) {
     const priceValue = p.priceSell ?? p.price;
-    return {
+    const item: CatalogItemProps = {
       title: p.name,
       description: p.description,
-      price: typeof priceValue === 'number' ? formatPrice(priceValue) : undefined,
+      price: typeof priceValue === "number" ? formatPrice(priceValue) : undefined,
       imageUrl: p.imageUrl ?? p.image ?? p.images?.[0],
       logos: getLogos(p),
     };
-  });
+  const catName = p.category?.name || "Sin categoría";
+    grouped[catName] = grouped[catName] ? [...grouped[catName], item] : [item];
+  }
+  const categories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Vista previa del catálogo</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="catalog-grid mx-auto grid max-w-7xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((item, index) => (
-            <CatalogItem key={index} {...item} />
-          ))}
-        </div>
+      <CardContent className="space-y-8">
+        {categories.map((cat) => (
+          <div key={cat}>
+            <h2 className="mb-4 text-xl font-semibold">{cat}</h2>
+            <div className="catalog-grid mx-auto grid max-w-7xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {grouped[cat]
+                .sort((a, b) => a.title.localeCompare(b.title))
+                .map((item, index) => (
+                  <CatalogItem key={index} {...item} />
+                ))}
+            </div>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );
