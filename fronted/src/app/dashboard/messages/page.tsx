@@ -49,22 +49,17 @@ export default function Page() {
   useEffect(() => {
     if (selected === null) return;
 
+    setHistory([]); // Reset history when switching clients
+
     const receiveHandler = (msg: Message) => {
       if (msg.clientId === selected) {
         setHistory((prev) =>
-          prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+          prev.some((m) => m.id === msg.id) ? prev : [...prev, msg],
         );
       }
     };
     const historyHandler = (msgs: Message[]) => {
-      setHistory((prev) => {
-        const filtered = msgs.filter((m) => m.clientId === selected);
-        const byId = new Map<number, Message>();
-        // Merge existing messages to preserve already rendered items
-        prev.forEach((m) => byId.set(m.id, m));
-        filtered.forEach((m) => byId.set(m.id, m));
-        return Array.from(byId.values());
-      });
+      setHistory(msgs); // Replace history with server response
     };
 
     socket.emit('chat:history', { clientId: selected });
