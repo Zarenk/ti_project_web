@@ -134,12 +134,13 @@ export default function Page() {
     );
   const clientMap = new Map(clients.map((c: any) => [c.userId, c.name]));
   const clientInfo = clients.find((c: any) => c.userId === selected);
+  const isActive = clientInfo?.status === 'Activo';
 
   return (
-    <section className="p-4 space-y-4">
+    <section className="p-4 space-y-4 h-[calc(100vh-8rem)] flex flex-col">
       <h1 className="text-2xl font-bold">Mensajes</h1>
-      <div className="flex flex-col md:flex-row gap-4">
-        <Card className="w-full md:w-1/3 flex flex-col">
+      <div className="flex flex-1 flex-col md:flex-row gap-4">
+        <Card className="w-full md:w-1/3 flex flex-col h-full">
           <div className="p-4 border-b flex items-center justify-between">
             <h2 className="text-lg font-semibold">Conversaciones</h2>
             <div className="flex gap-2">
@@ -204,7 +205,7 @@ export default function Page() {
             ))}
           </ul>
         </Card>
-        <div className="flex-1">
+        <div className="flex-1 h-full">
           {selected === null ? (
             <Card className="h-96 flex items-center justify-center p-4">
               <p className="text-muted-foreground">
@@ -212,7 +213,7 @@ export default function Page() {
               </p>
             </Card>
           ) : (
-            <Card className="h-96 flex flex-col">
+            <Card className="h-full flex flex-col">
               <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-gradient-to-r from-primary/80 to-primary shadow-sm">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-10 w-10">
@@ -225,11 +226,22 @@ export default function Page() {
                     )}
                   </Avatar>
                   <div className="flex flex-col">
-                    <span className="font-medium">
+                    <span className="font-medium text-blue-600 dark:text-blue-400">
                       {clientMap.get(selected) || 'Usuario'}
                     </span>
-                    <span className="text-xs text-muted-foreground flex items-center">
-                      <span className="mr-1 h-2 w-2 rounded-full bg-green-500" />Activo
+                    <span
+                      className={cn(
+                        'text-xs flex items-center',
+                        isActive ? 'text-green-600' : 'text-red-600'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'mr-1 h-2 w-2 rounded-full',
+                          isActive ? 'bg-green-500' : 'bg-red-500'
+                        )}
+                      />
+                      {isActive ? 'Activo' : 'Inactivo'}
                     </span>
                   </div>
                 </div>

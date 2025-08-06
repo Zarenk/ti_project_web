@@ -7,6 +7,9 @@ export interface CatalogItem {
   price: number;
   description?: string;
   imageUrl?: string;
+  brand?: string;
+  gpu?: string;
+  cpu?: string;
   brandLogo?: string;
   gpuLogo?: string;
   cpuLogo?: string;
@@ -27,11 +30,13 @@ export async function getCatalogItems(
     where: {
       categoryId: categories ? { in: categories } : undefined,
     },
-  select: {
+    select: {
       name: true,
       price: true,
       description: true,
       images: true,
+      brand: true,
+      specification: { select: { processor: true, graphics: true } },
       category: { select: { name: true } },
     },
     orderBy: [
@@ -45,6 +50,9 @@ export async function getCatalogItems(
     price: p.price,
     description: p.description ?? undefined,
     imageUrl: p.images[0] ?? undefined,
+    brand: p.brand ?? undefined,
+    cpu: p.specification?.processor ?? undefined,
+    gpu: p.specification?.graphics ?? undefined,
     categoryName: p.category?.name,
   }));
 }

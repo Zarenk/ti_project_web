@@ -25,10 +25,12 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
 
   worksheet.columns = [
     { header: 'Nombre', key: 'name', width: 30 },
+    { header: 'Descripción', key: 'description', width: 40 },
     { header: 'Precio', key: 'price', width: 15 },
     { header: 'Marca', key: 'brand', width: 15 },
     { header: 'GPU', key: 'gpu', width: 15 },
     { header: 'CPU', key: 'cpu', width: 15 },
+    { header: 'Categoría', key: 'categoryName', width: 20 },
   ];
 
   const headerRow = worksheet.getRow(1);
@@ -44,11 +46,17 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
   items.forEach((item) => {
     const row = worksheet.addRow({
       name: item.name,
+      description: item.description,
       price: item.price,
+      brand: item.brand,
+      gpu: item.gpu,
+      cpu: item.cpu,
+      categoryName: item.categoryName,
     });
 
     row.getCell('price').numFmt = '#,##0.00';
     row.height = 60;
+    row.alignment = { vertical: 'top', wrapText: true } as any;
 
     const rowNumber = row.number;
     const insertLogo = (file: string, column: string) => {
@@ -85,9 +93,9 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
       }
     };
 
-    insertLogo(item.brandLogo ?? '', 'C');
-    insertLogo(item.gpuLogo ?? '', 'D');
-    insertLogo(item.cpuLogo ?? '', 'E');
+    insertLogo(item.brandLogo ?? '', 'D');
+    insertLogo(item.gpuLogo ?? '', 'E');
+    insertLogo(item.cpuLogo ?? '', 'F');
   });
 
   return workbook;

@@ -31,17 +31,35 @@ function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
 
     const entries = Object.entries(grouped);
     entries.forEach(([category, items], idx) => {
+      if (doc.y > doc.page.height - doc.page.margins.bottom - 50) {
+        doc.addPage();
+      }
       doc.fontSize(18).text(category);
       doc.moveDown();
       items.forEach((item) => {
-        doc.fontSize(16).text(item.name);
+        if (doc.y > doc.page.height - doc.page.margins.bottom - 60) {
+          doc.addPage();
+        }
+        doc
+          .fontSize(16)
+          .text(item.name, {
+            width:
+              doc.page.width -
+              doc.page.margins.left -
+              doc.page.margins.right,
+          });
         if (item.description) {
           doc.moveDown(0.5);
           doc.fontSize(12).text(item.description);
         }
         if (item.price) {
           doc.moveDown(0.25);
-          doc.fontSize(12).text(`Price: ${item.price}`);
+          doc.fontSize(12).text(item.description, {
+            width:
+              doc.page.width -
+              doc.page.margins.left -
+              doc.page.margins.right,
+          });
         }
         doc.moveDown();
       });
