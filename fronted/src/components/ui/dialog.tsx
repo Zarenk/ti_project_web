@@ -105,6 +105,7 @@ function DialogContent({
           {...props}
         >
           <motion.div
+            layoutRoot
             drag
             dragConstraints={constraints}
             dragElastic={0}
