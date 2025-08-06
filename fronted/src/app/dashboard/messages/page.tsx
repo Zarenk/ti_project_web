@@ -47,7 +47,9 @@ export default function Page() {
 
     const receiveHandler = (msg: Message) => {
       if (msg.clientId === selected) {
-        setHistory((prev) => [...prev, msg]);
+        setHistory((prev) =>
+          prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+        );
       }
     };
     const historyHandler = (msgs: Message[]) => {
