@@ -22,23 +22,26 @@ export class ChatService {
     });
   }
 
+  async markAsSeen(clientId: number, viewerId: number, seenAt: Date) {
+    await this.prisma.chatMessage.updateMany({
+      where: { clientId, senderId: { not: viewerId }, seenAt: null },
+      data: { seenAt },
+    });
+  }
+
   async getUnansweredMessages(): Promise<{ clientId: number; count: number }[]> {
-    const clients = await this.prisma.chatMessage.groupBy({ by: ['clientId'] });
-    const counts: { clientId: number; count: number }[] = [];
-    for (const { clientId } of clients) {
-      const lastAdmin = await this.prisma.chatMessage.findFirst({
-        where: { clientId, senderId: { not: clientId } },
-        orderBy: { createdAt: 'desc' },
-      });
-      const count = await this.prisma.chatMessage.count({
-        where: {
-          clientId,
-          senderId: clientId,
-          ...(lastAdmin && { createdAt: { gt: lastAdmin.createdAt } }),
-        },
-      });
-      if (count > 0) counts.push({ clientId, count });
+    const messages = await this.prisma.chatMessage.findMany({
+      where: { seenAt: null },
+    });
+    const counts: Record<number, number> = {};
+    for (const m of messages) {
+      if (m.senderId === m.clientId) {
+        counts[m.clientId] = (counts[m.clientId] ?? 0) + 1;
+      }
     }
-    return counts;
+    return Object.entries(counts).map(([clientId, count]) => ({
+      clientId: Number(clientId),
+      count,
+    }));
   }
 }

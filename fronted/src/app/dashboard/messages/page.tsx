@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { getUnansweredMessages, sendMessage, getClients } from './messages.api';
+import { getUnansweredMessages, sendMessage, getClients, getMessages } from './messages.api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { AlertCircle, Eye, X, Filter, ArrowUpDown } from 'lucide-react';
 import socket, { cn } from '@/lib/utils';
 
 interface Message {
@@ -16,6 +17,7 @@ interface Message {
   senderId: number;
   text: string;
   createdAt: string;
+  seenAt?: string | null;
 }
 
 export default function Page() {
@@ -26,6 +28,8 @@ export default function Page() {
   const [history, setHistory] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+   const [lastMessages, setLastMessages] = useState<Record<number, Message | null>>({});
 
   useEffect(() => {
     const load = async () => {
@@ -39,6 +43,15 @@ export default function Page() {
         );
         setPendingCounts(counts);
         setClients(allClients);
+
+        const lastEntries = await Promise.all(
+          allClients.map(async (c: any) => {
+            const msgs = await getMessages(c.userId);
+            return [c.userId, msgs[msgs.length - 1] ?? null] as const;
+          })
+        );
+        setLastMessages(Object.fromEntries(lastEntries));
+
       } catch (err) {
         console.error(err);
       }
@@ -50,6 +63,7 @@ export default function Page() {
     if (selected === null) return;
 
     setHistory([]); // Reset history when switching clients
+    setPendingCounts((prev) => ({ ...prev, [selected]: 0 }));
 
     const receiveHandler = (msg: Message) => {
       if (msg.clientId === selected) {
@@ -61,16 +75,39 @@ export default function Page() {
     const historyHandler = (msgs: Message[]) => {
       setHistory(msgs); // Replace history with server response
     };
+    const seenHandler = ({ clientId, viewerId, seenAt }: any) => {
+      if (clientId !== selected) return;
+      if (viewerId === userId) {
+        setHistory((prev) =>
+          prev.map((m) =>
+            m.senderId !== userId && !m.seenAt ? { ...m, seenAt } : m
+          ),
+        );
+      } else {
+        setHistory((prev) =>
+          prev.map((m) =>
+            m.senderId === userId && !m.seenAt ? { ...m, seenAt } : m
+          ),
+        );
+      }
+    };
 
     socket.emit('chat:history', { clientId: selected });
+    socket.emit('chat:seen', { clientId: selected, viewerId: userId });
     socket.on('chat:receive', receiveHandler);
     socket.on('chat:history', historyHandler);
+    socket.on('chat:seen', seenHandler);
 
     return () => {
       socket.off('chat:receive', receiveHandler);
       socket.off('chat:history', historyHandler);
+      socket.off('chat:seen', seenHandler);
     };
   }, [selected]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [history]);
 
   const handleSend = async () => {
     if (!userId || selected === null || !text.trim()) return;
@@ -96,12 +133,24 @@ export default function Page() {
         (pendingCounts[b.userId] ?? 0) - (pendingCounts[a.userId] ?? 0)
     );
   const clientMap = new Map(clients.map((c: any) => [c.userId, c.name]));
+  const clientInfo = clients.find((c: any) => c.userId === selected);
 
   return (
     <section className="p-4 space-y-4">
       <h1 className="text-2xl font-bold">Mensajes</h1>
       <div className="flex flex-col md:flex-row gap-4">
         <Card className="w-full md:w-1/3 flex flex-col">
+          <div className="p-4 border-b flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Conversaciones</h2>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="icon" aria-label="Filtrar">
+                <Filter className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" aria-label="Ordenar">
+                <ArrowUpDown className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
           <div className="p-4 border-b">
             <Input
               placeholder="Buscar cliente..."
@@ -115,21 +164,40 @@ export default function Page() {
                 <button
                   onClick={() => setSelected(c.userId)}
                   className={cn(
-                    'w-full px-4 py-2 text-left hover:bg-muted',
-                    selected === c.userId && 'bg-muted'
+                    'w-full px-4 py-3 text-left transition-transform bg-gradient-to-r from-background to-muted hover:shadow-md hover:scale-105',
+                    selected === c.userId && 'from-primary/10 to-primary/5'
                   )}
                 >
-                  <div className="flex items-center justify-between">
-                    <span>{c.name}</span>
-                    {pendingCounts[c.userId] > 0 && (
-                      <Badge
-                        variant="destructive"
-                        className="flex items-center gap-1"
-                      >
-                        <AlertCircle className="h-4 w-4" />
-                        {pendingCounts[c.userId]}
-                      </Badge>
-                    )}
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={c.image || '/placeholder.svg'}
+                        alt={c.name}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                      <div className="flex flex-col text-left">
+                        <span className="font-medium">{c.name}</span>
+                        <span className="text-sm text-muted-foreground truncate max-w-[160px]">
+                          {lastMessages[c.userId]?.text || 'Sin mensajes'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-xs text-muted-foreground">
+                        {lastMessages[c.userId]?.createdAt
+                          ? new Date(lastMessages[c.userId]!.createdAt).toLocaleTimeString()
+                          : ''}
+                      </span>
+                      {pendingCounts[c.userId] > 0 && (
+                        <Badge
+                          variant="destructive"
+                          className="flex items-center gap-1"
+                        >
+                          <AlertCircle className="h-4 w-4" />
+                          {pendingCounts[c.userId]}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </button>
               </li>
@@ -145,6 +213,46 @@ export default function Page() {
             </Card>
           ) : (
             <Card className="h-96 flex flex-col">
+              <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-gradient-to-r from-primary/80 to-primary shadow-sm">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-10 w-10">
+                    {clientInfo?.image ? (
+                      <AvatarImage src={clientInfo.image} />
+                    ) : (
+                      <AvatarFallback>
+                        {clientMap.get(selected)?.[0] || '?'}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                  <div className="flex flex-col">
+                    <span className="font-medium">
+                      {clientMap.get(selected) || 'Usuario'}
+                    </span>
+                    <span className="text-xs text-muted-foreground flex items-center">
+                      <span className="mr-1 h-2 w-2 rounded-full bg-green-500" />Activo
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="bg-white text-primary hover:bg-primary hover:text-primary-foreground"
+                    onClick={() => {
+                      /* TODO: implement view profile navigation */
+                    }}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="destructive"
+                    onClick={() => setSelected(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </header>
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {history.map((m) => (
                   <div
@@ -162,7 +270,7 @@ export default function Page() {
                           : 'bg-muted'
                       )}
                     >
-                    <p className="text-xs mb-1">
+                      <p className="text-xs mb-1">
                         <span className="font-medium">
                           {m.senderId === userId
                             ? userName || 'Tú'
@@ -173,9 +281,15 @@ export default function Page() {
                         </span>
                       </p>
                       <p>{m.text}</p>
+                      {m.senderId === userId && m.seenAt && (
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          Visto {new Date(m.seenAt).toLocaleTimeString()}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
+                <div ref={bottomRef} />
               </div>
               <div className="p-4 border-t flex gap-2">
                 <Input

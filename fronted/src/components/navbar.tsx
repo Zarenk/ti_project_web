@@ -3,7 +3,18 @@
 import Image from "next/image"
 import Link from "next/link"
 import { useState, useRef, useEffect } from "react"
-import { UserIcon, Heart, Menu } from "lucide-react"
+import {
+  UserIcon,
+  Heart,
+  Menu,
+  Home,
+  HelpCircle,
+  Phone,
+  ShoppingBag,
+  LogOut,
+  LogIn,
+  UserPlus,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCart } from "@/context/cart-context"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -11,7 +22,14 @@ import CartSheet from "@/components/cart-sheet"
 import TopBanner from "./top-banner"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet"
+import {
+  Sheet,
+  SheetTrigger,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet"
 import { useAuth } from "@/context/auth-context"
 import { useTheme } from "next-themes"
 
@@ -52,6 +70,14 @@ export default function Navbar() {
     logout()
     router.push("/login")
   }
+
+  const navLinks = [
+    { href: "/", label: "Inicio", icon: Home },
+    { href: "/faq", label: "FAQ", icon: HelpCircle },
+    { href: "/contact", label: "Contacto", icon: Phone },
+    { href: "/store", label: "Productos", icon: ShoppingBag },
+    { href: "/favorites", label: "Favoritos", icon: Heart },
+  ]
 
   return (
     <>
@@ -162,41 +188,58 @@ export default function Navbar() {
                   <span className="sr-only">Open menu</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="p-4">
-                <nav className="flex flex-col gap-4">
-                  <Link href="/" className="text-sm font-medium">
-                    Inicio
-                  </Link>
-                  <Link href="/faq" className="text-sm font-medium">
-                    FAQ
-                  </Link>
-                  <Link href="/contact" className="text-sm font-medium">
-                    Contacto
-                  </Link>
-                  <Link href="/store" className="text-sm font-medium">
-                    Productos
-                  </Link>
+              <SheetContent
+                side="left"
+                className="p-0 bg-background/95 backdrop-blur-md"
+              >
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Menú</SheetTitle>
+                  <SheetDescription>Navegación principal</SheetDescription>
+                </SheetHeader>
+                <div className="flex h-full flex-col">
+                  <nav className="flex-1 px-6 py-6 space-y-1">
+                    {navLinks.map(({ href, label, icon: Icon }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        className="flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground hover:pl-4"
+                      >
+                        <Icon className="h-4 w-4" />
+                        {label}
+                      </Link>
+                    ))}
+                  </nav>
                   {userName ? (
-                    <>
+                    <div className="border-t px-6 py-4 space-y-3">
                       <span className="text-sm font-medium">{userName}</span>
-                      <Button onClick={handleLogout} variant="outline">
+                      <Button
+                        onClick={handleLogout}
+                        variant="outline"
+                        className="w-full justify-start gap-2"
+                      >
+                        <LogOut className="h-4 w-4" />
                         Cerrar Sesión
                       </Button>
-                    </>
+                    </div>
                   ) : (
-                    <>
-                      <Link href="/login" className="text-sm font-medium">
+                    <div className="border-t px-6 py-4 space-y-2">
+                      <Link
+                        href="/login"
+                        className="flex items-center gap-2 text-sm font-medium transition-colors hover:text-sky-600"
+                      >
+                        <LogIn className="h-4 w-4" />
                         Iniciar Sesión
                       </Link>
-                      <Link href="/register" className="text-sm font-medium">
+                      <Link
+                        href="/register"
+                        className="flex items-center gap-2 text-sm font-medium transition-colors hover:text-sky-600"
+                      >
+                        <UserPlus className="h-4 w-4" />
                         Registrarse
                       </Link>
-                    </>
+                    </div>
                   )}
-                  <Link href="/favorites" className="text-sm font-medium">
-                    Favoritos
-                  </Link>
-                </nav>
+                  </div>
               </SheetContent>
             </Sheet>
           </div>

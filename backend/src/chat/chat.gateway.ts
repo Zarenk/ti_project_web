@@ -44,4 +44,17 @@ export class ChatGateway implements OnGatewayConnection {
     const message = await this.chatService.addMessage(payload);
     this.server.emit('chat:receive', message);
   }
+
+  @SubscribeMessage('chat:seen')
+  async handleSeen(
+    @MessageBody() data: { clientId: number; viewerId: number },
+  ) {
+    const seenAt = new Date();
+    await this.chatService.markAsSeen(data.clientId, data.viewerId, seenAt);
+    this.server.emit('chat:seen', {
+      clientId: data.clientId,
+      viewerId: data.viewerId,
+      seenAt,
+    });
+  }
 }

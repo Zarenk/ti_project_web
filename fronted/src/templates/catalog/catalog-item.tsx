@@ -38,7 +38,7 @@ export function CatalogItem({
         {logos && logos.length > 0 && (
           <div className="flex flex-wrap justify-center gap-2 pt-2 border-t">
             {logos.map((logo, idx) => (
-              <img key={idx} src={logo} alt="logo" className="h-6" />
+              <img key={idx} src={logo} alt="logo" className="h-36" />
             ))}
           </div>
         )}

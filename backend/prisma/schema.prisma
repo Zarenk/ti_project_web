@@ -621,6 +621,7 @@ model ChatMessage {
   senderId  Int
   text      String
   createdAt DateTime @default(now())
+  seenAt    DateTime?
 
   client User @relation("ClientMessages", fields: [clientId], references: [id])
   sender User @relation("SenderMessages", fields: [senderId], references: [id])

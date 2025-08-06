@@ -4,11 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { X, Send } from "lucide-react";
+import { X, Send, Paperclip } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import socket, { cn } from "@/lib/utils";
+import socket from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
+import MessageBubble from "./MessageBubble";
+import TypingIndicator from "./TypingIndicator";
 
 interface Message {
   id: number;
@@ -16,6 +19,8 @@ interface Message {
   senderId: number;
   text: string;
   createdAt: string;
+  seenAt?: string | null;
+  file?: string;
 }
 
 interface ChatPanelProps {
@@ -26,6 +31,8 @@ interface ChatPanelProps {
 export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { userId: contextUserId } = useAuth();
   const userId = propUserId ?? contextUserId ?? 1;
@@ -36,24 +43,79 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
         setMessages((prev) => [...prev, msg]);
       }
     };
+
     const historyHandler = (history: Message[]) => {
-      setMessages(history.filter((m) => m.clientId === userId));
+      const chatHistory = history.filter((m) => m.clientId === userId);
+      if (chatHistory.length === 0) {
+        const welcome: Message = {
+          id: Date.now(),
+          clientId: userId,
+          senderId: 0,
+          text: "Bienvenido al chat de Tecnología Informática EIRL. Un asesor te responderá en breve. Por favor, mantén la cordialidad y proporciona detalles de tu consulta para ofrecerte una atención eficiente.",
+          createdAt: new Date().toISOString(),
+        };
+        setMessages([welcome]);
+      } else {
+        setMessages(chatHistory);
+      }
+    };
+
+    const seenHandler = ({ clientId, viewerId, seenAt }: any) => {
+      if (clientId !== userId) return;
+      if (viewerId === userId) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.senderId !== userId && !m.seenAt ? { ...m, seenAt } : m
+          )
+        );
+      } else {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.senderId === userId && !m.seenAt ? { ...m, seenAt } : m
+          )
+        );
+      }
     };
 
     socket.emit("chat:history", { clientId: userId });
+    socket.emit("chat:seen", { clientId: userId, viewerId: userId });
     socket.on("chat:receive", receiveHandler);
     socket.on("chat:history", historyHandler);
+    socket.on("chat:seen", seenHandler);
     return () => {
       socket.off("chat:receive", receiveHandler);
       socket.off("chat:history", historyHandler);
+      socket.off("chat:seen", seenHandler);
     };
   }, [userId]);
 
   const send = () => {
-    if (text.trim()) {
-      socket.emit("chat:send", { clientId: userId, senderId: userId, text });
+    if (text.trim() || preview) {
+      socket.emit("chat:send", {
+        clientId: userId,
+        senderId: userId,
+        text,
+        file: preview,
+      });
       setText("");
+      setFile(null);
+      setPreview(null);
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (selected) {
+      setFile(selected);
+      const reader = new FileReader();
+      reader.onload = () => setPreview(reader.result as string);
+      reader.readAsDataURL(selected);
+    }
+  };
+
+  const clearFile = () => {
+    setFile(null);
+    setPreview(null);
   };
 
   useEffect(() => {
@@ -79,40 +141,22 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
             />
             <h3 className="text-lg font-semibold">Chat en línea</h3>
           </div>
-        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Cerrar chat">
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Cerrar chat">
             <X className="h-5 w-5" />
           </Button>
         </div>
         <div className="flex-1 p-4 space-y-2 overflow-y-auto bg-background">
           <AnimatePresence initial={false}>
             {messages.map((m) => (
-              <motion.div
+              <MessageBubble
                 key={m.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                transition={{ duration: 0.2 }}
-                className={cn(
-                  "flex",
-                  m.senderId === userId ? "justify-end" : "justify-start"
-                )}
-              >
-                <div
-                    className={cn(
-                      "p-2 rounded-lg max-w-[80%]",
-                      m.senderId === userId
-                        ? "bg-blue-500 text-white"
-                        : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
-                    )}
-                  >
-                    <p>{m.text}</p>
-                    <span className="block mt-1 text-[10px] opacity-70">
-                      {new Date(m.createdAt).toLocaleTimeString()}
-                    </span>
-                </div>
-              </motion.div>
+                text={m.text}
+                time={m.createdAt}
+                isSender={m.senderId === userId}
+              />
             ))}
           </AnimatePresence>
+          {text && <TypingIndicator />}
           <div ref={messagesEndRef} />
         </div>
         <form
@@ -120,7 +164,7 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
             e.preventDefault();
             send();
           }}
-          className="p-4 border-t flex items-center gap-2 bg-background"
+          className="p-4 border-t flex flex-col gap-2 bg-background"
         >
           <Input
             placeholder="Escribe tu mensaje..."
@@ -139,6 +183,60 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
           >
             <Send className="h-4 w-4" />
           </motion.button>
+          {preview && (
+            <div className="relative inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview}
+                alt="Previsualización"
+                className="max-h-24 rounded-md"
+              />
+              <button
+                type="button"
+                onClick={clearFile}
+                className="absolute -top-2 -right-2 rounded-full bg-destructive text-white p-0.5"
+                aria-label="Eliminar adjunto"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <input
+              id="chat-file"
+              type="file"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <label
+              htmlFor="chat-file"
+              className="cursor-pointer text-muted-foreground hover:text-foreground"
+            >
+              <Paperclip className="h-5 w-5" />
+            </label>
+            <Textarea
+              placeholder="Escribe tu mensaje..."
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              className="flex-1"
+              aria-label="Escribe tu mensaje"
+              rows={1}
+            />
+            <Button
+              type="submit"
+              size="icon"
+              className="bg-primary hover:bg-primary/90"
+              aria-label="Enviar mensaje"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </form>
       </Card>
     </motion.div>
