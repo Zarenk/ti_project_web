@@ -53,7 +53,14 @@ export default function Page() {
       }
     };
     const historyHandler = (msgs: Message[]) => {
-      setHistory(msgs.filter((m) => m.clientId === selected));
+      setHistory((prev) => {
+        const filtered = msgs.filter((m) => m.clientId === selected);
+        const byId = new Map<number, Message>();
+        // Merge existing messages to preserve already rendered items
+        prev.forEach((m) => byId.set(m.id, m));
+        filtered.forEach((m) => byId.set(m.id, m));
+        return Array.from(byId.values());
+      });
     };
 
     socket.emit('chat:history', { clientId: selected });
@@ -74,7 +81,9 @@ export default function Page() {
         senderId: userId,
         text,
       });
-      setHistory((prev) => [...prev, msg]);
+      setHistory((prev) =>
+        prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+      );
       setText('');
     } catch (e) {
       console.error(e);

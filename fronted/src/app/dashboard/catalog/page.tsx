@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { exportCatalog } from "./catalog.api";
+import { generateCatalogPdf } from "./catalog-pdf";
 import { getProducts } from "../products/products.api";
 import CategoryFilter from "./category-filter";
 import CatalogPreview from "./catalog-preview";
@@ -29,10 +30,15 @@ export default function CatalogPage() {
   async function handleDownload(format: "pdf" | "excel") {
     try {
       setDownloading(format);
-      const params = selectedCategories.length
-        ? { categories: selectedCategories }
-        : {};
-      const blob = await exportCatalog(format, params);
+      let blob: Blob;
+      if (format === "pdf") {
+        blob = await generateCatalogPdf(products);
+      } else {
+        const params = selectedCategories.length
+          ? { categories: selectedCategories }
+          : {};
+        blob = await exportCatalog("excel", params);
+      }
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
