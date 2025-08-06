@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { useState, useRef, useEffect } from "react"
-import { UserIcon, Heart } from "lucide-react"
+import { UserIcon, Heart, Menu } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCart } from "@/context/cart-context"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -11,6 +11,7 @@ import CartSheet from "@/components/cart-sheet"
 import TopBanner from "./top-banner"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
+import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet"
 import { useAuth } from "@/context/auth-context"
 import { useTheme } from "next-themes"
 
@@ -70,7 +71,7 @@ export default function Navbar() {
             />
             <span className="transition-colors duration-300 group-hover:text-sky-600">Tienda TI</span>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-4">
             <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Inicio
             </Link>
@@ -150,6 +151,54 @@ export default function Navbar() {
             </Link>
             <CartSheet />
             <ModeToggle />
+          </div>
+          <div className="flex items-center gap-2 md:hidden">
+            <CartSheet />
+            <ModeToggle />
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-5 w-5" />
+                  <span className="sr-only">Open menu</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-4">
+                <nav className="flex flex-col gap-4">
+                  <Link href="/" className="text-sm font-medium">
+                    Inicio
+                  </Link>
+                  <Link href="/faq" className="text-sm font-medium">
+                    FAQ
+                  </Link>
+                  <Link href="/contact" className="text-sm font-medium">
+                    Contacto
+                  </Link>
+                  <Link href="/store" className="text-sm font-medium">
+                    Productos
+                  </Link>
+                  {userName ? (
+                    <>
+                      <span className="text-sm font-medium">{userName}</span>
+                      <Button onClick={handleLogout} variant="outline">
+                        Cerrar Sesión
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Link href="/login" className="text-sm font-medium">
+                        Iniciar Sesión
+                      </Link>
+                      <Link href="/register" className="text-sm font-medium">
+                        Registrarse
+                      </Link>
+                    </>
+                  )}
+                  <Link href="/favorites" className="text-sm font-medium">
+                    Favoritos
+                  </Link>
+                </nav>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </nav>

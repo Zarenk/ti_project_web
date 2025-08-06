@@ -93,9 +93,9 @@ export default function Page() {
     .filter((c: any) => c.name.toLowerCase().includes(search.toLowerCase()))
     .sort(
       (a: any, b: any) =>
-        (pendingCounts[b.id] ?? 0) - (pendingCounts[a.id] ?? 0)
+        (pendingCounts[b.userId] ?? 0) - (pendingCounts[a.userId] ?? 0)
     );
-  const clientMap = new Map(clients.map((c: any) => [c.id, c.name]));
+  const clientMap = new Map(clients.map((c: any) => [c.userId, c.name]));
 
   return (
     <section className="p-4 space-y-4">
@@ -111,23 +111,23 @@ export default function Page() {
           </div>
           <ul className="flex-1 overflow-y-auto divide-y">
             {filteredClients.map((c: any) => (
-              <li key={c.id}>
+              <li key={c.userId}>
                 <button
-                  onClick={() => setSelected(c.id)}
+                  onClick={() => setSelected(c.userId)}
                   className={cn(
                     'w-full px-4 py-2 text-left hover:bg-muted',
-                    selected === c.id && 'bg-muted'
+                    selected === c.userId && 'bg-muted'
                   )}
                 >
                   <div className="flex items-center justify-between">
                     <span>{c.name}</span>
-                    {pendingCounts[c.id] > 0 && (
+                    {pendingCounts[c.userId] > 0 && (
                       <Badge
                         variant="destructive"
                         className="flex items-center gap-1"
                       >
                         <AlertCircle className="h-4 w-4" />
-                        {pendingCounts[c.id]}
+                        {pendingCounts[c.userId]}
                       </Badge>
                     )}
                   </div>
