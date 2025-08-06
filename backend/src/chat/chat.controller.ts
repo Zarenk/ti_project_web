@@ -19,7 +19,7 @@ export class ChatController {
   }
 
   @Get('unanswered')
-  findUnanswered() {
+  async findUnanswered(): Promise<{ clientId: number; count: number }[]> {
     return this.chatService.getUnansweredMessages();
   }
 

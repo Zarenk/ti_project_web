@@ -16,13 +16,10 @@ Los logos deben proporcionarse en formato **JPEG**, **PNG** o **GIF**. Los archi
 
 ## Ejemplo de uso
 
-```ts
-import { CatalogTemplate } from "@/templates/catalog/catalog-template"
+```tsx
+import { CatalogItem } from "@/templates/catalog/catalog-item"
 
-const html = renderToString(
-  <CatalogTemplate
-    title="Mi catálogo"
-    items={[{ title: "Producto" }]}
-  />
-)
+function Example() {
+  return <CatalogItem title="Producto" />
+}
 ```

@@ -22,11 +22,23 @@ export class ChatService {
     });
   }
 
-  async getUnansweredMessages(): Promise<ChatMessage[]> {
-    const lastMessages = await this.prisma.chatMessage.findMany({
-      orderBy: { createdAt: 'desc' },
-      distinct: ['clientId'],
-    });
-    return lastMessages.filter((m) => m.senderId === m.clientId);
+  async getUnansweredMessages(): Promise<{ clientId: number; count: number }[]> {
+    const clients = await this.prisma.chatMessage.groupBy({ by: ['clientId'] });
+    const counts: { clientId: number; count: number }[] = [];
+    for (const { clientId } of clients) {
+      const lastAdmin = await this.prisma.chatMessage.findFirst({
+        where: { clientId, senderId: { not: clientId } },
+        orderBy: { createdAt: 'desc' },
+      });
+      const count = await this.prisma.chatMessage.count({
+        where: {
+          clientId,
+          senderId: clientId,
+          ...(lastAdmin && { createdAt: { gt: lastAdmin.createdAt } }),
+        },
+      });
+      if (count > 0) counts.push({ clientId, count });
+    }
+    return counts;
   }
 }

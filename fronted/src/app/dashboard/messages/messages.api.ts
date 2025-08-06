@@ -1,7 +1,9 @@
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
-export async function getUnansweredMessages() {
+export async function getUnansweredMessages(): Promise<
+  { clientId: number; count: number }[]
+> {
   const token = localStorage.getItem('token');
   if (!token) {
     throw new Error('No se encontró un token de autenticación');
@@ -35,7 +37,7 @@ export async function getClients() {
   if (!token) {
     throw new Error('No se encontró un token de autenticación');
   }
-  const res = await fetch(`${BACKEND_URL}/api/clients`, {
+  const res = await fetch(`${BACKEND_URL}/api/clients/registered`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
   });

@@ -1,8 +1,7 @@
 "use client";
 
-import { renderToStaticMarkup } from "react-dom/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CatalogTemplate } from "@/templates/catalog/catalog-template";
+import { CatalogItem } from "@/templates/catalog/catalog-item";
 import type { CatalogItemProps } from "@/templates/catalog/catalog-item";
 import { brandAssets } from "@/catalog/brandAssets";
 
@@ -27,6 +26,10 @@ interface CatalogPreviewProps {
 }
 
 export function CatalogPreview({ products }: CatalogPreviewProps) {
+
+  function formatPrice(value: number): string {
+    return `S/. ${value.toLocaleString('en-US')}`;
+  }
 
   function getLogos(p: Product): string[] {
     const logos: string[] = [];
@@ -56,13 +59,11 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     return {
       title: p.name,
       description: p.description,
-      price: typeof priceValue === 'number' ? `$${priceValue}` : undefined,
+      price: typeof priceValue === 'number' ? formatPrice(priceValue) : undefined,
       imageUrl: p.imageUrl ?? p.image ?? p.images?.[0],
       logos: getLogos(p),
     };
   });
-
-  const html = renderToStaticMarkup(<CatalogTemplate items={items} />);
 
   return (
     <Card>
@@ -70,10 +71,11 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
         <CardTitle>Vista previa del catálogo</CardTitle>
       </CardHeader>
       <CardContent>
-        <iframe
-          className="w-full h-[600px] rounded-xl border shadow-sm"
-          srcDoc={html}
-        />
+        <div className="catalog-grid mx-auto grid max-w-7xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((item, index) => (
+            <CatalogItem key={index} {...item} />
+          ))}
+        </div>
       </CardContent>
     </Card>
   );

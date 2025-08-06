@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { AlertCircle } from 'lucide-react';
 import socket, { cn } from '@/lib/utils';
 
 interface Message {
@@ -20,7 +21,7 @@ interface Message {
 export default function Page() {
   const { userId, userName } = useAuth();
   const [clients, setClients] = useState<any[]>([]);
-  const [pending, setPending] = useState<number[]>([]);
+  const [pendingCounts, setPendingCounts] = useState<Record<number, number>>({});
   const [selected, setSelected] = useState<number | null>(null);
   const [history, setHistory] = useState<Message[]>([]);
   const [text, setText] = useState('');
@@ -33,7 +34,10 @@ export default function Page() {
           getUnansweredMessages(),
           getClients(),
         ]);
-        setPending(pendingMsgs.map((m: any) => m.clientId));
+        const counts = Object.fromEntries(
+          pendingMsgs.map((m: any) => [m.clientId, m.count])
+        );
+        setPendingCounts(counts);
         setClients(allClients);
       } catch (err) {
         console.error(err);
@@ -90,9 +94,12 @@ export default function Page() {
     }
   };
 
-  const filteredClients = clients.filter((c: any) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredClients = clients
+    .filter((c: any) => c.name.toLowerCase().includes(search.toLowerCase()))
+    .sort(
+      (a: any, b: any) =>
+        (pendingCounts[b.id] ?? 0) - (pendingCounts[a.id] ?? 0)
+    );
   const clientMap = new Map(clients.map((c: any) => [c.id, c.name]));
 
   return (
@@ -119,8 +126,14 @@ export default function Page() {
                 >
                   <div className="flex items-center justify-between">
                     <span>{c.name}</span>
-                    {pending.includes(c.id) && (
-                      <Badge variant="destructive">Pendiente</Badge>
+                    {pendingCounts[c.id] > 0 && (
+                      <Badge
+                        variant="destructive"
+                        className="flex items-center gap-1"
+                      >
+                        <AlertCircle className="h-4 w-4" />
+                        {pendingCounts[c.id]}
+                      </Badge>
                     )}
                   </div>
                 </button>

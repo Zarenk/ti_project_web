@@ -50,6 +50,10 @@ function getLogos(p: Product): string[] {
   return logos
 }
 
+function formatPrice(value: number): string {
+  return `S/. ${value.toLocaleString('en-US')}`
+}
+
 const styles = StyleSheet.create({
   page: { padding: 16 },
   grid: { display: 'flex', flexDirection: 'row', flexWrap: 'wrap' },
@@ -93,11 +97,16 @@ function CatalogPdfDocument({ items }: { items: CatalogPdfItem[] }) {
 export async function generateCatalogPdf(products: Product[]): Promise<Blob> {
   const items: CatalogPdfItem[] = products.map((p) => {
     const priceValue = p.priceSell ?? p.price
+    const imageUrl = p.imageUrl ?? p.image ?? p.images?.[0]
+    const proxied = imageUrl
+      ? `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
+      : undefined
+
     return {
       title: p.name,
       description: p.description,
-      price: typeof priceValue === 'number' ? `$${priceValue}` : undefined,
-      imageUrl: p.imageUrl ?? p.image ?? p.images?.[0],
+      price: typeof priceValue === 'number' ? formatPrice(priceValue) : undefined,
+      imageUrl: proxied,
       logos: getLogos(p)
     }
   })

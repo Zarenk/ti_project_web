@@ -127,6 +127,17 @@ export class ClientService {
     return this.prismaService.client.findMany()
   }
 
+  findRegistered() {
+    return this.prismaService.client.findMany({
+      where: {
+        OR: [
+          { user: { email: { not: { startsWith: 'generic_' } } } },
+          { user: { username: { not: { startsWith: 'generic_' } } } },
+        ],
+      },
+    });
+  }
+
   async findOne(id: number) {
 
     if (!id || typeof id !== 'number') {

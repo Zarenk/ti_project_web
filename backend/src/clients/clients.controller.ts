@@ -53,9 +53,14 @@ export class ClientController {
   }
 
   @Get()
-  @ApiResponse({status: 200, description: 'Return all clients'}) // Swagger 
+  @ApiResponse({status: 200, description: 'Return all clients'}) // Swagger
   findAll() {
     return this.clientService.findAll();
+  }
+
+  @Get('registered')
+  findRegistered() {
+    return this.clientService.findRegistered();
   }
 
   @Get(':id')
