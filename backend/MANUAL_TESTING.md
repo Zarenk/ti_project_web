@@ -12,4 +12,5 @@
 
    exportCatalogPdf({ title: 'Hello PDF' }).then(buf => writeFileSync('out.pdf', buf));
    ```
-3. Open `out.pdf` and verify it contains the provided data.
+3. Seed or mock at least one product whose `brand` is `"Lenovo"` (trailing spaces are fine).
+4. Open `out.pdf` and verify that the Lenovo logo is embedded next to the corresponding product.

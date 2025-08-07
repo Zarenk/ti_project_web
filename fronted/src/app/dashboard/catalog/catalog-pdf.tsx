@@ -47,7 +47,7 @@ interface CatalogSection {
 function getLogos(p: Product): string[] {
   const logos: string[] = []
   if (p.brand) {
-    const brandLogo = brandAssets.brands[p.brand.toLowerCase()]
+    const brandLogo = brandAssets.brands[p.brand.trim().toLowerCase()]
     if (brandLogo) logos.push(brandLogo)
   }
   const processor = p.specification?.processor?.toLowerCase() || ''
@@ -73,21 +73,30 @@ function formatPrice(value: number): string {
 
 const styles = StyleSheet.create({
   page: { padding: 16 },
-  category: { fontSize: 14, fontWeight: 'bold', marginBottom: 8 },
+  category: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center'
+  },
   grid: { display: 'flex', flexDirection: 'row', flexWrap: 'wrap' },
   item: {
     width: '33.33%',
     padding: 8,
     border: '1 solid #cccccc',
     borderRadius: 4,
-    marginBottom: 8
+    alignItems: 'center',
+    textAlign: 'center',
+    marginBottom: 8,
+    position: 'relative'
   },
   image: { width: '100%', height: 120, objectFit: 'cover', marginBottom: 4 },
-  title: { fontSize: 12, fontWeight: 'bold' },
-  description: { fontSize: 10, marginTop: 2 },
-  price: { fontSize: 10, fontWeight: 'bold', marginTop: 4 },
+  title: { fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
+  description: { fontSize: 10, marginTop: 2, textAlign: 'center' },
+  price: { fontSize: 10, fontWeight: 'bold', marginTop: 4, textAlign: 'center' },
   logos: { flexDirection: 'row', marginTop: 4 },
-  logo: { width: 24, height: 24, marginRight: 4 }
+  logo: { width: 24, height: 24, marginRight: 4 },
+  companyLogo: { position: 'absolute', top: 4, right: 4, width: 24, height: 24 }
 })
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -117,6 +126,7 @@ function CatalogPdfDocument({ sections }: { sections: CatalogSection[] }) {
           <View style={styles.grid}>
             {page.items.map((item, idx) => (
               <View key={idx} style={styles.item}>
+                <PdfImage style={styles.companyLogo} src='/ti_logo_final_2024.png' />
                 {item.imageUrl && <PdfImage style={styles.image} src={item.imageUrl} />}
                 <Text style={styles.title}>{item.title}</Text>
                 {item.description && (

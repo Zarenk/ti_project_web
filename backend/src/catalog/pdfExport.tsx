@@ -4,8 +4,8 @@ import CatalogTemplate from './catalog-template';
 import type { CatalogItem } from './catalogData';
 import { getCatalogItems } from './catalogData';
 import PDFDocument from 'pdfkit';
-import fs from 'fs';
 import { brandAssets } from './brandAssets';
+import path from 'path';
 
 export function renderCatalogHtml(items: CatalogItem[]): string {
   const templateItems = items.map((item) => ({
@@ -17,23 +17,34 @@ export function renderCatalogHtml(items: CatalogItem[]): string {
   return renderToString(<CatalogTemplate items={templateItems} />);
 }
 
+function normalizeLogo(logoPath: string | undefined): string | null {
+  if (!logoPath) return null;
+  const ext = path.extname(logoPath).toLowerCase();
+  if (ext === '.svg') return logoPath.replace(/\.svg$/i, '.png');
+  if (ext === '.png' || ext === '.jpg' || ext === '.jpeg') return logoPath;
+  return null;
+}
+
 function getLogos(item: CatalogItem): string[] {
   const logos: string[] = [];
+  const pushLogo = (logo?: string) => {
+    const normalized = normalizeLogo(logo);
+    if (normalized) logos.push(normalized);
+  };
   if (item.brand) {
-    const logo = brandAssets.brands[item.brand.toLowerCase()];
-    if (logo) logos.push(logo);
+    pushLogo(brandAssets.brands[item.brand.toLowerCase()]);
   }
   const cpu = item.cpu?.toLowerCase() || '';
-  for (const [key, path] of Object.entries(brandAssets.cpus)) {
+  for (const [key, logoPath] of Object.entries(brandAssets.cpus)) {
     if (cpu.includes(key)) {
-      logos.push(path);
+      pushLogo(logoPath);
       break;
     }
   }
   const gpu = item.gpu?.toLowerCase() || '';
-  for (const [key, path] of Object.entries(brandAssets.gpus)) {
+  for (const [key, logoPath] of Object.entries(brandAssets.gpus)) {
     if (gpu.includes(key)) {
-      logos.push(path);
+      pushLogo(logoPath);
       break;
     }
   }
@@ -64,7 +75,7 @@ async function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
     if (doc.y > doc.page.height - doc.page.margins.bottom - 50) {
       doc.addPage();
     }
-    doc.font('Helvetica-Bold').fontSize(18).text(category, { align: 'center' });
+    doc.font('Helvetica-Bold').fontSize(24).text(category, { align: 'center' });
     doc.moveDown();
     doc.font('Helvetica');
 
@@ -75,14 +86,15 @@ async function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
       }
       doc.fontSize(16).text(item.name, {
         width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+        align: 'center',
       });
       if (item.description) {
         doc.moveDown(0.5);
-        doc.fontSize(12).text(item.description);
+        doc.fontSize(12).text(item.description, { align: 'center' });
       }
       if (typeof item.price === 'number') {
         doc.moveDown(0.25);
-        doc.fontSize(12).text(item.price.toString());
+        doc.fontSize(12).text(item.price.toString(), { align: 'center' });
       }
 
       const logos = getLogos(item);

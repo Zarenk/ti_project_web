@@ -11,6 +11,7 @@ export const brandAssets: BrandAssets = {
     dell: '/assets/logos/dell.svg',
     hp: '/assets/logos/hp.svg',
     asus: '/assets/logos/asus.svg',
+    lenovo: '/assets/logos/lenovo.svg',
   },
   gpus: {
     nvidia: '/assets/logos/nvidia.svg',
