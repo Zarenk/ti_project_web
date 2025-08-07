@@ -115,6 +115,7 @@ function ChatButtonContent() {
                   width={24}
                   height={24}
                   className="object-cover"
+                  priority
                 />
               </span>
             )}

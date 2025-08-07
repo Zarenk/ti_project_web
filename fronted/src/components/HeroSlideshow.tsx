@@ -92,6 +92,7 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
                   width={600}
                   height={500}
                   className="w-full aspect-[6/5] object-cover object-center rounded-2xl shadow-2xl"
+                  priority                
                 />
               </Link>
             ) : (
@@ -101,6 +102,7 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
                 width={600}
                 height={500}
                 className="w-full aspect-[6/5] object-cover object-center rounded-2xl shadow-2xl"
+                priority
               />
             )}
           </motion.div>

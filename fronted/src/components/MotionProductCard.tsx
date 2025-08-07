@@ -39,9 +39,10 @@ interface Product {
 interface MotionProductCardProps {
   product: Product
   withActions?: boolean
+  priority?: boolean
 }
 
-export default function MotionProductCard({ product, withActions = false }: MotionProductCardProps) {
+export default function MotionProductCard({ product, withActions = false, priority = false }: MotionProductCardProps) {
 
   const { addItem } = useCart()
   const [isFavorite, setIsFavorite] = useState(false)
@@ -86,6 +87,7 @@ export default function MotionProductCard({ product, withActions = false }: Moti
                 width={300}
                 height={300}
                 className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
+                priority={priority}
               />
             </div>
           </CardHeader>

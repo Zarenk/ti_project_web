@@ -452,7 +452,7 @@ export default function StorePage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {paginatedProducts.map((product) => (
+                {paginatedProducts.map((product, index) => (
                   <Card
                     key={product.id}
                     className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border"
@@ -467,6 +467,7 @@ export default function StorePage() {
                             width={300}
                             height={300}
                             className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
+                            priority={index === 0}
                           />
                         </div>
                     </CardHeader>

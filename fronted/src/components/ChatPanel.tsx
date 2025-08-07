@@ -201,6 +201,7 @@ export default function ChatPanel({
               width={32}
               height={32}
               className="rounded-full object-cover"
+              priority
             />
             <h3 className="text-lg font-semibold">Chat en línea</h3>
           </div>
