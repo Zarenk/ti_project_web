@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { getUnansweredMessages, sendMessage, getClients, getMessages } from './messages.api';
+import { sendMessage, getClients, getMessages } from './messages.api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AlertCircle, Eye, X, Filter, ArrowUpDown } from 'lucide-react';
 import socket, { cn } from '@/lib/utils';
 import TypingIndicator from '@/components/TypingIndicator';
+import { useMessages } from '@/context/messages-context';
 
 interface Message {
   id: number;
@@ -23,8 +24,8 @@ interface Message {
 
 export default function Page() {
   const { userId, userName } = useAuth();
+  const { pendingCounts, setPendingCounts } = useMessages();
   const [clients, setClients] = useState<any[]>([]);
-  const [pendingCounts, setPendingCounts] = useState<Record<number, number>>({});
   const [selected, setSelected] = useState<number | null>(null);
   const [history, setHistory] = useState<Message[]>([]);
   const [text, setText] = useState('');
@@ -36,16 +37,31 @@ export default function Page() {
   const [clientTyping, setClientTyping] = useState(false);
 
   useEffect(() => {
+    const receiveHandler = (msg: Message) => {
+      if (msg.clientId !== selected) {
+        setPendingCounts((prev) => ({
+          ...prev,
+          [msg.clientId]: (prev[msg.clientId] ?? 0) + 1,
+        }));
+      }
+    };
+    const seenHandler = ({ clientId }: any) => {
+      setPendingCounts((prev) =>
+        prev[clientId] ? { ...prev, [clientId]: 0 } : prev,
+      );
+    };
+    socket.on('chat:receive', receiveHandler);
+    socket.on('chat:seen', seenHandler);
+    return () => {
+      socket.off('chat:receive', receiveHandler);
+      socket.off('chat:seen', seenHandler);
+    };
+  }, [selected, setPendingCounts]);
+
+  useEffect(() => {
     const load = async () => {
       try {
-        const [pendingMsgs, allClients] = await Promise.all([
-          getUnansweredMessages(),
-          getClients(),
-        ]);
-        const counts = Object.fromEntries(
-          pendingMsgs.map((m: any) => [m.clientId, m.count])
-        );
-        setPendingCounts(counts);
+        const allClients = await getClients();
         setClients(allClients);
 
         const lastEntries = await Promise.all(
