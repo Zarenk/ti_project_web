@@ -52,9 +52,9 @@
     "numalet": "^0.2.1",
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
-    "react": "^19.0.0",
+    "react": "19.0.0",
     "react-day-picker": "^8.10.1",
-    "react-dom": "^19.0.0",
+    "react-dom": "19.0.0",
     "react-hook-form": "^7.56.1",
     "react-qr-reader": "^2.2.1",
     "react-qr-scanner": "^1.0.0-alpha.11",
@@ -85,6 +85,8 @@
     "vitest": "^1.5.0"
   },
   "overrides": {
-    "framer-motion": "12.9.2"
+    "framer-motion": "12.9.2",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
   }
 }

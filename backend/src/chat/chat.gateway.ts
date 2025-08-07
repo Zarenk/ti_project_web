@@ -52,10 +52,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       senderId: number;
       text: string;
       file?: string; // optional attachment from client
+      tempId?: number; // temporary id for optimistic UI updates
     },
     @ConnectedSocket() client: Socket,
   ) {
-    const { clientId, senderId, text, file } = payload;
+    const { clientId, senderId, text, file, tempId } = payload;
 
     const now = Date.now();
     const entry = this.messageCounts.get(client.id);
@@ -77,7 +78,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       senderId,
       text,
     });
-    this.server.emit('chat:receive', { ...message, file });
+    this.server.emit('chat:receive', { ...message, file, tempId });
   }
 
   @SubscribeMessage('chat:seen')

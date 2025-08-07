@@ -26,7 +26,11 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         console.error(err);
       }
     };
-    load();
+    const token = localStorage.getItem("token");
+    if (token) {
+      load();
+    }
+    
   }, []);
 
   const totalUnread = Object.values(pendingCounts).reduce(
