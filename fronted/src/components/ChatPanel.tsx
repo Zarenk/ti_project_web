@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { X, Send, Paperclip } from "lucide-react";
@@ -114,6 +113,15 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
 
   const send = () => {
     if (text.trim() || preview) {
+      const newMessage: Message = {
+        id: Date.now(),
+        clientId: userId,
+        senderId: userId,
+        text,
+        createdAt: new Date().toISOString(),
+        file: preview || undefined,
+      };
+      setMessages((prev) => [...prev, newMessage]);
       socket.emit("chat:send", {
         clientId: userId,
         senderId: userId,
@@ -174,6 +182,7 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
               <MessageBubble
                 key={m.id}
                 text={m.text}
+                file={m.file}
                 time={m.createdAt}
                 isSender={m.senderId === userId}
               />
@@ -189,23 +198,6 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
           }}
           className="p-4 border-t flex flex-col gap-2 bg-background"
         >
-          <Input
-            placeholder="Escribe tu mensaje..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-            className="flex-1"
-            aria-label="Escribe tu mensaje"
-          />
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            whileHover={{ scale: 1.05 }}
-            type="submit"
-            className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-md"
-            aria-label="Enviar mensaje"
-          >
-            <Send className="h-4 w-4" />
-          </motion.button>
           {preview && (
             <div className="relative inline-block">
               {/* eslint-disable-next-line @next/next/no-img-element */}
