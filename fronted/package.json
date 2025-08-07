@@ -86,6 +86,8 @@
   },
   "overrides": {
     "framer-motion": "12.9.2",
+    "motion-dom": "12.9.1",
+    "motion-utils": "12.8.3",
     "react": "19.0.0",
     "react-dom": "19.0.0"
   }
