@@ -1,16 +1,16 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Card } from "@/components/ui/card";
-import { X, Send, Paperclip } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import socket from "@/lib/utils";
-import { useAuth } from "@/context/auth-context";
-import MessageBubble from "./MessageBubble";
-import TypingIndicator from "./TypingIndicator";
+import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Card } from '@/components/ui/card';
+import { X, Send, Paperclip } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import socket from '@/lib/utils';
+import { useAuth } from '@/context/auth-context';
+import MessageBubble from './MessageBubble';
+import TypingIndicator from './TypingIndicator';
 
 interface Message {
   id: number;
@@ -20,6 +20,7 @@ interface Message {
   createdAt: string;
   seenAt?: string | null;
   file?: string;
+  tempId?: number;
 }
 
 interface ChatPanelProps {
@@ -27,20 +28,32 @@ interface ChatPanelProps {
   userId?: number;
 }
 
-export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProps) {
+export default function ChatPanel({
+  onClose,
+  userId: propUserId,
+}: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [text, setText] = useState("");
+  const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { userId: contextUserId } = useAuth();
   const userId = propUserId ?? contextUserId ?? 1;
   const [agentTyping, setAgentTyping] = useState(false);
+  const pendingTempIds = useRef<Set<number>>(new Set());
+  const [rateLimited, setRateLimited] = useState(false);
 
   useEffect(() => {
     const receiveHandler = (msg: Message) => {
       if (msg.clientId === userId) {
-        setMessages((prev) => [...prev, msg]);
+        if (msg.tempId && pendingTempIds.current.has(msg.tempId)) {
+          pendingTempIds.current.delete(msg.tempId);
+          setMessages((prev) =>
+            prev.map((m) => (m.tempId === msg.tempId ? { ...msg } : m))
+          );
+        } else {
+          setMessages((prev) => [...prev, msg]);
+        }
       }
     };
 
@@ -51,7 +64,7 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
           id: Date.now(),
           clientId: userId,
           senderId: 0,
-          text: "Bienvenido al chat de Tecnología Informática EIRL. Un asesor te responderá en breve. Por favor, mantén la cordialidad y proporciona detalles de tu consulta para ofrecerte una atención eficiente.",
+          text: 'Bienvenido al chat de Tecnología Informática EIRL. Un asesor te responderá en breve. Por favor, mantén la cordialidad y proporciona detalles de tu consulta para ofrecerte una atención eficiente.',
           createdAt: new Date().toISOString(),
         };
         setMessages([welcome]);
@@ -65,45 +78,54 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
       if (viewerId === userId) {
         setMessages((prev) =>
           prev.map((m) =>
-            m.senderId !== userId && !m.seenAt ? { ...m, seenAt } : m
-          )
+            m.senderId !== userId && !m.seenAt ? { ...m, seenAt } : m,
+          ),
         );
       } else {
         setMessages((prev) =>
           prev.map((m) =>
-            m.senderId === userId && !m.seenAt ? { ...m, seenAt } : m
-          )
+            m.senderId === userId && !m.seenAt ? { ...m, seenAt } : m,
+          ),
         );
       }
     };
 
-    socket.emit("chat:history", { clientId: userId });
-    socket.emit("chat:seen", { clientId: userId, viewerId: userId });
-    socket.on("chat:receive", receiveHandler);
-    socket.on("chat:history", historyHandler);
-    socket.on("chat:seen", seenHandler);
+    socket.emit('chat:history', { clientId: userId });
+    socket.emit('chat:seen', { clientId: userId, viewerId: userId });
+    socket.on('chat:receive', receiveHandler);
+    socket.on('chat:history', historyHandler);
+    socket.on('chat:seen', seenHandler);
     const typingHandler = ({ clientId, senderId, isTyping }: any) => {
       if (clientId === userId && senderId !== userId) {
         setAgentTyping(isTyping);
       }
     };
-    socket.on("chat:typing", typingHandler);
+    const rateLimitHandler = () => {
+      setRateLimited(true);
+      alert(
+        'Has excedido el límite de mensajes. Intenta nuevamente en unos segundos.',
+      );
+      setTimeout(() => setRateLimited(false), 10_000);
+    };
+    socket.on('chat:typing', typingHandler);
+    socket.on('chat:rate-limit', rateLimitHandler);
     return () => {
-      socket.off("chat:receive", receiveHandler);
-      socket.off("chat:history", historyHandler);
-      socket.off("chat:seen", seenHandler);
-      socket.off("chat:typing", typingHandler);
+      socket.off('chat:receive', receiveHandler);
+      socket.off('chat:history', historyHandler);
+      socket.off('chat:seen', seenHandler);
+      socket.off('chat:typing', typingHandler);
+      socket.off('chat:rate-limit', rateLimitHandler);
     };
   }, [userId]);
 
   useEffect(() => {
-    socket.emit("chat:typing", {
+    socket.emit('chat:typing', {
       clientId: userId,
       senderId: userId,
       isTyping: text.length > 0,
     });
     return () => {
-      socket.emit("chat:typing", {
+      socket.emit('chat:typing', {
         clientId: userId,
         senderId: userId,
         isTyping: false,
@@ -112,9 +134,12 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
   }, [text, userId]);
 
   const send = () => {
-    if (text.trim() || preview) {
+    if (rateLimited) return;
+    if (text.trim() || preview) {    
+      const tempId = Date.now();
       const newMessage: Message = {
-        id: Date.now(),
+        id: tempId,
+        tempId,
         clientId: userId,
         senderId: userId,
         text,
@@ -122,16 +147,18 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
         file: preview || undefined,
       };
       setMessages((prev) => [...prev, newMessage]);
+      pendingTempIds.current.add(tempId);
       const payload: any = {
         clientId: userId,
         senderId: userId,
         text,
-        };
+        tempId,
+      };
       if (preview) {
         payload.file = preview;
       }
-      socket.emit("chat:send", payload);
-      setText("");
+      socket.emit('chat:send', payload);
+      setText('');
       setFile(null);
       setPreview(null);
     }
@@ -251,6 +278,7 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
               size="icon"
               className="bg-primary hover:bg-primary/90"
               aria-label="Enviar mensaje"
+              disabled={rateLimited}
             >
               <Send className="h-4 w-4" />
             </Button>

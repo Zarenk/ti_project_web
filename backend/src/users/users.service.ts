@@ -27,13 +27,15 @@ export class UsersService {
     };
   }
 
-  async register(data: { email: string; username: string; password: string; role: string }) {
+  async register(data: { email: string; username?: string; password: string; role: string }) {
+    const username = data.username || data.email.split('@')[0];
+
     const existingEmail = await this.prismaService.user.findUnique({ where: { email: data.email } });
     if (existingEmail) {
       throw new BadRequestException('El correo ya está registrado');
     }
 
-    const existingUsername = await this.prismaService.user.findUnique({ where: { username: data.username } });
+    const existingUsername = await this.prismaService.user.findUnique({ where: { username } });
     if (existingUsername) {
       throw new BadRequestException('El nombre de usuario ya está registrado');
     }
@@ -44,7 +46,7 @@ export class UsersService {
       return await this.prismaService.user.create({
         data: {
           email: data.email,
-          username: data.username,
+          username,
           password: hashedPassword,
           role: data.role as UserRole,
         },
@@ -58,7 +60,7 @@ export class UsersService {
     }
   }
 
-  async publicRegister(data: { email: string; username: string; password: string; name: string; image?: string | null; type?: string | null; typeNumber?: string | null }) {
+  async publicRegister(data: { email: string; username?: string; password: string; name: string; image?: string | null; type?: string | null; typeNumber?: string | null }) {
     const user = await this.register({
       email: data.email,
       username: data.username,

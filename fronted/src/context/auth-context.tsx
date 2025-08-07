@@ -9,6 +9,7 @@ import {
   useCallback,
 } from "react"
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
+import { signOut } from "next-auth/react"
 
 type AuthContextType = {
   userId: number | null
@@ -42,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(async () => {
+    await signOut({ redirect: false })
     await fetch('/api/logout', { method: 'POST', credentials: 'include' })
     if (typeof window !== "undefined") {
       localStorage.removeItem('token')

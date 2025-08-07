@@ -18,7 +18,7 @@ export class UsersController {
   }
 
   @Post('register')
-  async register(@Body() body: { email: string; username: string; password: string; role: string }) {
+  async register(@Body() body: { email: string; username?: string; password: string; role: string }) {
     return this.usersService.register(body);
   }
 
@@ -28,7 +28,7 @@ export class UsersController {
     @Body()
     body: {
       email: string;
-      username: string;
+      username?: string;
       password: string;
       name: string;
       image?: string | null;

@@ -22,6 +22,7 @@ const registerSchema = z
     email: z
       .string({ required_error: 'El correo es obligatorio' })
       .email('Correo electrónico inválido'),
+    username: z.string().optional(),
     password: z
       .string({ required_error: 'La contraseña es obligatoria' })
       .min(6, 'La contraseña debe tener al menos 6 caracteres'),
@@ -48,7 +49,8 @@ export default function RegisterForm() {
 
   const onSubmit = async (data: RegisterType) => {
     try {
-      await registerUser(data.email, data.fullName, data.password, data.fullName);
+      const username = data.username?.trim() || data.email.split('@')[0];
+      await registerUser(data.email, username, data.password, data.fullName);
       await loginUser(data.email, data.password);
       await refreshUser();
       toast.success('Registro exitoso');
@@ -56,6 +58,8 @@ export default function RegisterForm() {
     } catch (error: any) {
       if (error.message && error.message.toLowerCase().includes('correo')) {
         setError('email', { type: 'manual', message: error.message });
+      } else if (error.message && error.message.toLowerCase().includes('usuario')) {
+        setError('username', { type: 'manual', message: error.message });
       } else {
         toast.error(error.message || 'Error al registrarse');
       }
@@ -91,6 +95,11 @@ export default function RegisterForm() {
               <Label htmlFor="email" className="text-slate-700 dark:text-slate-300 font-medium">Correo electrónico</Label>
               <Input id="email" type="email" placeholder="tu@ejemplo.com" {...register('email')} className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
               {errors.email && <p className="text-red-500 text-sm">{errors.email.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-slate-700 dark:text-slate-300 font-medium">Nombre de usuario</Label>
+              <Input id="username" type="text" placeholder="Ingresa tu nombre de usuario" {...register('username')} className="h-12 border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg" />
+              {errors.username && <p className="text-red-500 text-sm">{errors.username.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password" className="text-slate-700 dark:text-slate-300 font-medium">Contraseña</Label>

@@ -4,6 +4,7 @@ import {
   SubscribeMessage,
   MessageBody,
   OnGatewayConnection,
+  OnGatewayDisconnect,
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
@@ -15,13 +16,24 @@ import { ChatService } from './chat.service';
   },
 })
 
-export class ChatGateway implements OnGatewayConnection {
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
   constructor(private chatService: ChatService) {}
 
+  private readonly messageCounts = new Map<
+    string,
+    { count: number; timestamp: number }
+  >();
+  private readonly LIMIT = 5;
+  private readonly INTERVAL_MS = 10_000;
+
   async handleConnection() {}
+
+  handleDisconnect(client: Socket) {
+    this.messageCounts.delete(client.id);
+  }
 
   @SubscribeMessage('chat:history')
   async handleHistory(
@@ -44,6 +56,19 @@ export class ChatGateway implements OnGatewayConnection {
     @ConnectedSocket() client: Socket,
   ) {
     const { clientId, senderId, text, file } = payload;
+
+    const now = Date.now();
+    const entry = this.messageCounts.get(client.id);
+    if (entry && now - entry.timestamp < this.INTERVAL_MS) {
+      if (entry.count >= this.LIMIT) {
+        client.emit('chat:rate-limit');
+        return;
+      }
+      entry.count += 1;
+    } else {
+      this.messageCounts.set(client.id, { count: 1, timestamp: now });
+    }
+
     // Persist only required fields. Extra data such as files are ignored by the
     // database but still propagated to listeners so UIs can handle them if
     // needed.
@@ -71,7 +96,11 @@ export class ChatGateway implements OnGatewayConnection {
   @SubscribeMessage('chat:typing')
   handleTyping(
     @MessageBody()
-    payload: { clientId: number; senderId: number; isTyping: boolean },
+    payload: {
+      clientId: number;
+      senderId: number;
+      isTyping: boolean;
+    },
   ) {
     this.server.emit('chat:typing', payload);
   }
