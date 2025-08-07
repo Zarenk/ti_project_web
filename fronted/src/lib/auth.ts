@@ -1,9 +1,9 @@
 import { jwtDecode } from 'jwt-decode'
 
 export interface UserTokenPayload {
-  userId: number
-  name: string
-  role?: string
+  userId: number;
+  name: string;
+  role?: string;
 }
 
 export async function getUserDataFromToken(): Promise<UserTokenPayload | null> {
@@ -17,12 +17,19 @@ export async function getUserDataFromToken(): Promise<UserTokenPayload | null> {
     const res = await fetch('/api/login', {
       credentials: 'include',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-    if (!res.ok) return null
-    const data = await res.json()
+    });
+    if (res.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        document.cookie = 'token=; Max-Age=0; path=/';
+      }
+      return null;
+    }
+    if (!res.ok) return null;
+    const data = await res.json();
     if (!token && data.access_token && typeof window !== 'undefined') {
-      localStorage.setItem('token', data.access_token)
-      token = data.access_token
+      localStorage.setItem('token', data.access_token);
+      token = data.access_token;
     }
     return {
       userId: data.id ?? data.userId ?? data.user?.id,
@@ -46,7 +53,14 @@ export async function isTokenValid(): Promise<boolean> {
     const res = await fetch('/api/login', {
       credentials: 'include',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    });
+    if (res.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        document.cookie = 'token=; Max-Age=0; path=/';
+      }
+      return false;
+    }
     if (res.ok) {
       const data = await res.json()
       if (!token && data.access_token && typeof window !== 'undefined') {
@@ -60,11 +74,11 @@ export async function isTokenValid(): Promise<boolean> {
 }
 
 export function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null
-  const stored = localStorage.getItem('token')
-  if (stored) return stored
-  const match = document.cookie.match(/(?:^|; )token=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : null
+  if (typeof window === 'undefined') return null;
+  const stored = localStorage.getItem('token');
+  if (stored) return stored;
+  const match = document.cookie.match(/(?:^|; )token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 export function getLastAccessFromToken(): Date | null {

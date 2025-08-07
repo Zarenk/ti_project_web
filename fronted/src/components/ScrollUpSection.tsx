@@ -20,8 +20,11 @@ export default function ScrollUpSection({
     if (!el) return
 
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        setVisible(entry.isIntersecting)
+      ([entry], obs) => {
+        if (entry.isIntersecting) {
+          setVisible(true)
+          obs.unobserve(entry.target)
+        }
       },
       { threshold: 0.2 }
     )

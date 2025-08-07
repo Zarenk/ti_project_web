@@ -1,13 +1,13 @@
-"use client"
+'use client';
 
-import { useState, useEffect } from "react";
-import Image from "next/image";
-import { MessageSquare } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import ChatPanel from "./ChatPanel";
-import socket from "@/lib/utils";
-import { useAuth } from "@/context/auth-context";
-import { usePathname } from "next/navigation";
+import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import { MessageSquare } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import ChatPanel from './ChatPanel';
+import socket from '@/lib/utils';
+import { useAuth } from '@/context/auth-context';
+import { usePathname } from 'next/navigation';
 
 interface Message {
   clientId: number;
@@ -20,7 +20,7 @@ export default function ChatButton() {
   const pathname = usePathname();
   const { role } = useAuth();
 
-  if (pathname.startsWith("/dashboard") || role !== "CLIENT") {
+  if (pathname.startsWith('/dashboard') || (role && role !== 'CLIENT')) {
     return null;
   }
 
@@ -42,36 +42,38 @@ function ChatButtonContent() {
     };
     const handleHistory = (history: Message[]) => {
       if (!open) {
-        const lastRead = Number(localStorage.getItem("chatLastRead") || 0);
+        const lastRead = Number(localStorage.getItem('chatLastRead') || 0);
         const count = history.filter(
           (m) =>
             m.clientId === userId &&
             m.senderId !== userId &&
-            new Date(m.createdAt).getTime() > lastRead
+            new Date(m.createdAt).getTime() > lastRead,
         ).length;
         setUnread(count);
       }
     };
 
-    socket.emit("chat:history", { clientId: userId });
-    socket.on("chat:receive", handleReceive);
-    socket.on("chat:history", handleHistory);
+    socket.emit('chat:history', { clientId: userId });
+    socket.on('chat:receive', handleReceive);
+    socket.on('chat:history', handleHistory);
     return () => {
-      socket.off("chat:receive", handleReceive);
-      socket.off("chat:history", handleHistory);
+      socket.off('chat:receive', handleReceive);
+      socket.off('chat:history', handleHistory);
     };
   }, [userId, open]);
 
   useEffect(() => {
     if (open) {
       setUnread(0);
-      localStorage.setItem("chatLastRead", Date.now().toString());
+      localStorage.setItem('chatLastRead', Date.now().toString());
     }
   }, [open]);
 
   return (
     <>
-      <AnimatePresence>{open && <ChatPanel onClose={() => setOpen(false)} />}</AnimatePresence>
+      <AnimatePresence>
+        {open && <ChatPanel onClose={() => setOpen(false)} />}
+      </AnimatePresence>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -89,7 +91,7 @@ function ChatButtonContent() {
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10 }}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                 className="absolute right-full mr-2 hidden sm:block bg-blue-500 text-white px-3 py-1 rounded-md shadow-lg whitespace-nowrap text-xs"
               >
                 Comunícate con nostros por nuestro chat

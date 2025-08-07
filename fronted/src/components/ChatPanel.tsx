@@ -192,7 +192,7 @@ export default function ChatPanel({
       exit={{ opacity: 0, y: 20 }}
       className="fixed bottom-20 right-6 z-50"
     >
-      <Card className="w-96 h-[500px] flex flex-col shadow-lg overflow-hidden">
+      <Card className="w-96 h-[600px] flex flex-col shadow-lg overflow-hidden">
         <div className="bg-blue-500 text-white p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Image

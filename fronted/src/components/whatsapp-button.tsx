@@ -1,25 +1,25 @@
-"use client"
+'use client'
 
-import Link from "next/link"
-import { MessageCircle } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
-import { useState } from "react"
-import { usePathname } from "next/navigation"
-import { useAuth } from "@/context/auth-context"
+import Link from 'next/link';
+import { MessageCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { useAuth } from '@/context/auth-context';
 
 export default function WhatsappButton() {
-  const pathname = usePathname()
-  const { role } = useAuth()
+  const pathname = usePathname();
+  const { role } = useAuth();
 
-  if (pathname.startsWith("/dashboard") || role !== "CLIENT") {
-    return null
+  if (pathname.startsWith('/dashboard') || (role && role !== 'CLIENT')) {
+    return null;
   }
 
-  return <WhatsappButtonContent />
+  return <WhatsappButtonContent />;
 }
 
 function WhatsappButtonContent() {
-  const [hovered, setHovered] = useState(false)
+  const [hovered, setHovered] = useState(false);
 
   return (
     <motion.div
@@ -42,7 +42,7 @@ function WhatsappButtonContent() {
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
               className="absolute right-full mr-2 hidden sm:block bg-green-500 text-white px-3 py-1 rounded-md shadow-lg whitespace-nowrap text-xs"
             >
               Comunícate con nosotros por Whatsapp
@@ -59,5 +59,5 @@ function WhatsappButtonContent() {
         </motion.div>
       </Link>
     </motion.div>
-  )
+  );
 }

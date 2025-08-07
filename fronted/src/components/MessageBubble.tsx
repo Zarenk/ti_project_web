@@ -29,7 +29,7 @@ export function MessageBubble({ text, file, isSender, time }: MessageBubbleProps
             : "bg-gradient-to-r from-pink-200 to-purple-200 text-purple-900"
         )}
       >
-        {text && <p>{text}</p>}
+        {text && <p className="text-sm">{text}</p>}
         {file && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={file} alt="Archivo adjunto" className="mt-2 max-h-60 rounded-md" />
