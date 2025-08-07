@@ -57,4 +57,12 @@ export class ChatGateway implements OnGatewayConnection {
       seenAt,
     });
   }
+
+  @SubscribeMessage('chat:typing')
+  handleTyping(
+    @MessageBody()
+    payload: { clientId: number; senderId: number; isTyping: boolean },
+  ) {
+    this.server.emit('chat:typing', payload);
+  }
 }

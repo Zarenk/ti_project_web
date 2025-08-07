@@ -36,6 +36,7 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { userId: contextUserId } = useAuth();
   const userId = propUserId ?? contextUserId ?? 1;
+  const [agentTyping, setAgentTyping] = useState(false);
 
   useEffect(() => {
     const receiveHandler = (msg: Message) => {
@@ -82,12 +83,34 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
     socket.on("chat:receive", receiveHandler);
     socket.on("chat:history", historyHandler);
     socket.on("chat:seen", seenHandler);
+    const typingHandler = ({ clientId, senderId, isTyping }: any) => {
+      if (clientId === userId && senderId !== userId) {
+        setAgentTyping(isTyping);
+      }
+    };
+    socket.on("chat:typing", typingHandler);
     return () => {
       socket.off("chat:receive", receiveHandler);
       socket.off("chat:history", historyHandler);
       socket.off("chat:seen", seenHandler);
+      socket.off("chat:typing", typingHandler);
     };
   }, [userId]);
+
+  useEffect(() => {
+    socket.emit("chat:typing", {
+      clientId: userId,
+      senderId: userId,
+      isTyping: text.length > 0,
+    });
+    return () => {
+      socket.emit("chat:typing", {
+        clientId: userId,
+        senderId: userId,
+        isTyping: false,
+      });
+    };
+  }, [text, userId]);
 
   const send = () => {
     if (text.trim() || preview) {
@@ -156,7 +179,7 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
               />
             ))}
           </AnimatePresence>
-          {text && <TypingIndicator />}
+          {agentTyping && <TypingIndicator name="Asesor" />}
           <div ref={messagesEndRef} />
         </div>
         <form

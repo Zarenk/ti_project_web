@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AlertCircle, Eye, X, Filter, ArrowUpDown } from 'lucide-react';
 import socket, { cn } from '@/lib/utils';
+import TypingIndicator from '@/components/TypingIndicator';
 
 interface Message {
   id: number;
@@ -32,6 +33,7 @@ export default function Page() {
   const [lastMessages, setLastMessages] = useState<Record<number, Message | null>>({});
   const [showPendingOnly, setShowPendingOnly] = useState(false);
   const [sortByName, setSortByName] = useState(false);
+  const [clientTyping, setClientTyping] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -66,6 +68,7 @@ export default function Page() {
 
     setHistory([]); // Reset history when switching clients
     setPendingCounts((prev) => ({ ...prev, [selected]: 0 }));
+    setClientTyping(false);
 
     const receiveHandler = (msg: Message) => {
       if (msg.clientId === selected) {
@@ -94,18 +97,42 @@ export default function Page() {
       }
     };
 
+    const typingHandler = ({ clientId, senderId, isTyping }: any) => {
+      if (clientId === selected && senderId !== userId) {
+        setClientTyping(isTyping);
+      }
+    };
+
     socket.emit('chat:history', { clientId: selected });
     socket.emit('chat:seen', { clientId: selected, viewerId: userId });
     socket.on('chat:receive', receiveHandler);
     socket.on('chat:history', historyHandler);
     socket.on('chat:seen', seenHandler);
+    socket.on('chat:typing', typingHandler);
 
     return () => {
       socket.off('chat:receive', receiveHandler);
       socket.off('chat:history', historyHandler);
       socket.off('chat:seen', seenHandler);
+      socket.off('chat:typing', typingHandler);
     };
   }, [selected]);
+
+  useEffect(() => {
+    if (selected === null) return;
+    socket.emit('chat:typing', {
+      clientId: selected,
+      senderId: userId,
+      isTyping: text.length > 0,
+    });
+    return () => {
+      socket.emit('chat:typing', {
+        clientId: selected,
+        senderId: userId,
+        isTyping: false,
+      });
+    };
+  }, [text, selected, userId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -319,6 +346,11 @@ export default function Page() {
                     </div>
                   </div>
                 ))}
+                {clientTyping && (
+                  <TypingIndicator
+                    name={clientMap.get(selected!) || 'Usuario'}
+                  />
+                )}
                 <div ref={bottomRef} />
               </div>
               <div className="p-4 border-t flex gap-2">
