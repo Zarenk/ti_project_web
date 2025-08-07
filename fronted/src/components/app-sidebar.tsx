@@ -29,6 +29,7 @@ import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
 import { getUserProfile } from "../app/dashboard/users/users.api"
+import { getUnansweredMessages } from "@/app/dashboard/messages/messages.api"
 import {
   Sidebar,
   SidebarContent,
@@ -246,6 +247,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     email: "",
     avatar: "/logo_ti.png",
   })
+  const [unreadMessages, setUnreadMessages] = useState(0)
 
   useEffect(() => {
     async function fetchProfile() {
@@ -263,13 +265,40 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     fetchProfile()
   }, [])
 
+  useEffect(() => {
+    async function fetchUnread() {
+      try {
+        const res = await getUnansweredMessages()
+        const total = res.reduce((acc, m) => acc + m.count, 0)
+        setUnreadMessages(total)
+      } catch (error) {
+        console.error("Error fetching unread messages:", error)
+      }
+    }
+    fetchUnread()
+  }, [])
+
+  const navMain = React.useMemo(() => {
+    return data.navMain.map((item) => {
+      if (item.title === "Ventas") {
+        return {
+          ...item,
+          items: item.items?.map((sub) =>
+            sub.title === "Mensajes" ? { ...sub, badge: unreadMessages } : sub
+          ),
+        }
+      }
+      return item
+    })
+  }, [unreadMessages])
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={navMain} />
         <NavProjects projects={data.projects} />
       </SidebarContent>
       <SidebarFooter>

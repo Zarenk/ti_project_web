@@ -7,12 +7,20 @@ import { ChatMessage } from '@prisma/client';
 export class ChatService {
   constructor(private prisma: PrismaService) {}
 
-  async addMessage(message: {
+  async addMessage({
+    clientId,
+    senderId,
+    text,
+  }: {
     clientId: number;
     senderId: number;
     text: string;
   }): Promise<ChatMessage> {
-    return this.prisma.chatMessage.create({ data: message });
+    // Only persist allowed fields to avoid runtime errors if extra properties
+    // are accidentally provided in the payload (e.g. attachments).
+    return this.prisma.chatMessage.create({
+      data: { clientId, senderId, text },
+    });
   }
 
   async getMessages(clientId: number): Promise<ChatMessage[]> {

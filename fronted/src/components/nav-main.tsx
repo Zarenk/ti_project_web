@@ -31,6 +31,7 @@ export function NavMain({
     items?: {
       title: string
       url: string
+      badge?: number
     }[]
   }[]
 }) {
@@ -61,17 +62,22 @@ export function NavMain({
                 <SidebarMenuSub>
                   {item.items?.map((subItem) => (
                     <SidebarMenuSubItem key={subItem.title}>
-                      <SidebarMenuSubButton 
-                        asChild>
-                        <Link 
+                      <SidebarMenuSubButton asChild>
+                        <Link
                           href={subItem.url}
+                          className="flex w-full items-center justify-between"
                           onClick={() => {
                             if (isMobile) {
                               setOpenMobile(false); // Cierra el sidebar en pantallas móviles
                             }
                           }}
-                          > {/* aca hay que cambiar etiqueta a por LINK*/}
+                        >
                           <span>{subItem.title}</span>
+                          {subItem.badge !== undefined && subItem.badge > 0 && (
+                            <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-semibold text-white">
+                              {subItem.badge}
+                            </span>
+                          )}
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>

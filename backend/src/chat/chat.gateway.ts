@@ -34,15 +34,25 @@ export class ChatGateway implements OnGatewayConnection {
 
   @SubscribeMessage('chat:send')
   async handleMessage(
-    @MessageBody() payload: {
+    @MessageBody()
+    payload: {
       clientId: number;
       senderId: number;
       text: string;
+      file?: string; // optional attachment from client
     },
     @ConnectedSocket() client: Socket,
   ) {
-    const message = await this.chatService.addMessage(payload);
-    this.server.emit('chat:receive', message);
+    const { clientId, senderId, text, file } = payload;
+    // Persist only required fields. Extra data such as files are ignored by the
+    // database but still propagated to listeners so UIs can handle them if
+    // needed.
+    const message = await this.chatService.addMessage({
+      clientId,
+      senderId,
+      text,
+    });
+    this.server.emit('chat:receive', { ...message, file });
   }
 
   @SubscribeMessage('chat:seen')

@@ -122,12 +122,15 @@ export default function ChatPanel({ onClose, userId: propUserId }: ChatPanelProp
         file: preview || undefined,
       };
       setMessages((prev) => [...prev, newMessage]);
-      socket.emit("chat:send", {
+      const payload: any = {
         clientId: userId,
         senderId: userId,
         text,
-        file: preview,
-      });
+        };
+      if (preview) {
+        payload.file = preview;
+      }
+      socket.emit("chat:send", payload);
       setText("");
       setFile(null);
       setPreview(null);
