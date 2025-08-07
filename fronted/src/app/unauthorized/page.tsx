@@ -1,3 +1,5 @@
+"use client"
+
 import { Player } from '@lottiefiles/react-lottie-player'
 import { motion } from 'framer-motion'
 
