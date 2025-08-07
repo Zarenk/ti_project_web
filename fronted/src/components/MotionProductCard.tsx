@@ -12,7 +12,8 @@ import { ShoppingCart, Heart } from "lucide-react"
 import { toggleFavorite } from "@/app/favorites/favorite.api"
 import Link from "next/link"
 
-const MotionButton = motion(Button)
+// Use the new `motion.create` API to avoid deprecated `motion()` usage
+const MotionButton = motion.create(Button)
 
 interface Product {
   id: number
