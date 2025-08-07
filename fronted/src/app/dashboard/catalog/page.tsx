@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { exportCatalog } from "./catalog.api";
 import { generateCatalogPdf } from "./catalog-pdf";
 import { getProducts } from "../products/products.api";
+import { getStoresWithProduct } from "../inventory/inventory.api";
 import CategoryFilter from "./category-filter";
 import CatalogPreview from "./catalog-preview";
 
@@ -20,9 +21,25 @@ export default function CatalogPage() {
         return;
       }
       const all = await getProducts();
-      setProducts(
-        all.filter((p: any) => selectedCategories.includes(p.categoryId))
+      const filtered = all.filter((p: any) =>
+        selectedCategories.includes(p.categoryId)
       );
+      const mapped = await Promise.all(
+        filtered.map(async (p: any) => {
+          let stock: number | null = null;
+          try {
+            const stores = await getStoresWithProduct(p.id);
+            stock = stores.reduce(
+              (sum: number, item: any) => sum + (item.stock ?? 0),
+              0
+            );
+          } catch (error) {
+            console.error("Error fetching stock:", error);
+          }
+          return { ...p, stock };
+        })
+      );
+      setProducts(mapped);
     }
     fetchProducts();
   }, [selectedCategories]);

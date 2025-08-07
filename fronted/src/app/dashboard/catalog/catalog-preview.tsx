@@ -1,9 +1,19 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CatalogItem } from "@/templates/catalog/catalog-item";
 import type { CatalogItemProps } from "@/templates/catalog/catalog-item";
 import { brandAssets } from "@/catalog/brandAssets";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Product {
   id: number;
@@ -15,6 +25,7 @@ interface Product {
   imageUrl?: string;
   images?: string[];
   brand?: string;
+  stock?: number | null;
   category?: {
     id: number;
     name: string;
@@ -30,6 +41,40 @@ interface CatalogPreviewProps {
 }
 
 export function CatalogPreview({ products }: CatalogPreviewProps) {
+  const [onlyStock, setOnlyStock] = useState(false);
+  const [selectedBrand, setSelectedBrand] = useState("all");
+  const [sortBy, setSortBy] = useState<"name" | "price-asc" | "price-desc">(
+    "name"
+  );
+
+  const brands = useMemo(
+    () =>
+      Array.from(
+        new Set(products.map((p) => p.brand).filter((b): b is string => !!b))
+      ).sort((a, b) => a.localeCompare(b)),
+    [products]
+  );
+
+  const filteredProducts = useMemo(() => {
+    const result = products.filter((p) => {
+      const matchesStock = !onlyStock || (p.stock ?? 0) > 0;
+      const matchesBrand =
+        selectedBrand === "all" || p.brand === selectedBrand;
+      return matchesStock && matchesBrand;
+    });
+    const getPrice = (p: Product) => p.priceSell ?? p.price ?? 0;
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case "price-asc":
+          return getPrice(a) - getPrice(b);
+        case "price-desc":
+          return getPrice(b) - getPrice(a);
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
+    return result;
+  }, [products, onlyStock, selectedBrand, sortBy]);
 
   function formatPrice(value: number): string {
     return `S/. ${value.toLocaleString('en-US')}`;
@@ -59,7 +104,7 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
   }
 
   const grouped: Record<string, CatalogItemProps[]> = {};
-  for (const p of products) {
+    for (const p of filteredProducts) {
     const priceValue = p.priceSell ?? p.price;
     const item: CatalogItemProps = {
       title: p.name,
@@ -77,17 +122,54 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     <Card>
       <CardHeader>
         <CardTitle>Vista previa del catálogo</CardTitle>
+        <div className="mt-4 flex flex-wrap gap-4">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="only-stock"
+              checked={onlyStock}
+              onCheckedChange={(checked) => setOnlyStock(checked === true)}
+            />
+            <Label htmlFor="only-stock">Solo con stock</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Label>Marca</Label>
+            <Select value={selectedBrand} onValueChange={setSelectedBrand}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {brands.map((b) => (
+                  <SelectItem key={b} value={b}>
+                    {b}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Label>Ordenar</Label>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">Nombre</SelectItem>
+                <SelectItem value="price-asc">Precio ascendente</SelectItem>
+                <SelectItem value="price-desc">Precio descendente</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-8">
         {categories.map((cat) => (
           <div key={cat}>
             <h2 className="mb-4 text-xl font-semibold">{cat}</h2>
             <div className="catalog-grid mx-auto grid max-w-7xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {grouped[cat]
-                .sort((a, b) => a.title.localeCompare(b.title))
-                .map((item, index) => (
-                  <CatalogItem key={index} {...item} />
-                ))}
+              {grouped[cat].map((item, index) => (
+                <CatalogItem key={index} {...item} />
+              ))}
             </div>
           </div>
         ))}
