@@ -447,6 +447,24 @@ export async function getRecentSalesByRange(from: string, to: string) {
   return res.json();
 }
 
+export async function getRecentSales(limit = 10) {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    throw new Error('No se encontró un token de autenticación')
+  }
+  const to = new Date().toISOString()
+  const fromDate = new Date()
+  fromDate.setMonth(fromDate.getMonth() - 1)
+  const from = fromDate.toISOString()
+  const res = await fetch(
+    `${BACKEND_URL}/api/sales/recent/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  if (!res.ok) throw new Error('Error al obtener ventas recientes')
+  const data = await res.json()
+  return Array.isArray(data) ? data.slice(0, limit) : []
+}
+
 export async function getSaleById(id: number | string) {
   const token = localStorage.getItem('token');
   if (!token) {

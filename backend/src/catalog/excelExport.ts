@@ -43,59 +43,72 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
   };
   headerRow.height = 20;
 
-  items.forEach((item) => {
-    const row = worksheet.addRow({
-      name: item.name,
-      description: item.description,
-      price: item.price,
-      brand: item.brand,
-      gpu: item.gpu,
-      cpu: item.cpu,
-      categoryName: item.categoryName,
-    });
+  const grouped = items.reduce<Record<string, CatalogItem[]>>((acc, item) => {
+    const cat = item.categoryName || 'Sin categoría';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(item);
+    return acc;
+  }, {});
+
+  const categories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+  categories.forEach((cat) => {
+    const catRow = worksheet.addRow({ name: cat });
+    const rowNumber = catRow.number;
+    worksheet.mergeCells(`A${rowNumber}:G${rowNumber}`);
+    catRow.font = { bold: true };
+    catRow.alignment = { horizontal: 'center' };
+
+    grouped[cat]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((item) => {
+        const row = worksheet.addRow({
+          name: item.name,
+          description: item.description,
+          price: item.price,
+          brand: item.brand,
+          gpu: item.gpu,
+          cpu: item.cpu,
+          categoryName: item.categoryName,
+        });
 
     row.getCell('price').numFmt = '#,##0.00';
-    row.height = 60;
-    row.alignment = { vertical: 'top', wrapText: true } as any;
+        row.height = 60;
+        row.alignment = { vertical: 'top', wrapText: true } as any;
 
-    const rowNumber = row.number;
-    const insertLogo = (file: string, column: string) => {
-      if (!file) return;
-      try {
-        // Only allow supported extensions for ExcelJS
-        const ext = path.extname(file).slice(1).toLowerCase();
-        let excelExt: 'jpeg' | 'png' | 'gif';
-        if (ext === 'jpg' || ext === 'jpeg') {
-          excelExt = 'jpeg';
-        } else if (ext === 'png') {
-          excelExt = 'png';
-        } else if (ext === 'gif') {
-          excelExt = 'gif';
-        } else {
-          // Skip unsupported formats (e.g. svg)
-          return;
-        }
+        const rNumber = row.number;
+        const insertLogo = (file: string, column: string) => {
+          if (!file) return;
+          try {
+            const ext = path.extname(file).slice(1).toLowerCase();
+            let excelExt: 'jpeg' | 'png' | 'gif';
+            if (ext === 'jpg' || ext === 'jpeg') {
+              excelExt = 'jpeg';
+            } else if (ext === 'png') {
+              excelExt = 'png';
+            } else if (ext === 'gif') {
+              excelExt = 'gif';
+            } else {
+              return;
+            }
 
-        const imageId = workbook.addImage({ filename: file, extension: excelExt });
-        const colNumber = worksheet.getColumn(column).number;
-        const tl = new (ExcelJS as any).Anchor(worksheet, {
-          col: colNumber - 1,
-          row: rowNumber - 1,
-        });
-        const br = new (ExcelJS as any).Anchor(worksheet, {
-          col: colNumber,
-          row: rowNumber,
-        });
-        worksheet.addImage(imageId, { tl, br, editAs: 'oneCell' });
+            const imageId = workbook.addImage({ filename: file, extension: excelExt });
+            const colNumber = worksheet.getColumn(column).number;
+            const tl = new (ExcelJS as any).Anchor(worksheet, {
+              col: colNumber - 1,
+              row: rNumber - 1,
+            });
+            const br = new (ExcelJS as any).Anchor(worksheet, {
+              col: colNumber,
+              row: rNumber,
+            });
+            worksheet.addImage(imageId, { tl, br, editAs: 'oneCell' });
+          } catch {}
+        };
 
-      } catch {
-        // Ignore logos that cannot be inserted
-      }
-    };
-
-    insertLogo(item.brandLogo ?? '', 'D');
-    insertLogo(item.gpuLogo ?? '', 'E');
-    insertLogo(item.cpuLogo ?? '', 'F');
+        insertLogo(item.brandLogo ?? '', 'D');
+        insertLogo(item.gpuLogo ?? '', 'E');
+        insertLogo(item.cpuLogo ?? '', 'F');
+      });
   });
 
   return workbook;

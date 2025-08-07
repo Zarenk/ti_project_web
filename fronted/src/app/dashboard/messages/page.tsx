@@ -29,7 +29,9 @@ export default function Page() {
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
-   const [lastMessages, setLastMessages] = useState<Record<number, Message | null>>({});
+  const [lastMessages, setLastMessages] = useState<Record<number, Message | null>>({});
+  const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const [sortByName, setSortByName] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -128,9 +130,13 @@ export default function Page() {
 
   const filteredClients = clients
     .filter((c: any) => c.name.toLowerCase().includes(search.toLowerCase()))
-    .sort(
-      (a: any, b: any) =>
-        (pendingCounts[b.userId] ?? 0) - (pendingCounts[a.userId] ?? 0)
+    .filter((c: any) =>
+      !showPendingOnly || (pendingCounts[c.userId] ?? 0) > 0,
+    )
+    .sort((a: any, b: any) =>
+      sortByName
+        ? a.name.localeCompare(b.name)
+        : (pendingCounts[b.userId] ?? 0) - (pendingCounts[a.userId] ?? 0),
     );
   const clientMap = new Map(clients.map((c: any) => [c.userId, c.name]));
   const clientInfo = clients.find((c: any) => c.userId === selected);
@@ -139,15 +145,27 @@ export default function Page() {
   return (
     <section className="p-4 space-y-4 h-[calc(100vh-8rem)] flex flex-col">
       <h1 className="text-2xl font-bold">Mensajes</h1>
-      <div className="flex flex-1 flex-col md:flex-row gap-4">
-        <Card className="w-full md:w-1/3 flex flex-col h-full">
+      <div className="flex flex-1 flex-col md:flex-row gap-4 overflow-hidden">
+        <Card className="w-full md:w-1/3 flex flex-col h-full overflow-hidden">
           <div className="p-4 border-b flex items-center justify-between">
             <h2 className="text-lg font-semibold">Conversaciones</h2>
             <div className="flex gap-2">
-              <Button variant="ghost" size="icon" aria-label="Filtrar">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Filtrar"
+                onClick={() => setShowPendingOnly((p) => !p)}
+                className="hover:bg-blue-100 hover:text-blue-600"
+              >
                 <Filter className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" aria-label="Ordenar">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Ordenar"
+                onClick={() => setSortByName((p) => !p)}
+                className="hover:bg-blue-100 hover:text-blue-600"
+              >
                 <ArrowUpDown className="h-4 w-4" />
               </Button>
             </div>
@@ -205,7 +223,7 @@ export default function Page() {
             ))}
           </ul>
         </Card>
-        <div className="flex-1 h-full">
+        <div className="flex-1 h-full flex flex-col min-h-0 overflow-hidden">
           {selected === null ? (
             <Card className="h-96 flex items-center justify-center p-4">
               <p className="text-muted-foreground">
@@ -213,8 +231,8 @@ export default function Page() {
               </p>
             </Card>
           ) : (
-            <Card className="h-full flex flex-col">
-              <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-gradient-to-r from-primary/80 to-primary shadow-sm">
+            <Card className="h-full flex flex-col overflow-hidden">
+              <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-gradient-to-r from-primary/80 to-primary text-primary-foreground shadow-sm">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-10 w-10">
                     {clientInfo?.image ? (
@@ -226,7 +244,7 @@ export default function Page() {
                     )}
                   </Avatar>
                   <div className="flex flex-col">
-                    <span className="font-medium text-blue-600 dark:text-blue-400">
+                    <span className="font-medium text-primary-foreground">
                       {clientMap.get(selected) || 'Usuario'}
                     </span>
                     <span

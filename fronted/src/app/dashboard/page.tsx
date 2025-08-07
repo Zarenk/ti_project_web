@@ -6,10 +6,11 @@ import { BarChart3, Box, DollarSign, Package, ShoppingCart, TrendingUp, Truck, U
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api";
-import { getMonthlySalesTotal } from "./sales/sales.api";
+import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api"
+import { getMonthlySalesTotal, getRecentSales } from "./sales/sales.api"
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 import { getOrdersCount, getRecentOrders } from "./orders/orders.api"
+import { getAllEntries } from "./entries/entries.api"
 import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 
@@ -21,11 +22,10 @@ export default function WelcomeDashboard() {
 
   const [monthlySales, setMonthlySales] = useState<{ total: number; growth: number | null } | null>(null);
 
-  const [lowStockItems, setLowStockItems] = useState<{ productId: number; productName: string; storeName: string; stock: number }[]>([]);
-  const [pendingOrders, setPendingOrders] = useState(0);
-  // Holds recent activity items. For now it contains recent orders, but the
-  // structure allows adding more activity types in the future.
-  const [recentActivity, setRecentActivity] = useState<{ id: number; code: string; createdAt: string }[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<{ productId: number; productName: string; storeName: string; stock: number }[]>([])
+  const [pendingOrders, setPendingOrders] = useState(0)
+  type ActivityItem = { id: number | string; type: 'order' | 'sale' | 'entry' | 'alert'; description: string; createdAt: string; href: string }
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
 
   const router = useRouter()
 
@@ -75,20 +75,6 @@ useEffect(() => {
   fetchData();
 }, []);
 
-
-useEffect(() => {
-  async function fetchLowStockItems() {
-    try {
-      const data = await getLowStockItems();
-      setLowStockItems(data);
-    } catch (error) {
-      console.error('Error al cargar productos sin stock:', error);
-    }
-  }
-
-  fetchLowStockItems();
-}, []);
-
 useEffect(() => {
   async function fetchPending() {
     try {
@@ -104,15 +90,54 @@ useEffect(() => {
 useEffect(() => {
   async function fetchRecent() {
     try {
-      // Request the last ten records from the backend
-      const data = await getRecentOrders(10);
-      setRecentActivity(data);
+      const [orders, entries, sales, lowStock] = await Promise.all([
+        getRecentOrders(10),
+        getAllEntries(),
+        getRecentSales(),
+        getLowStockItems(),
+      ])
+      setLowStockItems(lowStock)
+      const entryItems = (entries as any[])
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 10)
+      const activities: ActivityItem[] = [
+        ...orders.map((o: any) => ({
+          id: o.id,
+          type: 'order',
+          description: `Nueva orden #${o.code}`,
+          createdAt: o.createdAt,
+          href: `/dashboard/orders/${o.id}`,
+        })),
+        ...sales.map((s: any) => ({
+          id: s.id,
+          type: 'sale',
+          description: `Venta interna #${s.id}`,
+          createdAt: s.createdAt,
+          href: '/dashboard/sales',
+        })),
+        ...entryItems.map((e: any) => ({
+          id: e.id,
+          type: 'entry',
+          description: `Ingreso de inventario #${e.id}`,
+          createdAt: e.createdAt,
+          href: '/dashboard/entries',
+        })),
+        ...lowStock.slice(0, 10).map((i: any) => ({
+          id: i.productId,
+          type: 'alert',
+          description: `Sin stock: ${i.productName}`,
+          createdAt: new Date().toISOString(),
+          href: '/dashboard/inventory',
+        })),
+      ]
+      activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      setRecentActivity(activities.slice(0, 10))
     } catch (error) {
-      console.error('Error al cargar actividad de ordenes:', error);
+      console.error('Error al cargar actividad reciente:', error)
     }
   }
-  fetchRecent();
-}, []);
+  fetchRecent()
+}, [])
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
@@ -256,46 +281,22 @@ useEffect(() => {
                 <CardDescription>Ultimas actualizaciones del inventario y ordenes</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-6">
-                {recentActivity.slice(0, 10).map((o) => (
-                  <div key={o.id} className="flex items-center space-x-4">
+                {recentActivity.map((a) => (
+                  <Link key={`${a.type}-${a.id}`} href={a.href} className="flex items-center space-x-4">
                     <div className="rounded-full bg-muted p-2">
-                      <Users className="h-4 w-4" />
+                      {a.type === 'order' && <Users className="h-4 w-4" />}
+                      {a.type === 'sale' && <DollarSign className="h-4 w-4" />}
+                      {a.type === 'entry' && <Package className="h-4 w-4" />}
+                      {a.type === 'alert' && <TrendingUp className="h-4 w-4" />}
                     </div>
                     <div>
-                      <p className="text-sm font-medium leading-none">Nueva orden #{o.code}</p>
+                      <p className="text-sm font-medium leading-none">{a.description}</p>
                       <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(o.createdAt), { addSuffix: true, locale: es })}
+                        {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true, locale: es })}
                       </p>
                     </div>
-                  </div>
+                  </Link>
                 ))}
-                <div className="flex items-center space-x-4">
-                  <div className="rounded-full bg-muted p-2">
-                    <Package className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium leading-none">Stock updated: Wireless Headphones</p>
-                    <p className="text-xs text-muted-foreground">15 minutes ago</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="rounded-full bg-muted p-2">
-                    <Truck className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium leading-none">Shipment #4582 delivered</p>
-                    <p className="text-xs text-muted-foreground">1 hour ago</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="rounded-full bg-muted p-2">
-                    <TrendingUp className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium leading-none">Low stock alert: USB-C Cables</p>
-                    <p className="text-xs text-muted-foreground">3 hours ago</p>
-                  </div>
-                </div>
               </CardContent>
               <CardFooter>
                 <Button variant="outline" className="w-full">

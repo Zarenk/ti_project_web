@@ -1,6 +1,14 @@
 'use client'
 
-import { pdf, Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer'
+import {
+  pdf,
+  Document,
+  Page,
+  View,
+  Text,
+  Image as PdfImage,
+  StyleSheet
+} from '@react-pdf/renderer'
 import { brandAssets } from '@/catalog/brandAssets'
 
 interface Product {
@@ -13,6 +21,10 @@ interface Product {
   imageUrl?: string
   images?: string[]
   brand?: string
+  category?: {
+    id?: number
+    name: string
+  }
   specification?: {
     processor?: string
     graphics?: string
@@ -25,6 +37,11 @@ interface CatalogPdfItem {
   price?: string
   imageUrl?: string
   logos?: string[]
+}
+
+interface CatalogSection {
+  category: string
+  items: CatalogPdfItem[]
 }
 
 function getLogos(p: Product): string[] {
@@ -56,8 +73,15 @@ function formatPrice(value: number): string {
 
 const styles = StyleSheet.create({
   page: { padding: 16 },
+  category: { fontSize: 14, fontWeight: 'bold', marginBottom: 8 },
   grid: { display: 'flex', flexDirection: 'row', flexWrap: 'wrap' },
-  item: { width: '33.33%', padding: 8 },
+  item: {
+    width: '33.33%',
+    padding: 8,
+    border: '1 solid #cccccc',
+    borderRadius: 4,
+    marginBottom: 8
+  },
   image: { width: '100%', height: 120, objectFit: 'cover', marginBottom: 4 },
   title: { fontSize: 12, fontWeight: 'bold' },
   description: { fontSize: 10, marginTop: 2 },
@@ -66,51 +90,114 @@ const styles = StyleSheet.create({
   logo: { width: 24, height: 24, marginRight: 4 }
 })
 
-function CatalogPdfDocument({ items }: { items: CatalogPdfItem[] }) {
+function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size))
+  }
+  return chunks
+}
+
+function CatalogPdfDocument({ sections }: { sections: CatalogSection[] }) {
+  const ITEMS_PER_PAGE = 9
+  const pages: { category: string; items: CatalogPdfItem[] }[] = []
+
+  for (const section of sections) {
+    const groups = chunk(section.items, ITEMS_PER_PAGE)
+    for (const items of groups) {
+      pages.push({ category: section.category, items })
+    }
+  }
+
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.grid}>
-          {items.map((item, index) => (
-            <View key={index} style={styles.item}>
-              {item.imageUrl && <Image style={styles.image} src={item.imageUrl} />}
-              <Text style={styles.title}>{item.title}</Text>
-              {item.description && (
-                <Text style={styles.description}>{item.description}</Text>
-              )}
-              {item.price && <Text style={styles.price}>{item.price}</Text>}
-              {item.logos && item.logos.length > 0 && (
-                <View style={styles.logos}>
-                  {item.logos.map((logo, idx) => (
-                    <Image key={idx} style={styles.logo} src={logo} />
-                  ))}
-                </View>
-              )}
-            </View>
-          ))}
-        </View>
-      </Page>
+      {pages.map((page, index) => (
+        <Page key={index} size="A4" style={styles.page}>
+          <Text style={styles.category}>{page.category}</Text>
+          <View style={styles.grid}>
+            {page.items.map((item, idx) => (
+              <View key={idx} style={styles.item}>
+                {item.imageUrl && <PdfImage style={styles.image} src={item.imageUrl} />}
+                <Text style={styles.title}>{item.title}</Text>
+                {item.description && (
+                  <Text style={styles.description}>{item.description}</Text>
+                )}
+                {item.price && <Text style={styles.price}>{item.price}</Text>}
+                {item.logos && item.logos.length > 0 && (
+                  <View style={styles.logos}>
+                    {item.logos.map((logo, id) => (
+                      <PdfImage key={id} style={styles.logo} src={logo} />
+                    ))}
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        </Page>
+      ))}
     </Document>
   )
 }
 
+async function svgToPngDataUrl(src: string, size = 24): Promise<string> {
+  const svgText = await fetch(src).then((r) => r.text())
+  const svgBlob = new Blob([svgText], { type: 'image/svg+xml' })
+  const url = URL.createObjectURL(svgBlob)
+  const img = new Image()
+  img.src = url
+  await new Promise((resolve) => {
+    img.onload = resolve
+  })
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  ctx?.drawImage(img, 0, 0, size, size)
+  URL.revokeObjectURL(url)
+  return canvas.toDataURL('image/png')
+}
+
+async function normalizeLogo(src: string): Promise<string> {
+  if (src.endsWith('.svg')) {
+    try {
+      return await svgToPngDataUrl(src)
+    } catch {
+      return src
+    }
+  }
+  return src
+}
+
 export async function generateCatalogPdf(products: Product[]): Promise<Blob> {
-  const items: CatalogPdfItem[] = products.map((p) => {
+  const grouped: Record<string, CatalogPdfItem[]> = {}
+
+  for (const p of products) {
     const priceValue = p.priceSell ?? p.price
     const imageUrl = p.imageUrl ?? p.image ?? p.images?.[0]
     const proxied = imageUrl
       ? `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
       : undefined
 
-    return {
+    const logos = await Promise.all(getLogos(p).map(normalizeLogo))
+    const item: CatalogPdfItem = {
       title: p.name,
       description: p.description,
       price: typeof priceValue === 'number' ? formatPrice(priceValue) : undefined,
       imageUrl: proxied,
-      logos: getLogos(p)
+      logos
     }
-  })
 
-  const blob = await pdf(<CatalogPdfDocument items={items} />).toBlob()
+  const catName = p.category?.name || 'Sin categoría'
+    grouped[catName] = grouped[catName] ? [...grouped[catName], item] : [item]
+  }
+
+  const sections: CatalogSection[] = Object.keys(grouped)
+    .sort((a, b) => a.localeCompare(b))
+    .map((cat) => ({
+      category: cat,
+      items: grouped[cat].sort((a, b) => a.title.localeCompare(b.title))
+    }))
+
+  const blob = await pdf(<CatalogPdfDocument sections={sections} />).toBlob()
   return blob
 }
