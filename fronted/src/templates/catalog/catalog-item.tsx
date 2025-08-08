@@ -36,7 +36,7 @@ export function CatalogItem({
         {description && (
           <p className="text-sm text-gray-600 line-clamp-2">{description}</p>
         )}
-        {price && <p className="text-sm font-bold text-gray-900">{price}</p>}
+        {price && <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{price}</p>}
       </div>
       {logos && logos.length > 0 && (
         <div className="flex flex-wrap justify-center gap-2 p-1 pb-2">

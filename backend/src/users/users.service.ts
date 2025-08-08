@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class UsersService {
@@ -108,6 +109,9 @@ export class UsersService {
         email: true,
         role: true,
         createdAt: true,
+        client: {
+          select: { phone: true },
+        },
       },
     });
   }
@@ -148,5 +152,39 @@ export class UsersService {
       console.error('Error en el backend:', error);
       throw new InternalServerErrorException('Error al actualizar el usuario');
     }
+  }
+
+  async updateProfile(id: number, data: UpdateProfileDto) {
+    const { phone, ...userData } = data;
+    const updated = await this.update(id, userData);
+
+    if (phone !== undefined) {
+      const existingClient = await this.prismaService.client.findUnique({
+        where: { userId: id },
+      });
+
+      if (existingClient) {
+        await this.prismaService.client.update({
+          where: { userId: id },
+          data: { phone },
+        });
+      }
+    }
+
+    return updated;
+  }
+
+  async changePassword(id: number, currentPassword: string, newPassword: string) {
+    const user = await this.prismaService.user.findUnique({ where: { id } });
+    if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+      throw new UnauthorizedException('Contraseña actual incorrecta');
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await this.prismaService.user.update({
+      where: { id },
+      data: { password: hashed },
+    });
+    return { message: 'Password updated successfully' };
   }
 }

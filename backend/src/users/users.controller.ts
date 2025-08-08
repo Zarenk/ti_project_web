@@ -2,7 +2,8 @@ import { Controller, Post, Body, Request, UseGuards, Get, NotFoundException, Pat
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ApiResponse } from '@nestjs/swagger';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
 
 @Controller('users')
 export class UsersController {
@@ -65,7 +66,17 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Patch('profile')
-  updateProfile(@Request() req, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(req.user.userId, updateUserDto);
+  updateProfile(@Request() req, @Body() updateUserDto: UpdateProfileDto) {
+    return this.usersService.updateProfile(req.user.userId, updateUserDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('password')
+  changePassword(@Request() req, @Body() body: UpdatePasswordDto) {
+    return this.usersService.changePassword(
+      req.user.userId,
+      body.currentPassword,
+      body.newPassword,
+    );
   }
 }

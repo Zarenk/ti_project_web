@@ -43,7 +43,7 @@ interface CatalogPreviewProps {
 export function CatalogPreview({ products }: CatalogPreviewProps) {
   const [onlyStock, setOnlyStock] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState("all");
-  const [sortBy, setSortBy] = useState<"name" | "price-asc" | "price-desc">(
+  const [sortBy, setSortBy] = useState<"name" | "brand" | "price-asc" | "price-desc">(
     "name"
   );
 
@@ -69,6 +69,8 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
           return getPrice(a) - getPrice(b);
         case "price-desc":
           return getPrice(b) - getPrice(a);
+        case "brand":
+          return (a.brand || "").localeCompare(b.brand || "");
         default:
           return a.name.localeCompare(b.name);
       }
@@ -163,9 +165,12 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-8">
-        {categories.map((cat) => (
-          <div key={cat}>
-            <h2 className="mb-4 text-xl font-semibold">{cat}</h2>
+        {categories.map((cat, idx) => (
+          <div key={cat} className="rounded-md p-4 odd:bg-muted/50 even:bg-muted">
+            <div className="mb-4 text-center">
+              <h2 className="text-xl font-semibold">{cat}</h2>
+              <div className="mx-auto mt-2 h-1 w-full bg-primary"></div>
+            </div>
             <div className="catalog-grid mx-auto grid max-w-7xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {grouped[cat].map((item, index) => (
                 <CatalogItem key={index} {...item} />
