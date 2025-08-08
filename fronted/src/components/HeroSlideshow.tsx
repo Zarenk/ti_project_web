@@ -7,12 +7,18 @@ import { AnimatePresence, motion, useMotionValue } from "framer-motion"
 import { ChevronLeft, ChevronRight, Shield } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 
+interface Brand {
+  name: string
+  logoSvg?: string
+  logoPng?: string
+}
+
 interface Product {
   id: number
   name: string
   description: string
   price: number
-  brand: string
+  brand: Brand | null
   category: string
   images: string[]
   stock: number | null

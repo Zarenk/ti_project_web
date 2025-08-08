@@ -1,3 +1,4 @@
-import { Brand } from "../entities/brand.entity";
+import { Brand } from '@prisma/client';
 
-export type CreateBrandDto = Omit<Brand, 'id' | 'createdAt' | 'updatedAt'>;
+export type CreateBrandDto = Pick<Brand, 'name'> &
+  Partial<Pick<Brand, 'logoSvg' | 'logoPng'>>;
