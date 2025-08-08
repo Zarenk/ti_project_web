@@ -24,12 +24,18 @@ import { toast } from "sonner"
 import { useCart } from "@/context/cart-context"
 
 // Tipos
+interface Brand {
+  name: string
+  logoSvg?: string
+  logoPng?: string
+}
+
 interface Product {
   id: number
   name: string
   description: string
   price: number
-  brand: string
+  brand: Brand | null
   category: string
   images: string[]
   stock: number | null
@@ -75,7 +81,13 @@ export default function StorePage() {
               name: p.name,
               description: p.description || '',
               price: p.priceSell ?? p.price,
-              brand: p.brand || 'Sin marca',
+              brand: p.brand
+                ? {
+                    name: p.brand.name,
+                    logoSvg: p.brand.logoSvg,
+                    logoPng: p.brand.logoPng,
+                  }
+                : null,
               category: p.category?.name || 'Sin categoría',
               images: p.images || [],
               stock,
@@ -127,9 +139,11 @@ export default function StorePage() {
     a.localeCompare(b, undefined, { numeric: true })
   )
 
-  const brands = [...new Set(products.map((p) => p.brand))].sort((a, b) =>
-    a.localeCompare(b, undefined, { numeric: true })
-  )
+  const brands = [
+    ...new Set(
+      products.map((p) => p.brand?.name).filter((b): b is string => !!b)
+    ),
+  ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
 
   // Función para manejar filtros de categoría
   const handleCategoryChange = (category: string, checked: CheckedState) => {
@@ -165,14 +179,17 @@ export default function StorePage() {
       const matchesSearch =
         product.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
         product.description.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        product.brand.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+        (product.brand?.name.toLowerCase() || '').includes(
+          debouncedSearchTerm.toLowerCase()
+        )
 
       // Filtro por categoría
       const matchesCategory =
         selectedCategories.length === 0 ||
         selectedCategories.includes(product.category)
       const matchesBrand =
-        selectedBrands.length === 0 || selectedBrands.includes(product.brand)
+        selectedBrands.length === 0 ||
+        selectedBrands.includes(product.brand?.name || '')
 
       const matchesAvailability =
         selectedAvailability.length === 0 ||
@@ -200,7 +217,9 @@ export default function StorePage() {
         case "price-high":
           return b.price - a.price
         case "brand":
-          return a.brand.localeCompare(b.brand)
+          return (
+            a.brand?.name.localeCompare(b.brand?.name || '') || 0
+          )
         default:
           return 0
       }
@@ -480,7 +499,17 @@ export default function StorePage() {
                         </div>
                         <h3 className="font-semibold text-base sm:text-lg mb-1 break-words whitespace-normal">{product.name}</h3>
                         <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{product.description}</p>
-                        <span className="text-sm text-muted-foreground mb-2 block">{product.brand}</span>
+                        <span className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                          {product.brand?.logoSvg && (
+                            <Image
+                              src={product.brand.logoSvg}
+                              alt={product.brand.name}
+                              width={16}
+                              height={16}
+                            />
+                          )}
+                          {product.brand?.name}
+                        </span>
                         <div className="flex items-center justify-between">
                           <span className="text-2xl font-bold text-green-600">S/.{product.price.toFixed(2)}</span>
                         </div>

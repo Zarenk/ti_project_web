@@ -72,12 +72,18 @@ export default function Homepage() {
     }
   };
 
+  interface Brand {
+    name: string
+    logoSvg?: string
+    logoPng?: string
+  }
+
   interface FeaturedProduct {
     id: number
     name: string
     description: string
     price: number
-    brand: string
+    brand: Brand | null
     category: string
     images: string[]
     stock: number | null
@@ -104,7 +110,7 @@ export default function Homepage() {
     name: string
     description: string
     price: number
-    brand: string
+    brand: Brand | null
     category: string
     images: string[]
     stock: number
@@ -127,8 +133,14 @@ export default function Homepage() {
             id: p.id,
             name: p.name,
             description: p.description || "",
-            price: p.priceSell ?? p.price,           
-            brand: p.brand || "Sin marca",
+            price: p.priceSell ?? p.price,
+            brand: p.brand
+              ? {
+                  name: p.brand.name,
+                  logoSvg: p.brand.logoSvg,
+                  logoPng: p.brand.logoPng,
+                }
+              : null,
             category: p.category?.name || "Sin categoría",
             images: p.images || [],
             stock: p.stock ?? null,

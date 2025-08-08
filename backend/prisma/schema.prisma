@@ -19,7 +19,7 @@ model Product{
   barcode   String?  @unique // Opcional pero único
   qrCode    String?  @unique // Opcional pero único
   description String?
-  brand String?
+  brandName String? @map("brand")
   price Float
   priceSell Float?
   status String?
@@ -27,6 +27,10 @@ model Product{
   images String[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relación con Brand
+  brandId Int?
+  brand   Brand? @relation(fields: [brandId], references: [id])
 
   // Relación con Category
   categoryId  Int
@@ -44,6 +48,7 @@ model Product{
 
   @@index([categoryId])
   @@index([name])
+  @@index([brandId])
 }
 
 model ProductSpecification {
@@ -77,6 +82,17 @@ model ProductFeature {
   product     Product  @relation(fields: [productId], references: [id])
 
   @@index([productId])
+}
+
+model Brand {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  logoSvg   String?
+  logoPng   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products  Product[]
 }
 
 model Category{

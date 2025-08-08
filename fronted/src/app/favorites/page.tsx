@@ -64,7 +64,13 @@ export default function FavoritesPage() {
                   name: fav.product.name,
                   description: fav.product.description || '',
                   price: fav.product.priceSell ?? fav.product.price,
-                  brand: fav.product.brand || '',
+                  brand: fav.product.brand
+                    ? {
+                        name: fav.product.brand.name,
+                        logoSvg: fav.product.brand.logoSvg,
+                        logoPng: fav.product.brand.logoPng,
+                      }
+                    : null,
                   category: fav.product.category?.name || '',
                   images: fav.product.images || [],
                   stock: null,

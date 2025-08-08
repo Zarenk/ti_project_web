@@ -16,7 +16,7 @@ export async function getProfile() {
   return res.json();
 }
 
-export async function updateProfile(data: { username?: string; email?: string; phone?: string }) {
+export async function updateProfile(data: { username?: string; email?: string; phone?: string; image?: string }) {
   const token = getAuthToken();
   const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
     method: 'PATCH',
@@ -32,6 +32,22 @@ export async function updateProfile(data: { username?: string; email?: string; p
     throw { response: { status: res.status, data: err } };
   }
   return res.json();
+}
+
+export async function uploadProfileImage(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${BACKEND_URL}/api/clients/upload-image`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error('Error al subir la imagen');
+  }
+
+  return res.json() as Promise<{ url: string }>;
 }
 
 export async function changePassword(currentPassword: string, newPassword: string) {

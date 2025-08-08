@@ -13,17 +13,33 @@ export class ProductsService {
     private categoryService: CategoryService, // Cambiado a PrismaService
   ) {}
 
+  private mapBrand(brand: string | null) {
+    if (!brand) return null;
+    const slug = brand.trim().toLowerCase();
+    return {
+      name: brand,
+      logoSvg: `/assets/logos/${slug}.svg`,
+      logoPng: `/assets/logos/${slug}.png`,
+    };
+  }
+
   async create(createProductDto: CreateProductDto) {
-    const { specification, images, features, ...data } = createProductDto as any
-    try{
+    const { specification, images, features, brandId, ...data } =
+      createProductDto as any
+    try {
       return await this.prismaService.product.create({
         data: {
           ...data,
+          brandId: brandId ?? undefined,
           images: images ?? [],
           specification: specification ? { create: specification } : undefined,
           features: features ? { createMany: { data: features } } : undefined,
         },
-        include: { specification: true, features: true },
+        include: {
+          specification: true,
+          features: true,
+          brand: { select: { id: true, name: true, logoSvg: true, logoPng: true } },
+        },
       })
     }
     catch (error) {
@@ -40,7 +56,15 @@ export class ProductsService {
     }
   }
 
-  async verifyOrCreateProducts(products: { name: string; price: number; description?: string; brand?: string; categoryId?: number }[]) {
+  async verifyOrCreateProducts(
+    products: {
+      name: string
+      price: number
+      description?: string
+      brandId?: number
+      categoryId?: number
+    }[],
+  ) {
     const createdProducts: {
       name: string;
       id: number;
@@ -77,7 +101,7 @@ export class ProductsService {
             name: product.name,
             price: product.price,
             description: product.description || '',
-            brand: product.brand || null,
+            brandId: product.brandId || null,
             categoryId: product.categoryId || defaultCategory.id,
             images: [],
           },
@@ -93,8 +117,8 @@ export class ProductsService {
     return createdProducts;
   }
 
-  findAll() {
-    return this.prismaService.product.findMany({
+  async findAll() {
+    const products = await this.prismaService.product.findMany({
       select: {
         id: true,
         name: true,
@@ -113,6 +137,10 @@ export class ProductsService {
         specification: true,
       },
     });
+    return products.map((p) => ({
+      ...p,
+      brand: this.mapBrand(p.brand?.name ?? null),
+    }));
   }
 
   async findOne(id: number) {
@@ -127,6 +155,7 @@ export class ProductsService {
         category: true, // Incluye la relación con la categoría
         specification: true,
         features: true,
+        brand: { select: { id: true, name: true, logoSvg: true, logoPng: true } },
       },
     })
 
@@ -134,22 +163,28 @@ export class ProductsService {
       throw new NotFoundException(`Product with id ${id} not found`)
     }
 
-    return productFound;
+    return { ...productFound, brand: this.mapBrand(productFound.brand?.name ?? null) };
   }
 
   async update(id: number, updateProductDto: UpdateProductDto) {
-    const { specification, images, features, ...data } = updateProductDto as any
-    try{
+    const { specification, images, features, brandId, ...data } =
+      updateProductDto as any
+    try {
       const productFound = await this.prismaService.product.update({
         where: { id: Number(id) },
         data: {
           ...data,
+          brandId: brandId ?? undefined,
           images: images ?? undefined,
           specification: specification
             ? { upsert: { create: specification, update: specification } }
             : undefined,
         },
-        include: { specification: true, features: true },
+        include: {
+          specification: true,
+          features: true,
+          brand: { select: { id: true, name: true, logoSvg: true, logoPng: true } },
+        },
       })
   
       if(!productFound){
@@ -194,7 +229,7 @@ export class ProductsService {
               status: product.status,
               name: product.name,
               description: product.description,
-              brand: product.brand,
+              brandId: product.brandId,
             },
           })
         )

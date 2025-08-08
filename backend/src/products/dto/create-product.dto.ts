@@ -12,7 +12,7 @@ export type ProductFeatureInput = Omit<
 
 export type CreateProductDto = Omit<
   Product,
-  'id' | 'createdAt' | 'updatedAt' | 'specification'
+  'id' | 'createdAt' | 'updatedAt' | 'specification' | 'brandName'
 > & {
   specification?: ProductSpecInput
   features?: ProductFeatureInput[]

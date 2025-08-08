@@ -5,12 +5,18 @@ import Navbar from "@/components/navbar"
 import { getProducts } from "../dashboard/products/products.api"
 import MotionProductCard from "@/components/MotionProductCard"
 
+interface Brand {
+  name: string
+  logoSvg?: string
+  logoPng?: string
+}
+
 interface Product {
   id: number
   name: string
   description: string
   price: number
-  brand: string
+  brand: Brand | null
   category: string
   images: string[]
   stock: number | null
@@ -33,7 +39,25 @@ export default function MotionDemoPage() {
     async function fetchProducts() {
       try {
         const data = await getProducts()
-        setProducts(data)
+        setProducts(
+          data.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            description: p.description || '',
+            price: p.priceSell ?? p.price,
+            brand: p.brand
+              ? {
+                  name: p.brand.name,
+                  logoSvg: p.brand.logoSvg,
+                  logoPng: p.brand.logoPng,
+                }
+              : null,
+            category: p.category?.name || '',
+            images: p.images || [],
+            stock: p.stock ?? null,
+            specification: p.specification ?? undefined,
+          }))
+        )
       } catch (err) {
         console.error("Error fetching products", err)
       }

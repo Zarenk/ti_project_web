@@ -110,7 +110,7 @@ export class UsersService {
         role: true,
         createdAt: true,
         client: {
-          select: { phone: true },
+          select: { phone: true, image: true },
         },
       },
     });
@@ -155,18 +155,31 @@ export class UsersService {
   }
 
   async updateProfile(id: number, data: UpdateProfileDto) {
-    const { phone, ...userData } = data;
+    const { phone, image, ...userData } = data;
     const updated = await this.update(id, userData);
 
-    if (phone !== undefined) {
+    if (phone !== undefined || image !== undefined) {
       const existingClient = await this.prismaService.client.findUnique({
         where: { userId: id },
       });
 
+      const clientData: { phone?: string | null; image?: string | null; name?: string; email?: string } = {};
+      if (phone !== undefined) clientData.phone = phone;
+      if (image !== undefined) clientData.image = image;
+
       if (existingClient) {
         await this.prismaService.client.update({
           where: { userId: id },
-          data: { phone },
+          data: clientData,
+        });
+      } else {
+        await this.prismaService.client.create({
+          data: {
+            userId: id,
+            name: updated.username,
+            email: updated.email,
+            ...clientData,
+          },
         });
       }
     }

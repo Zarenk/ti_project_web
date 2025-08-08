@@ -24,7 +24,11 @@ interface Product {
   image?: string;
   imageUrl?: string;
   images?: string[];
-  brand?: string;
+  brand?: {
+    name: string;
+    logoSvg?: string;
+    logoPng?: string;
+  } | null;
   stock?: number | null;
   category?: {
     id: number;
@@ -50,7 +54,9 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
   const brands = useMemo(
     () =>
       Array.from(
-        new Set(products.map((p) => p.brand).filter((b): b is string => !!b))
+        new Set(
+          products.map((p) => p.brand?.name).filter((b): b is string => !!b)
+        )
       ).sort((a, b) => a.localeCompare(b)),
     [products]
   );
@@ -59,7 +65,7 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     const result = products.filter((p) => {
       const matchesStock = !onlyStock || (p.stock ?? 0) > 0;
       const matchesBrand =
-        selectedBrand === "all" || p.brand === selectedBrand;
+        selectedBrand === "all" || p.brand?.name === selectedBrand;
       return matchesStock && matchesBrand;
     });
     const getPrice = (p: Product) => p.priceSell ?? p.price ?? 0;
@@ -69,8 +75,6 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
           return getPrice(a) - getPrice(b);
         case "price-desc":
           return getPrice(b) - getPrice(a);
-        case "brand":
-          return (a.brand || "").localeCompare(b.brand || "");
         default:
           return a.name.localeCompare(b.name);
       }
@@ -84,12 +88,26 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
 
   function getLogos(p: Product): string[] {
     const logos: string[] = [];
-    if (p.brand) {
-      const brandLogo = brandAssets.brands[p.brand.toLowerCase()];
-      if (brandLogo) logos.push(brandLogo);
-    }
-    const processor = p.specification?.processor?.toLowerCase() || "";
-    for (const [key, path] of Object.entries(brandAssets.cpus)) {
+    const brandLogo = p.brand?.logoSvg || p.brand?.logoPng;
+    if (brandLogo) logos.push(brandLogo);
+
+    const cpuMap: Record<string, string> = {
+      intel: '/assets/logos/intel.svg',
+      core: '/assets/logos/intel.svg',
+      amd: '/assets/logos/amd.svg',
+      ryzen: '/assets/logos/amd.svg',
+    };
+    const gpuMap: Record<string, string> = {
+      nvidia: '/assets/logos/nvidia.svg',
+      geforce: '/assets/logos/nvidia.svg',
+      rtx: '/assets/logos/nvidia.svg',
+      gtx: '/assets/logos/nvidia.svg',
+      amd: '/assets/logos/amd.svg',
+      radeon: '/assets/logos/amd.svg',
+    };
+
+    const processor = p.specification?.processor?.toLowerCase() || '';
+    for (const [key, path] of Object.entries(cpuMap)) {
       if (processor.includes(key)) {
         logos.push(path);
         break;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
+import { BACKEND_URL } from '@/lib/utils';
 
 export function useChatUserId() {
   const { userId: contextUserId } = useAuth();
@@ -15,7 +16,9 @@ export function useChatUserId() {
         let storedId = localStorage.getItem('guestId');
         const expiresAt = Number(localStorage.getItem('guestIdExpires'));
         if (!storedId || !expiresAt || expiresAt < Date.now()) {
-          const res = await fetch('/clients/guest');
+          const res = await fetch(`${BACKEND_URL}/api/clients/guest`, {
+            method: 'POST',
+          });
           if (!res.ok) throw new Error('Failed to create guest');
           const data = await res.json();
           storedId = String(data.userId);

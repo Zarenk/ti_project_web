@@ -49,12 +49,18 @@ interface Props {
   params: Promise<{ id: string }>
 }
 
+interface Brand {
+  name: string
+  logoSvg?: string
+  logoPng?: string
+}
+
 interface RelatedProduct {
   id: number
   name: string
   description: string
   price: number
-  brand: string
+  brand: Brand | null
   category: string
   images: string[]
   stock: number | null
@@ -126,9 +132,11 @@ export default function ProductPage({ params }: Props) {
     async function fetchRelated() {
       try {
         const all = await getProducts()
-        const filtered = all.filter((p: any) =>
-          p.id !== product.id &&
-          (p.category?.name === product.category?.name || p.brand === product.brand)
+        const filtered = all.filter(
+          (p: any) =>
+            p.id !== product.id &&
+            (p.category?.name === product.category?.name ||
+              p.brand?.name === product.brand?.name)
         )
         const mapped = await Promise.all(
           filtered.slice(0, 4).map(async (p: any) => {
@@ -147,7 +155,13 @@ export default function ProductPage({ params }: Props) {
               name: p.name,
               description: p.description || '',
               price: p.priceSell ?? p.price,
-              brand: p.brand || 'Sin marca',
+              brand: p.brand
+                ? {
+                    name: p.brand.name,
+                    logoSvg: p.brand.logoSvg,
+                    logoPng: p.brand.logoPng,
+                  }
+                : null,
               category: p.category?.name || 'Sin categoría',
               images: p.images || [],
               stock: rpStock,
@@ -282,7 +296,7 @@ export default function ProductPage({ params }: Props) {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <ProductBreadcrumb
             category={product?.category?.name || null}
-            brand={product?.brand || null}
+            brand={product?.brand?.name || null}
             productName={product?.name || ''}
         />
         <div className="grid lg:grid-cols-2 gap-12">         
@@ -405,7 +419,17 @@ export default function ProductPage({ params }: Props) {
             <div className="space-y-4">
               <div className="bg-card p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center gap-3 mb-3">
-                  <Badge className="bg-blue-500 hover:bg-blue-600">{product?.brand}</Badge>
+                  <Badge className="bg-blue-500 hover:bg-blue-600 flex items-center gap-1">
+                    {product?.brand?.logoSvg && (
+                      <Image
+                        src={product.brand.logoSvg}
+                        alt={product.brand.name}
+                        width={16}
+                        height={16}
+                      />
+                    )}
+                    {product?.brand?.name}
+                  </Badge>
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{product?.name}</h2>
                 </div>
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -869,7 +893,17 @@ export default function ProductPage({ params }: Props) {
                         <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
                           {rp.description}
                         </p>
-                        <span className="text-sm text-muted-foreground mb-2 block">{rp.brand}</span>
+                        <span className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                          {rp.brand?.logoSvg && (
+                            <Image
+                              src={rp.brand.logoSvg}
+                              alt={rp.brand.name}
+                              width={16}
+                              height={16}
+                            />
+                          )}
+                          {rp.brand?.name}
+                        </span>
                         <div className="flex items-center justify-between">
                           <span className="text-2xl font-bold text-green-600">S/.{rp.price.toFixed(2)}</span>
                         </div>

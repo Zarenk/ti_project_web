@@ -15,12 +15,18 @@ import Link from "next/link"
 // Use the new `motion.create` API to avoid deprecated `motion()` usage
 const MotionButton = motion.create(Button)
 
+interface Brand {
+  name: string
+  logoSvg?: string
+  logoPng?: string
+}
+
 interface Product {
   id: number
   name: string
   description: string
   price: number
-  brand: string
+  brand: Brand | null
   category: string
   images: string[]
   stock: number | null
@@ -103,8 +109,16 @@ export default function MotionProductCard({ product, withActions = false, priori
               <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
                 {product.description}
               </p>
-              <span className="text-sm text-muted-foreground mb-2 block">
-                {product.brand}
+              <span className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                {product.brand?.logoSvg && (
+                  <Image
+                    src={product.brand.logoSvg}
+                    alt={product.brand.name}
+                    width={16}
+                    height={16}
+                  />
+                )}
+                {product.brand?.name}
               </span>
             <div className="flex items-center justify-between">
               <span className="text-2xl font-bold text-green-600">

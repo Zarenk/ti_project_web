@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,17 +8,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Mail, Phone, Shield, CalendarClock, LogIn, CheckCircle2, UserRound } from 'lucide-react'
+import { Mail, Phone, Shield, CalendarClock, LogIn, CheckCircle2, UserRound, ImageUp } from 'lucide-react'
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { getLastAccessFromToken } from "@/lib/auth"
-import { getProfile, updateProfile, changePassword } from "./account.api"
+import { getProfile, updateProfile, changePassword, uploadProfileImage } from "./account.api"
 
 export default function Page() {
   const [user, setUser] = useState({
     nombre: "",
     correo: "",
     telefono: "",
+    imagen: "",
     rol: "",
     tipoUsuario: "Interno",
     estado: "Activo",
@@ -39,6 +40,7 @@ export default function Page() {
   })
   const [savingDatos, setSavingDatos] = useState(false)
   const [savingPass, setSavingPass] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function loadProfile() {
@@ -49,6 +51,7 @@ export default function Page() {
           nombre: data.username,
           correo: data.email,
           telefono: data.client?.phone || "",
+          imagen: data.client?.image || "",
           rol: data.role,
           tipoUsuario: "Interno",
           estado: "Activo",
@@ -121,6 +124,22 @@ export default function Page() {
       .finally(() => setSavingPass(false))
   }
 
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const { url } = await uploadProfileImage(file)
+      await updateProfile({ image: url })
+      setUser((u) => ({ ...u, imagen: url }))
+      toast("Tu imagen de perfil se ha actualizado correctamente.")
+    } catch (error) {
+      console.error(error)
+      toast("Error: No se pudo actualizar la imagen.")
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
   const initials = user.nombre
     .split(" ")
     .map((n) => n[0])
@@ -129,38 +148,58 @@ export default function Page() {
     .toUpperCase()
 
   return (
-    <div className="min-h-[100svh] w-full bg-gradient-to-b from-sky-50 via-cyan-50 to-white">
+    <div className="min-h-[100svh] w-full bg-gradient-to-b from-sky-50 via-cyan-50 to-white dark:from-slate-900 dark:via-slate-900 dark:to-slate-950">
       <header
         className={cn(
           "w-full border-b",
-          "bg-gradient-to-r from-white via-sky-50 to-cyan-50",
-          "supports-[backdrop-filter]:backdrop-blur-sm"
+          "bg-gradient-to-r from-white via-sky-50 to-cyan-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950",
+          "supports-[backdrop-filter]:backdrop-blur-sm",
+          "dark:border-slate-700"
         )}
       >
         <div className="mx-auto max-w-6xl px-4 py-6 md:py-8">
           <div className="flex flex-col items-start gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
-              <Avatar className="size-14 border shadow-sm">
-                <AvatarImage alt={`Foto de ${user.nombre}`} src="/placeholder.svg?height=112&width=112" />
-                <AvatarFallback>{initials}</AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <Avatar className="size-14 border shadow-sm">
+                  <AvatarImage alt={`Foto de ${user.nombre}`} src={user.imagen || "/placeholder.svg?height=112&width=112"} />
+                  <AvatarFallback>{initials}</AvatarFallback>
+                </Avatar>
+                <Button
+                  type="button"
+                  size="icon"
+                  className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full border border-sky-200 bg-white text-sky-700 hover:bg-sky-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImageUp className="h-3 w-3" />
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageChange}
+                />
+              </div>
               <div className="animate-in fade-in slide-in-from-left-1">
-                <h1 className="text-xl font-semibold text-slate-800 md:text-2xl">{user.nombre}</h1>
+                <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-100 md:text-2xl">{user.nombre}</h1>
                 <div className="mt-1 flex items-center gap-2">
-                  <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100">{user.rol}</Badge>
-                  <span className="text-xs text-slate-500">Tipo: {user.tipoUsuario}</span>
+                  <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100 dark:bg-slate-700 dark:text-slate-200">
+                    {user.rol}
+                  </Badge>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Tipo: {user.tipoUsuario}</span>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <Button
                 variant="outline"
-                className="rounded-full border-sky-200 text-sky-700 hover:bg-sky-100 hover:text-sky-800"
+                className="rounded-full border-sky-200 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
               >
                 Ver actividad
               </Button>
               <Button
-                className="rounded-full bg-sky-600 text-white hover:bg-sky-700"
+                className="rounded-full bg-sky-600 text-white hover:bg-sky-700 dark:bg-slate-700 dark:hover:bg-slate-600"
                 onClick={() => handleDatosSubmit(new Event('submit') as unknown as React.FormEvent)}
               >
                 Guardar todo
@@ -174,9 +213,9 @@ export default function Page() {
         {/* Columna principal */}
         <section className="md:col-span-8 space-y-6">
           {/* Información de la cuenta (lectura) */}
-          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md">
+          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
             <CardHeader>
-              <CardTitle className="text-slate-800">Información de la cuenta</CardTitle>
+              <CardTitle className="text-slate-800 dark:text-slate-100">Información de la cuenta</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -197,18 +236,18 @@ export default function Page() {
           </Card>
 
           {/* Formularios de edición */}
-          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md">
+          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
             <CardHeader>
-              <CardTitle className="text-slate-800">Editar perfil</CardTitle>
+              <CardTitle className="text-slate-800 dark:text-slate-100">Editar perfil</CardTitle>
             </CardHeader>
             <CardContent className="space-y-8">
               {/* Datos personales */}
               <section aria-labelledby="datos-personales">
                 <div className="mb-3">
-                  <h3 id="datos-personales" className="text-sm font-medium text-slate-700">
+                  <h3 id="datos-personales" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     Datos personales
                   </h3>
-                  <p className="text-xs text-slate-500">Actualiza tu nombre, correo y teléfono.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Actualiza tu nombre, correo y teléfono.</p>
                 </div>
                 <form onSubmit={handleDatosSubmit} className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
@@ -218,7 +257,7 @@ export default function Page() {
                       placeholder="Nombre completo"
                       value={formDatos.nombre}
                       onChange={(e) => setFormDatos((f) => ({ ...f, nombre: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300"
+                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -229,7 +268,7 @@ export default function Page() {
                       placeholder="correo@empresa.com"
                       value={formDatos.correo}
                       onChange={(e) => setFormDatos((f) => ({ ...f, correo: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300"
+                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
                     />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
@@ -239,21 +278,21 @@ export default function Page() {
                       placeholder="+34 600 000 000"
                       value={formDatos.telefono}
                       onChange={(e) => setFormDatos((f) => ({ ...f, telefono: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300"
+                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
                     />
                   </div>
                   <div className="sm:col-span-2 flex items-center gap-2">
                     <Button
                       type="submit"
                       disabled={savingDatos}
-                      className="rounded-full bg-sky-600 text-white transition-shadow hover:bg-sky-700 hover:shadow-sm"
+                      className="rounded-full bg-sky-600 text-white transition-shadow hover:bg-sky-700 hover:shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600"
                     >
                       {savingDatos ? "Guardando..." : "Guardar cambios"}
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
-                      className="rounded-full text-sky-700 hover:bg-sky-100"
+                      className="rounded-full text-sky-700 hover:bg-sky-100 dark:text-slate-200 dark:hover:bg-slate-700"
                       onClick={() =>
                         setFormDatos({ nombre: user.nombre, correo: user.correo, telefono: user.telefono })
                       }
@@ -264,15 +303,15 @@ export default function Page() {
                 </form>
               </section>
 
-              <Separator className="bg-sky-100" />
+              <Separator className="bg-sky-100 dark:bg-slate-700" />
 
               {/* Contraseña */}
               <section aria-labelledby="seguridad">
                 <div className="mb-3">
-                  <h3 id="seguridad" className="text-sm font-medium text-slate-700">
+                  <h3 id="seguridad" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     Contraseña
                   </h3>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     Cambia tu contraseña. Asegúrate de usar una contraseña segura.
                   </p>
                 </div>
@@ -285,7 +324,7 @@ export default function Page() {
                       placeholder="Introduce tu contraseña actual"
                       value={formPass.actual}
                       onChange={(e) => setFormPass((f) => ({ ...f, actual: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300"
+                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -296,7 +335,7 @@ export default function Page() {
                       placeholder="Nueva contraseña"
                       value={formPass.nueva}
                       onChange={(e) => setFormPass((f) => ({ ...f, nueva: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300"
+                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -307,21 +346,21 @@ export default function Page() {
                       placeholder="Repite la nueva contraseña"
                       value={formPass.confirmar}
                       onChange={(e) => setFormPass((f) => ({ ...f, confirmar: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300"
+                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
                     />
                   </div>
                   <div className="sm:col-span-2 flex items-center gap-2">
                     <Button
                       type="submit"
                       disabled={savingPass}
-                      className="rounded-full bg-cyan-600 text-white transition-shadow hover:bg-cyan-700 hover:shadow-sm"
+                      className="rounded-full bg-cyan-600 text-white transition-shadow hover:bg-cyan-700 hover:shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600"
                     >
                       {savingPass ? "Actualizando..." : "Actualizar contraseña"}
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
-                      className="rounded-full text-sky-700 hover:bg-sky-100"
+                      className="rounded-full text-sky-700 hover:bg-sky-100 dark:text-slate-200 dark:hover:bg-slate-700"
                       onClick={() => setFormPass({ actual: "", nueva: "", confirmar: "" })}
                     >
                       Limpiar
@@ -338,9 +377,9 @@ export default function Page() {
 
         {/* Columna lateral: resumen */}
         <aside className="md:col-span-4 space-y-6">
-          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md">
+          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
             <CardHeader>
-              <CardTitle className="text-slate-800">Resumen</CardTitle>
+              <CardTitle className="text-slate-800 dark:text-slate-100">Resumen</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <SummaryItem
@@ -354,24 +393,30 @@ export default function Page() {
                 value={user.estado}
               />
               <SummaryItem icon={<Shield className="size-4 text-cyan-600" />} label="Rol" value={user.rol} />
-              <Separator className="bg-sky-100" />
-              <div className="rounded-lg bg-sky-50/70 p-3 text-xs text-slate-600">
+              <Separator className="bg-sky-100 dark:bg-slate-700" />
+              <div className="rounded-lg bg-sky-50/70 p-3 text-xs text-slate-600 dark:bg-slate-700/70 dark:text-slate-300">
                 Mantén tu información actualizada para garantizar una mejor experiencia en el intranet.
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md">
+          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
             <CardHeader>
-              <CardTitle className="text-slate-800">Contacto rápido</CardTitle>
+              <CardTitle className="text-slate-800 dark:text-slate-100">Contacto rápido</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3">
-              <Button variant="outline" className="justify-start rounded-lg hover:bg-sky-50">
-                <Mail className="mr-2 size-4 text-sky-700" />
+              <Button
+                variant="outline"
+                className="justify-start rounded-lg hover:bg-sky-50 dark:hover:bg-slate-700"
+              >
+                <Mail className="mr-2 size-4 text-sky-700 dark:text-slate-200" />
                 Enviar correo
               </Button>
-              <Button variant="outline" className="justify-start rounded-lg hover:bg-sky-50">
-                <Phone className="mr-2 size-4 text-sky-700" />
+              <Button
+                variant="outline"
+                className="justify-start rounded-lg hover:bg-sky-50 dark:hover:bg-slate-700"
+              >
+                <Phone className="mr-2 size-4 text-sky-700 dark:text-slate-200" />
                 Llamar
               </Button>
             </CardContent>
@@ -413,10 +458,10 @@ function SummaryItem({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="rounded-md bg-sky-50 p-2 text-sky-700 shadow-sm">{icon}</div>
+      <div className="rounded-md bg-sky-50 p-2 text-sky-700 shadow-sm dark:bg-slate-700 dark:text-slate-200">{icon}</div>
       <div className="min-w-0">
-        <div className="text-xs text-slate-500">{label}</div>
-        <div className="truncate text-sm font-medium text-slate-800">{value}</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
+        <div className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{value}</div>
       </div>
     </div>
   )

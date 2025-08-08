@@ -9,7 +9,6 @@ import {
   Image as PdfImage,
   StyleSheet
 } from '@react-pdf/renderer'
-import { brandAssets } from '@/catalog/brandAssets'
 
 interface Product {
   id: number
@@ -20,7 +19,11 @@ interface Product {
   image?: string
   imageUrl?: string
   images?: string[]
-  brand?: string
+  brand?: {
+    name: string
+    logoSvg?: string
+    logoPng?: string
+  } | null
   category?: {
     id?: number
     name: string
@@ -46,19 +49,32 @@ interface CatalogSection {
 
 function getLogos(p: Product): string[] {
   const logos: string[] = []
-  if (p.brand) {
-    const brandLogo = brandAssets.brands[p.brand.trim().toLowerCase()]
-    if (brandLogo) logos.push(brandLogo)
+  const brandLogo = p.brand?.logoSvg || p.brand?.logoPng
+  if (brandLogo) logos.push(brandLogo)
+
+  const cpuMap: Record<string, string> = {
+    intel: '/assets/logos/intel.svg',
+    core: '/assets/logos/intel.svg',
+    amd: '/assets/logos/amd.svg',
+    ryzen: '/assets/logos/amd.svg',
+  }
+  const gpuMap: Record<string, string> = {
+    nvidia: '/assets/logos/nvidia.svg',
+    geforce: '/assets/logos/nvidia.svg',
+    rtx: '/assets/logos/nvidia.svg',
+    gtx: '/assets/logos/nvidia.svg',
+    amd: '/assets/logos/amd.svg',
+    radeon: '/assets/logos/amd.svg',
   }
   const processor = p.specification?.processor?.toLowerCase() || ''
-  for (const [key, path] of Object.entries(brandAssets.cpus)) {
+  for (const [key, path] of Object.entries(cpuMap)) {
     if (processor.includes(key)) {
       logos.push(path)
       break
     }
   }
   const graphics = p.specification?.graphics?.toLowerCase() || ''
-  for (const [key, path] of Object.entries(brandAssets.gpus)) {
+  for (const [key, path] of Object.entries(gpuMap)) {
     if (graphics.includes(key)) {
       logos.push(path)
       break
