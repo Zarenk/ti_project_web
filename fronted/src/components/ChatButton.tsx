@@ -8,6 +8,7 @@ import ChatPanel from './ChatPanel';
 import socket from '@/lib/utils';
 import { useAuth } from '@/context/auth-context';
 import { usePathname } from 'next/navigation';
+import { useChatUserId } from '@/hooks/use-chat-user-id';
 
 interface Message {
   clientId: number;
@@ -31,10 +32,10 @@ function ChatButtonContent() {
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [unread, setUnread] = useState(0);
-  const { userId: contextUserId } = useAuth();
-  const userId = contextUserId ?? 1;
+  const userId = useChatUserId();
 
   useEffect(() => {
+    if (!userId) return;
     const handleReceive = (msg: Message) => {
       if (msg.clientId === userId && msg.senderId !== userId && !open) {
         setUnread((prev) => prev + 1);
@@ -72,7 +73,7 @@ function ChatButtonContent() {
   return (
     <>
       <AnimatePresence>
-        {open && <ChatPanel onClose={() => setOpen(false)} />}
+        {open && userId && <ChatPanel onClose={() => setOpen(false)} userId={userId} />}
       </AnimatePresence>
       <motion.div
         initial={{ opacity: 0, y: 20 }}

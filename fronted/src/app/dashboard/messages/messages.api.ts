@@ -37,7 +37,7 @@ export async function getClients() {
   if (!token) {
     throw new Error('No se encontró un token de autenticación');
   }
-  const res = await fetch(`${BACKEND_URL}/api/clients/registered`, {
+  const res = await fetch(`${BACKEND_URL}/api/clients/chat`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
   });

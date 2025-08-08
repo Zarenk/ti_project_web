@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CreateClientDto } from './dto/create-client.dto';
 import { Prisma} from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateClientDto } from './dto/update-client.dto';
 
@@ -43,6 +44,41 @@ export class ClientService {
       },
     });
     return genericUser.id;
+  }
+
+  async createGuest() {
+    const username = `generic_${randomUUID()}`;
+    const user = await this.prismaService.user.create({
+      data: {
+        email: `${username}@guest.local`,
+        username,
+        password: 'default_password',
+        role: 'GUEST',
+      },
+      select: { id: true },
+    });
+
+    try {
+      const client = await this.prismaService.client.create({
+        data: {
+          name: username,
+          userId: user.id,
+        },
+        select: { id: true, name: true },
+      });
+
+      return { userId: user.id, client };
+    } catch (error) {
+      await this.prismaService.user.delete({ where: { id: user.id } });
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('Ya existe un cliente con esos datos');
+      }
+      console.error('Error en el backend:', error);
+      throw new InternalServerErrorException('Error al crear el cliente invitado');
+    }
   }
 
   async verifyOrCreateClients(clients: { name: string; type:string; typeNumber: string; idUser: number }[]) {
@@ -134,6 +170,14 @@ export class ClientService {
           { user: { email: { not: { startsWith: 'generic_' } } } },
           { user: { username: { not: { startsWith: 'generic_' } } } },
         ],
+      },
+    });
+  }
+
+  findAllForChat() {
+    return this.prismaService.client.findMany({
+      include: {
+        user: true,
       },
     });
   }

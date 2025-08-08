@@ -9,10 +9,10 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Mail, Phone, Shield, CalendarClock, LogIn, CheckCircle2, UserRound } from 'lucide-react'
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { getLastAccessFromToken } from "@/lib/auth"
 import { getProfile, updateProfile, changePassword } from "./account.api"
-import { toast } from "@/hooks/use-toast"
 
 export default function Page() {
   const [user, setUser] = useState({
@@ -62,7 +62,7 @@ export default function Page() {
         })
       } catch (error) {
         console.error(error)
-        toast({ title: "Error", description: "No se pudo cargar el perfil." })
+        toast("Error: No se pudo cargar el perfil.")
       }
     }
     loadProfile()
@@ -71,11 +71,11 @@ export default function Page() {
   function handleDatosSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!formDatos.nombre.trim()) {
-      toast({ title: "Nombre requerido", description: "Por favor, introduce tu nombre completo." })
+      toast("Nombre requerido\nPor favor, introduce tu nombre completo.")
       return
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formDatos.correo)) {
-      toast({ title: "Correo inválido", description: "Introduce un correo electrónico válido." })
+      toast("Correo inválido\nIntroduce un correo electrónico válido.")
       return
     }
     setSavingDatos(true)
@@ -87,40 +87,37 @@ export default function Page() {
           correo: formDatos.correo.trim(),
           telefono: formDatos.telefono.trim(),
         }))
-        toast({ title: "Cambios guardados", description: "Tus datos personales se han actualizado correctamente." })
+        toast("Tus datos personales se han actualizado correctamente.")
       })
-      .catch(() => toast({ title: "Error", description: "No se pudieron guardar los cambios." }))
+      .catch(() => toast("Error: No se pudieron guardar los cambios."))
       .finally(() => setSavingDatos(false))
   }
 
   function handlePassSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!formPass.actual || !formPass.nueva || !formPass.confirmar) {
-      toast({ title: "Campos incompletos", description: "Completa todos los campos para actualizar la contraseña." })
+      toast("Campos incompletos. Completa todos los campos para actualizar la contraseña.")
       return
     }
     if (formPass.nueva.length < 8) {
-      toast({ title: "Contraseña débil", description: "La nueva contraseña debe tener al menos 8 caracteres." })
+      toast("Contraseña débil: La nueva contraseña debe tener al menos 8 caracteres.")
       return
     }
     if (formPass.nueva !== formPass.confirmar) {
-      toast({ title: "No coincide", description: "La confirmación de la contraseña no coincide." })
+      toast("No coincide: La confirmación de la contraseña no coincide.")
       return
     }
     if (formPass.nueva === formPass.actual) {
-      toast({
-        title: "Sin cambios",
-        description: "La nueva contraseña no puede ser igual a la contraseña actual.",
-      })
+      toast("Sin cambios: La nueva contraseña no puede ser igual a la contraseña actual.")
       return
     }
     setSavingPass(true)
     changePassword(formPass.actual, formPass.nueva)
       .then(() => {
         setFormPass({ actual: "", nueva: "", confirmar: "" })
-        toast({ title: "Contraseña actualizada", description: "Tu contraseña se ha actualizado correctamente." })
+        toast("Tu contraseña se ha actualizado correctamente.")
       })
-      .catch(() => toast({ title: "Error", description: "No se pudo actualizar la contraseña." }))
+      .catch(() => toast("Error: No se pudo actualizar la contraseña."))
       .finally(() => setSavingPass(false))
   }
 

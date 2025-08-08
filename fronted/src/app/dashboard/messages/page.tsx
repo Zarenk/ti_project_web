@@ -36,6 +36,9 @@ export default function Page() {
   const [sortByName, setSortByName] = useState(false);
   const [clientTyping, setClientTyping] = useState(false);
 
+  const displayName = (c: any) =>
+    c.name && c.name.trim() !== '' ? c.name : `Invitado #${c.userId}`;
+
   useEffect(() => {
     const receiveHandler = (msg: Message) => {
       if (msg.clientId !== selected) {
@@ -172,16 +175,20 @@ export default function Page() {
   };
 
   const filteredClients = clients
-    .filter((c: any) => c.name.toLowerCase().includes(search.toLowerCase()))
     .filter((c: any) =>
-      !showPendingOnly || (pendingCounts[c.userId] ?? 0) > 0,
+      displayName(c).toLowerCase().includes(search.toLowerCase()),
+    )
+    .filter(
+      (c: any) => !showPendingOnly || (pendingCounts[c.userId] ?? 0) > 0,
     )
     .sort((a: any, b: any) =>
       sortByName
-        ? a.name.localeCompare(b.name)
+        ? displayName(a).localeCompare(displayName(b))
         : (pendingCounts[b.userId] ?? 0) - (pendingCounts[a.userId] ?? 0),
     );
-  const clientMap = new Map(clients.map((c: any) => [c.userId, c.name]));
+  const clientMap = new Map(
+    clients.map((c: any) => [c.userId, displayName(c)]),
+  );
   const clientInfo = clients.find((c: any) => c.userId === selected);
   const isActive = clientInfo?.status === 'Activo';
 
@@ -234,11 +241,11 @@ export default function Page() {
                     <div className="flex items-center gap-4">
                       <img
                         src={c.image || '/placeholder.svg'}
-                        alt={c.name}
+                        alt={displayName(c)}
                         className="w-10 h-10 rounded-full object-cover"
                       />
                       <div className="flex flex-col text-left">
-                        <span className="font-medium">{c.name}</span>
+                        <span className="font-medium">{displayName(c)}</span>
                         <span className="text-sm text-muted-foreground truncate max-w-[160px]">
                           {lastMessages[c.userId]?.text || 'Sin mensajes'}
                         </span>

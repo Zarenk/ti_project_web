@@ -8,9 +8,9 @@ import { Card } from '@/components/ui/card';
 import { X, Send, Paperclip } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import socket from '@/lib/utils';
-import { useAuth } from '@/context/auth-context';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
+import { useChatUserId } from '@/hooks/use-chat-user-id';
 
 interface Message {
   id: number;
@@ -37,13 +37,14 @@ export default function ChatPanel({
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { userId: contextUserId } = useAuth();
-  const userId = propUserId ?? contextUserId ?? 1;
+  const hookUserId = useChatUserId();
+  const userId = propUserId ?? hookUserId;
   const [agentTyping, setAgentTyping] = useState(false);
   const pendingTempIds = useRef<Set<number>>(new Set());
   const [rateLimited, setRateLimited] = useState(false);
 
   useEffect(() => {
+    if (!userId) return;
     const receiveHandler = (msg: Message) => {
       if (msg.clientId === userId) {
         if (msg.tempId && pendingTempIds.current.has(msg.tempId)) {
@@ -121,6 +122,7 @@ export default function ChatPanel({
   }, [userId]);
 
   useEffect(() => {
+    if (!userId) return;
     socket.emit('chat:typing', {
       clientId: userId,
       senderId: userId,
@@ -136,8 +138,8 @@ export default function ChatPanel({
   }, [text, userId]);
 
   const send = () => {
-    if (rateLimited) return;
-    if (text.trim() || preview) {    
+    if (rateLimited || !userId) return;
+    if (text.trim() || preview) { 
       const tempId = Date.now();
       const newMessage: Message = {
         id: tempId,

@@ -96,6 +96,7 @@ enum UserRole {
   ADMIN
   EMPLOYEE
   CLIENT
+  GUEST
 }
 
 model User {

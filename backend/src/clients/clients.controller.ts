@@ -38,6 +38,12 @@ export class ClientController {
     return this.clientService.selfRegister(clientData);
   }
 
+  @Post('guest')
+  @ApiOperation({ summary: 'Create guest client' })
+  createGuest() {
+    return this.clientService.createGuest();
+  }
+
   @Post('verify-or-create-products')
   async verifyOrCreateProducts(
     @Body() clients: { name: string; type?: string; typerNumber?: string; userId: number }[],
@@ -61,6 +67,11 @@ export class ClientController {
   @Get('registered')
   findRegistered() {
     return this.clientService.findRegistered();
+  }
+
+  @Get('chat')
+  findAllForChat() {
+    return this.clientService.findAllForChat();
   }
 
   @Get(':id')
