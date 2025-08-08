@@ -8,34 +8,28 @@ export async function getBrands() {
   return res.json();
 }
 
-export async function createBrand(data: { name: string; svgLogo?: string; pngLogo?: string }) {
-  const res = await fetch(`${BACKEND_URL}/api/brands`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => null);
-    throw new Error(errorData?.message || 'Error al crear la marca');
+export async function createBrand(data: {
+  name: string;
+  logoSvg?: File;
+  logoPng?: File;
+}) {
+  const formData = new FormData();
+  formData.append('name', data.name);
+  if (data.logoSvg) {
+    formData.append('logoSvg', data.logoSvg);
+  }
+  if (data.logoPng) {
+    formData.append('logoPng', data.logoPng);
   }
 
-  return res.json();
-}
-
-export async function uploadLogo(file: File) {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const res = await fetch(`${BACKEND_URL}/api/upload-logo`, {
+  const res = await fetch(`${BACKEND_URL}/api/brands`, {
     method: 'POST',
     body: formData,
   });
 
   if (!res.ok) {
-    throw new Error('Error al subir el logo');
+    const errorData = await res.json().catch(() => null);
+    throw new Error(errorData?.message || 'Error al crear la marca');
   }
 
   return res.json();

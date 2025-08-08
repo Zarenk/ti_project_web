@@ -5,13 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { createBrand, getBrands, uploadLogo } from './brands.api';
+import { createBrand, getBrands } from './brands.api';
 
 interface Brand {
   id: number;
   name: string;
-  svgLogo?: string;
-  pngLogo?: string;
+  logoSvg?: string;
+  logoPng?: string;
 }
 
 export default function BrandsPage() {
@@ -36,19 +36,11 @@ export default function BrandsPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     try {
-      let svgUrl: string | undefined;
-      let pngUrl: string | undefined;
-
-      if (svgFile) {
-        const res = await uploadLogo(svgFile);
-        svgUrl = res.url;
-      }
-      if (pngFile) {
-        const res = await uploadLogo(pngFile);
-        pngUrl = res.url;
-      }
-
-      await createBrand({ name, svgLogo: svgUrl, pngLogo: pngUrl });
+      await createBrand({
+        name,
+        logoSvg: svgFile || undefined,
+        logoPng: pngFile || undefined,
+      });
       setName('');
       setSvgFile(null);
       setPngFile(null);
@@ -92,10 +84,14 @@ export default function BrandsPage() {
               <TableRow key={brand.id}>
                 <TableCell>{brand.name}</TableCell>
                 <TableCell>
-                  {brand.svgLogo && <img src={brand.svgLogo} alt={brand.name} className="h-8" />}
+                  {brand.logoSvg && (
+                    <img src={brand.logoSvg} alt={brand.name} className="h-8" />
+                  )}
                 </TableCell>
                 <TableCell>
-                  {brand.pngLogo && <img src={brand.pngLogo} alt={brand.name} className="h-8" />}
+                  {brand.logoPng && (
+                    <img src={brand.logoPng} alt={brand.name} className="h-8" />
+                  )}
                 </TableCell>
               </TableRow>
             ))}

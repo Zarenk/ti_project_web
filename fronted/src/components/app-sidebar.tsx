@@ -103,6 +103,10 @@ const data = {
       isActive: true,
       items: [
         {
+          title: "Administrar Marcas",
+          url: "/dashboard/brands",
+        },
+        {
           title: "Nuevo Producto",
           url: "/dashboard/products/new",
         },

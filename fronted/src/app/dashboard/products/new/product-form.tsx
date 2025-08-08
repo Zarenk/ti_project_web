@@ -165,12 +165,13 @@ export function ProductForm({product, categories}: {product: any; categories: an
         }
     }
     catch(error: any){
+        const message = error.response?.data?.message || error.message || 'Error inesperado'
 
-        if (error.response?.status === 409 || error.response?.data?.message.includes("ya existe")) {
-            setNameError(error.response?.data?.message || "El nombre del producto ya existe.");
-            console.log("Estado nameError actualizado:", error.response?.data?.message);
+        if (error.response?.status === 409 || message.includes('ya existe')) {
+            setNameError(message);
+            console.log("Estado nameError actualizado:", message);
         } else {
-            console.error("Error inesperado:", error.message);
+            console.error("Error inesperado:", message);
         }
     }
         

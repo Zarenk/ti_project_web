@@ -8,9 +8,10 @@ import {
   Delete,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   BadRequestException,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { BrandsService } from './brands.service';
@@ -22,8 +23,48 @@ export class BrandsController {
   constructor(private readonly brandsService: BrandsService) {}
 
   @Post()
-  create(@Body() createBrandDto: CreateBrandDto) {
-    return this.brandsService.create(createBrandDto);
+   @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'logoSvg', maxCount: 1 },
+        { name: 'logoPng', maxCount: 1 },
+      ],
+      {
+        storage: diskStorage({
+          destination: './uploads/brands',
+          filename: (req, file, cb) => {
+            const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+            cb(null, `${unique}${extname(file.originalname)}`);
+          },
+        }),
+        fileFilter: (req, file, cb) => {
+          if (
+            file.mimetype !== 'image/png' &&
+            file.mimetype !== 'image/svg+xml'
+          ) {
+            return cb(
+              new BadRequestException('Solo se permiten archivos PNG o SVG'),
+              false,
+            );
+          }
+          cb(null, true);
+        },
+      },
+    ),
+  )
+  create(
+    @Body() createBrandDto: CreateBrandDto,
+    @UploadedFiles()
+    files: { logoSvg?: Express.Multer.File[]; logoPng?: Express.Multer.File[] },
+  ) {
+    const data: CreateBrandDto = { name: createBrandDto.name };
+    if (files.logoSvg?.[0]) {
+      data.logoSvg = `/uploads/brands/${files.logoSvg[0].filename}`;
+    }
+    if (files.logoPng?.[0]) {
+      data.logoPng = `/uploads/brands/${files.logoPng[0].filename}`;
+    }
+    return this.brandsService.create(data);
   }
 
   @Get()

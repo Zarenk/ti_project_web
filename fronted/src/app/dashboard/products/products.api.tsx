@@ -36,8 +36,14 @@ export async function createProduct(productData: any){
     }) 
 
     if (!res.ok) {
-        const errorData = await res.json();
-        throw { response: { status: res.status, data: errorData } }; // Lanza un error con la estructura esperada
+        let errorData: any = null
+        try {
+            errorData = await res.json()
+        } catch (err) {
+            // Si la respuesta no es JSON, mantenemos errorData como null
+        }
+        const message = errorData?.message || 'Error al crear el producto'
+        throw { message, response: { status: res.status, data: errorData } }
     }
 
     const data = await res.json();
