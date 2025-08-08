@@ -467,7 +467,9 @@ export class EntriesService {
         orderBy: { createdAt: 'desc' },
         take: limit * 3,
         include: {
-          product: { include: { category: true } },
+          product: {
+            include: { category: true, brand: { select: { name: true } } },
+          },
           inventory: { include: { storeOnInventory: true } },
         },
       });
