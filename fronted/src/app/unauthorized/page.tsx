@@ -1,30 +1,17 @@
-"use client"
-
-import { Player } from "@lottiefiles/react-lottie-player"
-import { h1 as MotionH1 } from "framer-motion/client"
-import UnauthorizedKnight from "./UnauthorizedKnight"
+import UnauthorizedKnight from "./UnauthorizedKnight.client"
 
 export default function UnauthorizedPage() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen">
-      <div className="w-64 h-64">
-        <Player
-          src="/animations/no-access.json"
-          loop
-          autoplay
-          style={{ height: 200, width: 200 }}
-        />
-      </div>
-      <div className="relative mt-4 flex items-center justify-center">
-        <MotionH1
-          className="text-2xl font-semibold"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          Acceso no autorizado
-        </MotionH1>
+    <div className="relative min-h-[60vh] flex flex-col items-center justify-start pt-8">
+      {/* Caballero arriba */}
+      <div className="absolute top-0 left-0 w-full flex justify-center z-1 pointer-events-none">
         <UnauthorizedKnight />
+      </div>
+
+      {/* Texto más abajo */}
+      <div className="text-center space-y-2 z-0 mt-40 select-none">
+        <h1 className="text-3xl font-bold">Acceso no autorizado</h1>
+        <p className="opacity-80">No tienes permisos para ver esta sección.</p>
       </div>
     </div>
   )
