@@ -24,11 +24,11 @@ function resolveUrl(input: RequestInfo | URL): RequestInfo | URL {
 async function refreshToken(): Promise<boolean> {
   const base = process.env.NEXT_PUBLIC_BACKEND_URL || ''
   try {
-    const res = await fetch(`${base}/auth/refresh`, {
+    const res = await fetch(`${base}/api/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
     })
-    if (!res.ok) return false
+    if (res.status === 404) return false
     try {
       const data = await res.json()
       if (data?.access_token && typeof window !== 'undefined') {
@@ -50,6 +50,9 @@ export async function authFetch(
   const url = resolveUrl(input)
   const headers = new Headers(init.headers || {})
   const auth = await getAuthHeaders()
+  if (Object.keys(auth).length === 0) {
+    throw new UnauthenticatedError()
+  }
   Object.entries(auth).forEach(([k, v]) => headers.set(k, v as string))
 
   let res = await fetch(url, { ...init, headers })
