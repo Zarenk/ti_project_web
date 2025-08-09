@@ -11,8 +11,17 @@ export class BrandsService {
     return this.prisma.brand.create({ data: createBrandDto });
   }
 
-  findAll() {
-    return this.prisma.brand.findMany({ orderBy: { name: 'asc' } });
+  async findAll(page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.brand.findMany({
+        skip,
+        take: limit,
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.brand.count(),
+    ]);
+    return { data, total };
   }
 
   findOne(id: number) {

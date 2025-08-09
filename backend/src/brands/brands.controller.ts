@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Delete,
+  Query,
   UseInterceptors,
   UploadedFile,
   UploadedFiles,
@@ -68,8 +69,11 @@ export class BrandsController {
   }
 
   @Get()
-  findAll() {
-    return this.brandsService.findAll();
+  findAll(
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+  ) {
+    return this.brandsService.findAll(+page, +limit);
   }
 
   @Get(':id')
@@ -78,8 +82,49 @@ export class BrandsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateBrandDto: UpdateBrandDto) {
-    return this.brandsService.update(+id, updateBrandDto);
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'logoSvg', maxCount: 1 },
+        { name: 'logoPng', maxCount: 1 },
+      ],
+      {
+        storage: diskStorage({
+          destination: './uploads/brands',
+          filename: (req, file, cb) => {
+            const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+            cb(null, `${unique}${extname(file.originalname)}`);
+          },
+        }),
+        fileFilter: (req, file, cb) => {
+          if (
+            file.mimetype !== 'image/png' &&
+            file.mimetype !== 'image/svg+xml'
+          ) {
+            return cb(
+              new BadRequestException('Solo se permiten archivos PNG o SVG'),
+              false,
+            );
+          }
+          cb(null, true);
+        },
+      },
+    ),
+  )
+  update(
+    @Param('id') id: string,
+    @Body() updateBrandDto: UpdateBrandDto,
+    @UploadedFiles()
+    files: { logoSvg?: Express.Multer.File[]; logoPng?: Express.Multer.File[] },
+  ) {
+    const data: UpdateBrandDto = { ...updateBrandDto };
+    if (files.logoSvg?.[0]) {
+      data.logoSvg = `/uploads/brands/${files.logoSvg[0].filename}`;
+    }
+    if (files.logoPng?.[0]) {
+      data.logoPng = `/uploads/brands/${files.logoPng[0].filename}`;
+    }
+    return this.brandsService.update(+id, data);
   }
 
   @Delete(':id')

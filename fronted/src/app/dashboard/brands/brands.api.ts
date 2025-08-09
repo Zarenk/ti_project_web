@@ -1,7 +1,10 @@
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
-export async function getBrands() {
-  const res = await fetch(`${BACKEND_URL}/api/brands`, { cache: 'no-store' });
+export async function getBrands(page = 1, limit = 10) {
+  const res = await fetch(
+    `${BACKEND_URL}/api/brands?page=${page}&limit=${limit}`,
+    { cache: 'no-store' },
+  );
   if (!res.ok) {
     throw new Error('Error al obtener las marcas');
   }
@@ -30,6 +33,35 @@ export async function createBrand(data: {
   if (!res.ok) {
     const errorData = await res.json().catch(() => null);
     throw new Error(errorData?.message || 'Error al crear la marca');
+  }
+
+  return res.json();
+}
+
+export async function updateBrand(
+  id: number,
+  data: { name?: string; logoSvg?: File; logoPng?: File },
+) {
+  const formData = new FormData();
+  if (data.name) formData.append('name', data.name);
+  if (data.logoSvg) formData.append('logoSvg', data.logoSvg);
+  if (data.logoPng) formData.append('logoPng', data.logoPng);
+
+  const res = await fetch(`${BACKEND_URL}/api/brands/${id}`, {
+    method: 'PATCH',
+    body: formData,
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    throw new Error(errorData?.message || 'Error al actualizar la marca');
+  }
+  return res.json();
+}
+
+export async function deleteBrand(id: number) {
+  const res = await fetch(`${BACKEND_URL}/api/brands/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    throw new Error('Error al eliminar la marca');
   }
 
   return res.json();

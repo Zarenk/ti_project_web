@@ -10,6 +10,8 @@ import {
     getCoreRowModel,
     getFilteredRowModel,
     getPaginationRowModel,
+    getSortedRowModel,
+    SortingState,
     useReactTable,
   } from "@tanstack/react-table"
 import React, { useEffect, useState } from "react";
@@ -47,6 +49,9 @@ interface DataTableProps<TData, TValue> {
 
     // ESTADO PARA MANEJAR FILTROS DE LA COLUMNA
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
+    const [sorting, setSorting] = React.useState<SortingState>([
+      { id: "createdAt", desc: true },
+    ])
 
     // ESTADO PARA MANEJAR LOS MODALS
     const [isModalOpen, setIsModalOpen] = React.useState(false); // Estado del modal
@@ -63,11 +68,14 @@ interface DataTableProps<TData, TValue> {
         data,
         columns,
         onColumnFiltersChange: setColumnFilters,
+        onSortingChange: setSorting,
         getFilteredRowModel: getFilteredRowModel(),
+        getSortedRowModel: getSortedRowModel(),
         getCoreRowModel: getCoreRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
         state: {
             columnFilters,
+            sorting,
         },
       })
 

@@ -24,7 +24,7 @@ export class ProductsService {
   }
 
   async create(createProductDto: CreateProductDto) {
-    const { specification, images, features, brandId, ...data } =
+    const { specification, images, features, brandId, brand: _brand, ...data } =
       createProductDto as any
     try {
       return await this.prismaService.product.create({
@@ -136,6 +136,9 @@ export class ProductsService {
         },
         specification: true,
       },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
     return products.map((p) => ({
       ...p,
@@ -167,7 +170,7 @@ export class ProductsService {
   }
 
   async update(id: number, updateProductDto: UpdateProductDto) {
-    const { specification, images, features, brandId, ...data } =
+    const { specification, images, features, brandId, brand: _brand, ...data } =
       updateProductDto as any
     try {
       const productFound = await this.prismaService.product.update({
