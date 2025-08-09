@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { BarChart3, Box, DollarSign, Package, ShoppingCart, TrendingUp, Truck, Users } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from 'sonner'
 import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api"
@@ -30,11 +30,11 @@ export default function WelcomeDashboard() {
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
 
   const router = useRouter()
-  const [authErrorShown, setAuthErrorShown] = useState(false)
+  const authErrorShown = useRef(false)
   const handleAuthError = (err: unknown) => {
-    if (authErrorShown) return true
+    if (authErrorShown.current) return true
     if (err instanceof UnauthenticatedError) {
-      setAuthErrorShown(true)
+      authErrorShown.current = true
       toast.error('Tu sesión ha expirado. Vuelve a iniciar sesión.')
       const path = window.location.pathname
       router.replace(`/login?returnTo=${encodeURIComponent(path)}`)
@@ -43,83 +43,33 @@ export default function WelcomeDashboard() {
     return false
   }
 
-
 //------------------------------- USE EFFECT --------------------------------//
 
 useEffect(() => {
-    async function fetchTotalInventory() {
-      try {
-        const data = await getTotalInventory();
-        setTotalInventory(data);
-    } catch (error) {
-      if (!handleAuthError(error)) {
-        console.error('Error al cargar el inventario total:', error);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  fetchTotalInventory();
-}, []);
-
-useEffect(() => {
     async function fetchData() {
-      const data = await getUserDataFromToken();
-      if (!data || !(await isTokenValid()) || (data.role !== 'ADMIN' && data.role !== 'EMPLOYEE')) {
-        router.push('/unauthorized');
-      return;
-      }
       try {
-        const [inventoryData, salesData] = await Promise.all([
-          getTotalInventory(),
-          getMonthlySalesTotal(),
-        ]);
+        const data = await getUserDataFromToken();
+        if (!data || !(await isTokenValid()) || (data.role !== 'ADMIN' && data.role !== 'EMPLOYEE')) {
+          router.push('/unauthorized');
+        return;
+        }
+        const [inventoryData, salesData, pendingData, orders, entries, sales, lowStock] =
+          await Promise.all([
+            getTotalInventory(),
+            getMonthlySalesTotal(),
+            getOrdersCount('PENDING'),
+            getRecentOrders(10),
+            getAllEntries(),
+            getRecentSales(),
+            getLowStockItems(),
+          ]);
         setTotalInventory(inventoryData);
         setMonthlySales(salesData);
-    } catch (error) {
-      if (!handleAuthError(error)) {
-        if (error instanceof Error && error.message === 'Unauthorized') {
-          router.push('/unauthorized');
-        } else {
-          console.error('Error cargando datos:', error);
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  fetchData();
-}, []);
-
-useEffect(() => {
-    async function fetchPending() {
-      try {
-        const data = await getOrdersCount('PENDING');
-        setPendingOrders(data.count);
-    } catch (error) {
-      if (!handleAuthError(error)) {
-        console.error('Error al cargar ordenes pendientes:', error);
-      }
-    }
-  }
-  fetchPending();
-}, []);
-
-useEffect(() => {
-    async function fetchRecent() {
-      try {
-        const [orders, entries, sales, lowStock] = await Promise.all([
-          getRecentOrders(10),
-          getAllEntries(),
-          getRecentSales(),
-          getLowStockItems(),
-        ])
-        setLowStockItems(lowStock)
+        setPendingOrders(pendingData.count);
+        setLowStockItems(lowStock);
         const entryItems = (entries as any[])
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 10)
+          .slice(0, 10);
         const activities: ActivityItem[] = [
           ...orders.map((o: any) => ({
             id: o.id,
@@ -149,17 +99,23 @@ useEffect(() => {
             createdAt: new Date().toISOString(),
             href: '/dashboard/inventory',
           })),
-        ]
-        activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        setRecentActivity(activities.slice(0, 10))
-    } catch (error) {
-      if (!handleAuthError(error)) {
-        console.error('Error al cargar actividad reciente:', error)
+        ];
+        activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setRecentActivity(activities.slice(0, 10));
+      } catch (error) {
+        if (!handleAuthError(error)) {
+          if (error instanceof Error && error.message === 'Unauthorized') {
+            router.push('/unauthorized');
+          } else {
+            console.error('Error cargando datos:', error);
+          }
+        }
+      } finally {
+        setLoading(false);
       }
     }
-  }
-  fetchRecent()
-}, [])
+  fetchData();
+  }, [])
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
