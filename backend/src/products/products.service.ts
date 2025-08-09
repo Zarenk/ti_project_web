@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { Prisma} from '@prisma/client';
+import { Prisma, Brand } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CategoryService } from 'src/category/category.service';
 import { BrandsService } from 'src/brands/brands.service';
@@ -29,7 +29,7 @@ export class ProductsService {
     const { specification, images, features, brandId, brand, ...data } =
       createProductDto as any;
     try {
-      let brandEntity = null;
+      let brandEntity: Brand | null = null;
       if (!brandId && brand) {
         brandEntity = await this.brandsService.findOrCreateByName(brand);
       } else if (brandId) {
@@ -183,7 +183,7 @@ export class ProductsService {
     const { specification, images, features, brandId, brand, ...data } =
       updateProductDto as any;
     try {
-      let brandEntity = null;
+      let brandEntity: Brand | null = null;
       if (!brandId && brand) {
         brandEntity = await this.brandsService.findOrCreateByName(brand);
       }
