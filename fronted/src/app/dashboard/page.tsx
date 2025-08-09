@@ -16,6 +16,24 @@ import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import { UnauthenticatedError } from "@/utils/auth-fetch"
 
+type ActivityItem = {
+  id: number | string
+  type: 'order' | 'sale' | 'entry' | 'alert'
+  description: string
+  createdAt: string
+  href: string
+}
+
+type Order = { id: number; code: string; createdAt: string }
+type Sale = { id: number; createdAt: string }
+type Entry = { id: number; createdAt: string }
+type LowStockItem = {
+  productId: number
+  productName: string
+  storeName: string
+  stock: number
+}
+
 export default function WelcomeDashboard() {
 
 //------------------------------- CONSTANTES --------------------------------//
@@ -24,7 +42,7 @@ export default function WelcomeDashboard() {
 
   const [monthlySales, setMonthlySales] = useState<{ total: number; growth: number | null } | null>(null);
 
-  const [lowStockItems, setLowStockItems] = useState<{ productId: number; productName: string; storeName: string; stock: number }[]>([])
+  const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([])
   const [pendingOrders, setPendingOrders] = useState(0)
   type ActivityItem = { id: number | string; type: 'order' | 'sale' | 'entry' | 'alert'; description: string; createdAt: string; href: string }
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
@@ -47,14 +65,21 @@ export default function WelcomeDashboard() {
 
 useEffect(() => {
     async function fetchData() {
-      try {
         const data = await getUserDataFromToken();
         if (!data || !(await isTokenValid()) || (data.role !== 'ADMIN' && data.role !== 'EMPLOYEE')) {
           router.push('/unauthorized');
-        return;
+          return;
         }
-        const [inventoryData, salesData, pendingData, orders, entries, sales, lowStock] =
-          await Promise.all([
+        try {
+          const [
+            inventoryData,
+            monthlySalesData,
+            pendingData,
+            recentOrders,
+            entries,
+            recentSales,
+            lowStock,
+          ] = (await Promise.all([
             getTotalInventory(),
             getMonthlySalesTotal(),
             getOrdersCount('PENDING'),
@@ -62,23 +87,23 @@ useEffect(() => {
             getAllEntries(),
             getRecentSales(),
             getLowStockItems(),
-          ]);
+          ]));
         setTotalInventory(inventoryData);
-        setMonthlySales(salesData);
+        setMonthlySales(monthlySalesData);
         setPendingOrders(pendingData.count);
         setLowStockItems(lowStock);
-        const entryItems = (entries as any[])
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        const entryItems = entries
+          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .slice(0, 10);
         const activities: ActivityItem[] = [
-          ...orders.map((o: any) => ({
+          ...recentOrders.map((o: any) => ({
             id: o.id,
             type: 'order',
             description: `Nueva orden #${o.code}`,
             createdAt: o.createdAt,
             href: `/dashboard/orders/${o.id}`,
           })),
-          ...sales.map((s: any) => ({
+          ...recentSales.map((s: any) => ({
             id: s.id,
             type: 'sale',
             description: `Venta interna #${s.id}`,
@@ -94,7 +119,7 @@ useEffect(() => {
           })),
           ...lowStock.slice(0, 10).map((i: any) => ({
             id: i.productId,
-            type: 'alert',
+            type: 'alert',  
             description: `Sin stock: ${i.productName}`,
             createdAt: new Date().toISOString(),
             href: '/dashboard/inventory',
@@ -102,14 +127,14 @@ useEffect(() => {
         ];
         activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setRecentActivity(activities.slice(0, 10));
-      } catch (error) {
+      } catch (error: unknown) {
         if (!handleAuthError(error)) {
           if (error instanceof Error && error.message === 'Unauthorized') {
             router.push('/unauthorized');
           } else {
             console.error('Error cargando datos:', error);
           }
-        }
+        }      
       } finally {
         setLoading(false);
       }
