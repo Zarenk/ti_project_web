@@ -7,8 +7,24 @@ import { UpdateBrandDto } from './dto/update-brand.dto';
 export class BrandsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private normalizeName(name: string) {
+    return name.trim().toUpperCase();
+  }
+
   create(createBrandDto: CreateBrandDto) {
-    return this.prisma.brand.create({ data: createBrandDto });
+    const name = this.normalizeName(createBrandDto.name);
+    return this.prisma.brand.create({
+      data: { ...createBrandDto, name },
+    });
+  }
+
+  async findOrCreateByName(name: string) {
+    const normalized = this.normalizeName(name);
+    const existing = await this.prisma.brand.findUnique({
+      where: { name: normalized },
+    });
+    if (existing) return existing;
+    return this.prisma.brand.create({ data: { name: normalized } });
   }
 
   async findAll(page = 1, limit = 10) {
@@ -29,7 +45,10 @@ export class BrandsService {
   }
 
   update(id: number, updateBrandDto: UpdateBrandDto) {
-    return this.prisma.brand.update({ where: { id }, data: updateBrandDto });
+    const data = updateBrandDto.name
+      ? { ...updateBrandDto, name: this.normalizeName(updateBrandDto.name) }
+      : updateBrandDto;
+    return this.prisma.brand.update({ where: { id }, data });
   }
 
   remove(id: number) {

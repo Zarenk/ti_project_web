@@ -637,6 +637,7 @@ model ChatMessage {
   clientId  Int
   senderId  Int
   text      String
+  file      String?
   createdAt DateTime @default(now())
   seenAt    DateTime?
 

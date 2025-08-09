@@ -11,15 +11,17 @@ export class ChatService {
     clientId,
     senderId,
     text,
+    file,
   }: {
     clientId: number;
     senderId: number;
     text: string;
+    file?: string;
   }): Promise<ChatMessage> {
     // Only persist allowed fields to avoid runtime errors if extra properties
     // are accidentally provided in the payload (e.g. attachments).
     return this.prisma.chatMessage.create({
-      data: { clientId, senderId, text },
+      data: { clientId, senderId, text, file },
     });
   }
 

@@ -51,6 +51,7 @@ export async function sendMessage(data: {
   clientId: number;
   senderId: number;
   text: string;
+  file?: string;
 }) {
   const token = localStorage.getItem('token');
   if (!token) {

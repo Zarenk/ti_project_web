@@ -4,6 +4,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { Prisma} from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CategoryService } from 'src/category/category.service';
+import { BrandsService } from 'src/brands/brands.service';
 
 @Injectable()
 export class ProductsService {
@@ -11,6 +12,7 @@ export class ProductsService {
   constructor(
     private prismaService: PrismaService,
     private categoryService: CategoryService, // Cambiado a PrismaService
+    private brandsService: BrandsService,
   ) {}
 
   private mapBrand(brand: string | null) {
@@ -24,13 +26,22 @@ export class ProductsService {
   }
 
   async create(createProductDto: CreateProductDto) {
-    const { specification, images, features, brandId, brand: _brand, ...data } =
-      createProductDto as any
+    const { specification, images, features, brandId, brand, ...data } =
+      createProductDto as any;
     try {
+      let brandEntity = null;
+      if (!brandId && brand) {
+        brandEntity = await this.brandsService.findOrCreateByName(brand);
+      } else if (brandId) {
+        brandEntity = await this.prismaService.brand.findUnique({
+          where: { id: brandId },
+        });
+      }
       return await this.prismaService.product.create({
         data: {
           ...data,
-          brandId: brandId ?? undefined,
+          brandId: brandEntity ? brandEntity.id : brandId ?? undefined,
+          brandName: brandEntity ? brandEntity.name : undefined,
           images: images ?? [],
           specification: specification ? { create: specification } : undefined,
           features: features ? { createMany: { data: features } } : undefined,
@@ -40,9 +51,8 @@ export class ProductsService {
           features: true,
           brand: { select: { id: true, name: true, logoSvg: true, logoPng: true } },
         },
-      })
-    }
-    catch (error) {
+      });
+    } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
@@ -170,14 +180,19 @@ export class ProductsService {
   }
 
   async update(id: number, updateProductDto: UpdateProductDto) {
-    const { specification, images, features, brandId, brand: _brand, ...data } =
-      updateProductDto as any
+    const { specification, images, features, brandId, brand, ...data } =
+      updateProductDto as any;
     try {
+      let brandEntity = null;
+      if (!brandId && brand) {
+        brandEntity = await this.brandsService.findOrCreateByName(brand);
+      }
       const productFound = await this.prismaService.product.update({
         where: { id: Number(id) },
         data: {
           ...data,
-          brandId: brandId ?? undefined,
+          brandId: brandEntity ? brandEntity.id : brandId ?? undefined,
+          brandName: brandEntity ? brandEntity.name : undefined,
           images: images ?? undefined,
           specification: specification
             ? { upsert: { create: specification, update: specification } }
@@ -188,10 +203,10 @@ export class ProductsService {
           features: true,
           brand: { select: { id: true, name: true, logoSvg: true, logoPng: true } },
         },
-      })
-  
-      if(!productFound){
-        throw new NotFoundException(`Product with id ${id} not found`)
+      });
+
+      if (!productFound) {
+        throw new NotFoundException(`Product with id ${id} not found`);
       }
   
       return productFound;

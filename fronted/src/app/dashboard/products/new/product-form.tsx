@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { createProduct, updateProduct } from '../products.api'
 import { uploadProductImage } from '../products.api'
+import { getBrands } from '../../brands/brands.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { SelectTrigger, SelectValue } from '@radix-ui/react-select'
@@ -107,8 +108,17 @@ export function ProductForm({product, categories}: {product: any; categories: an
   const router = useRouter();
   const params = useParams<{id: string}>();
 
+  const [brands, setBrands] = useState<any[]>([]);
   // Estado para manejar el error del nombre si se repite
   const [nameError, setNameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getBrands(1, 1000)
+      .then((res) =>
+        setBrands(res.data.map((b: any) => ({ ...b, name: b.name.toUpperCase() }))),
+      )
+      .catch(() => {});
+  }, []);
 
   const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
@@ -136,9 +146,11 @@ export function ProductForm({product, categories}: {product: any; categories: an
         if (connectivity) spec.connectivity = connectivity
 
         const cleanedImages = productData.images?.filter((img) => img.trim() !== "") ?? []
+        const brand = productData.brand?.trim().toUpperCase()
 
         const payload = {
             ...productData,
+            brand: brand || undefined,
             images: cleanedImages.length > 0 ? cleanedImages : undefined,
             categoryId: Number(productData.categoryId),
             specification: Object.keys(spec).length ? spec : undefined,
@@ -220,8 +232,14 @@ export function ProductForm({product, categories}: {product: any; categories: an
                             Marca
                         </Label>
                         <Input
+                        list="brand-options"
                         maxLength={50}
                         {...register('brand')}></Input>
+                        <datalist id="brand-options">
+                          {brands.map((b) => (
+                            <option key={b.id} value={b.name} />
+                          ))}
+                        </datalist>
                         {form.formState.errors.brand && (
                             <p className="text-red-500 text-sm">{form.formState.errors.brand.message}</p>
                         )}

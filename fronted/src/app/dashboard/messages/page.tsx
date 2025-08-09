@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { AlertCircle, Eye, X, Filter, ArrowUpDown } from 'lucide-react';
+import { AlertCircle, Eye, X, Filter, ArrowUpDown, Paperclip } from 'lucide-react';
 import socket, { cn } from '@/lib/utils';
 import TypingIndicator from '@/components/TypingIndicator';
 import { useMessages } from '@/context/messages-context';
@@ -20,6 +20,7 @@ interface Message {
   text: string;
   createdAt: string;
   seenAt?: string | null;
+  file?: string;
 }
 
 export default function Page() {
@@ -29,12 +30,30 @@ export default function Page() {
   const [selected, setSelected] = useState<number | null>(null);
   const [history, setHistory] = useState<Message[]>([]);
   const [text, setText] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [lastMessages, setLastMessages] = useState<Record<number, Message | null>>({});
   const [showPendingOnly, setShowPendingOnly] = useState(false);
   const [sortByName, setSortByName] = useState(false);
   const [clientTyping, setClientTyping] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (selected) {
+      setFile(selected);
+      const reader = new FileReader();
+      reader.onload = () => setPreview(reader.result as string);
+      reader.readAsDataURL(selected);
+    }
+  };
+
+  const clearFile = () => {
+    setFile(null);
+    setPreview(null);
+  };
+
 
   const displayName = (c: any) =>
     c.name && c.name.trim() !== '' ? c.name : `Invitado #${c.userId}`;
@@ -158,17 +177,20 @@ export default function Page() {
   }, [history]);
 
   const handleSend = async () => {
-    if (!userId || selected === null || !text.trim()) return;
+    if (!userId || selected === null || (!text.trim() && !preview)) return;
     try {
       const msg = await sendMessage({
         clientId: selected,
         senderId: userId,
         text,
+        file: preview || undefined,
       });
       setHistory((prev) =>
         prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
       );
       setText('');
+      setFile(null);
+      setPreview(null);
     } catch (e) {
       console.error(e);
     }
@@ -247,7 +269,10 @@ export default function Page() {
                       <div className="flex flex-col text-left">
                         <span className="font-medium">{displayName(c)}</span>
                         <span className="text-sm text-muted-foreground truncate max-w-[160px]">
-                          {lastMessages[c.userId]?.text || 'Sin mensajes'}
+                          {lastMessages[c.userId]?.text ||
+                            (lastMessages[c.userId]?.file
+                              ? 'Archivo adjunto'
+                              : 'Sin mensajes')}
                         </span>
                       </div>
                     </div>
@@ -361,6 +386,14 @@ export default function Page() {
                         </span>
                       </p>
                       <p>{m.text}</p>
+                      {m.file && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={m.file}
+                          alt="Archivo adjunto"
+                          className="mt-2 max-h-60 rounded-md"
+                        />
+                      )}
                       {m.senderId === userId && m.seenAt && (
                         <p className="text-[10px] text-muted-foreground mt-1">
                           Visto {new Date(m.seenAt).toLocaleTimeString()}
@@ -376,14 +409,46 @@ export default function Page() {
                 )}
                 <div ref={bottomRef} />
               </div>
-              <div className="p-4 border-t flex gap-2">
-                <Input
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Escribe tu mensaje..."
-                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                />
-                <Button onClick={handleSend}>Enviar</Button>
+              <div className="p-4 border-t flex flex-col gap-2">
+                {preview && (
+                  <div className="relative inline-block">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={preview}
+                      alt="Previsualización"
+                      className="max-h-24 rounded-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={clearFile}
+                      className="absolute -top-2 -right-2 rounded-full bg-destructive text-white p-0.5"
+                      aria-label="Eliminar adjunto"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    id="message-file"
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                  <label
+                    htmlFor="message-file"
+                    className="cursor-pointer text-muted-foreground hover:text-foreground flex items-center"
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </label>
+                  <Input
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Escribe tu mensaje..."
+                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  />
+                  <Button onClick={handleSend}>Enviar</Button>
+                </div>
               </div>
             </Card>
           )}

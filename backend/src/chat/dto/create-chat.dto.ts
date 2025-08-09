@@ -1,4 +1,4 @@
-import { IsInt, IsString, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateChatDto {
   @IsInt()
@@ -10,4 +10,8 @@ export class CreateChatDto {
   @IsString()
   @MinLength(1)
   text!: string;
+
+  @IsOptional()
+  @IsString()
+  file?: string;
 }

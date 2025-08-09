@@ -17,4 +17,6 @@ export type CreateProductDto = Omit<
   specification?: ProductSpecInput
   features?: ProductFeatureInput[]
   images?: string[]
+  /** Nombre de la marca cuando no se proporciona el ID */
+  brand?: string
 }

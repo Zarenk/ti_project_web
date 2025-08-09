@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { getLastAccessFromToken } from "@/lib/auth"
 import { getProfile, updateProfile, changePassword, uploadProfileImage } from "./account.api"
+import Actividad from "./Actividad"
 
 export default function Page() {
   const [user, setUser] = useState({
@@ -41,6 +42,7 @@ export default function Page() {
   const [savingDatos, setSavingDatos] = useState(false)
   const [savingPass, setSavingPass] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showActividad, setShowActividad] = useState(false)
 
   useEffect(() => {
     async function loadProfile() {
@@ -192,12 +194,15 @@ export default function Page() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                className="rounded-full border-sky-200 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
-              >
-                Ver actividad
-              </Button>
+              {user.rol === 'ADMIN' && (
+                <Button
+                  variant="outline"
+                  className="rounded-full border-sky-200 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
+                  onClick={() => setShowActividad((v) => !v)}
+                >
+                  Actividad
+                </Button>
+              )}
               <Button
                 className="rounded-full bg-sky-600 text-white hover:bg-sky-700 dark:bg-slate-700 dark:hover:bg-slate-600"
                 onClick={() => handleDatosSubmit(new Event('submit') as unknown as React.FormEvent)}
@@ -209,219 +214,227 @@ export default function Page() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 md:grid-cols-12 md:gap-8 md:py-10">
-        {/* Columna principal */}
-        <section className="md:col-span-8 space-y-6">
-          {/* Información de la cuenta (lectura) */}
-          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-800 dark:text-slate-100">Información de la cuenta</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <InfoRow label="Nombre completo" value={user.nombre} icon={<UserRound className="size-4" />} />
-                <InfoRow label="Correo electrónico" value={user.correo} icon={<Mail className="size-4" />} />
-                {user.telefono && (
-                  <InfoRow label="Número de teléfono" value={user.telefono} icon={<Phone className="size-4" />} />
-                )}
-                <InfoRow label="Rol" value={user.rol} icon={<Shield className="size-4" />} />
-                <InfoRow
-                  label="Fecha de creación"
-                  value={user.creadoEl ? new Date(user.creadoEl).toLocaleDateString("es-ES", { dateStyle: "long" }) : ""}
-                  icon={<CalendarClock className="size-4" />}
-                />
-                <InfoRow label="Estado" value={user.estado} icon={<CheckCircle2 className="size-4 text-emerald-500" />} />
-              </div>
-            </CardContent>
-          </Card>
+      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 md:grid-cols-12 md:gap-8 md:py-10">      
+        {showActividad ? (
+          <div className="md:col-span-12">
+            <Actividad />
+          </div>
+        ) : (
+          <>
+            {/* Columna principal */}
+            <section className="md:col-span-8 space-y-6">
+              {/* Información de la cuenta (lectura) */}
+              <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-slate-800 dark:text-slate-100">Información de la cuenta</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <InfoRow label="Nombre completo" value={user.nombre} icon={<UserRound className="size-4" />} />
+                    <InfoRow label="Correo electrónico" value={user.correo} icon={<Mail className="size-4" />} />
+                    {user.telefono && (
+                      <InfoRow label="Número de teléfono" value={user.telefono} icon={<Phone className="size-4" />} />
+                    )}
+                    <InfoRow label="Rol" value={user.rol} icon={<Shield className="size-4" />} />
+                    <InfoRow
+                      label="Fecha de creación"
+                      value={user.creadoEl ? new Date(user.creadoEl).toLocaleDateString("es-ES", { dateStyle: "long" }) : ""}
+                      icon={<CalendarClock className="size-4" />}
+                    />
+                    <InfoRow label="Estado" value={user.estado} icon={<CheckCircle2 className="size-4 text-emerald-500" />} />
+                  </div>                  
+                </CardContent>
+              </Card>
 
-          {/* Formularios de edición */}
-          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-800 dark:text-slate-100">Editar perfil</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-8">
-              {/* Datos personales */}
-              <section aria-labelledby="datos-personales">
-                <div className="mb-3">
-                  <h3 id="datos-personales" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Datos personales
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Actualiza tu nombre, correo y teléfono.</p>
-                </div>
-                <form onSubmit={handleDatosSubmit} className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="nombre">Nombre</Label>
-                    <Input
-                      id="nombre"
-                      placeholder="Nombre completo"
-                      value={formDatos.nombre}
-                      onChange={(e) => setFormDatos((f) => ({ ...f, nombre: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="correo">Correo electrónico</Label>
-                    <Input
-                      id="correo"
-                      type="email"
-                      placeholder="correo@empresa.com"
-                      value={formDatos.correo}
-                      onChange={(e) => setFormDatos((f) => ({ ...f, correo: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
-                    />
-                  </div>
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="telefono">Número de teléfono</Label>
-                    <Input
-                      id="telefono"
-                      placeholder="+34 600 000 000"
-                      value={formDatos.telefono}
-                      onChange={(e) => setFormDatos((f) => ({ ...f, telefono: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
-                    />
-                  </div>
-                  <div className="sm:col-span-2 flex items-center gap-2">
-                    <Button
-                      type="submit"
-                      disabled={savingDatos}
-                      className="rounded-full bg-sky-600 text-white transition-shadow hover:bg-sky-700 hover:shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600"
-                    >
-                      {savingDatos ? "Guardando..." : "Guardar cambios"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="rounded-full text-sky-700 hover:bg-sky-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                      onClick={() =>
-                        setFormDatos({ nombre: user.nombre, correo: user.correo, telefono: user.telefono })
-                      }
-                    >
-                      Deshacer
-                    </Button>
-                  </div>
-                </form>
-              </section>
+              {/* Formularios de edición */}
+              <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-slate-800 dark:text-slate-100">Editar perfil</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-8">
+                  {/* Datos personales */}
+                  <section aria-labelledby="datos-personales">
+                    <div className="mb-3">
+                      <h3 id="datos-personales" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Datos personales
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Actualiza tu nombre, correo y teléfono.</p>
+                    </div>
+                    <form onSubmit={handleDatosSubmit} className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="nombre">Nombre</Label>
+                        <Input
+                          id="nombre"
+                          placeholder="Nombre completo"
+                          value={formDatos.nombre}
+                          onChange={(e) => setFormDatos((f) => ({ ...f, nombre: e.target.value }))}
+                          className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="correo">Correo electrónico</Label>
+                        <Input
+                          id="correo"
+                          type="email"
+                          placeholder="correo@empresa.com"
+                          value={formDatos.correo}
+                          onChange={(e) => setFormDatos((f) => ({ ...f, correo: e.target.value }))}
+                          className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
+                        />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="telefono">Número de teléfono</Label>
+                        <Input
+                          id="telefono"
+                          placeholder="+34 600 000 000"
+                          value={formDatos.telefono}
+                          onChange={(e) => setFormDatos((f) => ({ ...f, telefono: e.target.value }))}
+                          className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 flex items-center gap-2">
+                        <Button
+                          type="submit"
+                          disabled={savingDatos}
+                          className="rounded-full bg-sky-600 text-white transition-shadow hover:bg-sky-700 hover:shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600"
+                        >
+                          {savingDatos ? "Guardando..." : "Guardar cambios"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="rounded-full text-sky-700 hover:bg-sky-100 dark:text-slate-200 dark:hover:bg-slate-700"
+                          onClick={() =>
+                            setFormDatos({ nombre: user.nombre, correo: user.correo, telefono: user.telefono })
+                          }
+                        >
+                          Deshacer
+                        </Button>
+                      </div>
+                    </form>
+                  </section>
 
-              <Separator className="bg-sky-100 dark:bg-slate-700" />
+                  <Separator className="bg-sky-100 dark:bg-slate-700" />
 
-              {/* Contraseña */}
-              <section aria-labelledby="seguridad">
-                <div className="mb-3">
-                  <h3 id="seguridad" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Contraseña
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Cambia tu contraseña. Asegúrate de usar una contraseña segura.
-                  </p>
-                </div>
-                <form onSubmit={handlePassSubmit} className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="actual">Contraseña actual</Label>
-                    <Input
-                      id="actual"
-                      type="password"
-                      placeholder="Introduce tu contraseña actual"
-                      value={formPass.actual}
-                      onChange={(e) => setFormPass((f) => ({ ...f, actual: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="nueva">Nueva contraseña</Label>
-                    <Input
-                      id="nueva"
-                      type="password"
-                      placeholder="Nueva contraseña"
-                      value={formPass.nueva}
-                      onChange={(e) => setFormPass((f) => ({ ...f, nueva: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="confirmar">Confirmar contraseña</Label>
-                    <Input
-                      id="confirmar"
-                      type="password"
-                      placeholder="Repite la nueva contraseña"
-                      value={formPass.confirmar}
-                      onChange={(e) => setFormPass((f) => ({ ...f, confirmar: e.target.value }))}
-                      className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
-                    />
-                  </div>
-                  <div className="sm:col-span-2 flex items-center gap-2">
-                    <Button
-                      type="submit"
-                      disabled={savingPass}
-                      className="rounded-full bg-cyan-600 text-white transition-shadow hover:bg-cyan-700 hover:shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600"
-                    >
-                      {savingPass ? "Actualizando..." : "Actualizar contraseña"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="rounded-full text-sky-700 hover:bg-sky-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                      onClick={() => setFormPass({ actual: "", nueva: "", confirmar: "" })}
-                    >
-                      Limpiar
-                    </Button>
-                  </div>
-                </form>
-              </section>
-            </CardContent>
-            <CardFooter className="text-xs text-slate-500">
-              Los cambios se aplican únicamente a este usuario dentro del sistema interno.
-            </CardFooter>
-          </Card>
-        </section>
+                  {/* Contraseña */}
+                  <section aria-labelledby="seguridad">
+                    <div className="mb-3">
+                      <h3 id="seguridad" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Contraseña
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Cambia tu contraseña. Asegúrate de usar una contraseña segura.
+                      </p>
+                    </div>
+                    <form onSubmit={handlePassSubmit} className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="actual">Contraseña actual</Label>
+                        <Input
+                          id="actual"
+                          type="password"
+                          placeholder="Introduce tu contraseña actual"
+                          value={formPass.actual}
+                          onChange={(e) => setFormPass((f) => ({ ...f, actual: e.target.value }))}
+                          className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="nueva">Nueva contraseña</Label>
+                        <Input
+                          id="nueva"
+                          type="password"
+                          placeholder="Nueva contraseña"
+                          value={formPass.nueva}
+                          onChange={(e) => setFormPass((f) => ({ ...f, nueva: e.target.value }))}
+                          className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="confirmar">Confirmar contraseña</Label>
+                        <Input
+                          id="confirmar"
+                          type="password"
+                          placeholder="Repite la nueva contraseña"
+                          value={formPass.confirmar}
+                          onChange={(e) => setFormPass((f) => ({ ...f, confirmar: e.target.value }))}
+                          className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 flex items-center gap-2">
+                        <Button
+                          type="submit"
+                          disabled={savingPass}
+                          className="rounded-full bg-cyan-600 text-white transition-shadow hover:bg-cyan-700 hover:shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600"
+                        >
+                          {savingPass ? "Actualizando..." : "Actualizar contraseña"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="rounded-full text-sky-700 hover:bg-sky-100 dark:text-slate-200 dark:hover:bg-slate-700"
+                          onClick={() => setFormPass({ actual: "", nueva: "", confirmar: "" })}
+                        >
+                          Limpiar
+                        </Button>
+                      </div>
+                    </form>
+                  </section>
+                </CardContent>
+                <CardFooter className="text-xs text-slate-500">
+                  Los cambios se aplican únicamente a este usuario dentro del sistema interno.
+                </CardFooter>
+              </Card>
+            </section>
 
-        {/* Columna lateral: resumen */}
-        <aside className="md:col-span-4 space-y-6">
-          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-800 dark:text-slate-100">Resumen</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <SummaryItem
-                icon={<LogIn className="size-4 text-sky-600" />}
-                label="Último inicio de sesión"
-                value={user.ultimoInicio}
-              />
-              <SummaryItem
-                icon={<CheckCircle2 className="size-4 text-emerald-600" />}
-                label="Estado"
-                value={user.estado}
-              />
-              <SummaryItem icon={<Shield className="size-4 text-cyan-600" />} label="Rol" value={user.rol} />
-              <Separator className="bg-sky-100 dark:bg-slate-700" />
-              <div className="rounded-lg bg-sky-50/70 p-3 text-xs text-slate-600 dark:bg-slate-700/70 dark:text-slate-300">
-                Mantén tu información actualizada para garantizar una mejor experiencia en el intranet.
-              </div>
-            </CardContent>
-          </Card>
+            {/* Columna lateral: resumen */}
+            <aside className="md:col-span-4 space-y-6">
+              <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-slate-800 dark:text-slate-100">Resumen</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <SummaryItem
+                    icon={<LogIn className="size-4 text-sky-600" />}
+                    label="Último inicio de sesión"
+                    value={user.ultimoInicio}
+                  />
+                  <SummaryItem
+                    icon={<CheckCircle2 className="size-4 text-emerald-600" />}
+                    label="Estado"
+                    value={user.estado}
+                  />
+                  <SummaryItem icon={<Shield className="size-4 text-cyan-600" />} label="Rol" value={user.rol} />
+                  <Separator className="bg-sky-100 dark:bg-slate-700" />
+                  <div className="rounded-lg bg-sky-50/70 p-3 text-xs text-slate-600 dark:bg-slate-700/70 dark:text-slate-300">
+                    Mantén tu información actualizada para garantizar una mejor experiencia en el intranet.
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-800 dark:text-slate-100">Contacto rápido</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <Button
-                variant="outline"
-                className="justify-start rounded-lg hover:bg-sky-50 dark:hover:bg-slate-700"
-              >
-                <Mail className="mr-2 size-4 text-sky-700 dark:text-slate-200" />
-                Enviar correo
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start rounded-lg hover:bg-sky-50 dark:hover:bg-slate-700"
-              >
-                <Phone className="mr-2 size-4 text-sky-700 dark:text-slate-200" />
-                Llamar
-              </Button>
-            </CardContent>
-          </Card>
-        </aside>
+              <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-slate-800 dark:text-slate-100">Contacto rápido</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3">
+                  <Button
+                    variant="outline"
+                    className="justify-start rounded-lg hover:bg-sky-50 dark:hover:bg-slate-700"
+                  >
+                    <Mail className="mr-2 size-4 text-sky-700 dark:text-slate-200" />
+                    Enviar correo
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start rounded-lg hover:bg-sky-50 dark:hover:bg-slate-700"
+                  >
+                    <Phone className="mr-2 size-4 text-sky-700 dark:text-slate-200" />
+                    Llamar
+                  </Button>
+                </CardContent>
+              </Card>
+            </aside>
+          </>
+        )}
       </main>
     </div>
   )

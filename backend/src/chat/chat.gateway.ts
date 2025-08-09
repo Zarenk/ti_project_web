@@ -77,8 +77,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       clientId,
       senderId,
       text,
+      file,
     });
-    this.server.emit('chat:receive', { ...message, file, tempId });
+    this.server.emit('chat:receive', { ...message, tempId });
   }
 
   @SubscribeMessage('chat:seen')
