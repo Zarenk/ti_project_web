@@ -27,10 +27,14 @@ export type Products = {
     id: string
     name: string
     description: string
-    brand?: string
+    brand?: {
+      name?: string
+      logoSvg?: string
+      logoPng?: string
+    } | string | null
     price: number
     priceSell: number
-    status: string
+    status?: string | null
     createdAt: Date
     category: {
       id: string;
@@ -125,6 +129,13 @@ export const columns: ColumnDef<Products>[] = [
             </Button>
           )
         },
+    cell: ({ row }) => {
+          const brand = row.original.brand as any;
+          if (typeof brand === 'string') {
+            return <div className="font-medium">{brand}</div>;
+          }
+          return <div className="font-medium">{brand?.name || 'Sin marca'}</div>;
+        },
     },  
     {
         accessorKey: 'price',
@@ -166,6 +177,10 @@ export const columns: ColumnDef<Products>[] = [
               <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
           )
+        },
+        cell: ({ row }) => {
+          const status = row.getValue('status') as string | null;
+          return <div className="font-medium">{status === 'active' ? 'Activo' : 'Inactivo'}</div>;
         },
     },
     {
@@ -303,7 +318,12 @@ export const columns: ColumnDef<Products>[] = [
                   <div><strong>Descripción:</strong> {products.description}</div>
                   <div><strong>Precio Compra:</strong> S/. {products.price}</div>
                   <div><strong>Precio Venta:</strong> S/. {products.priceSell}</div>
-                  <div><strong>Marca:</strong> {products.brand || 'Sin marca'}</div>
+                  <div>
+                    <strong>Marca:</strong>{" "}
+                    {typeof products.brand === "string"
+                      ? products.brand
+                      : products.brand?.name || "Sin marca"}
+                  </div>
                   <div><strong>Estado:</strong> {products.status}</div>
                   <div><strong>Categoría:</strong> {products.category?.name || "Sin categoría"}</div>
                   <div><strong>Fecha de Creación:</strong> {new Date(products.createdAt).toLocaleDateString()}</div>

@@ -136,6 +136,7 @@ export class ProductsService {
         priceSell: true,
         description: true,
         brand: true,
+        status: true,
         createdAt: true,
         images: true,
         categoryId: true,

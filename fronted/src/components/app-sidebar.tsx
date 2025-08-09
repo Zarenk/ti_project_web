@@ -257,11 +257,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     async function fetchProfile() {
       try {
         const profile = await getUserProfile()
-        setUser({
-          name: profile.username,
-          email: profile.email,
-          avatar: "/logo_ti.png",
-        })
+        if (profile) {
+          setUser({
+            name: profile.username,
+            email: profile.email,
+            avatar: "/logo_ti.png",
+          })
+        }
       } catch (error) {
         console.error("Error fetching user profile:", error)
       }

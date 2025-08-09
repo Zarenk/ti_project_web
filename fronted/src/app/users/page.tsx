@@ -158,6 +158,10 @@ export default function UserPanel() {
       }
       try {
         const profile = await getUserProfile()
+        if (!profile) {
+          router.replace('/login')
+          return
+        }
         setRegistrationDate(
           new Date(profile.createdAt).toLocaleDateString('es-ES')
         )

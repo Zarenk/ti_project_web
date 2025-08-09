@@ -50,14 +50,14 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
  
-interface DataTableProps<TData extends {id:string, createdAt:Date, name:string, 
-  description:string, brand?: string, price: number, priceSell: number, status: string, category_name: string}, TValue> {
+interface DataTableProps<TData extends {id:string, createdAt:Date, name:string,
+  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string}, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
 }
  
-export function DataTable<TData extends {id:string, createdAt:Date, name:string, 
-  description:string, brand?: string, price: number, priceSell: number, status: string, category_name: string}, TValue>({
+export function DataTable<TData extends {id:string, createdAt:Date, name:string,
+  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string}, TValue>({
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
@@ -313,10 +313,10 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
                     <td class="truncate"${row.description}">
                       ${row.description}
                     </td>
-                    <td class="truncate">${row.brand ?? ''}</td>
+                    <td class="truncate">${(typeof row.brand === 'string' ? row.brand : row.brand?.name) ?? ''}</td>
                     <td>S/. ${row.price}</td>
                     <td>S/. ${row.priceSell}</td>
-                    <td>${row.status}</td>
+                    <td>${row.status === 'active' ? 'Activo' : 'Inactivo'}</td>
                     <td>${new Date(row.createdAt).toLocaleDateString()}</td>
                   </tr>
                 `
@@ -775,7 +775,7 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
                     <div><strong>Descripción:</strong> {selectedRowData.description}</div>
                     <div><strong>Precio:</strong> S/. {selectedRowData.price}</div>
                     <div><strong>Precio de Venta:</strong> S/. {selectedRowData.priceSell}</div>
-                    <div><strong>Estado:</strong> {selectedRowData.status}</div>
+                    <div><strong>Estado:</strong> {selectedRowData.status === 'active' ? 'Activo' : 'Inactivo'}</div>
                     <div><strong>Fecha de Creación:</strong> {new Date(selectedRowData.createdAt).toLocaleDateString()}</div>
                 </span>
                 <AlertDialogFooter>
@@ -808,7 +808,7 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
                           <strong>Descripción:</strong> {row.description}
                         </div>
                         <div>
-                          <strong>Marca:</strong> {row.brand || 'Sin marca'}
+                          <strong>Marca:</strong> {typeof row.brand === 'string' ? row.brand : row.brand?.name || 'Sin marca'}
                         </div>
                         <div>
                           <strong>Precio:</strong> S/. {row.price}
@@ -820,7 +820,7 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
                           <strong>Categoría:</strong> {row.category_name}
                         </div>
                         <div>
-                          <strong>Estado:</strong> {row.status}
+                          <strong>Estado:</strong> {row.status === 'active' ? 'Activo' : 'Inactivo'}
                         </div>
                         <div>
                           <strong>Fecha de Creación:</strong>{" "}

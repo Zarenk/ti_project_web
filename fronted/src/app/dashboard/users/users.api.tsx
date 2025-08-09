@@ -29,38 +29,35 @@ export async function loginUser(email: string, password: string) {
 
 // Función para obtener el perfil del usuario autenticado
 export async function getUserProfile() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
 
-  if (token) {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        return await response.json();
-      }
-    } catch (error: any) {
-      console.error('Error en getUserProfile:', error.message);
-      throw error;
-    }
+  if (!token) {
+    return null
   }
 
   try {
-    const res = await fetch('/api/login');
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Error al obtener el perfil del usuario');
+    const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (response.ok) {
+      return await response.json()
     }
 
-    return await res.json();
+    if (response.status === 401) {
+      return null
+    }
+    
+    const errorData = await response.json()
+    throw new Error(errorData.message || 'Error al obtener el perfil del usuario')
+
   } catch (error: any) {
-    console.error('Error en getUserProfile:', error.message);
-    throw error;
+    console.error('Error en getUserProfile:', error.message)
+    throw error
   }
 }
 
