@@ -67,6 +67,21 @@ Start the development server:
 cd fronted
 npm run dev
 ```
+### Authenticated requests
+
+The `src/utils/auth-fetch.ts` helper centralizes authenticated requests. It
+automatically injects the bearer token from cookies or `localStorage`, prefixes
+relative URLs with `NEXT_PUBLIC_BACKEND_URL` and tries a silent refresh on `401`
+responses.
+
+```ts
+import { authFetch } from '@/utils/auth-fetch'
+
+const res = await authFetch('/api/inventory')
+const data = await res.json()
+```
+
+If you only need the headers, `getAuthHeaders()` is also available.
 
 ### Shipping information
 Web orders now store shipping details. When creating a web sale you can send the following optional fields:

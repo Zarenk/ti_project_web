@@ -2,6 +2,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:400
 
 import { DateRange } from "react-day-picker"
 import { getAuthToken } from "@/lib/auth"
+import { authFetch } from "@/utils/auth-fetch";
 
 export async function createSale(data: {
   userId: number;
@@ -448,17 +449,12 @@ export async function getRecentSalesByRange(from: string, to: string) {
 }
 
 export async function getRecentSales(limit = 10) {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    throw new Error('No se encontró un token de autenticación')
-  }
   const to = new Date().toISOString()
   const fromDate = new Date()
   fromDate.setMonth(fromDate.getMonth() - 1)
   const from = fromDate.toISOString()
-  const res = await fetch(
-    `${BACKEND_URL}/api/sales/recent/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
-    { headers: { Authorization: `Bearer ${token}` } }
+  const res = await authFetch(
+    `${BACKEND_URL}/api/sales/recent/${encodeURIComponent(from)}/${encodeURIComponent(to)}`
   )
   if (!res.ok) throw new Error('Error al obtener ventas recientes')
   const data = await res.json()

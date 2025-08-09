@@ -1,4 +1,5 @@
-import { getAuthToken } from '@/lib/auth';
+import { getAuthToken } from '@/lib/auth'
+import { authFetch } from '@/utils/auth-fetch';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
@@ -30,14 +31,13 @@ export async function getOrders(params: { status?: string; from?: string; to?: s
 }
 
 export async function getOrdersCount(status?: string) {
-  const qs = status ? `?status=${encodeURIComponent(status)}` : '';
-  const token = getAuthToken();
-  const res = await fetch(`${BACKEND_URL}/api/web-sales/orders/count${qs}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    credentials: 'include',
-  });
-  if (!res.ok) throw new Error('Error al obtener el conteo de ordenes');
-  return res.json();
+  const qs = status ? `?status=${encodeURIComponent(status)}` : ''
+  const res = await authFetch(
+    `${BACKEND_URL}/api/web-sales/orders/count${qs}`,
+    { credentials: 'include' },
+  )
+  if (!res.ok) throw new Error('Error al obtener el conteo de ordenes')
+  return res.json()
 }
 
 // Fetches the most recent orders from the backend. The backend already
@@ -45,16 +45,12 @@ export async function getOrdersCount(status?: string) {
 // mirror that behaviour here by using 10 as the default value. This ensures
 // the recent activity section displays at most the latest ten movements.
 export async function getRecentOrders(limit = 10) {
-  const qs = new URLSearchParams();
-  qs.append('limit', limit.toString());
-  const token = getAuthToken();
-  const res = await fetch(
+  const qs = new URLSearchParams()
+  qs.append('limit', limit.toString())
+  const res = await authFetch(
     `${BACKEND_URL}/api/web-sales/orders/recent?${qs.toString()}`,
-    {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      credentials: 'include',
-    },
-  );
-  if (!res.ok) throw new Error('Error al obtener actividad de ordenes');
-  return res.json();
+    { credentials: 'include' },
+  )
+  if (!res.ok) throw new Error('Error al obtener actividad de ordenes')
+  return res.json()
 }

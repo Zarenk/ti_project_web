@@ -1,3 +1,6 @@
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
+
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 // Obtener todo el inventario
@@ -282,17 +285,13 @@ export async function getAllProductsByStore(storeId: number, queryParams: string
 
 export async function getTotalInventory() {
   try {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      throw new Error('No se encontró un token de autenticación');
-    }
-    const response = await fetch(`${BACKEND_URL}/api/inventory/total-inventory`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+    const response = await authFetch(
+      `${BACKEND_URL}/api/inventory/total-inventory`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
       },
-    });
+    )
 
     if (!response.ok) {
       throw new Error('Error al obtener el inventario total');
@@ -300,20 +299,17 @@ export async function getTotalInventory() {
 
     return await response.json();
   } catch (error) {
-    console.error('Error al obtener el inventario total:', error);
-    throw error;
+    if (error instanceof UnauthenticatedError) throw error
+    console.error('Error al obtener el inventario total:', error)
+    throw error
   }
 }
 
 export async function getLowStockItems() {
   try {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      throw new Error('No se encontró un token de autenticación');
-    }
-    const response = await fetch(`${BACKEND_URL}/api/inventory/low-stock-items`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await authFetch(
+      `${BACKEND_URL}/api/inventory/low-stock-items`,
+    )
     if (!response.ok) {
       if (response.status === 403) {
         throw new Error('Unauthorized');
@@ -322,6 +318,7 @@ export async function getLowStockItems() {
     }
     return await response.json();
   } catch (error) {
+    if (error instanceof UnauthenticatedError) throw error
     console.error('Error al obtener los productos sin stock:', error);
     return [];
   }

@@ -6,6 +6,7 @@ import { BarChart3, Box, DollarSign, Package, ShoppingCart, TrendingUp, Truck, U
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from 'sonner'
 import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api"
 import { getMonthlySalesTotal, getRecentSales } from "./sales/sales.api"
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
@@ -13,6 +14,7 @@ import { getOrdersCount, getRecentOrders } from "./orders/orders.api"
 import { getAllEntries } from "./entries/entries.api"
 import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
+import { UnauthenticatedError } from "@/utils/auth-fetch"
 
 export default function WelcomeDashboard() {
 
@@ -28,17 +30,31 @@ export default function WelcomeDashboard() {
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
 
   const router = useRouter()
+  const [authErrorShown, setAuthErrorShown] = useState(false)
+  const handleAuthError = (err: unknown) => {
+    if (authErrorShown) return true
+    if (err instanceof UnauthenticatedError) {
+      setAuthErrorShown(true)
+      toast.error('Tu sesión ha expirado. Vuelve a iniciar sesión.')
+      const path = window.location.pathname
+      router.replace(`/login?returnTo=${encodeURIComponent(path)}`)
+      return true
+    }
+    return false
+  }
 
 
 //------------------------------- USE EFFECT --------------------------------//
 
 useEffect(() => {
-  async function fetchTotalInventory() {
-    try {
-      const data = await getTotalInventory();
-      setTotalInventory(data);
+    async function fetchTotalInventory() {
+      try {
+        const data = await getTotalInventory();
+        setTotalInventory(data);
     } catch (error) {
-      console.error('Error al cargar el inventario total:', error);
+      if (!handleAuthError(error)) {
+        console.error('Error al cargar el inventario total:', error);
+      }
     } finally {
       setLoading(false);
     }
@@ -48,24 +64,26 @@ useEffect(() => {
 }, []);
 
 useEffect(() => {
-  async function fetchData() {
-    const data = await getUserDataFromToken();
-    if (!data || !(await isTokenValid()) || (data.role !== 'ADMIN' && data.role !== 'EMPLOYEE')) {
-      router.push('/unauthorized');
-      return;
-    }
-    try {
-      const [inventoryData, salesData] = await Promise.all([
-        getTotalInventory(),
-        getMonthlySalesTotal(),
-      ]);
-      setTotalInventory(inventoryData);
-      setMonthlySales(salesData);
-    } catch (error: any) {
-      if (error.message === 'Unauthorized') {
+    async function fetchData() {
+      const data = await getUserDataFromToken();
+      if (!data || !(await isTokenValid()) || (data.role !== 'ADMIN' && data.role !== 'EMPLOYEE')) {
         router.push('/unauthorized');
-      } else {
-        console.error('Error cargando datos:', error);
+      return;
+      }
+      try {
+        const [inventoryData, salesData] = await Promise.all([
+          getTotalInventory(),
+          getMonthlySalesTotal(),
+        ]);
+        setTotalInventory(inventoryData);
+        setMonthlySales(salesData);
+    } catch (error) {
+      if (!handleAuthError(error)) {
+        if (error instanceof Error && error.message === 'Unauthorized') {
+          router.push('/unauthorized');
+        } else {
+          console.error('Error cargando datos:', error);
+        }
       }
     } finally {
       setLoading(false);
@@ -76,64 +94,68 @@ useEffect(() => {
 }, []);
 
 useEffect(() => {
-  async function fetchPending() {
-    try {
-      const data = await getOrdersCount('PENDING');
-      setPendingOrders(data.count);
+    async function fetchPending() {
+      try {
+        const data = await getOrdersCount('PENDING');
+        setPendingOrders(data.count);
     } catch (error) {
-      console.error('Error al cargar ordenes pendientes:', error);
+      if (!handleAuthError(error)) {
+        console.error('Error al cargar ordenes pendientes:', error);
+      }
     }
   }
   fetchPending();
 }, []);
 
 useEffect(() => {
-  async function fetchRecent() {
-    try {
-      const [orders, entries, sales, lowStock] = await Promise.all([
-        getRecentOrders(10),
-        getAllEntries(),
-        getRecentSales(),
-        getLowStockItems(),
-      ])
-      setLowStockItems(lowStock)
-      const entryItems = (entries as any[])
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 10)
-      const activities: ActivityItem[] = [
-        ...orders.map((o: any) => ({
-          id: o.id,
-          type: 'order',
-          description: `Nueva orden #${o.code}`,
-          createdAt: o.createdAt,
-          href: `/dashboard/orders/${o.id}`,
-        })),
-        ...sales.map((s: any) => ({
-          id: s.id,
-          type: 'sale',
-          description: `Venta interna #${s.id}`,
-          createdAt: s.createdAt,
-          href: '/dashboard/sales',
-        })),
-        ...entryItems.map((e: any) => ({
-          id: e.id,
-          type: 'entry',
-          description: `Ingreso de inventario #${e.id}`,
-          createdAt: e.createdAt,
-          href: '/dashboard/entries',
-        })),
-        ...lowStock.slice(0, 10).map((i: any) => ({
-          id: i.productId,
-          type: 'alert',
-          description: `Sin stock: ${i.productName}`,
-          createdAt: new Date().toISOString(),
-          href: '/dashboard/inventory',
-        })),
-      ]
-      activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      setRecentActivity(activities.slice(0, 10))
+    async function fetchRecent() {
+      try {
+        const [orders, entries, sales, lowStock] = await Promise.all([
+          getRecentOrders(10),
+          getAllEntries(),
+          getRecentSales(),
+          getLowStockItems(),
+        ])
+        setLowStockItems(lowStock)
+        const entryItems = (entries as any[])
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 10)
+        const activities: ActivityItem[] = [
+          ...orders.map((o: any) => ({
+            id: o.id,
+            type: 'order',
+            description: `Nueva orden #${o.code}`,
+            createdAt: o.createdAt,
+            href: `/dashboard/orders/${o.id}`,
+          })),
+          ...sales.map((s: any) => ({
+            id: s.id,
+            type: 'sale',
+            description: `Venta interna #${s.id}`,
+            createdAt: s.createdAt,
+            href: '/dashboard/sales',
+          })),
+          ...entryItems.map((e: any) => ({
+            id: e.id,
+            type: 'entry',
+            description: `Ingreso de inventario #${e.id}`,
+            createdAt: e.createdAt,
+            href: '/dashboard/entries',
+          })),
+          ...lowStock.slice(0, 10).map((i: any) => ({
+            id: i.productId,
+            type: 'alert',
+            description: `Sin stock: ${i.productName}`,
+            createdAt: new Date().toISOString(),
+            href: '/dashboard/inventory',
+          })),
+        ]
+        activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        setRecentActivity(activities.slice(0, 10))
     } catch (error) {
-      console.error('Error al cargar actividad reciente:', error)
+      if (!handleAuthError(error)) {
+        console.error('Error al cargar actividad reciente:', error)
+      }
     }
   }
   fetchRecent()
