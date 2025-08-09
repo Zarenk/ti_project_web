@@ -49,7 +49,7 @@ export async function authFetch(
 ): Promise<Response> {
   const url = resolveUrl(input)
   const headers = new Headers(init.headers || {})
-  const auth = getAuthHeaders()
+  const auth = await getAuthHeaders()
   Object.entries(auth).forEach(([k, v]) => headers.set(k, v as string))
 
   let res = await fetch(url, { ...init, headers })
@@ -60,7 +60,7 @@ export async function authFetch(
     throw new UnauthenticatedError()
   }
   const retryHeaders = new Headers(init.headers || {})
-  const newAuth = getAuthHeaders()
+  const newAuth = await getAuthHeaders()
   Object.entries(newAuth).forEach(([k, v]) => retryHeaders.set(k, v as string))
   res = await fetch(url, { ...init, headers: retryHeaders })
   if (res.status === 401) {
