@@ -667,3 +667,31 @@ model NewsletterSubscriber {
   email     String   @unique
   createdAt DateTime @default(now())
 }
+
+enum AuditAction {
+  CREATED
+  UPDATED
+  DELETED
+  LOGIN
+  LOGOUT
+  OTHER
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  actorId    Int?
+  actorEmail String?
+  entityType String?
+  entityId   String?
+  action     AuditAction
+  summary    String?
+  diff       Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([entityType])
+  @@index([action])
+}

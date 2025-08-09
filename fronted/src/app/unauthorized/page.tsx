@@ -1,5 +1,7 @@
+"use client"
+
 import { Player } from "@lottiefiles/react-lottie-player"
-import { motion } from "framer-motion"
+import { h1 as MotionH1 } from "framer-motion/client"
 
 export default function UnauthorizedPage() {
   return (
@@ -12,14 +14,14 @@ export default function UnauthorizedPage() {
           style={{ height: 200, width: 200 }}
         />
       </div>
-      <motion.h1
+      <MotionH1
         className="text-2xl font-semibold mt-4"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
         Acceso no autorizado
-      </motion.h1>
+      </MotionH1>
     </div>
   )
 }

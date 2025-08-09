@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UseInterceptors, UploadedFile, Req } from '@nestjs/common';
 import { Request } from 'express';
+import { AuditAction } from '@prisma/client';
+import { ActivityService } from '../activity/activity.service';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -11,12 +13,28 @@ import { extname } from 'path';
 
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly activityService: ActivityService,
+  ) {}
 
   @Post()
   @ApiOperation({summary: 'Create a product'})    // Swagger 
-  create(@Body() createProductDto: CreateProductDto) {
-    return this.productsService.create(createProductDto);
+  async create(@Body() createProductDto: CreateProductDto, @Req() req: Request) {
+    const product = await this.productsService.create(createProductDto);
+    await this.activityService.log(
+      {
+        actorId: (req as any)?.user?.userId,
+        actorEmail: (req as any)?.user?.username,
+        entityType: 'Product',
+        entityId: product.id.toString(),
+        action: AuditAction.CREATED,
+        summary: `Producto ${product.name} creado`,
+        diff: { after: product } as any,
+      },
+      req,
+    );
+    return product;
   }
 
   @Post('verify-or-create-products')
@@ -76,8 +94,33 @@ export class ProductsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
-    return this.productsService.update(+id, updateProductDto);
+  async update(
+    @Param('id') id: string,
+    @Body() updateProductDto: UpdateProductDto,
+    @Req() req: Request,
+  ) {
+    const before = await this.productsService.findOne(+id);
+    const updated = await this.productsService.update(+id, updateProductDto);
+    const diff: any = { before: {}, after: {} };
+    for (const key of Object.keys(updated)) {
+      if (JSON.stringify((before as any)[key]) !== JSON.stringify((updated as any)[key])) {
+        (diff.before as any)[key] = (before as any)[key];
+        (diff.after as any)[key] = (updated as any)[key];
+      }
+    }
+    await this.activityService.log(
+      {
+        actorId: (req as any)?.user?.userId,
+        actorEmail: (req as any)?.user?.username,
+        entityType: 'Product',
+        entityId: updated.id.toString(),
+        action: AuditAction.UPDATED,
+        summary: `Producto ${updated.name} actualizado`,
+        diff,
+      },
+      req,
+    );
+    return updated;
   }
 
   @Patch()
@@ -94,8 +137,21 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.productsService.remove(+id);
+  async remove(@Param('id') id: string, @Req() req: Request) {
+    const removed = await this.productsService.remove(+id);
+    await this.activityService.log(
+      {
+        actorId: (req as any)?.user?.userId,
+        actorEmail: (req as any)?.user?.username,
+        entityType: 'Product',
+        entityId: id,
+        action: AuditAction.DELETED,
+        summary: `Producto ${removed.name} eliminado`,
+        diff: { before: removed } as any,
+      },
+      req,
+    );
+    return removed;
   }
 
   @Delete()
