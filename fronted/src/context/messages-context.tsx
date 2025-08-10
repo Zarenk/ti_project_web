@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { getUnansweredMessages } from "@/app/dashboard/messages/messages.api";
+import { isTokenValid } from "@/lib/auth";
 
 interface MessagesContextType {
   pendingCounts: Record<number, number>;
@@ -26,10 +27,11 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         console.error(err);
       }
     };
-    const token = localStorage.getItem("token");
-    if (token) {
-      load();
-    }
+    isTokenValid().then((valid) => {
+      if (valid) {
+        load();
+      }
+    });
     
   }, []);
 

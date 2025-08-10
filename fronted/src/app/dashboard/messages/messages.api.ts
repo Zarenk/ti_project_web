@@ -1,16 +1,9 @@
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { authFetch } from '@/utils/auth-fetch';
 
 export async function getUnansweredMessages(): Promise<
   { clientId: number; count: number }[]
 > {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    throw new Error('No se encontró un token de autenticación');
-  }
-  const res = await fetch(`${BACKEND_URL}/api/chat/unanswered`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch('/api/chat/unanswered');
   if (!res.ok) {
     throw new Error('Error al obtener los mensajes');
   }
@@ -18,14 +11,7 @@ export async function getUnansweredMessages(): Promise<
 }
 
 export async function getMessages(clientId: number) {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    throw new Error('No se encontró un token de autenticación');
-  }
-  const res = await fetch(`${BACKEND_URL}/api/chat/${clientId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store',
-  });
+  const res = await authFetch('/api/clients/chat', { cache: 'no-store' });
   if (!res.ok) {
     throw new Error('Error al obtener la conversación');
   }
@@ -33,14 +19,7 @@ export async function getMessages(clientId: number) {
 }
 
 export async function getClients() {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    throw new Error('No se encontró un token de autenticación');
-  }
-  const res = await fetch(`${BACKEND_URL}/api/clients/chat`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store',
-  });
+  const res = await authFetch('/api/clients/chat', { cache: 'no-store' });
   if (!res.ok) {
     throw new Error('Error al obtener los clientes');
   }
@@ -53,15 +32,10 @@ export async function sendMessage(data: {
   text: string;
   file?: string;
 }) {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    throw new Error('No se encontró un token de autenticación');
-  }
-  const res = await fetch(`${BACKEND_URL}/api/chat`, {
+  const res = await authFetch('/api/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(data),
   });
