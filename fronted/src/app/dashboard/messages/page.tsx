@@ -219,7 +219,7 @@ export default function Page() {
       <h1 className="text-2xl font-bold">Mensajes</h1>
       <div className="flex flex-1 flex-col md:flex-row gap-4 overflow-hidden">
         <Card className="w-full md:w-1/3 flex flex-col h-full overflow-hidden">
-          <div className="p-4 border-b flex items-center justify-between">
+          <div className="px-4 py-0 border-b flex items-center justify-between">
             <h2 className="text-lg font-semibold">Conversaciones</h2>
             <div className="flex gap-2">
               <Button
@@ -227,7 +227,7 @@ export default function Page() {
                 size="icon"
                 aria-label="Filtrar"
                 onClick={() => setShowPendingOnly((p) => !p)}
-                className="hover:bg-blue-100 hover:text-blue-600"
+                className="hover:bg-blue-100 hover:text-blue-600 h-8 w-8"
               >
                 <Filter className="h-4 w-4" />
               </Button>
@@ -236,13 +236,13 @@ export default function Page() {
                 size="icon"
                 aria-label="Ordenar"
                 onClick={() => setSortByName((p) => !p)}
-                className="hover:bg-blue-100 hover:text-blue-600"
+                className="hover:bg-blue-100 hover:text-blue-600 h-8 w-8"
               >
                 <ArrowUpDown className="h-4 w-4" />
               </Button>
             </div>
           </div>
-          <div className="p-4 border-b">
+          <div className="p-2 border-b">
             <Input
               placeholder="Buscar cliente..."
               value={search}
