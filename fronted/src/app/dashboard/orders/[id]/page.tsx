@@ -216,7 +216,7 @@ export default function OrderDetailPage() {
   return (
     <div className="max-w-4xl mx-auto p-6">
         <div className="mb-8">
-          <Link href="/dashboard/orders" className="flex items-center">
+          <Link href="/dashboard/orders" prefetch={false} className="flex items-center">
             <Button variant="outline" className="shadow-sm mb-4">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Volver a Órdenes

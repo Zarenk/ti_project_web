@@ -30,13 +30,16 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet"
-import { useAuth } from "@/context/auth-context"
+import { useAuth as useAuthContext } from "@/context/auth-context"
 import { useTheme } from "next-themes"
+import { useAuth } from "@/app/hooks/useAuth"
 
 export default function Navbar() {
   const [open, setOpen] = useState(false)
   const closeTimer = useRef<NodeJS.Timeout | null>(null)
-  const { userName, refreshUser, logout } = useAuth()
+  const { logout } = useAuthContext()
+  const { user } = useAuth()
+  const userName = user?.name || user?.username
   const router = useRouter()
   const { items } = useCart()
   const { theme } = useTheme()
@@ -61,10 +64,6 @@ export default function Navbar() {
   }
 
   const hasActiveOrder = items.length > 0
-
-  useEffect(() => {
-    refreshUser()
-  }, [refreshUser])
 
   const handleLogout = async () => {
     await logout()

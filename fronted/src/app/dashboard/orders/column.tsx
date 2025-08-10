@@ -79,7 +79,7 @@ export function getColumns(
       return (
         <div className="flex gap-2">
           <Button size="sm" variant="outline" asChild>
-            <Link href={`/dashboard/orders/${row.original.id}`}>Ver</Link>
+            <Link href={`/dashboard/orders/${row.original.id}`} prefetch={false}>Ver</Link>
           </Button>
           {row.original.status === "PENDING" && (
             <>

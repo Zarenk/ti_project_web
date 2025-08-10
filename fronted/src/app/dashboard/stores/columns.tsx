@@ -245,7 +245,7 @@ export const columns: ColumnDef<Stores>[] = [
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
-                <Link href={`/dashboard/stores/${stores.id}/edit`}>
+                <Link href={`/dashboard/stores/${stores.id}/edit`} prefetch={false}>
                 Modificar
                 </Link>
                 </DropdownMenuItem>

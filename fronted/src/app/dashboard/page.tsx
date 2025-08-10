@@ -195,7 +195,7 @@ useEffect(() => {
                 <p className="text-xs text-muted-foreground">Productos que necesitan reabastecimiento</p>
               </CardContent>
             </Card>
-            <Link href="/dashboard/orders" className="block">
+            <Link href="/dashboard/orders" prefetch={false} className="block">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Ordenes Pendientes</CardTitle>

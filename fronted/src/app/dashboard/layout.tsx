@@ -1,34 +1,28 @@
-"use client";
+import { Suspense, type ReactNode } from "react";
+import { redirect } from "next/navigation";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { getUserDataFromToken, isTokenValid } from "@/lib/auth";
-
-import { AppSidebar } from "@/components/app-sidebar"
+import { AppSidebar } from "@/components/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { getCurrentUser } from "@/lib/current.user";
+import DashboardLoading from "./loading";
 
-export default function Page({children}: {children: React.ReactNode}) {
-  
-  const router = useRouter();
+export default async function Page({ children }: { children: ReactNode }) {
+  const user = await getCurrentUser();
 
-  useEffect(() => {
-    async function check() {
-      const data = await getUserDataFromToken();
-      if (!data || !(await isTokenValid())) {
-        router.push("/unauthorized");
-      } else if (data.role === "CLIENT") {
-        router.push("/users");
-      }
-    }
-    check();
-  }, [router]);
+  if (!user) {
+    redirect("/unauthorized");
+  }
+
+  if (user.role === "CLIENT") {
+    redirect("/users");
+  }
 
   return (
     <SidebarProvider>
@@ -52,7 +46,9 @@ export default function Page({children}: {children: React.ReactNode}) {
         />
         TI Empresa
         </div>
-        {children}       
+        <Suspense fallback={<DashboardLoading />}>
+          {children}
+        </Suspense>   
       </SidebarInset>
     </SidebarProvider>
   );

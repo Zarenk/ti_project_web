@@ -113,7 +113,7 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
     <div className="p-4 max-w-5xl mx-auto space-y-6">
 
         <div className="flex flex-wrap items-center gap-4 mb-6">
-        <Link href="/dashboard/inventory">
+        <Link href="/dashboard/inventory" prefetch={false}>
             <Button variant="outline" className="shadow-sm">
             ← Volver al Inventario
             </Button>

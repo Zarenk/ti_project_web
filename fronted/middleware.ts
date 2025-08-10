@@ -1,19 +1,21 @@
 import { NextResponse, NextRequest } from 'next/server'
-import jwt from 'jsonwebtoken'
+import { jwtVerify } from 'jose'
 
-export function middleware(request: NextRequest) {
-  const token = request.cookies.get('token')?.value
+export async function middleware(request: NextRequest) {
+  const token = request.cookies.get('auth_token')?.value
   if (!token) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return NextResponse.redirect(new URL('/unauthorized', request.url))
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as any
-    if (payload.role !== 'ADMIN' && payload.role !== 'EMPLOYEE') {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET!)
+    const { payload } = await jwtVerify(token, secret)
+    const role = (payload as any).role
+    if (role !== 'ADMIN' && role !== 'EMPLOYEE') {
       return NextResponse.redirect(new URL('/unauthorized', request.url))
     }
   } catch (e) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return NextResponse.redirect(new URL('/unauthorized', request.url))
   }
 
   return NextResponse.next()

@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useEffect, useState } from "react"
 import {
   AudioWaveform,
   BookOpen,
@@ -28,7 +27,6 @@ import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
-import { getUserProfile } from "../app/dashboard/users/users.api"
 import {
   Sidebar,
   SidebarContent,
@@ -37,6 +35,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useMessages } from "@/context/messages-context"
+import { useAuth } from "@/app/hooks/useAuth"
 
 // Static navigation data
 const data = {
@@ -246,30 +245,14 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
-  const [user, setUser] = useState({
-    name: "",
-    email: "",
-    avatar: "/logo_ti.png",
-  })
+  const { user } = useAuth()
   const { totalUnread } = useMessages()
 
-  useEffect(() => {
-    async function fetchProfile() {
-      try {
-        const profile = await getUserProfile()
-        if (profile) {
-          setUser({
-            name: profile.username,
-            email: profile.email,
-            avatar: "/logo_ti.png",
-          })
-        }
-      } catch (error) {
-        console.error("Error fetching user profile:", error)
-      }
-    }
-    fetchProfile()
-  }, [])
+  const profile = {
+    name: user?.name || user?.username || "",
+    email: user?.email || "",
+    avatar: user?.image || user?.avatar || "/logo_ti.png",
+  }
 
   const navMain = React.useMemo(() => {
     return data.navMain.map((item) => {
@@ -295,7 +278,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavProjects projects={data.projects} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={user} />
+        <NavUser user={profile} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

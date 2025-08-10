@@ -1,95 +1,24 @@
-import { jwtDecode } from 'jwt-decode'
+import 'server-only'
+import jwt from 'jsonwebtoken'
+import { cookies } from 'next/headers'
 
-export interface UserTokenPayload {
-  userId: number;
-  name: string;
-  role?: string;
+export interface CurrentUser {
+  id: number
+  name: string
+  role?: string
 }
 
-export async function getUserDataFromToken(): Promise<UserTokenPayload | null> {
-  let token = getAuthToken()
-  const hasCookie =
-    typeof document !== 'undefined' && /(?:^|; )token=/.test(document.cookie)
-
-  if (!token && !hasCookie) return null
-
-  try {
-    const res = await fetch('/api/login', {
-      credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (res.status === 401) {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        document.cookie = 'token=; Max-Age=0; path=/';
-      }
-      return null;
-    }
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!token && data.access_token && typeof window !== 'undefined') {
-      localStorage.setItem('token', data.access_token);
-      token = data.access_token;
-    }
-    return {
-      userId: data.id ?? data.userId ?? data.user?.id,
-      name: data.username ?? data.name ?? data.user?.username,
-      role: data.role ?? data.user?.role,
-    }
-  } catch (error) {
-    console.error('Error fetching user profile:', error)
-    return null
-  }
-}
-
-export async function isTokenValid(): Promise<boolean> {
-  const token = getAuthToken()
-  const hasCookie =
-    typeof document !== 'undefined' && /(?:^|; )token=/.test(document.cookie)
-
-  if (!token && !hasCookie) return false
-  
-  try {
-    const res = await fetch('/api/login', {
-      credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (res.status === 401) {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        document.cookie = 'token=; Max-Age=0; path=/';
-      }
-      return false;
-    }
-    if (res.ok) {
-      const data = await res.json()
-      if (!token && data.access_token && typeof window !== 'undefined') {
-        localStorage.setItem('token', data.access_token)
-      }
-    }
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
-export function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  const stored = localStorage.getItem('token');
-  if (stored) return stored;
-  const match = document.cookie.match(/(?:^|; )token=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-export function getLastAccessFromToken(): Date | null {
-  const token = getAuthToken()
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const token = (await cookies()).get('auth_token')?.value
   if (!token) return null
+
   try {
-    const decoded: { iat?: number } = jwtDecode(token)
-    if (!decoded.iat) return null
-    return new Date(decoded.iat * 1000)
-  } catch (error) {
-    console.error('Error decoding token:', error)
+    const payload = jwt.verify(token, process.env.JWT_SECRET!) as any
+    if (!payload || !payload.id || !payload.name) {
+      return null
+    }
+    return { id: payload.id, name: payload.name, role: payload.role }
+  } catch {
     return null
   }
 }
