@@ -141,7 +141,9 @@ export default function StorePage() {
 
   const brands = [
     ...new Set(
-      products.map((p) => p.brand?.name).filter((b): b is string => !!b)
+      products
+        .map((p) => p.brand?.name?.trim())
+        .filter((b): b is string => !!b)
     ),
   ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
 
@@ -155,10 +157,11 @@ export default function StorePage() {
   }
 
   const handleBrandChange = (brand: string, checked: CheckedState) => {
+    const normalized = brand.trim()
     if (checked === true) {
-      setSelectedBrands([...selectedBrands, brand])
+      setSelectedBrands([...selectedBrands, normalized])
     } else if (checked === false) {
-      setSelectedBrands(selectedBrands.filter((b) => b !== brand))
+      setSelectedBrands(selectedBrands.filter((b) => b !== normalized))
     }
   }
 
@@ -189,7 +192,11 @@ export default function StorePage() {
         selectedCategories.includes(product.category)
       const matchesBrand =
         selectedBrands.length === 0 ||
-        selectedBrands.includes(product.brand?.name || '')
+        selectedBrands.some(
+          (b) =>
+            b.toLowerCase() ===
+            (product.brand?.name?.trim().toLowerCase() || '')
+        )
 
       const matchesAvailability =
         selectedAvailability.length === 0 ||

@@ -302,8 +302,8 @@ useEffect(() => {
                 ))}
               </CardContent>
               <CardFooter>
-                <Button variant="outline" className="w-full">
-                  Ver toda la activadad
+                <Button variant="outline" asChild className="w-full">
+                  <Link href="/dashboard/activity">Ver toda la actividad</Link>
                 </Button>
               </CardFooter>
             </Card>

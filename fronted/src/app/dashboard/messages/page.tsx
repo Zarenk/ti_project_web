@@ -60,6 +60,7 @@ export default function Page() {
 
   useEffect(() => {
     const receiveHandler = (msg: Message) => {
+      setLastMessages((prev) => ({ ...prev, [msg.clientId]: msg }));
       if (msg.clientId !== selected) {
         setPendingCounts((prev) => ({
           ...prev,
@@ -188,6 +189,7 @@ export default function Page() {
       setHistory((prev) =>
         prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
       );
+      setLastMessages((prev) => ({ ...prev, [selected]: msg }));
       setText('');
       setFile(null);
       setPreview(null);
@@ -206,7 +208,8 @@ export default function Page() {
     .sort((a: any, b: any) =>
       sortByName
         ? displayName(a).localeCompare(displayName(b))
-        : (pendingCounts[b.userId] ?? 0) - (pendingCounts[a.userId] ?? 0),
+        : new Date(lastMessages[b.userId]?.createdAt ?? 0).getTime() -
+          new Date(lastMessages[a.userId]?.createdAt ?? 0).getTime(),        
     );
   const clientMap = new Map(
     clients.map((c: any) => [c.userId, displayName(c)]),
@@ -242,7 +245,7 @@ export default function Page() {
               </Button>
             </div>
           </div>
-          <div className="p-2 border-b">
+          <div className="border-b px-4 py-1 flex items-center">
             <Input
               placeholder="Buscar cliente..."
               value={search}

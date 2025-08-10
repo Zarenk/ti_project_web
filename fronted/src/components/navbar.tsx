@@ -66,8 +66,8 @@ export default function Navbar() {
     refreshUser()
   }, [refreshUser])
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     router.push("/login")
   }
 

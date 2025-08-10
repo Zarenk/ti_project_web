@@ -2,11 +2,7 @@ import { columns } from './columns';
 import { DataTable } from './data-table';
 import { getStores } from './stores.api';
 
-
-
 export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
-
-
 
 export default async function Page() {
 
