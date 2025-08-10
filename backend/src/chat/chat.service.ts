@@ -15,13 +15,13 @@ export class ChatService {
   }: {
     clientId: number;
     senderId: number;
-    text: string;
+    text?: string;
     file?: string;
   }): Promise<ChatMessage> {
     // Only persist allowed fields to avoid runtime errors if extra properties
     // are accidentally provided in the payload (e.g. attachments).
     return this.prisma.chatMessage.create({
-      data: { clientId, senderId, text, file },
+      data: { clientId, senderId, text: text ?? '', file },
     });
   }
 
@@ -39,7 +39,9 @@ export class ChatService {
     });
   }
 
-  async getUnansweredMessages(): Promise<{ clientId: number; count: number }[]> {
+  async getUnansweredMessages(): Promise<
+    { clientId: number; count: number }[]
+  > {
     const messages = await this.prisma.chatMessage.findMany({
       where: { seenAt: null },
     });

@@ -86,13 +86,13 @@ export default function MotionProductCard({ product, withActions = false, priori
       <Card className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border">
         <Link href={`/store/${product.id}`} className="block">
           <CardHeader className="p-0">
-            <div className="relative overflow-hidden rounded-t-lg">
+            <div className="relative h-56 flex items-center justify-center overflow-hidden rounded-t-lg">
               <Image
                 src={product.images[0] || "/placeholder.svg"}
                 alt={product.name}
                 width={300}
                 height={300}
-                className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
+                className="h-full w-full object-contain group-hover:scale-105 transition-transform duration-200"
                 priority={priority}
               />
             </div>

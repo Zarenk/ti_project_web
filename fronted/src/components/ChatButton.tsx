@@ -21,7 +21,12 @@ export default function ChatButton() {
   const pathname = usePathname();
   const { role } = useAuth();
 
-  if (pathname.startsWith('/dashboard') || (role && role !== 'CLIENT')) {
+  if (
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/google-auth') ||
+    (role && role !== 'CLIENT')
+  ) {
     return null;
   }
 

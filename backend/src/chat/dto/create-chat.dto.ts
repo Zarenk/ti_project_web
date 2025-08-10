@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString } from 'class-validator';
 
 export class CreateChatDto {
   @IsInt()
@@ -8,8 +8,8 @@ export class CreateChatDto {
   senderId!: number;
 
   @IsString()
-  @MinLength(1)
-  text!: string;
+  @IsOptional()
+  text?: string;
 
   @IsOptional()
   @IsString()

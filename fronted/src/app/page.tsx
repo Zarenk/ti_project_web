@@ -415,7 +415,7 @@ export default function Homepage() {
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: direction > 0 ? -300 : 300, opacity: 0 }}
                 transition={{ type: "tween" }}
-                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6"
+                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 items-stretch"
                 >
                 {visibleCategories.map((category, index) => (
                   <Link
@@ -423,12 +423,12 @@ export default function Homepage() {
                     href={`/store?category=${encodeURIComponent(category.name)}`}
                   >
                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                      <Card className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-sky-100 hover:border-sky-200">
-                        <CardContent className="p-6 text-center">
+                      <Card className="h-full group hover:shadow-lg transition-all duration-300 cursor-pointer border-sky-100 hover:border-sky-200">
+                        <CardContent className="p-6 text-center flex flex-col justify-between h-full">
                           <div className="w-16 h-16 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
                             <category.icon className="w-8 h-8 text-white" />
                           </div>
-                          <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors">
+                          <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors line-clamp-2">
                             {category.name}
                           </h3>
                           <p className="text-sm text-gray-600 dark:text-gray-300">{category.count}+ productos</p>

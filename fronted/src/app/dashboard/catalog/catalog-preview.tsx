@@ -70,15 +70,20 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     });
     const getPrice = (p: Product) => p.priceSell ?? p.price ?? 0;
     result.sort((a, b) => {
-      switch (sortBy) {
-        case "price-asc":
-          return getPrice(a) - getPrice(b);
-        case "price-desc":
-          return getPrice(b) - getPrice(a);
-        default:
-          return a.name.localeCompare(b.name);
-      }
-    });
+        switch (sortBy) {
+          case "price-asc":
+            return getPrice(a) - getPrice(b);
+          case "price-desc":
+            return getPrice(b) - getPrice(a);
+          case "brand":
+            return (
+              (a.brand?.name || "").localeCompare(b.brand?.name || "") ||
+              a.name.localeCompare(b.name)
+            );
+          default:
+            return a.name.localeCompare(b.name);
+        }
+      });
     return result;
   }, [products, onlyStock, selectedBrand, sortBy]);
 
@@ -175,6 +180,7 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="name">Nombre</SelectItem>
+                <SelectItem value="brand">Marca</SelectItem>
                 <SelectItem value="price-asc">Precio ascendente</SelectItem>
                 <SelectItem value="price-desc">Precio descendente</SelectItem>
               </SelectContent>

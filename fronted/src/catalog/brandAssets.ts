@@ -7,6 +7,7 @@ export interface BrandAssets {
 
 export const brandAssets: BrandAssets = {
   brands: {
+    acer: '/assets/logos/acer.svg',
     apple: '/assets/logos/apple.svg',
     dell: '/assets/logos/dell.svg',
     hp: '/assets/logos/hp.svg',

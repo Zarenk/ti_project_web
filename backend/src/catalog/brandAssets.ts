@@ -4,6 +4,7 @@ const LOGO_DIR = path.resolve(__dirname, '../../../fronted/public/assets/logos')
 
 export const brandAssets = {
   brands: {
+    acer: path.join(LOGO_DIR, 'acer.png'),
     apple: path.join(LOGO_DIR, 'apple.png'),
     dell: path.join(LOGO_DIR, 'dell.png'),
     hp: path.join(LOGO_DIR, 'hp.png'),
