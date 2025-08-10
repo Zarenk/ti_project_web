@@ -1,6 +1,7 @@
 import 'server-only'
 import jwt from 'jsonwebtoken'
 import { cookies } from 'next/headers'
+import { jwtDecode } from 'jwt-decode'
 
 export interface CurrentUser {
   id: number
@@ -9,6 +10,8 @@ export interface CurrentUser {
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const { cookies } = await import('next/headers')
+  const jwt = (await import('jsonwebtoken')).default
   const token = (await cookies()).get('auth_token')?.value
   if (!token) return null
 
@@ -18,6 +21,43 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       return null
     }
     return { id: payload.id, name: payload.name, role: payload.role }
+  } catch {
+    return null
+  }
+}
+
+export async function getUserDataFromToken(): Promise<CurrentUser | null> {
+  try {
+    const res = await fetch('/api/me', { credentials: 'include', cache: 'no-store' })
+    if (!res.ok) return null
+    return (await res.json()) as CurrentUser
+  } catch {
+    return null
+  }
+}
+
+export async function isTokenValid(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/me', { credentials: 'include', cache: 'no-store' })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+export function getAuthToken(): string | null {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(/(?:^|; )auth_token=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+export function getLastAccessFromToken(): Date | null {
+  const token = getAuthToken()
+  if (!token) return null
+  try {
+    const decoded: { iat?: number } = jwtDecode(token)
+    if (!decoded.iat) return null
+    return new Date(decoded.iat * 1000)
   } catch {
     return null
   }
