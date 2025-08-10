@@ -1,7 +1,5 @@
-import 'server-only'
-import jwt from 'jsonwebtoken'
-import { cookies } from 'next/headers'
 import { jwtDecode } from 'jwt-decode'
+import type { JwtPayload } from 'jsonwebtoken'
 
 export interface CurrentUser {
   id: number
@@ -11,13 +9,17 @@ export interface CurrentUser {
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const { cookies } = await import('next/headers')
-  const jwt = (await import('jsonwebtoken')).default
+  const { verify } = await import('jsonwebtoken')
   const token = (await cookies()).get('auth_token')?.value
   if (!token) return null
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as any
-    if (!payload || !payload.id || !payload.name) {
+    const payload = verify(token, process.env.JWT_SECRET!) as JwtPayload & {
+      id?: number
+      name?: string
+      role?: string
+    }
+    if (!payload?.id || !payload?.name) {
       return null
     }
     return { id: payload.id, name: payload.name, role: payload.role }
