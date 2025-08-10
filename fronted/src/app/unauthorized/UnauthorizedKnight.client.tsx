@@ -4,6 +4,75 @@ import * as THREE from "three"
 
 type Phase = "idle" | "attack" | "defend"
 
+type Pix = 0 | 1 | 2 // 0: transparente, 1: blanco, 2: negro
+
+// ===== Sprites 16x16 en B/N =====
+// Nota: Mantengo formas muy simples para un “caballerito” genérico (no Meta Knight).
+// Capa base: cuerpo redondeado + ojos
+const BODY_16: Pix[] = (() => {
+  // disco “gordo” + ojos (dos columnas negras)
+  const S: Pix[] = new Array(16 * 16).fill(0)
+  const circle = (cx: number, cy: number, r: number) => {
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 16; x++) {
+        const dx = x - cx, dy = y - cy
+        if (dx * dx + dy * dy <= r * r) S[y * 16 + x] = 1
+      }
+    }
+  }
+  circle(8, 9, 6.5)
+
+  // ojos (negros)
+  const setEye = (ex: number, ey: number) => {
+    S[(ey + 0) * 16 + ex] = 2
+    S[(ey + 1) * 16 + ex] = 2
+    S[(ey + 2) * 16 + ex] = 2
+  }
+  setEye(5, 8)
+  setEye(10, 8)
+
+  return S
+})()
+
+// Yelmo muy simple (bisel superior y visor recto)
+const HELMET_16: Pix[] = (() => {
+  const H: Pix[] = new Array(16 * 16).fill(0)
+  // línea superior curva (blanca) y visor (negro)
+  for (let x = 2; x <= 13; x++) H[3 * 16 + x] = 1
+  for (let x = 3; x <= 12; x++) H[4 * 16 + x] = 1
+  for (let x = 4; x <= 11; x++) H[5 * 16 + x] = 1
+  // visor
+  for (let x = 4; x <= 11; x++) H[7 * 16 + x] = 2
+  for (let x = 4; x <= 11; x++) H[8 * 16 + x] = 2
+  return H
+})()
+
+// Brazos (dos “bultos” laterales)
+const ARMS_16: Pix[] = (() => {
+  const A: Pix[] = new Array(16 * 16).fill(0)
+  // izquierda
+  A[9 * 16 + 2] = 1; A[10 * 16 + 2] = 1; A[10 * 16 + 3] = 1
+  // derecha
+  A[9 * 16 + 13] = 1; A[10 * 16 + 13] = 1; A[10 * 16 + 12] = 1
+  return A
+})()
+
+// Espada (se dibuja en un grupo aparte para animarla)
+const SWORD_16: Pix[] = (() => {
+  const S: Pix[] = new Array(16 * 16).fill(0)
+  // empuñadura negra
+  S[11 * 16 + 13] = 2
+  S[12 * 16 + 13] = 2
+  S[13 * 16 + 13] = 2
+  // guarda horizontal
+  S[12 * 16 + 12] = 2
+  S[12 * 16 + 14] = 2
+  // hoja blanca hacia abajo
+  for (let y = 8; y <= 11; y++) S[y * 16 + 13] = 1
+  for (let y = 4; y <= 7; y++) S[y * 16 + 13] = 1
+  return S
+})()
+
 export default function UnauthorizedKnight() {
   const containerRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef<number | null>(null)
@@ -11,294 +80,176 @@ export default function UnauthorizedKnight() {
 
   useEffect(() => {
     const el = containerRef.current!
-    // Renderer
+    // ===== Renderer en BAJA resolución para pixelar =====
     const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true })
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    renderer.setSize(el.clientWidth, el.clientHeight)
+    renderer.setClearAlpha(0)
+    // Fijamos una resolución baja “retro”
+    const LOW_W = 160
+    const LOW_H = 160
+    renderer.setPixelRatio(1) // importante: sin HiDPI
+    renderer.setSize(LOW_W, LOW_H, false)
+    // Escalar por CSS al tamaño del contenedor y pixelar
+    renderer.domElement.style.width = "100%"
+    renderer.domElement.style.height = "100%"
+    ;(renderer.domElement.style as any).imageRendering = "pixelated"
     el.appendChild(renderer.domElement)
 
-    // Cámara ortográfica para look “pixel”
-    const camera = new THREE.OrthographicCamera(
-      -el.clientWidth / 120,
-      el.clientWidth / 120,
-      el.clientHeight / 120,
-      -el.clientHeight / 120,
-      0.1,
-      100
-    )
-    camera.position.set(0, 2, 5)
-    camera.lookAt(0, 0, 0)
+    // Cámara ortográfica sobre una placa frontal
+    const cam = new THREE.OrthographicCamera(-8, 8, 8, -8, 0.1, 100)
+    cam.position.set(0, 0, 10)
+    cam.lookAt(0, 0, 0)
 
-    // Escena y luces
     const scene = new THREE.Scene()
-    scene.add(new THREE.AmbientLight(0xffffff, 0.9))
-    const dir = new THREE.DirectionalLight(0xffffff, 0.8)
-    dir.position.set(4, 8, 6)
-    scene.add(dir)
 
-    // ====== MATERIALES TOON ======
-    const toonBlue   = new THREE.MeshToonMaterial({ color: 0x2f4cff })
-    const toonSilver = new THREE.MeshToonMaterial({ color: 0xc7ccd6 })
-    const toonBlack  = new THREE.MeshToonMaterial({ color: 0x1b1f26 })
-    const toonEye    = new THREE.MeshBasicMaterial({ color: 0xffeb00, toneMapped: false })
-    const toonPurple = new THREE.MeshToonMaterial({ color: 0x732ee6 })
-    const toonCape   = new THREE.MeshToonMaterial({ color: 0x5b16a8, side: THREE.DoubleSide })
-    const toonGold   = new THREE.MeshToonMaterial({ color: 0xffd240 })
+    // Materiales B/N
+    const MAT_WHITE = new THREE.MeshBasicMaterial({ color: 0xffffff })
+    const MAT_BLACK = new THREE.MeshBasicMaterial({ color: 0x000000 })
 
-    // Utilidad: contorno falso
-    function addOutline(mesh: THREE.Mesh, thickness = 1.02) {
-      const outline = mesh.clone()
-      outline.material = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide })
-      outline.scale.multiplyScalar(thickness)
-      mesh.add(outline)
-      return outline
+    // Utilidad: crea un grupo de “píxeles” (cuadrados) a partir de un mapa 16×16
+    function makePixelLayer(map: Pix[], pixelSize = 1): THREE.Group {
+      const g = new THREE.Group()
+      const geo = new THREE.PlaneGeometry(pixelSize, pixelSize)
+      const instWhite: THREE.Mesh[] = []
+      const instBlack: THREE.Mesh[] = []
+      for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 16; x++) {
+          const v = map[y * 16 + x]
+          if (v === 0) continue
+          const mesh = new THREE.Mesh(geo, v === 1 ? MAT_WHITE : MAT_BLACK)
+          // centrado en (0,0)
+          const px = (x - 8) * pixelSize + pixelSize / 2
+          const py = (8 - y) * pixelSize - pixelSize / 2
+          mesh.position.set(px, py, 0)
+          g.add(mesh)
+          if (v === 1) instWhite.push(mesh); else instBlack.push(mesh)
+        }
+      }
+      return g
     }
 
-    // ====== CONSTRUCCIÓN DEL CABALLERO ======
+    // ===== Construcción del “caballero” pixelado =====
     const knight = new THREE.Group()
     scene.add(knight)
 
-    // Cuerpo
-    const bodyGeom = new THREE.SphereGeometry(0.92, 20, 16)
-    const body = new THREE.Mesh(bodyGeom, toonBlue)
-    addOutline(body, 1.02)
+    // Orden Z: casco delante de cuerpo, brazos, y espada al frente
+    const body = makePixelLayer(BODY_16, 1)
+    body.position.z = 0
     knight.add(body)
 
-    // Casco (media cúpula)
-    const helmetGeom = new THREE.SphereGeometry(1.05, 20, 16, 0, Math.PI * 2, 0, Math.PI / 2)
-    const helmet = new THREE.Mesh(helmetGeom, toonSilver)
-    helmet.position.y = 0.12
-    addOutline(helmet, 1.015)
+    const helmet = makePixelLayer(HELMET_16, 1)
+    helmet.position.z = 0.1
     knight.add(helmet)
 
-    // Cresta del casco (peine)
-    const crest = new THREE.Group()
-    const toothGeom = new THREE.BoxGeometry(0.10, 0.28, 0.20)
-    for (let i = -4; i <= 4; i++) {
-      const t = new THREE.Mesh(toothGeom, toonSilver)
-      t.position.set(i * 0.14, 0.38, 0.0)
-      t.rotation.z = (i * Math.PI) / 36
-      crest.add(t)
-    }
-    crest.position.y = 0.15
-    knight.add(crest)
+    const arms = makePixelLayer(ARMS_16, 1)
+    arms.position.z = 0.15
+    knight.add(arms)
 
-    // Visor + ojos
-    const visorGeom = new THREE.BoxGeometry(1.18, 0.34, 0.16)
-    const visor = new THREE.Mesh(visorGeom, toonBlack)
-    visor.position.set(0, 0.24, 0.78)
-    addOutline(visor, 1.03)
-    knight.add(visor)
+    // Espada en grupo aparte para animar “swing”
+    const swordGroup = new THREE.Group()
+    const sword = makePixelLayer(SWORD_16, 1)
+    swordGroup.add(sword)
+    swordGroup.position.set(1.5, -1.5, 0.2) // anclaje al costado
+    knight.add(swordGroup)
 
-    const eyeGeom = new THREE.PlaneGeometry(0.28, 0.1)
-    const eyeL = new THREE.Mesh(eyeGeom, toonEye)
-    eyeL.position.set(-0.25, 0.25, 0.81)
-    eyeL.rotation.z = 0.12
-    const eyeR = eyeL.clone()
-    eyeR.position.x = 0.25
-    eyeR.rotation.z = -0.12
-    knight.add(eyeL, eyeR)
+    // Pequeño “sombrado” por duplicado negro a z- y transparencia
+    const shadow = makePixelLayer(BODY_16.map(v => (v ? 2 : 0)) as Pix[], 1)
+    shadow.position.z = -0.2
+    shadow.position.x = 0.4
+    shadow.position.y = -0.4
+    shadow.children.forEach(m => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.15)
+    shadow.children.forEach(m => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).transparent = true)
+    knight.add(shadow)
 
-    // Hombreras con cuernos
-    const pauldronBaseGeom = new THREE.SphereGeometry(0.38, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2)
-    const hornGeom = new THREE.ConeGeometry(0.12, 0.22, 8)
-    function makePauldron(side: 1 | -1) {
-      const g = new THREE.Group()
-      const base = new THREE.Mesh(pauldronBaseGeom, toonPurple)
-      base.rotation.z = Math.PI * 0.5
-      const horn = new THREE.Mesh(hornGeom, toonPurple)
-      horn.rotation.x = Math.PI
-      horn.position.set(0, 0.05, 0.08)
-      g.add(base, horn)
-      g.position.set(0.82 * side, 0.42, 0)
-      addOutline(base, 1.03)
-      addOutline(horn, 1.03)
-      return g
-    }
-    const pauldronL = makePauldron(-1)
-    const pauldronR = makePauldron(1)
-    knight.add(pauldronL, pauldronR)
-
-    // Brazos (grupos para animar)
-    const armRight = new THREE.Group()
-    armRight.position.set(0.80, 0.34, 0)
-    const armRSphere = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 12), toonSilver)
-    armRight.add(armRSphere)
-    knight.add(armRight)
-
-    const armLeft = new THREE.Group()
-    armLeft.position.set(-0.80, 0.34, 0)
-    const armLSphere = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 12), toonSilver)
-    armLeft.add(armLSphere)
-    knight.add(armLeft)
-
-    // Botas
-    const bootGeom = new THREE.BoxGeometry(0.56, 0.28, 0.62)
-    function makeBoot(x: number) {
-      const b = new THREE.Mesh(bootGeom, toonPurple)
-      b.position.set(x, -0.84, 0.06)
-      b.rotation.x = -0.06
-      addOutline(b, 1.03)
-      return b
-    }
-    const bootL = makeBoot(-0.45)
-    const bootR = makeBoot(0.45)
-    knight.add(bootL, bootR)
-
-    // Alas (capa en dos planos recortados)
-    const wingGeom = new THREE.PlaneGeometry(1.6, 1.2, 12, 3)
-    // Recorte triangular ligero
-    {
-      const pos = wingGeom.attributes.position as THREE.BufferAttribute
-      for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i), y = pos.getY(i)
-        if (x > -0.05) {
-          const cut = (x + 0.8) / 2.4
-          pos.setY(i, y - Math.max(0, (y + 0.6) * cut * 0.6))
-        }
-      }
-      pos.needsUpdate = true
-    }
-    const wingL = new THREE.Mesh(wingGeom.clone(), toonCape)
-    const wingR = new THREE.Mesh(wingGeom.clone(), toonCape)
-    wingL.position.set(-0.15, 0.55, -0.15)
-    wingR.position.set(0.15, 0.55, -0.15)
-    wingL.rotation.set(Math.PI * 0.08, Math.PI * 0.12, Math.PI * 0.08)
-    wingR.rotation.set(Math.PI * 0.08, -Math.PI * 0.12, -Math.PI * 0.08)
-    addOutline(wingL, 1.01)
-    addOutline(wingR, 1.01)
-    knight.add(wingL, wingR)
-    const wingLPos = (wingL.geometry as THREE.PlaneGeometry).attributes.position as THREE.BufferAttribute
-    const wingRPos = (wingR.geometry as THREE.PlaneGeometry).attributes.position as THREE.BufferAttribute
-
-    // Espada dorada
-    const sword = new THREE.Group()
-    const bladeGeom = new THREE.BoxGeometry(0.10, 1.5, 0.10)
-    const blade = new THREE.Mesh(bladeGeom, toonGold)
-    blade.position.y = -0.60
-    addOutline(blade, 1.04)
-    sword.add(blade)
-
-    const guardCenter = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.2, 8), toonGold)
-    guardCenter.rotation.z = Math.PI * 0.5
-    sword.add(guardCenter)
-
-    const wingGuardGeom = new THREE.ConeGeometry(0.22, 0.28, 5)
-    const guardL = new THREE.Mesh(wingGuardGeom, toonGold)
-    guardL.rotation.set(Math.PI * 0.5, 0, Math.PI * 0.30)
-    guardL.position.set(-0.22, 0.02, 0)
-    const guardR = guardL.clone()
-    guardR.rotation.z = -Math.PI * 0.30
-    guardR.position.x = 0.22
-    sword.add(guardL, guardR)
-
-    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), toonGold)
-    pommel.position.y = 0.18
-    sword.add(pommel)
-
-    sword.position.set(0.18, -0.05, 0)
-    armRight.add(sword)
-
-    // ====== ESTADO / INTERACCIÓN ======
+    // ===== Estado/Interacción =====
     let phase: Phase = "idle"
     let animT = 0
-    let targetYaw = 0
     let paused = false
-    let lastTime = performance.now()
-
-    const onMove = (e: MouseEvent) => {
-      const rect = el.getBoundingClientRect()
-      const x = (e.clientX - rect.left) / rect.width
-      targetYaw = THREE.MathUtils.degToRad(THREE.MathUtils.lerp(-45, 45, x))
-    }
+    let last = performance.now()
     const onClick = () => {
       if (phase !== "idle") return
-      // badge
       if (badgeRef.current) {
         badgeRef.current.style.opacity = "1"
-        setTimeout(() => { if (badgeRef.current) badgeRef.current.style.opacity = "0" }, 1000)
+        setTimeout(() => { if (badgeRef.current) badgeRef.current.style.opacity = "0" }, 900)
       }
       phase = "attack"
       animT = 0
     }
     const onVisibility = () => (paused = document.hidden)
-
-    el.addEventListener("mousemove", onMove)
     el.addEventListener("click", onClick)
     document.addEventListener("visibilitychange", onVisibility)
 
-    // Resize
-    const onResize = () => {
-      const w = el.clientWidth, h = el.clientHeight
-      renderer.setSize(w, h)
-      camera.left = -w / 120
-      camera.right = w / 120
-      camera.top = h / 120
-      camera.bottom = -h / 120
-      camera.updateProjectionMatrix()
-    }
-    const ro = new ResizeObserver(onResize)
-    ro.observe(el)
+    // Idle “bob” + parpadeo simple (apagamos ojos 1 frame cada cierto tiempo)
+    let blinkTimer = 0
+    const blinkInterval = 2200
+    let eyesOff = false
 
-    // Ondulación de alas
-    const waveWings = (t: number) => {
-      const amp = 0.06
-      for (const pos of [wingLPos, wingRPos]) {
-        for (let i = 0; i < pos.count; i++) {
-          const x = pos.getX(i)
-          const y = pos.getY(i)
-          const zBase = -0.02 - Math.abs(x) * 0.08
-          const wave = Math.sin(t * 2 + x * 2.0 + y * 1.2) * amp * (0.4 + (y + 0.6))
-          pos.setZ(i, zBase + wave)
-        }
-        pos.needsUpdate = true
-      }
+    // Referencias rápidas a “ojos” (dos píxeles negros en BODY_16: (5,8..10) y (10,8..10))
+    const findEyeMeshes = () => {
+      const eyes: THREE.Mesh[] = []
+      body.children.forEach((m) => {
+        const mesh = m as THREE.Mesh
+        const mat = mesh.material as THREE.MeshBasicMaterial
+        if (mat.color.getHex() === 0x000000) eyes.push(mesh)
+      })
+      return eyes
     }
+    const eyeMeshes = findEyeMeshes()
 
     // Loop
     const tick = () => {
       const now = performance.now()
-      const delta = Math.min(0.05, (now - lastTime) / 1000)
-      lastTime = now
+      const dt = Math.min(0.05, (now - last) / 1000)
+      last = now
 
       if (!paused) {
-        // cámara-look: yaw al mouse + idle bob
-        knight.rotation.y += (targetYaw - knight.rotation.y) * 0.1
-        knight.position.y = Math.sin(now / 1000 * 2) * 0.03 - 0.25
+        // bamboleo
+        const t = now / 1000
+        knight.position.y = Math.sin(t * 2) * 0.25 - 0.5
+        knight.rotation.z = Math.sin(t * 1.6) * 0.03
 
-        waveWings(now / 1000)
+        // parpadeo
+        blinkTimer += dt * 1000
+        if (blinkTimer > blinkInterval) {
+          eyesOff = !eyesOff
+          blinkTimer = 0
+          // apagar/encender ojos (cambiar a blanco)
+          for (const em of eyeMeshes) {
+            const mat = (em.material as THREE.MeshBasicMaterial)
+            mat.color.setHex(eyesOff ? 0xffffff : 0x000000)
+          }
+        }
 
         if (phase === "attack") {
-          const dur = 0.7
-          animT = Math.min(1, animT + delta / dur)
-          const cut = THREE.MathUtils.smoothstep(animT, 0, 1)
-          armRight.rotation.x = THREE.MathUtils.lerp(0, -1.28, cut)
-          armRight.rotation.y = THREE.MathUtils.lerp(0,  0.35, cut)
-          blade.rotation.z    = THREE.MathUtils.lerp(0, -0.35, cut)
+          const dur = 0.5
+          animT = Math.min(1, animT + dt / dur)
+          const k = THREE.MathUtils.smoothstep(animT, 0, 1)
+          // swing de la espada
+          swordGroup.rotation.z = THREE.MathUtils.lerp(0, -Math.PI * 0.9, k)
+          swordGroup.position.x = THREE.MathUtils.lerp(1.5, 0.6, k)
+          swordGroup.position.y = THREE.MathUtils.lerp(-1.5, 0.2, k)
           if (animT >= 1) { phase = "defend"; animT = 0 }
         } else if (phase === "defend") {
-          const dur = 0.5
-          animT = Math.min(1, animT + delta / dur)
-          const block = THREE.MathUtils.smoothstep(animT, 0, 1)
-          armLeft.rotation.x = THREE.MathUtils.lerp(0, -0.6, block)
-          // Cerrar alas un poco durante defensa
-          wingL.rotation.y = THREE.MathUtils.lerp(Math.PI*0.12, Math.PI*0.22, block)
-          wingR.rotation.y = THREE.MathUtils.lerp(-Math.PI*0.12, -Math.PI*0.22, block)
+          const dur = 0.45
+          animT = Math.min(1, animT + dt / dur)
+          const k = THREE.MathUtils.smoothstep(animT, 0, 1)
+          // subir “escudo” (simulado con casco hacia delante)
+          helmet.position.y = THREE.MathUtils.lerp(0, 0.5, k)
+          arms.position.y = THREE.MathUtils.lerp(0, 0.3, k)
+          swordGroup.rotation.z = THREE.MathUtils.lerp(-Math.PI * 0.9, -Math.PI * 0.4, k)
           if (animT >= 1) {
             setTimeout(() => {
-              armRight.rotation.set(0, 0, 0)
-              blade.rotation.set(0, 0, 0)
-              armLeft.rotation.set(0, 0, 0)
-              // Restablecer alas
-              wingL.rotation.set(Math.PI * 0.08, Math.PI * 0.12, Math.PI * 0.08)
-              wingR.rotation.set(Math.PI * 0.08, -Math.PI * 0.12, -Math.PI * 0.08)
+              // reset
+              helmet.position.y = 0
+              arms.position.y = 0
+              swordGroup.rotation.set(0, 0, 0)
+              swordGroup.position.set(1.5, -1.5, 0.2)
               phase = "idle"
             }, 250)
           }
         }
       }
 
-      renderer.render(scene, camera)
+      renderer.render(scene, cam)
       rafRef.current = requestAnimationFrame(tick)
     }
     tick()
@@ -306,32 +257,10 @@ export default function UnauthorizedKnight() {
     // Cleanup
     return () => {
       cancelAnimationFrame(rafRef.current!)
-      el.removeEventListener("mousemove", onMove)
       el.removeEventListener("click", onClick)
       document.removeEventListener("visibilitychange", onVisibility)
-      ro.disconnect()
       renderer.dispose()
       if (renderer.domElement.parentElement === el) el.removeChild(renderer.domElement)
-
-      // Dispose geometrías/materiales
-      bodyGeom.dispose()
-      helmetGeom.dispose()
-      toothGeom.dispose()
-      visorGeom.dispose()
-      eyeGeom.dispose()
-      pauldronBaseGeom.dispose()
-      hornGeom.dispose()
-      bootGeom.dispose()
-      wingGeom.dispose()
-      bladeGeom.dispose()
-
-      toonBlue.dispose()
-      toonSilver.dispose()
-      toonBlack.dispose()
-      toonEye.dispose()
-      toonPurple.dispose()
-      toonCape.dispose()
-      toonGold.dispose()
     }
   }, [])
 

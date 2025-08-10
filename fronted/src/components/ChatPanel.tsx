@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { X, Send, Paperclip } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion'; 
 import socket from '@/lib/utils';
-import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import { useChatUserId } from '@/hooks/use-chat-user-id';
+import MessagesList from './MessageList';
 
 interface Message {
   id: number;
@@ -121,21 +121,41 @@ export default function ChatPanel({
     };
   }, [userId]);
 
+  const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!userId) return;
-    socket.emit('chat:typing', {
-      clientId: userId,
-      senderId: userId,
-      isTyping: text.length > 0,
-    });
-    return () => {
+    if (typingTimeout.current) {
+      clearTimeout(typingTimeout.current);
+    }
+
+    typingTimeout.current = setTimeout(() => {
       socket.emit('chat:typing', {
         clientId: userId,
         senderId: userId,
-        isTyping: false,
+        isTyping: text.length > 0,
       });
+    }, 300);
+
+    return () => {
+      if (typingTimeout.current) {
+        clearTimeout(typingTimeout.current);
+        typingTimeout.current = null;
+      }     
     };
   }, [text, userId]);
+
+  useEffect(() => {
+    return () => {
+      if (userId) {
+        socket.emit('chat:typing', {
+          clientId: userId,
+          senderId: userId,
+          isTyping: false,
+        });
+      }
+    };
+  }, [userId]);
 
   const send = () => {
     if (rateLimited || !userId) return;
@@ -212,17 +232,7 @@ export default function ChatPanel({
           </Button>
         </div>
         <div className="flex-1 p-4 space-y-2 overflow-y-auto bg-background">
-          <AnimatePresence initial={false}>
-            {messages.map((m) => (
-              <MessageBubble
-                key={m.id}
-                text={m.text}
-                file={m.file}
-                time={m.createdAt}
-                isSender={m.senderId === userId}
-              />
-            ))}
-          </AnimatePresence>
+          <MessagesList messages={messages} userId={userId ?? undefined} />
           {agentTyping && <TypingIndicator name="Asesor" />}
           <div ref={messagesEndRef} />
         </div>
