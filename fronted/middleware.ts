@@ -2,7 +2,7 @@ import { NextResponse, NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
 
 export async function middleware(request: NextRequest) {
-  const token = request.cookies.get('auth_token')?.value
+  const token = request.cookies.get('token')?.value
   if (!token) {
     return NextResponse.redirect(new URL('/unauthorized', request.url))
   }
@@ -18,7 +18,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/unauthorized', request.url))
   }
 
-  return NextResponse.next()
+  const res = NextResponse.next()
+  res.headers.set('Cache-Control', 'no-store, max-age=0')
+  return res
 }
 
 export const config = {

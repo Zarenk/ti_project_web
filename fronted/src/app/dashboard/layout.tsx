@@ -13,6 +13,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { getCurrentUser } from "@/lib/current.user";
 import DashboardLoading from "./loading";
 
+export const revalidate = 0;
+
 export default async function Page({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
 

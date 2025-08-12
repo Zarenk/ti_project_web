@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Mail, Phone, Shield, CalendarClock, LogIn, CheckCircle2, UserRound, ImageUp } from 'lucide-react'
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { getLastAccessFromToken } from "@/lib/auth"
+import { getLastAccessFromToken, isTokenValid, getUserDataFromToken } from "@/lib/auth"
 import { getProfile, updateProfile, changePassword, uploadProfileImage } from "./account.api"
 import Actividad from "./Actividad"
 
@@ -43,27 +44,37 @@ export default function Page() {
   const [savingPass, setSavingPass] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showActividad, setShowActividad] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     async function loadProfile() {
+      const session = await getUserDataFromToken()
+      if (!session || !(await isTokenValid())) {
+        router.replace('/login')
+        return
+      }
+      if (session.role !== 'ADMIN' && session.role !== 'EMPLOYEE') {
+        router.push('/unauthorized')
+        return
+      }
       try {
-        const data = await getProfile()
+        const profile = await getProfile()
         const last = getLastAccessFromToken()
         setUser({
-          nombre: data.username,
-          correo: data.email,
-          telefono: data.client?.phone || "",
-          imagen: data.client?.image || "",
-          rol: data.role,
+          nombre: profile.username,
+          correo: profile.email,
+          telefono: profile.client?.phone || "",
+          imagen: profile.client?.image || "",
+          rol: profile.role,
           tipoUsuario: "Interno",
           estado: "Activo",
-          creadoEl: data.createdAt,
+          creadoEl: profile.createdAt,
           ultimoInicio: last ? last.toLocaleString("es-ES") : "",
         })
         setFormDatos({
-          nombre: data.username,
-          correo: data.email,
-          telefono: data.client?.phone || "",
+          nombre: profile.username,
+          correo: profile.email,
+          telefono: profile.client?.phone || "",
         })
       } catch (error) {
         console.error(error)
@@ -71,7 +82,7 @@ export default function Page() {
       }
     }
     loadProfile()
-  }, [])
+  }, [router])
 
   function handleDatosSubmit(e: React.FormEvent) {
     e.preventDefault()
