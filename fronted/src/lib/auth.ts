@@ -29,8 +29,16 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 }
 
 export async function getUserDataFromToken(): Promise<CurrentUser | null> {
+
+  const token = getAuthToken()
+  if (!token) return null
+
   try {
-    const res = await fetch('/api/me', { credentials: 'include', cache: 'no-store' })
+    const res = await fetch('/api/me', {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { Authorization: `Bearer ${token}` },
+    })
     if (!res.ok) return null
     return (await res.json()) as CurrentUser
   } catch {
@@ -39,8 +47,16 @@ export async function getUserDataFromToken(): Promise<CurrentUser | null> {
 }
 
 export async function isTokenValid(): Promise<boolean> {
+ 
+  const token = getAuthToken()
+  if (!token) return false
+  
   try {
-    const res = await fetch('/api/me', { credentials: 'include', cache: 'no-store' })
+    const res = await fetch('/api/me', {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { Authorization: `Bearer ${token}` },
+    })
     return res.ok
   } catch {
     return false

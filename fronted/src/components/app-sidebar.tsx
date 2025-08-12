@@ -35,7 +35,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useMessages } from "@/context/messages-context"
-import { useAuth } from "@/app/hooks/useAuth"
+import { useAuth } from "@/context/auth-context"
 
 // Static navigation data
 const data = {
@@ -245,13 +245,13 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
-  const { user } = useAuth()
+  const { userName } = useAuth()
   const { totalUnread } = useMessages()
 
   const profile = {
-    name: user?.name || user?.username || "",
-    email: user?.email || "",
-    avatar: user?.image || user?.avatar || "/logo_ti.png",
+    name: userName || "",
+    email: "",
+    avatar: "/logo_ti.png",
   }
 
   const navMain = React.useMemo(() => {

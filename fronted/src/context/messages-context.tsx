@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { getUnansweredMessages } from "@/app/dashboard/messages/messages.api";
-import { isTokenValid } from "@/lib/auth";
+import { useAuth } from "./auth-context";
 
 interface MessagesContextType {
   pendingCounts: Record<number, number>;
@@ -14,6 +14,7 @@ const MessagesContext = createContext<MessagesContextType | undefined>(undefined
 
 export function MessagesProvider({ children }: { children: ReactNode }) {
   const [pendingCounts, setPendingCounts] = useState<Record<number, number>>({});
+   const { userId } = useAuth();
 
   useEffect(() => {
     const load = async () => {
@@ -27,13 +28,11 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         console.error(err);
       }
     };
-    isTokenValid().then((valid) => {
-      if (valid) {
-        load();
-      }
-    });
-    
-  }, []);
+    if (userId !== null) {
+      load();
+    }
+
+  }, [userId]);
 
   const totalUnread = Object.values(pendingCounts).reduce(
     (acc, count) => acc + count,

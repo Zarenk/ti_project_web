@@ -8,7 +8,7 @@ import {
   ReactNode,
   useCallback,
 } from "react"
-import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
+import { getUserDataFromToken } from "@/lib/auth"
 import { signOut } from "next-auth/react"
 
 type AuthContextType = {
@@ -27,11 +27,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<string | null>(null)
 
   const refreshUser = useCallback(async () => {
-    if (await isTokenValid()) {
-      const data = await getUserDataFromToken()
-      setUserName(data?.name ?? null)
-      setUserId(data?.userId ?? null)
-      setRole(data?.role ?? null)
+    const data = await getUserDataFromToken()
+    if (data) {
+      setUserName(data.name ?? null)
+      setUserId(data.id ?? null)
+      setRole(data.role ?? null)
     } else {
       setUserName(null)
       setUserId(null)
