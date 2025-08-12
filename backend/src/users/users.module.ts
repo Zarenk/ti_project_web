@@ -8,9 +8,11 @@ import { JwtStrategy } from './JwtStrategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ConfigService } from '@nestjs/config';
 import { SimpleCookieMiddleware } from './simple-cookie.middleware';
+import { ActivityModule } from 'src/activity/activity.module';
 
 @Module({
   imports: [
+    ActivityModule,
     PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],

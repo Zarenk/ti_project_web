@@ -2,33 +2,50 @@ import { BadRequestException, ConflictException, Injectable, InternalServerError
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, AuditAction } from '@prisma/client';
+import { ActivityService } from '../activity/activity.service';
+import { Request } from 'express';
 
 @Injectable()
 export class ProvidersService {
   
-  constructor(private prismaService: PrismaService) {}
+  constructor(
+    private prismaService: PrismaService,
+    private activityService: ActivityService,
+  ) {}
 
-  async create(createProviderDto: CreateProviderDto) {
-    try{
-      return await this.prismaService.provider.create({
-        data: createProviderDto
-      })   
-    }
-    catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
-        throw new ConflictException(
-          `El Proveedor con el RUC "${createProviderDto.documentNumber}" ya existe.`
-        );
+   async create(createProviderDto: CreateProviderDto, req?: Request) {
+      try {
+         const provider = await this.prismaService.provider.create({
+           data: createProviderDto,
+        });
+        await this.activityService.log(
+          {
+              actorId: (req as any)?.user?.userId,
+              actorEmail: (req as any)?.user?.username,
+              entityType: 'Provider',
+              entityId: provider.id.toString(),
+              action: AuditAction.CREATED,
+              summary: `Proveedor ${provider.name} creado`,
+              diff: { after: provider } as any,
+            },
+            req,
+          );
+          return provider;
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002"
+          ) {
+            throw new ConflictException(
+              `El Proveedor con el RUC "${createProviderDto.documentNumber}" ya existe.`
+            );
+          }
+          console.error("Error en el backend:", error);
+          throw error;
       }
-      console.error("Error en el backend:", error);
-      throw error;
     }
-  }
-
+  
   findAll() {
     try{
       return this.prismaService.provider.findMany()
@@ -69,8 +86,15 @@ export class ProvidersService {
     return !!provider; // Devuelve true si el proveedor existe, false si no
   }
 
-  async update(id: number, updateProviderDto: UpdateProviderDto) {
-    try{
+  async update(
+    id: number,
+    updateProviderDto: UpdateProviderDto,
+    req?: Request,
+  ) {
+    try {
+      const before = await this.prismaService.provider.findUnique({
+        where: { id: Number(id) },
+      });
       const providerFound = await this.prismaService.provider.update({
         where: {id: Number(id)},  
         data: updateProviderDto
@@ -79,6 +103,32 @@ export class ProvidersService {
       if(!providerFound){
         throw new NotFoundException(`Provider with id ${id} not found`)
       }
+
+      const diff: any = { before: {}, after: {} };
+      if (before) {
+        for (const key of Object.keys(providerFound)) {
+          if (
+            JSON.stringify((before as any)[key]) !==
+            JSON.stringify((providerFound as any)[key])
+          ) {
+            diff.before[key] = (before as any)[key];
+            diff.after[key] = (providerFound as any)[key];
+          }
+        }
+      }
+
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Provider',
+          entityId: providerFound.id.toString(),
+          action: AuditAction.UPDATED,
+          summary: `Proveedor ${providerFound.name} actualizado`,
+          diff,
+        },
+        req,
+      );
   
       return providerFound;
     } catch (error){
@@ -95,7 +145,7 @@ export class ProvidersService {
     }    
   }
 
-  async updateMany(providers: UpdateProviderDto[]) {
+  async updateMany(providers: UpdateProviderDto[], req?: Request) {
     if (!Array.isArray(providers) || providers.length === 0) {
       throw new BadRequestException('No se proporcionaron proveedores para actualizar.');
     }
@@ -123,8 +173,19 @@ export class ProvidersService {
               website: provider.website,
               status: provider.status,
             },
-          })
-        )
+          }),
+        ),
+      );
+
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Provider',
+          action: AuditAction.UPDATED,
+          summary: `${updatedProviders.length} proveedor(es) actualizado(s)`,
+        },
+        req,
       );
   
       return {
@@ -141,11 +202,13 @@ export class ProvidersService {
         }
       }
   
-      throw new InternalServerErrorException('Hubo un error al actualizar los proveedores.');
+      throw new InternalServerErrorException(
+        'Hubo un error al actualizar los proveedores.',
+      );
     }
   }
 
-  async remove(id: number) {
+  async remove(id: number, req?: Request) {
     try{
 
       // Verificar si la categoría tiene productos relacionados
@@ -159,63 +222,88 @@ export class ProvidersService {
         );
       }
       // Proceder con la eliminación si no hay proveedores relacionados
-      const deteledProvider = this.prismaService.provider.delete({
-        where:{
-          id
-        }
-      })
-      if(!deteledProvider){
-        throw new NotFoundException(`Provider with id ${id} not found`)
+      const deletedProvider = await this.prismaService.provider.delete({
+        where: {
+          id,
+        },
+      });
+      if (!deletedProvider) {
+        throw new NotFoundException(`Provider with id ${id} not found`);
       }
-  
-      return deteledProvider;
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Provider',
+          entityId: id.toString(),
+          action: AuditAction.DELETED,
+          summary: `Proveedor ${deletedProvider.name} eliminado`,
+          diff: { before: deletedProvider } as any,
+        },
+        req,
+      );
 
-    }
-    catch(error){
-      console.error("Error en el backend:", error);
+      return deletedProvider;
+    } catch (error) {
+      console.error('Error en el backend:', error);
       throw error; // Lanza otros errores no manejados
     }
   }
 
-  async removes(ids: number[]) {
+  async removes(ids: number[], req?: Request) {
     if (!Array.isArray(ids) || ids.length === 0) {
       throw new NotFoundException('No se proporcionaron IDs válidos para eliminar.');
     }
       // Verificar si alguna de las categorías tiene productos relacionados
-      const relatedProviders = await this.prismaService.entry.findMany({
+    const relatedProviders = await this.prismaService.entry.findMany({
+      where: {
+        providerId: {
+          in: ids,
+        },
+      },
+    });
+
+    if (relatedProviders.length > 0) {
+      throw new ConflictException(
+        `No se pueden eliminar los proveedores porque algunos tienen datos relacionados.`,
+      );
+    }
+
+    try {
+      const deletedProviders = await this.prismaService.provider.deleteMany({
         where: {
-          providerId: {
+          id: {
             in: ids,
           },
         },
       });
 
-      if (relatedProviders.length > 0) {
-        throw new ConflictException(
-          `No se pueden eliminar los proveedores porque algunos tienen datos relacionados.`
+      if (deletedProviders.count === 0) {
+        throw new NotFoundException(
+          `No se encontraron proveedores con los IDs proporcionados.`,
         );
       }
       
-      try{
-        const deletedProviders = await this.prismaService.provider.deleteMany({
-          where: {
-            id: {
-              in: ids,
-            },
-          },
-        });
-        
-        if(deletedProviders.count === 0){
-          throw new NotFoundException(`No se encontraron proveedores con los IDs proporcionados.`);
-        }
-  
-        return {
-          message: `${deletedProviders.count} proveedor(es) eliminado(s) correctamente.`,
-        };
-      }
-      catch (error) {
-      console.error("Error en el backend:", error);
-      throw new InternalServerErrorException('Hubo un error al eliminar los proveedores.');     
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Provider',
+          action: AuditAction.DELETED,
+          summary: `${deletedProviders.count} proveedor(es) eliminado(s)`,
+          diff: { ids } as any,
+        },
+        req,
+      );
+
+      return {
+        message: `${deletedProviders.count} proveedor(es) eliminado(s) correctamente.`,
+      };
+    } catch (error) {
+      console.error('Error en el backend:', error);
+      throw new InternalServerErrorException(
+        'Hubo un error al eliminar los proveedores.',
+      );   
     }
   }
 }

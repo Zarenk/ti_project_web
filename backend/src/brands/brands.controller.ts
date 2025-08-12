@@ -11,6 +11,7 @@ import {
   UploadedFile,
   UploadedFiles,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -18,6 +19,7 @@ import { extname } from 'path';
 import { BrandsService } from './brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
+import { Request } from 'express';  
 
 @Controller('brands')
 export class BrandsController {
@@ -57,6 +59,7 @@ export class BrandsController {
     @Body() createBrandDto: CreateBrandDto,
     @UploadedFiles()
     files: { logoSvg?: Express.Multer.File[]; logoPng?: Express.Multer.File[] },
+    @Req() req: Request,
   ) {
     const data: CreateBrandDto = { name: createBrandDto.name };
     if (files.logoSvg?.[0]) {
@@ -65,7 +68,7 @@ export class BrandsController {
     if (files.logoPng?.[0]) {
       data.logoPng = `/uploads/brands/${files.logoPng[0].filename}`;
     }
-    return this.brandsService.create(data);
+    return this.brandsService.create(data, req);
   }
 
   @Get()
@@ -116,6 +119,7 @@ export class BrandsController {
     @Body() updateBrandDto: UpdateBrandDto,
     @UploadedFiles()
     files: { logoSvg?: Express.Multer.File[]; logoPng?: Express.Multer.File[] },
+    @Req() req: Request,
   ) {
     const data: UpdateBrandDto = { ...updateBrandDto };
     if (files.logoSvg?.[0]) {
@@ -124,12 +128,12 @@ export class BrandsController {
     if (files.logoPng?.[0]) {
       data.logoPng = `/uploads/brands/${files.logoPng[0].filename}`;
     }
-    return this.brandsService.update(+id, data);
+    return this.brandsService.update(+id, data, req);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.brandsService.remove(+id);
+  remove(@Param('id') id: string, @Req() req: Request) {
+    return this.brandsService.remove(+id, req);
   }
 
   @Post(':id/upload-logo')
@@ -159,6 +163,7 @@ export class BrandsController {
   async uploadLogo(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
   ) {
     if (!file) {
       throw new BadRequestException('No se proporcionó ningún archivo');
@@ -168,6 +173,6 @@ export class BrandsController {
       file.mimetype === 'image/svg+xml'
         ? { logoSvg: filePath }
         : { logoPng: filePath };
-    return this.brandsService.update(+id, updateData);
+    return this.brandsService.update(+id, updateData, req); 
   }
 }

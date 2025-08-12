@@ -1,21 +1,46 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Request } from 'express';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, AuditAction } from '@prisma/client';
+import { ActivityService } from '../activity/activity.service';
 
 @Injectable()
 export class StoresService {
   
-  constructor(private prismaService: PrismaService) {}
+  constructor(
+    private prismaService: PrismaService,
+    private activityService: ActivityService,
+  ) {}
 
-  async create(createStoreDto: CreateStoreDto) {
-    try{
-      return await this.prismaService.store.create({
-        data: createStoreDto
-      })   
-    }
-    catch (error) {
+  async create(createStoreDto: CreateStoreDto, req: Request) {
+    try {
+      const store = await this.prismaService.store.create({
+        data: createStoreDto,
+      });
+
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Store',
+          entityId: store.id.toString(),
+          action: AuditAction.CREATED,
+          summary: `Tienda ${store.name} creada`,
+          diff: { after: store } as any,
+        },
+        req,
+      );
+
+      return store;
+    } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
@@ -58,19 +83,47 @@ export class StoresService {
     return !!store; // Devuelve true si el proveedor existe, false si no
   }
 
-  async update(id: number, updateStoreDto: UpdateStoreDto) {
-    try{
-      const storeFound = await this.prismaService.store.update({
-        where: {id: Number(id)},  
-        data: updateStoreDto
-      })
-  
-      if(!storeFound){
-        throw new NotFoundException(`Store with id ${id} not found`)
+  async update(id: number, updateStoreDto: UpdateStoreDto, req: Request) {
+    try {
+      const before = await this.prismaService.store.findUnique({
+        where: { id: Number(id) },
+      });
+      const updated = await this.prismaService.store.update({
+        where: { id: Number(id) },
+        data: updateStoreDto,
+      });
+
+      if (!updated) {
+        throw new NotFoundException(`Store with id ${id} not found`);
       }
-  
-      return storeFound;
-    } catch (error){
+
+      const diff: any = { before: {}, after: {} };
+      for (const key of Object.keys(updated)) {
+        if (
+          JSON.stringify((before as any)?.[key]) !==
+          JSON.stringify((updated as any)?.[key])
+        ) {
+          diff.before[key] = (before as any)?.[key];
+          diff.after[key] = (updated as any)?.[key];
+        }
+      }
+    
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Store',
+          entityId: updated.id.toString(),
+          action: AuditAction.UPDATED,
+          summary: `Tienda ${updated.name} actualizada`,
+          diff,
+        },
+        req,
+      );
+
+      return updated;
+    } catch (error) {
+
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
@@ -84,14 +137,16 @@ export class StoresService {
     }    
   }
 
-  async updateMany(stores: UpdateStoreDto[]) {
+  async updateMany(stores: UpdateStoreDto[], req: Request) {
     if (!Array.isArray(stores) || stores.length === 0) {
       throw new BadRequestException('No se proporcionaron tiendas para actualizar.');
     }
   
     try {
       // Validar que todos los productos tengan un ID válido
-      const invalidProducts = stores.filter((store) => !store.id || isNaN(Number(store.id)));
+      const invalidProducts = stores.filter(
+        (store) => !store.id || isNaN(Number(store.id)),
+      );
       if (invalidProducts.length > 0) {
         throw new BadRequestException('Todas las tiendas deben tener un ID válido.');
       }
@@ -114,6 +169,18 @@ export class StoresService {
           })
         )
       );
+
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Store',
+          action: AuditAction.UPDATED,
+          summary: `${updatedStores.length} tienda(s) actualizada(s)`,
+          diff: { after: updatedStores } as any,
+        },
+        req,
+      );
   
       return {
         message: `${updatedStores.length} tienda(s) actualizada(s) correctamente.`,
@@ -133,21 +200,34 @@ export class StoresService {
     }
   }
 
-  async remove(id: number) {
-      const deletedStore = this.prismaService.store.delete({
-      where:{
-        id
-      }
-    })
+  async remove(id: number, req: Request) {
+    const deletedStore = await this.prismaService.store.delete({
+      where: {
+        id,
+      },
+    });
 
     if(!deletedStore){
       throw new NotFoundException(`Store with id ${id} not found`)
     }
 
+    await this.activityService.log(
+      {
+        actorId: (req as any)?.user?.userId,
+        actorEmail: (req as any)?.user?.username,
+        entityType: 'Store',
+        entityId: id.toString(),
+        action: AuditAction.DELETED,
+        summary: `Tienda ${deletedStore.name} eliminada`,
+        diff: { before: deletedStore } as any,
+      },
+      req,
+    );
+
     return deletedStore;
   }
 
-  async removes(ids: number[]) {
+  async removes(ids: number[], req: Request) {
     if (!Array.isArray(ids) || ids.length === 0) {
       throw new NotFoundException('No se proporcionaron IDs válidos para eliminar.');
     }
@@ -168,6 +248,19 @@ export class StoresService {
       if (deletedStores.count === 0) {
         throw new NotFoundException('No se encontraron tiendas con los IDs proporcionados.');
       }
+
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Store',
+          entityId: numericIds.join(','),
+          action: AuditAction.DELETED,
+          summary: `${deletedStores.count} tienda(s) eliminada(s)`,
+          diff: { ids: numericIds } as any,
+        },
+        req,
+      );
         
       return {
         message: `${deletedStores.count} tienda(s) eliminada(s) correctamente.`,

@@ -1,32 +1,52 @@
-import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Request } from 'express';
+import { Prisma, AuditAction, Category } from '@prisma/client';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Category } from '@prisma/client'; // Importa el tipo generado por Prisma
+import { ActivityService } from 'src/activity/activity.service';
 
 @Injectable()
 export class CategoryService {
   
-  constructor(private prismaService: PrismaService) {}
+  constructor(
+    private prismaService: PrismaService,
+    private activityService: ActivityService,
+  ) {}
 
-  async create(createCategoryDto: CreateCategoryDto) {
-    try{
-      return await this.prismaService.category.create({
-        data: createCategoryDto
-      })   
-    }
-    catch (error) {
-          if (
-            error instanceof Prisma.PrismaClientKnownRequestError &&
-            error.code === "P2002"
-          ) {
-            throw new ConflictException(
-              `La categoria con el nombre "${createCategoryDto.name}" ya existe.`
-            );
-          }
-          console.error("Error en el backend:", error);
-          throw error;
+  async create(createCategoryDto: CreateCategoryDto, req: Request) {
+    try {
+      const category = await this.prismaService.category.create({
+        data: createCategoryDto,
+      });
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Category',
+          entityId: category.id.toString(),
+          action: AuditAction.CREATED,
+          summary: `Categoría ${category.name} creada`,
+        },
+        req,
+      );
+      return category;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          `La categoria con el nombre "${createCategoryDto.name}" ya existe.`,
+        );
+      }
+      console.error('Error en el backend:', error);
+      throw error;
     }
   }
 
@@ -101,16 +121,33 @@ export class CategoryService {
     return productFound;
   }
 
-  async update(id: number, updateCategoryDto: UpdateCategoryDto) {
-    try{
+  async update(id: number, updateCategoryDto: UpdateCategoryDto, req: Request) {
+    try {
+      const before = await this.prismaService.category.findUnique({
+        where: { id: Number(id) },
+      });
       const categoryFound = await this.prismaService.category.update({
-        where: {id: Number(id)},  
-        data: updateCategoryDto
-      })
+        where: { id: Number(id) },
+        data: updateCategoryDto,
+      });
 
       if(!categoryFound){
         throw new NotFoundException(`Category with id ${id} not found`)
       }
+
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Category',
+          entityId: categoryFound.id.toString(),
+          action: AuditAction.UPDATED,
+          summary: `Categoría ${categoryFound.name} actualizada`,
+          diff: { before, after: categoryFound } as any,
+        },
+        req,
+      );
+
       return categoryFound;
     }
     catch (error) {
@@ -127,7 +164,7 @@ export class CategoryService {
     }
   }
 
-  async remove(id: number) {
+  async remove(id: number, req: Request) {
 
     // Verificar si la categoría tiene productos relacionados
     const relatedProducts = await this.prismaService.product.findMany({
@@ -136,13 +173,13 @@ export class CategoryService {
 
     if (relatedProducts.length > 0) {
       throw new ConflictException(
-        `No se puede eliminar la categoría con ID ${id} porque tiene productos relacionados.`
+        `No se puede eliminar la categoría con ID ${id} porque tiene productos relacionados.`,
       );
     }
     // Proceder con la eliminación si no hay productos relacionados
-      const deteledCategory = this.prismaService.category.delete({
+    const deteledCategory = this.prismaService.category.delete({
       where:{
-        id
+        id,
       }
     })
 
@@ -150,10 +187,23 @@ export class CategoryService {
       throw new NotFoundException(`Categoria with id ${id} not found`)
     }
 
+    await this.activityService.log(
+      {
+        actorId: (req as any)?.user?.userId,
+        actorEmail: (req as any)?.user?.username,
+        entityType: 'Category',
+        entityId: id.toString(),
+        action: AuditAction.DELETED,
+        summary: `Categoría ${(await deteledCategory).name} eliminada`,
+        diff: { before: deteledCategory } as any,
+      },
+      req,
+    );
+
     return deteledCategory;
   }
 
-  async removes(ids: number[]) {
+  async removes(ids: number[], req: Request) {
     if (!Array.isArray(ids) || ids.length === 0) {
       throw new NotFoundException('No se proporcionaron IDs válidos para eliminar.');
     }
@@ -186,6 +236,18 @@ export class CategoryService {
       if (deletedCategories.count === 0) {
         throw new NotFoundException('No se encontraron categorias con los IDs proporcionados.');
       }
+
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Category',
+          entityId: ids.join(','),
+          action: AuditAction.DELETED,
+          summary: `Categorías eliminadas: ${ids.join(', ')}`,
+        },
+        req,
+      );
   
       return {
         message: `${deletedCategories.count} categoria(s) eliminado(s) correctamente.`,

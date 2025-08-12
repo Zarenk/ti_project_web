@@ -1,15 +1,19 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, AuditAction } from '@prisma/client';
 import { zonedTimeToUtc, utcToZonedTime, format as formatTz } from 'date-fns-tz'
 import { subDays, startOfDay, endOfDay } from 'date-fns'
 import { eachDayOfInterval } from 'date-fns';
 import { executeSale, prepareSaleContext, SaleAllocation } from 'src/utils/sales-helper';
+import { ActivityService } from 'src/activity/activity.service';
 
 @Injectable()
 export class SalesService {
 
-  constructor(private prisma: PrismaService){}
+  constructor(
+    private prisma: PrismaService,
+    private readonly activityService: ActivityService,
+  ){}
 
   // Método para crear una venta
   async createSale(data: {
@@ -45,7 +49,7 @@ export class SalesService {
       total += detail.quantity * detail.price;
     }
 
-    return executeSale(this.prisma, {
+    const sale = await executeSale(this.prisma, {
       userId,
       storeId,
       clientId: clientIdToUse,
@@ -59,6 +63,23 @@ export class SalesService {
       source: 'POS',
       getStoreName: () => store.name,
     });
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true },
+    });
+
+    await this.activityService.log({
+      actorId: userId,
+      actorEmail: user?.username,
+      entityType: 'Sale',
+      entityId: sale.id.toString(),
+      action: AuditAction.CREATED,
+      summary: `Venta ${sale.id} por ${sale.total} realizada por ${user?.username ?? 'ID ' + userId}`,
+      diff: { after: sale } as any,
+    });
+
+    return sale;
   }
 
   async findAllSales() {

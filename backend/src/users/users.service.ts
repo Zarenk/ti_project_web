@@ -1,15 +1,26 @@
-import { Injectable, UnauthorizedException, BadRequestException, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  ConflictException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UserRole } from '@prisma/client';
+import { UserRole, AuditAction } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { ActivityService } from 'src/activity/activity.service';
 import { Prisma } from '@prisma/client';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private prismaService: PrismaService, private jwtService: JwtService) {}
+  constructor(
+    private prismaService: PrismaService,
+    private jwtService: JwtService,
+    private activityService: ActivityService,
+  ) {}
 
   async validateUser(email: string, password: string) {
     const user = await this.prismaService.user.findUnique({ where: { email } });
@@ -23,9 +34,29 @@ export class UsersService {
   async login(user: any) {
     const payload = { username: user.username, sub: user.id, role: user.role };
     const token = this.jwtService.sign(payload);
+    await this.activityService.log({
+      actorId: user.id,
+      actorEmail: user.email,
+      entityType: 'User',
+      entityId: user.id.toString(),
+      action: AuditAction.LOGIN,
+      summary: `User ${user.email} logged in`,
+    });
     return {
       access_token: token,
     };
+  }
+
+  async logout(user: any) {
+    await this.activityService.log({
+      actorId: user.id,
+      actorEmail: user.email,
+      entityType: 'User',
+      entityId: user.id.toString(),
+      action: AuditAction.LOGOUT,
+      summary: `User ${user.email} logged out`,
+    });
+    return { message: 'Logged out' };
   }
 
   async register(data: { email: string; username?: string; password: string; role: string }) {
@@ -44,7 +75,7 @@ export class UsersService {
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
     try {
-      return await this.prismaService.user.create({
+      const user = await this.prismaService.user.create({
         data: {
           email: data.email,
           username,
@@ -52,6 +83,17 @@ export class UsersService {
           role: data.role as UserRole,
         },
       });
+
+      await this.activityService.log({
+        actorId: user.id,
+        actorEmail: user.email,
+        entityType: 'User',
+        entityId: user.id.toString(),
+        action: AuditAction.CREATED,
+        summary: `User ${user.email} registered`,
+      });
+      return user;
+
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('El usuario ya existe');
@@ -89,6 +131,15 @@ export class UsersService {
       console.error('Error en el backend:', error);
       throw new InternalServerErrorException('Error al registrar el usuario');
     }
+
+    await this.activityService.log({
+      actorId: user.id,
+      actorEmail: user.email,
+      entityType: 'User',
+      entityId: user.id.toString(),
+      action: AuditAction.CREATED,
+      summary: `User ${user.email} self-registered`,
+    });
 
     return user;
   }
@@ -184,6 +235,15 @@ export class UsersService {
       }
     }
 
+    await this.activityService.log({
+      actorId: id,
+      actorEmail: updated.email,
+      entityType: 'User',
+      entityId: id.toString(),
+      action: AuditAction.UPDATED,
+      summary: `User ${updated.email} updated profile`,
+    });
+
     return updated;
   }
 
@@ -198,6 +258,16 @@ export class UsersService {
       where: { id },
       data: { password: hashed },
     });
+
+    await this.activityService.log({
+      actorId: id,
+      actorEmail: user.email,
+      entityType: 'User',
+      entityId: id.toString(),
+      action: AuditAction.UPDATED,
+      summary: `User ${user.email} changed password`,
+    });
+    
     return { message: 'Password updated successfully' };
   }
 }

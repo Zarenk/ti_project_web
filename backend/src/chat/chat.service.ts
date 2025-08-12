@@ -1,11 +1,14 @@
 import { Injectable } from '@nestjs/common';
-
 import { PrismaService } from '../prisma/prisma.service';
-import { ChatMessage } from '@prisma/client';
+import { ActivityService } from '../activity/activity.service';
+import { AuditAction, ChatMessage } from '@prisma/client';
 
 @Injectable()
 export class ChatService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly activityService: ActivityService,
+  ) {}
 
   async addMessage({
     clientId,
@@ -20,9 +23,20 @@ export class ChatService {
   }): Promise<ChatMessage> {
     // Only persist allowed fields to avoid runtime errors if extra properties
     // are accidentally provided in the payload (e.g. attachments).
-    return this.prisma.chatMessage.create({
+    const message = await this.prisma.chatMessage.create({
       data: { clientId, senderId, text: text ?? '', file },
     });
+
+    // Log message creation without storing full message content
+    await this.activityService.log({
+      actorId: senderId,
+      entityType: 'ChatMessage',
+      entityId: message.id.toString(),
+      action: AuditAction.CREATED,
+      summary: `Mensaje de usuario ${senderId} al cliente ${clientId}`,
+    });
+
+    return message;
   }
 
   async getMessages(clientId: number): Promise<ChatMessage[]> {

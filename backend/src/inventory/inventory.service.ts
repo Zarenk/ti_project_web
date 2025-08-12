@@ -2,6 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { ActivityService } from 'src/activity/activity.service';
+import { AuditAction } from '@prisma/client';
 import * as xlsx from 'xlsx';
 import * as ExcelJS from 'exceljs';
 import { format } from 'date-fns-tz';
@@ -10,7 +12,10 @@ import { Buffer } from 'buffer';
 @Injectable()
 export class InventoryService {
   [x: string]: any;
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private activityService: ActivityService,
+  ) {}
 
   parseExcel(filePath: string): any[] {
     const workbook = xlsx.readFile(filePath);
@@ -151,6 +156,11 @@ export class InventoryService {
       userId,
     } = transferDto;
 
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { name: true },
+    });
+
     // Validar que la tienda de origen tenga suficiente stock
     const sourceStoreInventory = await this.prisma.storeOnInventory.findFirst({
       where: { storeId: sourceStoreId, inventory: { productId } },
@@ -258,6 +268,15 @@ export class InventoryService {
         'No se pudo registrar el traslado en la tabla de transferencias',
       );
     }
+
+    await this.activityService.log({
+      actorId: userId,
+      entityType: 'InventoryItem',
+      entityId: productId.toString(),
+      action: AuditAction.UPDATED,
+      summary: `Transferencia de ${quantity}x ${product?.name ?? ''} de tienda ${sourceStoreId} a tienda ${destinationStoreId}`,
+    });
+
     return { message: 'Traslado realizado con éxito' };
   }
   //
@@ -732,6 +751,8 @@ export class InventoryService {
       let storeInventory = await this.prisma.storeOnInventory.findFirst({
         where: { inventoryId: inventory.id, storeId },
       })
+
+      const action = storeInventory ? AuditAction.UPDATED : AuditAction.CREATED
   
       if (storeInventory) {
         await this.prisma.storeOnInventory.update({
@@ -760,6 +781,14 @@ export class InventoryService {
           previousStock: storeInventory?.stock ?? 0,
           newStock: (storeInventory?.stock ?? 0) + parsedStock,
         },
+      })
+
+      await this.activityService.log({
+        actorId: userId,
+        entityType: 'InventoryItem',
+        entityId: inventory.id.toString(),
+        action,
+        summary: `Importación de ${parsedStock}x ${product.name} en tienda ${storeId}`,
       })
   
       let series: string[] = []

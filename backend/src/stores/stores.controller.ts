@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  BadRequestException,
+  Req,
+} from '@nestjs/common';
+import { Request } from 'express';
 import { StoresService } from './stores.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
@@ -9,9 +20,9 @@ export class StoresController {
   constructor(private readonly storesService: StoresService) {}
 
   @Post()
-  @ApiOperation({summary: 'Create a store'})    // Swagger 
-  create(@Body() createStoreDto: CreateStoreDto) {
-    return this.storesService.create(createStoreDto);
+  @ApiOperation({ summary: 'Create a store' }) // Swagger
+  create(@Body() createStoreDto: CreateStoreDto, @Req() req: Request) {
+    return this.storesService.create(createStoreDto, req);
   }
 
   @Get()
@@ -41,30 +52,37 @@ export class StoresController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateStoreDto: UpdateStoreDto) {
-    return this.storesService.update(+id, updateStoreDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateStoreDto: UpdateStoreDto,
+    @Req() req: Request,
+  ) {
+    return this.storesService.update(+id, updateStoreDto, req);
   }
 
   @Patch()
   @ApiOperation({ summary: 'Update multiple stores with the same values' }) // Swagger
   @ApiResponse({ status: 200, description: 'Stores updated successfully' }) // Swagger
-  async updateMany(@Body() updateStoresDto: UpdateStoreDto[]) {
+  async updateMany(
+    @Body() updateStoresDto: UpdateStoreDto[],
+    @Req() req: Request,
+  ) {
 
     if (!Array.isArray(updateStoresDto) || updateStoresDto.length === 0) {
       throw new BadRequestException('No se proporcionaron tiendas para actualizar.');
     }
 
     // Delegar la lógica al servicio
-    return this.storesService.updateMany(updateStoresDto);
+    return this.storesService.updateMany(updateStoresDto, req);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.storesService.remove(+id);
+  remove(@Param('id') id: string, @Req() req: Request) {
+    return this.storesService.remove(+id, req);
   }
 
   @Delete()
-  async removes(@Body('ids') ids: number[]) {
-    return this.storesService.removes(ids);
+  async removes(@Body('ids') ids: number[], @Req() req: Request) {
+    return this.storesService.removes(ids, req);
   }
 }

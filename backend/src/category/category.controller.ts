@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  BadRequestException,
+  Req,
+} from '@nestjs/common';
+import { Request } from 'express';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -9,9 +20,9 @@ export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
     @Post()
-    @ApiOperation({summary: 'Create a category'})    // Swagger 
-    create(@Body() createCategoryDto: CreateCategoryDto) {
-      return this.categoryService.create(createCategoryDto);
+    @ApiOperation({summary: 'Create a category'})    // Swagger
+    create(@Body() createCategoryDto: CreateCategoryDto, @Req() req: Request) {
+      return this.categoryService.create(createCategoryDto, req);
     }
 
     @Post('verify-or-create-default')
@@ -45,17 +56,21 @@ export class CategoryController {
     }
   
     @Patch(':id')
-    update(@Param('id') id: string, @Body() updateCategoryDto: UpdateCategoryDto) {
-      return this.categoryService.update(+id, updateCategoryDto);
+    update(
+      @Param('id') id: string,
+      @Body() updateCategoryDto: UpdateCategoryDto,
+      @Req() req: Request,
+    ) {
+      return this.categoryService.update(+id, updateCategoryDto, req);
     }
   
     @Delete(':id')
-    remove(@Param('id') id: string) {
-      return this.categoryService.remove(+id);
+    remove(@Param('id') id: string, @Req() req: Request) {
+      return this.categoryService.remove(+id, req);
     }
   
     @Delete()
-    async removes(@Body('ids') ids: number[]) {
-      return this.categoryService.removes(ids);
+    async removes(@Body('ids') ids: number[], @Req() req: Request) {
+      return this.categoryService.removes(ids, req);
     }
 }

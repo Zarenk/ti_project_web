@@ -32,8 +32,8 @@ export class WebSalesController {
   }
 
   @Post('order')
-  async createOrder(@Body() dto: CreateWebSaleDto) {
-    return this.webSalesService.createWebOrder(dto);
+  async createOrder(@Body() dto: CreateWebSaleDto, @Req() req: Request) {
+    return this.webSalesService.createWebOrder(dto, req);
   }
 
   @Post('payments/culqi')
@@ -46,8 +46,11 @@ export class WebSalesController {
   }
 
   @Post('order/:id/complete')
-  async completeOrder(@Param('id', ParseIntPipe) id: number) {
-    return this.webSalesService.completeWebOrder(id);
+  async completeOrder(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
+  ) {
+    return this.webSalesService.completeWebOrder(id, req);
   }
   
   @Post('order/:id/reject')
@@ -67,7 +70,10 @@ export class WebSalesController {
       }),
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
-          return cb(new BadRequestException('Solo se permiten imagenes'), false);
+          return cb(
+            new BadRequestException('Solo se permiten imagenes'),
+            false,
+          );
         }
         cb(null, true);
       },
@@ -77,14 +83,11 @@ export class WebSalesController {
     @Param('id', ParseIntPipe) id: number,
     @UploadedFiles() files: Express.Multer.File[],
     @Body('description') description: string,
-    @Req() req: Request,
   ) {
     if (!files || files.length === 0) {
       throw new BadRequestException('No se proporcionaron imagenes');
     }
-    const urls = files.map(
-      (f) => `/uploads/order-proofs/${f.filename}`,
-    );
+    const urls = files.map((f) => `/uploads/order-proofs/${f.filename}`);
     return this.webSalesService.addOrderProofs(id, urls, description);
   }
 

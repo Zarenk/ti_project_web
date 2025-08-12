@@ -11,6 +11,8 @@ import { CreateEntryDto } from './dto/create-entry.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CategoryService } from 'src/category/category.service';
+import { ActivityService } from 'src/activity/activity.service';
+import { AuditAction } from '@prisma/client';
 
 @Injectable()
 export class EntriesService {
@@ -18,6 +20,7 @@ export class EntriesService {
   constructor(
     private prisma: PrismaService,
     private categoryService: CategoryService,
+    private activityService: ActivityService,
   ) {}
 
   private handlePrismaError(error: any): never {
@@ -52,7 +55,7 @@ export class EntriesService {
 
   try{
     console.log("Datos recibidos en createEntry:", data);
-    return await this.prisma.$transaction(async (prisma) => {
+    const entry = await this.prisma.$transaction(async (prisma) => {
       // Verificar que la tienda exista
       const store = await prisma.store.findUnique({ where: { id: data.storeId } });
       if (!store) {
@@ -232,6 +235,19 @@ export class EntriesService {
       console.log("Entrada creada:", entry);
       return entry;
     });
+
+    const summary = data.details
+      .map((d) => `${d.quantity}x ${d.name}`)
+      .join(', ');
+    await this.activityService.log({
+      actorId: data.userId,
+      entityType: 'InventoryItem',
+      entityId: entry.id.toString(),
+      action: AuditAction.CREATED,
+      summary: `Entrada creada con productos: ${summary}`,
+    });
+    return entry;
+
     }catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
@@ -304,7 +320,7 @@ export class EntriesService {
     try {
       const entry = await this.prisma.entry.findUnique({
         where: { id },
-        include: { details: { include: { series: true } } },
+        include: { details: { include: { series: true, product: true } } },
       });
 
     if (!entry) {
@@ -353,7 +369,17 @@ export class EntriesService {
       }
 
       // Eliminar la entrada
-        return this.prisma.entry.delete({ where: { id } });
+      const summary = entry.details
+        .map((d) => `${d.quantity}x ${d.product.name}`)
+        .join(', ');
+      await this.activityService.log({
+        actorId: entry.userId,
+        entityType: 'InventoryItem',
+        entityId: entry.id.toString(),
+        action: AuditAction.UPDATED,
+        summary: `Entrada eliminada afectando: ${summary}`,
+      });
+      return this.prisma.entry.delete({ where: { id } });
       } catch (error) {
         if (error instanceof HttpException) {
           throw error;
@@ -372,7 +398,7 @@ export class EntriesService {
       // Obtener las entradas con sus detalles
       const entries = await this.prisma.entry.findMany({
         where: { id: { in: ids } },
-        include: { details: { include: { series: true } } },
+        include: { details: { include: { series: true, product: true } } },
       });
 
       if (entries.length === 0) {
@@ -420,6 +446,18 @@ export class EntriesService {
             },
           });
         }
+
+        const summary = entry.details
+          .map((d) => `${d.quantity}x ${d.product.name}`)
+          .join(', ');
+        await this.activityService.log({
+          actorId: entry.userId,
+          entityType: 'InventoryItem',
+          entityId: entry.id.toString(),
+          action: AuditAction.UPDATED,
+          summary: `Entrada eliminada afectando: ${summary}`,
+        });
+        
       }
 
       // Eliminar las entradas

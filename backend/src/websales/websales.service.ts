@@ -1,16 +1,25 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, AuditAction } from '@prisma/client';
 import { CreateWebSaleDto } from './dto/create-websale.dto';
 import {
   prepareSaleContext,
   executeSale,
   SaleAllocation,
 } from '../utils/sales-helper';
+import { ActivityService } from '../activity/activity.service';
+import { Request } from 'express';
 
 @Injectable()
 export class WebSalesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly activityService: ActivityService,
+  ) {}
 
   async payWithCulqi(token: string, amount: number, order: CreateWebSaleDto) {
     const secret = process.env.CULQI_SECRET_KEY;
@@ -49,8 +58,9 @@ export class WebSalesService {
     return sale;
   }
 
-  async createWebOrder(data: CreateWebSaleDto) {
-    const { shippingName, shippingAddress, city, postalCode, phone, code } = data;
+  async createWebOrder(data: CreateWebSaleDto, req?: Request) {
+    const { shippingName, shippingAddress, city, postalCode, phone, code } =
+      data;
     const order = await this.prisma.orders.create({
       data: {
         status: 'PENDING',
@@ -63,6 +73,20 @@ export class WebSalesService {
         payload: data as unknown as Prisma.JsonObject,
       },
     });
+
+    await this.activityService.log(
+      {
+        actorId: (req as any)?.user?.userId,
+        actorEmail: (req as any)?.user?.username,
+        entityType: 'Order',
+        entityId: order.id.toString(),
+        action: AuditAction.CREATED,
+        summary: `Orden ${order.code} creada`,
+        diff: { after: order } as any,
+      },
+      req,
+    );
+
     return order;
   }
 
@@ -158,6 +182,21 @@ export class WebSalesService {
       );
     }
 
+    const user = await this.prisma.user.findUnique({
+      where: { id: sale.userId },
+      select: { username: true },
+    });
+
+    await this.activityService.log({
+      actorId: sale.userId,
+      actorEmail: user?.username,
+      entityType: 'Sale',
+      entityId: sale.id.toString(),
+      action: AuditAction.CREATED,
+      summary: `Venta ${sale.id} por ${sale.total} realizada por ${user?.username ?? 'ID ' + sale.userId}`,
+      diff: { after: sale } as any,
+    });
+
     return sale;
   }
 
@@ -191,7 +230,7 @@ export class WebSalesService {
     });
   }
 
-  async completeWebOrder(id: number) {
+  async completeWebOrder(id: number, req?: Request) {
     const order = await this.prisma.orders.findUnique({ where: { id } });
     if (!order || order.status !== 'PENDING' || !order.payload) {
       throw new BadRequestException('Orden no válida para completar');
@@ -203,6 +242,22 @@ export class WebSalesService {
       where: { id },
       data: { status: 'COMPLETED', salesId: sale.id },
     });
+
+    await this.activityService.log(
+      {
+        actorId: (req as any)?.user?.userId,
+        actorEmail: (req as any)?.user?.username,
+        entityType: 'Order',
+        entityId: id.toString(),
+        action: AuditAction.UPDATED,
+        summary: `Orden ${order.code} completada`,
+        diff: {
+          before: { status: 'PENDING' },
+          after: { status: 'COMPLETED' },
+        } as any,
+      },
+      req,
+    );
 
     const enrichedSale = await this.prisma.sales.findUnique({
       where: { id: sale.id },
@@ -218,6 +273,23 @@ export class WebSalesService {
         order: true,
       },
     });
+
+    if (enrichedSale) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: enrichedSale.userId },
+        select: { username: true },
+      });
+
+      await this.activityService.log({
+        actorId: enrichedSale.userId,
+        actorEmail: user?.username,
+        entityType: 'Sale',
+        entityId: enrichedSale.id.toString(),
+        action: AuditAction.UPDATED,
+        summary: `Venta ${enrichedSale.id} por ${enrichedSale.total} completada por ${user?.username ?? 'ID ' + enrichedSale.userId}`,
+        diff: { after: enrichedSale } as any,
+      });
+    }
 
     return enrichedSale;
   }
