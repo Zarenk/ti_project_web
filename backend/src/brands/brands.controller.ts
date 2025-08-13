@@ -15,15 +15,29 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { extname, join } from 'path';
 import { BrandsService } from './brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
-import { Request } from 'express';  
+import { Request } from 'express';
+import { resolveBackendPath } from 'src/utils/path-utils';
+import { convertPngToSvg } from 'src/utils/image-utils';
 
 @Controller('brands')
 export class BrandsController {
   constructor(private readonly brandsService: BrandsService) {}
+
+  private async processPng(file: Express.Multer.File) {
+    const uploadsDir = resolveBackendPath('uploads', 'brands');
+    const pngPath = join(uploadsDir, file.filename);
+    const svgFilename = file.filename.replace(/\.[^/.]+$/, '.svg');
+    const svgPath = join(uploadsDir, svgFilename);
+    await convertPngToSvg(pngPath, svgPath);
+    return {
+      logoPng: `/uploads/brands/${file.filename}`,
+      logoSvg: `/uploads/brands/${svgFilename}`,
+    };
+  }
 
   @Post()
    @UseInterceptors(
@@ -55,7 +69,8 @@ export class BrandsController {
       },
     ),
   )
-  create(
+
+  async create(
     @Body() createBrandDto: CreateBrandDto,
     @UploadedFiles()
     files: { logoSvg?: Express.Multer.File[]; logoPng?: Express.Multer.File[] },
@@ -66,7 +81,11 @@ export class BrandsController {
       data.logoSvg = `/uploads/brands/${files.logoSvg[0].filename}`;
     }
     if (files.logoPng?.[0]) {
-      data.logoPng = `/uploads/brands/${files.logoPng[0].filename}`;
+      const paths = await this.processPng(files.logoPng[0]);
+      data.logoPng = paths.logoPng;
+      if (!data.logoSvg) {
+        data.logoSvg = paths.logoSvg;
+      }
     }
     return this.brandsService.create(data, req);
   }
@@ -114,7 +133,8 @@ export class BrandsController {
       },
     ),
   )
-  update(
+
+  async update(
     @Param('id') id: string,
     @Body() updateBrandDto: UpdateBrandDto,
     @UploadedFiles()
@@ -126,7 +146,9 @@ export class BrandsController {
       data.logoSvg = `/uploads/brands/${files.logoSvg[0].filename}`;
     }
     if (files.logoPng?.[0]) {
-      data.logoPng = `/uploads/brands/${files.logoPng[0].filename}`;
+      const paths = await this.processPng(files.logoPng[0]);
+      data.logoPng = paths.logoPng;
+      data.logoSvg = paths.logoSvg;
     }
     return this.brandsService.update(+id, data, req);
   }
@@ -134,6 +156,25 @@ export class BrandsController {
   @Delete(':id')
   remove(@Param('id') id: string, @Req() req: Request) {
     return this.brandsService.remove(+id, req);
+  }
+
+  @Post(':id/convert-png')
+  async convertPngToSvg(@Param('id') id: string, @Req() req: Request) {
+    const brand = await this.brandsService.findOne(+id);
+    if (!brand?.logoPng) {
+      throw new BadRequestException('La marca no tiene logo PNG');
+    }
+    const uploadsDir = resolveBackendPath('uploads', 'brands');
+    const filename = brand.logoPng.split('/').pop() as string;
+    const pngPath = join(uploadsDir, filename);
+    const svgFilename = filename.replace(/\.[^/.]+$/, '.svg');
+    const svgPath = join(uploadsDir, svgFilename);
+    await convertPngToSvg(pngPath, svgPath);
+    return this.brandsService.update(
+      +id,
+      { logoSvg: `/uploads/brands/${svgFilename}` },
+      req,
+    );
   }
 
   @Post(':id/upload-logo')
@@ -168,11 +209,11 @@ export class BrandsController {
     if (!file) {
       throw new BadRequestException('No se proporcionó ningún archivo');
     }
+    if (file.mimetype === 'image/png') {
+      const paths = await this.processPng(file);
+      return this.brandsService.update(+id, paths, req);
+    }
     const filePath = `/uploads/brands/${file.filename}`;
-    const updateData =
-      file.mimetype === 'image/svg+xml'
-        ? { logoSvg: filePath }
-        : { logoPng: filePath };
-    return this.brandsService.update(+id, updateData, req); 
+    return this.brandsService.update(+id, { logoSvg: filePath }, req); 
   }
 }

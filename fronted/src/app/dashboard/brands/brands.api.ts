@@ -66,3 +66,14 @@ export async function deleteBrand(id: number) {
 
   return res.json();
 }
+
+export async function convertBrandPngToSvg(id: number) {
+  const res = await fetch(`${BACKEND_URL}/api/brands/${id}/convert-png`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    throw new Error(errorData?.message || 'Error al convertir la imagen');
+  }
+  return res.json();
+}

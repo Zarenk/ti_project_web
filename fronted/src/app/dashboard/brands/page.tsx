@@ -11,6 +11,7 @@ import {
   updateBrand,
   deleteBrand,
   BACKEND_URL,
+  convertBrandPngToSvg,
 } from './brands.api';
 
 interface Brand {
@@ -87,6 +88,15 @@ export default function BrandsPage() {
     }
   }
 
+  async function handleConvert(id: number) {
+    try {
+      await convertBrandPngToSvg(id);
+      await fetchBrands();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   function getImageUrl(path?: string) {
     if (!path) return '';
     return path.startsWith('http') ? path : `${BACKEND_URL}${path}`;
@@ -148,6 +158,11 @@ export default function BrandsPage() {
                   <Button type="button" onClick={() => handleEdit(brand)}>
                     Editar
                   </Button>
+                  {brand.logoPng && !brand.logoSvg && (
+                    <Button type="button" onClick={() => handleConvert(brand.id)}>
+                      PNG a SVG
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="destructive"

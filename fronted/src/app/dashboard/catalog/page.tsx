@@ -78,7 +78,6 @@ export default function CatalogPage() {
         selected={selectedCategories}
         onChange={setSelectedCategories}
       />
-      {products.length > 0 && <CatalogPreview products={products} />}
       <div className="flex gap-4">
         <Button onClick={() => handleDownload("pdf")} disabled={downloading === "pdf"}>
           {downloading === "pdf" ? "Generando..." : "Descargar PDF"}
@@ -87,6 +86,7 @@ export default function CatalogPage() {
           {downloading === "excel" ? "Generando..." : "Descargar Excel"}
         </Button>
       </div>
+      {products.length > 0 && <CatalogPreview products={products} />}
     </div>
   );
 }

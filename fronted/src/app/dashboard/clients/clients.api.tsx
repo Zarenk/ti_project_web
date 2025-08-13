@@ -7,6 +7,13 @@ export async function getClients(){
   return data.json()
 }
 
+export async function getRegisteredClients(){
+  const data = await fetch(`${BACKEND_URL}/api/clients/registered`, {
+      'cache': 'no-store',
+  });
+  return data.json()
+}
+
 export async function getClient(id: string){
   const data = await fetch(`${BACKEND_URL}/api/clients/${id}`, {
       'cache': 'force-cache',

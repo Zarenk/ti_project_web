@@ -167,8 +167,13 @@ export class ClientService {
     return this.prismaService.client.findMany({
       where: {
         OR: [
-          { user: { email: { not: { startsWith: 'generic_' } } } },
-          { user: { username: { not: { startsWith: 'generic_' } } } },
+          { name: 'Sin Cliente' },
+          {
+            AND: [
+              { user: { email: { not: { startsWith: 'generic_' } } } },
+              { user: { username: { not: { startsWith: 'generic_' } } } },
+            ],
+          },
         ],
       },
     });

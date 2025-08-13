@@ -28,7 +28,7 @@ import { createSale, fetchSeriesByProductAndStore, generarYEnviarDocumento, getP
 import { AddSeriesDialog } from '../components/AddSeriesDialog'
 import { SeriesModal } from '../components/SeriesModal'
 import { StoreChangeDialog } from '../components/StoreChangeDialog'
-import { getClients } from '../../clients/clients.api'
+import { getRegisteredClients } from '../../clients/clients.api'
 import { InvoiceDocument } from '../components/pdf/InvoiceDocument'
 import QRCode from 'qrcode';
 import { numeroALetrasCustom } from '../components/utils/numeros-a-letras'
@@ -667,7 +667,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   useEffect(() => {
     async function fetchClients() {
       try {
-          const clients = await getClients();
+          const clients = await getRegisteredClients();
           setClients(clients); // Guarda los proveedores en el estado
       } catch (error) {
           console.error('Error al obtener los clientes:', error);
