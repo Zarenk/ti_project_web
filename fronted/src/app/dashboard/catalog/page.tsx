@@ -8,6 +8,7 @@ import { getProducts } from "../products/products.api";
 import { getStoresWithProduct } from "../inventory/inventory.api";
 import CategoryFilter from "./category-filter";
 import CatalogPreview from "./catalog-preview";
+import { toast } from "sonner";
 
 export default function CatalogPage() {
   const [downloading, setDownloading] = useState<"pdf" | "excel" | null>(null);
@@ -45,15 +46,17 @@ export default function CatalogPage() {
   }, [selectedCategories]);
 
   async function handleDownload(format: "pdf" | "excel") {
+    if (selectedCategories.length === 0) {
+      toast.error("Debes seleccionar una categoría");
+      return;
+    }
     try {
       setDownloading(format);
       let blob: Blob;
       if (format === "pdf") {
         blob = await generateCatalogPdf(products);
       } else {
-        const params = selectedCategories.length
-          ? { categories: selectedCategories }
-          : {};
+        const params = { categories: selectedCategories };
         blob = await exportCatalog("excel", params);
       }
       const url = window.URL.createObjectURL(blob);

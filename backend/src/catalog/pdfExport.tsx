@@ -6,6 +6,8 @@ import { getCatalogItems } from './catalogData';
 import PDFDocument from 'pdfkit';
 import { brandAssets } from './brandAssets';
 import path from 'path';
+import fs from 'fs';
+import SVGtoPDF from 'svg-to-pdfkit';
 
 export function renderCatalogHtml(items: CatalogItem[]): string {
   const templateItems = items.map((item) => ({
@@ -17,16 +19,21 @@ export function renderCatalogHtml(items: CatalogItem[]): string {
   return renderToString(<CatalogTemplate items={templateItems} />);
 }
 
-function normalizeLogo(logoPath: string | undefined): string | null {
+type Logo = { path: string; isSvg: boolean };
+
+function normalizeLogo(logoPath: string | undefined): Logo | null {
   if (!logoPath) return null;
   const ext = path.extname(logoPath).toLowerCase();
-  if (ext === '.svg') return logoPath.replace(/\.svg$/i, '.png');
-  if (ext === '.png' || ext === '.jpg' || ext === '.jpeg') return logoPath;
-  return null;
+  if (ext === '.svg') return { path: logoPath, isSvg: true };
+  if (ext === '.png' || ext === '.jpg' || ext === '.jpeg') {
+    return { path: logoPath, isSvg: false };
+  }
+  const pngFallback = logoPath.replace(/\.[^.]+$/, '.png');
+  return fs.existsSync(pngFallback) ? { path: pngFallback, isSvg: false } : null;
 }
 
-function getLogos(item: CatalogItem): string[] {
-  const logos: string[] = [];
+function getLogos(item: CatalogItem): Logo[] {
+  const logos: Logo[] = [];
   const pushLogo = (logo?: string) => {
     const normalized = normalizeLogo(logo);
     if (normalized) logos.push(normalized);
@@ -104,7 +111,18 @@ async function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
         const y = doc.y;
         logos.forEach((logo, idx) => {
           try {
-            doc.image(logo, startX + idx * 26, y, { width: 24, height: 24 });
+            if (logo.isSvg) {
+              const svg = fs.readFileSync(logo.path, 'utf8');
+              SVGtoPDF(doc, svg, startX + idx * 26, y, {
+                width: 24,
+                height: 24,
+              });
+            } else {
+              doc.image(logo.path, startX + idx * 26, y, {
+                width: 24,
+                height: 24,
+              });
+            }
           } catch {}
         });
         doc.moveDown(1.5);
@@ -127,3 +145,5 @@ export async function exportCatalogPdf(
   const items = await getCatalogItems(filters);
   return itemsToPdf(items);
 }
+
+export { itemsToPdf };
