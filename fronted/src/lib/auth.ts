@@ -82,7 +82,18 @@ export async function isTokenValid(): Promise<boolean> {
       cache: 'no-store',
       headers,
     })
-    return res.ok
+    if (!res.ok) return false
+    try {
+      const data = (await res.json()) as {
+        id?: number
+        name?: string
+        role?: string
+        error?: unknown
+      }
+      return !!data.id && !!data.name && !!data.role && !data.error
+    } catch {
+      return false
+    }
   } catch {
     return false
   }

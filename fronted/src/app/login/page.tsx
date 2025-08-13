@@ -15,10 +15,12 @@ export default function LoginPage() {
     async function check() {
       if (await isTokenValid()) {
         const data = await getUserDataFromToken();
-        if (data?.role === 'ADMIN' || data?.role === 'EMPLOYEE') {
-          router.replace('/dashboard');
-        } else {
-          router.replace('/users');
+        if (data) {
+          if (data.role === 'ADMIN' || data.role === 'EMPLOYEE') {
+            router.replace('/dashboard');
+          } else {
+            router.replace('/users');
+          }
         }
       }
     }
