@@ -3,6 +3,10 @@ import type { JwtPayload } from 'jsonwebtoken'
 import { getAuthToken } from '@/utils/auth-token'
 
 export interface CurrentUser {
+  /**
+   * Display name of the user. This may originate from the `username`
+   * field if the API does not provide a `name` property.
+   */
   id: number
   name: string
   role?: string
@@ -55,14 +59,16 @@ export async function getUserDataFromToken(): Promise<CurrentUser | null> {
     })
     if (!res.ok) return null
     const data = (await res.json()) as Partial<CurrentUser> & {
+      username?: string
       error?: unknown
     }
-    if (!data.id || !data.name || !data.role || data.error) {
+    const name = data.name ?? data.username
+    if (!data.id || !name || !data.role || data.error) {
       return null
     }
     return {
       id: data.id,
-      name: data.name,
+      name,
       role: data.role,
     }
   } catch {
@@ -87,10 +93,11 @@ export async function isTokenValid(): Promise<boolean> {
       const data = (await res.json()) as {
         id?: number
         name?: string
+        username?: string
         role?: string
         error?: unknown
       }
-      return !!data.id && !!data.name && !!data.role && !data.error
+      return !!data.id && !!(data.name ?? data.username) && !!data.role && !data.error
     } catch {
       return false
     }
