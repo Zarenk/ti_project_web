@@ -96,7 +96,7 @@ export default function ProductPage({ params }: Props) {
   const [ratingValue, setRatingValue] = useState(5)
   const [comment, setComment] = useState('')
   const commentRef = useRef<HTMLTextAreaElement | null>(null)
-  const [userData, setUserData] = useState<{ userId: number; name: string } | null>(null)
+  const [userData, setUserData] = useState<{ id: number; name: string } | null>(null)
 
   useEffect(() => {
     async function fetchProduct() {
@@ -203,7 +203,7 @@ export default function ProductPage({ params }: Props) {
         setReviews(res)
         const u = await getUserDataFromToken()
         if (u) {
-          const mine = res.find((r: any) => r.userId === u.userId)
+          const mine = res.find((r: any) => r.userId === u.id)
           if (mine) {
             setMyReview(mine)
             setRatingValue(mine.rating)
@@ -263,14 +263,12 @@ export default function ProductPage({ params }: Props) {
 
   async function handleReviewSubmit() {
     if (!userData) return
-    const token = localStorage.getItem('token')
-    if (!token) return
     const text = commentRef.current?.value || ''
     try {
-      await submitReview(Number(id), ratingValue, text, token)
+      await submitReview(Number(id), ratingValue, text)
       const updated = await getReviews(Number(id))
       setReviews(updated)
-      const mine = updated.find((r: any) => r.userId === userData.userId)
+      const mine = updated.find((r: any) => r.userId === userData.id)
       setMyReview(mine)
       setComment(text)
       toast.success('Reseña guardada')
@@ -765,7 +763,7 @@ export default function ProductPage({ params }: Props) {
                     <Card
                       key={review.id}
                       className={`${
-                        review.userId === userData?.userId ? 'border-l-4 border-blue-500 bg-blue-50/30' : 'bg-card/60'
+                        review.userId === userData?.id ? 'border-l-4 border-blue-500 bg-blue-50/30' : 'bg-card/60'
                       }`}
                     >
                       <CardContent className="p-6 space-y-2">

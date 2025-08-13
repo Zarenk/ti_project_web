@@ -16,6 +16,7 @@ import { cn, uploadPdfToServer } from '@/lib/utils'
 import React from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {jwtDecode} from 'jwt-decode';
+import { getAuthToken } from "@/utils/auth-token";
 import {  getStores } from '../../stores/stores.api'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -38,8 +39,8 @@ import { ProductDetailModal } from '../components/ProductDetailModal'
 const Numalet = require('numalet');
 
 // Función para obtener el userId del token JWT almacenado en localStorage
-function getUserIdFromToken(): number | null {
-  const token = localStorage.getItem('token'); // Obtén el token del localStorage
+async function getUserIdFromToken(): Promise<number | null> {
+  const token = await getAuthToken();
   if (!token) {
     console.error('No se encontró un token de autenticación');
     return null;
@@ -218,7 +219,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
 
-  const userId = getUserIdFromToken(); // Obtén el userId del token
+  const userId = await getUserIdFromToken(); // Obtén el userId del token
 
       if (!userId) {
         toast.error("No se pudo obtener el ID del usuario. Por favor, inicie sesión nuevamente.");

@@ -1,7 +1,8 @@
 "use client"
 
 import { createContext, useContext, useState, ReactNode, useEffect } from "react"
-import { getAuthToken, isTokenValid } from "@/lib/auth"
+import { getAuthToken } from "@/utils/auth-token"
+import { isTokenValid } from "@/lib/auth"
 import { jwtDecode } from "jwt-decode"
 
 export type CartItem = {
@@ -27,7 +28,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cartKey, setCartKey] = useState("cart-guest")
 
   const getKey = async () => {
-    const token = getAuthToken()
+    const token = await getAuthToken()
     if (!token) return "cart-guest"
     try {
       const decoded: { userId?: number } = jwtDecode(token)

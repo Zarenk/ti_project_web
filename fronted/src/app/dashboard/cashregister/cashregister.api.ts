@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getAuthHeaders } from "@/utils/auth-token";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
@@ -93,19 +94,15 @@ export const createIndependentTransaction = async (data: {
 };
 
 export async function getActiveCashRegister(storeId: number): Promise<{ id: number; name: string; currentBalance: number; initialBalance: number; } | null> {
-  const token = localStorage.getItem('token'); // Obtén el token del localStorage
-
-  if (!token) {
+  const headers = await getAuthHeaders();
+  if (!('Authorization' in headers)) {
     throw new Error('No se encontró un token de autenticación');
   }
 
   try {
     const response = await fetch(`${BACKEND_URL}/api/cashregister/active/${storeId}`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { 'Content-Type': 'application/json', ...headers },
     });
 
     if (!response.ok) {

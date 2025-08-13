@@ -1,5 +1,6 @@
 import { jwtDecode } from 'jwt-decode'
 import type { JwtPayload } from 'jsonwebtoken'
+import { getAuthToken, getAuthHeaders } from '@/utils/auth-token'
 
 export interface CurrentUser {
   id: number
@@ -30,17 +31,31 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
 export async function getUserDataFromToken(): Promise<CurrentUser | null> {
 
-  const token = getAuthToken()
-  if (!token) return null
+  const headers = await getAuthHeaders()
+  if (Object.keys(headers).length === 0) return null
 
   try {
     const res = await fetch('/api/me', {
       credentials: 'include',
       cache: 'no-store',
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
     })
     if (!res.ok) return null
-    return (await res.json()) as CurrentUser
+    const data: any = await res.json()
+    if (
+      !data ||
+      typeof data.id !== 'number' ||
+      typeof data.role !== 'string' ||
+      typeof data.name !== 'string' ||
+      data.error
+    ) {
+      return null
+    }
+    return {
+      id: data.id,
+      name: data.name,
+      role: data.role,
+    }
   } catch {
     return null
   }
@@ -48,14 +63,14 @@ export async function getUserDataFromToken(): Promise<CurrentUser | null> {
 
 export async function isTokenValid(): Promise<boolean> {
  
-  const token = getAuthToken()
-  if (!token) return false
+  const headers = await getAuthHeaders()
+  if (Object.keys(headers).length === 0) return false
   
   try {
     const res = await fetch('/api/me', {
       credentials: 'include',
       cache: 'no-store',
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
     })
     return res.ok
   } catch {
@@ -63,23 +78,8 @@ export async function isTokenValid(): Promise<boolean> {
   }
 }
 
-export function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const match = document.cookie.match(/(?:^|; )token=([^;]+)/)
-    if (match) return decodeURIComponent(match[1])
-  } catch {
-    /* ignore */
-  }
-  try {
-    return localStorage.getItem('token')
-  } catch {
-    return null
-  }
-}
-
-export function getLastAccessFromToken(): Date | null {
-  const token = getAuthToken()
+export async function getLastAccessFromToken(): Promise<Date | null> {
+  const token = await getAuthToken()
   if (!token) return null
   try {
     const decoded: { iat?: number } = jwtDecode(token)

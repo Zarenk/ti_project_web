@@ -165,7 +165,7 @@ export default function UserPanel() {
         setRegistrationDate(
           new Date(profile.createdAt).toLocaleDateString('es-ES')
         )
-        const last = getLastAccessFromToken()
+        const last = await getLastAccessFromToken()
         if (last) {
           setLastAccess(last.toLocaleString('es-ES'))
         }

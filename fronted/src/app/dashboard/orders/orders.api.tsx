@@ -1,4 +1,4 @@
-import { getAuthToken } from '@/lib/auth'
+import { getAuthHeaders } from '@/utils/auth-token'
 import { authFetch } from '@/utils/auth-fetch';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
@@ -10,11 +10,11 @@ export async function getOrders(params: { status?: string; from?: string; to?: s
   if (params.to) qs.append('to', params.to);
   if (params.clientId) qs.append('clientId', params.clientId);
   if (params.code) qs.append('code', params.code);
-  const token = getAuthToken();
+  const headers = await getAuthHeaders();
   const res = await fetch(
     `${BACKEND_URL}/api/web-sales/orders?${qs.toString()}`,
     {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers,
       credentials: 'include',
     }
   );

@@ -11,6 +11,7 @@ import React from 'react'
 import { getProducts } from '../../products/products.api'
 import { getProviders } from '../../providers/providers.api'
 import {jwtDecode} from 'jwt-decode';
+import { getAuthToken } from "@/utils/auth-token";
 import { getStores } from '../../stores/stores.api'
 import { UploadSection } from '../components/entries/UploadSection'
 import { AdditionalInfoSection } from '../components/entries/AdditionalInfoSection'
@@ -24,16 +25,16 @@ import { ActionButtons } from '../components/entries/ActionButtons'
 import { getLatestExchangeRateByCurrency } from '../../exchange/exchange.api'
 
 // Función para obtener el userId del token JWT almacenado en localStorage
-function getUserIdFromToken(): number | null {
-  const token = localStorage.getItem('token'); // Obtén el token del localStorage
+async function getUserIdFromToken(): Promise<number | null> {
+  const token = await getAuthToken();
   if (!token) {
     console.error('No se encontró un token de autenticación');
     return null;
   }
 
   try {
-    const decodedToken: { sub: number } = jwtDecode(token); // Decodifica el token
-    return decodedToken.sub; // Retorna el userId (sub es el estándar en JWT para el ID del usuario)
+    const decodedToken: { sub: number } = jwtDecode(token);
+    return decodedToken.sub;
   } catch (error) {
     console.error('Error al decodificar el token:', error);
     return null;

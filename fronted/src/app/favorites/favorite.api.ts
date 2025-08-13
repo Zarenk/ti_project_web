@@ -1,14 +1,11 @@
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
 
-function getToken() {
-  if (typeof window === 'undefined') return null
-  return localStorage.getItem('token')
-}
+import { getAuthHeaders } from '@/utils/auth-token'
 
 export async function getFavorites() {
-  const token = getToken()
+  const headers = await getAuthHeaders()
   const res = await fetch('/api/favorites', {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers,
     credentials: 'include',
     cache: 'no-store',
   })
@@ -17,11 +14,11 @@ export async function getFavorites() {
 }
 
 export async function toggleFavorite(productId: number) {
-  const token = getToken()
-  if (!token) throw new Error('Unauthorized')
+  const headers = await getAuthHeaders()
+  if (!('Authorization' in headers)) throw new Error('Unauthorized')
   const res = await fetch('/api/favorites', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json', ...headers },
     credentials: 'include',
     body: JSON.stringify({ productId }),
   })
@@ -30,11 +27,11 @@ export async function toggleFavorite(productId: number) {
 }
 
 export async function removeFavorite(productId: number) {
-  const token = getToken()
-  if (!token) throw new Error('Unauthorized')
+  const headers = await getAuthHeaders()
+  if (!('Authorization' in headers)) throw new Error('Unauthorized')
   const res = await fetch(`/api/favorites/${productId}`, {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
+    headers,
     credentials: 'include',
   })
   if (!res.ok) throw new Error('Error')

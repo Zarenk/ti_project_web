@@ -1,4 +1,4 @@
-import { getAuthToken } from '@/lib/auth';
+import { getAuthHeaders } from '@/utils/auth-token';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://192.168.1.40:4000';
 
@@ -11,9 +11,9 @@ export async function exportCatalog(format: 'pdf' | 'excel', params: Record<stri
     }
   }
 
-  const token = getAuthToken();
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BACKEND_URL}/api/catalog/export?${qs.toString()}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    headers,
     credentials: 'include',
   });
 

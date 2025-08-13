@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getAuthToken } from '@/lib/auth';
+import { getAuthHeaders } from '@/utils/auth-token';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
@@ -202,10 +202,10 @@ export const checkSeries = async (serial: string): Promise<{ exists: boolean }> 
 //
 
 export async function getRecentEntries(limit = 5) {
-  const token = getAuthToken();
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BACKEND_URL}/api/entries/recent?limit=${limit}`, {
     cache: 'no-store',
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    headers,
     credentials: 'include',
   });
   if (res.status === 401) {

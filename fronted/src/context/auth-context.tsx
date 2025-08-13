@@ -41,18 +41,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.dispatchEvent(new Event("authchange"))
     }
   }, [])
-
-  const logout = useCallback(async () => {
-    await signOut({ redirect: false })
-    await fetch('/api/logout', { method: 'POST', credentials: 'include' })
-    if (typeof window !== "undefined") {
-      localStorage.removeItem('token')
-      window.dispatchEvent(new Event("authchange"))
-    }
-    setUserName(null)
-    setUserId(null)
-    setRole(null)
-  }, [])
+    const logout = useCallback(async () => {
+      await signOut({ redirect: false })
+      try {
+        const res = await fetch('/api/logout', { method: 'POST', credentials: 'include' })
+        if (res.ok) {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem('token')
+            window.dispatchEvent(new Event("authchange"))
+          }
+          setUserName(null)
+          setUserId(null)
+          setRole(null)
+        }
+      } catch (error) {
+        console.error('Logout failed', error)
+      }
+    }, [])
 
   useEffect(() => {
     refreshUser()

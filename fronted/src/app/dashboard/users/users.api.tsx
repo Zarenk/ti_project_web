@@ -1,4 +1,5 @@
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { getAuthHeaders } from '@/utils/auth-token';
 
 // Función para realizar el login
 export async function loginUser(email: string, password: string) {
@@ -29,19 +30,15 @@ export async function loginUser(email: string, password: string) {
 
 // Función para obtener el perfil del usuario autenticado
 export async function getUserProfile() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-
-  if (!token) {
-    return null
+  const headers = await getAuthHeaders();
+  if (Object.keys(headers).length === 0) {
+    return null;
   }
 
   try {
     const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { 'Content-Type': 'application/json', ...headers },
     })
 
     if (response.ok) {
@@ -62,19 +59,15 @@ export async function getUserProfile() {
 }
 
 export async function getUserProfileId() {
-  const token = localStorage.getItem('token'); // Obtén el token del localStorage
-
-  if (!token) {
+  const headers = await getAuthHeaders();
+  if (!('Authorization' in headers)) {
     throw new Error('No se encontró un token de autenticación');
   }
 
   try {
     const response = await fetch(`${BACKEND_URL}/api/users/profileid`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`, // Envía el token en el encabezado Authorization
-      },
+      headers: { 'Content-Type': 'application/json', ...headers },
     });
 
     if (!response.ok) {
@@ -109,14 +102,14 @@ export async function createUser(
 }
 
 export async function updateUser(data: { email?: string; username?: string; password?: string }) {
-  const token = localStorage.getItem('token');
-  if (!token) {
+  const headers = await getAuthHeaders();
+  if (!('Authorization' in headers)) {
     throw new Error('No se encontró un token de autenticación');
   }
 
   const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(data),
   });
 if (!res.ok) {

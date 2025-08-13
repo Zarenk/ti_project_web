@@ -59,7 +59,7 @@ export default function Page() {
       }
       try {
         const profile = await getProfile()
-        const last = getLastAccessFromToken()
+        const last = await getLastAccessFromToken()
         setUser({
           nombre: profile.username,
           correo: profile.email,

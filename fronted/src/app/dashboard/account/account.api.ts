@@ -1,12 +1,12 @@
-import { getAuthToken } from '@/lib/auth';
+import { getAuthHeaders } from '@/utils/auth-token';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 export async function getProfile() {
-  const token = getAuthToken();
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    headers,
     credentials: 'include',
     cache: 'no-store',
   });
@@ -17,13 +17,10 @@ export async function getProfile() {
 }
 
 export async function updateProfile(data: { username?: string; email?: string; phone?: string; image?: string }) {
-  const token = getAuthToken();
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: { 'Content-Type': 'application/json', ...headers },
     credentials: 'include',
     body: JSON.stringify(data),
   });
@@ -51,13 +48,10 @@ export async function uploadProfileImage(file: File) {
 }
 
 export async function changePassword(currentPassword: string, newPassword: string) {
-  const token = getAuthToken();
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BACKEND_URL}/api/users/password`, {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: { 'Content-Type': 'application/json', ...headers },
     credentials: 'include',
     body: JSON.stringify({ currentPassword, newPassword }),
   });

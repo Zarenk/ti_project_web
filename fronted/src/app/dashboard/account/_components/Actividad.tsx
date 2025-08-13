@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { DateRange } from "react-day-picker"
-import { getAuthToken, getUserDataFromToken } from "@/lib/auth"
+import { getUserDataFromToken } from "@/lib/auth"
+import { getAuthHeaders } from "@/utils/auth-token"
 import ActivityFilters from "./ActivityFilter"
 import SummaryCards from "./SummaryCard"
 import ActivityTable, { ActivityItem } from "./ActivityTable"
@@ -22,9 +23,9 @@ export default function Actividad() {
   useEffect(() => {
     async function load() {
       try {
-        const token = getAuthToken()
+        const headers = await getAuthHeaders()
         const res = await fetch(`${BACKEND_URL}/api/clients/activity`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          headers,
           credentials: "include",
         })
         if (!res.ok) throw new Error("Error")
@@ -72,7 +73,7 @@ export default function Actividad() {
 
   const handleExport = async () => {
     const user = await getUserDataFromToken()
-    const clientId = user?.userId || 0
+    const clientId = user?.id || 0
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "")
     const headers = ["Fecha", "Tipo", "Descripción", "Monto"]
     const rows = filtered.map((r) => [r.fecha, r.tipo, r.descripcion, r.monto.toString()])

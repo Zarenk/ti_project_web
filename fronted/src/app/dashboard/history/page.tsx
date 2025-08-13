@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { jwtDecode } from "jwt-decode"
+import { getAuthToken } from "@/utils/auth-token"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -26,8 +27,8 @@ interface HistoryEntry {
   }
 }
 
-function getUserIdFromToken(): number | null {
-  const token = localStorage.getItem("token")
+async function getUserIdFromToken(): Promise<number | null> {
+  const token = await getAuthToken()
   if (!token) {
     return null
   }
@@ -48,7 +49,7 @@ export default function UserHistory() {
 
   useEffect(() => {
     async function fetchHistory() {
-      const id = getUserIdFromToken()
+      const id = await getUserIdFromToken()
       if (!id) {
         toast.error("No se pudo obtener el ID del usuario. Inicia sesión nuevamente.")
         return

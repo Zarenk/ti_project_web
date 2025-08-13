@@ -20,7 +20,7 @@ export async function handleFormSubmission({
   tipoMoneda, // Nuevo parámetro
   tipoCambioActual, // Nuevo parámetro
 }: any) {
-  const userId = getUserIdFromToken();
+  const userId = await getUserIdFromToken();
   if (!userId) {
     toast.error("No se pudo obtener el ID del usuario. Por favor, inicie sesión nuevamente.");
     return;

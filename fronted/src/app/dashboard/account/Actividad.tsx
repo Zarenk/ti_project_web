@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { getAuthToken } from "@/lib/auth";
+import { getAuthHeaders } from "@/utils/auth-token";
 import { formatInTimeZone } from "date-fns-tz";
 
 const BACKEND_URL =
@@ -51,7 +51,7 @@ export default function Actividad() {
     async function load() {
       setLoading(true);
       try {
-        const token = getAuthToken();
+        const headers = await getAuthHeaders();
         const params = new URLSearchParams({
           page: String(page),
           pageSize: String(pageSize),
@@ -60,7 +60,7 @@ export default function Actividad() {
         const res = await fetch(
           `${BACKEND_URL}/api/activity?${params.toString()}`,
           {
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+            headers,
             credentials: "include",
           },
         );
