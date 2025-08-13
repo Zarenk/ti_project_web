@@ -55,7 +55,7 @@ interface OrderData {
 
 export default function TrackOrderDetailsPage() {
   const params = useParams();
-  const code = Array.isArray(params.code) ? params.code[0] : params.code;
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const [order, setOrder] = useState<OrderData | null>(null);
   const [events, setEvents] = useState<TrackingEvent[]>([]);
@@ -63,9 +63,9 @@ export default function TrackOrderDetailsPage() {
 
   useEffect(() => {
     async function fetchData() {
-      if (!code) return;
+      if (!id) return;
       try {
-        const orderData = (await getWebOrderByCode(code)) as OrderData;
+        const orderData = (await getWebOrderByCode(id)) as OrderData;
         setOrder(orderData);
         const payload = orderData.payload;
         if (payload?.details) {
@@ -94,7 +94,7 @@ export default function TrackOrderDetailsPage() {
         const backendUrl =
           process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
         const res = await fetch(
-          `${backendUrl}/orders/${encodeURIComponent(code)}/tracking`
+          `${backendUrl}/orders/${encodeURIComponent(id)}/tracking`
         );
         if (res.ok) {
           const trackingData = await res.json();
@@ -105,7 +105,7 @@ export default function TrackOrderDetailsPage() {
       }
     }
     fetchData();
-  }, [code]);
+  }, [id]);
 
   if (!order) {
     return (
