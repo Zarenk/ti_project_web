@@ -27,17 +27,27 @@ export default function GoogleAuthPage() {
       const name = session.user.name || email;
       const img = session.user.image || undefined;
       setImage(session.user.image || null);
+
+      // Intentar iniciar sesión primero para evitar errores de registro repetido
+      try {
+        await loginUser(email, email);
+        await refreshUser();
+        const data = await getUserDataFromToken();
+        if (data) {
+        }
+        setError(null);
+        setSuccess('Autenticación exitosa');
+        await new Promise((r) => setTimeout(r, 1000));
+        router.push('/store');
+        return;
+      } catch (err) {
+        // si el login falla, procedemos a registrar al usuario
+        }
       try {
         await registerUser(email, name, email, name);
         setSuccess('Registro completado con éxito');
         await new Promise((r) => setTimeout(r, 1000));
-      } catch (err: any) {
-        setSuccess(null);
-        if (!err.message?.includes('registrado')) {
-          setError(err.message || 'Error al registrar usuario');
-        }
-      }
-      try {
+
         await loginUser(email, email);
         await refreshUser();
         const data = await getUserDataFromToken();
@@ -50,7 +60,9 @@ export default function GoogleAuthPage() {
         return;
       } catch (err: any) {
         setSuccess(null);
-        setError(err.message || 'No se pudo iniciar sesión');
+        if (!err.message?.includes('registrado')) {
+          setError(err.message || 'No se pudo iniciar sesión');
+        }
         await new Promise((r) => setTimeout(r, 1500));
         router.push('/register');
         return;

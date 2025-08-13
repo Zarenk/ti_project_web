@@ -49,13 +49,17 @@ export default function WelcomeDashboard() {
 
   const router = useRouter()
   const authErrorShown = useRef(false)
-  const handleAuthError = (err: unknown) => {
+  const handleAuthError = async (err: unknown) => {
     if (authErrorShown.current) return true
     if (err instanceof UnauthenticatedError) {
       authErrorShown.current = true
-      toast.error('Tu sesión ha expirado. Vuelve a iniciar sesión.')
-      const path = window.location.pathname
-      router.replace(`/login?returnTo=${encodeURIComponent(path)}`)
+      if (await isTokenValid()) {
+        router.push('/unauthorized')
+      } else {
+        toast.error('Tu sesión ha expirado. Vuelve a iniciar sesión.')
+        const path = window.location.pathname
+        router.replace(`/login?returnTo=${encodeURIComponent(path)}`)
+      }
       return true
     }
     return false
@@ -79,7 +83,7 @@ useEffect(() => {
             entries,
             recentSales,
             lowStock,
-          ] = (await Promise.all([
+          ] = await Promise.all([
             getTotalInventory(),
             getMonthlySalesTotal(),
             getOrdersCount('PENDING'),
@@ -87,11 +91,11 @@ useEffect(() => {
             getAllEntries(),
             getRecentSales(),
             getLowStockItems(),
-          ]));
-        setTotalInventory(inventoryData);
-        setMonthlySales(monthlySalesData);
-        setPendingOrders(pendingData.count);
-        setLowStockItems(lowStock);
+          ])
+        setTotalInventory(inventoryData)
+        setMonthlySales(monthlySalesData)
+        setPendingOrders(pendingData.count)
+        setLowStockItems(lowStock)
         const entryItems = entries
           .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .slice(0, 10);
@@ -128,7 +132,7 @@ useEffect(() => {
         activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setRecentActivity(activities.slice(0, 10));
       } catch (error: unknown) {
-        if (!handleAuthError(error)) {
+        if (!(await handleAuthError(error))) {
           if (error instanceof Error && error.message === 'Unauthorized') {
             router.push('/unauthorized');
           } else {
