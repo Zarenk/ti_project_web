@@ -55,6 +55,7 @@
     "react-dom": "^18.2.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sharp": "^0.34.3",
     "soap": "^1.1.10",
     "socket.io": "^4.8.1",
     "svg-to-pdfkit": "^0.1.8",

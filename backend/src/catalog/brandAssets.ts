@@ -1,6 +1,9 @@
 import path from 'path'
 
-const LOGO_DIR = path.resolve(__dirname, '../../../fronted/public/assets/logos')
+const LOGO_DIR = path.resolve(
+  __dirname,
+  '../../../fronted/public/assets/logos',
+);
 
 export const brandAssets = {
   brands: {

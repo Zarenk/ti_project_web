@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { getWebOrderByCode } from "@/app/dashboard/sales/sales.api";
+import { Loader2 } from "lucide-react";
 
 export default function TrackOrderPage() {
   const [code, setCode] = useState("");
@@ -18,14 +19,8 @@ export default function TrackOrderPage() {
     if (!code.trim()) return;
     setLoading(true);
     try {
-      const order = await getWebOrderByCode(code.trim());
-      if (order.status === "PENDING") {
-        router.push(`/pending-orders/${order.id}`);
-      } else if (order.status === "COMPLETED" && order.salesId) {
-        router.push(`/orders/${order.salesId}`);
-      } else {
-        toast.error("Orden no encontrada");
-      }
+      await getWebOrderByCode(code.trim());
+      router.push(`/track-order/${code.trim()}`);
     } catch (err) {
       toast.error("Orden no encontrada");
     } finally {
@@ -47,8 +42,17 @@ export default function TrackOrderPage() {
             onChange={(e) => setCode(e.target.value)}
             className="flex-1"
           />
-          <Button type="submit" disabled={loading}>
-            Buscar
+          <Button
+            type="submit"
+            disabled={loading}
+            aria-busy={loading}
+            aria-label={loading ? "Buscando" : "Buscar"}
+          >
+            {loading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              "Buscar"
+            )}
           </Button>
         </form>
       </div>

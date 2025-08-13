@@ -11,7 +11,7 @@ export async function getUnansweredMessages(): Promise<
 }
 
 export async function getMessages(clientId: number) {
-  const res = await authFetch('/api/clients/chat', { cache: 'no-store' });
+   const res = await authFetch(`/api/chat/${clientId}`, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error('Error al obtener la conversación');
   }

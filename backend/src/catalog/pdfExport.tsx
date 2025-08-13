@@ -8,6 +8,7 @@ import { brandAssets } from './brandAssets';
 import path from 'path';
 import fs from 'fs';
 import SVGtoPDF from 'svg-to-pdfkit';
+import sharp from 'sharp';
 
 export function renderCatalogHtml(items: CatalogItem[]): string {
   const templateItems = items.map((item) => ({
@@ -109,8 +110,9 @@ async function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
         doc.moveDown(0.5);
         const startX = doc.x;
         const y = doc.y;
-        logos.forEach((logo, idx) => {
+        for (const [idx, logo] of logos.entries()) {
           try {
+            doc.image(logo, startX + idx * 26, y, { width: 24, height: 24 });
             if (logo.isSvg) {
               const svg = fs.readFileSync(logo.path, 'utf8');
               SVGtoPDF(doc, svg, startX + idx * 26, y, {
@@ -118,13 +120,17 @@ async function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
                 height: 24,
               });
             } else {
-              doc.image(logo.path, startX + idx * 26, y, {
+              const imgBuffer = await sharp(logo.path)
+                .resize({ width: 256, height: 256, fit: 'inside' })
+                .png()
+                .toBuffer();
+              doc.image(imgBuffer, startX + idx * 26, y, {
                 width: 24,
                 height: 24,
               });
             }
           } catch {}
-        });
+        }
         doc.moveDown(1.5);
       } else {
         doc.moveDown();
