@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
+import { Request } from 'express';
 
 @WebSocketGateway({
   cors: {
@@ -73,12 +74,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Persist only required fields. Extra data such as files are ignored by the
     // database but still propagated to listeners so UIs can handle them if
     // needed.
-    const message = await this.chatService.addMessage({
-      clientId,
-      senderId,
-      text,
-      file,
-    });
+    const fakeReq = {
+      ip: client.handshake.address,
+      headers: { 'user-agent': client.handshake.headers['user-agent'] },
+    } as Request;
+    const message = await this.chatService.addMessage(
+      {
+        clientId,
+        senderId,
+        text,
+        file,
+      },
+      fakeReq,
+    );
     this.server.emit('chat:receive', { ...message, tempId });
   }
 

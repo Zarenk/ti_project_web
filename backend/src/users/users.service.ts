@@ -13,6 +13,7 @@ import { ActivityService } from 'src/activity/activity.service';
 import { Prisma } from '@prisma/client';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { Request } from 'express';
 
 @Injectable()
 export class UsersService {
@@ -31,17 +32,20 @@ export class UsersService {
     throw new UnauthorizedException('Credenciales inválidas');
   }
 
-  async login(user: any) {
+  async login(user: any, req?: Request) {
     const payload = { username: user.username, sub: user.id, role: user.role };
     const token = this.jwtService.sign(payload);
-    await this.activityService.log({
-      actorId: user.id,
-      actorEmail: user.email,
-      entityType: 'User',
-      entityId: user.id.toString(),
-      action: AuditAction.LOGIN,
-      summary: `User ${user.email} logged in`,
-    });
+    await this.activityService.log(
+      {
+        actorId: user.id,
+        actorEmail: user.email,
+        entityType: 'User',
+        entityId: user.id.toString(),
+        action: AuditAction.LOGIN,
+        summary: `User ${user.email} logged in`,
+      },
+      req,
+    );
     return {
       access_token: token,
     };

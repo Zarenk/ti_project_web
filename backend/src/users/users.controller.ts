@@ -1,19 +1,32 @@
-import { Controller, Post, Body, Request, UseGuards, Get, NotFoundException, Patch } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Request,
+  UseGuards,
+  Get,
+  NotFoundException,
+  Patch,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ApiResponse } from '@nestjs/swagger';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
+import { Request as ExpressRequest } from 'express';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post('login')
-  async login(@Body() body: { email: string; password: string }) {
+  async login(
+    @Body() body: { email: string; password: string },
+    @Request() req: ExpressRequest,
+  ) {
     console.log('Solicitud de login recibida:', body);
     const user = await this.usersService.validateUser(body.email, body.password);
-    const token = await this.usersService.login(user);
+    const token = await this.usersService.login(user, req);
     console.log('Token generado:', token);
     return token;
   }

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
 import { AuditAction, ChatMessage } from '@prisma/client';
+import { Request } from 'express';
 
 @Injectable()
 export class ChatService {
@@ -10,17 +11,20 @@ export class ChatService {
     private readonly activityService: ActivityService,
   ) {}
 
-  async addMessage({
-    clientId,
-    senderId,
-    text,
-    file,
-  }: {
-    clientId: number;
-    senderId: number;
-    text?: string;
-    file?: string;
-  }): Promise<ChatMessage> {
+  async addMessage(
+    {
+      clientId,
+      senderId,
+      text,
+      file,
+    }: {
+      clientId: number;
+      senderId: number;
+      text?: string;
+      file?: string;
+    },
+    req?: Request,
+  ): Promise<ChatMessage> {
     // Only persist allowed fields to avoid runtime errors if extra properties
     // are accidentally provided in the payload (e.g. attachments).
     const message = await this.prisma.chatMessage.create({
@@ -28,13 +32,18 @@ export class ChatService {
     });
 
     // Log message creation without storing full message content
-    await this.activityService.log({
-      actorId: senderId,
-      entityType: 'ChatMessage',
-      entityId: message.id.toString(),
-      action: AuditAction.CREATED,
-      summary: `Mensaje de usuario ${senderId} al cliente ${clientId}`,
-    });
+    const sanitizedText = text?.slice(0, 1000);
+    await this.activityService.log(
+      {
+        actorId: senderId,
+        entityType: 'ChatMessage',
+        entityId: message.id.toString(),
+        action: AuditAction.CREATED,
+        summary: `Mensaje de usuario ${senderId} al cliente ${clientId}`,
+        diff: sanitizedText ? { message: sanitizedText } : undefined,
+      },
+      req,
+    );
 
     return message;
   }

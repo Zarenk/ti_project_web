@@ -153,6 +153,11 @@ export default function Actividad() {
                             <div>
                               <span className="font-medium">User Agent:</span> {log.userAgent || "-"}
                             </div>
+                            {log.diff?.message && (
+                              <div>
+                                <span className="font-medium">Mensaje:</span> {log.diff.message}
+                              </div>
+                            )}
                           </div>
                           {log.diff && (
                             <pre className="mt-4 max-h-60 overflow-auto rounded bg-slate-100 p-2 text-xs dark:bg-slate-800">

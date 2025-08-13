@@ -166,13 +166,18 @@ function CatalogPdfDocument({ sections }: { sections: CatalogSection[] }) {
 }
 
 async function svgToPngDataUrl(src: string, size = 24): Promise<string> {
-  const svgText = await fetch(src).then((r) => r.text())
+  const response = await fetch(src)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch SVG: ${response.status}`)
+  }
+  const svgText = await response.text()
   const svgBlob = new Blob([svgText], { type: 'image/svg+xml' })
   const url = URL.createObjectURL(svgBlob)
   const img = new Image()
   img.src = url
-  await new Promise((resolve) => {
+  await new Promise((resolve, reject) => {
     img.onload = resolve
+    img.onerror = reject
   })
   const canvas = document.createElement('canvas')
   canvas.width = size
@@ -183,15 +188,20 @@ async function svgToPngDataUrl(src: string, size = 24): Promise<string> {
   return canvas.toDataURL('image/png')
 }
 
-async function normalizeLogo(src: string): Promise<string> {
+async function normalizeLogo(src: string): Promise<string | null> {
   if (src.endsWith('.svg')) {
     try {
       return await svgToPngDataUrl(src)
     } catch {
-      return src
+      return null
     }
   }
-  return src
+  try {
+    const response = await fetch(src)
+    return response.ok ? src : null
+  } catch {
+    return null
+  }
 }
 
 export async function generateCatalogPdf(products: Product[]): Promise<Blob> {
@@ -204,7 +214,9 @@ export async function generateCatalogPdf(products: Product[]): Promise<Blob> {
       ? `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
       : undefined
 
-    const logos = await Promise.all(getLogos(p).map(normalizeLogo))
+    const logos = (
+      await Promise.all(getLogos(p).map(normalizeLogo))
+    ).filter(Boolean) as string[]
     const item: CatalogPdfItem = {
       title: p.name,
       description: p.description,
