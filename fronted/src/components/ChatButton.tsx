@@ -38,6 +38,18 @@ function ChatButtonContent() {
   const [hovered, setHovered] = useState(false);
   const [unread, setUnread] = useState(0);
   const userId = useChatUserId();
+  const [cartOpen, setCartOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpen = () => setCartOpen(true);
+    const handleClose = () => setCartOpen(false);
+    window.addEventListener('cart:open', handleOpen);
+    window.addEventListener('cart:close', handleClose);
+    return () => {
+      window.removeEventListener('cart:open', handleOpen);
+      window.removeEventListener('cart:close', handleClose);
+    };
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -74,6 +86,8 @@ function ChatButtonContent() {
       localStorage.setItem('chatLastRead', Date.now().toString());
     }
   }, [open]);
+
+  if (cartOpen) return null;
 
   return (
     <>

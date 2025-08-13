@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 
@@ -25,6 +25,20 @@ export default function WhatsappButton() {
 
 function WhatsappButtonContent() {
   const [hovered, setHovered] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpen = () => setCartOpen(true);
+    const handleClose = () => setCartOpen(false);
+    window.addEventListener('cart:open', handleOpen);
+    window.addEventListener('cart:close', handleClose);
+    return () => {
+      window.removeEventListener('cart:open', handleOpen);
+      window.removeEventListener('cart:close', handleClose);
+    };
+  }, []);
+
+  if (cartOpen) return null;
 
   return (
     <motion.div
