@@ -1,4 +1,5 @@
 import React from "react"
+import { BrandLogo } from "@/components/BrandLogo"
 
 export interface CatalogItemProps {
   title: string
@@ -25,7 +26,7 @@ export function CatalogItem({
       </div>
       {imageUrl && (
         <div className="relative w-full pb-[75%] bg-gray-100">
-          <img
+          <BrandLogo
             src={imageUrl}
             alt={title}
             className="absolute inset-0 h-full w-full object-cover"
@@ -43,7 +44,7 @@ export function CatalogItem({
       {logos && logos.length > 0 && (
         <div className="flex flex-wrap justify-center gap-2 p-1 pb-2">
           {logos.map((logo, idx) => (
-            <img key={idx} src={logo} alt="logo" className="h-30" />
+            <BrandLogo key={idx} src={logo} alt="logo" className="h-30" />
           ))}
         </div>
       )}

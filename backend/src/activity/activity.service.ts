@@ -87,6 +87,13 @@ export class ActivityService {
     return this.prisma.auditLog.findUnique({ where: { id } });
   }
 
+  async findAllByUser(userId: number) {
+    return this.prisma.auditLog.findMany({
+      where: { actorId: userId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async stats() {
     const byAction = await this.prisma.auditLog.groupBy({
       by: ['action'],

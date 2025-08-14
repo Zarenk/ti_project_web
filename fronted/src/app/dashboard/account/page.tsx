@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/context/auth-context"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -45,6 +46,7 @@ export default function Page() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showActividad, setShowActividad] = useState(false)
   const router = useRouter()
+  const { logout } = useAuth()
 
   useEffect(() => {
     async function loadProfile() {
@@ -109,7 +111,7 @@ export default function Page() {
       .finally(() => setSavingDatos(false))
   }
 
-  function handlePassSubmit(e: React.FormEvent) {
+  async function handlePassSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!formPass.actual || !formPass.nueva || !formPass.confirmar) {
       toast("Campos incompletos. Completa todos los campos para actualizar la contraseña.")
@@ -128,13 +130,17 @@ export default function Page() {
       return
     }
     setSavingPass(true)
-    changePassword(formPass.actual, formPass.nueva)
-      .then(() => {
-        setFormPass({ actual: "", nueva: "", confirmar: "" })
-        toast("Tu contraseña se ha actualizado correctamente.")
-      })
-      .catch(() => toast("Error: No se pudo actualizar la contraseña."))
-      .finally(() => setSavingPass(false))
+    try {
+      await changePassword(formPass.actual, formPass.nueva)
+      setFormPass({ actual: "", nueva: "", confirmar: "" })
+      toast("Tu contraseña se ha actualizado correctamente.")
+      await logout()
+      router.push('/login')
+    } catch (error) {
+      toast("Error: No se pudo actualizar la contraseña.")
+    } finally {
+      setSavingPass(false)
+    }
   }
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {

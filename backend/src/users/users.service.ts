@@ -33,7 +33,12 @@ export class UsersService {
   }
 
   async login(user: any, req?: Request) {
-    const payload = { username: user.username, sub: user.id, role: user.role };
+    const payload = {
+      username: user.username,
+      sub: user.id,
+      role: user.role,
+      tokenVersion: user.tokenVersion,
+    };
     const token = this.jwtService.sign(payload);
     await this.activityService.log(
       {
@@ -260,7 +265,7 @@ export class UsersService {
     const hashed = await bcrypt.hash(newPassword, 10);
     await this.prismaService.user.update({
       where: { id },
-      data: { password: hashed },
+      data: { password: hashed, tokenVersion: { increment: 1 } },
     });
 
     await this.activityService.log({

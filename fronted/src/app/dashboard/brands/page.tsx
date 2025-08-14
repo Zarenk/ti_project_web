@@ -13,6 +13,7 @@ import {
   BACKEND_URL,
   convertBrandPngToSvg,
 } from './brands.api';
+import { BrandLogo } from '@/components/BrandLogo';
 
 interface Brand {
   id: number;
@@ -138,7 +139,7 @@ export default function BrandsPage() {
                 <TableCell>{brand.name}</TableCell>
                 <TableCell>
                   {brand.logoSvg && (
-                    <img
+                    <BrandLogo
                       src={getImageUrl(brand.logoSvg)}
                       alt={brand.name}
                       className="h-8"
@@ -147,7 +148,7 @@ export default function BrandsPage() {
                 </TableCell>
                 <TableCell>
                   {brand.logoPng && (
-                    <img
+                    <BrandLogo
                       src={getImageUrl(brand.logoPng)}
                       alt={brand.name}
                       className="h-8"

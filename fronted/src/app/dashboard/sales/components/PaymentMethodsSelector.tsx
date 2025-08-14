@@ -6,6 +6,7 @@ import { getPaymentMethods } from "../sales.api";
 import { X, Banknote, Landmark } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner"; // Asegúrate de importar sonner
+import { BrandLogo } from "@/components/BrandLogo";
 
 type SelectedPayment = {
   paymentMethodId: number | null;
@@ -139,9 +140,18 @@ export function PaymentMethodsModal({
   const getIcon = (name: string) => {
     if (name.includes("EFECTIVO")) return <Banknote className="w-4 h-4 mr-2" />;
     if (name.includes("TRANSFERENCIA")) return <Landmark className="w-4 h-4 mr-2" />;
-    if (name.includes("VISA")) return <img src="/icons/visa.png" alt="Visa" className="w-4 h-4 mr-2" />;
-    if (name.includes("YAPE")) return <img src="/icons/yape.png" alt="Yape" className="w-4 h-4 mr-2" />;
-    if (name.includes("PLIN")) return <img src="/icons/plin.png" alt="Plin" className="w-4 h-4 mr-2" />;
+    if (name.includes("VISA"))
+      return (
+        <BrandLogo src="/icons/visa.png" alt="Visa" className="w-4 h-4 mr-2" />
+      );
+    if (name.includes("YAPE"))
+      return (
+        <BrandLogo src="/icons/yape.png" alt="Yape" className="w-4 h-4 mr-2" />
+      );
+    if (name.includes("PLIN"))
+      return (
+        <BrandLogo src="/icons/plin.png" alt="Plin" className="w-4 h-4 mr-2" />
+      );
     return null;
   };
 

@@ -124,6 +124,7 @@ model User {
   client    Client?  // Relación opcional con el modelo Client
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tokenVersion Int @default(0)
 
   entrys           Entry[]   // Relación con el modelo Entry
   inventoryHistory InventoryHistory[] // Relación con el modelo InventoryHistory

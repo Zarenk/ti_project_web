@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run check-logos && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest"
+    "test": "vitest",
+    "check-logos": "node scripts/run-check-logos.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.3",

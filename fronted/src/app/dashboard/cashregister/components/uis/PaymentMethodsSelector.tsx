@@ -8,6 +8,7 @@ import { X, Banknote, Landmark } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getPaymentMethods } from "@/app/dashboard/sales/sales.api";
 import { toast } from "sonner";
+import { BrandLogo } from "@/components/BrandLogo";
 
 type PaymentMethod = {
   id: number;
@@ -100,9 +101,18 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
   const getIcon = (method: string) => {
     if (method.includes("EN EFECTIVO")) return <Banknote className="w-4 h-4 mr-1" />;
     if (method.includes("TRANSFERENCIA")) return <Landmark className="w-4 h-4 mr-1" />;
-    if (method.includes("PAGO CON VISA")) return <img src="/icons/visa.png" alt="Visa" className="w-4 h-4 mr-1" />;
-    if (method.includes("YAPE")) return <img src="/icons/yape.png" alt="Yape" className="w-4 h-4 mr-1" />;
-    if (method.includes("PLIN")) return <img src="/icons/plin.png" alt="Plin" className="w-4 h-4 mr-1" />;
+    if (method.includes("PAGO CON VISA"))
+      return (
+        <BrandLogo src="/icons/visa.png" alt="Visa" className="w-4 h-4 mr-1" />
+      );
+    if (method.includes("YAPE"))
+      return (
+        <BrandLogo src="/icons/yape.png" alt="Yape" className="w-4 h-4 mr-1" />
+      );
+    if (method.includes("PLIN"))
+      return (
+        <BrandLogo src="/icons/plin.png" alt="Plin" className="w-4 h-4 mr-1" />
+      );
     return null;
   };
 

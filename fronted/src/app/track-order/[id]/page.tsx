@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/table";
 import { getWebOrderByCode } from "@/app/dashboard/sales/sales.api";
 import { getProduct } from "@/app/dashboard/products/products.api";
+import { Loader2 } from "lucide-react";
+import OrderTimeline from "@/components/order-timeline";
 
 interface TrackingEvent {
   id: number;
@@ -111,7 +113,13 @@ export default function TrackOrderDetailsPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">Cargando...</div>
+        <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center">
+          <div className="flex items-center gap-2 text-blue-900 dark:text-blue-100">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span>Cargando pedido...</span>
+          </div>
+          <div className="mt-6 h-2 w-32 rounded bg-gradient-to-r from-slate-200 to-sky-200 dark:from-slate-700 dark:to-sky-700 animate-pulse" />
+        </div>
       </div>
     );
   }
@@ -139,24 +147,7 @@ export default function TrackOrderDetailsPage() {
                 No hay actualizaciones disponibles.
               </p>
             ) : (
-              <ol className="relative border-l border-slate-200 dark:border-slate-700">
-                {events.map((ev) => (
-                  <li key={ev.id} className="mb-10 ml-4">
-                    <div className="absolute w-3 h-3 bg-blue-400 rounded-full -left-1.5 border border-white dark:border-slate-900"></div>
-                    <time className="mb-1 text-sm font-normal leading-none text-slate-500 dark:text-slate-400">
-                      {new Date(ev.createdAt).toLocaleString("es-ES")}
-                    </time>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                      {ev.status}
-                    </h3>
-                    {ev.description && (
-                      <p className="text-sm text-slate-600 dark:text-slate-400">
-                        {ev.description}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ol>
+              <OrderTimeline events={events} />
             )}
           </CardContent>
         </Card>

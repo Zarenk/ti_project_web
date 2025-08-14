@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable } from "./data-table"
 import { columns, History } from "./columns"
-import { getUserHistory } from "./history.api"
+import { getUserHistory, getUserActivity } from "./history.api"
+import { activityColumns, Activity } from "./activity-columns"
 
 interface HistoryEntry {
   id: number
@@ -44,11 +45,12 @@ async function getUserIdFromToken(): Promise<number | null> {
 
 export default function UserHistory() {
   const [history, setHistory] = useState<History[]>([])
+  const [activity, setActivity] = useState<Activity[]>([])
   const [loading, setLoading] = useState(false)
   const [userId, setUserId] = useState<number | null>(null)
 
   useEffect(() => {
-    async function fetchHistory() {
+    async function fetchData() {
       const id = await getUserIdFromToken()
       if (!id) {
         toast.error("No se pudo obtener el ID del usuario. Inicia sesión nuevamente.")
@@ -59,8 +61,11 @@ export default function UserHistory() {
   
       setLoading(true)
       try {
-        const data = await getUserHistory(id)
-        const mapped = data.map((entry: HistoryEntry) => ({
+        const [historyData, activityData] = await Promise.all([
+          getUserHistory(id),
+          getUserActivity(id),
+        ])
+        const mapped = historyData.map((entry: HistoryEntry) => ({
           id: entry.id,
           username: entry.user.username,
           action: entry.action,
@@ -72,6 +77,15 @@ export default function UserHistory() {
           createdAt: entry.createdAt,
         })) as History[]
         setHistory(mapped)
+        const mappedActivity = activityData.map((entry: any) => ({
+          id: entry.id,
+          username: entry.actorEmail ?? "",
+          action: entry.action,
+          entityType: entry.entityType,
+          summary: entry.summary,
+          createdAt: entry.createdAt,
+        })) as Activity[]
+        setActivity(mappedActivity)
       } catch (error) {
         console.error("Error:", error)
       } finally {
@@ -79,7 +93,7 @@ export default function UserHistory() {
       }
     }
   
-    fetchHistory()
+    fetchData()
   }, [])
 
   return (
@@ -100,6 +114,27 @@ export default function UserHistory() {
           ) : (
             <div className="overflow-auto">
               <DataTable columns={columns} data={history} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-8">
+        <CardHeader>
+          <CardTitle className="text-xl">Actividad del Usuario</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full rounded-md" />
+              ))}
+            </div>
+          ) : activity.length === 0 ? (
+            <p className="text-muted-foreground">No hay actividad disponible para este usuario.</p>
+          ) : (
+            <div className="overflow-auto">
+              <DataTable columns={activityColumns} data={activity} />
             </div>
           )}
         </CardContent>

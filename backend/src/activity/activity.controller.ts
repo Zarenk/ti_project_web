@@ -1,4 +1,11 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
 import { ActivityService } from './activity.service';
 import { QueryActivityDto } from './dto/query-activity.dto';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
@@ -28,5 +35,15 @@ export class ActivityController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.activityService.findOne(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('users/:userId')
+  findAllByUser(@Param('userId') userId: string) {
+    const id = parseInt(userId, 10);
+    if (isNaN(id)) {
+      throw new BadRequestException('El ID del usuario debe ser un número válido');
+    }
+    return this.activityService.findAllByUser(id);
   }
 }

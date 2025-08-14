@@ -14,6 +14,9 @@ Este directorio contiene componentes de React reutilizables para renderizar cat�
 
 Los logos deben proporcionarse en formato **JPEG**, **PNG** o **GIF**. Los archivos **SVG** u otros formatos no compatibles se omiten durante la exportación.
 
+Al agregar una nueva marca al catálogo es obligatorio incluir su archivo **SVG** correspondiente en `public/assets/logos` y referenciarlo en `src/catalog/brandAssets.ts`. Si el recurso no existe se mostrará el placeholder por defecto, afectando la integridad del catálogo.
+
+
 ## Ejemplo de uso
 
 ```tsx

@@ -67,6 +67,11 @@ Start the development server:
 cd fronted
 npm run dev
 ```
+
+### Brand assets
+
+Brand logos referenced in `src/catalog/brandAssets.ts` must have corresponding files under `public/assets/logos/`. The build process runs `npm run check-logos` and will fail if any logo is missing. Remember to add the necessary static files whenever new brands are introduced.
+
 ### Authenticated requests
 
 The `src/utils/auth-fetch.ts` helper centralizes authenticated requests. It

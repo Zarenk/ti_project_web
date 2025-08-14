@@ -3,6 +3,20 @@ import { getAuthHeaders } from "@/utils/auth-token";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
+async function safeJson<T>(response: Response): Promise<T | null> {
+  if (response.status === 204) return null;
+  try {
+    const text = await response.text();
+    if (!text) return null;
+    return JSON.parse(text) as T;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 // CAJA
 export async function getCashRegisterBalance(storeId: number) {
   try {
@@ -18,7 +32,11 @@ export async function getCashRegisterBalance(storeId: number) {
       throw new Error('Error al obtener el balance');
     }
 
-    const data = await response.json();
+    if (response.status === 204) {
+      return null;
+    }
+
+    const data = await safeJson<{ currentBalance?: number }>(response);
     // Si el backend devuelve null significa que no hay caja activa
     if (data === null || data.currentBalance === null || data.currentBalance === undefined) {
       return null;
@@ -27,6 +45,9 @@ export async function getCashRegisterBalance(storeId: number) {
     return Number(data.currentBalance ?? 0);
   } catch (error: any) {
     console.error('Error al obtener el balance de la caja:', error.message || error);
+    if (error instanceof SyntaxError) {
+      return null;
+    }
     throw error;
   }
 }
@@ -112,7 +133,11 @@ export async function getActiveCashRegister(storeId: number): Promise<{ id: numb
       throw new Error('No se pudo obtener la caja activa.');
     }
 
-    const data = await response.json();
+    if (response.status === 204) {
+      return null;
+    }
+
+    const data = await safeJson<{ id: number; name: string; currentBalance: number; initialBalance: number }>(response);
 
     // Si el backend responde null no existe caja activa
     if (data === null) {
@@ -123,6 +148,9 @@ export async function getActiveCashRegister(storeId: number): Promise<{ id: numb
     return data;
   } catch (error) {
     console.error('Error al obtener la caja activa:', error);
+    if (error instanceof SyntaxError) {
+      return null;
+    }
     throw new Error('Error al obtener la caja activa. Por favor, intente nuevamente.');
   }
 }
