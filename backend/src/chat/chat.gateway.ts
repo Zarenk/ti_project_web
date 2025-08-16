@@ -90,6 +90,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.emit('chat:receive', { ...message, tempId });
   }
 
+  @SubscribeMessage('chat:edit')
+  async handleEdit(
+    @MessageBody() data: { id: number; senderId: number; text: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const fakeReq = {
+      ip: client.handshake.address,
+      headers: { 'user-agent': client.handshake.headers['user-agent'] },
+    } as Request;
+    const updated = await this.chatService.updateMessage(data, fakeReq);
+    this.server.emit('chat:updated', updated);
+  }
+
+  @SubscribeMessage('chat:delete')
+  async handleDelete(
+    @MessageBody() data: { id: number; senderId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const fakeReq = {
+      ip: client.handshake.address,
+      headers: { 'user-agent': client.handshake.headers['user-agent'] },
+    } as Request;
+    const deleted = await this.chatService.deleteMessage(data, fakeReq);
+    this.server.emit('chat:deleted', { id: deleted.id, deletedAt: deleted.deletedAt });
+  }
+
   @SubscribeMessage('chat:seen')
   async handleSeen(
     @MessageBody() data: { clientId: number; viewerId: number },

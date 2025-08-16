@@ -640,6 +640,8 @@ model ChatMessage {
   text      String
   file      String?
   createdAt DateTime @default(now())
+  updatedAt DateTime? @updatedAt
+  deletedAt DateTime?
   seenAt    DateTime?
 
   client User @relation("ClientMessages", fields: [clientId], references: [id])

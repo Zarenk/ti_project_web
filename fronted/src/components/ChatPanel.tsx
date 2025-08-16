@@ -103,6 +103,14 @@ export default function ChatPanel({
         setAgentTyping(isTyping);
       }
     };
+    const updateHandler = ({ id, text }: any) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, text } : m)),
+      );
+    };
+    const deleteHandler = ({ id }: any) => {
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+    };
     const rateLimitHandler = () => {
       setRateLimited(true);
       alert(
@@ -112,12 +120,16 @@ export default function ChatPanel({
     };
     socket.on('chat:typing', typingHandler);
     socket.on('chat:rate-limit', rateLimitHandler);
+    socket.on('chat:updated', updateHandler);
+    socket.on('chat:deleted', deleteHandler);
     return () => {
       socket.off('chat:receive', receiveHandler);
       socket.off('chat:history', historyHandler);
       socket.off('chat:seen', seenHandler);
       socket.off('chat:typing', typingHandler);
       socket.off('chat:rate-limit', rateLimitHandler);
+      socket.off('chat:updated', updateHandler);
+      socket.off('chat:deleted', deleteHandler);
     };
   }, [userId]);
 
@@ -207,6 +219,12 @@ export default function ChatPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleEdit = (id: number, newText: string) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, text: newText } : m)),
+    );
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -232,7 +250,11 @@ export default function ChatPanel({
           </Button>
         </div>
         <div className="flex-1 p-4 space-y-2 overflow-y-auto bg-background">
-          <MessagesList messages={messages} userId={userId ?? undefined} />
+          <MessagesList
+            messages={messages}
+            userId={userId ?? undefined}
+            onEdit={handleEdit}
+          />
           {agentTyping && <TypingIndicator name="Asesor" />}
           <div ref={messagesEndRef} />
         </div>

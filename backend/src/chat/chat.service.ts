@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
 import { AuditAction, ChatMessage } from '@prisma/client';
@@ -10,6 +14,8 @@ export class ChatService {
     private prisma: PrismaService,
     private readonly activityService: ActivityService,
   ) {}
+
+  private readonly LIMIT_MS = 5 * 60 * 1000;
 
   async addMessage(
     {
@@ -60,6 +66,86 @@ export class ChatService {
       where: { clientId, senderId: { not: viewerId }, seenAt: null },
       data: { seenAt },
     });
+  }
+
+  async updateMessage(
+    {
+      id,
+      senderId,
+      text,
+    }: { id: number; senderId: number; text: string },
+    req?: Request,
+  ): Promise<ChatMessage> {
+    const message = await this.prisma.chatMessage.findUnique({
+      where: { id },
+    });
+
+    if (!message || message.deletedAt) {
+      throw new NotFoundException('Message not found');
+    }
+    if (message.senderId !== senderId) {
+      throw new ForbiddenException('Cannot edit this message');
+    }
+    if (Date.now() - message.createdAt.getTime() > this.LIMIT_MS) {
+      throw new ForbiddenException('Edit window expired');
+    }
+
+    const updated = await this.prisma.chatMessage.update({
+      where: { id },
+      data: { text },
+    });
+
+    const sanitizedText = text?.slice(0, 1000);
+    await this.activityService.log(
+      {
+        actorId: senderId,
+        entityType: 'ChatMessage',
+        entityId: id.toString(),
+        action: AuditAction.UPDATED,
+        summary: `Mensaje ${id} editado por ${senderId}`,
+        diff: sanitizedText ? { message: sanitizedText } : undefined,
+      },
+      req,
+    );
+
+    return updated;
+  }
+
+  async deleteMessage(
+    { id, senderId }: { id: number; senderId: number },
+    req?: Request,
+  ): Promise<ChatMessage> {
+    const message = await this.prisma.chatMessage.findUnique({
+      where: { id },
+    });
+
+    if (!message || message.deletedAt) {
+      throw new NotFoundException('Message not found');
+    }
+    if (message.senderId !== senderId) {
+      throw new ForbiddenException('Cannot delete this message');
+    }
+    if (Date.now() - message.createdAt.getTime() > this.LIMIT_MS) {
+      throw new ForbiddenException('Delete window expired');
+    }
+
+    const deleted = await this.prisma.chatMessage.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+
+    await this.activityService.log(
+      {
+        actorId: senderId,
+        entityType: 'ChatMessage',
+        entityId: id.toString(),
+        action: AuditAction.DELETED,
+        summary: `Mensaje ${id} eliminado por ${senderId}`,
+      },
+      req,
+    );
+
+    return deleted;
   }
 
   async getUnansweredMessages(): Promise<

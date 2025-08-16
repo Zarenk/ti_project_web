@@ -278,30 +278,20 @@ export function processInvoiceText(
   );
 
   const parseProductLine = (line: string) => {
-    const parts = line.trim().split(/\s{2,}/).filter(Boolean);
-    if (parts.length < 4) return null;
+    const productRegex =
+      /^(\d+(?:[.,]\d+)?)\s*[A-Z]*\s*(.+?)\s*(\d+(?:[.,]\d+)?)\s*(\d+(?:[.,]\d+)?)$/i;
+    const match = line.match(productRegex);
+    if (!match) return null;
 
-    const totalPriceStr = parts.pop()!;
-    const unitPriceStr = parts.pop()!;
-    let quantityStr = parts.pop()!;
+    const [, qtyStr, name, unitStr, totalStr] = match;
+    const normalize = (v: string) => parseFloat(v.replace(/,/g, '.'));
 
-    if (isNaN(parseFloat(quantityStr.replace(/[^\d.,]/g, "")))) {
-      quantityStr = parts.pop() || "";
-    }
-
-    const name = parts.join(" ").trim();
-    const normalizeNumber = (value: string) =>
-      parseFloat(value.replace(/[^0-9.]/g, ""));
-
-    const quantity = normalizeNumber(quantityStr);
-    const unitPrice = normalizeNumber(unitPriceStr);
-    const totalPrice = normalizeNumber(totalPriceStr);
-
-    if (isNaN(quantity) || isNaN(unitPrice)) {
-      return null;
-    }
-
-    return { name, quantity, unitPrice, totalPrice };
+    return {
+      name: name.trim(),
+      quantity: normalize(qtyStr),
+      unitPrice: normalize(unitStr),
+      totalPrice: normalize(totalStr),
+    };
   };
 
   const products: {
@@ -324,7 +314,7 @@ export function processInvoiceText(
         id: index + 1,
         name: product.name,
         quantity: product.quantity,
-        price: product.unitPrice,
+        price: parseFloat((product.unitPrice * 1.18).toFixed(2)),
         category_name: "Sin categoria",
       }))
     );
@@ -339,6 +329,7 @@ export function processInvoiceText(
   const totalMatch = text.match(
     /(?:TOTAL(?:\s+A\s+PAGAR)?|IMPORTE\s+TOTAL)[^\d]*([\d.,]+)/i
   );
+  const comprobanteMatch = text.match(/(FACTURA|BOLETA)\s+ELECTR[ÓO]NICA/i);
 
   let providerName = "";
   let providerIndex = -1;
@@ -347,47 +338,43 @@ export function processInvoiceText(
     const ruc = rucMatch[1];
     setValue("ruc", ruc);
     setValue("provider_documentNumber", ruc);
-    if (ruc === "20212331377") {
-      setCurrency("USD");
-      setValue("tipo_moneda", "USD");
-    }
+    // Por defecto la mayoría de estos comprobantes están en soles
+    setCurrency("PEN");
+    setValue("tipo_moneda", "PEN");
 
-    const rucLineIndex = lines.findIndex((line) => rucRegex.test(line));
-    if (rucLineIndex > 0) {
-      providerName = lines[rucLineIndex - 1].trim();
-      providerIndex = rucLineIndex - 1;
-    }
-
-  }
-  if (!providerName) {
-    const providerRegex = /([A-ZÑ&\.\s]{3,})\s+R\.?U\.?C\.?\s*[:\-]?\s*\d{11}/i;
-    const providerMatch = text.match(providerRegex);
-    if (providerMatch) {
-      providerName = providerMatch[1].trim();
-      providerIndex = lines.findIndex((line) => line.includes(providerName));
+  const rucLineIndex = lines.findIndex((line) => rucRegex.test(line));
+    if (rucLineIndex > -1) {
+      const candidates = lines
+        .slice(0, rucLineIndex)
+        .filter(
+          (l) =>
+            l && !/\d/.test(l) && !/(factura|boleta|electr[óo]nica)/i.test(l)
+        );
+      if (candidates.length > 0) {
+        providerName = candidates[0].trim();
+        providerIndex = lines.indexOf(candidates[0]);
+      }
     }
   }
 
   if (providerName) {
     setValue("provider_name", providerName);
-    let address = "";
-    for (let i = providerIndex + 1; i <= providerIndex + 3 && i < lines.length; i++) {
-      const addressMatch = lines[i].match(/direcci[óo]n[:\s]*(.+)/i);
-      if (addressMatch) {
-        address = addressMatch[1].trim();
-        break;
-      }
-      if (i === providerIndex + 1 && !rucRegex.test(lines[i])) {
-        address = lines[i].trim();
-        break;
-      }
-      if (i === providerIndex + 2 && rucRegex.test(lines[i - 1])) {
-        address = lines[i].trim();
-        break;
+    const addressLines: string[] = [];
+    const addressKeywords = /(av\.?|jr\.?|calle|urb\.?|mz|lt|-|\d)/i;
+    const rucLineIndex = lines.findIndex((line) => rucRegex.test(line));
+    for (let i = providerIndex + 1; i < rucLineIndex; i++) {
+      const line = lines[i];
+      if (/factura|boleta/i.test(line)) break;
+      if (addressKeywords.test(line)) {
+        addressLines.push(line.trim());
       }
     }
-    if (address) setValue("provider_adress", address);
+    if (addressLines.length > 0) {
+      setValue("provider_adress", addressLines.join(" "));
+    }
   }
+  
+  if (comprobanteMatch) setValue("comprobante", comprobanteMatch[0].trim());
   if (serieMatch) {
     const serie = serieMatch[1];
     setValue("serie", serie);

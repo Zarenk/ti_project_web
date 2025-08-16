@@ -18,18 +18,25 @@ interface Message {
 interface MessagesListProps {
   messages: Message[];
   userId?: number;
+  onEdit?: (id: number, text: string) => void;
 }
 
-function MessagesListComponent({ messages, userId }: MessagesListProps) {
+function MessagesListComponent({
+  messages,
+  userId,
+  onEdit,
+}: MessagesListProps) {
   return (
     <AnimatePresence initial={false}>
       {messages.map((m) => (
         <MessageBubble
           key={m.id}
+          id={m.id}
           text={m.text}
           file={m.file}
-          time={m.createdAt}
+          createdAt={m.createdAt}
           isSender={m.senderId === userId}
+          onEdit={onEdit}
         />
       ))}
     </AnimatePresence>
