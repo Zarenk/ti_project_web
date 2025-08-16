@@ -19,7 +19,7 @@ import { ProviderSection } from '../components/entries/ProviderSection'
 import { StoreSection } from '../components/entries/StoreSection'
 import { ProductSelection } from '../components/entries/ProductSelection'
 import { SelectedProductsTable } from '../components/entries/SelectedProductsTable'
-import { processExtractedText } from '../utils/pdfExtractor'
+import { detectInvoiceProvider, processExtractedText, processInvoiceText } from '../utils/pdfExtractor'
 import { handleFormSubmission } from '../utils/onSubmitHelper'
 import { ActionButtons } from '../components/entries/ActionButtons'
 import { getLatestExchangeRateByCurrency } from '../../exchange/exchange.api'
@@ -355,8 +355,16 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       setPdfFile(file);
       try {
         const extractedText = await processPDF(file); // Llama a la función de la API
-        console.log('Texto extraído del PDF:', extractedText);
-        processExtractedText(extractedText, setSelectedProducts, form.setValue, setCurrency); // Procesa el texto extraído
+        const provider = detectInvoiceProvider(extractedText);
+
+        if (provider === "deltron") {
+          processExtractedText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        } else if (provider != "deltron") {
+          processInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        } else {
+          toast.warning("Formato de factura no reconocido.");
+          return;
+        }
         setIsNewInvoiceBoolean(true);
         toast.success("Factura subida correctamente.");
       } catch (error) {

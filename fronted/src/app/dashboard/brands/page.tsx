@@ -118,8 +118,13 @@ export default function BrandsPage() {
             <Input id="svg" type="file" accept="image/svg+xml" onChange={(e) => setSvgFile(e.target.files?.[0] || null)} />
           </div>
           <div>
-            <Label htmlFor="png">Logo PNG</Label>
-            <Input id="png" type="file" accept="image/png" onChange={(e) => setPngFile(e.target.files?.[0] || null)} />
+            <Label htmlFor="png">Logo PNG/JPEG</Label>
+            <Input
+              id="png"
+              type="file"
+              accept="image/png, image/jpeg"
+              onChange={(e) => setPngFile(e.target.files?.[0] || null)}
+            />
           </div>
           <Button type="submit">{editing ? 'Actualizar' : 'Guardar'}</Button>
         </form>

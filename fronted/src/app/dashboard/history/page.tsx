@@ -35,8 +35,10 @@ async function getUserIdFromToken(): Promise<number | null> {
   }
 
   try {
-    const decodedToken: { sub: number } = jwtDecode(token)
-    return decodedToken.sub
+    const decoded: { sub: string | number } = jwtDecode(token)
+    const id = Number(decoded.sub)
+    if (Number.isNaN(id)) return null
+    return id
   } catch (error) {
     console.error("Error decoding token:", error)
     return null

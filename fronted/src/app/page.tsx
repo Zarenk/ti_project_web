@@ -317,8 +317,12 @@ export default function Homepage() {
                 transition={{ type: 'tween' }}
                 className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"
               >
-                {visibleRecent.map((product) => (
-                  <MotionProductCard key={product.id} product={product} withActions />
+                {visibleRecent.map((product, idx) => (
+                  <MotionProductCard
+                    key={`${product.id}-${idx}`}
+                    product={product}
+                    withActions
+                  />
                 ))}
               </motion.div>
             </AnimatePresence>

@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs';
+import sharp from 'sharp';
 
 function getPngDimensions(buffer: Buffer) {
   return {
@@ -13,4 +14,9 @@ export async function convertPngToSvg(pngPath: string, svgPath: string) {
   const base64 = buffer.toString('base64');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><image href="data:image/png;base64,${base64}" width="${width}" height="${height}"/></svg>`;
   await fs.writeFile(svgPath, svg, 'utf8');
+}
+
+export async function convertJpegToPng(jpegPath: string, pngPath: string) {
+  await sharp(jpegPath).png().toFile(pngPath);
+  await fs.unlink(jpegPath);
 }

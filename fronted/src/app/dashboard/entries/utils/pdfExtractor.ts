@@ -1,6 +1,24 @@
 
 import { toast } from "sonner";
 
+// Detecta el proveedor de la factura a partir del texto extraído
+// Devuelve "deltron", "gozu" o "unknown" si no se reconoce
+export function detectInvoiceProvider(text: string): "deltron" | "gozu" | "unknown" {
+  const normalized = text.toLowerCase();
+
+  // Deltron se identifica por su RUC específico
+  if (normalized.includes("20212331377")) {
+    return "deltron";
+  }
+
+  // GOZU puede identificarse por el nombre de la empresa o su RUC
+  if (normalized.includes("gozu gaming") || /2060\d{7}/.test(normalized)) {
+    return "gozu";
+  }
+
+  return "unknown";
+}
+
 export function processExtractedText(
   text: string,
   setSelectedProducts: Function,
@@ -216,4 +234,90 @@ export function processExtractedText(
   }
 
   if (totalMatch) setValue("total_comprobante", totalMatch[1].trim()); 
+}
+
+export function processInvoiceText(
+  text: string,
+  setSelectedProducts: Function,
+  setValue: Function,
+  setCurrency: Function
+) {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const headerKeywords = [
+    "IGV",
+    "FORMA DE PAGO",
+    "FORMA",
+    "PAGO",
+    "SUBTOTAL",
+    "TOTAL",
+    "SON:",
+  ];
+
+  const filteredLines = lines.filter(
+    (line) => !headerKeywords.some((word) => line.toUpperCase().includes(word))
+  );
+
+  const itemRegex =
+    /^\d+\s+[A-Z0-9-]+\s+(.+?)\s+(\d+(?:\.\d+)?)\s+[A-Z]+\s+([\d.,]+)\s+([\d.,]+)$/;
+
+  const products: {
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+  }[] = [];
+
+  for (const line of filteredLines) {
+    const match = line.match(itemRegex);
+    if (match) {
+      const [, name, quantityStr, unitPriceStr, totalPriceStr] = match;
+      const quantity = parseFloat(quantityStr);
+      const unitPrice = parseFloat(unitPriceStr.replace(/,/g, ""));
+      const totalPrice = parseFloat(totalPriceStr.replace(/,/g, ""));
+      products.push({ name: name.trim(), quantity, unitPrice, totalPrice });
+    }
+  }
+
+  if (products.length > 0) {
+    setSelectedProducts(
+      products.map((product, index) => ({
+        id: index + 1,
+        name: product.name,
+        quantity: product.quantity,
+        price: product.unitPrice,
+        category_name: "Sin categoria",
+      }))
+    );
+  } else {
+    toast.warning("No se encontraron productos en el archivo PDF.");
+  }
+
+  const rucMatch = text.match(/RUC\s*:?\s*(\d{11})/i);
+  const razonSocialMatch = text.match(/GOZU\s+GAMING\s+S\.A\.C\.?/i);
+  const serieMatch = text.match(/(E\d{3}-\d{4,})/i);
+  const fechaMatch = text.match(/Fecha\s+de\s+emisi[óo]n[:\s]*([\d\/.-]+)/i);
+  const totalMatch = text.match(/TOTAL\s+(?:A\s+PAGAR\s*)?\$?([\d.,]+)/i);
+
+  if (rucMatch) {
+    const ruc = rucMatch[1];
+    setValue("ruc", ruc);
+    setValue("provider_documentNumber", ruc);
+    if (ruc === "20212331377") {
+      setCurrency("USD");
+      setValue("tipo_moneda", "USD");
+    }
+  }
+  if (razonSocialMatch) setValue("provider_name", razonSocialMatch[0].trim());
+  if (serieMatch) {
+    const serie = serieMatch[1];
+    setValue("serie", serie);
+    setValue("nroCorrelativo", serie);
+  }
+  if (fechaMatch)
+    setValue("fecha_emision_comprobante", fechaMatch[1].trim());
+  if (totalMatch) setValue("total_comprobante", totalMatch[1].trim());
 }

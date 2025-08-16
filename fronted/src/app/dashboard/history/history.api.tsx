@@ -1,7 +1,16 @@
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { authFetch } from '@/utils/auth-fetch';
+
+export const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+
 
 export async function getUserHistory(userId: number) {
-  const res = await fetch(`${BACKEND_URL}/api/inventory/history/users/${userId}`);
+  const res = await authFetch(
+    `${BACKEND_URL}/api/inventory/history/users/${userId}`,
+    {
+      credentials: 'include',
+    },
+  );
   if (!res.ok) {
     throw new Error('Error al obtener el historial del usuario');
   }
@@ -9,7 +18,12 @@ export async function getUserHistory(userId: number) {
 }
 
 export async function getUserActivity(userId: number) {
-  const res = await fetch(`${BACKEND_URL}/api/activity/users/${userId}`);
+  const res = await authFetch(
+    `${BACKEND_URL}/api/activity/users/${userId}`,
+    {
+      credentials: 'include',
+    },
+  );
   if (!res.ok) {
     throw new Error('Error al obtener la actividad del usuario');
   }

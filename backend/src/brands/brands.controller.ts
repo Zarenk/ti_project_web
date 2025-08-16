@@ -16,31 +16,48 @@ import {
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
+import { promises as fs } from 'fs';
 import { BrandsService } from './brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 import { Request } from 'express';
 import { resolveBackendPath } from 'src/utils/path-utils';
-import { convertPngToSvg } from 'src/utils/image-utils';
+import { convertJpegToPng, convertPngToSvg } from 'src/utils/image-utils';
 
 @Controller('brands')
 export class BrandsController {
   constructor(private readonly brandsService: BrandsService) {}
 
-  private async processPng(file: Express.Multer.File) {
+  private async processImage(file: Express.Multer.File) {
     const uploadsDir = resolveBackendPath('uploads', 'brands');
-    const pngPath = join(uploadsDir, file.filename);
-    const svgFilename = file.filename.replace(/\.[^/.]+$/, '.svg');
-    const svgPath = join(uploadsDir, svgFilename);
-    await convertPngToSvg(pngPath, svgPath);
-    return {
-      logoPng: `/uploads/brands/${file.filename}`,
-      logoSvg: `/uploads/brands/${svgFilename}`,
-    };
+    if (file.mimetype === 'image/jpeg') {
+      const jpegPath = join(uploadsDir, file.filename);
+      const pngFilename = file.filename.replace(/\.[^/.]+$/, '.png');
+      const pngPath = join(uploadsDir, pngFilename);
+      await convertJpegToPng(jpegPath, pngPath);
+      const svgFilename = pngFilename.replace(/\.[^/.]+$/, '.svg');
+      const svgPath = join(uploadsDir, svgFilename);
+      await convertPngToSvg(pngPath, svgPath);
+      return {
+        logoPng: `/uploads/brands/${pngFilename}`,
+        logoSvg: `/uploads/brands/${svgFilename}`,
+      };
+    }
+    if (file.mimetype === 'image/png') {
+      const pngPath = join(uploadsDir, file.filename);
+      const svgFilename = file.filename.replace(/\.[^/.]+$/, '.svg');
+      const svgPath = join(uploadsDir, svgFilename);
+      await convertPngToSvg(pngPath, svgPath);
+      return {
+        logoPng: `/uploads/brands/${file.filename}`,
+        logoSvg: `/uploads/brands/${svgFilename}`,
+      };
+    }
+    throw new BadRequestException('Formato de imagen no soportado');
   }
 
   @Post()
-   @UseInterceptors(
+  @UseInterceptors(
     FileFieldsInterceptor(
       [
         { name: 'logoSvg', maxCount: 1 },
@@ -57,10 +74,11 @@ export class BrandsController {
         fileFilter: (req, file, cb) => {
           if (
             file.mimetype !== 'image/png' &&
-            file.mimetype !== 'image/svg+xml'
+            file.mimetype !== 'image/svg+xml' &&
+            file.mimetype !== 'image/jpeg'
           ) {
             return cb(
-              new BadRequestException('Solo se permiten archivos PNG o SVG'),
+              new BadRequestException('Solo se permiten archivos PNG, JPG o SVG'),
               false,
             );
           }
@@ -81,7 +99,7 @@ export class BrandsController {
       data.logoSvg = `/uploads/brands/${files.logoSvg[0].filename}`;
     }
     if (files.logoPng?.[0]) {
-      const paths = await this.processPng(files.logoPng[0]);
+      const paths = await this.processImage(files.logoPng[0]);
       data.logoPng = paths.logoPng;
       if (!data.logoSvg) {
         data.logoSvg = paths.logoSvg;
@@ -121,10 +139,11 @@ export class BrandsController {
         fileFilter: (req, file, cb) => {
           if (
             file.mimetype !== 'image/png' &&
-            file.mimetype !== 'image/svg+xml'
+            file.mimetype !== 'image/svg+xml' &&
+            file.mimetype !== 'image/jpeg'
           ) {
             return cb(
-              new BadRequestException('Solo se permiten archivos PNG o SVG'),
+              new BadRequestException('Solo se permiten archivos PNG, JPG o SVG'),
               false,
             );
           }
@@ -146,7 +165,7 @@ export class BrandsController {
       data.logoSvg = `/uploads/brands/${files.logoSvg[0].filename}`;
     }
     if (files.logoPng?.[0]) {
-      const paths = await this.processPng(files.logoPng[0]);
+      const paths = await this.processImage(files.logoPng[0]);
       data.logoPng = paths.logoPng;
       data.logoSvg = paths.logoSvg;
     }
@@ -190,10 +209,11 @@ export class BrandsController {
       fileFilter: (req, file, cb) => {
         if (
           file.mimetype !== 'image/png' &&
-          file.mimetype !== 'image/svg+xml'
+          file.mimetype !== 'image/svg+xml' &&
+          file.mimetype !== 'image/jpeg'
         ) {
           return cb(
-            new BadRequestException('Solo se permiten archivos PNG o SVG'),
+            new BadRequestException('Solo se permiten archivos PNG, JPG o SVG'),
             false,
           );
         }
@@ -209,11 +229,11 @@ export class BrandsController {
     if (!file) {
       throw new BadRequestException('No se proporcionó ningún archivo');
     }
-    if (file.mimetype === 'image/png') {
-      const paths = await this.processPng(file);
+    if (file.mimetype === 'image/png' || file.mimetype === 'image/jpeg') {
+      const paths = await this.processImage(file);
       return this.brandsService.update(+id, paths, req);
     }
     const filePath = `/uploads/brands/${file.filename}`;
-    return this.brandsService.update(+id, { logoSvg: filePath }, req); 
+    return this.brandsService.update(+id, { logoSvg: filePath }, req);
   }
 }

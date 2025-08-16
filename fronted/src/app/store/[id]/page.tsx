@@ -30,7 +30,8 @@ import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/progress"
 import Navbar from "@/components/navbar"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 import { getProduct, getProducts } from "../../dashboard/products/products.api"
 import { getReviews, submitReview } from "./reviews.api"
 import { toast } from "sonner"
@@ -86,8 +87,8 @@ export default function ProductPage({ params }: Props) {
   const [product, setProduct] = useState<any>(null)
   const [stock, setStock] = useState<number | null>(null)
   const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([])
-  const [showMagnifier, setShowMagnifier] = useState(false)
-  const [magnifierPos, setMagnifierPos] = useState({ x: 0, y: 0, width: 0, height: 0 })
+  const [zoomActive, setZoomActive] = useState(false)
+  const imgRef = useRef<HTMLImageElement | null>(null)
   const [isImageDialogOpen, setIsImageDialogOpen] = useState(false)
   const { addItem } = useCart()
   const router = useRouter()
@@ -308,14 +309,16 @@ export default function ProductPage({ params }: Props) {
               )}
               <Badge className="absolute top-4 right-4 z-10 bg-green-500 hover:bg-green-600">Envío Gratis</Badge>
               <div
-                className="aspect-square rounded-2xl overflow-hidden bg-card shadow-lg group cursor-zoom-in relative"
-                onMouseEnter={() => setShowMagnifier(true)}
-                onMouseLeave={() => setShowMagnifier(false)}
+                className="aspect-square rounded-2xl overflow-hidden bg-card shadow-lg relative"
+                onMouseEnter={() => setZoomActive(true)}
+                onMouseLeave={() => setZoomActive(false)}
                 onMouseMove={(e) => {
                   const { left, top, width, height } = e.currentTarget.getBoundingClientRect()
-                  const x = e.clientX - left
-                  const y = e.clientY - top
-                  setMagnifierPos({ x, y, width, height })
+                  const x = ((e.clientX - left) / width) * 100
+                  const y = ((e.clientY - top) / height) * 100
+                  if (imgRef.current) {
+                    imgRef.current.style.transformOrigin = `${x}% ${y}%`
+                  }
                 }}
               >
                 <Button
@@ -328,33 +331,25 @@ export default function ProductPage({ params }: Props) {
                   <span className="sr-only">Maximizar imagen</span>
                 </Button>
                 <Image
+                  ref={imgRef}
                   src={images[selectedImage] || "/placeholder.svg"}
                   alt={product?.name || "Producto"}
                   width={600}
                   height={600}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                  className={`w-full h-full object-cover transition-transform duration-200 ${zoomActive ? 'scale-150' : 'scale-100'}`}
                 />
-                {showMagnifier && (
-                  <div
-                    className="absolute pointer-events-none rounded-full border-2 border-white shadow-lg"
-                    style={{
-                      top: magnifierPos.y - 75,
-                      left: magnifierPos.x - 75,
-                      width: 150,
-                      height: 150,
-                      backgroundImage: `url(${images[selectedImage] || "/placeholder.svg"})`,
-                      backgroundRepeat: "no-repeat",
-                      backgroundSize: `${magnifierPos.width * 2}px ${magnifierPos.height * 2}px`,
-                      backgroundPositionX: `-${magnifierPos.x * 2 - 75}px`,
-                      backgroundPositionY: `-${magnifierPos.y * 2 - 75}px`,
-                    }}
-                  />
-                )}
               </div>
             </div>
 
             <Dialog open={isImageDialogOpen} onOpenChange={setIsImageDialogOpen}>
-              <DialogContent className="max-w-3xl p-0 bg-transparent border-none shadow-none">
+              <DialogContent
+                aria-describedby={undefined}
+                className="max-w-3xl p-0 bg-transparent border-none shadow-none"
+              >
+                <VisuallyHidden>
+                  <DialogTitle>{product?.name || "Producto"}</DialogTitle>
+                  <DialogDescription>Imagen ampliada</DialogDescription>
+                </VisuallyHidden>
                 <Image
                   src={images[selectedImage] || "/placeholder.svg"}
                   alt={product?.name || "Producto"}
