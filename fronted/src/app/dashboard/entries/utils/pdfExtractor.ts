@@ -1,23 +1,37 @@
 
 import { toast } from "sonner";
 
+// Listas de patrones para identificar proveedores por diseño de comprobante
+// Se pueden agregar más nombres o RUCs en cada lista para extender el soporte
+const DELTRON_PATTERNS: (string | RegExp)[] = ["20212331377"];
+const GOZU_TEMPLATE_PATTERNS: (string | RegExp)[] = [
+  /gozu gaming/i,
+  /2060\d{7}/, // RUC de GOZU y similares que comparten el mismo diseño
+];
+
+type InvoiceProvider = "deltron" | "gozu" | "unknown";
+
 // Detecta el proveedor de la factura a partir del texto extraído
 // Devuelve "deltron", "gozu" o "unknown" si no se reconoce
-export function detectInvoiceProvider(text: string): "deltron" | "gozu" | "unknown" {
+export function detectInvoiceProvider(text: string): InvoiceProvider {
   const normalized = text.toLowerCase();
 
-  // Deltron se identifica por su RUC específico
-  if (normalized.includes("20212331377")) {
+  const matches = (patterns: (string | RegExp)[]) =>
+    patterns.some((p) =>
+      typeof p === "string" ? normalized.includes(p.toLowerCase()) : p.test(normalized)
+    );
+
+  if (matches(DELTRON_PATTERNS)) {
     return "deltron";
   }
 
-  // GOZU puede identificarse por el nombre de la empresa o su RUC
-  if (normalized.includes("gozu gaming") || /2060\d{7}/.test(normalized)) {
+  if (matches(GOZU_TEMPLATE_PATTERNS)) {
     return "gozu";
   }
 
   return "unknown";
 }
+
 
 export function processExtractedText(
   text: string,

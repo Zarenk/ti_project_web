@@ -359,7 +359,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
         if (provider === "deltron") {
           processExtractedText(extractedText, setSelectedProducts, form.setValue, setCurrency);
-        } else if (provider != "deltron") {
+        } else if (provider === "gozu") {
           processInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
         } else {
           toast.warning("Formato de factura no reconocido.");
