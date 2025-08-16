@@ -4,9 +4,11 @@ import { toast } from "sonner";
 // Listas de patrones para identificar proveedores por diseño de comprobante
 // Se pueden agregar más nombres o RUCs en cada lista para extender el soporte
 const DELTRON_PATTERNS: (string | RegExp)[] = ["20212331377"];
-const GOZU_TEMPLATE_PATTERNS: (string | RegExp)[] = [
+const TEMPLATE_PATTERNS: (string | RegExp)[] = [
   /gozu gaming/i,
   /2060\d{7}/, // RUC de GOZU y similares que comparten el mismo diseño
+  /pc\s*link/i, // Nuevo proveedor con el mismo diseño de comprobante
+  "20519078520", // RUC del nuevo proveedor
 ];
 
 type InvoiceProvider = "deltron" | "gozu" | "unknown";
@@ -25,7 +27,7 @@ export function detectInvoiceProvider(text: string): InvoiceProvider {
     return "deltron";
   }
 
-  if (matches(GOZU_TEMPLATE_PATTERNS)) {
+  if (matches(TEMPLATE_PATTERNS)) {
     return "gozu";
   }
 
@@ -275,8 +277,32 @@ export function processInvoiceText(
     (line) => !headerKeywords.some((word) => line.toUpperCase().includes(word))
   );
 
-  const itemRegex =
-    /^\d+\s+[A-Z0-9-]+\s+(.+?)\s+(\d+(?:\.\d+)?)\s+[A-Z]+\s+([\d.,]+)\s+([\d.,]+)$/;
+  const parseProductLine = (line: string) => {
+    const parts = line.trim().split(/\s{2,}/).filter(Boolean);
+    if (parts.length < 4) return null;
+
+    const totalPriceStr = parts.pop()!;
+    const unitPriceStr = parts.pop()!;
+    let quantityStr = parts.pop()!;
+
+    if (isNaN(parseFloat(quantityStr.replace(/[^\d.,]/g, "")))) {
+      quantityStr = parts.pop() || "";
+    }
+
+    const name = parts.join(" ").trim();
+    const normalizeNumber = (value: string) =>
+      parseFloat(value.replace(/[^0-9.]/g, ""));
+
+    const quantity = normalizeNumber(quantityStr);
+    const unitPrice = normalizeNumber(unitPriceStr);
+    const totalPrice = normalizeNumber(totalPriceStr);
+
+    if (isNaN(quantity) || isNaN(unitPrice)) {
+      return null;
+    }
+
+    return { name, quantity, unitPrice, totalPrice };
+  };
 
   const products: {
     name: string;
@@ -286,13 +312,9 @@ export function processInvoiceText(
   }[] = [];
 
   for (const line of filteredLines) {
-    const match = line.match(itemRegex);
-    if (match) {
-      const [, name, quantityStr, unitPriceStr, totalPriceStr] = match;
-      const quantity = parseFloat(quantityStr);
-      const unitPrice = parseFloat(unitPriceStr.replace(/,/g, ""));
-      const totalPrice = parseFloat(totalPriceStr.replace(/,/g, ""));
-      products.push({ name: name.trim(), quantity, unitPrice, totalPrice });
+    const product = parseProductLine(line);
+    if (product) {
+      products.push(product);
     }
   }
 
@@ -310,11 +332,16 @@ export function processInvoiceText(
     toast.warning("No se encontraron productos en el archivo PDF.");
   }
 
-  const rucMatch = text.match(/RUC\s*:?\s*(\d{11})/i);
-  const razonSocialMatch = text.match(/GOZU\s+GAMING\s+S\.A\.C\.?/i);
-  const serieMatch = text.match(/(E\d{3}-\d{4,})/i);
+  const rucRegex = /R\.?U\.?C\.?\s*[:\-]?\s*(\d{11})/i;
+  const rucMatch = text.match(/R\.?U\.?C\.?\s*(?:N[°º#:]\s*)?(\d{11})/i);
+  const serieMatch = text.match(/(?:serie\s*[:\-]?\s*)?([A-Z]\d{3}-\d{3,})/i);
   const fechaMatch = text.match(/Fecha\s+de\s+emisi[óo]n[:\s]*([\d\/.-]+)/i);
-  const totalMatch = text.match(/TOTAL\s+(?:A\s+PAGAR\s*)?\$?([\d.,]+)/i);
+  const totalMatch = text.match(
+    /(?:TOTAL(?:\s+A\s+PAGAR)?|IMPORTE\s+TOTAL)[^\d]*([\d.,]+)/i
+  );
+
+  let providerName = "";
+  let providerIndex = -1;
 
   if (rucMatch) {
     const ruc = rucMatch[1];
@@ -324,8 +351,43 @@ export function processInvoiceText(
       setCurrency("USD");
       setValue("tipo_moneda", "USD");
     }
+
+    const rucLineIndex = lines.findIndex((line) => rucRegex.test(line));
+    if (rucLineIndex > 0) {
+      providerName = lines[rucLineIndex - 1].trim();
+      providerIndex = rucLineIndex - 1;
+    }
+
   }
-  if (razonSocialMatch) setValue("provider_name", razonSocialMatch[0].trim());
+  if (!providerName) {
+    const providerRegex = /([A-ZÑ&\.\s]{3,})\s+R\.?U\.?C\.?\s*[:\-]?\s*\d{11}/i;
+    const providerMatch = text.match(providerRegex);
+    if (providerMatch) {
+      providerName = providerMatch[1].trim();
+      providerIndex = lines.findIndex((line) => line.includes(providerName));
+    }
+  }
+
+  if (providerName) {
+    setValue("provider_name", providerName);
+    let address = "";
+    for (let i = providerIndex + 1; i <= providerIndex + 3 && i < lines.length; i++) {
+      const addressMatch = lines[i].match(/direcci[óo]n[:\s]*(.+)/i);
+      if (addressMatch) {
+        address = addressMatch[1].trim();
+        break;
+      }
+      if (i === providerIndex + 1 && !rucRegex.test(lines[i])) {
+        address = lines[i].trim();
+        break;
+      }
+      if (i === providerIndex + 2 && rucRegex.test(lines[i - 1])) {
+        address = lines[i].trim();
+        break;
+      }
+    }
+    if (address) setValue("provider_adress", address);
+  }
   if (serieMatch) {
     const serie = serieMatch[1];
     setValue("serie", serie);
