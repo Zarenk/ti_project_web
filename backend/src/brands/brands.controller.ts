@@ -24,13 +24,16 @@ import { Request } from 'express';
 import { resolveBackendPath } from 'src/utils/path-utils';
 import { convertJpegToPng, convertPngToSvg } from 'src/utils/image-utils';
 
+const JPEG_MIME_TYPES = ['image/jpeg', 'image/jpg'];
+const ALLOWED_MIME_TYPES = ['image/png', 'image/svg+xml', ...JPEG_MIME_TYPES];
+
 @Controller('brands')
 export class BrandsController {
   constructor(private readonly brandsService: BrandsService) {}
 
   private async processImage(file: Express.Multer.File) {
     const uploadsDir = resolveBackendPath('uploads', 'brands');
-    if (file.mimetype === 'image/jpeg') {
+    if (JPEG_MIME_TYPES.includes(file.mimetype)) {
       const jpegPath = join(uploadsDir, file.filename);
       const pngFilename = file.filename.replace(/\.[^/.]+$/, '.png');
       const pngPath = join(uploadsDir, pngFilename);
@@ -72,11 +75,7 @@ export class BrandsController {
           },
         }),
         fileFilter: (req, file, cb) => {
-          if (
-            file.mimetype !== 'image/png' &&
-            file.mimetype !== 'image/svg+xml' &&
-            file.mimetype !== 'image/jpeg'
-          ) {
+          if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
             return cb(
               new BadRequestException('Solo se permiten archivos PNG, JPG o SVG'),
               false,
@@ -137,11 +136,7 @@ export class BrandsController {
           },
         }),
         fileFilter: (req, file, cb) => {
-          if (
-            file.mimetype !== 'image/png' &&
-            file.mimetype !== 'image/svg+xml' &&
-            file.mimetype !== 'image/jpeg'
-          ) {
+          if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
             return cb(
               new BadRequestException('Solo se permiten archivos PNG, JPG o SVG'),
               false,
@@ -207,11 +202,7 @@ export class BrandsController {
         },
       }),
       fileFilter: (req, file, cb) => {
-        if (
-          file.mimetype !== 'image/png' &&
-          file.mimetype !== 'image/svg+xml' &&
-          file.mimetype !== 'image/jpeg'
-        ) {
+        if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
           return cb(
             new BadRequestException('Solo se permiten archivos PNG, JPG o SVG'),
             false,
@@ -229,7 +220,7 @@ export class BrandsController {
     if (!file) {
       throw new BadRequestException('No se proporcionó ningún archivo');
     }
-    if (file.mimetype === 'image/png' || file.mimetype === 'image/jpeg') {
+    if (file.mimetype === 'image/png' || JPEG_MIME_TYPES.includes(file.mimetype)) {
       const paths = await this.processImage(file);
       return this.brandsService.update(+id, paths, req);
     }
