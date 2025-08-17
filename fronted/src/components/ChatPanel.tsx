@@ -252,7 +252,7 @@ export default function ChatPanel({
         <div className="flex-1 p-4 space-y-2 overflow-y-auto bg-background">
           <MessagesList
             messages={messages}
-            userId={userId ?? undefined}
+            userId={userId!}
             onEdit={handleEdit}
           />
           {agentTyping && <TypingIndicator name="Asesor" />}

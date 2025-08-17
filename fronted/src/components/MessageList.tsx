@@ -17,7 +17,7 @@ interface Message {
 
 interface MessagesListProps {
   messages: Message[];
-  userId?: number;
+  userId: number;
   onEdit?: (id: number, text: string) => void;
 }
 
@@ -36,6 +36,7 @@ function MessagesListComponent({
           file={m.file}
           createdAt={m.createdAt}
           isSender={m.senderId === userId}
+          userId={userId}
           onEdit={onEdit}
         />
       ))}

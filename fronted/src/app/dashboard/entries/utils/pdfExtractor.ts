@@ -324,10 +324,12 @@ export function processInvoiceText(
 
   const rucRegex = /R\.?U\.?C\.?\s*[:\-]?\s*(\d{11})/i;
   const rucMatch = text.match(/R\.?U\.?C\.?\s*(?:N[°º#:]\s*)?(\d{11})/i);
+  const providerNameLine = text.match(/(?:Raz[oó]n Social|Proveedor|Nombre)[:\-\s]*([^\n]+)/i);
+  const addressLine = text.match(/Direcci[oó]n[^:]*[:\-\s]*([^\n]+)/i);
   const serieMatch = text.match(/(?:serie\s*[:\-]?\s*)?([A-Z]\d{3}-\d{3,})/i);
   const fechaMatch = text.match(/Fecha\s+de\s+emisi[óo]n[:\s]*([\d\/.-]+)/i);
   const totalMatch = text.match(
-    /(?:TOTAL(?:\s+A\s+PAGAR)?|IMPORTE\s+TOTAL)[^\d]*([\d.,]+)/i
+    /(?:TOTAL(?:\s+A\s+PAGAR)?|IMPORTE\s+TOTAL)\s*:?\s*(?:S\/|\$)?\s*([\d.,]+)/i
   );
   const comprobanteMatch = text.match(/(FACTURA|BOLETA)\s+ELECTR[ÓO]NICA/i);
 
@@ -338,42 +340,57 @@ export function processInvoiceText(
     const ruc = rucMatch[1];
     setValue("ruc", ruc);
     setValue("provider_documentNumber", ruc);
-    // Por defecto la mayoría de estos comprobantes están en soles
     setCurrency("PEN");
     setValue("tipo_moneda", "PEN");
 
   const rucLineIndex = lines.findIndex((line) => rucRegex.test(line));
-    if (rucLineIndex > -1) {
-      const candidates = lines
-        .slice(0, rucLineIndex)
-        .filter(
-          (l) =>
-            l && !/\d/.test(l) && !/(factura|boleta|electr[óo]nica)/i.test(l)
-        );
-      if (candidates.length > 0) {
-        providerName = candidates[0].trim();
-        providerIndex = lines.indexOf(candidates[0]);
+    if (providerNameLine) {
+      providerName = providerNameLine[1].trim();
+      providerIndex = rucLineIndex > -1 ? rucLineIndex : 0;
+    } else if (rucLineIndex > -1) {
+      const rucLine = lines[rucLineIndex];
+      const sameLine = rucLine.match(/^(.*?)(?:R\.?U\.?C\.?)/i);
+      if (sameLine && sameLine[1].trim()) {
+        providerName = sameLine[1].trim();
+        providerIndex = rucLineIndex;
+      } else {
+        for (let i = rucLineIndex - 1; i >= 0; i--) {
+          const candidate = lines[i];
+          if (
+            candidate &&
+            !/\d/.test(candidate) &&
+            !/(factura|boleta|electr[óo]nica)/i.test(candidate)
+          ) {
+            providerName = candidate.trim();
+            providerIndex = i;
+            break;
+          }
+        }
       }
     }
   }
 
   if (providerName) {
     setValue("provider_name", providerName);
-    const addressLines: string[] = [];
-    const addressKeywords = /(av\.?|jr\.?|calle|urb\.?|mz|lt|-|\d)/i;
-    const rucLineIndex = lines.findIndex((line) => rucRegex.test(line));
-    for (let i = providerIndex + 1; i < rucLineIndex; i++) {
-      const line = lines[i];
-      if (/factura|boleta/i.test(line)) break;
-      if (addressKeywords.test(line)) {
-        addressLines.push(line.trim());
+    if (addressLine) {
+      setValue("provider_adress", addressLine[1].trim());
+    } else {
+      const addressLines: string[] = [];
+      const addressKeywords = /(av\.?|jr\.?|calle|urb\.?|mz|lt|dpto|\d)/i;
+      const rucLineIndex = lines.findIndex((line) => rucRegex.test(line));
+      for (let i = providerIndex + 1; i < rucLineIndex; i++) {
+        const line = lines[i];
+        if (/factura|boleta/i.test(line)) break;
+        if (addressKeywords.test(line)) {
+          addressLines.push(line.trim());
+        }
+      }
+      if (addressLines.length > 0) {
+        setValue("provider_adress", addressLines.join(" "));
       }
     }
-    if (addressLines.length > 0) {
-      setValue("provider_adress", addressLines.join(" "));
-    }
   }
-  
+
   if (comprobanteMatch) setValue("comprobante", comprobanteMatch[0].trim());
   if (serieMatch) {
     const serie = serieMatch[1];
@@ -382,5 +399,6 @@ export function processInvoiceText(
   }
   if (fechaMatch)
     setValue("fecha_emision_comprobante", fechaMatch[1].trim());
-  if (totalMatch) setValue("total_comprobante", totalMatch[1].trim());
+  if (totalMatch)
+    setValue("total_comprobante", totalMatch[1].replace(/[\s,]/g, ""));
 }

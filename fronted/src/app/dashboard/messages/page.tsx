@@ -12,6 +12,7 @@ import ClientList from './client-list';
 import socket, { cn } from '@/lib/utils';
 import TypingIndicator from '@/components/TypingIndicator';
 import { useMessages } from '@/context/messages-context';
+import EditableMessage from './EditableMessage';
 
 interface Message {
   id: number;
@@ -145,18 +146,32 @@ export default function Page() {
       }
     };
 
+    const updateHandler = ({ id, text }: any) => {
+      setHistory((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, text } : m)),
+      );
+    };
+
+    const deleteHandler = ({ id }: any) => {
+      setHistory((prev) => prev.filter((m) => m.id !== id));
+    };
+
     socket.emit('chat:history', { clientId: selected });
     socket.emit('chat:seen', { clientId: selected, viewerId: userId });
     socket.on('chat:receive', receiveHandler);
     socket.on('chat:history', historyHandler);
     socket.on('chat:seen', seenHandler);
     socket.on('chat:typing', typingHandler);
+    socket.on('chat:updated', updateHandler);
+    socket.on('chat:deleted', deleteHandler);
 
     return () => {
       socket.off('chat:receive', receiveHandler);
       socket.off('chat:history', historyHandler);
       socket.off('chat:seen', seenHandler);
       socket.off('chat:typing', typingHandler);
+      socket.off('chat:updated', updateHandler);
+      socket.off('chat:deleted', deleteHandler);
     };
   }, [selected]);
 
@@ -179,6 +194,12 @@ export default function Page() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history]);
+
+  const handleEditMessage = (id: number, newText: string) => {
+    setHistory((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, text: newText } : m)),
+    );
+  };
 
   const handleSend = async () => {
     if (!userId || selected === null || (!text.trim() && !preview)) return;
@@ -291,47 +312,18 @@ export default function Page() {
               </header>
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {history.map((m) => (
-                  <div
+                  <EditableMessage
                     key={m.id}
-                    className={cn(
-                      'max-w-[80%]',
-                      m.senderId === userId ? 'ml-auto text-right' : 'mr-auto'
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'rounded-lg p-2',
-                        m.senderId === userId
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted'
-                      )}
-                    >
-                      <p className="text-xs mb-1">
-                        <span className="font-medium">
-                          {m.senderId === userId
-                            ? userName || 'Tú'
-                            : clientMap.get(m.clientId) || 'Usuario'}
-                        </span>{' '}
-                        <span className="text-muted-foreground">
-                          {new Date(m.createdAt).toLocaleTimeString()}
-                        </span>
-                      </p>
-                      <p>{m.text}</p>
-                      {m.file && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={m.file}
-                          alt="Archivo adjunto"
-                          className="mt-2 max-h-60 rounded-md"
-                        />
-                      )}
-                      {m.senderId === userId && m.seenAt && (
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          Visto {new Date(m.seenAt).toLocaleTimeString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                    message={m}
+                    isSender={m.senderId === userId}
+                    userId={userId!}
+                    displayName={
+                      m.senderId === userId
+                        ? userName || 'Tú'
+                        : clientMap.get(m.clientId) || 'Usuario'
+                    }
+                    onEdit={handleEditMessage}
+                  />
                 ))}
                 {clientTyping && (
                   <TypingIndicator

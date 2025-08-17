@@ -1,75 +1,78 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Textarea } from "@/components/ui/textarea";
-import { cn, default as socket } from "@/lib/utils";
-import { MoreVertical } from "lucide-react";
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { MoreVertical } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+} from '@/components/ui/dropdown-menu';
+import { cn, default as socket } from '@/lib/utils';
 
 const LIMIT_MS = 5 * 60 * 1000;
 
-interface MessageBubbleProps {
+interface Message {
   id: number;
+  clientId: number;
+  senderId: number;
   text: string;
-  file?: string;
-  isSender: boolean;
   createdAt: string;
-  userId: number;
-  onEdit?: (id: number, text: string) => void;
+  seenAt?: string | null;
+  file?: string;
 }
 
-export function MessageBubble({
-  id,
-  text,
-  file,
+interface EditableMessageProps {
+  message: Message;
+  isSender: boolean;
+  userId: number;
+  displayName: string;
+  onEdit: (id: number, text: string) => void;
+}
+
+export default function EditableMessage({
+  message,
   isSender,
-  createdAt,
   userId,
+  displayName,
   onEdit,
-}: MessageBubbleProps) {
+}: EditableMessageProps) {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(text);
+  const [value, setValue] = useState(message.text);
 
   useEffect(() => {
     if (!editing) {
-      setValue(text);
+      setValue(message.text);
     }
-  }, [text, editing]);
+  }, [editing, message.text]);
 
   const canEdit =
-    isSender && Date.now() - new Date(createdAt).getTime() < LIMIT_MS;
+    isSender && Date.now() - new Date(message.createdAt).getTime() < LIMIT_MS;
 
   const handleSave = () => {
     setEditing(false);
-    if (value !== text) {
-      onEdit?.(id, value);
-      socket.emit("chat:edit", { id, senderId: userId, text: value });
+    if (value !== message.text) {
+      onEdit(message.id, value);
+      socket.emit('chat:edit', {
+        id: message.id,
+        senderId: userId,
+        text: value,
+      });
     }
   };
 
   const handleDelete = () => {
-    socket.emit("chat:delete", { id, senderId: userId });
+    socket.emit('chat:delete', { id: message.id, senderId: userId });
   };
+
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95, y: 10 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95, y: 10 }}
-      transition={{ duration: 0.2 }}
-      className={cn("flex", isSender ? "justify-end" : "justify-start")}
-    >
+    <div className={cn('max-w-[80%]', isSender ? 'ml-auto text-right' : 'mr-auto')}>
       <div
         className={cn(
-          "p-3 rounded-2xl max-w-[80%] border shadow relative group",
-          isSender
-            ? "bg-gradient-to-r from-blue-200 to-blue-300 text-blue-900"
-            : "bg-gradient-to-r from-pink-200 to-purple-200 text-purple-900"
+          'relative rounded-lg p-2 group',
+          isSender ? 'bg-primary text-primary-foreground' : 'bg-muted'
         )}
       >
         {editing ? (
@@ -77,13 +80,13 @@ export function MessageBubble({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 handleSave();
-              } else if (e.key === "Escape") {
+              } else if (e.key === 'Escape') {
                 e.preventDefault();
                 setEditing(false);
-                setValue(text);
+                setValue(message.text);
               }
             }}
             rows={1}
@@ -92,21 +95,26 @@ export function MessageBubble({
           />
         ) : (
           <>
-            {text && <p className="text-sm">{text}</p>}
-            {file && (
+            <p className="text-xs mb-1">
+              <span className="font-medium">{displayName}</span>{' '}
+              <span className="text-muted-foreground">
+                {new Date(message.createdAt).toLocaleTimeString()}
+              </span>
+            </p>
+            <p>{message.text}</p>
+            {message.file && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={file}
+                src={message.file}
                 alt="Archivo adjunto"
                 className="mt-2 max-h-60 rounded-md"
               />
             )}
-            <div className="mt-2 flex items-center gap-2 text-[10px] opacity-70">
-              <Avatar className="h-4 w-4">
-                <AvatarFallback>{isSender ? "T" : "A"}</AvatarFallback>
-              </Avatar>
-              <span>{new Date(createdAt).toLocaleTimeString()}</span>
-            </div>
+            {isSender && message.seenAt && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Visto {new Date(message.seenAt).toLocaleTimeString()}
+              </p>
+            )}
           </>
         )}
         {canEdit && !editing && (
@@ -135,8 +143,6 @@ export function MessageBubble({
           </DropdownMenu>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
-
-export default MessageBubble;
