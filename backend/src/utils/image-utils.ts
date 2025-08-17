@@ -17,6 +17,11 @@ export async function convertPngToSvg(pngPath: string, svgPath: string) {
 }
 
 export async function convertJpegToPng(jpegPath: string, pngPath: string) {
-  await sharp(jpegPath).png().toFile(pngPath);
-  await fs.unlink(jpegPath);
+  try {
+    await sharp(jpegPath).png().toFile(pngPath);
+    await fs.unlink(jpegPath);
+  } catch (error) {
+    console.error('Failed to convert JPEG to PNG:', error);
+    return;
+  }
 }

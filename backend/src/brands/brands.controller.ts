@@ -37,24 +37,34 @@ export class BrandsController {
       const jpegPath = join(uploadsDir, file.filename);
       const pngFilename = file.filename.replace(/\.[^/.]+$/, '.png');
       const pngPath = join(uploadsDir, pngFilename);
-      await convertJpegToPng(jpegPath, pngPath);
-      const svgFilename = pngFilename.replace(/\.[^/.]+$/, '.svg');
-      const svgPath = join(uploadsDir, svgFilename);
-      await convertPngToSvg(pngPath, svgPath);
-      return {
-        logoPng: `/uploads/brands/${pngFilename}`,
-        logoSvg: `/uploads/brands/${svgFilename}`,
-      };
+      try {
+        await convertJpegToPng(jpegPath, pngPath);
+        const svgFilename = pngFilename.replace(/\.[^/.]+$/, '.svg');
+        const svgPath = join(uploadsDir, svgFilename);
+        await convertPngToSvg(pngPath, svgPath);
+        return {
+          logoPng: `/uploads/brands/${pngFilename}`,
+          logoSvg: `/uploads/brands/${svgFilename}`,
+        };
+      } catch (error) {
+        console.error('Image conversion failed', error);
+        return { logoPng: undefined, logoSvg: undefined };
+      }
     }
     if (file.mimetype === 'image/png') {
       const pngPath = join(uploadsDir, file.filename);
       const svgFilename = file.filename.replace(/\.[^/.]+$/, '.svg');
       const svgPath = join(uploadsDir, svgFilename);
-      await convertPngToSvg(pngPath, svgPath);
-      return {
-        logoPng: `/uploads/brands/${file.filename}`,
-        logoSvg: `/uploads/brands/${svgFilename}`,
-      };
+      try {
+        await convertPngToSvg(pngPath, svgPath);
+        return {
+          logoPng: `/uploads/brands/${file.filename}`,
+          logoSvg: `/uploads/brands/${svgFilename}`,
+        };
+      } catch (error) {
+        console.error('Image conversion failed', error);
+        return { logoPng: undefined, logoSvg: undefined };
+      }
     }
     throw new BadRequestException('Formato de imagen no soportado');
   }

@@ -55,10 +55,27 @@ function extractProviderDetails(text: string, setValue: Function): string | null
     setValue("provider_adress", addressMatch[1].trim());
   }
 
+  // Fallback para comprobantes que no incluyen etiquetas explícitas
+  if ((!nameMatch || !addressMatch) && rucMatch?.index !== undefined) {
+    const beforeRuc = text.slice(0, rucMatch.index).trim();
+    const lines = beforeRuc
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const facturaIdx = lines.findIndex((l) => /factura/i.test(l));
+    const headerLines = facturaIdx === -1 ? lines : lines.slice(0, facturaIdx);
+
+    if (headerLines.length >= 2) {
+      const providerName = headerLines[1];
+      const addressLines = headerLines.slice(2).join(" ").replace(/\s+/g, " ");
+
+      if (!nameMatch) setValue("provider_name", providerName);
+      if (!addressMatch && addressLines) setValue("provider_adress", addressLines);
+    }
+  }
+
   return ruc;
 }
-
-
 
 export function processExtractedText(
   text: string,

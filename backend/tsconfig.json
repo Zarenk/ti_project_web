@@ -12,7 +12,7 @@
     "incremental": true,
     // esto se ingreso para que no de error al importar los modulos de node PDF
     "typeRoots": ["./node_modules/@types", "./src/types"],
-    "types": ["node"],
+    "types": ["node", "jest"],
     "lib": ["es2021", "dom"],
     "esModuleInterop": true,
     "strict": true,
