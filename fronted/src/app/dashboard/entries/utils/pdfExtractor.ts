@@ -34,6 +34,31 @@ export function detectInvoiceProvider(text: string): InvoiceProvider {
   return "unknown";
 }
 
+// Extrae información del proveedor desde el texto del PDF y actualiza el formulario
+// Retorna el RUC encontrado para permitir lógica adicional (como tipo de moneda)
+function extractProviderDetails(text: string, setValue: Function): string | null {
+  const rucMatch = text.match(/R\.?U\.?C\.?\s*(?:N[°º#:\s]*?)?(\d{11})/i);
+  let ruc: string | null = null;
+  if (rucMatch) {
+    ruc = rucMatch[1];
+    setValue("provider_documentNumber", ruc);
+    setValue("ruc", ruc);
+  }
+
+  const nameMatch = text.match(/(?:Raz[oó]n Social|Proveedor|Nombre)[:\-\s]*([^\n]+)/i);
+  if (nameMatch) {
+    setValue("provider_name", nameMatch[1].trim());
+  }
+
+  const addressMatch = text.match(/Direcci[oó]n[^:]*[:\-\s]*([^\n]+)/i);
+  if (addressMatch) {
+    setValue("provider_adress", addressMatch[1].trim());
+  }
+
+  return ruc;
+}
+
+
 
 export function processExtractedText(
   text: string,
@@ -284,7 +309,12 @@ export function processInvoiceText(
     if (!match) return null;
 
     const [, qtyStr, name, unitStr, totalStr] = match;
-    const normalize = (v: string) => parseFloat(v.replace(/,/g, '.'));
+    const normalize = (v: string) => {
+      if (v.includes(',') && v.includes('.')) {
+        return parseFloat(v.replace(/,/g, ''));
+      }
+      return parseFloat(v.replace(',', '.'));
+    };
 
     return {
       name: name.trim(),
@@ -314,82 +344,25 @@ export function processInvoiceText(
         id: index + 1,
         name: product.name,
         quantity: product.quantity,
-        price: parseFloat((product.unitPrice * 1.18).toFixed(2)),
+        price: parseFloat(product.unitPrice.toFixed(2)),
         category_name: "Sin categoria",
       }))
     );
   } else {
     toast.warning("No se encontraron productos en el archivo PDF.");
   }
+  const ruc = extractProviderDetails(text, setValue);
+  if (ruc) {
+    setCurrency("PEN");
+    setValue("tipo_moneda", "PEN");
+  }
 
-  const rucRegex = /R\.?U\.?C\.?\s*[:\-]?\s*(\d{11})/i;
-  const rucMatch = text.match(/R\.?U\.?C\.?\s*(?:N[°º#:]\s*)?(\d{11})/i);
-  const providerNameLine = text.match(/(?:Raz[oó]n Social|Proveedor|Nombre)[:\-\s]*([^\n]+)/i);
-  const addressLine = text.match(/Direcci[oó]n[^:]*[:\-\s]*([^\n]+)/i);
   const serieMatch = text.match(/(?:serie\s*[:\-]?\s*)?([A-Z]\d{3}-\d{3,})/i);
   const fechaMatch = text.match(/Fecha\s+de\s+emisi[óo]n[:\s]*([\d\/.-]+)/i);
   const totalMatch = text.match(
     /(?:TOTAL(?:\s+A\s+PAGAR)?|IMPORTE\s+TOTAL)\s*:?\s*(?:S\/|\$)?\s*([\d.,]+)/i
   );
   const comprobanteMatch = text.match(/(FACTURA|BOLETA)\s+ELECTR[ÓO]NICA/i);
-
-  let providerName = "";
-  let providerIndex = -1;
-
-  if (rucMatch) {
-    const ruc = rucMatch[1];
-    setValue("ruc", ruc);
-    setValue("provider_documentNumber", ruc);
-    setCurrency("PEN");
-    setValue("tipo_moneda", "PEN");
-
-  const rucLineIndex = lines.findIndex((line) => rucRegex.test(line));
-    if (providerNameLine) {
-      providerName = providerNameLine[1].trim();
-      providerIndex = rucLineIndex > -1 ? rucLineIndex : 0;
-    } else if (rucLineIndex > -1) {
-      const rucLine = lines[rucLineIndex];
-      const sameLine = rucLine.match(/^(.*?)(?:R\.?U\.?C\.?)/i);
-      if (sameLine && sameLine[1].trim()) {
-        providerName = sameLine[1].trim();
-        providerIndex = rucLineIndex;
-      } else {
-        for (let i = rucLineIndex - 1; i >= 0; i--) {
-          const candidate = lines[i];
-          if (
-            candidate &&
-            !/\d/.test(candidate) &&
-            !/(factura|boleta|electr[óo]nica)/i.test(candidate)
-          ) {
-            providerName = candidate.trim();
-            providerIndex = i;
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  if (providerName) {
-    setValue("provider_name", providerName);
-    if (addressLine) {
-      setValue("provider_adress", addressLine[1].trim());
-    } else {
-      const addressLines: string[] = [];
-      const addressKeywords = /(av\.?|jr\.?|calle|urb\.?|mz|lt|dpto|\d)/i;
-      const rucLineIndex = lines.findIndex((line) => rucRegex.test(line));
-      for (let i = providerIndex + 1; i < rucLineIndex; i++) {
-        const line = lines[i];
-        if (/factura|boleta/i.test(line)) break;
-        if (addressKeywords.test(line)) {
-          addressLines.push(line.trim());
-        }
-      }
-      if (addressLines.length > 0) {
-        setValue("provider_adress", addressLines.join(" "));
-      }
-    }
-  }
 
   if (comprobanteMatch) setValue("comprobante", comprobanteMatch[0].trim());
   if (serieMatch) {

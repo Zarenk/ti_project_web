@@ -66,56 +66,63 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "p-3 rounded-2xl max-w-[80%] border shadow relative group",
-          isSender
-            ? "bg-gradient-to-r from-blue-200 to-blue-300 text-blue-900"
-            : "bg-gradient-to-r from-pink-200 to-purple-200 text-purple-900"
+          "group flex items-start gap-1",
+          isSender ? "flex-row-reverse" : "flex-row"
         )}
       >
-        {editing ? (
-          <Textarea
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSave();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                setEditing(false);
-                setValue(text);
-              }
-            }}
-            rows={1}
-            className="text-sm"
-            autoFocus
-          />
-        ) : (
-          <>
-            {text && <p className="text-sm">{text}</p>}
-            {file && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={file}
-                alt="Archivo adjunto"
-                className="mt-2 max-h-60 rounded-md"
-              />
-            )}
-            <div className="mt-2 flex items-center gap-2 text-[10px] opacity-70">
-              <Avatar className="h-4 w-4">
-                <AvatarFallback>{isSender ? "T" : "A"}</AvatarFallback>
-              </Avatar>
-              <span>{new Date(createdAt).toLocaleTimeString()}</span>
-            </div>
-          </>
-        )}
+        <div
+          className={cn(
+            "p-3 rounded-2xl max-w-[80%] border shadow",
+            isSender
+              ? "bg-gradient-to-r from-blue-200 to-blue-300 text-blue-900"
+              : "bg-gradient-to-r from-pink-200 to-purple-200 text-purple-900"
+          )}
+        >
+          {editing ? (
+            <Textarea
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSave();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setEditing(false);
+                  setValue(text);
+                }
+              }}
+              rows={1}
+              className="text-sm"
+              autoFocus
+            />
+          ) : (
+            <>
+              {text && <p className="text-sm">{text}</p>}
+              {file && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={file}
+                  alt="Archivo adjunto"
+                  className="mt-2 max-h-60 rounded-md"
+                />
+              )}
+              <div className="mt-2 flex items-center gap-2 text-[10px] opacity-70">
+                <Avatar className="h-4 w-4">
+                  <AvatarFallback>{isSender ? "T" : "A"}</AvatarFallback>
+                </Avatar>
+                <span>{new Date(createdAt).toLocaleTimeString()}</span>
+              </div>
+            </>
+          )}
+        </div>
         {canEdit && !editing && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100"
+                className="h-6 w-6 opacity-0 group-hover:opacity-100 mt-1"
                 aria-label="Opciones del mensaje"
               >
                 <MoreVertical className="h-4 w-4" />

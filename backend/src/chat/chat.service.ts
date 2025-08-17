@@ -56,7 +56,7 @@ export class ChatService {
 
   async getMessages(clientId: number): Promise<ChatMessage[]> {
     return this.prisma.chatMessage.findMany({
-      where: { clientId },
+      where: { clientId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
   }
