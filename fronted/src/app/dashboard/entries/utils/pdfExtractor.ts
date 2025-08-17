@@ -37,7 +37,7 @@ export function detectInvoiceProvider(text: string): InvoiceProvider {
 // Extrae información del proveedor desde el texto del PDF y actualiza el formulario
 // Retorna el RUC encontrado para permitir lógica adicional (como tipo de moneda)
 function extractProviderDetails(text: string, setValue: Function): string | null {
-  const rucMatch = text.match(/R\.?U\.?C\.?\s*(?:N[°º#:\s]*?)?(\d{11})/i);
+  const rucMatch = text.match(/R\.?U\.?C\.?\s*(?:N[°º#\s]*)?[:\s-]*(\d{11})/i);
   let ruc: string | null = null;
   if (rucMatch) {
     ruc = rucMatch[1];
@@ -73,6 +73,7 @@ function extractProviderDetails(text: string, setValue: Function): string | null
       if (!addressMatch && addressLines) setValue("provider_adress", addressLines);
     }
   }
+
 
   return ruc;
 }
