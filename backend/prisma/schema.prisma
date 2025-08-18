@@ -698,3 +698,149 @@ model AuditLog {
   @@index([entityType])
   @@index([action])
 }
+
+enum TemplateVersion {
+  V1
+  V2
+}
+
+enum PublishAdapter {
+  LOCAL_STUB
+}
+
+model Org {
+  id        Int       @id @default(autoincrement())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  campaigns      Campaign[]
+  publishTargets PublishTarget[]
+
+  @@unique([name, deletedAt])
+}
+
+model Campaign {
+  id        Int       @id @default(autoincrement())
+  orgId     Int
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  org       Org        @relation(fields: [orgId], references: [id])
+  templates Template[]
+  creatives Creative[]
+  runs      Run[]
+
+  @@unique([orgId, name, deletedAt])
+  @@index([orgId])
+}
+
+model Template {
+  id         Int             @id @default(autoincrement())
+  campaignId Int
+  name       String
+  version    TemplateVersion
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  deletedAt  DateTime?
+
+  campaign  Campaign   @relation(fields: [campaignId], references: [id])
+  creatives Creative[]
+
+  @@unique([campaignId, version, deletedAt])
+  @@index([campaignId])
+}
+
+model Creative {
+  id         Int       @id @default(autoincrement())
+  campaignId Int
+  templateId Int
+  name       String
+  data       Json
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  template Template @relation(fields: [templateId], references: [id])
+  assets   Asset[]
+
+  @@unique([campaignId, name, deletedAt])
+  @@index([campaignId])
+  @@index([templateId])
+}
+
+model Run {
+  id         Int       @id @default(autoincrement())
+  campaignId Int
+  name       String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  campaign Campaign           @relation(fields: [campaignId], references: [id])
+  assets   Asset[]
+  logs     PublishTargetLog[]
+
+  @@unique([campaignId, name, deletedAt])
+  @@index([campaignId])
+}
+
+model Asset {
+  id         Int       @id @default(autoincrement())
+  runId      Int
+  creativeId Int
+  uri        String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  run      Run                @relation(fields: [runId], references: [id])
+  creative Creative           @relation(fields: [creativeId], references: [id])
+  logs     PublishTargetLog[]
+
+  @@unique([runId, uri, deletedAt])
+  @@index([runId])
+  @@index([creativeId])
+}
+
+model PublishTarget {
+  id        Int            @id @default(autoincrement())
+  orgId     Int
+  name      String
+  adapter   PublishAdapter
+  config    Json
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  deletedAt DateTime?
+
+  org  Org                @relation(fields: [orgId], references: [id])
+  logs PublishTargetLog[]
+
+  @@unique([orgId, name, deletedAt])
+  @@index([orgId])
+}
+
+model PublishTargetLog {
+  id              Int       @id @default(autoincrement())
+  publishTargetId Int
+  assetId         Int
+  status          String
+  message         String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  publishTarget PublishTarget @relation(fields: [publishTargetId], references: [id])
+  asset         Asset         @relation(fields: [assetId], references: [id])
+  run           Run?          @relation(fields: [runId], references: [id])
+  runId         Int?
+
+  @@unique([publishTargetId, assetId, deletedAt])
+  @@index([publishTargetId])
+  @@index([assetId])
+  @@index([runId])
+}

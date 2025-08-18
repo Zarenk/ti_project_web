@@ -74,6 +74,22 @@ async function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
     return acc;
   }, {});
 
+  const categories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+  const title = `CATALOGO DE ${categories.join(', ')} de la empresa TECNOLOGIA INFORMATICA de la fecha ${new Date().toLocaleDateString()}`;
+
+  doc.rect(0, 0, doc.page.width, 80).fill('#333333');
+  doc
+    .fillColor('white')
+    .font('Helvetica-Bold')
+    .fontSize(20)
+    .text(title, doc.page.margins.left, 30, {
+      width:
+        doc.page.width - doc.page.margins.left - doc.page.margins.right,
+      align: 'center',
+    });
+  doc.addPage();
+  doc.fillColor('black');
+
   const entries = Object.entries(grouped).sort(([a], [b]) =>
     a.localeCompare(b),
   );

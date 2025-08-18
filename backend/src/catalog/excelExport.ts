@@ -33,16 +33,6 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
     { header: 'Categoría', key: 'categoryName', width: 20 },
   ];
 
-  const headerRow = worksheet.getRow(1);
-  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-  headerRow.fill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'FF333333' },
-  };
-  headerRow.height = 20;
-
   const grouped = items.reduce<Record<string, CatalogItem[]>>((acc, item) => {
     const cat = item.categoryName || 'Sin categoría';
     if (!acc[cat]) acc[cat] = [];
@@ -51,6 +41,29 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
   }, {});
 
   const categories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+  const title = `CATALOGO DE ${categories.join(', ')} de la empresa TECNOLOGIA INFORMATICA de la fecha ${new Date().toLocaleDateString()}`;
+  worksheet.spliceRows(1, 0, [title]);
+  worksheet.mergeCells('A1:G1');
+  const titleRow = worksheet.getRow(1);
+  titleRow.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+  titleRow.alignment = { horizontal: 'center' };
+  titleRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF333333' },
+  };
+  titleRow.height = 30;
+
+  const headerRow = worksheet.getRow(2);
+  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF333333' },
+  };
+  headerRow.height = 20;
+  
   categories.forEach((cat) => {
     const catRow = worksheet.addRow({ name: cat });
     const rowNumber = catRow.number;

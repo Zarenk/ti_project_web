@@ -19,10 +19,10 @@ import { ProviderSection } from '../components/entries/ProviderSection'
 import { StoreSection } from '../components/entries/StoreSection'
 import { ProductSelection } from '../components/entries/ProductSelection'
 import { SelectedProductsTable } from '../components/entries/SelectedProductsTable'
-import { detectInvoiceProvider, processExtractedText, processInvoiceText } from '../utils/pdfExtractor'
 import { handleFormSubmission } from '../utils/onSubmitHelper'
 import { ActionButtons } from '../components/entries/ActionButtons'
 import { getLatestExchangeRateByCurrency } from '../../exchange/exchange.api'
+import { detectInvoiceProvider, processExtractedText, processInvoiceText } from '../utils/pdfExtractor'
 
 // Función para obtener el userId del token JWT almacenado en localStorage
 async function getUserIdFromToken(): Promise<number | null> {
@@ -359,11 +359,11 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
         if (provider === "deltron") {
           processExtractedText(extractedText, setSelectedProducts, form.setValue, setCurrency);
-        } else if (provider === "gozu") {
-          processInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
         } else {
-          toast.warning("Formato de factura no reconocido.");
-          return;
+          processInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+          if (provider === "unknown") {
+            toast.warning("Formato de factura no reconocido.");
+          }
         }
         setIsNewInvoiceBoolean(true);
         toast.success("Factura subida correctamente.");

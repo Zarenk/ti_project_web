@@ -1,0 +1,91 @@
+import ScrollUpSection from '@/components/ScrollUpSection';
+import MotionProductCard from '@/components/MotionProductCard';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+interface Brand {
+  name: string;
+  logoSvg?: string;
+  logoPng?: string;
+}
+
+interface RecentProduct {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  brand: Brand | null;
+  category: string;
+  images: string[];
+  stock: number;
+}
+
+interface UltimosIngresosSectionProps {
+  visibleRecent: RecentProduct[];
+  recentIndex: number;
+  recentDirection: number;
+  nextRecent: () => void;
+  prevRecent: () => void;
+  recentProductsLength: number;
+}
+
+export default function UltimosIngresosSection({
+  visibleRecent,
+  recentIndex,
+  recentDirection,
+  nextRecent,
+  prevRecent,
+  recentProductsLength,
+}: UltimosIngresosSectionProps) {
+  return (
+    <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
+      <div className="container mx-auto px-4">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">
+            Últimos ingresos
+          </h2>
+        </div>
+        <div className="relative">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={recentIndex}
+              initial={{ x: recentDirection > 0 ? 300 : -300, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: recentDirection > 0 ? -300 : 300, opacity: 0 }}
+              transition={{ type: 'tween' }}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"
+            >
+              {visibleRecent.map((product, idx) => (
+                <MotionProductCard
+                  key={`${product.id}-${idx}`}
+                  product={product}
+                  withActions
+                />
+              ))}
+            </motion.div>
+          </AnimatePresence>
+          {recentProductsLength > 4 && (
+            <>
+              <motion.button
+                aria-label="Anterior"
+                onClick={prevRecent}
+                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[150%] bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+                whileTap={{ scale: 0.9 }}
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </motion.button>
+              <motion.button
+                aria-label="Siguiente"
+                onClick={nextRecent}
+                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[150%] bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+                whileTap={{ scale: 0.9 }}
+              >
+                <ChevronRight className="w-5 h-5" />
+              </motion.button>
+            </>
+          )}
+        </div>
+      </div>
+    </ScrollUpSection>
+  );
+}

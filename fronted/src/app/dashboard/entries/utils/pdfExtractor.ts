@@ -4,17 +4,17 @@ import { toast } from "sonner";
 // Listas de patrones para identificar proveedores por diseño de comprobante
 // Se pueden agregar más nombres o RUCs en cada lista para extender el soporte
 const DELTRON_PATTERNS: (string | RegExp)[] = ["20212331377"];
-const TEMPLATE_PATTERNS: (string | RegExp)[] = [
+const TEMPLATE_PROVIDER_PATTERNS: (string | RegExp)[] = [
   /gozu gaming/i,
   /2060\d{7}/, // RUC de GOZU y similares que comparten el mismo diseño
   /pc\s*link/i, // Nuevo proveedor con el mismo diseño de comprobante
   "20519078520", // RUC del nuevo proveedor
 ];
 
-type InvoiceProvider = "deltron" | "gozu" | "unknown";
+type InvoiceProvider = "deltron" | "template" | "unknown";
 
 // Detecta el proveedor de la factura a partir del texto extraído
-// Devuelve "deltron", "gozu" o "unknown" si no se reconoce
+// Devuelve "deltron", "template" o "unknown" si no se reconoce
 export function detectInvoiceProvider(text: string): InvoiceProvider {
   const normalized = text.toLowerCase();
 
@@ -27,8 +27,8 @@ export function detectInvoiceProvider(text: string): InvoiceProvider {
     return "deltron";
   }
 
-  if (matches(TEMPLATE_PATTERNS)) {
-    return "gozu";
+  if (matches(TEMPLATE_PROVIDER_PATTERNS)) {
+    return "template";
   }
 
   return "unknown";
@@ -50,9 +50,12 @@ function extractProviderDetails(text: string, setValue: Function): string | null
     setValue("provider_name", nameMatch[1].trim());
   }
 
-  const addressMatch = text.match(/Direcci[oó]n[^:]*[:\-\s]*([^\n]+)/i);
+  let addressMatch = text.match(
+    /Direcci[oó]n(?![^\n]*cliente)[^:]*[:\-\s]*([\s\S]*?)(?=\n{2,}|\n(?:RUC|Señor|Cliente|Tipo de Moneda|Observación|Forma de pago|Cantidad|SON:|$))/i
+  );
   if (addressMatch) {
-    setValue("provider_adress", addressMatch[1].trim());
+    const address = addressMatch[1].replace(/\s+/g, " ").trim();
+    setValue("provider_adress", address);
   }
 
   // Fallback para comprobantes que no incluyen etiquetas explícitas
@@ -73,7 +76,6 @@ function extractProviderDetails(text: string, setValue: Function): string | null
       if (!addressMatch && addressLines) setValue("provider_adress", addressLines);
     }
   }
-
 
   return ruc;
 }
@@ -303,7 +305,11 @@ export function processInvoiceText(
 ) {
   const lines = text
     .split("\n")
-    .map((line) => line.trim())
+    .map((line) =>
+      line
+        .trim()
+        .replace(/(?<=\d)(?=\D)|(?<=\D)(?=\d)/g, " ")
+    )
     .filter(Boolean);
 
   const headerKeywords = [
@@ -314,6 +320,10 @@ export function processInvoiceText(
     "SUBTOTAL",
     "TOTAL",
     "SON:",
+    "CANTIDAD",
+    "DESCRIPCIÓN",
+    "UNIDAD",
+    "ICBPER",
   ];
 
   const filteredLines = lines.filter(
@@ -321,12 +331,6 @@ export function processInvoiceText(
   );
 
   const parseProductLine = (line: string) => {
-    const productRegex =
-      /^(\d+(?:[.,]\d+)?)\s*[A-Z]*\s*(.+?)\s*(\d+(?:[.,]\d+)?)\s*(\d+(?:[.,]\d+)?)$/i;
-    const match = line.match(productRegex);
-    if (!match) return null;
-
-    const [, qtyStr, name, unitStr, totalStr] = match;
     const normalize = (v: string) => {
       if (v.includes(',') && v.includes('.')) {
         return parseFloat(v.replace(/,/g, ''));
@@ -334,12 +338,44 @@ export function processInvoiceText(
       return parseFloat(v.replace(',', '.'));
     };
 
-    return {
+    const tokens = line.split(/\s+/);
+    const qtyStr = tokens.shift();
+    if (!qtyStr || !/^\d+(?:[.,]\d+)?$/.test(qtyStr)) return null;
+
+    // Extract trailing numeric values (total, unit price, optional icbper)
+    const numericTail: string[] = [];
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      if (/^\d+(?:[.,]\d+)?$/.test(tokens[i])) {
+        numericTail.push(tokens[i]);
+      } else {
+        break;
+      }
+    }
+    if (numericTail.length < 2) return null;
+
+    const totalStr = numericTail[0];
+    const unitStr = numericTail[1];
+    const icbperStr = numericTail[2];
+    const name = tokens.slice(0, tokens.length - numericTail.length).join(' ');
+
+    const product: {
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+      icbper?: number;
+    } = {
       name: name.trim(),
       quantity: normalize(qtyStr),
       unitPrice: normalize(unitStr),
       totalPrice: normalize(totalStr),
     };
+
+    if (icbperStr) {
+      product.icbper = normalize(icbperStr);
+    }
+
+    return product;
   };
 
   const products: {
@@ -347,6 +383,7 @@ export function processInvoiceText(
     quantity: number;
     unitPrice: number;
     totalPrice: number;
+    icbper?: number;
   }[] = [];
 
   for (const line of filteredLines) {

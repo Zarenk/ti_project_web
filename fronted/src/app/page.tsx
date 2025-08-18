@@ -1,15 +1,6 @@
 "use client"
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Card, CardContent } from '@/components/ui/card';
-import MotionProductCard from '@/components/MotionProductCard';
-import HeroSlideshow from '@/components/HeroSlideshow';
-import ScrollUpSection from '@/components/ScrollUpSection';
 import {
   ShoppingCart,
   User,
@@ -44,15 +35,19 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import Navbar from "@/components/navbar"
-import { useCart } from "@/context/cart-context"
 import { toast } from "sonner"
-import { formatCurrency } from "@/lib/utils"
 import { getProducts } from "./dashboard/products/products.api"
 import { getCategoriesWithCount } from "./dashboard/categories/categories.api"
 import { getRecentEntries } from "./dashboard/entries/entries.api"
+import UltimosIngresosSection from '@/components/home/UltimosIngresosSection';
+import HeroSection from '@/components/home/HeroSection';
+import FeaturedProductsSection from '@/components/home/FeaturedProductsSection';
+import CategoriesSection from '@/components/home/CategoriesSection';
+import BenefitsSection from '@/components/home/BenefitsSection';
+import TestimonialsSection from '@/components/home/TestimonialSection';
+import NewsletterSection from '@/components/home/NewsLetterSection';
 
 export default function Homepage() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [email, setEmail] = useState("")
 
   const handleSubscribe = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -299,261 +294,31 @@ export default function Homepage() {
     <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-gray-950 dark:to-black">
       <Navbar />
 
-      {/* Últimos ingresos */}
-      <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">
-              Últimos ingresos
-            </h2>
-          </div>
-          <div className="relative">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={recentIndex}
-                initial={{ x: recentDirection > 0 ? 300 : -300, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: recentDirection > 0 ? -300 : 300, opacity: 0 }}
-                transition={{ type: 'tween' }}
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"
-              >
-                {visibleRecent.map((product, idx) => (
-                  <MotionProductCard
-                    key={`${product.id}-${idx}`}
-                    product={product}
-                    withActions
-                  />
-                ))}
-              </motion.div>
-            </AnimatePresence>
-            {recentProducts.length > 4 && (
-              <>
-                <motion.button
-                  aria-label="Anterior"
-                  onClick={prevRecent}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[150%] bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </motion.button>
-                <motion.button
-                  aria-label="Siguiente"
-                  onClick={nextRecent}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[150%] bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </motion.button>
-              </>
-            )}
-          </div>
-        </div>
-      </ScrollUpSection>
-
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-r from-sky-100 via-blue-50 to-sky-100 py-20 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800">
-        <div className="container mx-auto px-4">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-8">
-              <div className="space-y-4">
-                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800 dark:text-gray-100 leading-tight">
-                  Potencia tu productividad con nuestras <span className="text-sky-600">laptops y componentes</span>
-                </h1>
-                <p className="text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
-                  Equipos de alto rendimiento para trabajo, estudio y gaming. Encuentra la tecnología perfecta para tus
-                  necesidades.
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button size="lg" className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 text-lg">
-                  Ver productos
-                  <ChevronRight className="w-5 h-5 ml-2" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="border-sky-300 text-sky-600 hover:bg-sky-50 px-8 py-3 text-lg bg-transparent"
-                >
-                  Ofertas especiales
-                </Button>
-              </div>
-            </div>
-            <HeroSlideshow products={heroProducts} />
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Products */}
-      <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Productos destacados</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Descubre nuestra selección de equipos más populares con las mejores ofertas
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuredProducts.map((product) => (
-              <MotionProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        </div>
-      </ScrollUpSection>
-
-      {/* Categories */}
-      <ScrollUpSection className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Explora por categoría</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Encuentra exactamente lo que necesitas en nuestras categorías especializadas
-            </p>
-          </div>
-
-          <div className="relative">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={categoryIndex}
-                initial={{ x: direction > 0 ? 300 : -300, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: direction > 0 ? -300 : 300, opacity: 0 }}
-                transition={{ type: "tween" }}
-                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 items-stretch"
-                >
-                {visibleCategories.map((category, index) => (
-                  <Link
-                    key={index}
-                    href={`/store?category=${encodeURIComponent(category.name)}`}
-                  >
-                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                      <Card className="h-full group hover:shadow-lg transition-all duration-300 cursor-pointer border-sky-100 hover:border-sky-200">
-                        <CardContent className="p-6 text-center flex flex-col justify-between h-full">
-                          <div className="w-16 h-16 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                            <category.icon className="w-8 h-8 text-white" />
-                          </div>
-                          <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-sky-600 transition-colors line-clamp-2">
-                            {category.name}
-                          </h3>
-                          <p className="text-sm text-gray-600 dark:text-gray-300">{category.count}+ productos</p>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </Link>
-                ))}
-              </motion.div>
-            </AnimatePresence>
-            {categories.length > 6 && (
-              <>
-                <motion.button
-                  aria-label="Anterior"
-                  onClick={prevCategories}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[150%] bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </motion.button>
-                <motion.button
-                  aria-label="Siguiente"
-                  onClick={nextCategories}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[150%] bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </motion.button>
-              </>
-            )}
-          </div>
-        </div>
-      </ScrollUpSection>
-
-      {/* Benefits */}
-      <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">¿Por qué comprar con nosotros?</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Ofrecemos la mejor experiencia de compra con servicios que marcan la diferencia
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {benefits.map((benefit, index) => (
-              <div key={index} className="text-center group">
-                <div className="w-20 h-20 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
-                  <benefit.icon className="w-10 h-10 text-white" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-3">{benefit.title}</h3>
-                <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{benefit.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </ScrollUpSection>
-
-      {/* Testimonials */}
-      <ScrollUpSection className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Lo que dicen nuestros clientes</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Miles de clientes satisfechos confían en nosotros para sus necesidades tecnológicas
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <Card key={index} className="border-sky-100 hover:shadow-lg transition-shadow duration-300">
-                <CardContent className="p-8">
-                  <div className="flex items-center mb-4">
-                    {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
-                    ))}
-                  </div>
-                  <p className="text-gray-700 dark:text-gray-300 mb-6 leading-relaxed italic">"{testimonial.comment}"</p>
-                  <div>
-                    <p className="font-semibold text-gray-800 dark:text-gray-100">{testimonial.name}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">{testimonial.location}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </ScrollUpSection>
-
-      {/* Newsletter & Contact */}
-      <ScrollUpSection className="py-20 bg-gradient-to-r from-blue-700 to-blue-800 text-white">
-        <div className="container mx-auto px-4">
-          <div className="max-w-md mx-auto text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Suscríbete y recibe ofertas exclusivas
-            </h2>
-            <p className="text-xl text-blue-100 mb-8">
-              Mantente al día con las últimas novedades, ofertas especiales y
-              lanzamientos de productos
-            </p>
-            <form
-              onSubmit={handleSubscribe}
-              className="flex flex-col sm:flex-row gap-4"
-            >
-              <Input
-                type="email"
-                placeholder="Tu correo electrónico"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="flex-1 bg-white dark:bg-gray-800 dark:text-gray-100 text-gray-800 border-0"
-              />
-              <Button
-                type="submit"
-                className="bg-white text-blue-700 hover:bg-blue-50 px-8"
-              >
-                Suscribirme
-              </Button>
-            </form>
-          </div>
-        </div>
-      </ScrollUpSection>
+      <UltimosIngresosSection
+        visibleRecent={visibleRecent}
+        recentIndex={recentIndex}
+        recentDirection={recentDirection}
+        nextRecent={nextRecent}
+        prevRecent={prevRecent}
+        recentProductsLength={recentProducts.length}
+      />
+      <HeroSection heroProducts={heroProducts} />
+      <FeaturedProductsSection featuredProducts={featuredProducts} />
+      <CategoriesSection
+        visibleCategories={visibleCategories}
+        categoryIndex={categoryIndex}
+        direction={direction}
+        nextCategories={nextCategories}
+        prevCategories={prevCategories}
+        categoriesLength={categories.length}
+      />
+      <BenefitsSection benefits={benefits} />
+      <TestimonialsSection testimonials={testimonials} />
+      <NewsletterSection
+        email={email}
+        setEmail={setEmail}
+        handleSubscribe={handleSubscribe}
+      />
     </div>
   )
 }

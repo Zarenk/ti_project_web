@@ -17,15 +17,26 @@ export class BrandsService {
     return name.trim().toUpperCase();
   }
 
+  private async getActorInfo(req: Request) {
+    const actorId = (req as any)?.user?.userId;
+    if (!actorId) return { actorId: undefined, actorEmail: undefined };
+    const user = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { email: true },
+    });
+    return { actorId, actorEmail: user?.email };
+  }
+
   async create(createBrandDto: CreateBrandDto, req: Request) {
     const name = this.normalizeName(createBrandDto.name);
     const brand = await this.prisma.brand.create({
       data: { ...createBrandDto, name },
     });
+    const { actorId, actorEmail } = await this.getActorInfo(req);
     await this.activityService.log(
       {
-        actorId: (req as any)?.user?.userId,
-        actorEmail: (req as any)?.user?.username,
+        actorId,
+        actorEmail,
         entityType: 'Brand',
         entityId: brand.id.toString(),
         action: AuditAction.CREATED,
@@ -69,6 +80,7 @@ export class BrandsService {
       ? { ...updateBrandDto, name: this.normalizeName(updateBrandDto.name) }
       : updateBrandDto;
     const updated = await this.prisma.brand.update({ where: { id }, data });
+    const { actorId, actorEmail } = await this.getActorInfo(req);
     const diff: any = { before: {}, after: {} };
     for (const key of Object.keys(updated)) {
       if (JSON.stringify((before as any)[key]) !== JSON.stringify((updated as any)[key])) {
@@ -78,8 +90,8 @@ export class BrandsService {
     }
     await this.activityService.log(
       {
-        actorId: (req as any)?.user?.userId,
-        actorEmail: (req as any)?.user?.username,
+        actorId,
+        actorEmail,
         entityType: 'Brand',
         entityId: updated.id.toString(),
         action: AuditAction.UPDATED,
@@ -93,10 +105,11 @@ export class BrandsService {
 
   async remove(id: number, req: Request) {
     const removed = await this.prisma.brand.delete({ where: { id } });
+    const { actorId, actorEmail } = await this.getActorInfo(req);
     await this.activityService.log(
       {
-        actorId: (req as any)?.user?.userId,
-        actorEmail: (req as any)?.user?.username,
+        actorId,
+        actorEmail,
         entityType: 'Brand',
         entityId: id.toString(),
         action: AuditAction.DELETED,

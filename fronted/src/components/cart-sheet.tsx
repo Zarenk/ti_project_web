@@ -34,7 +34,7 @@ export default function CartSheet() {
       {/* Cart Icon Button */}
       <Button
         onClick={() => setIsOpen(true)}
-        className="relative bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg transition-all duration-300 hover:scale-105"
+        className="relative bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg transition-all duration-300 hover:scale-105 cursor-pointer"
       >
         <ShoppingCart className="h-5 w-5" />
         {totalItems > 0 && (

@@ -12,11 +12,12 @@ import {
   UploadedFiles,
   BadRequestException,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
-import { promises as fs } from 'fs';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { BrandsService } from './brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
@@ -69,6 +70,7 @@ export class BrandsController {
     throw new BadRequestException('Formato de imagen no soportado');
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post()
   @UseInterceptors(
     FileFieldsInterceptor(
@@ -130,6 +132,7 @@ export class BrandsController {
     return this.brandsService.findOne(+id);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Patch(':id')
   @UseInterceptors(
     FileFieldsInterceptor(
@@ -177,11 +180,13 @@ export class BrandsController {
     return this.brandsService.update(+id, data, req);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Delete(':id')
   remove(@Param('id') id: string, @Req() req: Request) {
     return this.brandsService.remove(+id, req);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post(':id/convert-png')
   async convertPngToSvg(@Param('id') id: string, @Req() req: Request) {
     const brand = await this.brandsService.findOne(+id);
@@ -201,6 +206,7 @@ export class BrandsController {
     );
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post(':id/upload-logo')
   @UseInterceptors(
     FileInterceptor('file', {

@@ -89,6 +89,18 @@ function formatPrice(value: number): string {
 
 const styles = StyleSheet.create({
   page: { padding: 16 },
+  titlePage: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#333333',
+  },
+  titleText: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    padding: 16,
+  },
   category: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -134,8 +146,14 @@ function CatalogPdfDocument({ sections }: { sections: CatalogSection[] }) {
     }
   }
 
+  const categoriesList = sections.map((s) => s.category).join(', ')
+  const title = `CATALOGO DE ${categoriesList} de TECNOLOGIA INFORMATICA de la fecha ${new Date().toLocaleDateString()}`
+
   return (
     <Document>
+      <Page size="A4" style={styles.titlePage}>
+        <Text style={styles.titleText}>{title}</Text>
+      </Page>
       {pages.map((page, index) => (
         <Page key={index} size="A4" style={styles.page}>
           <Text style={styles.category}>{page.category}</Text>

@@ -245,8 +245,20 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
-  const { userName } = useAuth()
+  const { userName, userId, role } = useAuth()
   const { totalUnread } = useMessages()
+
+  const adsLabEnabled = process.env.NEXT_PUBLIC_ADSLAB_ENABLED === 'true'
+  const allowUserIds = process.env.NEXT_PUBLIC_ADSLAB_ALLOWLIST_USER_IDS
+    ? process.env.NEXT_PUBLIC_ADSLAB_ALLOWLIST_USER_IDS.split(',').map((id) => id.trim()).filter(Boolean)
+    : []
+  const allowRoles = process.env.NEXT_PUBLIC_ADSLAB_ALLOWLIST_ROLES
+    ? process.env.NEXT_PUBLIC_ADSLAB_ALLOWLIST_ROLES.split(',').map((r) => r.trim()).filter(Boolean)
+    : []
+  const canAccessAdsLab = adsLabEnabled && (
+    (userId !== null && allowUserIds.includes(String(userId))) ||
+    (role !== null && allowRoles.includes(role))
+  )
 
   const profile = {
     name: userName || "",
@@ -255,7 +267,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   const navMain = React.useMemo(() => {
-    return data.navMain.map((item) => {
+    const items = data.navMain.map((item) => {
       if (item.title === "Ventas") {
         return {
           ...item,
@@ -266,7 +278,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }
       return item
     })
-  }, [totalUnread])
+  if (canAccessAdsLab) {
+      items.push({
+        title: "AdsLab",
+        url: "#",
+        icon: Bot,
+        items: [
+          {
+            title: "AdsLab",
+            url: "/dashboard/adslab",
+          },
+        ],
+      })
+    }
+
+    return items
+  }, [totalUnread, canAccessAdsLab])
 
   return (
     <Sidebar collapsible="icon" {...props}>

@@ -17,6 +17,14 @@ export class ChatService {
 
   private readonly LIMIT_MS = 5 * 60 * 1000;
 
+  private async getActorEmail(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    return user?.email;
+  }
+
   async addMessage(
     {
       clientId,
@@ -39,9 +47,11 @@ export class ChatService {
 
     // Log message creation without storing full message content
     const sanitizedText = text?.slice(0, 1000);
+    const actorEmail = await this.getActorEmail(senderId);
     await this.activityService.log(
       {
         actorId: senderId,
+        actorEmail,
         entityType: 'ChatMessage',
         entityId: message.id.toString(),
         action: AuditAction.CREATED,
@@ -96,9 +106,11 @@ export class ChatService {
     });
 
     const sanitizedText = text?.slice(0, 1000);
+    const actorEmail = await this.getActorEmail(senderId);
     await this.activityService.log(
       {
         actorId: senderId,
+        actorEmail,
         entityType: 'ChatMessage',
         entityId: id.toString(),
         action: AuditAction.UPDATED,
@@ -134,9 +146,11 @@ export class ChatService {
       data: { deletedAt: new Date() },
     });
 
+    const actorEmail = await this.getActorEmail(senderId);
     await this.activityService.log(
       {
         actorId: senderId,
+        actorEmail,
         entityType: 'ChatMessage',
         entityId: id.toString(),
         action: AuditAction.DELETED,
