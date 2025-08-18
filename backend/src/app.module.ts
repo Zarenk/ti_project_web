@@ -35,12 +35,13 @@ import { BrandsModule } from './brands/brands.module';
 import { ActivityModule } from './activity/activity.module';
 import { AuthModule } from './auth/auth.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
+import { AdsModule } from './ads/ads.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
     ProductsModule, UsersModule, CategoryModule, StoresModule, 
-    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule, WebsalesModule, ContactModule, ChatModule, FavoritesModule, NewsletterModule, OrdertrackingModule, CatalogexportModule, BrandsModule, ActivityModule, AuthModule, CampaignsModule],
+    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule, WebsalesModule, ContactModule, ChatModule, FavoritesModule, NewsletterModule, OrdertrackingModule, CatalogexportModule, BrandsModule, ActivityModule, AuthModule, CampaignsModule, AdsModule],
   controllers: [AppController, CatalogExportController],
   providers: [AppService, BarcodeGateway, PrismaService],
 })

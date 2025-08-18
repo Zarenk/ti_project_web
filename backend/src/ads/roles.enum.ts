@@ -1,0 +1,6 @@
+export enum AdsRole {
+  ADMIN = 'ADMIN',
+  MARKETING = 'MARKETING',
+  REVIEWER = 'REVIEWER',
+  VIEWER = 'VIEWER',
+}
