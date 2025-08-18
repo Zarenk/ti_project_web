@@ -209,8 +209,8 @@ export default function Homepage() {
         gsapModule.default.registerPlugin(ScrollTrigger.default)
         ctx = gsapModule.default.context(() => {
           gsapModule.default
-            .utils.toArray<HTMLElement>(".gsap-section")
-            .forEach((section) => {
+            .utils.toArray(".gsap-section")
+            .forEach((section:any) => {
               gsapModule.default.from(section, {
                 y: 100,
                 opacity: 0,
@@ -228,7 +228,7 @@ export default function Homepage() {
       }
     }
     loadGsap()
-    return () => ctx?.revert()
+    return () => ctx?.kill()
   }, [])
 
   const nextCategories = () =>

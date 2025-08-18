@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import HeroSlideshow from '@/components/HeroSlideshow';
+import SectionBackground from '@/components/SectionBackground';
 import { ChevronRight } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
@@ -63,6 +64,7 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
       ref={sectionRef}
       className="relative bg-gradient-to-r from-sky-100 via-blue-50 to-sky-100 py-20 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800"
     >
+      <SectionBackground />
       <div className="container mx-auto px-4">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-8">

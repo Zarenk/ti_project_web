@@ -2,6 +2,7 @@ import ScrollUpSection from '@/components/ScrollUpSection';
 import MotionProductCard from '@/components/MotionProductCard';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import SectionBackground from '../SectionBackground';
 
 interface Brand {
   name: string;
@@ -39,6 +40,7 @@ export default function UltimosIngresosSection({
 }: UltimosIngresosSectionProps) {
   return (
     <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
+      <SectionBackground />
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4 font-signika">
