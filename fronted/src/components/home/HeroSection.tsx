@@ -9,10 +9,25 @@ interface HeroSectionProps {
 
 export default function HeroSection({ heroProducts }: HeroSectionProps) {
 
-  const sectionRef = useRef<HTMLDivElement>(null)
+   const sectionRef = useRef<HTMLDivElement>(null);
+
+  const renderAnimatedText = (text: string) => {
+    const words = text.split(' ');
+    return words.map((word, wordIndex) => (
+      <span key={wordIndex} className="inline-block whitespace-nowrap">
+        {word.split('').map((char, charIndex) => (
+          <span key={`${wordIndex}-${charIndex}`} className="inline-block hero-letter">
+            {char}
+          </span>
+        ))}
+        {wordIndex < words.length - 1 && (
+          <span className="inline-block hero-letter whitespace-pre">{' '}</span>
+        )}
+      </span>
+    ));
+  };
 
   useEffect(() => {
-    let ctx: any
     import('gsap')
       .then((gsapModule) => {
         const gsap = gsapModule.default;
@@ -52,18 +67,11 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-8">
             <div className="space-y-4 hero-title">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800 dark:text-gray-100 leading-tight">
-                {`Potencia tu productividad con nuestras `.split('').map((char, i) => (
-                  <span key={i} className="inline-block hero-letter">
-                    {char === ' ' ? ' ' : char}
-                  </span>
-                ))}
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800 dark:text-gray-100 leading-tight font-signika">
+                {renderAnimatedText('Potencia tu productividad con nuestras')}
                 <span className="text-sky-600">
-                  {`laptops y componentes`.split('').map((char, i) => (
-                    <span key={`h-${i}`} className="inline-block hero-letter">
-                      {char === ' ' ? ' ' : char}
-                    </span>
-                  ))}
+                  {' '}
+                  {renderAnimatedText('laptops y componentes')}
                 </span>
               </h1>
               <p className="text-xl text-gray-600 dark:text-gray-300 leading-relaxed hero-description">

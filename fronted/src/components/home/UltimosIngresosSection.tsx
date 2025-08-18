@@ -41,7 +41,7 @@ export default function UltimosIngresosSection({
     <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4 font-signika">
             Últimos ingresos
           </h2>
         </div>

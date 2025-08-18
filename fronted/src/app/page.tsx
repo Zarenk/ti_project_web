@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ShoppingCart,
   User,
@@ -45,9 +45,10 @@ import FeaturedProductsSection from '@/components/home/FeaturedProductsSection';
 import CategoriesSection from '@/components/home/CategoriesSection';
 import BenefitsSection from '@/components/home/BenefitsSection';
 import TestimonialsSection from '@/components/home/TestimonialSection';
-import NewsletterSection from '@/components/home/NewsLetterSection';
+import NewsletterSection from '@/components/home/NewsletterSection';
 
 export default function Homepage() {
+  const sectionsRef = useRef<HTMLDivElement>(null)
   const [email, setEmail] = useState("")
 
   const handleSubscribe = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -199,6 +200,37 @@ export default function Homepage() {
     fetchCategoriesData()
   }, [])
 
+  useEffect(() => {
+    let ctx: any
+    async function loadGsap() {
+      try {
+        const gsapModule = await import("gsap")
+        const ScrollTrigger = await import("gsap/ScrollTrigger")
+        gsapModule.default.registerPlugin(ScrollTrigger.default)
+        ctx = gsapModule.default.context(() => {
+          gsapModule.default
+            .utils.toArray<HTMLElement>(".gsap-section")
+            .forEach((section) => {
+              gsapModule.default.from(section, {
+                y: 100,
+                opacity: 0,
+                duration: 1,
+                ease: "power2.out",
+                scrollTrigger: {
+                  trigger: section,
+                  start: "top 80%",
+                },
+              })
+            })
+        }, sectionsRef)
+      } catch (err) {
+        console.error("GSAP animations failed to load", err)
+      }
+    }
+    loadGsap()
+    return () => ctx?.revert()
+  }, [])
+
   const nextCategories = () =>
     setCategoryIndex((i) =>
       categories.length > 0 ? (i + 6) % categories.length : i,
@@ -293,32 +325,47 @@ export default function Homepage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-gray-950 dark:to-black">
       <Navbar />
-
-      <UltimosIngresosSection
-        visibleRecent={visibleRecent}
-        recentIndex={recentIndex}
-        recentDirection={recentDirection}
-        nextRecent={nextRecent}
-        prevRecent={prevRecent}
-        recentProductsLength={recentProducts.length}
-      />
-      <HeroSection heroProducts={heroProducts} />
-      <FeaturedProductsSection featuredProducts={featuredProducts} />
-      <CategoriesSection
-        visibleCategories={visibleCategories}
-        categoryIndex={categoryIndex}
-        direction={direction}
-        nextCategories={nextCategories}
-        prevCategories={prevCategories}
-        categoriesLength={categories.length}
-      />
-      <BenefitsSection benefits={benefits} />
-      <TestimonialsSection testimonials={testimonials} />
-      <NewsletterSection
-        email={email}
-        setEmail={setEmail}
-        handleSubscribe={handleSubscribe}
-      />
+      <div ref={sectionsRef}>
+        <section className="gsap-section">
+          <HeroSection heroProducts={heroProducts} />
+        </section>
+        <section className="gsap-section">
+          <UltimosIngresosSection
+            visibleRecent={visibleRecent}
+            recentIndex={recentIndex}
+            recentDirection={recentDirection}
+            nextRecent={nextRecent}
+            prevRecent={prevRecent}
+            recentProductsLength={recentProducts.length}
+          />
+        </section>
+        <section className="gsap-section">
+          <FeaturedProductsSection featuredProducts={featuredProducts} />
+        </section>
+        <section className="gsap-section">
+          <CategoriesSection
+            visibleCategories={visibleCategories}
+            categoryIndex={categoryIndex}
+            direction={direction}
+            nextCategories={nextCategories}
+            prevCategories={prevCategories}
+            categoriesLength={categories.length}
+          />
+        </section>
+        <section className="gsap-section">
+          <BenefitsSection benefits={benefits} />
+        </section>
+        <section className="gsap-section">
+          <TestimonialsSection testimonials={testimonials} />
+        </section>
+        <section className="gsap-section">
+          <NewsletterSection
+            email={email}
+            setEmail={setEmail}
+            handleSubscribe={handleSubscribe}
+          />
+        </section>
+      </div>
     </div>
   )
 }

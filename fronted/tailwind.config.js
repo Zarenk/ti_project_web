@@ -4,7 +4,11 @@ module.exports = {
     "./src/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        signika: ['"Signika Negative"', 'sans-serif'],
+      },
+    },
   },
   plugins: [require('@tailwindcss/line-clamp')],
 };
