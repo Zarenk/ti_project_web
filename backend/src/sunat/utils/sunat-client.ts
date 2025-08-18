@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as fs from 'fs';
 import * as https from 'https';
+import { assertSafeUrl } from '../../common/security/ssrf.util';
 
 /**
  * Envía un archivo ZIP a la SUNAT.
@@ -23,6 +24,8 @@ export async function sendToSunat(
     if (!fs.existsSync(zipFilePath)) {
       throw new Error(`El archivo ZIP no existe en la ruta: ${zipFilePath}`);
     }
+
+    await assertSafeUrl(sunatUrl);
 
     // Leer el contenido del archivo ZIP y convertirlo a base64
     const zipContent = fs.readFileSync(zipFilePath).toString('base64');
@@ -61,7 +64,7 @@ export async function sendToSunat(
 
     // Retornar la respuesta de la SUNAT
     return response.data;
-  } catch (error:any) {
+  } catch (error: any) {
     console.error('Error al enviar el archivo a la SUNAT:', error.message);
     if (error.response) {
       console.error('Respuesta de SUNAT:', error.response.status, error.response.data);
