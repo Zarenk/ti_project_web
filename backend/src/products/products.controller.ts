@@ -19,8 +19,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
-import * as multer from 'multer';
-import { UploaderService } from '../common/upload/uploader.service';
+import { diskStorage } from 'multer';
 import { extname } from 'path';
 
 
@@ -29,7 +28,6 @@ export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
     private readonly activityService: ActivityService,
-    private readonly uploader: UploaderService,
   ) {}
 
   @Post()
@@ -67,18 +65,30 @@ export class ProductsController {
 
   @Post('upload-image')
     @UseInterceptors(
-    FileInterceptor('file', {
-      storage: multer.memoryStorage(),
-    }),
-  )
-  async uploadImage(@UploadedFile() file: Express.Multer.File) {
-    if (!file) {
-      throw new BadRequestException('No se proporcionó ninguna imagen');
+      FileInterceptor('file', {
+        storage: diskStorage({
+          destination: './uploads/products',
+          filename: (req, file, cb) => {
+            const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+            cb(null, `${unique}${extname(file.originalname)}`);
+          },
+        }),
+        fileFilter: (req, file, cb) => {
+          if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+            return cb(new BadRequestException('Solo se permiten imagenes'), false);
+          }
+          cb(null, true);
+        },
+      }),
+    )
+    uploadImage(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
+      if (!file) {
+        throw new BadRequestException('No se proporcionó ninguna imagen');
+      }
+      const baseUrl =
+        process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+      return { url: `${baseUrl}/uploads/products/${file.filename}` };
     }
-  const key = `products/${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname)}`;
-    const url = await this.uploader.uploadImage(file, key);
-    return { url };
-  }
 
   @Get()
   @ApiResponse({status: 200, description: 'Return all products'}) // Swagger 
@@ -90,7 +100,7 @@ export class ProductsController {
   findOne(@Param('id') id: string) {
     const numericId = parseInt(id, 10); // Convierte el ID a un número entero
     if (isNaN(numericId)) {
-      throw new BadRequestException('El ID debe ser un número válido.');
+    throw new BadRequestException('El ID debe ser un número válido.');
     }
     return this.productsService.findOne(numericId);
   }

@@ -16,8 +16,26 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
     import('gsap')
       .then((gsapModule) => {
         const gsap = gsapModule.default;
-        gsap.from('.hero-title', { opacity: 0, y: 40, duration: 1 });
-        gsap.from('.hero-buttons', { opacity: 0, y: 20, duration: 0.8, delay: 0.5 });
+        gsap.from('.hero-letter', {
+          opacity: 0,
+          y: 20,
+          duration: 0.6,
+          stagger: 0.05,
+          ease: 'power2.out',
+        });
+        gsap.from('.hero-description', {
+          opacity: 0,
+          y: 20,
+          duration: 0.6,
+          delay: 0.5,
+          ease: 'power2.out',
+        });
+        gsap.from('.hero-buttons', {
+          opacity: 0,
+          y: 20,
+          duration: 0.8,
+          delay: 0.8,
+        });
       })
       .catch((err) => console.error('GSAP failed to load', err))
 
@@ -35,9 +53,20 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
           <div className="space-y-8">
             <div className="space-y-4 hero-title">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800 dark:text-gray-100 leading-tight">
-                Potencia tu productividad con nuestras <span className="text-sky-600">laptops y componentes</span>
+                {`Potencia tu productividad con nuestras `.split('').map((char, i) => (
+                  <span key={i} className="inline-block hero-letter">
+                    {char === ' ' ? ' ' : char}
+                  </span>
+                ))}
+                <span className="text-sky-600">
+                  {`laptops y componentes`.split('').map((char, i) => (
+                    <span key={`h-${i}`} className="inline-block hero-letter">
+                      {char === ' ' ? ' ' : char}
+                    </span>
+                  ))}
+                </span>
               </h1>
-              <p className="text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
+              <p className="text-xl text-gray-600 dark:text-gray-300 leading-relaxed hero-description">
                 Equipos de alto rendimiento para trabajo, estudio y gaming. Encuentra la tecnología perfecta para tus necesidades.
               </p>
             </div>
