@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { fileTypeFromBuffer } from 'file-type';
 import sharp from 'sharp';
 import { S3Service } from '../storage/s3.service';
 import { AntivirusService } from '../security/antivirus.service';
@@ -12,6 +11,7 @@ export class UploaderService {
     if (file.size > 5 * 1024 * 1024) {
       throw new Error('File too large');
     }
+    const { fileTypeFromBuffer } = await import('file-type');
     const type = await fileTypeFromBuffer(file.buffer);
     if (!type || !['image/jpeg', 'image/png'].includes(type.mime)) {
       throw new Error('Invalid file type');

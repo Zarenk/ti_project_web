@@ -107,6 +107,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center'
   },
+  categorySeparator: {
+    width: '100%',
+    height: 4,
+    backgroundColor: '#007bff',
+    marginBottom: 8,
+  },
   grid: { display: 'flex', flexDirection: 'row', flexWrap: 'wrap' },
   item: {
     width: '33.33%',
@@ -157,6 +163,7 @@ function CatalogPdfDocument({ sections }: { sections: CatalogSection[] }) {
       {pages.map((page, index) => (
         <Page key={index} size="A4" style={styles.page}>
           <Text style={styles.category}>{page.category}</Text>
+          <View style={styles.categorySeparator} />
           <View style={styles.grid}>
             {page.items.map((item, idx) => (
               <View key={idx} style={styles.item}>
