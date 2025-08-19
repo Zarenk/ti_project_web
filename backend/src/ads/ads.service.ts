@@ -7,7 +7,7 @@ import { CreateCreativeDto } from './dto/create-creative.dto';
 import { UpdateCreativeDto } from './dto/update-creative.dto';
 import { ReviewCreativeDto } from './dto/review-creative.dto';
 import { Logger } from '@nestjs/common';
-import { Job, Worker } from 'bullmq';
+import { Job, Queue, Worker } from 'bullmq';
 import {
   ADS_GENERATE_QUEUE,
   ADS_PUBLISH_QUEUE,
@@ -62,19 +62,26 @@ export class AdsService {
     );
     this.generateWorker = generateWorker;
 
-    generateWorker.on('failed', async (job, err) => {
-      if (!job) return;
-      if (generateDlqQueue) {
-        await generateDlqQueue.add('failed', job.data, { jobId: job.id });
-      }
-      if (this.generateWorker) {
-        await this.handleFailure(this.generateWorker, err);
-      }
+    generateWorker.on('failed', (job, err) => {
+      void (async () => {
+        if (!job) return;
+        if (generateDlqQueue) {
+          await generateDlqQueue.add('failed', job.data, { jobId: job.id });
+        }
+        if (this.generateWorker) {
+          await this.handleFailure(this.generateWorker, err);
+        }
+      })();
+    });
+    generateWorker.on('error', (err) => {
+      this.logger.error(`Redis error on ${ADS_GENERATE_QUEUE}: ${err.message}`);
+      void this.generateWorker?.close();
+      this.generateWorker = null;
     });
 
     const publishWorker = new Worker<AdsJobData>(
       ADS_PUBLISH_QUEUE,
-      async (job) => this.processPublish(job),
+      (job) => this.processPublish(job),
       {
         connection: redisConfig,
         concurrency: 2,
@@ -83,14 +90,21 @@ export class AdsService {
     );
     this.publishWorker = publishWorker;
 
-    publishWorker.on('failed', async (job, err) => {
-      if (!job) return;
-      if (publishDlqQueue) {
-        await publishDlqQueue.add('failed', job.data, { jobId: job.id });
-      }
-      if (this.publishWorker) {
-        await this.handleFailure(this.publishWorker, err);
-      }
+    publishWorker.on('failed', (job, err) => {
+      void (async () => {
+        if (!job) return;
+        if (publishDlqQueue) {
+          await publishDlqQueue.add('failed', job.data, { jobId: job.id });
+        }
+        if (this.publishWorker) {
+          await this.handleFailure(this.publishWorker, err);
+        }
+      })();
+    });
+    publishWorker.on('error', (err) => {
+      this.logger.error(`Redis error on ${ADS_PUBLISH_QUEUE}: ${err.message}`);
+      void this.publishWorker?.close();
+      this.publishWorker = null;
     });
   }
 
@@ -98,17 +112,16 @@ export class AdsService {
     if (err instanceof QuotaExceededError) {
       this.logger.warn('Quota exceeded, pausing worker');
       await worker.pause(true);
-      setTimeout(async () => {
-        try {
-          await worker.resume();
-        } catch (e) {
+      setTimeout(() => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        void worker.resume().catch((e) => {
           this.logger.error(e);
-        }
+        });
       }, 60_000);
     }
   }
 
-  private async processGenerate(job: Job<AdsJobData>) {
+  private processGenerate(job: Job<AdsJobData>) {
     this.logger.log('processing generate', {
       requestId: job.data.requestId,
       jobId: job.id,
@@ -157,9 +170,15 @@ export class AdsService {
       this.logger.warn('Redis disabled, cannot requeue DLQ');
       return 0;
     }
-    const jobs = await dlq.getJobs(['waiting', 'delayed', 'failed']);
+    const jobs = await (dlq as Queue<AdsJobData>).getJobs([
+      'waiting',
+      'delayed',
+      'failed',
+    ]);
     for (const job of jobs) {
-      await main.add(job.name, job.data, { jobId: job.id });
+      await (main as Queue<AdsJobData>).add(job.name, job.data, {
+        jobId: job.id,
+      });
       await job.remove();
     }
     return jobs.length;

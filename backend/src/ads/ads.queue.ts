@@ -1,4 +1,5 @@
 import { Queue } from 'bullmq';
+import { Logger } from '@nestjs/common';
 import { redisConfig, redisEnabled } from '../config/redis.config';
 
 // BullMQ 5+ forbids the use of ':' in queue names. The previous implementation
@@ -17,32 +18,45 @@ const defaultJobOptions = {
   removeOnFail: { age: 24 * 3600 },
 };
 
-export const generateQueue =
-  redisEnabled
-    ? new Queue(ADS_GENERATE_QUEUE, {
-        connection: redisConfig,
-        defaultJobOptions,
-      })
-    : null;
+const logger = new Logger('AdsQueue');
 
-export const publishQueue =
-  redisEnabled
-    ? new Queue(ADS_PUBLISH_QUEUE, {
-        connection: redisConfig,
-        defaultJobOptions,
-      })
-    : null;
+export let generateQueue: Queue | null = null;
+export let publishQueue: Queue | null = null;
+export let generateDlqQueue: Queue | null = null;
+export let publishDlqQueue: Queue | null = null;
 
-export const generateDlqQueue =
-  redisEnabled
-    ? new Queue(ADS_GENERATE_DLQ, {
-        connection: redisConfig,
-      })
-    : null;
+if (redisEnabled) {
+  generateQueue = new Queue(ADS_GENERATE_QUEUE, {
+    connection: redisConfig,
+    defaultJobOptions,
+  });
+  generateQueue.on('error', (err) => {
+    logger.error(`Redis error on ${ADS_GENERATE_QUEUE}: ${err.message}`);
+    generateQueue = null;
+  });
 
-export const publishDlqQueue =
-  redisEnabled
-    ? new Queue(ADS_PUBLISH_DLQ, {
-        connection: redisConfig,
-      })
-    : null;
+  publishQueue = new Queue(ADS_PUBLISH_QUEUE, {
+    connection: redisConfig,
+    defaultJobOptions,
+  });
+  publishQueue.on('error', (err) => {
+    logger.error(`Redis error on ${ADS_PUBLISH_QUEUE}: ${err.message}`);
+    publishQueue = null;
+  });
+
+  generateDlqQueue = new Queue(ADS_GENERATE_DLQ, {
+    connection: redisConfig,
+  });
+  generateDlqQueue.on('error', (err) => {
+    logger.error(`Redis error on ${ADS_GENERATE_DLQ}: ${err.message}`);
+    generateDlqQueue = null;
+  });
+
+  publishDlqQueue = new Queue(ADS_PUBLISH_DLQ, {
+    connection: redisConfig,
+  });
+  publishDlqQueue.on('error', (err) => {
+    logger.error(`Redis error on ${ADS_PUBLISH_DLQ}: ${err.message}`);
+    publishDlqQueue = null;
+  });
+}
