@@ -39,15 +39,15 @@ export class QuotaExceededError extends Error {}
 @Injectable()
 export class AdsService {
   private readonly logger = new Logger(AdsService.name);
-  private generateWorker: Worker<AdsJobData>;
-  private publishWorker: Worker<AdsJobData>;
+  private generateWorker: Worker<AdsJobData> | null = null;
+  private publishWorker: Worker<AdsJobData> | null = null;
 
   constructor() {
     this.createWorkers();
   }
 
   private createWorkers() {
-    this.generateWorker = new Worker<AdsJobData>(
+    const generateWorker = new Worker<AdsJobData>(
       ADS_GENERATE_QUEUE,
       async (job) => this.processGenerate(job),
       {
@@ -56,13 +56,17 @@ export class AdsService {
         limiter: { max: 10, duration: 1000 },
       },
     );
+    this.generateWorker = generateWorker;
 
-    this.generateWorker.on('failed', async (job, err) => {
+    generateWorker.on('failed', async (job, err) => {
+      if (!job) return;
       await generateDlqQueue.add('failed', job.data, { jobId: job.id });
-      await this.handleFailure(this.generateWorker, err);
+      if (this.generateWorker) {
+        await this.handleFailure(this.generateWorker, err);
+      }
     });
 
-    this.publishWorker = new Worker<AdsJobData>(
+    const publishWorker = new Worker<AdsJobData>(
       ADS_PUBLISH_QUEUE,
       async (job) => this.processPublish(job),
       {
@@ -71,10 +75,14 @@ export class AdsService {
         limiter: { max: 5, duration: 1000 },
       },
     );
+    this.publishWorker = publishWorker;
 
-    this.publishWorker.on('failed', async (job, err) => {
+    publishWorker.on('failed', async (job, err) => {
+      if (!job) return;
       await publishDlqQueue.add('failed', job.data, { jobId: job.id });
-      await this.handleFailure(this.publishWorker, err);
+      if (this.publishWorker) {
+        await this.handleFailure(this.publishWorker, err);
+      }
     });
   }
 
@@ -82,8 +90,12 @@ export class AdsService {
     if (err instanceof QuotaExceededError) {
       this.logger.warn('Quota exceeded, pausing worker');
       await worker.pause(true);
-      setTimeout(() => {
-        worker.resume().catch((e) => this.logger.error(e));
+      setTimeout(async () => {
+        try {
+          await worker.resume();
+        } catch (e) {
+          this.logger.error(e);
+        }
       }, 60_000);
     }
   }

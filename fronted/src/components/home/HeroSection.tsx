@@ -1,3 +1,5 @@
+"use client"
+
 import { Button } from '@/components/ui/button';
 import HeroSlideshow from '@/components/HeroSlideshow';
 import SectionBackground from '@/components/SectionBackground';
@@ -62,7 +64,7 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
   return (
     <section
       ref={sectionRef}
-      className="relative bg-gradient-to-r from-sky-100 via-blue-50 to-sky-100 py-20 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800"
+      className="relative z-0 bg-gradient-to-r from-sky-100 via-blue-50 to-sky-100 py-20 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800"
     >
       <SectionBackground />
       <div className="container mx-auto px-4">

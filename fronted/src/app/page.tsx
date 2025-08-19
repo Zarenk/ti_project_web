@@ -228,7 +228,7 @@ export default function Homepage() {
       }
     }
     loadGsap()
-    return () => ctx?.kill()
+    return () => ctx?.kill(false)
   }, [])
 
   const nextCategories = () =>
