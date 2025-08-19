@@ -54,6 +54,11 @@ async function bootstrap() {
     credentials: true,
   });
 
+  if (process.env.ADSLAB_ENABLED === 'true') {
+    const { setupAdslabMonitoring } = await import('./adslab/monitoring');
+    setupAdslabMonitoring();
+  }
+
   await app.listen(process.env.PORT ?? 4000, '0.0.0.0');
 }
-bootstrap();
+void bootstrap();

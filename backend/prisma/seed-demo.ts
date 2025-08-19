@@ -1,5 +1,8 @@
 import { PrismaClient, PublishAdapter, TemplateVersion } from '@prisma/client'
 
+// This seed inserts demo data using upserts so it can be executed multiple
+// times without creating duplicate records.
+
 const prisma = new PrismaClient()
 
 async function main() {
@@ -98,6 +101,8 @@ async function main() {
       runId: run.id,
     },
   })
+
+  console.log('Demo seed completed') 
 }
 
 main()

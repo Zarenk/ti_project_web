@@ -1,0 +1,12 @@
+{
+  "slo": {
+    "name": "generate_jobs_ready_latency",
+    "description": "99% of generate jobs ready < 60s",
+    "target": 0.99,
+    "thresholdSeconds": 60
+  },
+  "alerts": {
+    "warning": 0.97,
+    "critical": 0.95
+  }
+}
