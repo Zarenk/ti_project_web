@@ -113,10 +113,11 @@ export class AdsService {
       this.logger.warn('Quota exceeded, pausing worker');
       await worker.pause(true);
       setTimeout(() => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        void worker.resume().catch((e) => {
+        try {
+          worker.resume();
+        } catch (e) {
           this.logger.error(e);
-        });
+        }
       }, 60_000);
     }
   }
