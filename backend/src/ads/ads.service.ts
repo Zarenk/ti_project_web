@@ -16,7 +16,7 @@ import {
   generateDlqQueue,
   publishDlqQueue,
 } from './ads.queue';
-import { redisConfig } from '../config/redis.config';
+import { redisConfig, redisEnabled } from '../config/redis.config';
 
 export interface PromptRun {
   idempotencyKey: string;
@@ -43,7 +43,11 @@ export class AdsService {
   private publishWorker: Worker<AdsJobData> | null = null;
 
   constructor() {
-    this.createWorkers();
+    if (redisEnabled) {
+      this.createWorkers();
+    } else {
+      this.logger.warn('Redis disabled, ads workers will not start');
+    }
   }
 
   private createWorkers() {
@@ -60,7 +64,9 @@ export class AdsService {
 
     generateWorker.on('failed', async (job, err) => {
       if (!job) return;
-      await generateDlqQueue.add('failed', job.data, { jobId: job.id });
+      if (generateDlqQueue) {
+        await generateDlqQueue.add('failed', job.data, { jobId: job.id });
+      }
       if (this.generateWorker) {
         await this.handleFailure(this.generateWorker, err);
       }
@@ -79,7 +85,9 @@ export class AdsService {
 
     publishWorker.on('failed', async (job, err) => {
       if (!job) return;
-      await publishDlqQueue.add('failed', job.data, { jobId: job.id });
+      if (publishDlqQueue) {
+        await publishDlqQueue.add('failed', job.data, { jobId: job.id });
+      }
       if (this.publishWorker) {
         await this.handleFailure(this.publishWorker, err);
       }
@@ -119,12 +127,24 @@ export class AdsService {
   }
 
   async enqueueGenerate(data: AdsJobData) {
+
+    if (!generateQueue) {
+      this.logger.warn('Redis disabled, generate job not enqueued');
+      return;
+    }
+
     await generateQueue.add('generate', data, {
       jobId: data.promptRun.idempotencyKey,
     });
   }
 
   async enqueuePublish(data: AdsJobData) {
+
+    if (!publishQueue) {
+      this.logger.warn('Redis disabled, publish job not enqueued');
+      return;
+    }
+
     await publishQueue.add('publish', data, {
       jobId: data.promptRun.idempotencyKey,
     });
@@ -133,6 +153,10 @@ export class AdsService {
   async requeueDlq(queue: 'generate' | 'publish') {
     const dlq = queue === 'generate' ? generateDlqQueue : publishDlqQueue;
     const main = queue === 'generate' ? generateQueue : publishQueue;
+    if (!dlq || !main) {
+      this.logger.warn('Redis disabled, cannot requeue DLQ');
+      return 0;
+    }
     const jobs = await dlq.getJobs(['waiting', 'delayed', 'failed']);
     for (const job of jobs) {
       await main.add(job.name, job.data, { jobId: job.id });

@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { redisConfig } from '../config/redis.config';
+import { redisConfig, redisEnabled } from '../config/redis.config';
 
 // BullMQ 5+ forbids the use of ':' in queue names. The previous implementation
 // used colon-delimited names (e.g. `ads:generate`), which now throws an error
@@ -17,19 +17,32 @@ const defaultJobOptions = {
   removeOnFail: { age: 24 * 3600 },
 };
 
-export const generateQueue = new Queue(ADS_GENERATE_QUEUE, {
-  connection: redisConfig,
-  defaultJobOptions,
-});
+export const generateQueue =
+  redisEnabled
+    ? new Queue(ADS_GENERATE_QUEUE, {
+        connection: redisConfig,
+        defaultJobOptions,
+      })
+    : null;
 
-export const publishQueue = new Queue(ADS_PUBLISH_QUEUE, {
-  connection: redisConfig,
-  defaultJobOptions,
-});
+export const publishQueue =
+  redisEnabled
+    ? new Queue(ADS_PUBLISH_QUEUE, {
+        connection: redisConfig,
+        defaultJobOptions,
+      })
+    : null;
 
-export const generateDlqQueue = new Queue(ADS_GENERATE_DLQ, {
-  connection: redisConfig,
-});
-export const publishDlqQueue = new Queue(ADS_PUBLISH_DLQ, {
-  connection: redisConfig,
-});
+export const generateDlqQueue =
+  redisEnabled
+    ? new Queue(ADS_GENERATE_DLQ, {
+        connection: redisConfig,
+      })
+    : null;
+
+export const publishDlqQueue =
+  redisEnabled
+    ? new Queue(ADS_PUBLISH_DLQ, {
+        connection: redisConfig,
+      })
+    : null;
