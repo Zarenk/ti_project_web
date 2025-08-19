@@ -1,4 +1,4 @@
-import { Queue, QueueScheduler } from 'bullmq';
+import { Queue } from 'bullmq';
 import { redisConfig } from '../config/redis.config';
 
 // BullMQ 5+ forbids the use of ':' in queue names. The previous implementation
@@ -21,16 +21,12 @@ export const generateQueue = new Queue(ADS_GENERATE_QUEUE, {
   connection: redisConfig,
   defaultJobOptions,
 });
-// QueueScheduler constructor lacks strict typings, so disable the linter rule
-// for this instantiation.
-// eslint-disable-next-line @typescript-eslint/no-unsafe-call
-new QueueScheduler(ADS_GENERATE_QUEUE, { connection: redisConfig });
 
 export const publishQueue = new Queue(ADS_PUBLISH_QUEUE, {
   connection: redisConfig,
   defaultJobOptions,
 });
-// eslint-disable-next-line @typescript-eslint/no-unsafe-call
+
 export const generateDlqQueue = new Queue(ADS_GENERATE_DLQ, {
   connection: redisConfig,
 });

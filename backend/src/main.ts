@@ -5,10 +5,15 @@ import * as bodyParser from 'body-parser';
 import * as express from 'express';
 import { join } from 'path'; // Ensure 'join' is imported for path handling
 import { ValidationPipe } from '@nestjs/common';
+import { MetricsService } from './metrics/metrics.service';
+import { TelemetryInterceptor } from './metrics/trace.interceptor';
+import './metrics/tracing';
 
 async function bootstrap() {
   
   const app = await NestFactory.create(AppModule);
+  const metrics = app.get(MetricsService);
+  app.useGlobalInterceptors(new TelemetryInterceptor(metrics));
   // Serve static files before applying the global prefix so they remain
   // accessible without "/api" in the path
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
