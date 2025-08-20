@@ -1,10 +1,11 @@
 import { RedisOptions } from 'ioredis';
 
 /**
- * Flag indicating if Redis integration is enabled. Set `REDIS_ENABLED=false`
- * to disable all queue and worker initialisation during local development.
+ * Flag indicating if Redis integration is enabled. Set `REDIS_ENABLED=true`
+ * to enable queue and worker initialisation. By default, Redis is disabled to
+ * avoid connection errors in environments without a running server.
  */
-export const redisEnabled = process.env.REDIS_ENABLED !== 'false';
+export const redisEnabled = process.env.REDIS_ENABLED === 'true';
 
 /**
  * Shared Redis configuration used by BullMQ queues and workers. The
