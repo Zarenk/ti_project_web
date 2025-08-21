@@ -996,3 +996,11 @@ model PleExport {
   @@index([periodId])
   @@index([type])
 }
+
+model TrialBalanceCache {
+  id        Int      @id @default(autoincrement())
+  startDate DateTime
+  endDate   DateTime
+  data      Json
+  createdAt DateTime @default(now())
+}
