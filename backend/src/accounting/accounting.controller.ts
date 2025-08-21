@@ -1,21 +1,29 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
-import { Roles } from 'src/users/roles.decorator';
-import { RolesGuard } from 'src/users/roles.guard';
-import { AccountsService } from './accounting.service';
-import { CreateAccountDto } from './accounts/dto/create-account.dto';
-import { Account } from '@prisma/client';
+import { Controller, Get, Query } from '@nestjs/common';
+import { AccountingService } from './accounting.service';
 
-@ApiTags('accounts')
-@Controller('accounting/accounts')
-@UseGuards(JwtAuthGuard, RolesGuard)
-export class AccountsController {
-  constructor(private readonly accountsService: AccountsService) {}
+@Controller('accounting/reports')
+export class AccountingController {
+  constructor(private readonly accountingService: AccountingService) {}
 
-  @Post()
-  @Roles('ADMIN')
-  create(@Body() dto: CreateAccountDto): Account {
-    return this.accountsService.create(dto);
+  @Get('ledger')
+  getLedger(
+    @Query('accountCode') accountCode?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page = '1',
+    @Query('size') size = '20',
+  ) {
+    return this.accountingService.getLedger({
+      accountCode,
+      from,
+      to,
+      page: Number(page),
+      size: Number(size),
+    });
+  }
+
+  @Get('trial-balance')
+  getTrialBalance(@Query('period') period: string) {
+    return this.accountingService.getTrialBalance(period);
   }
 }
