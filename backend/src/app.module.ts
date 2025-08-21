@@ -38,12 +38,14 @@ import { CampaignsModule } from './campaigns/campaigns.module';
 import { AdsModule } from './ads/ads.module';
 import { PublishModule } from './publish/publish.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { AccountingModule } from './accounting/accounting.module';
+import { JournalsModule } from './journals/journals.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
     ProductsModule, UsersModule, CategoryModule, StoresModule, 
-    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule, WebsalesModule, ContactModule, ChatModule, FavoritesModule, NewsletterModule, OrdertrackingModule, CatalogexportModule, BrandsModule, ActivityModule, AuthModule, CampaignsModule, AdsModule, PublishModule, MetricsModule],
+    ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule, WebsalesModule, ContactModule, ChatModule, FavoritesModule, NewsletterModule, OrdertrackingModule, CatalogexportModule, BrandsModule, ActivityModule, AuthModule, CampaignsModule, AdsModule, PublishModule, MetricsModule, AccountingModule, JournalsModule],
   controllers: [AppController, CatalogExportController],
   providers: [AppService, BarcodeGateway, PrismaService],
 })

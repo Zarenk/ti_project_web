@@ -16,7 +16,14 @@ export function getAdsLabAllowlistUserIds(): string[] {
 }
 
 export function getAdsLabAllowlistRoles(): string[] {
-  const env = process.env.ADSLAB_ALLOWLIST_ROLES
-  if (!env) return []
-  return env.split(',').map((r) => r.trim()).filter(Boolean)
+  const env = process.env.ADSLAB_ALLOWLIST_ROLES;
+  if (!env) return [];
+  return env
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean);
+}
+
+export function isAccountingEnabled(): boolean {
+  return process.env.ACCOUNTING_ENABLED === 'true';
 }

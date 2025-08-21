@@ -183,6 +183,7 @@ model Entry {
   storeId     Int       // Almacén relacionado con la entrada  
   userId      Int       // Usuario que realiza la entrada
   providerId  Int       // Proveedor relacionado con la entrada
+  journalId   Int?      // Diario contable relacionado con la entrada
   date        DateTime  @default(now()) // Fecha de la entrada
   description String?   // Descripción opcional
   tipoMoneda  String?   // Tipo de moneda (e.g., PEN, USD)
@@ -195,6 +196,7 @@ model Entry {
   store       Store     @relation(fields: [storeId], references: [id]) // Relación con el modelo Store
   user        User      @relation(fields: [userId], references: [id]) // Relación con el modelo User
   provider    Provider  @relation(fields: [providerId], references: [id]) // Relación con el modelo Provider
+  journal     Journal?  @relation(fields: [journalId], references: [id])
   details     EntryDetail[]
 
   invoice     Invoice?  @relation // Relación 1:1 con Comprobante (sin `fields` ni `references`)
@@ -205,6 +207,7 @@ model Entry {
   @@index([storeId])
   @@index([userId])
   @@index([providerId])
+  @@index([journalId])
   @@index([date])
 }
 
@@ -887,27 +890,25 @@ enum PeriodStatus {
 }
 
 model Account {
-  id       Int        @id @default(autoincrement())
-  code     String     @unique
-  name     String
-  type     AccountType
-  nature   Nature
-  parentId Int?
-  parent   Account?   @relation("AccountParent", fields: [parentId], references: [id])
-  children Account[]  @relation("AccountParent")
-  lines    JournalLine[]
-
-  @@index([code])
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  parentId  Int?
+  parent    Account? @relation("AccountChildren", fields: [parentId], references: [id])
+  children  Account[] @relation("AccountChildren")
+  level     Int
+  isPosting Boolean   @default(false)
+  taxCodes  TaxCode[]
 }
 
 model Journal {
-  id      Int         @id @default(autoincrement())
-  code    String      @unique
-  name    String
-  type    JournalType
-  entries JournalEntry[]
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([type])
+  entries   Entry[]
 }
 
 model Period {
@@ -931,7 +932,6 @@ model JournalEntry {
   debitTotal  Decimal     @default(0.00)
   creditTotal Decimal     @default(0.00)
 
-  journal   Journal   @relation(fields: [journalId], references: [id])
   period    Period    @relation(fields: [periodId], references: [id])
   lines     JournalLine[]
   documents DocumentLink[]
@@ -952,7 +952,6 @@ model JournalLine {
   credit    Decimal @default(0.00)
 
   entry   JournalEntry @relation(fields: [entryId], references: [id])
-  account Account      @relation(fields: [accountId], references: [id])
   taxCode TaxCode?     @relation(fields: [taxCodeId], references: [id])
 
   @@index([entryId])
@@ -965,6 +964,11 @@ model TaxCode {
   code  String   @unique
   rate  Decimal
   lines JournalLine[]
+  name              String
+  sunatTributoCode  String
+  sunatOperacionType String
+  contraAccountId   Int?
+  contraAccount     Account? @relation(fields: [contraAccountId], references: [id])
 
   @@index([code])
 }
