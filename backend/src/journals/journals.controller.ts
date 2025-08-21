@@ -4,7 +4,7 @@ import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { Roles } from 'src/users/roles.decorator';
 import { RolesGuard } from 'src/users/roles.guard';
 import { CreateJournalDto } from './dto/create-journal.dto';
-import { JournalsService } from './journals.service';
+import { Journal, JournalsService } from './journals.service';
 
 @ApiTags('journals')
 @Controller('accounting/journals')
@@ -14,7 +14,7 @@ export class JournalsController {
 
   @Post()
   @Roles('ADMIN')
-  create(@Body() dto: CreateJournalDto) {
+  create(@Body() dto: CreateJournalDto): Journal {
     return this.journalsService.create(dto);
   }
 }

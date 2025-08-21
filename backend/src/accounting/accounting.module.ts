@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
-import { AccountsController } from './accounts.controller';
-import { AccountsService } from './accounts.service';
 import { RolesGuard } from 'src/users/roles.guard';
+import { AccountsController } from './accounting.controller';
+import { AccountsService } from './accounting.service';
 
 @Module({
   controllers: [AccountsController],

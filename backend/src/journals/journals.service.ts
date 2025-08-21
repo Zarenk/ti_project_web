@@ -1,7 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { CreateJournalDto } from './dto/create-journal.dto';
 
-interface Journal {
+export interface Journal {
   id: number;
   reference: string;
   amount: number;

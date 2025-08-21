@@ -1,5 +1,5 @@
-import { ConflictException, Injectable } from '@nestjs/common';
-import { CreateAccountDto } from './dto/create-account.dto';
+import { ConflictException, Injectable } from '@nestjs/common'
+import { CreateAccountDto } from './accounts/dto/create-account.dto';
 
 interface Account {
   id: number;
