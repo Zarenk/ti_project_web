@@ -4,11 +4,16 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import SimplePagination from "@/components/simple-pagination"
-import { Campaign, fetchCampaigns } from "./ads.api"
+import { Campaign, fetchCampaigns, createCampaign } from "./ads.api"
 import { useRBAC } from "../hooks/use-rbac"
 import { trackEvent } from "@/lib/analytics"
 
+const statusLabels: Record<string, string> = {
+  active: "Activa",
+  paused: "Pausada",
+}
 
 export default function AdsDashboardPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
@@ -19,33 +24,53 @@ export default function AdsDashboardPage() {
   const [error, setError] = useState<string | null>(null)
 
   const canCreate = useRBAC(["admin", "marketing"])
+  const organizationId = 1
 
   useEffect(() => {
     setLoading(true)
     setError(null)
-    fetchCampaigns(page, pageSize)
+    fetchCampaigns(organizationId, page, pageSize)
       .then(({ items, total }) => {
         setCampaigns(items)
         setTotal(total)
       })
-      .catch(() => setError("Failed to load campaigns"))
+      .catch(() => setError("Error al cargar campañas"))
       .finally(() => setLoading(false))
   }, [page, pageSize])
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     trackEvent("ads.create_campaign.clicked")
+    const name = prompt("Campaign name?")
+    if (!name) return
+    try {
+      const created = await createCampaign(organizationId, {
+        name,
+        status: "draft",
+      })
+      setCampaigns((prev) => [...prev, created])
+      setTotal((t) => t + 1)
+    } catch {
+      setError("Failed to create campaign")
+    }
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Ads Dashboard</h1>
-        {canCreate && <Button onClick={handleCreate}>Create Campaign</Button>}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold">Panel de Publicidad</h1>
+          <p className="text-sm text-muted-foreground">
+            Gestiona tus campañas y creatividades de forma sencilla.
+          </p>
+        </div>
+        {canCreate && (
+          <Button onClick={handleCreate}>Crear campaña</Button>
+        )}
       </div>
 
       {loading && (
         <Card>
-          <CardContent>Loading...</CardContent>
+          <CardContent>Cargando...</CardContent>
         </Card>
       )}
       {error && (
@@ -55,19 +80,22 @@ export default function AdsDashboardPage() {
       )}
       {!loading && !error && campaigns.length === 0 && (
         <Card>
-          <CardContent>No campaigns found.</CardContent>
+          <CardContent>No se encontraron campañas.</CardContent>
         </Card>
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
         {campaigns.map((c) => (
           <Card key={c.id} className="hover:shadow">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>{c.name}</CardTitle>
+              <Badge variant={c.status === "active" ? "default" : "secondary"}>
+                {statusLabels[c.status] ?? c.status}
+              </Badge>
             </CardHeader>
             <CardContent>
               <Link href={`/ads/campaign/${c.id}`}>
-                <Button variant="outline">View</Button>
+                <Button variant="outline">Ver detalles</Button>
               </Link>
             </CardContent>
           </Card>

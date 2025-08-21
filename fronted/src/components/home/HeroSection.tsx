@@ -5,7 +5,7 @@ import HeroSlideshow from '@/components/HeroSlideshow';
 import SectionBackground from '@/components/SectionBackground';
 import { ChevronRight } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import Hero3DCarousel from '../Hero3dCarousel';
+import HeroCollageCarousel from '../HeroCollageCarousel';
 
 interface HeroSectionProps {
   heroProducts: any[];
@@ -97,7 +97,7 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
               </Button>
             </div>
           </div>
-          <Hero3DCarousel products={heroProducts} />
+          <HeroCollageCarousel products={heroProducts} />
         </div>
       </div>
     </section>

@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AdsRole } from './roles.enum';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
@@ -41,6 +41,16 @@ export class AdsService {
   private readonly logger = new Logger(AdsService.name);
   private generateWorker: Worker<AdsJobData> | null = null;
   private publishWorker: Worker<AdsJobData> | null = null;
+
+  // In-memory storage for demo purposes only
+  private campaigns: { id: number; name: string; status: string; organizationId: number }[] = [];
+  private creatives: {
+    id: number;
+    name: string;
+    image?: string;
+    campaignId: number;
+    organizationId: number;
+  }[] = [];
 
   constructor() {
     if (redisEnabled) {
@@ -194,32 +204,71 @@ export class AdsService {
     }
   }
 
-  createCampaign(user: AdsUser, dto: CreateCampaignDto) {
-    this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
-    return { ...dto, id: Date.now() };
+  listCampaigns(organizationId: number, page: number, pageSize: number) {
+    const items = this.campaigns.filter((c) => c.organizationId === organizationId);
+    const start = (page - 1) * pageSize;
+    return { items: items.slice(start, start + pageSize), total: items.length };
   }
 
-  updateCampaign(id: number, user: AdsUser, dto: UpdateCampaignDto) {
-    this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
-    return { id, ...dto };
+  getCampaign(organizationId: number, id: number) {
+    const campaign = this.campaigns.find(
+      (c) => c.id === id && c.organizationId === organizationId,
+    );
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    const creatives = this.creatives.filter(
+      (cr) => cr.campaignId === id && cr.organizationId === organizationId,
+    );
+    return { campaign, creatives };
   }
 
-  publishCampaign(id: number, user: AdsUser, dto: PublishCampaignDto) {
+  getCreative(organizationId: number, id: number) {
+    const creative = this.creatives.find(
+      (cr) => cr.id === id && cr.organizationId === organizationId,
+    );
+    if (!creative) throw new NotFoundException('Creative not found');
+    return creative;
+  }
+
+  createCampaign(user: AdsUser, dto: CreateCampaignDto & { organizationId: number }) {
+    this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
+    const campaign = { ...dto, id: Date.now(), status: 'draft' };
+    this.campaigns.push(campaign);
+    return campaign;
+  }
+
+  updateCampaign(id: number, user: AdsUser, dto: UpdateCampaignDto & { organizationId: number }) {
+    this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
+    const idx = this.campaigns.findIndex(
+      (c) => c.id === id && c.organizationId === dto.organizationId,
+    );
+    if (idx === -1) throw new NotFoundException('Campaign not found');
+    this.campaigns[idx] = { ...this.campaigns[idx], ...dto };
+    return this.campaigns[idx];
+  }
+
+  publishCampaign(id: number, user: AdsUser, dto: PublishCampaignDto & { organizationId: number }) {
     this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
     return { id, published: dto.publish };
   }
 
-  createCreative(user: AdsUser, dto: CreateCreativeDto) {
+  createCreative(user: AdsUser, dto: CreateCreativeDto & { organizationId: number; campaignId: number }) {
     this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
-    return { ...dto, id: Date.now() };
+    const creative = { ...dto, id: Date.now(), name: dto.title || 'Untitled Creative' };
+    this.creatives.push(creative);
+    return creative;
   }
 
-  updateCreative(id: number, user: AdsUser, dto: UpdateCreativeDto) {
+  updateCreative(id: number, user: AdsUser, dto: UpdateCreativeDto & { organizationId: number }) {
     this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
-    return { id, ...dto };
+    const idx = this.creatives.findIndex(
+      (cr) => cr.id === id && cr.organizationId === dto.organizationId,
+    );
+    if (idx === -1) throw new NotFoundException('Creative not found');
+    this.creatives[idx] = { ...this.creatives[idx], ...dto };
+    return this.creatives[idx];
   }
 
-  reviewCreative(id: number, user: AdsUser, dto: ReviewCreativeDto) {
+  reviewCreative(id: number, user: AdsUser, dto: ReviewCreativeDto & { organizationId: number }) {
     this.ensureAccess(user, [AdsRole.REVIEWER], dto.organizationId);
     return { id, approved: dto.approved, notes: dto.notes };
   }

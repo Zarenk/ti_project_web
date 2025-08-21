@@ -27,11 +27,11 @@ export default function ReferenceImageUpload() {
   const handleFile = (f?: File) => {
     if (!f) return
     if (!ACCEPTED_TYPES.includes(f.type)) {
-      setError("Unsupported file type")
+      setError("Tipo de archivo no soportado")
       return
     }
     if (f.size > MAX_FILE_SIZE) {
-      setError("File too large")
+      setError("Archivo demasiado grande")
       return
     }
     setError(null)
@@ -51,7 +51,7 @@ export default function ReferenceImageUpload() {
       const res = await uploadReferenceImage(f)
       setUrl(res.url)
     } catch {
-      setError("Upload failed")
+      setError("La carga falló")
     } finally {
       setUploading(false)
     }
@@ -76,22 +76,25 @@ export default function ReferenceImageUpload() {
           className="hidden"
         />
         <label htmlFor="ref-upload" className="cursor-pointer">
-          Drag & drop image or click to upload
+          Arrastra y suelta una imagen o haz clic para subir
         </label>
+        <p className="text-xs text-muted-foreground mt-2">
+          Formatos permitidos: PNG, JPEG, GIF y WEBP. Tamaño máximo: 5 MB.
+        </p>
       </div>
       <CardContent className="mt-4 space-y-2">
-        {uploading && <p>Uploading...</p>}
+        {uploading && <p>Subiendo...</p>}
         {url && !uploading && (
           <div className="space-y-2">
-            <img src={url} alt="Uploaded" className="max-h-48 mx-auto" />
-            <p className="text-sm text-muted-foreground">Upload successful</p>
+            <img src={url} alt="Imagen subida" className="max-h-48 mx-auto" />
+            <p className="text-sm text-muted-foreground">Carga exitosa</p>
           </div>
         )}
         {error && (
           <div className="space-y-2">
             <p className="text-red-500">{error}</p>
             <Button variant="outline" size="sm" onClick={retry}>
-              Retry
+              Reintentar
             </Button>
           </div>
         )}

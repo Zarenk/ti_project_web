@@ -691,12 +691,15 @@ model AuditLog {
   diff       Json?
   ip         String?
   userAgent  String?
+  journalEntryId Int?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
   createdAt  DateTime    @default(now())
 
   @@index([createdAt])
   @@index([actorId])
   @@index([entityType])
   @@index([action])
+  @@index([journalEntryId])
 }
 
 enum TemplateVersion {
@@ -843,4 +846,149 @@ model PublishTargetLog {
   @@index([publishTargetId])
   @@index([assetId])
   @@index([runId])
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum Nature {
+  DEBIT
+  CREDIT
+}
+
+enum JournalType {
+  GENERAL
+  SALES
+  PURCHASE
+  CASH
+  BANK
+}
+
+enum EntryStatus {
+  DRAFT
+  POSTED
+  VOID
+}
+
+enum PleType {
+  SALES
+  PURCHASE
+  JOURNAL
+}
+
+enum PeriodStatus {
+  OPEN
+  CLOSED
+}
+
+model Account {
+  id       Int        @id @default(autoincrement())
+  code     String     @unique
+  name     String
+  type     AccountType
+  nature   Nature
+  parentId Int?
+  parent   Account?   @relation("AccountParent", fields: [parentId], references: [id])
+  children Account[]  @relation("AccountParent")
+  lines    JournalLine[]
+
+  @@index([code])
+}
+
+model Journal {
+  id      Int         @id @default(autoincrement())
+  code    String      @unique
+  name    String
+  type    JournalType
+  entries JournalEntry[]
+
+  @@index([type])
+}
+
+model Period {
+  id         Int          @id @default(autoincrement())
+  startDate  DateTime
+  endDate    DateTime
+  status     PeriodStatus @default(OPEN)
+  entries    JournalEntry[]
+  pleExports PleExport[]
+
+  @@unique([startDate, endDate])
+}
+
+model JournalEntry {
+  id          Int         @id @default(autoincrement())
+  journalId   Int
+  periodId    Int
+  date        DateTime
+  status      EntryStatus @default(DRAFT)
+  description String?
+  debitTotal  Decimal     @default(0.00)
+  creditTotal Decimal     @default(0.00)
+
+  journal   Journal   @relation(fields: [journalId], references: [id])
+  period    Period    @relation(fields: [periodId], references: [id])
+  lines     JournalLine[]
+  documents DocumentLink[]
+  auditLogs AuditLog[]
+
+  @@index([journalId])
+  @@index([periodId])
+  // @@check(name: "balance_check", expression: "debitTotal = creditTotal")
+}
+
+model JournalLine {
+  id        Int      @id @default(autoincrement())
+  entryId   Int
+  accountId Int
+  taxCodeId Int?
+  description String?
+  debit     Decimal @default(0.00)
+  credit    Decimal @default(0.00)
+
+  entry   JournalEntry @relation(fields: [entryId], references: [id])
+  account Account      @relation(fields: [accountId], references: [id])
+  taxCode TaxCode?     @relation(fields: [taxCodeId], references: [id])
+
+  @@index([entryId])
+  @@index([accountId])
+  // @@check(name: "debit_credit_check", expression: "(debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0)")
+}
+
+model TaxCode {
+  id    Int      @id @default(autoincrement())
+  code  String   @unique
+  rate  Decimal
+  lines JournalLine[]
+
+  @@index([code])
+}
+
+model DocumentLink {
+  id          Int      @id @default(autoincrement())
+  entryId     Int
+  url         String
+  description String?
+
+  entry JournalEntry @relation(fields: [entryId], references: [id])
+
+  @@index([entryId])
+}
+
+model PleExport {
+  id         Int       @id @default(autoincrement())
+  periodId   Int
+  type       PleType
+  fileUrl    String
+  exportedAt DateTime  @default(now())
+
+  period Period @relation(fields: [periodId], references: [id])
+
+  @@index([periodId])
+  @@index([type])
 }

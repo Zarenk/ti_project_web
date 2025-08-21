@@ -13,29 +13,34 @@ export default function CreativePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const organizationId = 1
+
   useEffect(() => {
-    fetchCreative(id)
+    fetchCreative(organizationId, id)
       .then(setCreative)
-      .catch(() => setError("Failed to load creative"))
+      .catch(() => setError("Error al cargar la creatividad"))
       .finally(() => setLoading(false))
   }, [id])
 
   if (loading)
     return (
       <Card>
-        <CardContent>Loading...</CardContent>
+        <CardContent>Cargando...</CardContent>
       </Card>
     )
   if (error || !creative)
     return (
       <Card>
-        <CardContent className="text-red-500">{error ?? "Not found"}</CardContent>
+        <CardContent className="text-red-500">{error ?? "No encontrada"}</CardContent>
       </Card>
     )
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">{creative.name}</h1>
+      <p className="text-muted-foreground">
+        Sube una imagen de referencia para generar la creatividad.
+      </p>
       <ReferenceImageUpload />
     </div>
   )

@@ -12,12 +12,13 @@ export default function AdsLayout({ children }: { children: ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    if (!enabled || !allowed) {
+    if (!enabled || allowed === false) {
       router.push("/unauthorized")
     }
   }, [enabled, allowed, router])
 
-  if (!enabled || !allowed) return null
+  if (!enabled || allowed === undefined) return null
+  if (allowed === false) return null
 
   return <div className="flex flex-col min-h-screen p-4">{children}</div>
 }

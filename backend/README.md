@@ -34,6 +34,22 @@ REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 ```
 
+## Accounting migrations and seed
+
+Run the accounting migration and seed scripts:
+
+```bash
+$ npm run migrate:accounting
+$ npm run seed:accounting
+```
+
+After seeding, verify that data was inserted with simple count queries:
+
+```sql
+SELECT COUNT(*) FROM "Account";
+SELECT COUNT(*) FROM "JournalEntry";
+```
+
 ## Compile and run the project
 
 ```bash

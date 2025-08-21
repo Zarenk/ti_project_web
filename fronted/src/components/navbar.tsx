@@ -82,6 +82,7 @@ export default function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <Link
             href="/"
+            onClick={() => router.refresh()}
             className="flex items-center gap-2 font-bold text-foreground group hover:text-sky-600 transition-colors"
           >
             <Image
@@ -95,7 +96,11 @@ export default function Navbar() {
             <span className="transition-colors duration-300 group-hover:text-sky-600">Tienda TI</span>
           </Link>
           <div className="hidden md:flex items-center gap-4">
-            <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+            <Link
+              href="/"
+              onClick={() => router.refresh()}
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
               Inicio
             </Link>
             <Link href="/faq" className="text-sm font-medium text-muted-foreground hover:text-foreground">
@@ -199,6 +204,7 @@ export default function Navbar() {
                       <Link
                         key={href}
                         href={href}
+                        onClick={href === '/' ? () => router.refresh() : undefined}
                         className="flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground hover:pl-4"
                       >
                         <Icon className="h-4 w-4" />
