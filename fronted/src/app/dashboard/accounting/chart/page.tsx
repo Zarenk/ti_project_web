@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -30,7 +30,7 @@ export default function ChartPage() {
     setAccounts((prev) => prev.map((a) => (a.id === account.id ? account : a)));
   };
 
-  const renderRows = (items: Account[], level = 0): JSX.Element[] =>
+  const renderRows = (items: Account[], level = 0): ReactElement[] =>
     items.flatMap((acc) => [
       <TableRow key={acc.id}>
         <TableCell style={{ paddingLeft: level * 16 }}>{acc.code}</TableCell>

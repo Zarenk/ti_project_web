@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type SubmitHandler } from "react-hook-form";
 import {
   Dialog,
   DialogContent,
@@ -47,10 +47,16 @@ export function AccountForm({
 }: AccountFormProps) {
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: defaultValues ?? { code: "", name: "", parentId: "" },
+    defaultValues: defaultValues
+      ? {
+          code: defaultValues.code,
+          name: defaultValues.name,
+          parentId: defaultValues.parentId ?? undefined,
+        }
+      : { code: "", name: "", parentId: "" },
   });
 
-  const handleSubmit = async (values: AccountFormValues) => {
+  const handleSubmit: SubmitHandler<AccountFormValues> = async (values) => {
     try {
       if (defaultValues?.id) {
         const updated = await updateAccount(defaultValues.id, values);
@@ -76,7 +82,7 @@ export function AccountForm({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <FormField
+            <FormField<AccountFormValues>
               control={form.control}
               name="code"
               render={({ field }) => (
@@ -89,7 +95,7 @@ export function AccountForm({
                 </FormItem>
               )}
             />
-            <FormField
+            <FormField<AccountFormValues>
               control={form.control}
               name="name"
               render={({ field }) => (
@@ -102,7 +108,7 @@ export function AccountForm({
                 </FormItem>
               )}
             />
-            <FormField
+            <FormField<AccountFormValues>
               control={form.control}
               name="parentId"
               render={({ field }) => (
