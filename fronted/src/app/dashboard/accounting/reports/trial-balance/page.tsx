@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { BACKEND_URL } from '@/lib/utils'
 
 interface TrialBalanceRow {
   account: string
@@ -14,7 +15,7 @@ export default function TrialBalancePage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/api/accounting/reports/trial-balance')
+        const res = await fetch(`${BACKEND_URL}/api/accounting/reports/trial-balance`)
         if (res.ok) {
           const data = await res.json()
           setRows(data)
@@ -28,7 +29,7 @@ export default function TrialBalancePage() {
 
   const exportCsv = async () => {
     try {
-      const res = await fetch('/api/accounting/reports/trial-balance?format=csv')
+      const res = await fetch(`${BACKEND_URL}/api/accounting/reports/trial-balance?format=csv`)
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

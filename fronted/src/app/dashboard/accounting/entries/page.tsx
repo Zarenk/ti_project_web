@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, FormEvent } from 'react'
 import { Badge } from '@/components/ui/badge'
+import { BACKEND_URL } from '@/lib/utils'
 
 interface Entry {
   id: string
@@ -15,7 +16,7 @@ export default function AccountingEntriesPage() {
 
   const fetchEntries = async () => {
     try {
-      const res = await fetch('/api/accounting/entries')
+      const res = await fetch(`${BACKEND_URL}/api/accounting/entries`)
       if (res.ok) {
         const data = await res.json()
         setEntries(data)

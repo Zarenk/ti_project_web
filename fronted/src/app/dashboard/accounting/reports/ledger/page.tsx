@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { BACKEND_URL } from '@/lib/utils'
 
 interface LedgerRow {
   date: string
@@ -15,7 +16,7 @@ export default function LedgerReportPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/api/accounting/reports/ledger')
+        const res = await fetch(`${BACKEND_URL}/api/accounting/reports/ledger`)
         if (res.ok) {
           const data = await res.json()
           setRows(data)

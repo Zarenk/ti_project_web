@@ -1,4 +1,5 @@
 import axios from "axios";
+import { BACKEND_URL } from "@/lib/utils";
 
 export interface Account {
   id: string;
@@ -9,13 +10,13 @@ export interface Account {
 }
 
 export async function fetchAccounts(): Promise<Account[]> {
-  const res = await axios.get("/api/accounting/accounts");
+  const res = await axios.get(`${BACKEND_URL}/api/accounting/accounts`);
   return res.data;
 }
 
 export async function createAccount(data: Omit<Account, "id" | "children">) {
   try {
-    const res = await axios.post("/api/accounting/accounts", data);
+    const res = await axios.post(`${BACKEND_URL}/api/accounting/accounts`, data);
     return res.data as Account;
   } catch (error: any) {
     if (axios.isAxiosError(error) && error.response?.status === 400) {
@@ -27,7 +28,7 @@ export async function createAccount(data: Omit<Account, "id" | "children">) {
 
 export async function updateAccount(id: string, data: Omit<Account, "id" | "children">) {
   try {
-    const res = await axios.put(`/api/accounting/accounts/${id}`, data);
+    const res = await axios.put(`${BACKEND_URL}/api/accounting/accounts/${id}`, data);
     return res.data as Account;
   } catch (error: any) {
     if (axios.isAxiosError(error) && error.response?.status === 400) {
