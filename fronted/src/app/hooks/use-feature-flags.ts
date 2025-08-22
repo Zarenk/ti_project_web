@@ -2,6 +2,7 @@
 
 const defaultFlags: Record<string, boolean> = {
   ads: true,
+  ACCOUNTING_ENABLED: true,
 }
 
 const envFlags = (process.env.NEXT_PUBLIC_FEATURE_FLAGS || "")

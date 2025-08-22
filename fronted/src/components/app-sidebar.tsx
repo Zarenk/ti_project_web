@@ -99,21 +99,6 @@ const data = {
       ],
     },
     {
-      title: "Contabilidad",
-      url: "/dashboard/accounting",
-      icon: Banknote,
-      items: [
-        {
-          title: "Nueva Categoria",
-          url: "/dashboard/accounting/new",
-        },
-        {
-          title: "Ver Contabilidad",
-          url: "/dashboard/accounting",
-        },
-      ],
-    },
-    {
       title: "Productos",
       url: "/dashboard/products",
       icon: SquareTerminal,
