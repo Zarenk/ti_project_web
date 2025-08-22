@@ -285,7 +285,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       return item
     })
     if (accountingEnabled && canAccessAccounting) {
-      items.push({
+      const accountingItem = {
         title: "Contabilidad",
         url: "/dashboard/accounting",
         icon: PieChart,
@@ -299,21 +299,29 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/dashboard/accounting/reports/trial-balance",
           },
         ],
-      })
+      }
+      const insertIndex = items.findIndex((i) =>
+        i.title.localeCompare(accountingItem.title, "es") > 0
+      )
+      if (insertIndex === -1) {
+        items.push(accountingItem)
+      } else {
+        items.splice(insertIndex, 0, accountingItem)
+      }
     }
-  if (canAccessAdsLab) {
-      items.push({
-        title: "AdsLab",
-        url: "#",
-        icon: Bot,
-        items: [
-          {
-            title: "AdsLab",
-            url: "/dashboard/adslab",
-          },
-        ],
-      })
-    }
+    if (canAccessAdsLab) {
+        items.push({
+          title: "AdsLab",
+          url: "#",
+          icon: Bot,
+          items: [
+            {
+              title: "AdsLab",
+              url: "/dashboard/adslab",
+            },
+          ],
+        })
+      }
 
     return items
   }, [totalUnread, canAccessAdsLab, accountingEnabled, canAccessAccounting])

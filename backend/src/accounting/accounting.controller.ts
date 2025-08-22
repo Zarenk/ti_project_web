@@ -1,11 +1,31 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { AccountingService } from './accounting.service';
+import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { AccountingService, AccountNode } from './accounting.service';
 
-@Controller('accounting/reports')
+@Controller('accounting')
 export class AccountingController {
   constructor(private readonly accountingService: AccountingService) {}
 
-  @Get('ledger')
+  @Get('accounts')
+  getAccounts(): Promise<AccountNode[]> {
+    return this.accountingService.getAccounts();
+  }
+
+  @Post('accounts')
+  createAccount(
+    @Body() body: { code: string; name: string; parentId?: number | null },
+  ): Promise<AccountNode> {
+    return this.accountingService.createAccount(body);
+  }
+
+  @Put('accounts/:id')
+  updateAccount(
+    @Param('id') id: string,
+    @Body() body: { code: string; name: string; parentId?: number | null },
+  ): Promise<AccountNode> {
+    return this.accountingService.updateAccount(Number(id), body);
+  }
+
+  @Get('reports/ledger')
   getLedger(
     @Query('accountCode') accountCode?: string,
     @Query('from') from?: string,
@@ -22,7 +42,7 @@ export class AccountingController {
     });
   }
 
-  @Get('trial-balance')
+  @Get('reports/trial-balance')
   getTrialBalance(@Query('period') period: string) {
     return this.accountingService.getTrialBalance(period);
   }

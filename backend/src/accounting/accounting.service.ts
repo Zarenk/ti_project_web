@@ -3,6 +3,14 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { zonedTimeToUtc } from 'date-fns-tz';
 import { endOfDay, startOfDay, parse, endOfMonth } from 'date-fns';
 
+export interface AccountNode {
+  id: number;
+  code: string;
+  name: string;
+  parentId: number | null;
+  children?: AccountNode[];
+}
+
 const LIMA_TZ = 'America/Lima';
 
 function toUtc(date: string, end = false): Date {
@@ -13,6 +21,92 @@ function toUtc(date: string, end = false): Date {
 @Injectable()
 export class AccountingService {
   constructor(private prisma: PrismaService) {}
+
+  async getAccounts(): Promise<AccountNode[]> {
+    const accounts = await this.prisma.account.findMany({
+      orderBy: { code: 'asc' },
+    });
+
+    const map = new Map<number, AccountNode>();
+    for (const acc of accounts) {
+      map.set(acc.id, {
+        id: acc.id,
+        code: acc.code,
+        name: acc.name,
+        parentId: acc.parentId,
+        children: [],
+      });
+    }
+
+    const roots: AccountNode[] = [];
+    for (const node of map.values()) {
+      if (node.parentId) {
+        const parent = map.get(node.parentId);
+        if (parent) {
+          parent.children!.push(node);
+        } else {
+          roots.push(node);
+        }
+      } else {
+        roots.push(node);
+      }
+    }
+
+    const clean = (node: AccountNode) => {
+      if (node.children && node.children.length === 0) {
+        delete node.children;
+      } else {
+        node.children?.forEach(clean);
+      }
+    };
+
+    roots.forEach(clean);
+    return roots;
+  }
+
+  async createAccount(data: {
+    code: string;
+    name: string;
+    parentId?: number | null;
+  }): Promise<AccountNode> {
+    const account = await this.prisma.account.create({
+      data: {
+        code: data.code,
+        name: data.name,
+        parentId: data.parentId ?? null,
+        level: data.code.length,
+        isPosting: data.code.length >= 4,
+      },
+    });
+    return {
+      id: account.id,
+      code: account.code,
+      name: account.name,
+      parentId: account.parentId,
+    };
+  }
+
+  async updateAccount(
+    id: number,
+    data: { code: string; name: string; parentId?: number | null },
+  ): Promise<AccountNode> {
+    const account = await this.prisma.account.update({
+      where: { id },
+      data: {
+        code: data.code,
+        name: data.name,
+        parentId: data.parentId ?? null,
+        level: data.code.length,
+        isPosting: data.code.length >= 4,
+      },
+    });
+    return {
+      id: account.id,
+      code: account.code,
+      name: account.name,
+      parentId: account.parentId,
+    };
+  }
 
   async getLedger(params: {
     accountCode?: string;
@@ -33,12 +127,18 @@ export class AccountingService {
       where.date = date;
     }
 
-    const lines: any[] = await (prisma.journalLine?.findMany
-      ? prisma.journalLine.findMany({
-          where,
-          orderBy: [{ date: 'asc' }, { id: 'asc' }],
-        })
-      : []);
+    let lines: any[] = [];
+    try {
+      lines = await (prisma.journalLine?.findMany
+        ? prisma.journalLine.findMany({
+            where,
+            orderBy: [{ date: 'asc' }, { id: 'asc' }],
+          })
+        : []);
+    } catch (error) {
+      console.error('Error retrieving ledger', error);
+      return { data: [], total: 0, message: 'No se pudo obtener el libro mayor' };
+    }
 
     let running = 0;
     const withBalance = lines.map((l) => {

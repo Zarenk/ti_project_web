@@ -19,4 +19,8 @@ export class JournalsService {
     this.journals.push(journal);
     return journal;
   }
+
+  findAll(): Journal[] {
+    return this.journals;
+  }
 }

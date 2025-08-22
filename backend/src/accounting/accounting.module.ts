@@ -8,6 +8,8 @@ import { SaleFulfilledController } from './hooks/sale-fulfilled.controller';
 import { SalePostedController } from './hooks/sale-posted.controller';
 import { AccountingController } from './accounting.controller';
 import { AccountingService } from './accounting.service';
+import { EntriesController } from './entries.controller';
+import { EntriesService } from './entries.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 
 @Module({
@@ -21,7 +23,8 @@ import { PrismaModule } from 'src/prisma/prisma.module';
     InventoryAdjustedController,
     CreditNotePostedController,
     DebitNotePostedController,
+    EntriesController,
   ],
-  providers: [AccountingService],
+  providers: [AccountingService, EntriesService],
 })
 export class AccountingModule {}
