@@ -8,8 +8,10 @@ import { SaleFulfilledController } from './hooks/sale-fulfilled.controller';
 import { SalePostedController } from './hooks/sale-posted.controller';
 import { AccountingController } from './accounting.controller';
 import { AccountingService } from './accounting.service';
+import { PrismaModule } from 'src/prisma/prisma.module';
 
 @Module({
+  imports: [PrismaModule],
   controllers: [
     AccountingController,
     SalePostedController,

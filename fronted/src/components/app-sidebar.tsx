@@ -36,6 +36,8 @@ import {
 } from "@/components/ui/sidebar"
 import { useMessages } from "@/context/messages-context"
 import { useAuth } from "@/context/auth-context"
+import { useFeatureFlag } from "@/app/hooks/use-feature-flags"
+import { useRBAC } from "@/app/hooks/use-rbac"
 
 // Static navigation data
 const data = {
@@ -248,6 +250,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { userName, userId, role } = useAuth()
   const { totalUnread } = useMessages()
 
+  const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
+  const canAccessAccounting = useRBAC(["admin", "accountant", "auditor"])
+
   const adsLabEnabled = process.env.NEXT_PUBLIC_ADSLAB_ENABLED === 'true'
   const allowUserIds = process.env.NEXT_PUBLIC_ADSLAB_ALLOWLIST_USER_IDS
     ? process.env.NEXT_PUBLIC_ADSLAB_ALLOWLIST_USER_IDS.split(',').map((id) => id.trim()).filter(Boolean)
@@ -278,6 +283,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }
       return item
     })
+    if (accountingEnabled && canAccessAccounting) {
+      items.push({
+        title: "Contabilidad",
+        url: "#",
+        icon: PieChart,
+        items: [
+          { title: "Plan de Cuentas", url: "/accounting/chart" },
+          { title: "Diarios", url: "/accounting/journals" },
+          { title: "Asientos", url: "/accounting/entries" },
+          { title: "Libro Mayor", url: "/accounting/reports/ledger" },
+          {
+            title: "Balance de Comprobación",
+            url: "/accounting/reports/trial-balance",
+          },
+        ],
+      })
+    }
   if (canAccessAdsLab) {
       items.push({
         title: "AdsLab",
@@ -293,7 +315,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
 
     return items
-  }, [totalUnread, canAccessAdsLab])
+  }, [totalUnread, canAccessAdsLab, accountingEnabled, canAccessAccounting])
 
   return (
     <Sidebar collapsible="icon" {...props}>
