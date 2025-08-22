@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { useRBAC } from "../hooks/use-rbac"
 import { useFeatureFlag } from "../hooks/use-feature-flags"
 
-
 export default function AdsLayout({ children }: { children: ReactNode }) {
   const enabled = useFeatureFlag("ads")
   const allowed = useRBAC(["admin", "marketing"])

@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   AudioWaveform,
+  Banknote,
   BookOpen,
   Bot,
   Command,
@@ -94,6 +95,21 @@ const data = {
         {
           title: "Ver Categorias",
           url: "/dashboard/categories",
+        },
+      ],
+    },
+    {
+      title: "Contabilidad",
+      url: "/dashboard/accounting",
+      icon: Banknote,
+      items: [
+        {
+          title: "Nueva Categoria",
+          url: "/dashboard/accounting/new",
+        },
+        {
+          title: "Ver Contabilidad",
+          url: "/dashboard/accounting",
         },
       ],
     },
@@ -286,16 +302,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     if (accountingEnabled && canAccessAccounting) {
       items.push({
         title: "Contabilidad",
-        url: "#",
+        url: "/dashboard/accounting",
         icon: PieChart,
         items: [
-          { title: "Plan de Cuentas", url: "/accounting/chart" },
-          { title: "Diarios", url: "/accounting/journals" },
-          { title: "Asientos", url: "/accounting/entries" },
-          { title: "Libro Mayor", url: "/accounting/reports/ledger" },
+          { title: "Plan de Cuentas", url: "/dashboard/accounting/chart" },
+          { title: "Diarios", url: "/dashboard/accounting/journals" },
+          { title: "Asientos", url: "/dashboard/accounting/entries" },
+          { title: "Libro Mayor", url: "/dashboard/accounting/reports/ledger" },
           {
             title: "Balance de Comprobación",
-            url: "/accounting/reports/trial-balance",
+            url: "/dashboard/accounting/reports/trial-balance",
           },
         ],
       })
