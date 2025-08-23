@@ -1,5 +1,6 @@
 import axios from "axios";
 import { BACKEND_URL } from "@/lib/utils";
+import { getAuthHeaders } from "@/utils/auth-token";
 
 export interface Journal {
   id: string;
@@ -9,13 +10,15 @@ export interface Journal {
 }
 
 export async function fetchJournals(): Promise<Journal[]> {
-  const res = await axios.get(`${BACKEND_URL}/api/accounting/journals`);
+  const headers = await getAuthHeaders();
+  const res = await axios.get(`${BACKEND_URL}/api/accounting/journals`, { headers });
   return res.data;
 }
 
 export async function createJournal(data: Omit<Journal, "id">) {
   try {
-    const res = await axios.post(`${BACKEND_URL}/api/accounting/journals`, data);
+    const headers = await getAuthHeaders();
+    const res = await axios.post(`${BACKEND_URL}/api/accounting/journals`, data, { headers });
     return res.data as Journal;
   } catch (error: any) {
     if (axios.isAxiosError(error) && error.response?.status === 400) {
@@ -27,7 +30,8 @@ export async function createJournal(data: Omit<Journal, "id">) {
 
 export async function updateJournal(id: string, data: Omit<Journal, "id">) {
   try {
-    const res = await axios.put(`${BACKEND_URL}/api/accounting/journals/${id}`, data);
+    const headers = await getAuthHeaders();
+    const res = await axios.put(`${BACKEND_URL}/api/accounting/journals/${id}`, data, { headers });
     return res.data as Journal;
   } catch (error: any) {
     if (axios.isAxiosError(error) && error.response?.status === 400) {
@@ -38,5 +42,6 @@ export async function updateJournal(id: string, data: Omit<Journal, "id">) {
 }
 
 export async function deleteJournal(id: string) {
-  await axios.delete(`${BACKEND_URL}/api/accounting/journals/${id}`);
+   const headers = await getAuthHeaders();
+  await axios.delete(`${BACKEND_URL}/api/accounting/journals/${id}`, { headers });
 }

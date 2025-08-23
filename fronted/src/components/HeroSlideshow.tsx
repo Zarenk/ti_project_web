@@ -36,6 +36,7 @@ interface Product {
 
 export default function HeroSlideshow({ products }: { products: Product[] }) {
   const [index, setIndex] = useState(0)
+  const [isPaused, setIsPaused] = useState(false)
 
   // Start from a random product when the list changes
   useEffect(() => {
@@ -58,6 +59,7 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
   const offsetY = useMotionValue(0)
 
   const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isPaused) return
     const rect = e.currentTarget.getBoundingClientRect()
     const x = ((e.clientX - rect.left) / rect.width - 0.5) * 20
     const y = ((e.clientY - rect.top) / rect.height - 0.5) * 20
@@ -69,6 +71,14 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
     offsetX.set(0)
     offsetY.set(0)
   }
+
+  useEffect(() => {
+    if (isPaused || products.length <= 1) return
+    const id = setInterval(() => {
+      setIndex((i) => (i + 1) % products.length)
+    }, 5000)
+    return () => clearInterval(id)
+  }, [isPaused, products, index])
 
   return (
     <div className="relative">
@@ -83,7 +93,11 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
         >
           <motion.div
             onMouseMove={handleMove}
-            onMouseLeave={resetMove}
+            onMouseEnter={() => setIsPaused(true)}
+            onMouseLeave={() => {
+              resetMove()
+              setIsPaused(false)
+            }}
             style={{ x: offsetX, y: offsetY }}
             className="cursor-pointer"
           >

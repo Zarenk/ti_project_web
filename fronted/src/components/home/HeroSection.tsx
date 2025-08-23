@@ -97,7 +97,7 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
               </Button>
             </div>
           </div>
-          <HeroCollageCarousel products={heroProducts} />
+          <HeroSlideshow products={heroProducts} />
         </div>
       </div>
     </section>

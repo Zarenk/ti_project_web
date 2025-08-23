@@ -34,7 +34,7 @@ export async function getAuthToken(): Promise<string | null> {
   }
 }
 
-export async function getAuthHeaders(): Promise<HeadersInit> {
+export async function getAuthHeaders(): Promise<Record<string, string>> {
   const token = await getAuthToken()
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
