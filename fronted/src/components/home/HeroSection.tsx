@@ -65,11 +65,11 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
   return (
     <section
       ref={sectionRef}
-      className="relative z-0 bg-gradient-to-r from-sky-100 via-blue-50 to-sky-100 py-20 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800"
+      className="relative z-0 bg-gradient-to-r from-sky-100 via-blue-50 to-sky-100 py-12 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800"
     >
       <SectionBackground />
       <div className="container mx-auto px-4">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+        <div className="grid lg:grid-cols-2 gap-8 items-center">
           <div className="space-y-8">
             <div className="space-y-4 hero-title">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800 dark:text-gray-100 leading-tight font-signika">

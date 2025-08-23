@@ -28,9 +28,9 @@ export default function CategoriesSection({
   categoriesLength,
 }: CategoriesSectionProps) {
   return (
-    <ScrollUpSection className="py-20 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
+    <ScrollUpSection className="py-12 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-black">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
+        <div className="text-center mb-8">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">Explora por categoría</h2>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
             Encuentra exactamente lo que necesitas en nuestras categorías especializadas

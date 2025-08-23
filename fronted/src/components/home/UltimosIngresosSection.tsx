@@ -39,10 +39,10 @@ export default function UltimosIngresosSection({
   recentProductsLength,
 }: UltimosIngresosSectionProps) {
   return (
-    <ScrollUpSection className="py-20 bg-white dark:bg-gray-900">
+    <ScrollUpSection className="py-12 bg-white dark:bg-gray-900">
       <SectionBackground />
       <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
+        <div className="text-center mb-8">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4 font-signika">
             Últimos ingresos
           </h2>

@@ -10,13 +10,13 @@ interface NewsletterSectionProps {
 
 export default function NewsletterSection({ email, setEmail, handleSubscribe }: NewsletterSectionProps) {
   return (
-    <ScrollUpSection className="py-20 bg-gradient-to-r from-blue-700 to-blue-800 text-white">
+    <ScrollUpSection className="py-12 bg-gradient-to-r from-blue-700 to-blue-800 text-white">
       <div className="container mx-auto px-4">
         <div className="max-w-md mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
             Suscríbete y recibe ofertas exclusivas
           </h2>
-          <p className="text-xl text-blue-100 mb-8">
+          <p className="text-xl text-blue-100 mb-6">
             Mantente al día con las últimas novedades, ofertas especiales y lanzamientos de productos
           </p>
           <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-4">

@@ -85,10 +85,19 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
       <AnimatePresence mode="wait">
         <motion.div
           key={product?.id ?? "placeholder"}
-          initial={{ x: 300, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: -300, opacity: 0 }}
-          transition={{ type: "tween" }}
+          animate={
+            isPaused
+              ? { x: 0, opacity: 1 }
+              : { x: [300, 0, -300], opacity: [0, 1, 0] }
+          }
+          transition={
+            isPaused
+              ? { duration: 0.2 }
+              : { duration: 3, times: [0, 0.5, 1], ease: "linear" }
+          }
+          onAnimationComplete={() => {
+            if (!isPaused) next()
+          }}
           className="relative"
         >
           <motion.div
