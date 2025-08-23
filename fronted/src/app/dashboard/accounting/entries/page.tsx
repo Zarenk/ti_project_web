@@ -18,8 +18,8 @@ export default function AccountingEntriesPage() {
     try {
       const res = await fetch(`${BACKEND_URL}/api/accounting/entries`)
       if (res.ok) {
-        const data = await res.json()
-        setEntries(data)
+        const { data }: { data: Entry[] } = await res.json()
+        setEntries(Array.isArray(data) ? data : [])
       }
     } catch (err) {
       console.error('Failed to load entries', err)

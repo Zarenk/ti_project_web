@@ -10,6 +10,11 @@ interface LedgerRow {
   credit: number
 }
 
+interface LedgerResponse {
+  data: LedgerRow[]
+  total: number
+}
+
 export default function LedgerReportPage() {
   const [rows, setRows] = useState<LedgerRow[]>([])
 
@@ -18,11 +23,13 @@ export default function LedgerReportPage() {
       try {
         const res = await fetch(`${BACKEND_URL}/api/accounting/reports/ledger`)
         if (res.ok) {
-          const data = await res.json()
-          setRows(data)
+          const data: LedgerResponse = await res.json()
+          // API returns an object with a `data` array and `total` count
+          setRows(Array.isArray(data.data) ? data.data : [])
         }
       } catch (err) {
         console.error('Failed to load ledger', err)
+        setRows([])
       }
     }
     load()
