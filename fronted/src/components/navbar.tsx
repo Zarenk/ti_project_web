@@ -80,20 +80,32 @@ export default function Navbar() {
     if (!window.matchMedia("(min-width: 768px)").matches) return
 
     const sections = document.querySelectorAll<HTMLElement>("[data-navcolor]")
+
+    const resolveColor = (el: HTMLElement): string => {
+      let current: HTMLElement | null = el
+      while (current) {
+        const color = window.getComputedStyle(current).backgroundColor
+        if (
+          color &&
+          color !== "rgba(0, 0, 0, 0)" &&
+          color !== "transparent"
+        ) {
+          return color
+        }
+        current = current.parentElement
+      }
+      return ""
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            const computed = window.getComputedStyle(entry.target).backgroundColor
-            const attrColor = entry.target.getAttribute("data-navcolor")
-            if (
-              computed &&
-              computed !== "rgba(0, 0, 0, 0)" &&
-              computed !== "transparent"
-            ) {
-              setNavColor(computed)
-            } else if (attrColor) {
-              setNavColor(attrColor)
+            const color = resolveColor(entry.target as HTMLElement)
+            if (color) {
+              setNavColor(color)
+            } else {
+              setNavColor("")
             }
           }
         })
