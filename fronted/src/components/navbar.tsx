@@ -84,8 +84,17 @@ export default function Navbar() {
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            const color = entry.target.getAttribute("data-navcolor")
-            if (color) setNavColor(color)
+            const computed = window.getComputedStyle(entry.target).backgroundColor
+            const attrColor = entry.target.getAttribute("data-navcolor")
+            if (
+              computed &&
+              computed !== "rgba(0, 0, 0, 0)" &&
+              computed !== "transparent"
+            ) {
+              setNavColor(computed)
+            } else if (attrColor) {
+              setNavColor(attrColor)
+            }
           }
         })
       },
@@ -100,7 +109,7 @@ export default function Navbar() {
     <>
       <TopBanner />
       <nav
-        className="bg-background shadow-sm border-b md:sticky md:top-0 md:z-50 transition-colors"
+        className="bg-background shadow-sm border-b md:sticky md:top-0 md:z-50 transition-colors duration-500 ease-in-out"
         style={{ backgroundColor: navColor || undefined }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
