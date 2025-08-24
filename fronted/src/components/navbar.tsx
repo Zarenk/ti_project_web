@@ -41,6 +41,7 @@ export default function Navbar() {
   const { items } = useCart()
   const { theme } = useTheme()
   const [logoSrc, setLogoSrc] = useState("/logo_ti.png")
+  const [navColor, setNavColor] = useState<string>("")
 
   useEffect(() => {
     setLogoSrc(theme === "dark" ? "/ti_logo_final_blanco.png" : "/logo_ti.png")
@@ -75,10 +76,33 @@ export default function Navbar() {
     { href: "/favorites", label: "Favoritos", icon: Heart },
   ]
 
+  useEffect(() => {
+    if (!window.matchMedia("(min-width: 768px)").matches) return
+
+    const sections = document.querySelectorAll<HTMLElement>("[data-navcolor]")
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const color = entry.target.getAttribute("data-navcolor")
+            if (color) setNavColor(color)
+          }
+        })
+      },
+      { threshold: 0.5 },
+    )
+
+    sections.forEach((section) => observer.observe(section))
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <>
       <TopBanner />
-      <nav className="bg-background shadow-sm border-b">
+      <nav
+        className="bg-background shadow-sm border-b md:sticky md:top-0 md:z-50 transition-colors"
+        style={{ backgroundColor: navColor || undefined }}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <Link
             href="/"

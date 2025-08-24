@@ -326,10 +326,10 @@ export default function Homepage() {
     <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-gray-950 dark:to-black">
       <Navbar />
       <div ref={sectionsRef}>
-        <section className="gsap-section">
+        <section className="gsap-section" data-navcolor="#ffffff">
           <HeroSection heroProducts={heroProducts} />
         </section>
-        <section className="gsap-section">
+        <section className="gsap-section" data-navcolor="#f1f5f9">
           <UltimosIngresosSection
             visibleRecent={visibleRecent}
             recentIndex={recentIndex}
@@ -339,10 +339,10 @@ export default function Homepage() {
             recentProductsLength={recentProducts.length}
           />
         </section>
-        <section className="gsap-section">
+        <section className="gsap-section" data-navcolor="#e0f2fe">
           <FeaturedProductsSection featuredProducts={featuredProducts} />
         </section>
-        <section className="gsap-section">
+        <section className="gsap-section" data-navcolor="#e0e7ff">
           <CategoriesSection
             visibleCategories={visibleCategories}
             categoryIndex={categoryIndex}
@@ -352,13 +352,13 @@ export default function Homepage() {
             categoriesLength={categories.length}
           />
         </section>
-        <section className="gsap-section">
+        <section className="gsap-section" data-navcolor="#fef3c7">
           <BenefitsSection benefits={benefits} />
         </section>
-        <section className="gsap-section">
+        <section className="gsap-section" data-navcolor="#fce7f3">
           <TestimonialsSection testimonials={testimonials} />
         </section>
-        <section className="gsap-section">
+        <section className="gsap-section" data-navcolor="#ecfccb">
           <NewsletterSection
             email={email}
             setEmail={setEmail}

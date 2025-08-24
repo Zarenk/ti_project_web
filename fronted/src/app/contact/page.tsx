@@ -54,7 +54,10 @@ export default function ContactPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-white dark:from-slate-900 dark:via-slate-950 dark:to-slate-950">
     <Navbar />
       {/* Header Section */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-700 dark:to-cyan-700 py-16 px-4">
+      <div
+        className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-700 dark:to-cyan-700 py-16 px-4"
+        data-navcolor="#3b82f6"
+      >
         <div className="absolute inset-0 bg-white/10 dark:bg-black/20 backdrop-blur-sm"></div>
         <div className="relative max-w-7xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 animate-fade-in">Contáctanos</h1>

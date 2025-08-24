@@ -71,7 +71,7 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
       <div className="container mx-auto px-4">
         <div className="grid lg:grid-cols-2 gap-8 items-center">
           <div className="space-y-8">
-            <div className="space-y-2 hero-title">
+            <div className="space-y-1 hero-title">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800 dark:text-gray-100 leading-tight font-signika">
                 {renderAnimatedText('Potencia tu productividad con nuestras')}
                 <span className="text-sky-600">

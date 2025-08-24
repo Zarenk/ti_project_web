@@ -70,7 +70,10 @@ export default function Component() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-celeste-50 to-white dark:from-slate-900 dark:to-slate-950">
       <Navbar />
-      <div className="container mx-auto px-4 py-12 max-w-4xl">
+      <div
+        className="container mx-auto px-4 py-12 max-w-4xl"
+        data-navcolor="#ffffff"
+      >
         {/* Header Section */}
         <div className="text-center mb-12">
           <div className="flex justify-center mb-6">

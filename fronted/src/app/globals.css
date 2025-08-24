@@ -132,6 +132,15 @@
   animation: banner-bg 8s ease-in-out infinite;
 }
 
+/* Announcement bar displayed above the navbar */
+.announcement-bar {
+  background-color: var(--secondary);
+  color: var(--secondary-foreground);
+  text-align: center;
+  font-weight: 600;
+  padding: 0.5rem;
+}
+
 .banner-track {
   display: inline-block;
   white-space: nowrap;

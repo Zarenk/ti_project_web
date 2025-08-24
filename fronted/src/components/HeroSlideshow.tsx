@@ -38,7 +38,7 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
   const [index, setIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isManual, setIsManual] = useState(false)
-  const autoDuration = 3
+  const autoDuration = 4
 
   // Start from a random product when the list changes
   useEffect(() => {
@@ -51,6 +51,7 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
   const next = (manualTrigger = false) => {
     if (manualTrigger) setIsManual(true)
     setIndex((i) => (products.length > 0 ? (i + 1) % products.length : i))
+
   }
   const prev = (manualTrigger = false) => {
     if (manualTrigger) setIsManual(true)
@@ -106,7 +107,7 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
             animate="center"
             exit="exit"
             transition={
-              isManual ? { duration: 0.5 } : { duration: autoDuration, ease: "linear" }
+              isManual ? { duration: 3 } : { duration: autoDuration, ease: "linear" }
             }
             onAnimationComplete={() => {
               if (isManual) setIsManual(false)
