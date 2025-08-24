@@ -155,7 +155,7 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
 
       {product && (
         <div className="absolute -top-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
-          <p className="font-semibold text-gray-800 dark:text-gray-100">
+          <p className="font-anton text-gray-800 dark:text-gray-100">
             {product.name}
           </p>
           <p className="text-sm text-gray-600 dark:text-gray-300">
