@@ -37,6 +37,8 @@ interface Product {
 export default function HeroSlideshow({ products }: { products: Product[] }) {
   const [index, setIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
+  const [isManual, setIsManual] = useState(false)
+  const autoDuration = 3
 
   // Start from a random product when the list changes
   useEffect(() => {
@@ -46,12 +48,22 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
     }
   }, [products])
 
-  const next = () =>
+  const next = (manualTrigger = false) => {
+    if (manualTrigger) setIsManual(true)
     setIndex((i) => (products.length > 0 ? (i + 1) % products.length : i))
-  const prev = () =>
+  }
+  const prev = (manualTrigger = false) => {
+    if (manualTrigger) setIsManual(true)
     setIndex((i) =>
       products.length > 0 ? (i - 1 + products.length) % products.length : i,
     )
+  }
+
+  useEffect(() => {
+    if (isPaused || isManual || products.length <= 1) return
+    const timer = setTimeout(() => next(), autoDuration * 1000)
+    return () => clearTimeout(timer)
+  }, [index, isPaused, isManual, products.length])
 
   const product = products[index]
 
@@ -72,31 +84,34 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
     offsetY.set(0)
   }
 
-  useEffect(() => {
-    if (isPaused || products.length <= 1) return
-    const id = setInterval(() => {
-      setIndex((i) => (i + 1) % products.length)
-    }, 5000)
-    return () => clearInterval(id)
-  }, [isPaused, products, index])
+  const autoVariants = {
+    enter: { x: 300, opacity: 0 },
+    center: { x: 0, opacity: 1 },
+    exit: { x: -300, opacity: 0 },
+  }
+
+  const manualVariants = {
+    enter: { opacity: 0 },
+    center: { opacity: 1 },
+    exit: { opacity: 0 },
+  }
 
   return (
     <div className="relative">
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         <motion.div
           key={product?.id ?? "placeholder"}
-          animate={
-            isPaused
-              ? { x: 0, opacity: 1 }
-              : { x: [300, 0, -300], opacity: [0, 1, 0] }
-          }
+          variants={isManual ? manualVariants : autoVariants}
+          initial="enter"
+          animate="center"
+          exit="exit"
           transition={
-            isPaused
-              ? { duration: 0.2 }
-              : { duration: 3, times: [0, 0.5, 1], ease: "linear" }
+            isManual
+              ? { duration: 0.5 }
+              : { duration: autoDuration, ease: "linear" }
           }
           onAnimationComplete={() => {
-            if (!isPaused) next()
+            if (isManual) setIsManual(false)
           }}
           className="relative"
         >
@@ -159,23 +174,23 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
         </motion.div>
       </AnimatePresence>
       {products.length > 1 && (
-        <>
-          <button
-            aria-label="Anterior"
-            onClick={prev}
-            className="absolute top-1/2 left-0 -translate-x-[150%] -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <button
-            aria-label="Siguiente"
-            onClick={next}
-            className="absolute top-1/2 right-0 translate-x-[150%] -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </button>
-        </>
-      )}
+          <>
+            <button
+              aria-label="Anterior"
+              onClick={() => prev(true)}
+              className="absolute top-1/2 left-0 -translate-x-[150%] -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <button
+              aria-label="Siguiente"
+              onClick={() => next(true)}
+              className="absolute top-1/2 right-0 translate-x-[150%] -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          </>
+        )}
     </div>
   )
 }
