@@ -71,7 +71,7 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
       <div className="container mx-auto px-4">
         <div className="grid lg:grid-cols-2 gap-8 items-center">
           <div className="space-y-8">
-            <div className="space-y-4 hero-title">
+            <div className="space-y-2 hero-title">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800 dark:text-gray-100 leading-tight font-signika">
                 {renderAnimatedText('Potencia tu productividad con nuestras')}
                 <span className="text-sky-600">
@@ -84,14 +84,14 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 hero-buttons">
-              <Button size="lg" className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 text-lg">
+              <Button size="lg" className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 text-lg transition-transform duration-300 ease-in-out hover:scale-105">
                 Ver productos
                 <ChevronRight className="w-5 h-5 ml-2" />
               </Button>
               <Button
                 variant="outline"
                 size="lg"
-                className="border-sky-300 text-sky-600 hover:bg-sky-50 px-8 py-3 text-lg bg-transparent"
+                className="border-sky-300 text-sky-600 hover:bg-sky-50 px-8 py-3 text-lg bg-transparent transition-transform duration-300 ease-in-out hover:scale-105"
               >
                 Ofertas especiales
               </Button>

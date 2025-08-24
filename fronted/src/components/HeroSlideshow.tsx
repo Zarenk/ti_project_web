@@ -95,102 +95,104 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
     center: { opacity: 1 },
     exit: { opacity: 0 },
   }
-
   return (
     <div className="relative">
-      <AnimatePresence>
-        <motion.div
-          key={product?.id ?? "placeholder"}
-          variants={isManual ? manualVariants : autoVariants}
-          initial="enter"
-          animate="center"
-          exit="exit"
-          transition={
-            isManual
-              ? { duration: 0.5 }
-              : { duration: autoDuration, ease: "linear" }
-          }
-          onAnimationComplete={() => {
-            if (isManual) setIsManual(false)
-          }}
-          className="relative"
-        >
+      <div className="relative w-full aspect-[6/5] overflow-hidden rounded-2xl shadow-2xl">
+        <AnimatePresence>
           <motion.div
-            onMouseMove={handleMove}
-            onMouseEnter={() => setIsPaused(true)}
-            onMouseLeave={() => {
-              resetMove()
-              setIsPaused(false)
+            key={product?.id ?? "placeholder"}
+            variants={isManual ? manualVariants : autoVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={
+              isManual ? { duration: 0.5 } : { duration: autoDuration, ease: "linear" }
+            }
+            onAnimationComplete={() => {
+              if (isManual) setIsManual(false)
             }}
-            style={{ x: offsetX, y: offsetY }}
-            className="cursor-pointer"
+            className="absolute inset-0"
           >
-            {product ? (
-              <Link href={`/store/${product.id}`}>
+            <motion.div
+              onMouseMove={handleMove}
+              onMouseEnter={() => setIsPaused(true)}
+              onMouseLeave={() => {
+                resetMove()
+                setIsPaused(false)
+              }}
+              style={{ x: offsetX, y: offsetY }}
+              className="h-full w-full cursor-pointer"
+            >
+              {product ? (
+                <Link href={`/store/${product.id}`}>
+                  <Image
+                    src={
+                      product.images[0] ||
+                      "/placeholder.svg?height=500&width=600&text=Hero+Banner"
+                    }
+                    alt={product.name}
+                    width={600}
+                    height={500}
+                    className="h-full w-full object-cover object-center"
+                    priority
+                  />
+                </Link>
+              ) : (
                 <Image
-                  src={
-                    product.images[0] ||
-                    "/placeholder.svg?height=500&width=600&text=Hero+Banner"
-                  }
-                  alt={product.name}
+                  src="/placeholder.svg?height=500&width=600&text=Hero+Banner"
+                  alt="Producto"
                   width={600}
-                  height={500}
-                  className="w-full aspect-[6/5] object-cover object-center rounded-2xl shadow-2xl"
-                  priority                
+                  height={500}         
+                  className="h-full w-full object-cover object-center"
+                  priority
                 />
-              </Link>
-            ) : (
-              <Image
-                src="/placeholder.svg?height=500&width=600&text=Hero+Banner"
-                alt="Producto"
-                width={600}
-                height={500}
-                className="w-full aspect-[6/5] object-cover object-center rounded-2xl shadow-2xl"
-                priority
-              />
-            )}
+              )}
+            </motion.div>
           </motion.div>
-          {product && (
-            <div className="absolute -top-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
-              <p className="font-semibold text-gray-800 dark:text-gray-100">
-                {product.name}
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                {formatCurrency(product.price, "PEN")}
-              </p>
-            </div>
-          )}
-          <div className="absolute -bottom-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <Shield className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-100">Garantía extendida</p>
-                <p className="text-sm text-gray-600 dark:text-gray-300">Hasta 3 años</p>
-              </div>
-            </div>
+        </AnimatePresence>
+      </div>
+
+      {product && (
+        <div className="absolute -top-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
+          <p className="font-semibold text-gray-800 dark:text-gray-100">
+            {product.name}
+          </p>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            {formatCurrency(product.price, "PEN")}
+          </p>
+        </div>
+      )}
+
+      <div className="absolute -bottom-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
+        <div className="flex items-center space-x-3">
+          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+            <Shield className="w-6 h-6 text-green-600" />
           </div>
-        </motion.div>
-      </AnimatePresence>
+          <div>
+            <p className="font-semibold text-gray-800 dark:text-gray-100">Garantía extendida</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300">Hasta 3 años</p>
+          </div>
+        </div>
+      </div>
+
       {products.length > 1 && (
-          <>
-            <button
-              aria-label="Anterior"
-              onClick={() => prev(true)}
-              className="absolute top-1/2 left-0 -translate-x-[150%] -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-            <button
-              aria-label="Siguiente"
-              onClick={() => next(true)}
-              className="absolute top-1/2 right-0 translate-x-[150%] -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
-            >
-              <ChevronRight className="w-6 h-6" />
-            </button>
-          </>
-        )}
+        <>
+          <button
+            aria-label="Anterior"
+            onClick={() => prev(true)}
+            className="absolute top-1/2 left-0 -translate-x-[150%] -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <button
+            aria-label="Siguiente"
+            onClick={() => next(true)}
+            className="absolute top-1/2 right-0 translate-x-[150%] -translate-y-1/2 bg-white/70 hover:bg-white text-gray-800 p-2 rounded-full"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        </>
+      )}
     </div>
   )
 }
