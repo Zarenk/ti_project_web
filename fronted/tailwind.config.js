@@ -10,7 +10,7 @@ module.exports = {
     extend: {
       fontFamily: {
         signika: ['"Signika Negative"', 'sans-serif'],
-        anton: ['"Anton"', 'sans-serif'],
+        anton: ['var(--font-anton)', 'sans-serif'],
       },
     },
   },

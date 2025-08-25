@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner";
@@ -8,6 +9,13 @@ import { AuthProvider } from "@/context/auth-context";
 import WhatsappButton from "@/components/whatsapp-button";
 import ChatButton from "@/components/ChatButton";
 import { MessagesProvider } from "@/context/messages-context";
+
+const anton = localFont({
+  src: "../../public/fonts/anton.woff2",
+  weight: "400",
+  variable: "--font-anton",
+  display: "swap",
+});
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={anton.variable}>
       <body className="antialiased">
         <ThemeProvider
             attribute="class"

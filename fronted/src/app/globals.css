@@ -1,15 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Signika+Negative:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
-/* Local Anton font */
-@font-face {
-  font-family: "Anton";
-  src: url("/fonts/anton.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
 @plugin "tailwindcss-animate";
 
 @custom-variant dark (&:is(.dark *));
