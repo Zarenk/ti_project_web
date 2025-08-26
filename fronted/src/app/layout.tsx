@@ -29,8 +29,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={anton.variable}>
-      <body className="antialiased font-anton">
+    <html lang="en" suppressHydrationWarning className={anton.className}>
+      <body className="antialiased">
         <ThemeProvider
             attribute="class"
             defaultTheme="system"
