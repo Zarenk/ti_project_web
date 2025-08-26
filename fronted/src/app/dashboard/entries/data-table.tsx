@@ -272,7 +272,6 @@ details: { product: string; quantity: number; price: number, series:string }[];
           <title>Reporte de Entradas Seleccionadas</title>
           <style>
             body {
-              font-family: Arial, sans-serif;
               margin: 20px;
             }
             table {

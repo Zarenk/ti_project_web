@@ -12,7 +12,6 @@ const styles = StyleSheet.create({
   page: {
     padding: 30,
     fontSize: 10,
-    fontFamily: 'Helvetica',
     color: '#000',
   },
   header: {
