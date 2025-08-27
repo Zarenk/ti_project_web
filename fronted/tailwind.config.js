@@ -12,6 +12,10 @@ module.exports = {
         signika: ['"Signika Negative"', 'sans-serif'],
         anton: ['var(--font-anton)', 'sans-serif'],
       },
+      fontWeight: {
+        'anton-regular': '400',
+        'anton-bold': '700',
+      },
     },
   },
   plugins: [require('@tailwindcss/line-clamp')],

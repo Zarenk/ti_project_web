@@ -11,7 +11,10 @@ import ChatButton from "@/components/ChatButton";
 import { MessagesProvider } from "@/context/messages-context";
 
 const anton = localFont({
-  src: "../../public/fonts/anton.woff2",
+  src: [
+    { path: "../../public/fonts/anton.woff2", weight: "400" },
+    { path: "../../public/fonts/anton-bold.woff2", weight: "700" },
+  ],
   variable: "--font-anton",
   display: "swap",
 });

@@ -149,13 +149,13 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
                 />
               )}
             </motion.div>
-          </motion.div>
+          </motion.div>9
         </AnimatePresence>
       </div>
 
       {product && (
         <div className="absolute -top-6 -left-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
-          <p className="text-gray-800 dark:text-gray-100">
+          <p className="text-gray-800 dark:text-gray-100 font-bold">
             {product.name}
           </p>
           <p className="text-sm text-gray-600 dark:text-gray-300">

@@ -43,6 +43,22 @@ export default function Navbar() {
   const [logoSrc, setLogoSrc] = useState("/logo_ti.png")
   const [navColor, setNavColor] = useState<string>("")
 
+  const resolveColor = (el: HTMLElement): string => {
+    let current: HTMLElement | null = el
+    while (current) {
+      const color = window.getComputedStyle(current).backgroundColor
+      if (
+        color &&
+        color !== "rgba(0, 0, 0, 0)" &&
+        color !== "transparent"
+      ) {
+        return color
+      }
+      current = current.parentElement
+    }
+    return ""
+  }
+
   useEffect(() => {
     setLogoSrc(theme === "dark" ? "/ti_logo_final_blanco.png" : "/logo_ti.png")
   }, [theme])
@@ -81,22 +97,6 @@ export default function Navbar() {
 
     const sections = document.querySelectorAll<HTMLElement>("[data-navcolor]")
 
-    const resolveColor = (el: HTMLElement): string => {
-      let current: HTMLElement | null = el
-      while (current) {
-        const color = window.getComputedStyle(current).backgroundColor
-        if (
-          color &&
-          color !== "rgba(0, 0, 0, 0)" &&
-          color !== "transparent"
-        ) {
-          return color
-        }
-        current = current.parentElement
-      }
-      return ""
-    }
-
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -116,6 +116,23 @@ export default function Navbar() {
     sections.forEach((section) => observer.observe(section))
     return () => observer.disconnect()
   }, [])
+
+  useEffect(() => {
+    if (!window.matchMedia("(min-width: 768px)").matches) return
+
+    const sections = document.querySelectorAll<HTMLElement>("[data-navcolor]")
+    const midpoint = window.innerHeight / 2
+
+    for (const section of Array.from(sections)) {
+      const rect = section.getBoundingClientRect()
+      if (rect.top <= midpoint && rect.bottom >= midpoint) {
+        const color = resolveColor(section)
+        setNavColor(color || "")
+        return
+      }
+    }
+    setNavColor("")
+  }, [theme])
 
   return (
     <>
