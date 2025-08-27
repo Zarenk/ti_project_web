@@ -123,15 +123,20 @@ export default function Navbar() {
     const sections = document.querySelectorAll<HTMLElement>("[data-navcolor]")
     const midpoint = window.innerHeight / 2
 
-    for (const section of Array.from(sections)) {
-      const rect = section.getBoundingClientRect()
-      if (rect.top <= midpoint && rect.bottom >= midpoint) {
-        const color = resolveColor(section)
-        setNavColor(color || "")
-        return
+    const updateColor = () => {
+      for (const section of Array.from(sections)) {
+        const rect = section.getBoundingClientRect()
+        if (rect.top <= midpoint && rect.bottom >= midpoint) {
+          const color = resolveColor(section)
+          setNavColor(color || "")
+          return
+        }
       }
+      setNavColor("")
     }
-    setNavColor("")
+    // Wait for the theme classes to apply before checking colors
+    const raf = requestAnimationFrame(updateColor)
+    return () => cancelAnimationFrame(raf)
   }, [theme])
 
   return (

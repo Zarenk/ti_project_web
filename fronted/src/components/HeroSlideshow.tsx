@@ -92,9 +92,9 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
   }
 
   const manualVariants = {
-    enter: { opacity: 0 },
+    enter: { opacity: 1 },
     center: { opacity: 1 },
-    exit: { opacity: 0 },
+    exit: { opacity: 1 },
   }
   return (
     <div className="relative">
@@ -107,7 +107,9 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
             animate="center"
             exit="exit"
             transition={
-              isManual ? { duration: 3 } : { duration: autoDuration, ease: "linear" }
+              isManual
+                ? { duration: 0 }
+                : { duration: autoDuration, ease: "linear" }
             }
             onAnimationComplete={() => {
               if (isManual) setIsManual(false)
@@ -149,7 +151,7 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
                 />
               )}
             </motion.div>
-          </motion.div>9
+          </motion.div>
         </AnimatePresence>
       </div>
 
