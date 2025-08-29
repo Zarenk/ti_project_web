@@ -95,6 +95,7 @@ export async function executeSale(prisma: PrismaService, params: {
   total: number;
   source: 'POS' | 'WEB';
   getStoreName: (alloc: SaleAllocation) => string;
+  onSalePosted?: (saleId: number, postedAt: Date) => Promise<void> | void;
 }) {
   const {
     userId,
@@ -109,9 +110,10 @@ export async function executeSale(prisma: PrismaService, params: {
     total,
     source,
     getStoreName,
+    onSalePosted,
   } = params;
 
-  return prisma.$transaction(async (prismaTx) => {
+  const sale = await prisma.$transaction(async (prismaTx) => {
     const sale = await prismaTx.sales.create({
       data: {
         userId,
@@ -275,4 +277,12 @@ export async function executeSale(prisma: PrismaService, params: {
 
     return sale;
   });
+
+  if (onSalePosted) {
+    Promise.resolve(onSalePosted(sale.id, new Date())).catch((err) =>
+      console.warn('Failed to notify accounting, will retry', err),
+    );
+  }
+
+  return sale;
 }

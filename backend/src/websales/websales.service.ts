@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AuditAction } from '@prisma/client';
@@ -12,13 +13,17 @@ import {
   SaleAllocation,
 } from '../utils/sales-helper';
 import { ActivityService } from '../activity/activity.service';
+import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { Request } from 'express';
 
 @Injectable()
 export class WebSalesService {
+  private readonly logger = new Logger(WebSalesService.name);
+
   constructor(
     private prisma: PrismaService,
     private readonly activityService: ActivityService,
+    private readonly accountingHook: AccountingHook,
   ) {}
 
   async payWithCulqi(token: string, amount: number, order: CreateWebSaleDto) {
@@ -143,7 +148,14 @@ export class WebSalesService {
       total,
       source: 'WEB',
       getStoreName: ({ storeInventory }) => storeInventory.store.name,
-      
+
+      onSalePosted: async (id) => {
+        try {
+          await this.accountingHook.postSale(id);
+        } catch (err) {
+          this.logger.warn(`Retrying accounting post for sale ${id}`);
+        }
+      },     
     });
 
     if (!skipOrder && shippingName && shippingAddress && city && postalCode) {

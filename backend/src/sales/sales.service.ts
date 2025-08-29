@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AuditAction } from '@prisma/client';
 import { zonedTimeToUtc, utcToZonedTime, format as formatTz } from 'date-fns-tz'
@@ -6,13 +6,17 @@ import { subDays, startOfDay, endOfDay } from 'date-fns'
 import { eachDayOfInterval } from 'date-fns';
 import { executeSale, prepareSaleContext, SaleAllocation } from 'src/utils/sales-helper';
 import { ActivityService } from 'src/activity/activity.service';
+import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 
 @Injectable()
 export class SalesService {
 
+  private readonly logger = new Logger(SalesService.name);
+
   constructor(
     private prisma: PrismaService,
     private readonly activityService: ActivityService,
+    private readonly accountingHook: AccountingHook,
   ){}
 
   // Método para crear una venta
@@ -62,6 +66,13 @@ export class SalesService {
       total,
       source: 'POS',
       getStoreName: () => store.name,
+      onSalePosted: async (id) => {
+        try {
+          await this.accountingHook.postSale(id);
+        } catch (err) {
+          this.logger.warn(`Retrying accounting post for sale ${id}`);
+        }
+      },
     });
 
     const user = await this.prisma.user.findUnique({
