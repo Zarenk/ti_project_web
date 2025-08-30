@@ -19,6 +19,7 @@ export class SalePostedController {
   @HttpCode(202)
   async handle(@Body() data: SalePostedDto) {
     try {
+      this.logger.log(`Received sale-posted event for sale ${data.saleId}`);
       const sale = await this.prisma.sales.findUnique({
         where: { id: data.saleId },
         include: { salesDetails: { include: { entryDetail: true } } },
@@ -37,8 +38,9 @@ export class SalePostedController {
           credit,
         })),
       });
-      this.entries.post(entry.id);
-      return { status: 'posted', entryId: entry.id };
+      this.entries.post((await entry).id);
+      this.logger.log(`Entry ${(await entry).id} created for sale ${data.saleId}`);
+      return { status: 'posted', entryId: (await entry).id };
     } catch (err) {
       this.logger.error('Failed to process sale-posted hook', err as any);
       throw err;

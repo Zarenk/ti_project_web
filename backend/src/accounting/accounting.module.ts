@@ -10,6 +10,7 @@ import { AccountingController } from './accounting.controller';
 import { AccountingService } from './accounting.service';
 import { EntriesController } from './entries.controller';
 import { EntriesService } from './entries.service';
+import { EntriesRepository } from './services/entries.repository';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { SaleAccountingService } from './services/sale-accounting.service';
 
@@ -26,6 +27,6 @@ import { SaleAccountingService } from './services/sale-accounting.service';
     DebitNotePostedController,
     EntriesController,
   ],
-  providers: [AccountingService, EntriesService, SaleAccountingService],
+  providers: [AccountingService, EntriesService, EntriesRepository, SaleAccountingService],
 })
 export class AccountingModule {}

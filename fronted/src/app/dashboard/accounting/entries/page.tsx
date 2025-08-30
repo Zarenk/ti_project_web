@@ -33,7 +33,7 @@ export default function AccountingEntriesPage() {
   const createDraft = async (e: FormEvent) => {
     e.preventDefault()
     try {
-      await fetch('/api/accounting/entries', {
+      await fetch(`${BACKEND_URL}/api/accounting/entries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description })
@@ -47,7 +47,7 @@ export default function AccountingEntriesPage() {
 
   const postEntry = async (id: string) => {
     try {
-      await fetch(`/api/accounting/entries/${id}/post`, { method: 'POST' })
+      await fetch(`${BACKEND_URL}/api/accounting/entries/${id}/void`, { method: 'POST' })
       fetchEntries()
     } catch (err) {
       console.error('Failed to post entry', err)
@@ -56,7 +56,7 @@ export default function AccountingEntriesPage() {
 
   const voidEntry = async (id: string) => {
     try {
-      await fetch(`/api/accounting/entries/${id}/void`, { method: 'POST' })
+      await fetch(`${BACKEND_URL}/api/accounting/entries/${id}/void`, { method: 'POST' })
       fetchEntries()
     } catch (err) {
       console.error('Failed to void entry', err)

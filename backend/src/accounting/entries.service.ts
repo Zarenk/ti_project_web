@@ -1,24 +1,18 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { EntriesRepository } from './services/entries.repository';
+import {
+  AccEntryStatus as EntryStatus,
+  AccPeriodStatus as PeriodStatus,
+} from '@prisma/client';
 
-enum EntryStatus {
-  DRAFT = 'DRAFT',
-  POSTED = 'POSTED',
-  VOID = 'VOID',
-}
-
-enum PeriodStatus {
-  OPEN = 'OPEN',
-  LOCKED = 'LOCKED',
-}
-
-interface EntryLine {
+export interface EntryLine {
   account: string;
   description?: string;
   debit: number;
   credit: number;
 }
 
-interface Entry {
+export interface Entry {
   id: number;
   period: string;
   date: Date;
@@ -30,42 +24,71 @@ interface Entry {
 
 @Injectable()
 export class EntriesService {
-  private entries: Entry[] = [];
-  private periods: Record<string, PeriodStatus> = {};
-  private idSeq = 1;
+  constructor(private readonly repo: EntriesRepository) {}
 
-  private getPeriodStatus(period: string): PeriodStatus {
-    return this.periods[period] ?? PeriodStatus.OPEN;
+  private async getPeriodStatus(period: string): Promise<PeriodStatus> {
+    const p = await this.repo.getPeriod(period);
+    return p?.status ?? PeriodStatus.OPEN;
   }
 
-  findAll(params: { period?: string; from?: Date; to?: Date; page?: number; size?: number }): { data: Entry[]; total: number } {
+  async findAll(params: {
+    period?: string;
+    from?: Date;
+    to?: Date;
+    page?: number;
+    size?: number;
+  }): Promise<{ data: Entry[]; total: number }> {
     const { period, from, to, page = 1, size = 25 } = params;
-    let filtered = this.entries;
-    if (period) {
-      filtered = filtered.filter((e) => e.period === period);
-    }
-    if (from) {
-      filtered = filtered.filter((e) => e.date >= from);
-    }
-    if (to) {
-      filtered = filtered.filter((e) => e.date <= to);
-    }
-    const total = filtered.length;
-    const start = (page - 1) * size;
-    const data = filtered.slice(start, start + size);
-    return { data, total };
+    const { data, total } = await this.repo.findAll({
+      period,
+      from,
+      to,
+      skip: (page - 1) * size,
+      take: size,
+    });
+    return {
+      data: data.map((e) => ({
+        id: e.id,
+        period: e.period.name,
+        date: e.date,
+        status: e.status,
+        totalDebit: e.totalDebit,
+        totalCredit: e.totalCredit,
+        lines: e.lines.map((l) => ({
+          account: l.account,
+          description: l.description ?? undefined,
+          debit: l.debit,
+          credit: l.credit,
+        })),
+      })),
+      total,
+    };
   }
 
-  findOne(id: number): Entry {
-    const entry = this.entries.find((e) => e.id === id);
+  async findOne(id: number): Promise<Entry> {
+    const entry = await this.repo.findOne(id);
     if (!entry) {
       throw new NotFoundException(`Entry ${id} not found`);
     }
-    return entry;
+    return {
+      id: entry.id,
+      period: entry.period.name,
+      date: entry.date,
+      status: entry.status,
+      totalDebit: entry.totalDebit,
+      totalCredit: entry.totalCredit,
+      lines: entry.lines.map((l) => ({
+        account: l.account,
+        description: l.description ?? undefined,
+        debit: l.debit,
+        credit: l.credit,
+      })),
+    };
   }
 
-  createDraft(data: { period: string; date: Date; lines: EntryLine[] }): Entry {
-    if (this.getPeriodStatus(data.period) === PeriodStatus.LOCKED) {
+  async createDraft(data: { period: string; date: Date; lines: EntryLine[] }): Promise<Entry> {
+    const period = await this.repo.ensurePeriod(data.period);
+    if (period.status === PeriodStatus.LOCKED) {
       throw new BadRequestException('Period is locked');
     }
     const totalDebit = data.lines.reduce((s, l) => s + (l.debit ?? 0), 0);
@@ -73,42 +96,86 @@ export class EntriesService {
     if (totalDebit !== totalCredit) {
       throw new BadRequestException('Unbalanced entry');
     }
-    const entry: Entry = {
-      id: this.idSeq++,
-      period: data.period,
+    const entry = await this.repo.createEntry({
+      periodId: period.id,
       date: data.date,
-      lines: data.lines,
-      status: EntryStatus.DRAFT,
       totalDebit,
       totalCredit,
+      lines: data.lines,
+    });
+    return {
+      id: entry.id,
+      period: entry.period.name,
+      date: entry.date,
+      status: entry.status,
+      totalDebit: entry.totalDebit,
+      totalCredit: entry.totalCredit,
+      lines: entry.lines.map((l) => ({
+        account: l.account,
+        description: l.description ?? undefined,
+        debit: l.debit,
+        credit: l.credit,
+      })),
     };
-    this.entries.push(entry);
-    return entry;
   }
 
-  post(id: number): Entry {
-    const entry = this.findOne(id);
-    if (this.getPeriodStatus(entry.period) === PeriodStatus.LOCKED) {
+  async post(id: number): Promise<Entry> {
+    const entry = await this.repo.findOne(id);
+    if (!entry) {
+      throw new NotFoundException(`Entry ${id} not found`);
+    }
+    const period = await this.repo.getPeriod(entry.period.name);
+    if (period && period.status === PeriodStatus.LOCKED) {
       throw new BadRequestException('Period is locked');
     }
     if (entry.status !== EntryStatus.DRAFT) {
       throw new BadRequestException('Only DRAFT entries can be posted');
     }
-    entry.status = EntryStatus.POSTED;
-    return entry;
+    const updated = await this.repo.updateStatus(id, EntryStatus.POSTED);
+    return {
+      id: updated.id,
+      period: updated.period.name,
+      date: updated.date,
+      status: updated.status,
+      totalDebit: updated.totalDebit,
+      totalCredit: updated.totalCredit,
+      lines: updated.lines.map((l) => ({
+        account: l.account,
+        description: l.description ?? undefined,
+        debit: l.debit,
+        credit: l.credit,
+      })),
+    };
   }
 
-  void(id: number): Entry {
-    const entry = this.findOne(id);
-    if (this.getPeriodStatus(entry.period) === PeriodStatus.LOCKED) {
+  async void(id: number): Promise<Entry> {
+    const entry = await this.repo.findOne(id);
+    if (!entry) {
+      throw new NotFoundException(`Entry ${id} not found`);
+    }
+    const period = await this.repo.getPeriod(entry.period.name);
+    if (period && period.status === PeriodStatus.LOCKED) {
       throw new BadRequestException('Period is locked');
     }
     if (entry.status === EntryStatus.VOID) {
       throw new BadRequestException('Entry already voided');
     }
-    entry.status = EntryStatus.VOID;
-    return entry;
+    const updated = await this.repo.updateStatus(id, EntryStatus.VOID);
+    return {
+      id: updated.id,
+      period: updated.period.name,
+      date: updated.date,
+      status: updated.status,
+      totalDebit: updated.totalDebit,
+      totalCredit: updated.totalCredit,
+      lines: updated.lines.map((l) => ({
+        account: l.account,
+        description: l.description ?? undefined,
+        debit: l.debit,
+        credit: l.credit,
+      })),
+    };
   }
 }
 
-export { EntryStatus, PeriodStatus, Entry, EntryLine };
+export { EntryStatus, PeriodStatus };

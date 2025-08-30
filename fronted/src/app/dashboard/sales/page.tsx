@@ -14,7 +14,13 @@ export default function Page() {
     const fetchData = async () => {
       try {
         const data = await getSales();
-        const mapped = data.map((sale: any) => ({ ...sale }));
+        const mapped = data
+          .map((sale: any) => ({ ...sale }))
+          .sort(
+            (a: any, b: any) =>
+              new Date(b.createdAt).getTime() -
+              new Date(a.createdAt).getTime()
+          );
         setSales(mapped);
       } catch (error) {
         console.error("Error al obtener las ventas:", error);

@@ -1004,3 +1004,50 @@ model TrialBalanceCache {
   data      Json
   createdAt DateTime @default(now())
 }
+
+enum AccEntryStatus {
+  DRAFT
+  POSTED
+  VOID
+}
+
+enum AccPeriodStatus {
+  OPEN
+  LOCKED
+}
+
+model AccPeriod {
+  id        Int @id @default(autoincrement())
+  name      String @unique
+  status    AccPeriodStatus @default(OPEN)
+  entries   AccEntry[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AccEntry {
+  id          Int       @id @default(autoincrement())
+  periodId    Int
+  date        DateTime
+  status      AccEntryStatus @default(DRAFT)
+  totalDebit  Float
+  totalCredit Float
+  period      AccPeriod @relation(fields: [periodId], references: [id])
+  lines       AccEntryLine[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([periodId])
+}
+
+model AccEntryLine {
+  id          Int      @id @default(autoincrement())
+  entryId     Int
+  account     String
+  description String?
+  debit       Float    @default(0)
+  credit      Float    @default(0)
+  entry       AccEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+}
