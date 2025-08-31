@@ -12,7 +12,7 @@ export class EntriesController {
     @Query('to') to?: string,
     @Query('page') page = '1',
     @Query('size') size = '25',
-  ): { data: Entry[]; total: number } {
+  ): Promise<{ data: Entry[]; total: number }> {
     return this.service.findAll({
       period,
       from: from ? new Date(from) : undefined,
@@ -23,12 +23,12 @@ export class EntriesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): Entry {
+  findOne(@Param('id') id: string): Promise<Entry> {
     return this.service.findOne(Number(id));
   }
 
   @Post()
-  create(@Body() body: { period: string; date: string; lines: EntryLine[] }): Entry {
+  create(@Body() body: { period: string; date: string; lines: EntryLine[] }): Promise<Entry> {
     return this.service.createDraft({
       period: body.period,
       date: new Date(body.date),
@@ -37,12 +37,12 @@ export class EntriesController {
   }
 
   @Post(':id/post')
-  post(@Param('id') id: string): Entry {
+  post(@Param('id') id: string): Promise<Entry> {
     return this.service.post(Number(id));
   }
 
   @Post(':id/void')
-  void(@Param('id') id: string): Entry {
+  void(@Param('id') id: string): Promise<Entry> {
     return this.service.void(Number(id));
   }
 }
