@@ -11,7 +11,7 @@ export class AccountingHook {
       timestamp: new Date().toISOString(),
     };
 
-    const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:3000';
+    const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:4000/api';
     const url = `${baseUrl}/accounting/hooks/sale-posted`;
     const maxRetries = 3;
 

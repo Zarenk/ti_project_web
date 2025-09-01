@@ -279,9 +279,20 @@ export async function executeSale(prisma: PrismaService, params: {
   });
 
   if (onSalePosted) {
-    Promise.resolve(onSalePosted(sale.id, new Date())).catch((err) =>
-      console.warn('Failed to notify accounting, will retry', err),
-    );
+    const MAX_RETRIES = 3;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        await onSalePosted(sale.id, new Date());
+        break;
+      } catch (err) {
+        if (attempt < MAX_RETRIES) {
+          console.warn(`Failed to notify accounting, attempt ${attempt}`, err);
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        } else {
+          console.error('Failed to notify accounting after retries', err);
+        }
+      }
+    }
   }
 
   return sale;
