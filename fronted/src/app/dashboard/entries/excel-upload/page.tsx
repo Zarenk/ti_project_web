@@ -6,7 +6,9 @@ import { Input } from '@/components/ui/input'
 import { useRouter } from 'next/navigation'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { commitImportedExcelData, getAllStores, importExcelFile } from '@/app/dashboard/inventory/inventory.api'
+import { getProviders } from '@/app/dashboard/providers/providers.api'
 import { getUserDataFromToken } from '@/lib/auth'
+import { toast } from 'sonner'
 
 function validarFilas(previewData: any[]): Record<number, string[]> {
     const errores: Record<number, string[]> = {}
@@ -88,14 +90,24 @@ export default function ExcelUploadPage() {
   const [previewData, setPreviewData] = useState<any[] | null>(null)
   const [stores, setStores] = useState<{ id: number; name: string }[]>([])
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null)
+  const [providers, setProviders] = useState<{ id: number; name: string }[]>([])
+  const [selectedProviderId, setSelectedProviderId] = useState<number | null>(null)
   const [erroresValidacion, setErroresValidacion] = useState<string[]>([])
   const [filasConError, setFilasConError] = useState<number[]>([])
   const erroresMapeados: Record<number, string[]> = validarFilas(previewData || [])
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
 
   const router = useRouter()
 
-const handleUpload = async () => {
+  const handleUpload = async () => {
     if (!file) return
+    setIsUploading(true)
+    setUploadProgress(0)
+    const interval = setInterval(() => {
+      setUploadProgress((p) => (p < 90 ? p + 10 : p))
+    }, 200)
     try {
       const response = await importExcelFile(file)
       const preview = response.preview
@@ -118,8 +130,17 @@ const handleUpload = async () => {
       }
 
       setPreviewData(preview)
+      toast.success('Archivo procesado correctamente')
     } catch (error) {
       console.error('Error al subir el archivo:', error)
+      toast.error('Error al subir el archivo')
+    } finally {
+      clearInterval(interval)
+      setUploadProgress(100)
+      setTimeout(() => {
+        setIsUploading(false)
+        setUploadProgress(0)
+      }, 500)
     }
   }
 
@@ -127,11 +148,15 @@ const handleUpload = async () => {
 
     const userData = await getUserDataFromToken()
     if (!userData) {
-        alert('No se pudo obtener el usuario. Inicia sesión nuevamente.')
+        toast.error('No se pudo obtener el usuario. Inicia sesión nuevamente.')
         return
     }
 
     if (!previewData || !selectedStoreId) return
+    if (!selectedProviderId) {
+      toast.error('Debe seleccionar un proveedor.')
+      return
+    }
 
     const erroresPorFila = validarFilas(previewData)
     const errores = Object.values(erroresPorFila).flat()
@@ -146,42 +171,48 @@ const handleUpload = async () => {
     setFilasConError(indicesConError)
 
     if (errores.length > 0) {
-    return
+      return
     }
 
+    setIsSaving(true)
     try {
-      const providerId = null // <--- aquí lo dejamos explícitamente como null
-      const response = await commitImportedExcelData(previewData, selectedStoreId, userData.userId, 
-        providerId)
+      const response = await commitImportedExcelData(previewData, selectedStoreId, userData.userId,
+        selectedProviderId)
 
       // Mostrar advertencias si hay series duplicadas
-      if (response.duplicatedSeriesGlobal?.length > 0 || response.duplicatedSeriesLocal?.length > 0) {
-        const msg: string[] = []
-  
-        if (response.duplicatedSeriesGlobal?.length > 0) {
-          msg.push(`⚠️ Series ya registradas en el sistema:\n${response.duplicatedSeriesGlobal.join(', ')}`)
-        }
-  
-        if (response.duplicatedSeriesLocal?.length > 0) {
-          msg.push(`⚠️ Series duplicadas en el archivo Excel:\n${response.duplicatedSeriesLocal.join(', ')}`)
-        }
-  
-        alert(msg.join('\n\n'))
+      const duplicatedMsgs: string[] = []
+      if (response.duplicatedSeriesGlobal?.length > 0) {
+        duplicatedMsgs.push(`⚠️ Series ya registradas en el sistema: ${response.duplicatedSeriesGlobal.join(', ')}`)      
       }
 
-      alert('✅ Inventario registrado con éxito.')
+      if (response.duplicatedSeriesLocal?.length > 0) {
+        duplicatedMsgs.push(`⚠️ Series duplicadas en el archivo Excel: ${response.duplicatedSeriesLocal.join(', ')}`)
+      }
+
+      if (duplicatedMsgs.length > 0) {
+        setErroresValidacion(duplicatedMsgs)
+        setFilasConError([])
+        return
+      }
+
+      toast.success('✅ Inventario registrado con éxito.')
       router.push('/dashboard/inventory')
     } catch (error) {
       console.error('Error al guardar datos:', error)
+      toast.error('Error al guardar datos')
+    } finally {
+      setIsSaving(false)
     }
   }
 
   useEffect(() => {
-    async function loadStores() {
+    async function loadData() {
       const storeList = await getAllStores()
       setStores(storeList)
+      const providerList = await getProviders()
+      setProviders(providerList)
     }
-    loadStores()
+    loadData()
   }, [])
 
   return (
@@ -226,7 +257,14 @@ const handleUpload = async () => {
       </div>
 
       <Input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-      <Button className="mt-4" onClick={handleUpload}>Procesar Archivo</Button>
+      <Button className="mt-4" onClick={handleUpload} disabled={isUploading}>
+        {isUploading ? 'Procesando...' : 'Procesar Archivo'}
+      </Button>
+      {isUploading && (
+        <div className="w-full bg-muted rounded h-2 mt-2">
+          <div className="bg-blue-600 h-2 rounded" style={{width: `${uploadProgress}%`}}></div>
+        </div>
+      )}
       <Button variant="outline" onClick={() => router.back()}>Volver</Button>
 
       {previewData && (
@@ -241,6 +279,22 @@ const handleUpload = async () => {
                 {stores.map((store) => (
                   <SelectItem key={store.id} value={store.id.toString()}>
                     {store.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <h2 className="font-semibold mb-1">Selecciona un proveedor:</h2>
+            <Select onValueChange={(value) => setSelectedProviderId(Number(value))}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Proveedor" />
+              </SelectTrigger>
+              <SelectContent>
+                {providers.map((prov) => (
+                  <SelectItem key={prov.id} value={prov.id.toString()}>
+                    {prov.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -310,9 +364,9 @@ const handleUpload = async () => {
           <Button
             className="w-full bg-green-700 hover:bg-green-800 text-white"
             onClick={handleCommit}
-            disabled={!selectedStoreId}
+            disabled={!selectedStoreId || !selectedProviderId || isSaving}
           >
-            Confirmar e Insertar Inventario
+            {isSaving ? 'Guardando...' : 'Confirmar e Insertar Inventario'}
           </Button>
         </div>
       )}

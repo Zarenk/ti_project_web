@@ -30,12 +30,12 @@ export async function createSale(data: {
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Error al crear la venta: ${errorText}`);
-    }
-  
+    } 
     return await response.json();
   }
   catch(error){
     console.error('Error al crear la venta:', error);
+    throw error;
   }
 }
 

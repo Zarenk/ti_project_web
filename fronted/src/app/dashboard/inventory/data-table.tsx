@@ -105,7 +105,7 @@ interface DataTableProps<TData, TValue> {
         });
       }, [rowSelection]);
 
-    const totalSelectedRows = 0//bject.keys(globalRowSelection).length;
+    const totalSelectedRows = Object.keys(globalRowSelection).length;
     //
 
   const [inputValue, setInputValue] = useState("")

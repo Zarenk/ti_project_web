@@ -20,6 +20,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { toast } from 'sonner'
 import { BACKEND_URL } from '@/lib/utils'
 
 interface Entry {
@@ -39,6 +50,7 @@ export default function AccountingEntriesPage() {
   const [period, setPeriod] = useState('')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
+  const [voidId, setVoidId] = useState<string | null>(null)
   const size = 25
 
   const fetchEntries = async () => {
@@ -90,10 +102,13 @@ export default function AccountingEntriesPage() {
 
   const voidEntry = async (id: string) => {
     try {
-      await fetch(`${BACKEND_URL}/api/accounting/entries/${id}/void`, { method: 'POST' })
+      const res = await fetch(`${BACKEND_URL}/api/accounting/entries/${id}/void`, { method: 'POST' })
+      if (!res.ok) throw new Error('Failed to void entry')
       fetchEntries()
+      toast.success('Entry voided successfully')
     } catch (err) {
       console.error('Failed to void entry', err)
+      toast.error('Failed to void entry')
     }
   }
 
@@ -169,7 +184,7 @@ export default function AccountingEntriesPage() {
                       <Button
                         variant='ghost'
                         size='icon'
-                        onClick={() => voidEntry(entry.id)}
+                        onClick={() => setVoidId(entry.id)}
                         aria-label='Void'
                       >
                         <XCircle className='h-4 w-4' />
@@ -200,6 +215,25 @@ export default function AccountingEntriesPage() {
             Next <ChevronRight className='ml-2 h-4 w-4' />
           </Button>
         </div>
+        <AlertDialog open={!!voidId} onOpenChange={(open) => !open && setVoidId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Void entry?</AlertDialogTitle>
+              <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (voidId) voidEntry(voidId)
+                  setVoidId(null)
+                }}
+              >
+                Continue
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   )

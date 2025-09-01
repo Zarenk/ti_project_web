@@ -472,9 +472,9 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
     }
     catch(error: any){
       console.error("Error al registrar la venta o enviar la factura:", error);
-      toast.error("Ocurrió un error al guardar la venta.")      
-    }
-        
+      const message = error instanceof Error ? error.message : "Ocurrió un error al guardar la venta.";
+      toast.error(message);     
+    }        
   })      
   //
 
