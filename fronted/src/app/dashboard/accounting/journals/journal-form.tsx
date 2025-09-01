@@ -23,9 +23,9 @@ import { Input } from "@/components/ui/input";
 import { Journal, createJournal, updateJournal } from "./journals.api";
 
 const schema = z.object({
-  date: z.string().min(1, "Date is required"),
-  description: z.string().min(1, "Description is required"),
-  amount: z.number({ invalid_type_error: "Amount must be a number" }),
+  date: z.string().min(1, "La fecha es obligatoria"),
+  description: z.string().min(1, "La descripción es obligatoria"),
+  amount: z.number({ invalid_type_error: "El monto debe ser numérico" }),
 });
 
 export type JournalFormValues = z.infer<typeof schema>;
@@ -72,7 +72,7 @@ export function JournalForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{defaultValues?.id ? "Edit Journal" : "New Journal"}</DialogTitle>
+          <DialogTitle>{defaultValues?.id ? "Editar Diario" : "Nuevo Diario"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -89,12 +89,44 @@ export function JournalForm({
                 </FormItem>
               )}
             />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fecha</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Monto</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        {...field}
+                        onChange={(e) => field.onChange(+e.target.value)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             <FormField
               control={form.control}
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
+                  <FormLabel>Descripción</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -102,21 +134,8 @@ export function JournalForm({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Amount</FormLabel>
-                  <FormControl>
-                    <Input type="number" {...field} onChange={(e) => field.onChange(+e.target.value)} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <DialogFooter>
-              <Button type="submit">Save</Button>
+              <Button type="submit">Guardar</Button>
             </DialogFooter>
           </form>
         </Form>

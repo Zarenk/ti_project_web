@@ -2,7 +2,10 @@ import { IsNumber, IsString } from 'class-validator';
 
 export class CreateJournalDto {
   @IsString()
-  reference!: string;
+  date!: string;
+
+  @IsString()
+  description!: string;
 
   @IsNumber()
   amount!: number;

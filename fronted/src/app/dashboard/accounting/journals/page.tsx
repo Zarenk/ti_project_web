@@ -50,9 +50,9 @@ export default function JournalsPage() {
     <div className="space-y-4">
       <Card className="shadow-sm">
         <CardHeader className="flex items-center justify-between">
-          <CardTitle>Journals</CardTitle>
+          <CardTitle>Diarios del día</CardTitle>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> New Journal
+            <Plus className="mr-2 h-4 w-4" /> Nuevo Diario
           </Button>
         </CardHeader>
         <CardContent>
@@ -60,16 +60,16 @@ export default function JournalsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead className="text-right">Monto</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {journals.map((j) => (
                   <TableRow key={j.id}>
-                    <TableCell>{j.date}</TableCell>
+                    <TableCell>{new Date(j.date).toLocaleDateString()}</TableCell>
                     <TableCell>{j.description}</TableCell>
                     <TableCell className="text-right">{j.amount}</TableCell>
                     <TableCell className="text-right space-x-2">
@@ -77,7 +77,7 @@ export default function JournalsPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => setEditing(j)}
-                        aria-label="Edit"
+                        aria-label="Editar"
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -85,7 +85,7 @@ export default function JournalsPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => handleDelete(j.id)}
-                        aria-label="Delete"
+                        aria-label="Eliminar"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
