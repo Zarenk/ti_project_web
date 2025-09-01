@@ -13,6 +13,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CategoryService } from 'src/category/category.service';
 import { ActivityService } from 'src/activity/activity.service';
 import { AuditAction } from '@prisma/client';
+import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 
 @Injectable()
 export class EntriesService {
@@ -21,6 +22,7 @@ export class EntriesService {
     private prisma: PrismaService,
     private categoryService: CategoryService,
     private activityService: ActivityService,
+    private accountingHook: AccountingHook,
   ) {}
 
   private handlePrismaError(error: any): never {
@@ -246,6 +248,11 @@ export class EntriesService {
       action: AuditAction.CREATED,
       summary: `Entrada creada con productos: ${summary}`,
     });
+    try {
+      await this.accountingHook.postPurchase(entry.id);
+    } catch (err) {
+      // Accounting hook failures shouldn't block operation
+    }
     return entry;
 
     }catch (error: any) {

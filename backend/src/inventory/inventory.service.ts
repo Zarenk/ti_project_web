@@ -8,6 +8,7 @@ import * as xlsx from 'xlsx';
 import * as ExcelJS from 'exceljs';
 import { format } from 'date-fns-tz';
 import { Buffer } from 'buffer';
+import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 
 @Injectable()
 export class InventoryService {
@@ -15,6 +16,7 @@ export class InventoryService {
   constructor(
     private prisma: PrismaService,
     private activityService: ActivityService,
+    private readonly accountingHook: AccountingHook,
   ) {}
 
   parseExcel(filePath: string): any[] {
@@ -789,6 +791,13 @@ export class InventoryService {
         entityId: inventory.id.toString(),
         action,
         summary: `Importación de ${parsedStock}x ${product.name} en tienda ${storeId}`,
+      })
+
+      await this.accountingHook.postInventoryAdjustment({
+        productId: product.id,
+        adjustment: parsedStock * parsedPrecioCompra,
+        counterAccount: 'inventory-adjustment',
+        description: `Importación de ${parsedStock}x ${product.name} en tienda ${storeId}`,
       })
   
       let series: string[] = []

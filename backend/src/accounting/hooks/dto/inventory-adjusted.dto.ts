@@ -6,7 +6,13 @@ export class InventoryAdjustedDto {
 
   @IsNumber()
   adjustment!: number;
+  
+  @IsString()
+  counterAccount!: string;
 
+  @IsString()
+  description!: string;
+  
   @IsString()
   timestamp!: string;
 }

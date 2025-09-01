@@ -13,6 +13,8 @@ import { EntriesService } from './entries.service';
 import { EntriesRepository } from './services/entries.repository';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { SaleAccountingService } from './services/sale-accounting.service';
+import { PurchaseAccountingService } from './services/purcharse-account.service';
+import { InventoryAccountingService } from './services/inventory-account.service';
 
 @Module({
   imports: [PrismaModule],
@@ -27,6 +29,13 @@ import { SaleAccountingService } from './services/sale-accounting.service';
     DebitNotePostedController,
     EntriesController,
   ],
-  providers: [AccountingService, EntriesService, EntriesRepository, SaleAccountingService],
+  providers: [
+    AccountingService,
+    EntriesService,
+    EntriesRepository,
+    SaleAccountingService,
+    PurchaseAccountingService,
+    InventoryAccountingService,
+  ],
 })
 export class AccountingModule {}

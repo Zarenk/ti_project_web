@@ -16,6 +16,10 @@ export interface Entry {
   id: number;
   period: string;
   date: Date;
+  description?: string;
+  provider?: string;
+  serie?: string;
+  correlativo?: string;
   lines: EntryLine[];
   status: EntryStatus;
   totalDebit: number;
@@ -51,6 +55,10 @@ export class EntriesService {
         id: e.id,
         period: e.period.name,
         date: e.date,
+        description: (e as any).description ?? undefined,
+        provider: (e as any).provider ?? undefined,
+        serie: (e as any).serie ?? undefined,
+        correlativo: (e as any).correlativo ?? undefined,
         status: e.status,
         totalDebit: e.totalDebit,
         totalCredit: e.totalCredit,
@@ -74,6 +82,10 @@ export class EntriesService {
       id: entry.id,
       period: entry.period.name,
       date: entry.date,
+      description: (entry as any).description ?? undefined,
+      provider: (entry as any).provider ?? undefined,
+      serie: (entry as any).serie ?? undefined,
+      correlativo: (entry as any).correlativo ?? undefined,
       status: entry.status,
       totalDebit: entry.totalDebit,
       totalCredit: entry.totalCredit,
@@ -107,6 +119,10 @@ export class EntriesService {
       id: entry.id,
       period: entry.period.name,
       date: entry.date,
+      description: (entry as any).description ?? undefined,
+      provider: (entry as any).provider ?? undefined,
+      serie: (entry as any).serie ?? undefined,
+      correlativo: (entry as any).correlativo ?? undefined,
       status: entry.status,
       totalDebit: entry.totalDebit,
       totalCredit: entry.totalCredit,
@@ -136,6 +152,10 @@ export class EntriesService {
       id: updated.id,
       period: updated.period.name,
       date: updated.date,
+      description: (updated as any).description ?? undefined,
+      provider: (updated as any).provider ?? undefined,
+      serie: (updated as any).serie ?? undefined,
+      correlativo: (updated as any).correlativo ?? undefined,
       status: updated.status,
       totalDebit: updated.totalDebit,
       totalCredit: updated.totalCredit,
@@ -165,6 +185,10 @@ export class EntriesService {
       id: updated.id,
       period: updated.period.name,
       date: updated.date,
+      description: (updated as any).description ?? undefined,
+      provider: (updated as any).provider ?? undefined,
+      serie: (updated as any).serie ?? undefined,
+      correlativo: (updated as any).correlativo ?? undefined,
       status: updated.status,
       totalDebit: updated.totalDebit,
       totalCredit: updated.totalCredit,

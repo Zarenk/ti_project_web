@@ -32,4 +32,61 @@ export class AccountingHook {
       }
     }
   }
+
+  async postPurchase(id: number): Promise<void> {
+    const payload = {
+        purchaseId: id,
+        timestamp: new Date().toISOString(),
+      };
+
+      const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:3000';
+      const url = `${baseUrl}/accounting/hooks/purchase-posted`;
+      const maxRetries = 3;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await axios.post(url, payload);
+          return;
+        } catch (err) {
+          this.logger.error(
+            `Failed to post purchase ${id} to accounting (attempt ${attempt})`,
+            err as any,
+          );
+          if (attempt < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+            continue;
+          }
+          throw err;
+        }
+      }
+  }
+
+  async postInventoryAdjustment(data: {
+    productId: number;
+    adjustment: number;
+    counterAccount: string;
+    description: string;
+  }): Promise<void> {
+    const payload = { ...data, timestamp: new Date().toISOString() };
+    const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:3000';
+    const url = `${baseUrl}/accounting/hooks/inventory-adjusted`;
+    const maxRetries = 3;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await axios.post(url, payload);
+        return;
+      } catch (err) {
+        this.logger.error(
+          `Failed to post inventory adjustment for product ${data.productId} (attempt ${attempt})`,
+          err as any,
+        );
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
 }

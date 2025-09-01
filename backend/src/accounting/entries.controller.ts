@@ -6,25 +6,54 @@ export class EntriesController {
   constructor(private readonly service: EntriesService) {}
 
   @Get()
-  findAll(
+  async findAll(
     @Query('period') period?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('page') page = '1',
     @Query('size') size = '25',
   ): Promise<{ data: Entry[]; total: number }> {
-    return this.service.findAll({
+    const { data, total } = await this.service.findAll({
       period,
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,
       page: Number(page),
       size: Number(size),
     });
+    return {
+      data: data.map((e) => ({
+        id: e.id,
+        period: e.period,
+        date: e.date,
+        description: e.description,
+        provider: e.provider,
+        serie: e.serie,
+        correlativo: e.correlativo,
+        status: e.status,
+        totalDebit: e.totalDebit,
+        totalCredit: e.totalCredit,
+        lines: e.lines,
+      })),
+      total,
+    };
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): Promise<Entry> {
-    return this.service.findOne(Number(id));
+  async findOne(@Param('id') id: string): Promise<Entry> {
+    const e = await this.service.findOne(Number(id));
+    return {
+      id: e.id,
+      period: e.period,
+      date: e.date,
+      description: e.description,
+      provider: e.provider,
+      serie: e.serie,
+      correlativo: e.correlativo,
+      status: e.status,
+      totalDebit: e.totalDebit,
+      totalCredit: e.totalCredit,
+      lines: e.lines,
+    };
   }
 
   @Post()
