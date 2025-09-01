@@ -62,7 +62,8 @@ export default function AccountingEntriesPage() {
 
   const postEntry = async (id: string) => {
     try {
-      await fetch(`${BACKEND_URL}/api/accounting/entries/${id}/void`, { method: 'POST' })
+      // Use the `/post` endpoint to post an entry.
+      await fetch(`${BACKEND_URL}/api/accounting/entries/${id}/post`, { method: 'POST' })
       fetchEntries()
     } catch (err) {
       console.error('Failed to post entry', err)

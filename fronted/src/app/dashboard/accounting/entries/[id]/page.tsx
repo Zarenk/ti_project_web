@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { BACKEND_URL } from '@/lib/utils'
@@ -22,8 +22,10 @@ interface Entry {
   lines: EntryLine[]
 }
 
-export default function EntryDetailPage({ params }: { params: { id: string } }) {
-  const { id } = params
+export default function EntryDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // `params` is provided as a Promise in Next.js 15+. Use the React `use()` hook
+  // to unwrap the value before accessing its properties.
+  const { id } = use(params)
   const [entry, setEntry] = useState<Entry | null>(null)
 
   useEffect(() => {
