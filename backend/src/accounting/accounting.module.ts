@@ -17,6 +17,7 @@ import { PurchaseAccountingService } from './services/purcharse-account.service'
 import { InventoryAccountingService } from './services/inventory-account.service';
 import { PaymentAccountingService } from './services/payment-accounting.service';
 import { DebitNoteAccountingService } from './services/debit-note-accounting.service';
+import { CreditNoteAccountingService } from './services/credit-note-accounting.service';
 
 @Module({
   imports: [PrismaModule],
@@ -40,6 +41,10 @@ import { DebitNoteAccountingService } from './services/debit-note-accounting.ser
     InventoryAccountingService,
     PaymentAccountingService,
     DebitNoteAccountingService,
+    {
+      provide: 'CreditNoteAccountingService',
+      useClass: CreditNoteAccountingService,
+    },
   ],
 })
 export class AccountingModule {}
