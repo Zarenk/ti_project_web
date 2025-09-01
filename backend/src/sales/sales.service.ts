@@ -75,6 +75,21 @@ export class SalesService {
       },
     });
 
+    const salePayments = await this.prisma.salePayment.findMany({
+      where: { salesId: sale.id },
+      select: { id: true },
+    });
+
+    for (const payment of salePayments) {
+      try {
+        await this.accountingHook.postPayment(payment.id);
+      } catch (err) {
+        this.logger.warn(
+          `Retrying accounting post for payment ${payment.id}`,
+        );
+      }
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { username: true },

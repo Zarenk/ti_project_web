@@ -2,7 +2,23 @@
 
 import React, { useEffect, useState, use } from 'react'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { BACKEND_URL } from '@/lib/utils'
 
 interface EntryLine {
@@ -18,6 +34,7 @@ interface Entry {
   date: string
   serie?: string
   correlativo?: string
+  invoiceUrl?: string
   status: 'draft' | 'posted' | 'void'
   lines: EntryLine[]
 }
@@ -43,42 +60,50 @@ export default function EntryDetailPage({ params }: { params: Promise<{ id: stri
     fetchEntry()
   }, [id])
 
-  if (!entry) return <section className='container mx-auto p-4'>Loading...</section>
+  if (!entry) return <section className='p-4'>Loading...</section>
 
   return (
-    <section className='container mx-auto p-4'>
-      <Link href='/dashboard/accounting/entries' className='text-blue-600 underline'>
-        &larr; Back
-      </Link>
-      <h1 className='text-2xl font-bold mb-4'>Entry {entry.id}</h1>
-      <div className='mb-4 space-y-1'>
-        <div><strong>Proveedor:</strong> {entry.provider ?? '-'}</div>
-        <div><strong>Fecha:</strong> {new Date(entry.date).toLocaleDateString()}</div>
-        <div><strong>Comprobante:</strong> {entry.serie && entry.correlativo ? `${entry.serie}-${entry.correlativo}` : '-'}</div>
-        <div><strong>Status:</strong> <Badge variant='secondary'>{entry.status}</Badge></div>
-      </div>
-      <div className='overflow-x-auto'>
-        <table className='min-w-full text-sm'>
-          <thead>
-            <tr className='text-left border-b'>
-              <th className='p-2'>Cuenta</th>
-              <th className='p-2'>Descripción</th>
-              <th className='p-2'>Débito</th>
-              <th className='p-2'>Crédito</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entry.lines.map((line, idx) => (
-              <tr key={idx} className='border-b'>
-                <td className='p-2'>{line.account}</td>
-                <td className='p-2'>{line.description ?? '-'}</td>
-                <td className='p-2'>{line.debit}</td>
-                <td className='p-2'>{line.credit}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <div className='p-4 space-y-4'>
+      <Button variant='ghost' size='sm' asChild>
+        <Link href='/dashboard/accounting/entries'>
+          <ArrowLeft className='mr-2 h-4 w-4' /> Back
+        </Link>
+      </Button>
+      <Card className='shadow-sm'>
+        <CardHeader>
+          <CardTitle>Entry {entry.id}</CardTitle>
+        </CardHeader>
+        <CardContent className='space-y-4'>
+          <div className='grid gap-2 sm:grid-cols-2'>
+            <div><strong>Proveedor:</strong> {entry.provider ?? '-'}</div>
+            <div><strong>Fecha:</strong> {new Date(entry.date).toLocaleDateString()}</div>
+            <div><strong>Comprobante:</strong> {entry.serie && entry.correlativo ? `${entry.serie}-${entry.correlativo}` : '-'} </div>
+            <div><strong>Status:</strong> <Badge variant='secondary'>{entry.status}</Badge></div>
+          </div>
+          <div className='overflow-x-auto'>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cuenta</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Débito</TableHead>
+                  <TableHead>Crédito</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {entry.lines.map((line, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>{line.account}</TableCell>
+                    <TableCell>{line.description ?? '-'}</TableCell>
+                    <TableCell>{line.debit}</TableCell>
+                    <TableCell>{line.credit}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

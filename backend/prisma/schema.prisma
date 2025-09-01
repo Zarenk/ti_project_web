@@ -176,6 +176,7 @@ model Provider{
   updatedAt DateTime @updatedAt
 
   entrys    Entry[]   // Relación con el modelo Entry
+  accEntries AccEntry[] // Relación con el modelo AccEntry
 }
 
 model Entry {
@@ -1032,12 +1033,18 @@ model AccEntry {
   status      AccEntryStatus @default(DRAFT)
   totalDebit  Float
   totalCredit Float
+  providerId  Int?
+  serie       String?
+  correlativo String?
+  invoiceUrl  String?
   period      AccPeriod @relation(fields: [periodId], references: [id])
+  provider    Provider?  @relation(fields: [providerId], references: [id])
   lines       AccEntryLine[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([periodId])
+  @@index([providerId])
 }
 
 model AccEntryLine {

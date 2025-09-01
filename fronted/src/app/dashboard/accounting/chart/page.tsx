@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState, type ReactElement } from "react";
+import { Plus, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -36,8 +43,13 @@ export default function ChartPage() {
         <TableCell style={{ paddingLeft: level * 16 }}>{acc.code}</TableCell>
         <TableCell>{acc.name}</TableCell>
         <TableCell className="text-right">
-          <Button variant="ghost" size="sm" onClick={() => setEditing(acc)}>
-            Edit
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setEditing(acc)}
+            aria-label="Edit"
+          >
+            <Pencil className="h-4 w-4" />
           </Button>
         </TableCell>
       </TableRow>,
@@ -46,19 +58,28 @@ export default function ChartPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={() => setCreateOpen(true)}>New Account</Button>
-      </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Code</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>{renderRows(accounts)}</TableBody>
-      </Table>
+      <Card className="shadow-sm">
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle>Chart of Accounts</CardTitle>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> New Account
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>{renderRows(accounts)}</TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
       <AccountForm
         open={createOpen}
         onOpenChange={setCreateOpen}

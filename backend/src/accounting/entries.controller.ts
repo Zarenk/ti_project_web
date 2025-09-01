@@ -29,6 +29,7 @@ export class EntriesController {
         provider: e.provider,
         serie: e.serie,
         correlativo: e.correlativo,
+        invoiceUrl: e.invoiceUrl,
         status: e.status,
         totalDebit: e.totalDebit,
         totalCredit: e.totalCredit,
@@ -49,6 +50,7 @@ export class EntriesController {
       provider: e.provider,
       serie: e.serie,
       correlativo: e.correlativo,
+      invoiceUrl: e.invoiceUrl,
       status: e.status,
       totalDebit: e.totalDebit,
       totalCredit: e.totalCredit,
@@ -57,11 +59,26 @@ export class EntriesController {
   }
 
   @Post()
-  create(@Body() body: { period: string; date: string; lines: EntryLine[] }): Promise<Entry> {
+  create(
+    @Body()
+    body: {
+      period: string;
+      date: string;
+      lines: EntryLine[];
+      providerId?: number;
+      serie?: string;
+      correlativo?: string;
+      invoiceUrl?: string;
+    },
+  ): Promise<Entry> {
     return this.service.createDraft({
       period: body.period,
       date: new Date(body.date),
       lines: body.lines,
+      providerId: body.providerId,
+      serie: body.serie,
+      correlativo: body.correlativo,
+      invoiceUrl: body.invoiceUrl,
     });
   }
 

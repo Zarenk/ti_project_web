@@ -155,8 +155,23 @@ export class WebSalesService {
         } catch (err) {
           this.logger.warn(`Retrying accounting post for sale ${id}`);
         }
-      },     
+      },
     });
+
+    const salePayments = await this.prisma.salePayment.findMany({
+      where: { salesId: createdSale.id },
+      select: { id: true },
+    });
+
+    for (const payment of salePayments) {
+      try {
+        await this.accountingHook.postPayment(payment.id);
+      } catch (err) {
+        this.logger.warn(
+          `Retrying accounting post for payment ${payment.id}`,
+        );
+      }
+    }    
 
     if (!skipOrder && shippingName && shippingAddress && city && postalCode) {
       await this.prisma.orders.create({

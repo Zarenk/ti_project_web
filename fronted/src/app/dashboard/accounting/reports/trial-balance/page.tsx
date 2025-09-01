@@ -1,6 +1,22 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { FileDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { BACKEND_URL } from '@/lib/utils'
 
 interface TrialBalanceRow {
@@ -43,36 +59,35 @@ export default function TrialBalancePage() {
   }
 
   return (
-    <section className='container mx-auto p-4'>
-      <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4'>
-        <h1 className='text-2xl font-bold'>Trial Balance</h1>
-        <button
-          onClick={exportCsv}
-          className='bg-blue-600 text-white px-4 py-2 rounded'
-        >
-          Export CSV
-        </button>
-      </div>
-      <div className='overflow-x-auto'>
-        <table className='min-w-full text-sm'>
-          <thead>
-            <tr className='text-left border-b'>
-              <th className='p-2'>Account</th>
-              <th className='p-2'>Debit</th>
-              <th className='p-2'>Credit</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, idx) => (
-              <tr key={idx} className='border-b'>
-                <td className='p-2'>{row.account}</td>
-                <td className='p-2'>{row.debit}</td>
-                <td className='p-2'>{row.credit}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <Card className='shadow-sm'>
+      <CardHeader className='flex flex-col sm:flex-row sm:items-center justify-between gap-2'>
+        <CardTitle>Trial Balance</CardTitle>
+        <Button size='sm' onClick={exportCsv}>
+          <FileDown className='mr-2 h-4 w-4' /> Export CSV
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <div className='overflow-x-auto'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Account</TableHead>
+                <TableHead>Debit</TableHead>
+                <TableHead>Credit</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row, idx) => (
+                <TableRow key={idx}>
+                  <TableCell>{row.account}</TableCell>
+                  <TableCell>{row.debit}</TableCell>
+                  <TableCell>{row.credit}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

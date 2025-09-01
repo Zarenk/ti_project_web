@@ -1,6 +1,20 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { BACKEND_URL } from '@/lib/utils'
 
 interface LedgerRow {
@@ -36,30 +50,34 @@ export default function LedgerReportPage() {
   }, [])
 
   return (
-    <section className='container mx-auto p-4'>
-      <h1 className='text-2xl font-bold mb-4'>Ledger</h1>
-      <div className='overflow-x-auto'>
-        <table className='min-w-full text-sm'>
-          <thead>
-            <tr className='text-left border-b'>
-              <th className='p-2'>Date</th>
-              <th className='p-2'>Account</th>
-              <th className='p-2'>Debit</th>
-              <th className='p-2'>Credit</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, idx) => (
-              <tr key={idx} className='border-b'>
-                <td className='p-2'>{row.date}</td>
-                <td className='p-2'>{row.account}</td>
-                <td className='p-2'>{row.debit}</td>
-                <td className='p-2'>{row.credit}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <Card className='shadow-sm'>
+      <CardHeader>
+        <CardTitle>Ledger</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className='overflow-x-auto'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Account</TableHead>
+                <TableHead>Debit</TableHead>
+                <TableHead>Credit</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row, idx) => (
+                <TableRow key={idx}>
+                  <TableCell>{row.date}</TableCell>
+                  <TableCell>{row.account}</TableCell>
+                  <TableCell>{row.debit}</TableCell>
+                  <TableCell>{row.credit}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

@@ -20,6 +20,7 @@ export interface Entry {
   provider?: string;
   serie?: string;
   correlativo?: string;
+  invoiceUrl?: string;
   lines: EntryLine[];
   status: EntryStatus;
   totalDebit: number;
@@ -56,9 +57,10 @@ export class EntriesService {
         period: e.period.name,
         date: e.date,
         description: (e as any).description ?? undefined,
-        provider: (e as any).provider ?? undefined,
+        provider: (e.provider as any)?.name ?? undefined,
         serie: (e as any).serie ?? undefined,
         correlativo: (e as any).correlativo ?? undefined,
+        invoiceUrl: (e as any).invoiceUrl ?? undefined,
         status: e.status,
         totalDebit: e.totalDebit,
         totalCredit: e.totalCredit,
@@ -83,9 +85,10 @@ export class EntriesService {
       period: entry.period.name,
       date: entry.date,
       description: (entry as any).description ?? undefined,
-      provider: (entry as any).provider ?? undefined,
+      provider: (entry.provider as any)?.name ?? undefined,
       serie: (entry as any).serie ?? undefined,
       correlativo: (entry as any).correlativo ?? undefined,
+      invoiceUrl: (entry as any).invoiceUrl ?? undefined,
       status: entry.status,
       totalDebit: entry.totalDebit,
       totalCredit: entry.totalCredit,
@@ -98,7 +101,15 @@ export class EntriesService {
     };
   }
 
-  async createDraft(data: { period: string; date: Date; lines: EntryLine[] }): Promise<Entry> {
+  async createDraft(data: {
+    period: string;
+    date: Date;
+    lines: EntryLine[];
+    providerId?: number;
+    serie?: string;
+    correlativo?: string;
+    invoiceUrl?: string;
+  }): Promise<Entry> {
     const period = await this.repo.ensurePeriod(data.period);
     if (period.status === PeriodStatus.LOCKED) {
       throw new BadRequestException('Period is locked');
@@ -113,6 +124,10 @@ export class EntriesService {
       date: data.date,
       totalDebit,
       totalCredit,
+      providerId: data.providerId,
+      serie: data.serie,
+      correlativo: data.correlativo,
+      invoiceUrl: data.invoiceUrl,
       lines: data.lines,
     });
     return {
@@ -120,9 +135,10 @@ export class EntriesService {
       period: entry.period.name,
       date: entry.date,
       description: (entry as any).description ?? undefined,
-      provider: (entry as any).provider ?? undefined,
+      provider: (entry.provider as any)?.name ?? undefined,
       serie: (entry as any).serie ?? undefined,
       correlativo: (entry as any).correlativo ?? undefined,
+      invoiceUrl: (entry as any).invoiceUrl ?? undefined,
       status: entry.status,
       totalDebit: entry.totalDebit,
       totalCredit: entry.totalCredit,
@@ -153,9 +169,10 @@ export class EntriesService {
       period: updated.period.name,
       date: updated.date,
       description: (updated as any).description ?? undefined,
-      provider: (updated as any).provider ?? undefined,
+      provider: (updated.provider as any)?.name ?? undefined,
       serie: (updated as any).serie ?? undefined,
       correlativo: (updated as any).correlativo ?? undefined,
+      invoiceUrl: (updated as any).invoiceUrl ?? undefined,
       status: updated.status,
       totalDebit: updated.totalDebit,
       totalCredit: updated.totalCredit,
@@ -186,9 +203,10 @@ export class EntriesService {
       period: updated.period.name,
       date: updated.date,
       description: (updated as any).description ?? undefined,
-      provider: (updated as any).provider ?? undefined,
+      provider: (updated.provider as any)?.name ?? undefined,
       serie: (updated as any).serie ?? undefined,
       correlativo: (updated as any).correlativo ?? undefined,
+      invoiceUrl: (updated as any).invoiceUrl ?? undefined,
       status: updated.status,
       totalDebit: updated.totalDebit,
       totalCredit: updated.totalCredit,

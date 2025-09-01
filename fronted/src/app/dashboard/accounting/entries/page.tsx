@@ -2,7 +2,24 @@
 
 import React, { useEffect, useState, FormEvent } from 'react'
 import Link from 'next/link'
+import { PlusCircle, Check, XCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { BACKEND_URL } from '@/lib/utils'
 
 interface Entry {
@@ -11,6 +28,7 @@ interface Entry {
   date: string
   serie?: string
   correlativo?: string
+  invoiceUrl?: string
   description?: string
   status: 'draft' | 'posted' | 'void'
 }
@@ -86,94 +104,103 @@ export default function AccountingEntriesPage() {
   }
 
   return (
-    <section className='container mx-auto p-4'>
-      <h1 className='text-2xl font-bold mb-4'>Accounting Entries</h1>
-      <div className='mb-4 flex flex-col sm:flex-row gap-2'>
-        <input
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          placeholder='Period'
-          className='border rounded p-2'
-        />
-        <form onSubmit={createDraft} className='flex flex-1 gap-2'>
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder='Description'
-            className='border rounded p-2 flex-1'
+    <Card className='shadow-sm'>
+      <CardHeader className='space-y-4'>
+        <CardTitle>Accounting Entries</CardTitle>
+        <div className='flex flex-col md:flex-row md:items-center gap-2'>
+          <Input
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            placeholder='Period'
+            className='md:w-40'
           />
-          <button
-            type='submit'
-            className='bg-blue-600 text-white px-4 py-2 rounded'
+          <form onSubmit={createDraft} className='flex w-full gap-2'>
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder='Description'
+              className='flex-1'
+            />
+            <Button type='submit' size='sm'>
+              <PlusCircle className='mr-2 h-4 w-4' /> Create Draft
+            </Button>
+          </form>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className='overflow-x-auto'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Proveedor</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Comprobante</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className='text-right'>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {entries.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell>
+                    <Link href={`/dashboard/accounting/entries/${entry.id}`}>{entry.id}</Link>
+                  </TableCell>
+                  <TableCell>{entry.provider ?? '-'}</TableCell>
+                  <TableCell>{new Date(entry.date).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    {entry.serie && entry.correlativo ? `${entry.serie}-${entry.correlativo}` : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={badgeVariant[entry.status]}>{entry.status}</Badge>
+                  </TableCell>
+                  <TableCell className='space-x-2 text-right'>
+                    {entry.status === 'draft' && (
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        onClick={() => postEntry(entry.id)}
+                        aria-label='Post'
+                      >
+                        <Check className='h-4 w-4' />
+                      </Button>
+                    )}
+                    {entry.status !== 'void' && (
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        onClick={() => voidEntry(entry.id)}
+                        aria-label='Void'
+                      >
+                        <XCircle className='h-4 w-4' />
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <div className='flex items-center justify-between mt-4'>
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
           >
-            Create Draft
-          </button>
-        </form>
-      </div>
-      <div className='overflow-x-auto'>
-        <table className='min-w-full text-sm'>
-          <thead>
-            <tr className='text-left border-b'>
-              <th className='p-2'>ID</th>
-              <th className='p-2'>Proveedor</th>
-              <th className='p-2'>Fecha</th>
-              <th className='p-2'>Comprobante</th>
-              <th className='p-2'>Status</th>
-              <th className='p-2'>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry) => (
-              <tr key={entry.id} className='border-b'>
-                <td className='p-2'>
-                  <Link href={`/dashboard/accounting/entries/${entry.id}`}>{entry.id}</Link>
-                </td>
-                <td className='p-2'>{entry.provider ?? '-'}</td>
-                <td className='p-2'>{new Date(entry.date).toLocaleDateString()}</td>
-                <td className='p-2'>{entry.serie && entry.correlativo ? `${entry.serie}-${entry.correlativo}` : '-'}</td>
-                <td className='p-2'>
-                  <Badge variant={badgeVariant[entry.status]}>{entry.status}</Badge>
-                </td>
-                <td className='p-2 space-x-2'>
-                  {entry.status === 'draft' && (
-                    <button
-                      onClick={() => postEntry(entry.id)}
-                      className='bg-green-600 text-white px-2 py-1 rounded'
-                    >
-                      Post
-                    </button>
-                  )}
-                  {entry.status !== 'void' && (
-                    <button
-                      onClick={() => voidEntry(entry.id)}
-                      className='bg-red-600 text-white px-2 py-1 rounded'
-                    >
-                      Void
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className='flex justify-between mt-4'>
-        <button
-          className='px-3 py-1 border rounded'
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          disabled={page === 1}
-        >
-          Previous
-        </button>
-        <span>Page {page} of {Math.max(1, Math.ceil(total / size))}</span>
-        <button
-          className='px-3 py-1 border rounded'
-          onClick={() => setPage((p) => p + 1)}
-          disabled={page >= Math.ceil(total / size)}
-        >
-          Next
-        </button>
-      </div>
-    </section>
+            <ChevronLeft className='mr-2 h-4 w-4' /> Previous
+          </Button>
+          <span className='text-sm'>Page {page} of {Math.max(1, Math.ceil(total / size))}</span>
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={() => setPage((p) => p + 1)}
+            disabled={page >= Math.ceil(total / size)}
+          >
+            Next <ChevronRight className='ml-2 h-4 w-4' />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

@@ -89,4 +89,88 @@ export class AccountingHook {
       }
     }
   }
+
+  async postPayment(id: number): Promise<void> {
+      const payload = {
+        paymentId: id,
+        timestamp: new Date().toISOString(),
+      };
+
+      const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:4000/api';
+      const url = `${baseUrl}/accounting/hooks/payment-posted`;
+      const maxRetries = 3;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await axios.post(url, payload);
+          return;
+        } catch (err) {
+          this.logger.error(
+            `Failed to post payment ${id} to accounting (attempt ${attempt})`,
+            err as any,
+          );
+          if (attempt < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+            continue;
+          }
+          throw err;
+        }
+      }
+    }
+
+    async postCreditNote(id: number): Promise<void> {
+      const payload = {
+        creditNoteId: id,
+        timestamp: new Date().toISOString(),
+      };
+
+      const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:4000/api';
+      const url = `${baseUrl}/accounting/hooks/credit-note-posted`;
+      const maxRetries = 3;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await axios.post(url, payload);
+          return;
+        } catch (err) {
+          this.logger.error(
+            `Failed to post credit note ${id} to accounting (attempt ${attempt})`,
+            err as any,
+          );
+          if (attempt < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+            continue;
+          }
+          throw err;
+        }
+      }
+    }
+
+    async postDebitNote(id: number): Promise<void> {
+      const payload = {
+        debitNoteId: id,
+        timestamp: new Date().toISOString(),
+      };
+
+      const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:4000/api';
+      const url = `${baseUrl}/accounting/hooks/debit-note-posted`;
+      const maxRetries = 3;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await axios.post(url, payload);
+          return;
+        } catch (err) {
+          this.logger.error(
+            `Failed to post debit note ${id} to accounting (attempt ${attempt})`,
+            err as any,
+          );
+          if (attempt < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+            continue;
+          }
+          throw err;
+        }
+      }
+    }
 }

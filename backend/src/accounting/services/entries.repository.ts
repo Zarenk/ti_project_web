@@ -25,7 +25,7 @@ export class EntriesRepository {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.accEntry.findMany({
         where,
-        include: { lines: true, period: true },
+        include: { lines: true, period: true, provider: true },
         skip: params.skip,
         take: params.take,
         orderBy: { date: 'asc' },
@@ -38,7 +38,7 @@ export class EntriesRepository {
   async findOne(id: number) {
     return this.prisma.accEntry.findUnique({
       where: { id },
-      include: { lines: true, period: true },
+      include: { lines: true, period: true, provider: true },
     });
   }
 
@@ -59,6 +59,10 @@ export class EntriesRepository {
     date: Date;
     totalDebit: number;
     totalCredit: number;
+    providerId?: number;
+    serie?: string;
+    correlativo?: string;
+    invoiceUrl?: string;
     lines: { account: string; description?: string; debit: number; credit: number }[];
   }) {
     return this.prisma.accEntry.create({
@@ -67,6 +71,10 @@ export class EntriesRepository {
         date: data.date,
         totalDebit: data.totalDebit,
         totalCredit: data.totalCredit,
+        providerId: data.providerId,
+        serie: data.serie,
+        correlativo: data.correlativo,
+        invoiceUrl: data.invoiceUrl,
         lines: {
           create: data.lines.map((l) => ({
             account: l.account,
@@ -76,7 +84,7 @@ export class EntriesRepository {
           })),
         },
       },
-      include: { lines: true, period: true },
+      include: { lines: true, period: true, provider: true },
     });
   }
 
@@ -84,7 +92,7 @@ export class EntriesRepository {
     return this.prisma.accEntry.update({
       where: { id },
       data: { status },
-      include: { lines: true, period: true },
+      include: { lines: true, period: true, provider: true },
     });
   }
 }

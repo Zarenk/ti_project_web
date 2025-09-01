@@ -18,5 +18,9 @@ export default function AccountingLayout({ children }: { children: ReactNode }) 
 
   if (!enabled || !canRead) return null
 
-  return <div className="flex flex-col min-h-screen p-4">{children}</div>
+  return (
+    <main className="flex flex-col min-h-screen gap-4 p-4 md:p-6">
+      {children}
+    </main>
+  )
 }
