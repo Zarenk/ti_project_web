@@ -22,11 +22,24 @@ export class ActivityService {
   ) {
     const ip = req?.ip || undefined;
     const userAgent = req?.headers?.['user-agent'] || undefined;
+    // Ensure actorEmail is populated when actorId is present
+    let resolvedActorEmail = data.actorEmail ?? undefined;
+    if (!resolvedActorEmail && data.actorId) {
+      try {
+        const user = await this.prisma.user.findUnique({
+          where: { id: data.actorId },
+          select: { username: true, email: true },
+        });
+        resolvedActorEmail = user?.username || user?.email || undefined;
+      } catch (_) {
+        // ignore lookup failures; keep undefined
+      }
+    }
 
     return this.prisma.auditLog.create({
       data: {
         actorId: data.actorId ?? undefined,
-        actorEmail: data.actorEmail ?? undefined,
+        actorEmail: resolvedActorEmail,
         entityType: data.entityType ?? undefined,
         entityId: data.entityId ?? undefined,
         action: data.action,

@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { columns } from "./columns"; // Importar las columnas definidas
 import { getAllPurchasePrices, getInventory, getInventoryWithCurrency } from "./inventory.api";
 import { DataTable } from "./data-table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 interface InventoryItem {
   id: number;
@@ -34,6 +36,9 @@ interface InventoryItem {
 export default function InventoryPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [baseInventory, setBaseInventory] = useState<InventoryItem[]>([]);
+  const [sortMode, setSortMode] = useState<"created" | "updated">("created");
+  const [inStockOnly, setInStockOnly] = useState(false);
 
   useEffect(() => {
     async function fetchInventory() {
@@ -109,6 +114,7 @@ export default function InventoryPage() {
           (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
 
+        setBaseInventory(groupedData as InventoryItem[]);
         setInventory(sortedData as InventoryItem[]);
       } catch (error) {
         console.error("Error al obtener el inventario:", error);
@@ -120,6 +126,27 @@ export default function InventoryPage() {
 
     fetchInventory();
   }, []);
+
+  // Aplicar orden y filtro según controles
+  useEffect(() => {
+    let data = [...baseInventory];
+
+    if (inStockOnly) {
+      data = data.filter((item) => (item?.stock ?? 0) > 0);
+    }
+
+    if (sortMode === "updated") {
+      data.sort(
+        (a: any, b: any) => new Date(b.updateAt).getTime() - new Date(a.updateAt).getTime()
+      );
+    } else {
+      data.sort(
+        (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
+
+    setInventory(data);
+  }, [baseInventory, sortMode, inStockOnly]);
   
 
   if (loading) {
@@ -131,6 +158,32 @@ export default function InventoryPage() {
       <section className='py-2 sm:py-6'>
           <div className='container mx-auto px-1 sm:px-6 lg:px-8'>
             <h1 className='px-5 text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6'>Inventario General</h1>
+            <div className="px-5 mb-4 flex flex-wrap items-center gap-6">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="sort-updated"
+                  checked={sortMode === "updated"}
+                  onCheckedChange={(checked) => setSortMode(checked ? "updated" : "created")}
+                />
+                <Label htmlFor="sort-updated">Ordenar por último actualizado</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="sort-created"
+                  checked={sortMode === "created"}
+                  onCheckedChange={(checked) => setSortMode(checked ? "created" : "updated")}
+                />
+                <Label htmlFor="sort-created">Ordenar por último ingreso</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="in-stock-only"
+                  checked={inStockOnly}
+                  onCheckedChange={(checked) => setInStockOnly(!!checked)}
+                />
+                <Label htmlFor="in-stock-only">Solo productos en stock</Label>
+              </div>
+            </div>
             <div className="overflow-x-auto">
             <DataTable columns={columns} data={inventory}></DataTable>
           </div>          

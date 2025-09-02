@@ -271,8 +271,13 @@ export class InventoryService {
       );
     }
 
+    const userForLog1 = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true },
+    });
     await this.activityService.log({
       actorId: userId,
+      actorEmail: userForLog1?.username ?? undefined,
       entityType: 'InventoryItem',
       entityId: productId.toString(),
       action: AuditAction.UPDATED,
