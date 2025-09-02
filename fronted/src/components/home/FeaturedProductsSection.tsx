@@ -15,7 +15,7 @@ export default function FeaturedProductsSection({ featuredProducts }: FeaturedPr
             Descubre nuestra selección de equipos más populares con las mejores ofertas
           </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           {featuredProducts.map((product) => (
             <MotionProductCard key={product.id} product={product} />
           ))}

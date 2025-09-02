@@ -120,6 +120,9 @@ export default function Navbar() {
   useEffect(() => {
     if (!window.matchMedia("(min-width: 768px)").matches) return
 
+    // Clear inline color first so Tailwind `bg-background` reflects the new theme immediately
+    setNavColor("")
+
     const sections = document.querySelectorAll<HTMLElement>("[data-navcolor]")
     const midpoint = window.innerHeight / 2
 
@@ -134,9 +137,17 @@ export default function Navbar() {
       }
       setNavColor("")
     }
-    // Wait for the theme classes to apply before checking colors
-    const raf = requestAnimationFrame(updateColor)
-    return () => cancelAnimationFrame(raf)
+    // Wait for the theme classes to apply before checking colors.
+    // Use a double rAF to ensure the DOM has repainted with new CSS variables.
+    const raf1 = requestAnimationFrame(() => {
+      const raf2 = requestAnimationFrame(updateColor)
+      // store cancel of inner frame on outer's cleanup scope
+      ;(updateColor as any)._raf2 = raf2
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      if ((updateColor as any)._raf2) cancelAnimationFrame((updateColor as any)._raf2)
+    }
   }, [theme])
 
   return (
