@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuditAction } from '@prisma/client';
@@ -21,6 +22,9 @@ import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { JwtAuthGuard } from '../users/jwt-auth.guard';
+import { RolesGuard } from '../users/roles.guard';
+import { Roles } from '../users/roles.decorator';
 
 
 @Controller('products')
@@ -31,6 +35,8 @@ export class ProductsController {
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @ApiOperation({summary: 'Create a product'})    // Swagger 
   async create(@Body() createProductDto: CreateProductDto, @Req() req: Request) {
     const product = await this.productsService.create(createProductDto);
@@ -106,6 +112,8 @@ export class ProductsController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async update(
     @Param('id') id: string,
     @Body() updateProductDto: UpdateProductDto,
@@ -136,6 +144,8 @@ export class ProductsController {
   }
 
   @Patch()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Update multiple products with the same values' }) // Swagger
   @ApiResponse({ status: 200, description: 'Products updated successfully' }) // Swagger
   async updateMany(@Body() updateProductsDto: UpdateProductDto[]) {
@@ -149,6 +159,8 @@ export class ProductsController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async remove(@Param('id') id: string, @Req() req: Request) {
     const removed = await this.productsService.remove(+id);
     await this.activityService.log(
@@ -167,11 +179,15 @@ export class ProductsController {
   }
 
   @Delete()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async removes(@Body('ids') ids: number[]) {
     return this.productsService.removes(ids);
   }
 
   @Patch(':id/price-sell')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async updatePriceSell(
     @Param('id') id: string,
     @Body('priceSell') priceSell: number,
@@ -189,6 +205,8 @@ export class ProductsController {
   }
 
   @Patch(':id/category')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async updateCategory(
     @Param('id') id: string,
     @Body('categoryId') categoryId: number,

@@ -1,3 +1,4 @@
+import { getAuthHeaders } from '@/utils/auth-token'
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 export async function getProducts(){
@@ -27,10 +28,12 @@ export async function getProduct(id: string){
 }
 
 export async function createProduct(productData: any){
+    const auth = await getAuthHeaders()
     const res = await fetch(`${BACKEND_URL}/api/products`,{
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',         
+            ...auth,
         },
         body: JSON.stringify(productData)
     }) 
@@ -77,17 +80,23 @@ export async function verifyOrCreateProducts(products: { name: string; price: nu
 }
 
 export async function deleteProduct(id: string){
+    const auth = await getAuthHeaders()
     const res = await fetch(`${BACKEND_URL}/api/products/${id}`, {
         method: 'DELETE',
+        headers: {
+            ...auth,
+        },
     });
     return res.json()
 }
 
 export async function updateProduct(id: string, newProduct: any){
+    const auth = await getAuthHeaders()
     const res = await fetch(`${BACKEND_URL}/api/products/${id}`, {
         method: 'PATCH',
         headers: {
             'Content-Type': 'application/json',
+            ...auth,
         },
         body: JSON.stringify(newProduct),
         cache: 'no-store',
@@ -105,10 +114,12 @@ export async function updateManyProducts(products: any[]) {
     console.log("Enviando productos al backend para actualización masiva:", products); // Log para depuración
   
     try {
+      const auth = await getAuthHeaders()
       const response = await fetch(`${BACKEND_URL}/api/products`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          ...auth,
         },
         body: JSON.stringify(products), // Enviar el array de productos al backend
       });

@@ -101,6 +101,9 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // Estado para manejar el envío del formulario
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [loadingProviders, setLoadingProviders] = useState(true);
+  const [loadingStores, setLoadingStores] = useState(true);
 
   // MODAL DE PRODUCTOS
   const [categoriess, setCategories] = useState<{ id: number; name: string }[]>([]);
@@ -442,6 +445,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
         setProducts(products); // Guarda los productos en el estado
       } catch (error) {
         console.error('Error al obtener los productos:', error);
+      } finally {
+        setLoadingProducts(false);
       }
      }
 
@@ -457,6 +462,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           setProviders(providers); // Guarda los proveedores en el estado
       } catch (error) {
           console.error('Error al obtener los proveedores:', error);
+        } finally {
+          setLoadingProviders(false);
         }
       }
   
@@ -472,6 +479,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           setStores(stores); // Guarda las tiendas en el estado
       } catch (error) {
           console.error('Error al obtener las tiendas:', error);
+        } finally {
+          setLoadingStores(false);
         }
       }
   
@@ -487,6 +496,45 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       toast.error(`La cantidad de series excedía la nueva cantidad (${quantity}). Se eliminaron las últimas series.`);
     }
   }, [quantity]);
+
+  const isLoading = loadingProducts || loadingProviders || loadingStores;
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto w-full max-w-4xl px-1 sm:px-2 lg:px-8">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <div className="bg-accent animate-pulse rounded-md h-4 w-24" />
+              <div className="bg-accent animate-pulse rounded-md h-24 w-full" />
+            </div>
+            <div className="space-y-2">
+              <div className="bg-accent animate-pulse rounded-md h-4 w-24" />
+              <div className="bg-accent animate-pulse rounded-md h-24 w-full" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <div className="bg-accent animate-pulse rounded-md h-4 w-28" />
+              <div className="bg-accent animate-pulse rounded-md h-10 w-full" />
+            </div>
+            <div className="space-y-2">
+              <div className="bg-accent animate-pulse rounded-md h-4 w-28" />
+              <div className="bg-accent animate-pulse rounded-md h-10 w-full" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="bg-accent animate-pulse rounded-md h-4 w-36" />
+            <div className="bg-accent animate-pulse rounded-md h-40 w-full" />
+          </div>
+          <div className="flex justify-end gap-3">
+            <div className="bg-accent animate-pulse rounded-md h-10 w-28" />
+            <div className="bg-accent animate-pulse rounded-md h-10 w-40" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-4xl px-1 sm:px-2 lg:px-8">
