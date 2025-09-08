@@ -14,9 +14,21 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const metrics = app.get(MetricsService);
   app.useGlobalInterceptors(new TelemetryInterceptor(metrics));
+
+  const allowedOrigins =
+    process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()) ||
+    ['http://localhost:3000'];
+
+  app.enableCors({
+    origin: allowedOrigins,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+
   // Serve static files before applying the global prefix so they remain
   // accessible without "/api" in the path
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+
   // PARA COLOCAR PREVIAMENTE EN LA URL /API/
   app.setGlobalPrefix('api');
   // Habilitar la validación global de DTOs
@@ -45,16 +57,6 @@ async function bootstrap() {
   // Aumentar el límite de tamaño de la solicitud
   app.use(bodyParser.json({ limit: '10mb' })); // Aumenta el límite a 10 MB
   app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
-
-  const allowedOrigins =
-    process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()) ||
-    ['http://localhost:3000'];
-
-  app.enableCors({
-    origin: allowedOrigins,
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
-  });
 
   if (process.env.ADSLAB_ENABLED === 'true') {
     const { setupAdslabMonitoring } = await import('./adslab/monitoring');

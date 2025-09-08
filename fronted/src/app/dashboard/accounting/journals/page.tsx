@@ -35,12 +35,49 @@ type DailyLine = {
 
 const accountNames: Record<string, string> = {
   "1011": "Caja",
+  "1041": "Banco – Yape/Transferencia",
   "1212": "Cuentas por cobrar",
   "2011": "Mercaderías",
   "4011": "IGV por pagar",
   "6911": "Costo de ventas",
   "7011": "Ventas",
 };
+
+type Sale = {
+  date: string;
+  serie: string;
+  correlativo: string;
+  tipoComprobante: string;
+  customerName: string;
+  total: number;
+  payments: { paymentMethodId: number; amount: number }[];
+  items: { qty: number; unitPrice: number; costUnit: number }[];
+};
+
+function buildJournalFromSale(sale: Sale): DailyLine[] {
+  const desc = `${sale.tipoComprobante} ${sale.serie}-${sale.correlativo}`;
+  const base = Number((sale.total / 1.18).toFixed(2));
+  const igv = Number((sale.total - base).toFixed(2));
+  const cost = Number(
+    sale.items.reduce((sum, i) => sum + i.qty * (i.costUnit ?? 0), 0).toFixed(2)
+  );
+  const lines: DailyLine[] = sale.payments.map((p) => ({
+    date: sale.date,
+    account: p.paymentMethodId === -1 ? "1011" : "1041",
+    description: desc,
+    debit: Number(p.amount),
+    credit: 0,
+  }));
+
+  lines.push(
+    { date: sale.date, account: "7011", description: desc, debit: 0, credit: base },
+    { date: sale.date, account: "4011", description: desc, debit: 0, credit: igv },
+    { date: sale.date, account: "6911", description: desc, debit: cost, credit: 0 },
+    { date: sale.date, account: "2011", description: desc, debit: 0, credit: cost }
+  );
+
+  return lines;
+}
 
 export default function JournalsPage() {
   const [journals, setJournals] = useState<Journal[]>([]);
@@ -67,28 +104,43 @@ export default function JournalsPage() {
         const from = new Date(`${selectedDate}T00:00:00.000Z`).toISOString();
         const to = new Date(`${selectedDate}T23:59:59.999Z`).toISOString();
         const params = new URLSearchParams({ from, to, page: "1", size: "500" });
-        const res = await fetch(`${BACKEND_URL}/api/accounting/entries?${params.toString()}`);
-        if (!res.ok) {
-          setDailyLines([]);
-          return;
+        const salesParams = new URLSearchParams({ from, to });
+        const [res, salesRes] = await Promise.all([
+          fetch(`${BACKEND_URL}/api/accounting/entries?${params.toString()}`),
+          fetch(`${BACKEND_URL}/api/sales/transactions?${salesParams.toString()}`),
+        ]);
+
+        let lines: DailyLine[] = [];
+        if (res.ok) {
+          const json = await res.json();
+          lines = (json.data ?? []).flatMap((e: any) =>
+            (e.lines ?? []).map((l: any) => {
+              const voucher = e.serie && e.correlativo ? `${e.serie}-${e.correlativo}` : undefined;
+              const baseDesc = l.description ?? e.description ?? undefined;
+              const extra = e.provider
+                ? ` (${e.provider}${voucher ? ` · ${voucher}` : ""})`
+                : voucher
+                ? ` (${voucher})`
+                : "";
+              return {
+                date: e.date,
+                account: l.account,
+                description: baseDesc ? `${baseDesc}${extra}` : extra || undefined,
+                debit: Number(l.debit ?? 0),
+                credit: Number(l.credit ?? 0),
+                provider: e.provider ?? undefined,
+                voucher,
+              } as DailyLine;
+            })
+          );
         }
-        const json = await res.json();
-        const lines: DailyLine[] = (json.data ?? []).flatMap((e: any) =>
-          (e.lines ?? []).map((l: any) => {
-            const voucher = e.serie && e.correlativo ? `${e.serie}-${e.correlativo}` : undefined;
-            const baseDesc = l.description ?? e.description ?? undefined;
-            const extra = e.provider ? ` (${e.provider}${voucher ? ` · ${voucher}` : ""})` : voucher ? ` (${voucher})` : "";
-            return {
-              date: e.date,
-              account: l.account,
-              description: baseDesc ? `${baseDesc}${extra}` : extra || undefined,
-              debit: Number(l.debit ?? 0),
-              credit: Number(l.credit ?? 0),
-              provider: e.provider ?? undefined,
-              voucher,
-            } as DailyLine;
-          })
-        );
+
+        if (salesRes.ok) {
+          const salesJson = await salesRes.json();
+          const sales = Array.isArray(salesJson) ? salesJson : salesJson.data ?? [];
+          lines = lines.concat(sales.flatMap(buildJournalFromSale));
+        }
+
         setDailyLines(lines);
       } catch {
         setDailyLines([]);
