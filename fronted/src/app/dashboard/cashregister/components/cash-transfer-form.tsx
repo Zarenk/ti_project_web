@@ -22,6 +22,8 @@ const formSchema = z.object({
   type: z.enum(["deposit", "withdrawal"]),
   amount: z.coerce.number().positive("El monto debe ser positivo"), // Convierte automáticamente a número
   employee: z.string(),
+  clientName: z.string().optional(),
+  clientDocument: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -47,6 +49,8 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
       type: "deposit",
       amount: 0,
       employee: "",
+      clientName: "",
+      clientDocument: "",
       notes: "",
     },
   })
@@ -157,6 +161,9 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
         amount: values.amount,
         employee: employeeName,
         description: values.notes || "", // evitar undefined
+        clientName: values.clientName || undefined,
+        clientDocument: values.clientDocument || undefined,
+        clientDocumentType: values.clientDocument ? "DNI" : undefined,
         paymentMethods: paymentMethods,
       };
 
@@ -168,6 +175,8 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
         type: form.getValues("type"),
         amount: 0,
         employee: "",
+        clientName: "",
+        clientDocument: "",
         notes: "",
       });
 
@@ -247,6 +256,34 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
                   <Input placeholder="Nombre del encargado" value={employeeName || ''} readOnly />
                 </FormControl>
                 <FormDescription>Quien esta manejando esta transaccion</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="clientName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nombre del Cliente</FormLabel>
+                <FormControl>
+                  <Input placeholder="Nombre del cliente" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="clientDocument"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Documento del Cliente</FormLabel>
+                <FormControl>
+                  <Input placeholder="Documento del cliente" {...field} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

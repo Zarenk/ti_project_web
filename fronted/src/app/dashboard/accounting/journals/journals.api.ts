@@ -11,8 +11,13 @@ export interface Journal {
 
 export async function fetchJournals(): Promise<Journal[]> {
   const headers = await getAuthHeaders();
-  const res = await axios.get(`${BACKEND_URL}/api/accounting/journals`, { headers });
-  return res.data;
+  const res = await axios.get(`${BACKEND_URL}/api/accounting/journals`, {
+    headers,
+  });
+  const data = res.data as Journal[];
+  return data.sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
 }
 
 export async function createJournal(data: Omit<Journal, "id">) {

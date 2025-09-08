@@ -24,6 +24,12 @@ import { Input } from "@/components/ui/input";
 import { BACKEND_URL } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAuthHeaders } from "@/utils/auth-token";
+import { formatGlosa } from "./formatGlosa";
+
+const sortByDateDesc = <T extends { date: string }>(arr: T[]) =>
+  arr
+    .slice()
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
 type DailyLine = {
   date: string;
@@ -53,8 +59,14 @@ type Sale = {
   tipoComprobante: string;
   customerName: string;
   total: number;
-  payments: { paymentMethodId: number; amount: number }[];
-  items: { qty: number; unitPrice: number; costUnit: number; name?: string }[];
+  payments: { method: string; amount: number }[];
+  items: {
+    qty: number;
+    unitPrice: number;
+    costUnit: number;
+    productName: string;
+    series: string[];
+  }[];
 };
 
 function buildJournalFromSale(sale: Sale): DailyLine[] {
@@ -65,25 +77,39 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
   const payments =
     sale.payments && sale.payments.length > 0
       ? sale.payments
-      : [{ paymentMethodId: -1, amount: totalSale }];
+      : [{ method: "Efectivo", amount: totalSale }];
 
   const lines: DailyLine[] = [];
+
+  const paymentMethodMap: Record<number, string> = {
+    [-1]: "EN EFECTIVO",
+    [-2]: "TRANSFERENCIA",
+    [-3]: "PAGO CON VISA",
+    [-4]: "YAPE",
+    [-5]: "PLIN",
+    [-6]: "OTRO MEDIO DE PAGO",
+  };
 
   for (const item of sale.items) {
     const itemTotal = Number((item.qty * (item.unitPrice ?? 0)).toFixed(2));
     const itemBase = Number((itemTotal / 1.18).toFixed(2));
     const itemIgv = Number((itemTotal - itemBase).toFixed(2));
     const itemCost = Number((item.qty * (item.costUnit ?? 0)).toFixed(2));
-    const productName = item.name ?? "producto";
-    const saleDesc = `Venta ${productName} ${sale.serie}`;
-    const costDesc = `costo unidad ${productName} vendido`;
+    const productName = item.productName ?? "producto";
+    const seriesPart =
+      item.series && item.series.length > 0
+        ? ` (${item.series.join(", ")})`
+        : "";
+    const saleDesc = `Venta ${productName}${seriesPart} ${sale.serie}-${sale.correlativo}`;
 
     for (const p of payments) {
       const proportion = p.amount / totalSale || 0;
       const amount = Number((itemTotal * proportion).toFixed(2));
+      const account =
+        p.method && p.method.toLowerCase() === "efectivo" ? "1011" : "1041";
       lines.push({
         date: sale.date,
-        account: p.paymentMethodId === -1 ? "1011" : "1041",
+        account,
         description: saleDesc,
         debit: amount,
         credit: 0,
@@ -95,7 +121,12 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
       {
         date: sale.date,
         account: "7011",
-        description: saleDesc,
+        description: formatGlosa({
+          account: "7011",
+          serie: sale.serie,
+          correlativo: sale.correlativo,
+          productName,
+        }),
         debit: 0,
         credit: itemBase,
         quantity: item.qty,
@@ -103,7 +134,7 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
       {
         date: sale.date,
         account: "4011",
-        description: "IGV 18%",
+        description: saleDesc,
         debit: 0,
         credit: itemIgv,
         quantity: item.qty,
@@ -111,7 +142,7 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
       {
         date: sale.date,
         account: "6911",
-        description: costDesc,
+        description: saleDesc,
         debit: itemCost,
         credit: 0,
         quantity: item.qty,
@@ -119,7 +150,7 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
       {
         date: sale.date,
         account: "2011",
-        description: costDesc,
+        description: saleDesc,
         debit: 0,
         credit: itemCost,
         quantity: item.qty,
@@ -146,7 +177,9 @@ export default function JournalsPage() {
   const [dailyLoading, setDailyLoading] = useState(false);
 
   useEffect(() => {
-    fetchJournals().then(setJournals).catch(() => setJournals([]));
+    fetchJournals()
+      .then((js) => setJournals(sortByDateDesc(js)))
+      .catch(() => setJournals([]));
   }, []);
 
   useEffect(() => {
@@ -210,7 +243,7 @@ export default function JournalsPage() {
           lines = lines.concat(sales.flatMap(buildJournalFromSale));
         }
 
-        setDailyLines(lines);
+        setDailyLines(sortByDateDesc(lines));
       } catch {
         setDailyLines([]);
       } finally {
@@ -232,16 +265,18 @@ export default function JournalsPage() {
   }, [dailyLines]);
 
   const handleCreate = (journal: Journal) => {
-    setJournals((prev) => [...prev, journal]);
+    setJournals((prev) => sortByDateDesc([...prev, journal]));
   };
 
   const handleUpdate = (journal: Journal) => {
-    setJournals((prev) => prev.map((j) => (j.id === journal.id ? journal : j)));
+    setJournals((prev) =>
+      sortByDateDesc(prev.map((j) => (j.id === journal.id ? journal : j)))
+    );
   };
 
   const handleDelete = async (id: string) => {
     await deleteJournal(id);
-    setJournals((prev) => prev.filter((j) => j.id !== id));
+    setJournals((prev) => sortByDateDesc(prev.filter((j) => j.id !== id)));
   };
 
   return (
@@ -267,7 +302,7 @@ export default function JournalsPage() {
             <Table>
               <TableHeader className="sticky top-0 bg-background">
                 <TableRow>
-                  <TableHead className="w-[120px]">Fecha</TableHead>
+                  <TableHead className="w-[120px]">Fecha y hora</TableHead>
                   <TableHead className="min-w-[200px]">Cuenta</TableHead>
                   <TableHead className="min-w-[320px]">Glosa</TableHead>
                   <TableHead className="text-right w-[100px]">Cantidad</TableHead>
@@ -297,7 +332,7 @@ export default function JournalsPage() {
                   <>
                     {dailyLines.map((l, idx) => (
                       <TableRow key={idx} className="odd:bg-muted/5">
-                        <TableCell>{new Date(l.date).toLocaleDateString("es-PE")}</TableCell>
+                        <TableCell>{new Date(l.date).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium">
@@ -347,7 +382,7 @@ export default function JournalsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Fecha</TableHead>
+                  <TableHead>Fecha y hora</TableHead>
                   <TableHead>Cuenta</TableHead>
                   <TableHead>Glosa</TableHead>
                   <TableHead className="text-right">Debe</TableHead>
@@ -359,7 +394,7 @@ export default function JournalsPage() {
               <TableBody>
                 {journals.map((j) => (
                   <TableRow key={j.id}>
-                    <TableCell>{new Date(j.date).toLocaleDateString()}</TableCell>
+                    <TableCell>{new Date(j.date).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}</TableCell>
                     <TableCell className="text-muted-foreground">-</TableCell>
                     <TableCell>{j.description}</TableCell>
                     <TableCell className="text-right"></TableCell>

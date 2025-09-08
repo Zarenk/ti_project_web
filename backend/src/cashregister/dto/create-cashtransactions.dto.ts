@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsNotEmpty, IsNumber, IsPositive, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PaymentMethodDto {
@@ -38,4 +38,16 @@ export class CreateCashTransactionDto {
   @ValidateNested({ each: true })
   @Type(() => PaymentMethodDto)
   paymentMethods!: PaymentMethodDto[];
+
+  @IsOptional()
+  @IsString()
+  clientName?: string;
+
+  @IsOptional()
+  @IsString()
+  clientDocument?: string;
+
+  @IsOptional()
+  @IsString()
+  clientDocumentType?: string;
 }

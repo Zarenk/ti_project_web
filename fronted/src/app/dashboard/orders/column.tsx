@@ -127,27 +127,36 @@ export function getColumns(
                               : null;
 
                           if (invoice) {
-                            const invoicePayload = {
-                              saleId: createdSale.id,
-                              serie: invoice.serie,
-                              correlativo: invoice.nroCorrelativo,
-                              documentType: invoice.tipoComprobante === "FACTURA" ? "invoice" : "boleta",
-                              tipoMoneda: invoice.tipoMoneda ?? "PEN",
-                              total: invoice.total ?? createdSale.total,
-                              fechaEmision: invoice.fechaEmision,
-                              cliente: {
-                                razonSocial: createdSale.client?.name ?? "",
+                          const isFactura = invoice.tipoComprobante === "FACTURA";
+                          const cliente = isFactura
+                            ? {
+                                tipoDocumento: createdSale.client?.type ?? "",
                                 ruc: createdSale.client?.typeNumber ?? "",
+                                razonSocial:
+                                  createdSale.client?.razonSocial ||
+                                  createdSale.client?.name ||
+                                  "",
+                              }
+                            : {
+                                tipoDocumento: createdSale.client?.type ?? "",
                                 dni: createdSale.client?.typeNumber ?? "",
                                 nombre: createdSale.client?.name ?? "",
-                                tipoDocumento: createdSale.client?.type ?? "",
-                              },
-                              emisor: {
-                                razonSocial: createdSale.store?.name ?? "",
-                                adress: createdSale.store?.adress ?? "",
-                                ruc: 20519857538,
-                              },
-                              items: createdSale.salesDetails.map((d: any) => ({
+                              };
+                          const invoicePayload = {
+                            saleId: createdSale.id,
+                            serie: invoice.serie,
+                            correlativo: invoice.nroCorrelativo,
+                            documentType: isFactura ? "invoice" : "boleta",
+                            tipoMoneda: invoice.tipoMoneda ?? "PEN",
+                            total: invoice.total ?? createdSale.total,
+                            fechaEmision: invoice.fechaEmision,
+                            cliente,
+                            emisor: {
+                              razonSocial: createdSale.store?.name ?? "",
+                              adress: createdSale.store?.adress ?? "",
+                              ruc: 20519857538,
+                            },
+                            items: createdSale.salesDetails.map((d: any) => ({
                                 cantidad: d.quantity,
                                 descripcion: d.entryDetail.product.name,
                                 series: d.series ?? [],
@@ -156,7 +165,7 @@ export function getColumns(
                                 igv: Number(d.price * d.quantity - (d.price * d.quantity) / 1.18),
                                 total: Number(d.price * d.quantity),
                               })),
-                            } as any;
+                          } as any;
 
                             const sunatResp = await sendInvoiceToSunat(invoicePayload);
                             const totalTexto = numeroALetrasCustom(invoicePayload.total, invoicePayload.tipoMoneda);

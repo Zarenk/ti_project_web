@@ -81,6 +81,9 @@ export const createIndependentTransaction = async (data: {
   employee: string;
   description?: string;
   paymentMethods: { method: string; amount: number }[]; // 👈 Agregado para permitir paymentMethods
+  clientName?: string;
+  clientDocument?: string;
+  clientDocumentType?: string;
 }) => {
   const payload = {
     cashRegisterId: data.cashRegisterId,
@@ -89,6 +92,9 @@ export const createIndependentTransaction = async (data: {
     amount: data.amount,
     description: data.description || "",
     employee: data.employee,
+     clientName: data.clientName,
+     clientDocument: data.clientDocument,
+     clientDocumentType: data.clientDocumentType,
     paymentMethods: data.paymentMethods.map(pm => ({
       method: pm.method,
       amount: Number(pm.amount),  // 👈 FORZAMOS QUE amount sea un número real

@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   },
   // NUEVO ESTILO para valores alineados a la izquierda (solo para box y fechaBox)
   valueLeft: {
-    fkex: 1,
+    flex: 1,
     textAlign: 'left',
   },
   rowFieldLeft: {
@@ -206,6 +206,11 @@ export function InvoiceDocument({
 
   const Moneda =
   data.tipoMoneda === 'PEN' ? 'SOLES' : data.tipoMoneda.toUpperCase();
+
+  const direccionFormateada = (data.cliente.direccion || 'N/A').replace(
+    /(.{40})/g,
+    '$1\n'
+  );
 
   return (
     <Document>
@@ -254,7 +259,7 @@ export function InvoiceDocument({
             <View style={styles.rowFieldLeft}>
             <Text style={styles.labelBox}>Dirección</Text>
             <Text style={styles.colon}>:</Text>
-            <Text style={styles.valueLeft}>{data.cliente.direccion || 'N/A'}</Text>
+            <Text style={styles.valueLeft}>{direccionFormateada}</Text>
             </View>
         </View>
 
@@ -295,8 +300,8 @@ export function InvoiceDocument({
                 {item.descripcion}
                 {item.series && item.series.length > 0 && (
                   <Text style={{ fontSize: 9 }}>
-                    {' '}
-                    {item.series.length === 1 ? 'SERIE N°: ' : 'SERIES N°: '}
+                    {"\\n"}
+                    {item.series.length === 1 ? 'SERIE N°:\\n' : 'SERIES N°:\\n'}
                     {item.series.join(', ')}
                   </Text>
                 )}

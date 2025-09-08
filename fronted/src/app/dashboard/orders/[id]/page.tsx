@@ -364,6 +364,17 @@ export default function OrderDetailPage() {
     [-6]: "OTRO MEDIO DE PAGO",
   };
 
+  const rawShippingMethod = payload.shippingMethod ?? "-";
+  let shippingMethodLabel = rawShippingMethod;
+  let estimatedDelivery = payload.estimatedDelivery ?? "-";
+  if (["PICKUP", "RECOJO EN TIENDA"].includes(rawShippingMethod)) {
+    shippingMethodLabel = "RECOJO EN TIENDA";
+    estimatedDelivery = "Inmediata";
+  } else if (["DELIVERY", "ENVIO A DOMICILIO"].includes(rawShippingMethod)) {
+    shippingMethodLabel = rawShippingMethod === "DELIVERY" ? "DELIVERY" : "ENVIO A DOMICILIO";
+    estimatedDelivery = "entre 24 a 72 horas";
+  }
+
   const orderData = {
     orderNumber: order.code,
     orderDate: new Date(order.createdAt).toLocaleString("es-ES"),
@@ -387,8 +398,8 @@ export default function OrderDetailPage() {
       address: [order.shippingAddress, order.city, order.postalCode]
         .filter(Boolean)
         .join(", "),
-      method: payload.shippingMethod ?? "-",
-      estimatedDelivery: payload.estimatedDelivery ?? "-",
+      method: shippingMethodLabel,
+      estimatedDelivery,
     },
     payments: payments.map((p: any) => ({
       method: paymentMethodMap[p.paymentMethodId] || `Método ${p.paymentMethodId}`,
@@ -839,16 +850,40 @@ export default function OrderDetailPage() {
 
                             const invoice = createdSale && Array.isArray(createdSale.invoices) && createdSale.invoices.length > 0 ? createdSale.invoices[0] : null;
                             if (invoice) {
-                              const cliente = {
-                                dni: payload.dni || createdSale.client?.typeNumber || "",
-                                nombre: payload.invoiceName || createdSale.client?.name || "",
-                                direccion:
-                                  payload.invoiceAddress || createdSale.client?.adress || "",
-                                ruc: payload.ruc || createdSale.client?.typeNumber || "",
-                                razonSocial:
-                                  payload.razonSocial || createdSale.client?.name || "",
-                                tipoDocumento: createdSale.client?.type || "",
-                              };
+                              const isFactura = invoice.tipoComprobante === "FACTURA";
+                              const cliente = isFactura
+                                ? {
+                                    direccion:
+                                      payload.invoiceAddress ||
+                                      createdSale.client?.adress ||
+                                      "",
+                                    tipoDocumento:
+                                      createdSale.client?.type || "",
+                                    ruc:
+                                      payload.ruc ||
+                                      createdSale.client?.typeNumber ||
+                                      "",
+                                    razonSocial:
+                                      payload.razonSocial ||
+                                      createdSale.client?.razonSocial ||
+                                      "",
+                                  }
+                                : {
+                                    direccion:
+                                      payload.invoiceAddress ||
+                                      createdSale.client?.adress ||
+                                      "",
+                                    tipoDocumento:
+                                      createdSale.client?.type || "",
+                                    dni:
+                                      payload.dni ||
+                                      createdSale.client?.typeNumber ||
+                                      "",
+                                    nombre:
+                                      payload.nombre ||
+                                      createdSale.client?.name ||
+                                      "",
+                                  };
                               const invoicePayload = {
                                 saleId: createdSale.id,
                                 serie: invoice.serie,

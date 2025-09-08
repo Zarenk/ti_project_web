@@ -117,9 +117,9 @@
         voucher: tx.salePayments[0]?.sale?.invoices[0]
           ? `${tx.salePayments[0].sale.invoices[0].serie}-${tx.salePayments[0].sale.invoices[0].nroCorrelativo}`
           : null,
-        clientName: tx.salePayments[0]?.sale?.client?.name || null,
-        clientDocument: tx.salePayments[0]?.sale?.client?.typeNumber || null,
-        clientDocumentType: tx.salePayments[0]?.sale?.client?.type || null,
+        clientName: tx.clientName || tx.salePayments[0]?.sale?.client?.name || null,
+        clientDocument: tx.clientDocument || tx.salePayments[0]?.sale?.client?.typeNumber || null,
+        clientDocumentType: tx.clientDocumentType || tx.salePayments[0]?.sale?.client?.type || null,
       }));
     
       const formattedClosures = closures.map((closure) => ({
@@ -211,7 +211,7 @@
     /////////////////////////////CASH TRANSFER/////////////////////////////
     
     async createTransaction(data: CreateCashTransactionDto) {
-      const { cashRegisterId, userId, type, amount, description, paymentMethods } = data;
+      const { cashRegisterId, userId, type, amount, description, paymentMethods, clientName, clientDocument, clientDocumentType } = data;
 
       // Validaciones básicas
       if (!['INCOME', 'EXPENSE'].includes(type)) {
@@ -256,6 +256,9 @@
           description: description || '',
           userId,
           createdAt: new Date(),
+          clientName: clientName || null,
+          clientDocument: clientDocument || null,
+          clientDocumentType: clientDocumentType || null,
         },
       });
     

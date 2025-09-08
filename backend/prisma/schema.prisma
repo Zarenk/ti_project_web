@@ -542,6 +542,9 @@ model CashTransaction {
   type            CashTransactionType
   amount          Decimal
   description     String?
+  clientName      String?
+  clientDocument  String?
+  clientDocumentType String?
   userId          Int
   createdAt       DateTime         @default(now())
 
