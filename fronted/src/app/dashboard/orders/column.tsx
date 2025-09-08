@@ -30,6 +30,7 @@ export type Order = {
   client: string;
   total: number;
   status: string;
+  origin?: string;
 };
 
 export function getColumns(
@@ -43,6 +44,11 @@ export function getColumns(
   {
     accessorKey: "client",
     header: "Cliente",
+  },
+  {
+    accessorKey: "origin",
+    header: "Origen",
+    cell: ({ row }) => row.original.origin ?? 'WEB POS',
   },
   {
     accessorKey: "createdAt",

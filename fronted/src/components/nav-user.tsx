@@ -7,6 +7,7 @@ import {
   CreditCard,
   LogOut,
   Sparkles,
+  Loader2,
 } from "lucide-react"
 
 import {
@@ -31,6 +32,7 @@ import {
 } from "@/components/ui/sidebar"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/context/auth-context"
+import { useState } from "react"
 
 export function NavUser({
   user,
@@ -43,11 +45,15 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const { logout } = useAuth()
+  const [loggingOut, setLoggingOut] = useState(false)
   const router = useRouter()
 
   const handleLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
     await logout()
-    router.push("/login")
+    router.replace("/login")
+    setLoggingOut(false)
   }
 
   return (
@@ -111,9 +117,9 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>
-              <LogOut />
-              Cerrar Sesion
+            <DropdownMenuItem onClick={handleLogout} disabled={loggingOut}>
+              {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut />}
+              {loggingOut ? 'Cerrando…' : 'Cerrar Sesión'}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -9,7 +9,7 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        signika: ['"Signika Negative"', 'sans-serif'],
+        signika: ['var(--font-signika)', 'sans-serif'],
         anton: ['var(--font-anton)', 'sans-serif'],
       },
       fontWeight: {

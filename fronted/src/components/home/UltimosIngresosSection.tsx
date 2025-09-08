@@ -55,7 +55,7 @@ export default function UltimosIngresosSection({
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: recentDirection > 0 ? -300 : 300, opacity: 0 }}
               transition={{ type: 'tween' }}
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8"
             >
               {visibleRecent.map((product, idx) => (
                 <MotionProductCard

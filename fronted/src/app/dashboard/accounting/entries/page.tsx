@@ -103,12 +103,12 @@ export default function AccountingEntriesPage() {
   const voidEntry = async (id: string) => {
     try {
       const res = await fetch(`${BACKEND_URL}/api/accounting/entries/${id}/void`, { method: 'POST' })
-      if (!res.ok) throw new Error('Failed to void entry')
+      if (!res.ok) throw new Error('No se pudo anular el asiento')
       fetchEntries()
-      toast.success('Entry voided successfully')
+      toast.success('Asiento anulado correctamente')
     } catch (err) {
-      console.error('Failed to void entry', err)
-      toast.error('Failed to void entry')
+      console.error('No se pudo anular el asiento', err)
+      toast.error('No se pudo anular el asiento')
     }
   }
 
@@ -117,27 +117,32 @@ export default function AccountingEntriesPage() {
     posted: 'default',
     void: 'destructive'
   }
+  const statusLabel: Record<Entry['status'], string> = {
+    draft: 'Borrador',
+    posted: 'Publicado',
+    void: 'Anulado',
+  }
 
   return (
     <Card className='shadow-sm'>
       <CardHeader className='space-y-4'>
-        <CardTitle>Accounting Entries</CardTitle>
+        <CardTitle>Asientos contables</CardTitle>
         <div className='flex flex-col md:flex-row md:items-center gap-2'>
           <Input
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
-            placeholder='Period'
+            placeholder='Periodo (YYYY-MM)'
             className='md:w-40'
           />
           <form onSubmit={createDraft} className='flex w-full gap-2'>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder='Description'
+              placeholder='Descripción'
               className='flex-1'
             />
             <Button type='submit' size='sm'>
-              <PlusCircle className='mr-2 h-4 w-4' /> Create Draft
+              <PlusCircle className='mr-2 h-4 w-4' /> Crear borrador
             </Button>
           </form>
         </div>
@@ -151,8 +156,8 @@ export default function AccountingEntriesPage() {
                 <TableHead>Proveedor</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Comprobante</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className='text-right'>Actions</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className='text-right'>Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -167,7 +172,7 @@ export default function AccountingEntriesPage() {
                     {entry.serie && entry.correlativo ? `${entry.serie}-${entry.correlativo}` : '-'}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={badgeVariant[entry.status]}>{entry.status}</Badge>
+                    <Badge variant={badgeVariant[entry.status]}>{statusLabel[entry.status]}</Badge>
                   </TableCell>
                   <TableCell className='space-x-2 text-right'>
                     {entry.status === 'draft' && (
@@ -175,7 +180,7 @@ export default function AccountingEntriesPage() {
                         variant='ghost'
                         size='icon'
                         onClick={() => postEntry(entry.id)}
-                        aria-label='Post'
+                        aria-label='Publicar'
                       >
                         <Check className='h-4 w-4' />
                       </Button>
@@ -185,7 +190,7 @@ export default function AccountingEntriesPage() {
                         variant='ghost'
                         size='icon'
                         onClick={() => setVoidId(entry.id)}
-                        aria-label='Void'
+                        aria-label='Anular'
                       >
                         <XCircle className='h-4 w-4' />
                       </Button>
@@ -203,33 +208,33 @@ export default function AccountingEntriesPage() {
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
           >
-            <ChevronLeft className='mr-2 h-4 w-4' /> Previous
+            <ChevronLeft className='mr-2 h-4 w-4' /> Anterior
           </Button>
-          <span className='text-sm'>Page {page} of {Math.max(1, Math.ceil(total / size))}</span>
+          <span className='text-sm'>Página {page} de {Math.max(1, Math.ceil(total / size))}</span>
           <Button
             variant='outline'
             size='sm'
             onClick={() => setPage((p) => p + 1)}
             disabled={page >= Math.ceil(total / size)}
           >
-            Next <ChevronRight className='ml-2 h-4 w-4' />
+            Siguiente <ChevronRight className='ml-2 h-4 w-4' />
           </Button>
         </div>
         <AlertDialog open={!!voidId} onOpenChange={(open) => !open && setVoidId(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Void entry?</AlertDialogTitle>
-              <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+              <AlertDialogTitle>¿Anular asiento?</AlertDialogTitle>
+              <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {
                   if (voidId) voidEntry(voidId)
                   setVoidId(null)
                 }}
               >
-                Continue
+                Continuar
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

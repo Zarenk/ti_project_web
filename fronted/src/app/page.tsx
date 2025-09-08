@@ -38,6 +38,7 @@ import Navbar from "@/components/navbar"
 import { toast } from "sonner"
 import { getProducts } from "./dashboard/products/products.api"
 import { getCategoriesWithCount } from "./dashboard/categories/categories.api"
+import { getStoresWithProduct } from "./dashboard/inventory/inventory.api"
 import { getRecentEntries } from "./dashboard/entries/entries.api"
 import UltimosIngresosSection from '@/components/home/UltimosIngresosSection';
 import HeroSection from '@/components/home/HeroSection';
@@ -46,6 +47,7 @@ import CategoriesSection from '@/components/home/CategoriesSection';
 import BenefitsSection from '@/components/home/BenefitsSection';
 import TestimonialsSection from '@/components/home/TestimonialSection';
 import NewsletterSection from '@/components/home/NewsletterSection';
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Homepage() {
   const sectionsRef = useRef<HTMLDivElement>(null)
@@ -124,7 +126,6 @@ export default function Homepage() {
         const products = await getProducts()
         const withImages = (products as any[])
           .filter((p) => p.images && p.images.length > 0)
-          .slice(0, 6)
           .map((p) => ({
             id: p.id,
             name: p.name,
@@ -142,8 +143,25 @@ export default function Homepage() {
             stock: p.stock ?? null,
             specification: p.specification ?? undefined,
           })) as FeaturedProduct[]
-        setHeroProducts(withImages)
-        setFeaturedProducts(withImages.slice(0, 6))
+        // Compute stock for the top 10 items that we render
+        const topForStock = withImages.slice(0, 10)
+        const withStockTop = await Promise.all(
+          topForStock.map(async (p) => {
+            try {
+              const stores = await getStoresWithProduct(p.id)
+              const total = Array.isArray(stores)
+                ? stores.reduce((sum: number, s: any) => sum + (s.stock ?? 0), 0)
+                : 0
+              return { ...p, stock: total }
+            } catch {
+              return { ...p, stock: p.stock ?? null }
+            }
+          })
+        )
+        // Limit hero to 6 for layout/performance (with stock info)
+        setHeroProducts(withStockTop.slice(0, 6))
+        // Show up to 10 featured products as requested (with stock info)
+        setFeaturedProducts(withStockTop)
       } catch (error) {
         console.error("Error fetching featured products:", error)
       }
@@ -208,27 +226,21 @@ export default function Homepage() {
         const ScrollTrigger = await import("gsap/ScrollTrigger")
         gsapModule.default.registerPlugin(ScrollTrigger.default)
         ctx = gsapModule.default.context(() => {
-          gsapModule.default
-            .utils.toArray(".gsap-section")
-            .forEach((section:any) => {
-              gsapModule.default.from(section, {
-                y: 100,
-                opacity: 0,
-                duration: 1,
-                ease: "power2.out",
-                scrollTrigger: {
-                  trigger: section,
-                  start: "top 80%",
-                },
-              })
-            })
+          const gsap = gsapModule.default
+          const sections = gsap.utils.toArray<HTMLElement>(".gsap-section")
+          // Only clear any leftover inline styles; rely on ScrollUpSection for reveals
+          gsap.set(sections, { clearProps: "all" })
         }, sectionsRef)
+
+        // Ensure triggers recalc after layout/route transitions
+        requestAnimationFrame(() => ScrollTrigger.default.refresh())
       } catch (err) {
         console.error("GSAP animations failed to load", err)
       }
     }
     loadGsap()
-    return () => ctx?.kill(false)
+    // Revert to original styles and kill ScrollTriggers on unmount
+    return () => ctx?.revert()
   }, [])
 
   const nextCategories = () =>
@@ -268,12 +280,12 @@ export default function Homepage() {
   }
 
   const visibleRecent =
-    recentProducts.length <= 4
+    recentProducts.length <= 5
       ? recentProducts
       : [
-          ...recentProducts.slice(recentIndex, recentIndex + 4),
-          ...(recentIndex + 4 > recentProducts.length
-            ? recentProducts.slice(0, (recentIndex + 4) % recentProducts.length)
+          ...recentProducts.slice(recentIndex, recentIndex + 5),
+          ...(recentIndex + 5 > recentProducts.length
+            ? recentProducts.slice(0, (recentIndex + 5) % recentProducts.length)
             : []),
         ]
 
@@ -327,30 +339,106 @@ export default function Homepage() {
       <Navbar />
       <div ref={sectionsRef}>
         <section className="gsap-section" data-navcolor="#ffffff">
-          <HeroSection heroProducts={heroProducts} />
+          {heroProducts.length === 0 ? (
+            <div className="container mx-auto px-4 py-12">
+              <div className="grid lg:grid-cols-2 gap-8 items-center">
+                <div className="space-y-4">
+                  <Skeleton className="h-10 w-3/4" />
+                  <Skeleton className="h-5 w-2/3" />
+                  <div className="flex gap-4">
+                    <Skeleton className="h-10 w-40" />
+                    <Skeleton className="h-10 w-40" />
+                  </div>
+                </div>
+                <Skeleton className="w-full aspect-[6/5] rounded-2xl" />
+              </div>
+            </div>
+          ) : (
+            <HeroSection heroProducts={heroProducts} />
+          )}
         </section>
         <section className="gsap-section" data-navcolor="#f1f5f9">
-          <UltimosIngresosSection
-            visibleRecent={visibleRecent}
-            recentIndex={recentIndex}
-            recentDirection={recentDirection}
-            nextRecent={nextRecent}
-            prevRecent={prevRecent}
-            recentProductsLength={recentProducts.length}
-          />
+          {recentProducts.length === 0 ? (
+            <div className="container mx-auto px-4 py-12">
+              <div className="text-center mb-8">
+                <Skeleton className="h-8 w-64 mx-auto mb-2" />
+                <Skeleton className="h-4 w-96 mx-auto" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border bg-card">
+                    <Skeleton className="h-56 w-full rounded-t-xl" />
+                    <div className="p-4 space-y-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-6 w-3/4" />
+                      <Skeleton className="h-4 w-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <UltimosIngresosSection
+              visibleRecent={visibleRecent}
+              recentIndex={recentIndex}
+              recentDirection={recentDirection}
+              nextRecent={nextRecent}
+              prevRecent={prevRecent}
+              recentProductsLength={recentProducts.length}
+            />
+          )}
         </section>
         <section className="gsap-section" data-navcolor="#e0f2fe">
-          <FeaturedProductsSection featuredProducts={featuredProducts} />
+          {featuredProducts.length === 0 ? (
+            <div className="container mx-auto px-4 py-12">
+              <div className="text-center mb-8">
+                <Skeleton className="h-8 w-72 mx-auto mb-2" />
+                <Skeleton className="h-4 w-96 mx-auto" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border bg-card">
+                    <Skeleton className="h-56 w-full rounded-t-xl" />
+                    <div className="p-4 space-y-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-6 w-3/4" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-6 w-28" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <FeaturedProductsSection featuredProducts={featuredProducts} />
+          )}
         </section>
         <section className="gsap-section" data-navcolor="#e0e7ff">
-          <CategoriesSection
-            visibleCategories={visibleCategories}
-            categoryIndex={categoryIndex}
-            direction={direction}
-            nextCategories={nextCategories}
-            prevCategories={prevCategories}
-            categoriesLength={categories.length}
-          />
+          {categories.length === 0 ? (
+            <div className="container mx-auto px-4 py-12">
+              <div className="text-center mb-8">
+                <Skeleton className="h-8 w-60 mx-auto mb-2" />
+                <Skeleton className="h-4 w-96 mx-auto" />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border bg-card p-6">
+                    <Skeleton className="h-10 w-10 rounded-full mb-4" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <CategoriesSection
+              visibleCategories={visibleCategories}
+              categoryIndex={categoryIndex}
+              direction={direction}
+              nextCategories={nextCategories}
+              prevCategories={prevCategories}
+              categoriesLength={categories.length}
+            />
+          )}
         </section>
         <section className="gsap-section" data-navcolor="#fef3c7">
           <BenefitsSection benefits={benefits} />

@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import Navbar from '@/components/navbar'
 import MotionProductCard from '@/components/MotionProductCard'
+import { Skeleton } from "@/components/ui/skeleton"
 import { isTokenValid } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
 import { getFavorites } from './favorite.api'
@@ -37,20 +38,18 @@ export default function FavoritesPage() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-6">Mis Favoritos</h1>
         {isLoading ? (
-          <div className="flex flex-col items-center py-10">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-            >
-              <Loader2 className="h-10 w-10 text-primary" />
-            </motion.div>
-            <motion.p
-              className="mt-2 text-sm"
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ repeat: Infinity, duration: 2 }}
-            >
-              Cargando...
-            </motion.p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-xl border bg-card overflow-hidden">
+                <Skeleton className="h-56 w-full" />
+                <div className="p-4 space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-6 w-3/4" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-6 w-28" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : favorites.length === 0 ? (
           <p>No tienes productos en favoritos.</p>

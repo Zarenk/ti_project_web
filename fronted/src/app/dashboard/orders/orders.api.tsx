@@ -54,3 +54,23 @@ export async function getRecentOrders(limit = 10) {
   if (!res.ok) throw new Error('Error al obtener actividad de ordenes')
   return res.json()
 }
+
+export async function updateOrderSeries(
+  id: number | string,
+  items: { productId: number; series: string[] }[],
+) {
+  const res = await fetch(
+    `${BACKEND_URL}/api/web-sales/order/${id}/series`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    }
+  );
+  if (!res.ok) {
+    let message = 'Error al actualizar series de la orden';
+    try { message = await res.text(); } catch { /* ignore */ }
+    throw new Error(message);
+  }
+  return res.json();
+}

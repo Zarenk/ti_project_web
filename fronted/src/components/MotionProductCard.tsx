@@ -1,6 +1,8 @@
 "use client"
 
 import Image from "next/image"
+import { resolveImageUrl } from "@/lib/images"
+import { BrandLogo } from "@/components/BrandLogo"
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
@@ -10,6 +12,7 @@ import { useCart } from "@/context/cart-context"
 import { toast } from "sonner"
 import { ShoppingCart, Heart } from "lucide-react"
 import { toggleFavorite } from "@/app/favorites/favorite.api"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import Link from "next/link"
 
 // Use the new `motion.create` API to avoid deprecated `motion()` usage
@@ -52,6 +55,7 @@ export default function MotionProductCard({ product, withActions = false, priori
 
   const { addItem } = useCart()
   const [isFavorite, setIsFavorite] = useState(false)
+  const canAddToCart = typeof product.stock === 'number' && product.stock > 0
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -111,11 +115,10 @@ export default function MotionProductCard({ product, withActions = false, priori
               </p>
               <span className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
                 {product.brand?.logoSvg && (
-                  <Image
-                    src={product.brand.logoSvg}
+                  <BrandLogo
+                    src={resolveImageUrl(product.brand.logoSvg)}
                     alt={product.brand.name}
-                    width={16}
-                    height={16}
+                    className="h-4 w-auto"
                   />
                 )}
                 {product.brand?.name}
@@ -166,26 +169,39 @@ export default function MotionProductCard({ product, withActions = false, priori
         </Link>
         {withActions && (
           <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            <MotionButton
-              size="sm"
-              onClick={handleAddToCart}
-              whileHover={{ scale: 1.1, cursor: "grab" }}
-              whileTap={{ scale: 0.95, cursor: "grabbing" }}
-              className="bg-sky-500 hover:bg-sky-600 text-white pointer-events-auto cursor-grab active:cursor-grabbing"
-            >
-              <ShoppingCart className="w-4 h-4 mr-1" />
-              Agregar al carrito
-            </MotionButton>
-            <MotionButton
-              size="icon"
-              variant="outline"
-              onClick={handleToggleFavorite}
-              whileHover={{ scale: 1.1, cursor: "grab" }}
-              whileTap={{ scale: 0.95, cursor: "grabbing" }}
-              className={`pointer-events-auto cursor-grab active:cursor-grabbing ${isFavorite ? "text-red-500 border-red-500" : ""}`}
-            >
-              <Heart className={`w-4 h-4 ${isFavorite ? "fill-current" : ""}`} />
-            </MotionButton>
+            {canAddToCart && (
+              <MotionButton
+                size="sm"
+                onClick={handleAddToCart}
+                whileHover={{ scale: 1.1, cursor: "grab" }}
+                whileTap={{ scale: 0.95, cursor: "grabbing" }}
+                className="bg-sky-500 hover:bg-sky-600 text-white pointer-events-auto cursor-grab active:cursor-grabbing"
+              >
+                <ShoppingCart className="w-4 h-4 mr-1" />
+                Agregar al carrito
+              </MotionButton>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <MotionButton
+                  aria-label="Agregar favoritos"
+                  title="Agregar favoritos"
+                  size="icon"
+                  variant="outline"
+                  onClick={handleToggleFavorite}
+                  whileHover={{ scale: 1.1, cursor: "grab" }}
+                  whileTap={{ scale: 0.95, cursor: "grabbing" }}
+                  className={`group pointer-events-auto cursor-grab active:cursor-grabbing transition-colors ${
+                    isFavorite ? "text-red-500 border-red-500" : ""
+                  } hover:text-red-500 hover:border-red-500`}
+                >
+                  <Heart className={`w-4 h-4 transition-transform duration-150 ${
+                    isFavorite ? "" : ""
+                  } group-hover:scale-110`} />
+                </MotionButton>
+              </TooltipTrigger>
+              <TooltipContent side="top">Agregar favoritos</TooltipContent>
+            </Tooltip>
           </div>
         )}
       </Card>

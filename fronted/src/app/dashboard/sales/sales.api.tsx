@@ -163,6 +163,22 @@ export async function getOrdersByUser(id: number | string) {
   return res.json();
 }
 
+export async function getOrdersByEmail(email: string) {
+  const res = await fetch(
+    `${BACKEND_URL}/api/web-sales/order/by-email/${encodeURIComponent(email)}`,
+  );
+  if (!res.ok) throw new Error('Error al obtener las ordenes por email');
+  return res.json();
+}
+
+export async function getOrdersByDni(dni: string) {
+  const res = await fetch(
+    `${BACKEND_URL}/api/web-sales/order/by-dni/${encodeURIComponent(dni)}`,
+  );
+  if (!res.ok) throw new Error('Error al obtener las ordenes por DNI');
+  return res.json();
+}
+
 export async function getSales() {
   const headers = await getAuthHeaders()
   if (!('Authorization' in headers)) {

@@ -9,12 +9,14 @@ import {
   useCallback,
 } from "react"
 import { getUserDataFromToken } from "@/lib/auth"
+import { toast } from 'sonner'
 import { signOut } from "next-auth/react"
 
 type AuthContextType = {
   userId: number | null
   userName: string | null
   role: string | null
+  authPending: boolean
   refreshUser: () => Promise<void>
   logout: () => void
 }
@@ -25,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string | null>(null)
   const [userId, setUserId] = useState<number | null>(null)
   const [role, setRole] = useState<string | null>(null)
+  const [authPending, setAuthPending] = useState<boolean>(false)
 
   const refreshUser = useCallback(async () => {
     const data = await getUserDataFromToken()
@@ -42,20 +45,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
     const logout = useCallback(async () => {
-      await signOut({ redirect: false })
+      setAuthPending(true)
       try {
-        const res = await fetch('/api/logout', { method: 'POST', credentials: 'include' })
-        if (res.ok) {
-          if (typeof window !== "undefined") {
-            localStorage.removeItem('token')
-            window.dispatchEvent(new Event("authchange"))
-          }
-          setUserName(null)
-          setUserId(null)
-          setRole(null)
-        }
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 5000)
+        const logoutReq = fetch('/api/logout', {
+          method: 'POST',
+          credentials: 'include',
+          signal: controller.signal,
+        })
+        const nextAuth = signOut({ redirect: false })
+        await Promise.allSettled([logoutReq, nextAuth])
+        clearTimeout(timeout)
       } catch (error) {
         console.error('Logout failed', error)
+      } finally {
+        if (typeof window !== "undefined") {
+          try { localStorage.removeItem('token') } catch {}
+          window.dispatchEvent(new Event("authchange"))
+        }
+        setUserName(null)
+        setUserId(null)
+        setRole(null)
+        try { toast.success('Sesión cerrada') } catch {}
+        setAuthPending(false)
       }
     }, [])
 
@@ -64,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ userId, userName, role, refreshUser, logout }}>
+    <AuthContext.Provider value={{ userId, userName, role, authPending, refreshUser, logout }}>
       {children}
     </AuthContext.Provider>
   )

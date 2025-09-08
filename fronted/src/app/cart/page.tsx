@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import Image from "next/image"
 import { Minus, Plus, X, Heart, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,22 @@ import Link from "next/link"
 import { getProducts } from "../dashboard/products/products.api"
 import { getStoresWithProduct } from "../dashboard/inventory/inventory.api"
 import CheckoutSteps from "@/components/checkout-steps"
+import { getFavorites, toggleFavorite } from "@/app/favorites/favorite.api"
+import { toast } from "sonner"
+import { Skeleton } from "@/components/ui/skeleton"
+import { getAuthToken } from "@/utils/auth-token"
+import { isTokenValid } from "@/lib/auth"
+import { jwtDecode } from "jwt-decode"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Product {
   id: number
@@ -27,28 +43,122 @@ export default function ShoppingCart() {
   const [discount, setDiscount] = useState(0)
   const [couponApplied, setCouponApplied] = useState("")
   const [savedItems, setSavedItems] = useState<CartItem[]>([])
+  const [savedKey, setSavedKey] = useState<string>("saved-items-guest")
+  const [isSavedHydrated, setIsSavedHydrated] = useState<boolean>(false)
+  const prevSavedKeyRef = useRef<string>("saved-items-guest")
   const [stockMap, setStockMap] = useState<Record<number, number | null>>({})
+  const [favDialogOpen, setFavDialogOpen] = useState(false)
+  const [pendingFavItem, setPendingFavItem] = useState<CartItem | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    try {
-      const stored = localStorage.getItem("saved-items")
-      setSavedItems(stored ? (JSON.parse(stored) as CartItem[]) : [])
-    } catch {
-      setSavedItems([])
+    setIsSavedHydrated(false)
+    const computeKey = async () => {
+      const token = await getAuthToken()
+      if (!token) return "saved-items-guest"
+      try {
+        const decoded: { userId?: number } = jwtDecode(token)
+        const valid = await isTokenValid()
+        if (!valid || !decoded.userId) return "saved-items-guest"
+        return `saved-items-${decoded.userId}`
+      } catch {
+        return "saved-items-guest"
+      }
+    }
+    computeKey().then((key) => {
+      setSavedKey(key)
+      try {
+        const guestKey = "saved-items-guest"
+        const legacyKey = "saved-items" // compatibilidad con clave anterior
+        const tryLegacy = (k: string) => localStorage.getItem(k)
+        const guestRaw = localStorage.getItem(guestKey) ?? tryLegacy(legacyKey)
+        const guestList: CartItem[] = guestRaw ? JSON.parse(guestRaw) : []
+        if (key !== guestKey && guestList.length > 0) {
+          const userRaw = localStorage.getItem(key)
+          const userList: CartItem[] = userRaw ? JSON.parse(userRaw) : []
+          const mergedMap = new Map<number, CartItem>()
+          ;[...userList, ...guestList].forEach((it) => {
+            const existing = mergedMap.get(it.id)
+            if (existing) {
+              mergedMap.set(it.id, { ...existing, quantity: existing.quantity + it.quantity })
+            } else {
+              mergedMap.set(it.id, { ...it })
+            }
+          })
+          const merged = Array.from(mergedMap.values())
+          setSavedItems(merged)
+          localStorage.setItem(key, JSON.stringify(merged))
+          localStorage.removeItem(guestKey)
+          localStorage.removeItem(legacyKey)
+        } else {
+          const stored = localStorage.getItem(key) ?? localStorage.getItem(legacyKey)
+          setSavedItems(stored ? (JSON.parse(stored) as CartItem[]) : [])
+        }
+      } catch {
+        setSavedItems([])
+      }
+      prevSavedKeyRef.current = key
+      setIsSavedHydrated(true)
+    })
+    const handleAuth = () => {
+      setIsSavedHydrated(false)
+      computeKey().then((newKey) => {
+        try {
+          const prevKey = prevSavedKeyRef.current
+          if (prevKey === "saved-items-guest" && newKey !== "saved-items-guest") {
+            const guestRaw = localStorage.getItem("saved-items-guest")
+            const guestList: CartItem[] = guestRaw ? JSON.parse(guestRaw) : []
+            const userRaw = localStorage.getItem(newKey)
+            const userList: CartItem[] = userRaw ? JSON.parse(userRaw) : []
+            const mergedMap = new Map<number, CartItem>()
+            ;[...userList, ...guestList].forEach((it) => {
+              const existing = mergedMap.get(it.id)
+              if (existing) {
+                mergedMap.set(it.id, { ...existing, quantity: existing.quantity + it.quantity })
+              } else {
+                mergedMap.set(it.id, { ...it })
+              }
+            })
+            const merged = Array.from(mergedMap.values())
+            setSavedKey(newKey)
+            setSavedItems(merged)
+            localStorage.setItem(newKey, JSON.stringify(merged))
+            localStorage.removeItem("saved-items-guest")
+          } else {
+            setSavedKey(newKey)
+            const stored = localStorage.getItem(newKey)
+            setSavedItems(stored ? (JSON.parse(stored) as CartItem[]) : [])
+          }
+          prevSavedKeyRef.current = newKey
+        } catch {
+          setSavedKey(newKey)
+          const stored = localStorage.getItem(newKey)
+          setSavedItems(stored ? (JSON.parse(stored) as CartItem[]) : [])
+          prevSavedKeyRef.current = newKey
+        }
+        setIsSavedHydrated(true)
+      })
+    }
+    window.addEventListener("authchange", handleAuth)
+    return () => {
+      window.removeEventListener("authchange", handleAuth)
     }
   }, [])
   const [recommended, setRecommended] = useState<Product[]>([])
+  const [recommendedLoading, setRecommendedLoading] = useState(true)
   const [visibleStart, setVisibleStart] = useState(0)
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    if (!isSavedHydrated) return
     try {
-      localStorage.setItem("saved-items", JSON.stringify(savedItems))
+      localStorage.setItem(savedKey, JSON.stringify(savedItems))
     } catch {
       // ignore
     }
-  }, [savedItems])
+  }, [savedItems, savedKey, isSavedHydrated])
 
   useEffect(() => {
     async function fetchStocks() {
@@ -96,13 +206,56 @@ export default function ShoppingCart() {
       } catch (error) {
         console.error("Error fetching recommended", error)
       }
+      setRecommendedLoading(false)
     }
     fetchRecommended()
   }, [])
 
-  const saveForLater = (item: CartItem) => {
+  const saveForLater = async (item: CartItem) => {
+    try {
+      // Evitar duplicados en favoritos
+      const current = await getFavorites().catch(() => [])
+      const alreadyFav = Array.isArray(current) && current.some((f: any) => f.product?.id === item.id || f.productId === item.id)
+      if (alreadyFav) {
+        toast.info('Este producto ya está en tus Favoritos')
+      } else {
+        await toggleFavorite(item.id)
+        toast.success('Producto guardado en Favoritos')
+      }
+    } catch (err: any) {
+      const message = (err?.message || '').toLowerCase().includes('unauthorized')
+        ? 'Debes iniciar sesión para guardar en Favoritos'
+        : 'No se pudo guardar en Favoritos'
+      toast.error(message)
+    }
+
+    // Mantener la funcionalidad existente de "guardar para después"
     removeItem(item.id)
     setSavedItems((prev) => [...prev, item])
+  }
+
+  const openFavDialog = (item: CartItem) => {
+    setPendingFavItem(item)
+    setFavDialogOpen(true)
+  }
+
+  const confirmFav = async () => {
+    if (!pendingFavItem) return
+    await saveForLater(pendingFavItem)
+    setFavDialogOpen(false)
+    setPendingFavItem(null)
+  }
+
+  const openDeleteDialog = (id: number) => {
+    setPendingDeleteId(id)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (pendingDeleteId == null) return
+    removeItem(pendingDeleteId)
+    setDeleteDialogOpen(false)
+    setPendingDeleteId(null)
   }
 
   const moveToCart = (id: number) => {
@@ -121,6 +274,24 @@ export default function ShoppingCart() {
     setVisibleStart((prev) =>
       Math.min(prev + 4, Math.max(recommended.length - 4, 0))
     )
+  }
+
+  const addRecommendedToFavorites = async (productId: number) => {
+    try {
+      const current = await getFavorites().catch(() => [])
+      const alreadyFav = Array.isArray(current) && current.some((f: any) => f.product?.id === productId || f.productId === productId)
+      if (alreadyFav) {
+        toast.info('Este producto ya está en tus Favoritos')
+        return
+      }
+      await toggleFavorite(productId)
+      toast.success('Producto guardado en Favoritos')
+    } catch (err: any) {
+      const message = (err?.message || '').toLowerCase().includes('unauthorized')
+        ? 'Debes iniciar sesión para guardar en Favoritos'
+        : 'No se pudo guardar en Favoritos'
+      toast.error(message)
+    }
   }
 
   const applyCoupon = () => {
@@ -192,7 +363,7 @@ export default function ShoppingCart() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => removeItem(item.id)}
+                            onClick={() => openDeleteDialog(item.id)}
                             className="rounded-full w-8 h-8 p-0 hover:bg-sky-50 hover:text-sky-600 transition-transform active:scale-95"
                           >
                             <X className="w-4 h-4" />
@@ -242,11 +413,11 @@ export default function ShoppingCart() {
                           <p className="text-red-600 text-sm font-medium">No hay stock disponible</p>
                         )}
                         <Button
-                            variant="link"
-                            size="sm"
-                            onClick={() => saveForLater(item)}
-                            className="text-muted-foreground hover:text-sky-600 transition-colors flex items-center gap-1 active:scale-95"
-                          >
+                          variant="link"
+                          size="sm"
+                          onClick={() => openFavDialog(item)}
+                          className="text-muted-foreground hover:text-sky-600 transition-colors flex items-center gap-1 active:scale-95"
+                        >
                           <Heart className="w-4 h-4" /> Guardar para después
                         </Button>
                       </div>
@@ -296,63 +467,89 @@ export default function ShoppingCart() {
                  </div>
                )}
 
-               {recommended.length > 0 && (
+               {(recommendedLoading || recommended.length > 0) && (
                   <div className="bg-card rounded-2xl shadow-sm p-6">
                     <h3 className="text-lg font-medium text-foreground mb-4">Te podría interesar</h3>
-                    <div className="relative">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={showPrev}
-                        disabled={visibleStart === 0}
-                        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 hidden sm:flex"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
+                    <div className="relative px-6 sm:px-10">
+                      {!recommendedLoading && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={showPrev}
+                          disabled={visibleStart === 0}
+                          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 hidden sm:flex"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                      )}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {recommended.slice(visibleStart, visibleStart + 4).map((rp: any) => (
-                          <Card key={rp.id} className="group p-2 overflow-hidden">
-                            <Image
-                              src={rp.images[0] || "/placeholder.svg"}
-                              alt={rp.name}
-                              width={120}
-                              height={120}
-                              className="w-full h-24 object-cover rounded-lg group-hover:scale-105 transition-transform"
-                            />
-                            <div className="mt-2 space-y-1">
-                              <p className="text-sm font-medium line-clamp-2">{rp.name}</p>
-                              <p className="text-xs text-muted-foreground line-clamp-2">{rp.description}</p>
-                              <p className="text-sky-600 font-semibold">S/.{rp.price.toFixed(2)}</p>
-                            </div>
-                            <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button
-                                size="sm"
-                                className="w-full"
-                                onClick={() =>
-                                  addItem({
-                                    id: rp.id,
-                                    name: rp.name,
-                                    price: rp.price,
-                                    image: rp.images[0],
-                                    quantity: 1,
-                                  })
-                                }
-                              >
-                                Agregar
-                              </Button>
-                            </div>
-                          </Card>
-                        ))}
+                        {recommendedLoading
+                          ? Array.from({ length: 4 }).map((_, i) => (
+                              <div key={i} className="space-y-2">
+                                <Skeleton className="h-24 w-full rounded-lg" />
+                                <Skeleton className="h-4 w-3/4" />
+                                <Skeleton className="h-5 w-1/2" />
+                                <Skeleton className="h-8 w-full" />
+                              </div>
+                            ))
+                          : recommended.slice(visibleStart, visibleStart + 4).map((rp: any) => (
+                              <Card key={rp.id} className="group p-2 overflow-hidden">
+                                <Link href={`/store/${rp.id}`} className="block">
+                                  <Image
+                                    src={rp.images[0] || "/placeholder.svg"}
+                                    alt={rp.name}
+                                    width={120}
+                                    height={120}
+                                    className="w-full h-24 object-cover rounded-lg group-hover:scale-105 transition-transform"
+                                  />
+                                  <div className="mt-2 space-y-1">
+                                    <p className="text-sm font-medium line-clamp-2">{rp.name}</p>
+                                    <p className="text-xs text-muted-foreground line-clamp-2">{rp.description}</p>
+                                    <p className="text-sky-600 font-semibold">S/.{rp.price.toFixed(2)}</p>
+                                  </div>
+                                </Link>
+                                <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="icon"
+                                      variant="secondary"
+                                      onClick={() => addRecommendedToFavorites(rp.id)}
+                                      aria-label="Agregar a favoritos"
+                                    >
+                                      <Heart className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      className="flex-1"
+                                      onClick={() =>
+                                        addItem({
+                                          id: rp.id,
+                                          name: rp.name,
+                                          price: rp.price,
+                                          image: rp.images[0],
+                                          quantity: 1,
+                                        })
+                                      }
+                                      aria-label="Agregar al carrito"
+                                    >
+                                      Agregar
+                                    </Button>
+                                  </div>
+                                </div>
+                              </Card>
+                            ))}
                       </div>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={showNext}
-                        disabled={visibleStart + 4 >= recommended.length}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 hidden sm:flex"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
+                      {!recommendedLoading && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={showNext}
+                          disabled={visibleStart + 4 >= recommended.length}
+                          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 hidden sm:flex"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -423,6 +620,73 @@ export default function ShoppingCart() {
           </div>
         </div>
       </div>
+      <FavoritesConfirmDialog
+        open={favDialogOpen}
+        onOpenChange={setFavDialogOpen}
+        onConfirm={confirmFav}
+      />
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }
+
+// Dialogo de confirmación para guardar en Favoritos
+// Colocado al final para mantener la estructura del JSX clara
+function FavoritesConfirmDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  onConfirm: () => void
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Guardar en Favoritos</AlertDialogTitle>
+          <AlertDialogDescription>
+            ¿Deseas guardar este producto en tu lista de Favoritos?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Guardar</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+function DeleteConfirmDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  onConfirm: () => void
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Eliminar producto</AlertDialogTitle>
+          <AlertDialogDescription>
+            ¿Deseas eliminar este producto del carrito?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Eliminar</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+

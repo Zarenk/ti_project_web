@@ -36,6 +36,16 @@ export function DataTable<TData extends { createdAt: string; code: string; clien
   const [search, setSearch] = useState("");
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
   const [status, setStatus] = useState<string>("PENDING");
+  const [origin, setOrigin] = useState<string>("ALL");
+
+  const origins = useMemo(() => {
+    const set = new Set<string>();
+    (data || []).forEach((item: any) => {
+      const o = (item?.origin as string) || 'WEB POS';
+      if (o) set.add(o);
+    });
+    return Array.from(set);
+  }, [data]);
 
   const filteredData = useMemo(() => {
     let result = data;
@@ -50,6 +60,9 @@ export function DataTable<TData extends { createdAt: string; code: string; clien
         return date >= from && date <= to;
       });
     }
+    if (origin && origin !== 'ALL') {
+      result = result.filter((item) => ((item as any).origin || 'WEB POS') === origin);
+    }
     if (search) {
       const s = search.toLowerCase();
       result = result.filter((item) =>
@@ -58,7 +71,7 @@ export function DataTable<TData extends { createdAt: string; code: string; clien
       );
     }
     return result;
-  }, [data, search, selectedDateRange, status]);
+  }, [data, search, selectedDateRange, status, origin]);
 
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
@@ -80,12 +93,13 @@ export function DataTable<TData extends { createdAt: string; code: string; clien
     setSelectedDateRange(range);
   };
 
-  const isFiltered = !!search || !!selectedDateRange || status !== "PENDING";
+  const isFiltered = !!search || !!selectedDateRange || status !== "PENDING" || origin !== 'ALL';
 
   const handleResetFilters = () => {
     setSearch("");
     setSelectedDateRange(undefined);
     setStatus("PENDING");
+    setOrigin("ALL");
   };
 
   return (
@@ -106,6 +120,17 @@ export function DataTable<TData extends { createdAt: string; code: string; clien
             <SelectItem value="COMPLETED">Completadas</SelectItem>
             <SelectItem value="DENIED">Denegadas</SelectItem>
             <SelectItem value="ALL">Todas</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={origin} onValueChange={setOrigin}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Origen" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Todos los orígenes</SelectItem>
+            {origins.map((o) => (
+              <SelectItem key={o} value={o}>{o}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <CalendarDatePicker

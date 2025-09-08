@@ -170,6 +170,9 @@ export class ClientService {
           { name: 'Sin Cliente' },
           {
             AND: [
+              // Solo clientes cuyo usuario tiene rol CLIENT
+              { user: { role: 'CLIENT' } },
+              // Excluir usuarios generados (guest/generic)
               { user: { email: { not: { startsWith: 'generic_' } } } },
               { user: { username: { not: { startsWith: 'generic_' } } } },
             ],

@@ -125,7 +125,17 @@ export function ProductForm({product, categories}: {product: any; categories: an
     if (!file) return;
     try {
       const { url } = await uploadProductImage(file);
-      setValue(`images.${index}` as const, url);
+      // Store relative upload path to avoid stale host/IP issues
+      let toStore = url;
+      try {
+        const u = new URL(url);
+        if (u.pathname.startsWith('/uploads')) {
+          toStore = u.pathname; // persist only the path
+        }
+      } catch {
+        // ignore, keep original
+      }
+      setValue(`images.${index}` as const, toStore);
     } catch (err) {
       console.error('Error subiendo imagen', err);
     }

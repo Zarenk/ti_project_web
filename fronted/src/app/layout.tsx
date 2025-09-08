@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Signika_Negative } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner";
@@ -19,6 +20,13 @@ const anton = localFont({
   display: "swap",
 });
 
+const signika = Signika_Negative({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-signika",
+  display: "swap",
+});
+
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
@@ -32,7 +40,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={anton.className}>
+    <html lang="en" suppressHydrationWarning className={`${anton.variable} ${signika.variable}`}>
       <body className="antialiased font-anton">
         <ThemeProvider
             attribute="class"

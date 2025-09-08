@@ -9,6 +9,7 @@ import {
   Image as PdfImage,
   StyleSheet
 } from '@react-pdf/renderer'
+import { brandAssets } from '@/catalog/brandAssets'
 
 interface Product {
   id: number
@@ -48,39 +49,42 @@ interface CatalogSection {
 }
 
 function getLogos(p: Product): string[] {
-  const logos: string[] = []
-  const brandLogo = p.brand?.logoSvg || p.brand?.logoPng
-  if (brandLogo) logos.push(brandLogo)
+  const out = new Set<string>()
 
-  const cpuMap: Record<string, string> = {
-    intel: '/assets/logos/intel.svg',
-    core: '/assets/logos/intel.svg',
-    amd: '/assets/logos/amd.svg',
-    ryzen: '/assets/logos/amd.svg',
+  // Primary brand
+  const brandLogo = p.brand?.logoSvg || p.brand?.logoPng
+  if (brandLogo) out.add(brandLogo)
+
+  const haystack = `${p.name} ${p.description ?? ''}`.toLowerCase()
+
+  // Sub-brands (e.g., TUF/ROG/Legion/Predator)
+  if (brandAssets.subbrands) {
+    for (const [keyword, logoPath] of Object.entries(brandAssets.subbrands)) {
+      if (haystack.includes(keyword)) {
+        out.add(logoPath)
+      }
+    }
   }
-  const gpuMap: Record<string, string> = {
-    nvidia: '/assets/logos/nvidia.svg',
-    geforce: '/assets/logos/nvidia.svg',
-    rtx: '/assets/logos/nvidia.svg',
-    gtx: '/assets/logos/nvidia.svg',
-    amd: '/assets/logos/amd.svg',
-    radeon: '/assets/logos/amd.svg',
-  }
+
+  // CPU
   const processor = p.specification?.processor?.toLowerCase() || ''
-  for (const [key, path] of Object.entries(cpuMap)) {
+  for (const [key, path] of Object.entries(brandAssets.cpus)) {
     if (processor.includes(key)) {
-      logos.push(path)
+      out.add(path)
       break
     }
   }
+
+  // GPU
   const graphics = p.specification?.graphics?.toLowerCase() || ''
-  for (const [key, path] of Object.entries(gpuMap)) {
+  for (const [key, path] of Object.entries(brandAssets.gpus)) {
     if (graphics.includes(key)) {
-      logos.push(path)
+      out.add(path)
       break
     }
   }
-  return logos
+
+  return Array.from(out)
 }
 
 function formatPrice(value: number): string {

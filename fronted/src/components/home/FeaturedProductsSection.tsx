@@ -16,8 +16,12 @@ export default function FeaturedProductsSection({ featuredProducts }: FeaturedPr
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
-          {featuredProducts.map((product) => (
-            <MotionProductCard key={product.id} product={product} />
+          {featuredProducts.map((product, index) => (
+            <MotionProductCard
+              key={product.id}
+              product={product}
+              withActions
+            />
           ))}
         </div>
       </div>

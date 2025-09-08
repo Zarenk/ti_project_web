@@ -42,7 +42,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "3.6.0",
     "date-fns-tz": "^3.2.0",
-    "framer-motion": "12.9.2",
+    "framer-motion": "12.9.1",
     "gsap": "^3.12.5",
     "html5-qrcode": "^2.3.8",
     "jose": "^6.0.12",
@@ -90,9 +90,6 @@
     "vitest": "^1.5.0"
   },
   "overrides": {
-    "framer-motion": "12.9.2",
-    "motion-dom": "12.9.1",
-    "motion-utils": "12.8.3",
     "react": "19.0.0",
     "react-dom": "19.0.0"
   }

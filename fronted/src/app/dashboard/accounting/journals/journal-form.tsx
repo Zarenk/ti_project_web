@@ -81,7 +81,7 @@ export function JournalForm({
               name="date"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Date</FormLabel>
+                  <FormLabel>Fecha</FormLabel>
                   <FormControl>
                     <Input type="date" {...field} />
                   </FormControl>
@@ -94,7 +94,7 @@ export function JournalForm({
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
+                  <FormLabel>Descripción</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -107,12 +107,12 @@ export function JournalForm({
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Amount</FormLabel>
+                  <FormLabel>Monto</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
                   <FormMessage />
-                </FormItem>
+                </FormItem> 
               )}
             />
             <DialogFooter>
@@ -124,3 +124,4 @@ export function JournalForm({
     </Dialog>
   );
 }
+

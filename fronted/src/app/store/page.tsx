@@ -1,6 +1,8 @@
 "use client"
 
 import Image from "next/image"
+import { resolveImageUrl } from "@/lib/images"
+import { BrandLogo } from "@/components/BrandLogo"
 import { Search, Filter, Package, PackageOpen, DollarSign, Tag, Loader2 } from "lucide-react"
 import Navbar from "@/components/navbar"
 import { useState, useMemo, useEffect } from "react"
@@ -9,6 +11,7 @@ import { useDebounce } from "@/app/hooks/useDebounce"
 import { useSearchParams } from "next/navigation"
 import type { CheckedState } from "@radix-ui/react-checkbox"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import CatalogPagination from "@/components/catalog-pagination"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -455,20 +458,18 @@ export default function StorePage() {
 
             {/* Grid de productos */}
             {isLoading ? (
-              <div className="flex flex-col items-center py-10">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                >
-                  <Loader2 className="h-10 w-10 text-primary" />
-                </motion.div>
-                <motion.p
-                  className="mt-2 text-sm"
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ repeat: Infinity, duration: 2 }}
-                >
-                  Cargando...
-                </motion.p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} className="rounded-lg border bg-card overflow-hidden">
+                    <Skeleton className="h-48 w-full" />
+                    <div className="p-4 space-y-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-6 w-3/4" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-6 w-28" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : filteredAndSortedProducts.length === 0 ? (
               <div className="text-center py-12">
@@ -508,11 +509,10 @@ export default function StorePage() {
                         <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{product.description}</p>
                         <span className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
                           {product.brand?.logoSvg && (
-                            <Image
-                              src={product.brand.logoSvg}
+                            <BrandLogo
+                              src={resolveImageUrl(product.brand.logoSvg)}
                               alt={product.brand.name}
-                              width={16}
-                              height={16}
+                              className="h-4 w-auto"
                             />
                           )}
                           {product.brand?.name}

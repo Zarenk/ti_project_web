@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import InventoryModal from "./data-table-components/InventoryModal";
 import { DataTablePagination } from "@/components/data-table-pagination";
 import TransferModal from "./data-table-components/TransferModal";
 import { useDebounce } from "@/app/hooks/useDebounce";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import OutOfStockDialog from "./data-table-components/OutOfStockDialog";
 import { BookOpenIcon, FilterIcon, StoreIcon } from "lucide-react";
 import { getCategoriesFromInventory } from "./inventory.api";
@@ -43,9 +43,18 @@ interface DataTableProps<TData, TValue> {
   }: DataTableProps<TData, TValue>) {
     // ROUTER PARA MANEJAR LA NAVEGACION
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     // ESTADO PARA MANEJAR EL MODAL DE PRODUCTOS SIN STOCK
     const [isOutOfStockDialogOpen, setIsOutOfStockDialogOpen] = useState(false);
+
+    // Abrir el modal de productos sin stock si viene por query param
+    useEffect(() => {
+      const open = searchParams?.get('outOfStock');
+      if (open && (open === '1' || open.toLowerCase() === 'true')) {
+        setIsOutOfStockDialogOpen(true);
+      }
+    }, [searchParams]);
 
     // ESTADO PARA MANEJAR FILTROS DE LA COLUMNA
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -112,11 +121,11 @@ interface DataTableProps<TData, TValue> {
   // Aplica el debounce con 600ms
   const debouncedValue = useDebounce(inputValue, 600)
 
-  // Cargar las categorías desde el backend
+  // Cargar las categorÃ­as desde el backend
   useEffect(() => {
     async function loadCategories() {
       const products = await getCategoriesFromInventory();
-      const categories = Array.from(new Set(products.map((product:any) => product.product.category))); // Extraer categorías únicas
+      const categories = Array.from(new Set(products.map((product:any) => product.product.category))); // Extraer categorÃ­as Ãºnicas
       setCategoryOptions(categories);
     }
     loadCategories();
@@ -148,13 +157,13 @@ return (
             onValueChange={(value) => setSelectedCategory(value)}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Selecciona una categoría" />
+              <SelectValue placeholder="Selecciona una categorÃ­a" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">
                 <div className="flex items-center gap-2 font-semibold text-muted-foreground">
                   <FilterIcon className="w-4 h-4" />
-                  Todas las categorías
+                  Todas las categorias
                 </div>
               </SelectItem>
               {categoryOptions.map((cat) => (
@@ -173,7 +182,7 @@ return (
               Ver Productos Sin Stock
               <BookOpenIcon className="h-6 w-6" />
             </Button>           
-            {/* Otros componentes de la página */}
+            {/* Otros componentes de la pÃ¡gina */}
             <OutOfStockDialog
               isOpen={isOutOfStockDialogOpen}
               onClose={() => setIsOutOfStockDialogOpen(false)}
@@ -224,6 +233,8 @@ return (
                 <TableRow
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
+                    onDoubleClick={() => router.push(`/dashboard/inventory/product-details/${(row.original as any).id}`)}
+                    className="cursor-pointer"
                 >
                     {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
@@ -235,7 +246,7 @@ return (
                       className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded"
                       onClick={() => {
                         setSelectedProduct(row.original); // Establecer el producto seleccionado
-                        router.push(`/dashboard/inventory/product-details/${row.original.id}`); // Redirigir a la nueva página
+                        router.push(`/dashboard/inventory/product-details/${row.original.id}`); // Redirigir a la nueva pÃ¡gina
                       }}
                     >
                       Ver Informacion

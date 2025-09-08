@@ -4,11 +4,14 @@ import { getAuthHeaders } from '@/utils/auth-token'
 
 export async function getFavorites() {
   const headers = await getAuthHeaders()
+  // If there is no auth token, treat as no favorites without calling the API
+  if (!('Authorization' in headers)) return []
   const res = await fetch('/api/favorites', {
     headers,
     credentials: 'include',
     cache: 'no-store',
   })
+  if (res.status === 401) return []
   if (!res.ok) throw new Error('Error')
   return res.json()
 }

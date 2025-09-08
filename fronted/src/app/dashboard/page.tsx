@@ -122,13 +122,65 @@ useEffect(() => {
             createdAt: e.createdAt,
             href: '/dashboard/entries',
           })),
-          ...lowStock.slice(0, 10).map((i: any) => ({
-            id: i.productId,
-            type: 'alert',  
-            description: `Sin stock: ${i.productName}`,
-            createdAt: new Date().toISOString(),
-            href: '/dashboard/inventory',
-          })),
+          // Mostrar solo una alerta de stock para no llenar el feed
+          // Alertas de bajo stock: mostrar nuevas y colapsar repetidas
+          ...(() => {
+            const list: ActivityItem[] = []
+            if (!Array.isArray(lowStock) || lowStock.length === 0) return list
+            try {
+              const storageKey = 'dashboard.lowstock.seen'
+              const raw = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null
+              const seen: Record<string, number> = raw ? JSON.parse(raw) : {}
+              const now = Date.now()
+              const ttlMs = 24 * 60 * 60 * 1000 // 24h para no repetir en exceso
+              const newLow = lowStock.filter((i: any) => !seen[String(i.productId)] || (now - seen[String(i.productId)]) > ttlMs)
+
+              // Incluir hasta 3 nuevas alertas individuales para visibilidad
+              list.push(
+                ...newLow.slice(0, 3).map((i: any) => ({
+                  id: `lowstock-${i.productId}-${now}`,
+                  type: 'alert' as const,
+                  description: `Sin stock: ${i.productName}`,
+                  createdAt: new Date().toISOString(),
+                  href: '/dashboard/inventory',
+                }))
+              )
+
+              const remaining = lowStock.length - newLow.length
+              if (newLow.length === 0 && lowStock.length > 0) {
+                // Si no hay nuevas, mantener una sola entrada resumen
+                const first = lowStock[0]
+                list.push({
+                  id: 'lowstock-summary',
+                  type: 'alert',
+                  description: lowStock.length === 1
+                    ? `Sin stock: ${first.productName}`
+                    : `Sin stock: ${first.productName} y ${lowStock.length - 1} más`,
+                  createdAt: new Date().toISOString(),
+                  href: '/dashboard/inventory',
+                })
+              } else if (remaining > 0) {
+                // Hay más productos sin stock además de los nuevos mostrados
+                list.push({
+                  id: 'lowstock-remaining',
+                  type: 'alert',
+                  description: `Otros ${remaining} productos en stock bajo`,
+                  createdAt: new Date().toISOString(),
+                  href: '/dashboard/inventory',
+                })
+              }
+
+              // Persistir vistos (solo los nuevos que mostramos) con timestamp
+              const updated = { ...seen }
+              newLow.forEach((i: any) => { updated[String(i.productId)] = now })
+              if (typeof window !== 'undefined') {
+                localStorage.setItem(storageKey, JSON.stringify(updated))
+              }
+            } catch {
+              // si storage falla, no romper el feed
+            }
+            return list
+          })(),
         ];
         activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setRecentActivity(activities.slice(0, 10));
@@ -230,7 +282,8 @@ useEffect(() => {
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
           <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
-            <Card>
+            <Link href="/dashboard/inventory" prefetch={false} className="block">
+            <Card className="cursor-pointer">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Inventario Total</CardTitle>
                 <Box className="h-4 w-4 text-muted-foreground" />
@@ -242,7 +295,9 @@ useEffect(() => {
               <p className="text-xs text-muted-foreground">Items en stock</p>
               </CardContent>
             </Card>
-            <Card>
+            </Link>
+            <Link href="/dashboard/sales" prefetch={false} className="block">
+            <Card className="cursor-pointer">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Ventas del mes</CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -262,7 +317,9 @@ useEffect(() => {
                 </p>
               </CardContent>
             </Card>
-            <Card>
+            </Link>
+            <Link href="/dashboard/inventory?outOfStock=true" prefetch={false} className="block">
+            <Card className="cursor-pointer">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Items sin Stock</CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -272,6 +329,7 @@ useEffect(() => {
                 <p className="text-xs text-muted-foreground">Productos que necesitan reabastecimiento</p>
               </CardContent>
             </Card>
+            </Link>
             <Link href="/dashboard/orders" prefetch={false} className="block">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

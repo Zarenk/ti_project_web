@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -9,37 +9,79 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { signIn } from 'next-auth/react';
+import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { getUserDataFromToken } from '@/lib/auth';
+import { getAuthToken } from '@/utils/auth-token';
+import { jwtDecode } from 'jwt-decode';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { refreshUser } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    setLoading(true);
 
     try {
       await loginUser(email, password);
       await refreshUser();
-      toast.success('Inicio de sesión exitoso');
+      toast.success('Inicio de sesion exitoso');
 
+      // Redireccion por returnTo si esta presente y es segura (misma app)
+      if (typeof window !== 'undefined') {
+        try {
+          const params = new URLSearchParams(window.location.search)
+          const returnTo = params.get('returnTo')
+          if (returnTo && returnTo.startsWith('/')) {
+            router.replace(returnTo)
+            setLoading(false)
+            return
+          }
+        } catch {}
+      }
+
+      // Intentar evitar un segundo fetch usando el token local
+      try {
+        const token = await getAuthToken();
+        if (token) {
+          const payload: { role?: string } = jwtDecode(token as string);
+          const role = payload?.role;
+          if (role === 'ADMIN' || role === 'EMPLOYEE') {
+            router.replace('/dashboard');
+            setLoading(false);
+            return;
+          }
+          if (role) {
+            router.replace('/users');
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {}
       const data = await getUserDataFromToken();
       if (data?.role === 'ADMIN' || data?.role === 'EMPLOYEE') {
-        router.push('/dashboard');
+        router.replace('/dashboard');
+        setLoading(false);
       } else {
-        router.push('/users');
+        router.replace('/users');
+        setLoading(false);
       }
     } catch (error: any) {
-      toast.error(error.message || 'Error al iniciar sesión');
+      toast.error(error.message || 'Error al iniciar sesion');
     }
+    setLoading(false);
   };
   
+
   const handleGoogle = async () => {
+    if (loading) return;
     if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
-      toast.error('Google OAuth no está configurado');
+      toast.error('Google OAuth no esta configurado');
       return;
     }
     try {
@@ -51,10 +93,10 @@ export default function LoginForm() {
 
   return (
     <div className="flex flex-col gap-4">
-      <form onSubmit={handleLogin} className="flex flex-col gap-4">
+      <form onSubmit={handleLogin} className="flex flex-col gap-4" aria-busy={loading}>
         <div>
           <Label htmlFor="email" className="block text-sm font-medium">
-            Correo Electrónico
+            Correo Electronico
           </Label>
           <Input
             id="email"
@@ -64,6 +106,7 @@ export default function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
             required
             className="mt-1"
+            disabled={loading}
           />
         </div>
 
@@ -79,17 +122,19 @@ export default function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             className="mt-1"
+            disabled={loading}
           />
         </div>
-        <Button type="submit" className="w-full">
-          Iniciar Sesión
+        <Button type="submit" className="w-full" disabled={loading} aria-disabled={loading}>
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {loading ? 'Iniciando...' : 'Iniciar Sesion'}
         </Button>
       </form>
       <div className="relative my-4">
         <Separator className="bg-slate-200" />
         <div className="absolute inset-0 flex justify-center">
           <span className="bg-card px-4 text-sm text-slate-500 font-medium">
-            o inicia sesión con
+            o inicia sesion con
           </span>
         </div>
       </div>
@@ -97,6 +142,8 @@ export default function LoginForm() {
         variant="outline"
         onClick={handleGoogle}
         className="w-full border-2 border-slate-200 hover:border-blue-300 hover:bg-blue-50 rounded-lg font-semibold text-slate-700 dark:text-slate-200 transition-all duration-200 bg-transparent"
+        disabled={loading}
+        aria-disabled={loading}
       >
         <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
           <path
@@ -116,7 +163,8 @@ export default function LoginForm() {
             d="M12 4.594c1.415 0 2.707.488 3.728 1.39l2.797-2.797C16.728 1.067 14.48 0 12 0 7.637 0 3.915 2.362 2.289 5.883l3.35 2.58C7.207 6.389 9.425 4.594 12 4.594z"
           />
         </svg>
-        Iniciar con Google
+        {loading ? 'Procesando...' : 'Iniciar con Google'}
+        
       </Button>
     </div>
  

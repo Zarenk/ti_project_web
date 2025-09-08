@@ -12,6 +12,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getCurrentUser } from "@/lib/current.user";
 import DashboardLoading from "./loading";
+import LogoutOverlay from "@/components/logout-overlay";
 
 export const revalidate = 0;
 
@@ -30,6 +31,7 @@ export default async function Page({ children }: { children: ReactNode }) {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
+        <LogoutOverlay />
         <div className="flex items-center gap-2 px-4 py-4">
           <TooltipProvider>
             <Tooltip>

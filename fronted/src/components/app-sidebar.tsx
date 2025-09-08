@@ -211,6 +211,10 @@ const data = {
           url: "/dashboard/orders",
         },
         {
+          title: "Nueva Orden",
+          url: "/dashboard/orders/new",
+        },
+        {
           title: "Realizar Venta",
           url: "/dashboard/sales/new",
         },

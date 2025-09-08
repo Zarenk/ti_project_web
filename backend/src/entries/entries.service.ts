@@ -57,6 +57,8 @@ export class EntriesService {
 
   try{
     console.log("Datos recibidos en createEntry:", data);
+    // Declarar fuera de la transacción para usarlo después (actividad/auditoría)
+    const verifiedProducts: { productId: number; name: string; quantity: number; price: number; priceInSoles: number; series?: string[] }[] = [];
     const entry = await this.prisma.$transaction(async (prisma) => {
       // Verificar que la tienda exista
       const store = await prisma.store.findUnique({ where: { id: data.storeId } });
@@ -79,7 +81,6 @@ export class EntriesService {
       }
 
       // Verificar que los productos existan
-      const verifiedProducts: { productId: number; quantity: number; price: number, priceInSoles: number }[] = [];
       for (const detail of data.details) {
 
         if (!detail.productId) {
@@ -95,9 +96,11 @@ export class EntriesService {
 
         verifiedProducts.push({
           productId: product.id,
+          name: product.name,
           quantity: detail.quantity,
           price: detail.price,
           priceInSoles: detail.priceInSoles,
+          series: (detail as any)?.series ?? undefined,
         });
       }
 
@@ -238,7 +241,7 @@ export class EntriesService {
       return entry;
     });
 
-    const summary = data.details
+    const summary = verifiedProducts
       .map((d) => `${d.quantity}x ${d.name}`)
       .join(', ');
     await this.activityService.log({
@@ -247,6 +250,16 @@ export class EntriesService {
       entityId: entry.id.toString(),
       action: AuditAction.CREATED,
       summary: `Entrada creada con productos: ${summary}`,
+      diff: {
+        entryId: entry.id,
+        storeId: data.storeId,
+        providerId: data.providerId,
+        date: (data.date as any) ? new Date(data.date as any).toISOString() : null,
+        description: data.description,
+        currency: data.tipoMoneda,
+        details: verifiedProducts,
+        invoice: data.invoice ?? null,
+      } as any,
     });
     try {
       await this.accountingHook.postPurchase(entry.id);

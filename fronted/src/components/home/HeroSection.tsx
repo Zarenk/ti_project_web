@@ -32,34 +32,46 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
   };
 
   useEffect(() => {
+    let ctx: any
     import('gsap')
       .then((gsapModule) => {
-        const gsap = gsapModule.default;
-        gsap.from('.hero-letter', {
-          opacity: 0,
-          y: 20,
-          duration: 0.6,
-          stagger: 0.05,
-          ease: 'power2.out',
-        });
-        gsap.from('.hero-description', {
-          opacity: 0,
-          y: 20,
-          duration: 0.6,
-          delay: 0.5,
-          ease: 'power2.out',
-        });
-        gsap.from('.hero-buttons', {
-          opacity: 0,
-          y: 20,
-          duration: 0.8,
-          delay: 0.8,
-        });
+        const gsap = gsapModule.default
+        // Scope all selectors to this section and ensure clean state
+        ctx = gsap.context(() => {
+          // Ensure consistent, explicit initial state to avoid flicker/reverse fades
+          gsap.set(['.hero-letter', '.hero-description', '.hero-buttons'], {
+            opacity: 0,
+            y: 20,
+          })
+
+          gsap.to('.hero-letter', {
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            stagger: 0.05,
+            ease: 'power2.out',
+          })
+
+          gsap.to('.hero-description', {
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            delay: 0.25,
+            ease: 'power2.out',
+          })
+
+          gsap.to('.hero-buttons', {
+            opacity: 1,
+            y: 0,
+            duration: 0.8,
+            delay: 0.45,
+            ease: 'power2.out',
+          })
+        }, sectionRef)
       })
       .catch((err) => console.error('GSAP failed to load', err))
 
-    // No context to revert, so just return a cleanup function if needed
-    return () => {}
+    return () => ctx?.revert()
   }, [])
 
   return (

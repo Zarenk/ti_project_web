@@ -40,6 +40,10 @@ export class PurchasePostedController {
       const entry = await this.entries.createDraft({
         period: format(new Date(data.timestamp), 'yyyy-MM'),
         date: new Date(data.timestamp),
+        providerId: (purchase as any).providerId ?? purchase.provider?.id,
+        serie: purchase.invoice?.serie,
+        correlativo: purchase.invoice?.nroCorrelativo,
+        invoiceUrl: (purchase as any).pdfUrl ?? undefined,
         lines: lines.map(({ account, description, debit, credit }) => ({
           account,
           description,

@@ -72,13 +72,54 @@ export default function ActivityPage() {
           createdAt: e.createdAt,
           href: '/dashboard/entries',
         }));
-        lowStock.forEach((i: any) => items.push({
-          id: i.productId,
-          type: 'alert',
-          description: `Sin stock: ${i.productName}`,
-          createdAt: new Date().toISOString(),
-          href: '/dashboard/inventory',
-        }));
+        // Alertas de bajo stock: mostrar nuevas y colapsar repetidas
+        try {
+          const storageKey = 'dashboard.lowstock.seen'
+          const raw = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null
+          const seen: Record<string, number> = raw ? JSON.parse(raw) : {}
+          const now = Date.now()
+          const ttlMs = 24 * 60 * 60 * 1000 // 24h
+          const newLow = (Array.isArray(lowStock) ? lowStock : []).filter((i: any) => !seen[String(i.productId)] || (now - seen[String(i.productId)]) > ttlMs)
+
+          // Hasta 5 nuevas en la vista completa
+          newLow.slice(0, 5).forEach((i: any) => items.push({
+            id: `lowstock-${i.productId}-${now}`,
+            type: 'alert',
+            description: `Sin stock: ${i.productName}`,
+            createdAt: new Date().toISOString(),
+            href: '/dashboard/inventory',
+          }))
+
+          const remaining = (Array.isArray(lowStock) ? lowStock.length : 0) - newLow.length
+          if (newLow.length === 0 && Array.isArray(lowStock) && lowStock.length > 0) {
+            const first = lowStock[0]
+            items.push({
+              id: 'lowstock-summary',
+              type: 'alert',
+              description: lowStock.length === 1
+                ? `Sin stock: ${first.productName}`
+                : `Sin stock: ${first.productName} y ${lowStock.length - 1} más`,
+              createdAt: new Date().toISOString(),
+              href: '/dashboard/inventory',
+            })
+          } else if (remaining > 0) {
+            items.push({
+              id: 'lowstock-remaining',
+              type: 'alert',
+              description: `Otros ${remaining} productos en stock bajo`,
+              createdAt: new Date().toISOString(),
+              href: '/dashboard/inventory',
+            })
+          }
+
+          const updated = { ...seen }
+          newLow.forEach((i: any) => { updated[String(i.productId)] = now })
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(storageKey, JSON.stringify(updated))
+          }
+        } catch {
+          // ignorar errores de storage
+        }
         items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setActivities(items);
       } catch (error: unknown) {

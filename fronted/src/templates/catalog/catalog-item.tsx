@@ -1,5 +1,6 @@
 import React from "react"
 import { BrandLogo } from "@/components/BrandLogo"
+import { resolveImageUrl } from "@/lib/images"
 
 export interface CatalogItemProps {
   title: string
@@ -27,7 +28,7 @@ export function CatalogItem({
       {imageUrl && (
         <div className="relative w-full pb-[75%] bg-gray-100">
           <BrandLogo
-            src={imageUrl}
+            src={resolveImageUrl(imageUrl)}
             alt={title}
             className="absolute inset-0 h-full w-full object-cover"
           />

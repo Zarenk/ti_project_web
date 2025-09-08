@@ -3,6 +3,9 @@ export interface BrandAssets {
   gpus: Record<string, string>
   cpus: Record<string, string>
   storage: Record<string, string>
+  // Optional sub-brand/series logos keyed by keyword in product name
+  // Example: 'tuf' (ASUS TUF), 'rog' (ASUS ROG), 'predator' (Acer Predator)
+  subbrands?: Record<string, string>
 }
 
 export const brandAssets: BrandAssets = {
@@ -31,6 +34,23 @@ export const brandAssets: BrandAssets = {
   storage: {
     samsung: '/assets/logos/samsung.svg',
     seagate: '/assets/logos/seagate.svg',
+  },
+  // Keywords detected from product titles/descriptions to show an additional logo
+  // Add the corresponding SVG/PNG to public/assets/logos if available.
+  subbrands: {
+    // ASUS series
+    tuf: '/assets/logos/asus-tuf.svg',
+    rog: '/assets/logos/asus-rog.svg',
+    // HP series
+    omen: '/assets/logos/hp-omen.svg',
+    victus: '/assets/logos/hp-victus.svg',
+    // Lenovo series
+    legion: '/assets/logos/lenovo-legion.svg',
+    // Acer series
+    predator: '/assets/logos/acer-predator.svg',
+    nitro: '/assets/logos/acer-nitro.svg',
+    // Dell series (example)
+    alienware: '/assets/logos/dell-alienware.svg',
   },
 }
 

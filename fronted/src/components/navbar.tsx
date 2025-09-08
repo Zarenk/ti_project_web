@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import Image from "next/image"
 import Link from "next/link"
@@ -15,6 +15,7 @@ import {
   LogIn,
   UserPlus,
 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCart } from "@/context/cart-context"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -35,6 +36,7 @@ import { useAuth } from "@/context/auth-context"
 
 export default function Navbar() {
   const [open, setOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const closeTimer = useRef<NodeJS.Timeout | null>(null)
   const { logout, userName } = useAuth()
   const router = useRouter()
@@ -44,14 +46,22 @@ export default function Navbar() {
   const [navColor, setNavColor] = useState<string>("")
 
   const resolveColor = (el: HTMLElement): string => {
+    // Prefer explicit hints via data attributes.
+    const explicitLight = el.getAttribute("data-navcolor") || undefined
+    const explicitDark = el.getAttribute("data-navcolor-dark") || undefined
+
+    if (theme === "dark") {
+      if (explicitDark) return explicitDark
+      // In dark mode, avoid forcing light hints; fall back to computed/background.
+    } else {
+      if (explicitLight) return explicitLight
+    }
+
+    // Otherwise, try to infer from computed background colors up the tree.
     let current: HTMLElement | null = el
     while (current) {
       const color = window.getComputedStyle(current).backgroundColor
-      if (
-        color &&
-        color !== "rgba(0, 0, 0, 0)" &&
-        color !== "transparent"
-      ) {
+      if (color && color !== "rgba(0, 0, 0, 0)" && color !== "transparent") {
         return color
       }
       current = current.parentElement
@@ -80,8 +90,11 @@ export default function Navbar() {
   const hasActiveOrder = items.length > 0
 
   const handleLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
     await logout()
-    router.push("/login")
+    router.replace("/login")
+    setLoggingOut(false)
   }
 
   const navLinks = [
@@ -102,11 +115,7 @@ export default function Navbar() {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const color = resolveColor(entry.target as HTMLElement)
-            if (color) {
-              setNavColor(color)
-            } else {
-              setNavColor("")
-            }
+            setNavColor(color || "")
           }
         })
       },
@@ -115,7 +124,8 @@ export default function Navbar() {
 
     sections.forEach((section) => observer.observe(section))
     return () => observer.disconnect()
-  }, [])
+    // Recreate observer when theme changes so it uses the latest resolver behavior
+  }, [theme])
 
   useEffect(() => {
     if (!window.matchMedia("(min-width: 768px)").matches) return
@@ -160,7 +170,6 @@ export default function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <Link
             href="/"
-            onClick={() => router.refresh()}
             className="flex items-center gap-2 font-bold text-foreground group hover:text-sky-600 transition-colors"
           >
             <Image
@@ -169,14 +178,12 @@ export default function Navbar() {
               width={64}
               height={64}
               className="h-16 w-16 transition duration-300 group-hover:brightness-110 group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.7)]"
-              priority
             />
             <span className="transition-colors duration-300 group-hover:text-sky-600">Tienda TI</span>
           </Link>
           <div className="hidden md:flex items-center gap-4">
             <Link
               href="/"
-              onClick={() => router.refresh()}
               className="text-sm font-medium text-muted-foreground hover:text-foreground"
             >
               Inicio
@@ -210,8 +217,9 @@ export default function Navbar() {
                 >
                   <p className="text-sm font-medium">{userName}</p>
                   <p className="text-xs">Orden activa: {hasActiveOrder ? 'Sí' : 'No'}</p>
-                  <Button onClick={handleLogout} variant="outline" className="w-full">
-                    Cerrar Sesión
+                  <Button onClick={handleLogout} variant="outline" className="w-full" disabled={loggingOut} aria-disabled={loggingOut}>
+                    {loggingOut && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    {loggingOut ? 'Cerrando…' : 'Cerrar Sesión'}
                   </Button>
                 </PopoverContent>
               </Popover>
@@ -233,17 +241,17 @@ export default function Navbar() {
                   className="w-64 space-y-2 text-center transition-opacity duration-300"
                 >
                   <p className="text-xs font-semibold">
-                    Regístrate para acceder a beneficios y descuentos
+                    Regitrate para acceder a beneficios y descuentos
                   </p>
                   <Link href="/login" className="block">
                     <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                      Iniciar sesión
+                      Iniciar Sesión
                     </Button>  
                   </Link>
                   <p className="text-xs font-semibold">
                     Eres Nuevo Cliente?
                     <Link href="/register" className="underline text-blue-600 font-bold">
-                      Regístrate
+                      Registrate
                     </Link>
                   </p>
                 </PopoverContent>
@@ -282,7 +290,6 @@ export default function Navbar() {
                       <Link
                         key={href}
                         href={href}
-                        onClick={href === '/' ? () => router.refresh() : undefined}
                         className="flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground hover:pl-4"
                       >
                         <Icon className="h-4 w-4" />
@@ -297,9 +304,15 @@ export default function Navbar() {
                         onClick={handleLogout}
                         variant="outline"
                         className="w-full justify-start gap-2"
+                        disabled={loggingOut}
+                        aria-disabled={loggingOut}
                       >
-                        <LogOut className="h-4 w-4" />
-                        Cerrar Sesión
+                        {loggingOut ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <LogOut className="h-4 w-4" />
+                        )}
+                        {loggingOut ? 'Cerrando…' : 'Cerrar Sesión'}
                       </Button>
                     </div>
                   ) : (

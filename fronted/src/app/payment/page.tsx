@@ -33,6 +33,7 @@ import { regions } from "@/lib/region"
 import { DEFAULT_STORE_ID } from "@/lib/config"
 import { Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
+import { Skeleton } from "@/components/ui/skeleton"
 
 function ProcessingOverlay() {
   return (
@@ -213,39 +214,51 @@ export default function Component() {
   )
 
   // Prefill form with existing client data if user is logged in
+  const [isPageLoading, setIsPageLoading] = useState(true)
   useEffect(() => {
+    let cancelled = false
     async function loadClientData() {
       try {
         const user = await getUserDataFromToken()
-        if (!user) return
-        const clients = await getClients()
-        const client = clients.find((c: any) => c.userId === user.userId)
-        if (client) {
-          const [first, ...lastParts] = (client.name ?? '').split(' ')
-          setFormData((prev) => ({
-            ...prev,
-            firstName: prev.firstName || first,
-            lastName: prev.lastName || lastParts.join(' '),
-            email: prev.email || client.email || '',
-            phone: prev.phone || client.phone || '',
-            address: prev.address || client.adress || '',
-            personalDni:
-              prev.personalDni ||
-              (client.type === 'DNI' ? client.typeNumber || '' : ''),
-            invoiceName: prev.invoiceName || client.name || '',
-            invoiceAddress: prev.invoiceAddress || client.adress || '',
-            invoiceType: client.type === 'RUC' ? 'FACTURA' : 'BOLETA',
-            dni: client.type === 'DNI' ? client.typeNumber || '' : prev.dni,
-            ruc: client.type === 'RUC' ? client.typeNumber || '' : prev.ruc,
-            razonSocial:
-              client.type === 'RUC' ? client.name || '' : prev.razonSocial,
-          }))
+        if (user) {
+          const clients = await getClients()
+          const client = clients.find((c: any) => c.userId === user.userId)
+          if (client && !cancelled) {
+            const [first, ...lastParts] = (client.name ?? '').split(' ')
+            setFormData((prev) => ({
+              ...prev,
+              firstName: prev.firstName || first,
+              lastName: prev.lastName || lastParts.join(' '),
+              email: prev.email || client.email || '',
+              phone: prev.phone || client.phone || '',
+              address: prev.address || client.adress || '',
+              personalDni:
+                prev.personalDni ||
+                (client.type === 'DNI' ? client.typeNumber || '' : ''),
+              invoiceName: prev.invoiceName || client.name || '',
+              invoiceAddress: prev.invoiceAddress || client.adress || '',
+              invoiceType: client.type === 'RUC' ? 'FACTURA' : 'BOLETA',
+              dni: client.type === 'DNI' ? client.typeNumber || '' : prev.dni,
+              ruc: client.type === 'RUC' ? client.typeNumber || '' : prev.ruc,
+              razonSocial:
+                client.type === 'RUC' ? client.name || '' : prev.razonSocial,
+            }))
+          }
         }
       } catch (err) {
         console.error('Error cargando datos del cliente:', err)
+      } finally {
+        if (!cancelled) setIsPageLoading(false)
       }
     }
     loadClientData()
+    const timeout = setTimeout(() => {
+      if (!cancelled) setIsPageLoading(false)
+    }, 800)
+    return () => {
+      cancelled = true
+      clearTimeout(timeout)
+    }
   }, [])
 
   // Mantener sincronizado el DNI de facturación con el DNI personal
@@ -382,7 +395,7 @@ export default function Component() {
         }
 
          const userData = await getUserDataFromToken();
-        const userIdToSend = userData?.userId ?? 1;
+        const userIdToSend = userData?.id ?? 1;
 
         let clientId: number | undefined = undefined;
         if (formData.invoiceType === "BOLETA" || formData.invoiceType === "FACTURA") {
@@ -568,6 +581,59 @@ export default function Component() {
           <p className="text-gray-600 dark:text-gray-300">Proceso de compra seguro para tus necesidades tecnológicas</p>
         </div>
 
+        {isPageLoading ? (
+          <div className="grid lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+            <div className="lg:col-span-2 space-y-6">
+              <Card className="border-blue-200 dark:border-blue-700 shadow-sm p-0">
+                <CardHeader className="rounded-t-lg p-4">
+                  <div className="space-y-2">
+                    <Skeleton className="h-6 w-56" />
+                    <Skeleton className="h-4 w-80" />
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="grid md:grid-cols-2 gap-4">
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+              <Card className="border-blue-200 dark:border-blue-700 shadow-sm p-0">
+                <CardHeader className="rounded-t-lg p-4">
+                  <Skeleton className="h-6 w-64" />
+                </CardHeader>
+                <CardContent className="p-6 space-y-3">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-24 w-full" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+            <div className="lg:col-span-1">
+              <Card className="border-blue-200 dark:border-blue-700 shadow-lg sticky top-8 p-0">
+                <CardHeader className="rounded-t-lg p-4">
+                  <Skeleton className="h-6 w-48" />
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-20" />
+                    </div>
+                  ))}
+                  <div className="pt-4">
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        ) : (
         <div className="grid lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
           {/* Main Form */}
           <div className="lg:col-span-2 space-y-6">
@@ -1182,6 +1248,7 @@ export default function Component() {
             </Card>
           </div>
         </div>
+        )}
       </div>
     </div>
   )

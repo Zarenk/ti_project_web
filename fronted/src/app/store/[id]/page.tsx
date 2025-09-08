@@ -41,10 +41,13 @@ import { useRouter } from "next/navigation"
 import ProductBreadcrumb from "@/components/product-breadcrumb"
 import { icons } from "@/lib/icons"
 import { getUserDataFromToken } from "@/lib/auth"
+import { resolveImageUrl } from "@/lib/images"
+import { BrandLogo } from "@/components/BrandLogo"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { getFavorites, toggleFavorite } from "@/app/favorites/favorite.api"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface Props {
   params: Promise<{ id: string }>
@@ -186,7 +189,7 @@ export default function ProductPage({ params }: Props) {
 
   useEffect(() => {
     async function checkFav() {
-      if (!product) return
+      if (!product || !userData) return
       try {
         const favs = await getFavorites()
         setIsInWishlist(favs.some((f: any) => f.productId === product.id))
@@ -195,7 +198,7 @@ export default function ProductPage({ params }: Props) {
       }
     }
     checkFav()
-  }, [product])
+  }, [product, userData])
 
   useEffect(() => {
     async function loadReviews() {
@@ -293,6 +296,81 @@ export default function ProductPage({ params }: Props) {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {product === null ? (
+          <>
+            <div className="mb-6">
+              <Skeleton className="h-5 w-40 mb-2" />
+              <Skeleton className="h-4 w-60" />
+            </div>
+            <div className="grid lg:grid-cols-2 gap-12">
+              <div className="space-y-4">
+                <div className="relative">
+                  <Skeleton className="aspect-square w-full rounded-2xl" />
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Skeleton key={i} className="h-20 w-20 rounded-lg flex-shrink-0" />
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Skeleton className="h-6 w-32" />
+                    <Skeleton className="h-6 w-24" />
+                  </div>
+                  <Skeleton className="h-8 w-3/4 mb-3" />
+                  <div className="flex items-center gap-4 mb-4">
+                    <Skeleton className="h-5 w-40" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="bg-card p-6 rounded-xl shadow-sm border space-y-3">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-6 w-28" />
+                      <Skeleton className="h-7 w-48" />
+                    </div>
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
+                </div>
+                <div className="bg-card p-6 rounded-xl shadow-sm border space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-8 w-40" />
+                    <Skeleton className="h-6 w-32" />
+                    <Skeleton className="h-6 w-24" />
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <Skeleton className="h-9 w-10" />
+                    <Skeleton className="h-9 w-16" />
+                    <Skeleton className="h-9 w-10" />
+                  </div>
+                  <div className="flex gap-3">
+                    <Skeleton className="h-10 w-40" />
+                    <Skeleton className="h-10 w-40" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="mt-16">
+              <Skeleton className="h-7 w-64 mb-6" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border bg-card">
+                    <Skeleton className="h-48 w-full rounded-t-xl" />
+                    <div className="p-4 space-y-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-6 w-3/4" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-6 w-28" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
         <ProductBreadcrumb
             category={product?.category?.name || null}
             brand={product?.brand?.name || null}
@@ -336,6 +414,7 @@ export default function ProductPage({ params }: Props) {
                   alt={product?.name || "Producto"}
                   width={600}
                   height={600}
+                  priority
                   className={`w-full h-full object-cover transition-transform duration-200 ${zoomActive ? 'scale-150' : 'scale-100'}`}
                 />
               </div>
@@ -414,11 +493,10 @@ export default function ProductPage({ params }: Props) {
                 <div className="flex items-center gap-3 mb-3">
                   <Badge className="bg-blue-500 hover:bg-blue-600 flex items-center gap-1">
                     {product?.brand?.logoSvg && (
-                      <Image
-                        src={product.brand.logoSvg}
+                      <BrandLogo
+                        src={resolveImageUrl(product.brand.logoSvg)}
                         alt={product.brand.name}
-                        width={16}
-                        height={16}
+                        className="h-4 w-auto"
                       />
                     )}
                     {product?.brand?.name}
@@ -888,11 +966,10 @@ export default function ProductPage({ params }: Props) {
                         </p>
                         <span className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
                           {rp.brand?.logoSvg && (
-                            <Image
-                              src={rp.brand.logoSvg}
+                            <BrandLogo
+                              src={resolveImageUrl(rp.brand.logoSvg)}
                               alt={rp.brand.name}
-                              width={16}
-                              height={16}
+                              className="h-4 w-auto"
                             />
                           )}
                           {rp.brand?.name}
@@ -949,6 +1026,8 @@ export default function ProductPage({ params }: Props) {
           )}
 
         </div>
+          </>
+        )}
       </div>
     </div>
   )

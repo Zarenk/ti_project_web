@@ -13,15 +13,26 @@ export async function loginUser(email: string, password: string) {
       credentials: 'include',
     });
 
+    const contentType = response.headers.get('content-type') || ''
+    let data: any = null
+    try {
+      data = contentType.includes('application/json')
+        ? await response.json()
+        : await response.text()
+    } catch (e) {
+      data = null
+    }
+
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Error al iniciar sesión');
+      const message = typeof data === 'string' && data ? data : data?.message || 'Error al iniciar sesión'
+      throw new Error(message)
     }
-    const data = await response.json();
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('token', data.access_token);
+
+    const payload = typeof data === 'string' ? {} : data
+    if (typeof window !== 'undefined' && (payload as any)?.access_token) {
+      localStorage.setItem('token', (payload as any).access_token)
     }
-    return data;
+    return payload;
   } catch (error: any) {
     console.error('Error en loginUser:', error.message);
     throw error;

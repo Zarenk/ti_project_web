@@ -247,7 +247,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
                   <TableRow 
                     key={transaction.id}
                     className="cursor-pointer"
-                    onClick={() => isMobile && setModalTransaction(transaction)}
+                    onClick={() => setModalTransaction(transaction)}
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -321,6 +321,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
                   <p><strong>Encargado:</strong> {modalTransaction.employee}</p>
                   <p><strong>Métodos de Pago:</strong> {modalTransaction.paymentMethods?.join(", ") || "-"}</p>
                   <p><strong>Notas:</strong> {modalTransaction.description || "-"}</p>
+                  <p><strong>ID:</strong> {modalTransaction.id}</p>
+                  {modalTransaction.status && (
+                    <p><strong>Estado:</strong> {modalTransaction.status}</p>
+                  )}
+                  {(modalTransaction.cashRegisterName || modalTransaction.cashRegisterId !== undefined) && (
+                    <p>
+                      <strong>Caja:</strong> {modalTransaction.cashRegisterName ?? 'Caja'}{modalTransaction.cashRegisterId !== undefined ? ` (#${modalTransaction.cashRegisterId})` : ''}
+                    </p>
+                  )}
+                  {(modalTransaction.expectedAmount !== undefined) && (
+                    <p><strong>Monto esperado:</strong> {(modalTransaction.currency ?? 'S/.')} {Number(modalTransaction.expectedAmount).toFixed(2)}</p>
+                  )}
+                  {(modalTransaction.discrepancy !== undefined) && (
+                    <p><strong>Diferencia:</strong> {(modalTransaction.currency ?? 'S/.')} {Number(modalTransaction.discrepancy).toFixed(2)}</p>
+                  )}
                 </div>
               )}
             </DialogContent>

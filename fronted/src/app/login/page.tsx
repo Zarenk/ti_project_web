@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import LoginForm from './login-form';
@@ -41,7 +41,7 @@ export default function LoginPage() {
         </CardContent>
         <CardFooter className="justify-center flex flex-col gap-2">
           <p className="text-sm">
-            ¿No tienes una cuenta?{' '}
+            Aun no tienes una cuenta?{' '}
             <Link href="/register" className="font-semibold underline">
               Regístrate aquí
             </Link>

@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -79,14 +79,22 @@ export class WebSalesService {
       },
     });
 
+    // Ensure actor is recorded even when req is not provided
+    const webEmail = (data as any)?.email ?? (data as any)?.customerEmail ?? (data as any)?.customer?.email ?? undefined;
+    const isWebSource = (data as any)?.source === 'WEB' || !!webEmail;
+    const createdActorId = isWebSource ? undefined : (req as any)?.user?.userId ?? undefined;
+    const createdActorEmail = isWebSource ? webEmail : (req as any)?.user?.username ?? undefined;
+    const createdByLabel = createdActorEmail ?? (createdActorId ? `ID ${createdActorId}` : undefined);
     await this.activityService.log(
       {
-        actorId: (req as any)?.user?.userId,
-        actorEmail: (req as any)?.user?.username,
+        actorId: createdActorId,
+        actorEmail: createdActorEmail,
         entityType: 'Order',
         entityId: order.id.toString(),
         action: AuditAction.CREATED,
-        summary: `Orden ${order.code} creada`,
+        summary: createdByLabel
+          ? `Orden ${order.code} creada por ${createdByLabel}`
+          : `Orden ${order.code} creada`,
         diff: { after: order } as any,
       },
       req,
@@ -205,7 +213,7 @@ export class WebSalesService {
 
     if (!sale) {
       throw new NotFoundException(
-        `No se encontró la venta recién creada con ID ${createdSale.id}.`,
+        `No se encontrÃ³ la venta reciÃ©n creada con ID ${createdSale.id}.`,
       );
     }
 
@@ -230,7 +238,7 @@ export class WebSalesService {
   async getWebOrderById(id: number) {
     const order = await this.prisma.orders.findUnique({ where: { id } });
     if (!order) {
-      throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
+      throw new NotFoundException(`No se encontrÃ³ la orden con ID ${id}.`);
     }
     return order;
   }
@@ -239,7 +247,7 @@ export class WebSalesService {
     const order = await this.prisma.orders.findUnique({ where: { code } });
     if (!order) {
       throw new NotFoundException(
-        `No se encontró la orden con código ${code}.`,
+        `No se encontrÃ³ la orden con cÃ³digo ${code}.`,
       );
     }
     return order;
@@ -257,10 +265,44 @@ export class WebSalesService {
     });
   }
 
+  async getWebOrdersByEmail(email: string) {
+    return this.prisma.orders.findMany({
+      where: {
+        payload: {
+          path: ['email'],
+          equals: email,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getWebOrdersByDni(dni: string) {
+    return this.prisma.orders.findMany({
+      where: {
+        OR: [
+          {
+            payload: {
+              path: ['personalDni'],
+              equals: dni,
+            } as any,
+          },
+          {
+            payload: {
+              path: ['dni'],
+              equals: dni,
+            } as any,
+          },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async completeWebOrder(id: number, req?: Request) {
     const order = await this.prisma.orders.findUnique({ where: { id } });
     if (!order || order.status !== 'PENDING' || !order.payload) {
-      throw new BadRequestException('Orden no válida para completar');
+      throw new BadRequestException('Orden no vÃ¡lida para completar');
     }
 
     const sale = await this.createWebSale(order.payload as any, true);
@@ -270,14 +312,23 @@ export class WebSalesService {
       data: { status: 'COMPLETED', salesId: sale.id },
     });
 
+    // Fallback to sale.userId when req is not present so we always capture the actor
+    // Prefer attributing the update to the web customer when no staff context is present
+    const payloadAny = (order?.payload as any) || {};
+    const customerEmail = payloadAny?.email ?? payloadAny?.customerEmail ?? payloadAny?.customer?.email ?? payloadAny?.user?.email;
+    const completedActorId = (req as any)?.user?.userId ?? undefined;
+    const completedActorEmail = (req as any)?.user?.username ?? customerEmail ?? undefined; // ActivityService will resolve from actorId only if email is absent
+    const completedByLabel = completedActorEmail ?? (completedActorId ? `ID ${completedActorId}` : undefined);
     await this.activityService.log(
       {
-        actorId: (req as any)?.user?.userId,
-        actorEmail: (req as any)?.user?.username,
+        actorId: completedActorId,
+        actorEmail: completedActorEmail,
         entityType: 'Order',
         entityId: id.toString(),
         action: AuditAction.UPDATED,
-        summary: `Orden ${order.code} completada`,
+        summary: completedByLabel
+          ? `Orden ${order.code} completada por ${completedByLabel}`
+          : `Orden ${order.code} completada`,
         diff: {
           before: { status: 'PENDING' },
           after: { status: 'COMPLETED' },
@@ -321,10 +372,55 @@ export class WebSalesService {
     return enrichedSale;
   }
 
+  async updateOrderSeries(
+    id: number,
+    items: { productId: number; series: string[] }[],
+  ) {
+    const order = await this.prisma.orders.findUnique({ where: { id } });
+    if (!order) {
+      throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
+    }
+    const payload: any = order.payload || {};
+    const details: any[] = Array.isArray(payload.details) ? payload.details : [];
+
+    if (details.length === 0) {
+      throw new BadRequestException('La orden no contiene detalles para actualizar series');
+    }
+
+    const map = new Map<number, string[]>();
+    for (const it of items) {
+      if (!it || typeof it.productId !== 'number' || !Array.isArray(it.series)) continue;
+      // Unicos y sin falsy
+      const uniq = Array.from(new Set(it.series.filter(Boolean)));
+      map.set(it.productId, uniq);
+    }
+
+    const updatedDetails = details.map((d) => {
+      if (map.has(Number(d.productId))) {
+        const series = map.get(Number(d.productId))!;
+        // Validación opcional: si hay series provistas, deben ser exactamente igual a la cantidad
+        if (typeof d.quantity === 'number' && series.length !== Number(d.quantity)) {
+          throw new BadRequestException(
+            `El producto ${d.productId} requiere ${d.quantity} series, se recibieron ${series.length}`,
+          );
+        }
+        return { ...d, series };
+      }
+      return d;
+    });
+
+    const updated = await this.prisma.orders.update({
+      where: { id },
+      data: { payload: { ...payload, details: updatedDetails } as any },
+    });
+
+    return { success: true, order: updated };
+  }
+
   async rejectWebOrder(id: number) {
     const order = await this.prisma.orders.findUnique({ where: { id } });
     if (!order || order.status !== 'PENDING') {
-      throw new BadRequestException('Orden no válida para rechazar');
+      throw new BadRequestException('Orden no vÃ¡lida para rechazar');
     }
     await this.prisma.orders.update({
       where: { id },
@@ -340,7 +436,7 @@ export class WebSalesService {
   ) {
     const order = await this.prisma.orders.findUnique({ where: { id } });
     if (!order) {
-      throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
+      throw new NotFoundException(`No se encontrÃ³ la orden con ID ${id}.`);
     }
 
     const payload = (order.payload as any) || {};
@@ -374,7 +470,7 @@ export class WebSalesService {
     });
 
     if (!sale) {
-      throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
+      throw new NotFoundException(`No se encontrÃ³ la venta con ID ${id}.`);
     }
 
     return sale;

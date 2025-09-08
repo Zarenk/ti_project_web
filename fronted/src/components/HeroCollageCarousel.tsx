@@ -65,7 +65,6 @@ export default function HeroCollageCarousel({ products }: HeroCollageCarouselPro
             fill
             sizes="(min-width: 768px) 160px, 128px"
             className="object-cover rounded-lg"
-            priority={idx === 0}
           />
           {selectedIndex === idx && (
             <div className="absolute inset-0 bg-black/60 text-white flex flex-col items-center justify-center text-center">

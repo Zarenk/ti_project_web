@@ -92,40 +92,44 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
   }
 
   function getLogos(p: Product): string[] {
-    const logos: string[] = [];
+    const out = new Set<string>();
+
+    // 1) Primary brand logo from backend
     const brandLogo = p.brand?.logoSvg || p.brand?.logoPng;
-    if (brandLogo) logos.push(brandLogo);
+    if (brandLogo) out.add(brandLogo);
 
-    const cpuMap: Record<string, string> = {
-      intel: '/assets/logos/intel.svg',
-      core: '/assets/logos/intel.svg',
-      amd: '/assets/logos/amd.svg',
-      ryzen: '/assets/logos/amd.svg',
-    };
-    const gpuMap: Record<string, string> = {
-      nvidia: '/assets/logos/nvidia.svg',
-      geforce: '/assets/logos/nvidia.svg',
-      rtx: '/assets/logos/nvidia.svg',
-      gtx: '/assets/logos/nvidia.svg',
-      amd: '/assets/logos/amd.svg',
-      radeon: '/assets/logos/amd.svg',
-    };
+    // Base text to scan for keywords (name + description)
+    const haystack = `${p.name} ${p.description ?? ""}`.toLowerCase();
 
-    const processor = p.specification?.processor?.toLowerCase() || '';
-    for (const [key, path] of Object.entries(cpuMap)) {
+    // 2) Sub-brand/series detection (e.g., TUF, ROG, Legion, Predator)
+    if (brandAssets.subbrands) {
+      for (const [keyword, logoPath] of Object.entries(brandAssets.subbrands)) {
+        if (haystack.includes(keyword)) {
+          out.add(logoPath);
+          // Only one subbrand is needed; keep scanning CPUs/GPUs regardless
+        }
+      }
+    }
+
+    // 3) CPU brand detection
+    const processor = p.specification?.processor?.toLowerCase() || "";
+    for (const [key, path] of Object.entries(brandAssets.cpus)) {
       if (processor.includes(key)) {
-        logos.push(path);
+        out.add(path);
         break;
       }
     }
+
+    // 4) GPU brand detection
     const graphics = p.specification?.graphics?.toLowerCase() || "";
     for (const [key, path] of Object.entries(brandAssets.gpus)) {
       if (graphics.includes(key)) {
-        logos.push(path);
+        out.add(path);
         break;
       }
     }
-    return logos;
+
+    return Array.from(out);
   }
 
   const grouped: Record<string, CatalogItemProps[]> = {};

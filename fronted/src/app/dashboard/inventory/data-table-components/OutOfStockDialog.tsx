@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { getInventoryWithCurrency } from "../inventory.api";
 
@@ -22,7 +22,7 @@ export default function OutOfStockDialog({ isOpen, onClose }: { isOpen: boolean;
     async function fetchOutOfStockProducts() {
       try {
         const inventoryData = await getInventoryWithCurrency();
-        console.log("Datos del inventario:", inventoryData); // Depuración
+        console.log("Datos del inventario:", inventoryData); // DepuraciÃ³n
     
         const groupedByProduct: Record<string, OutOfStockProduct> = {};
     
@@ -58,24 +58,24 @@ export default function OutOfStockDialog({ isOpen, onClose }: { isOpen: boolean;
     }
 
     if (isOpen) {
-      fetchOutOfStockProducts(); // Actualiza los datos al abrir el diálogo
+      fetchOutOfStockProducts(); // Actualiza los datos al abrir el diÃ¡logo
       intervalId = setInterval(fetchOutOfStockProducts, 5000); // Actualiza cada 5 segundos
     }
 
     return () => {
-      if (intervalId) clearInterval(intervalId); // Limpia el intervalo al cerrar el diálogo
+      if (intervalId) clearInterval(intervalId); // Limpia el intervalo al cerrar el diÃ¡logo
     };
   }, [isOpen]);
 
   return (
-    <AlertDialog open={isOpen} onOpenChange={onClose}>
-      <AlertDialogContent className="w-full max-w-5xl">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Productos Sin Stock</AlertDialogTitle>
-          <AlertDialogDescription>
-            Aquí puedes ver los productos que tienen stock general en 0 y su desglose por tienda.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="w-full max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Productos Sin Stock</DialogTitle>
+          <DialogDescription>
+            AquÃ­ puedes ver los productos que tienen stock general en 0 y su desglose por tienda.
+          </DialogDescription>
+        </DialogHeader>
 
         <div className="w-full overflow-x-auto max-h-[60vh]">
           {outOfStockProducts.length > 0 ? (
@@ -83,7 +83,7 @@ export default function OutOfStockDialog({ isOpen, onClose }: { isOpen: boolean;
               <thead>
                 <tr className="bg-gray-900 text-white uppercase tracking-wide">
                   <th className="border-b px-4 py-3 text-left">Nombre</th>
-                  <th className="border-b px-4 py-3 text-left">Categoría</th>
+                  <th className="border-b px-4 py-3 text-left">CategorÃ­a</th>
                   <th className="border-b px-4 py-3 text-left">Stock General</th>
                   <th className="border-b px-4 py-3 text-left">Stock por Tienda</th>
                   <th className="border-b px-4 py-3 text-left">Acciones</th>
@@ -91,16 +91,16 @@ export default function OutOfStockDialog({ isOpen, onClose }: { isOpen: boolean;
               </thead>
               <tbody>
                 {outOfStockProducts.map((product, index) => (
-                  <tr key={index} className="border-b hover:bg-gray-400 transition">
+                  <tr key={index} className="border-b hover:bg-gray-100 dark:hover:bg-gray-800 transition">
                     <td className="px-4 py-3">{product.name || "Sin nombre"}</td>
                     <td className="px-4 py-3">
                         {typeof product.category === "string"
                         ? product.category
-                        : product.category?.name || "Sin categoría"}
+                        : product.category?.name || "Sin categorÃ­a"}
                     </td>
                     <td
                       className={`px-4 py-3 font-semibold ${
-                        product.totalStock === 0 ? "text-red-600" : "text-white"
+                        product.totalStock === 0 ? "text-red-600" : "text-foreground"
                       }`}
                     >
                       {product.totalStock} u.
@@ -111,7 +111,7 @@ export default function OutOfStockDialog({ isOpen, onClose }: { isOpen: boolean;
                           <li key={storeItem.storeId}>
                             {storeItem.store?.name || "Tienda desconocida"}:{" "}
                             <span
-                              className={`font-semibold ${storeItem.stock === 0 ? "text-red-600" : "text-white"}`}
+                              className={`font-semibold ${storeItem.stock === 0 ? "text-red-600" : "text-foreground"}`}
                             >
                               <br />
                               {storeItem.stock} u.
@@ -127,7 +127,7 @@ export default function OutOfStockDialog({ isOpen, onClose }: { isOpen: boolean;
                             window.location.href = `/dashboard/inventory/product-details/${product.id}`;
                         }}
                         >
-                        Ver información
+                        Ver informacion
                         </Button>
                     </td>
                   </tr>
@@ -141,10 +141,10 @@ export default function OutOfStockDialog({ isOpen, onClose }: { isOpen: boolean;
           )}
         </div>
 
-        <AlertDialogFooter>
+        <DialogFooter>
           <Button onClick={onClose}>Cerrar</Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

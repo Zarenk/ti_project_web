@@ -5,6 +5,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Patch,
   Query,
   UploadedFiles,
   UseGuards,
@@ -51,6 +52,17 @@ export class WebSalesController {
     @Req() req: Request,
   ) {
     return this.webSalesService.completeWebOrder(id, req);
+  }
+
+  @Patch('order/:id/series')
+  async updateOrderSeries(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('items') items: { productId: number; series: string[] }[],
+  ) {
+    if (!Array.isArray(items)) {
+      throw new BadRequestException('Formato inválido: items debe ser un arreglo');
+    }
+    return this.webSalesService.updateOrderSeries(id, items);
   }
   
   @Post('order/:id/reject')
@@ -142,5 +154,15 @@ export class WebSalesController {
   @Get('order/by-user/:id')
   async findOrdersByUser(@Param('id', ParseIntPipe) id: number) {
     return this.webSalesService.getWebOrdersByUser(id);
+  }
+
+  @Get('order/by-email/:email')
+  async findOrdersByEmail(@Param('email') email: string) {
+    return this.webSalesService.getWebOrdersByEmail(email);
+  }
+
+  @Get('order/by-dni/:dni')
+  async findOrdersByDni(@Param('dni') dni: string) {
+    return this.webSalesService.getWebOrdersByDni(dni);
   }
 }
