@@ -839,6 +839,16 @@ export default function OrderDetailPage() {
 
                             const invoice = createdSale && Array.isArray(createdSale.invoices) && createdSale.invoices.length > 0 ? createdSale.invoices[0] : null;
                             if (invoice) {
+                              const cliente = {
+                                dni: payload.dni || createdSale.client?.typeNumber || "",
+                                nombre: payload.invoiceName || createdSale.client?.name || "",
+                                direccion:
+                                  payload.invoiceAddress || createdSale.client?.adress || "",
+                                ruc: payload.ruc || createdSale.client?.typeNumber || "",
+                                razonSocial:
+                                  payload.razonSocial || createdSale.client?.name || "",
+                                tipoDocumento: createdSale.client?.type || "",
+                              };
                               const invoicePayload = {
                                 saleId: createdSale.id,
                                 serie: invoice.serie,
@@ -847,13 +857,7 @@ export default function OrderDetailPage() {
                                 tipoMoneda: invoice.tipoMoneda ?? "PEN",
                                 total: invoice.total ?? createdSale.total,
                                 fechaEmision: invoice.fechaEmision,
-                                cliente: {
-                                  razonSocial: createdSale.client?.name ?? "",
-                                  ruc: createdSale.client?.typeNumber ?? "",
-                                  dni: createdSale.client?.typeNumber ?? "",
-                                  nombre: createdSale.client?.name ?? "",
-                                  tipoDocumento: createdSale.client?.type ?? "",
-                                },
+                                cliente,
                                 emisor: {
                                   razonSocial: createdSale.store?.name ?? "",
                                   adress: createdSale.store?.adress ?? "",
