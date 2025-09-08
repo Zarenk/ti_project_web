@@ -12,7 +12,7 @@ export async function getBrands(page = 1, limit = 10) {
 }
 
 export async function getKeywords() {
-  const res = await fetch(`${BACKEND_URL}/api/brands/keywords`, {
+  const res = await fetch(`${BACKEND_URL}/api/keywords`, {
     cache: 'no-store',
   });
   if (!res.ok) {
