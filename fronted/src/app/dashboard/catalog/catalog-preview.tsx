@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CatalogItem } from "@/templates/catalog/catalog-item";
 import type { CatalogItemProps } from "@/templates/catalog/catalog-item";
 import { brandAssets } from "@/catalog/brandAssets";
+import { resolveImageUrl } from "@/lib/images";
+import { getBrands } from "../brands/brands.api";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
@@ -50,6 +52,26 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
   const [sortBy, setSortBy] = useState<"name" | "brand" | "price-asc" | "price-desc">(
     "name"
   );
+  const [brandMap, setBrandMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    async function fetchBrands() {
+      try {
+        const { data } = await getBrands(1, 1000);
+        const map: Record<string, string> = {};
+        for (const b of data) {
+          const logo = b.logoSvg || b.logoPng;
+          if (logo) {
+            map[b.name.toLowerCase()] = resolveImageUrl(logo);
+          }
+        }
+        setBrandMap(map);
+      } catch (err) {
+        console.error("Error fetching brands", err);
+      }
+    }
+    fetchBrands();
+  }, []);
 
   const brands = useMemo(
     () =>
@@ -92,22 +114,18 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
   }
 
   function getLogos(p: Product): string[] {
-    const out = new Set<string>();
+    const logos = new Map<string, string>();
 
     // 1) Primary brand logo from backend
-    const brandLogo = p.brand?.logoSvg || p.brand?.logoPng;
-    if (brandLogo) out.add(brandLogo);
+    const brandLogo = resolveImageUrl(p.brand?.logoSvg || p.brand?.logoPng);
+    if (brandLogo) logos.set(brandLogo, brandLogo);
 
-    // Base text to scan for keywords (name + description)
     const haystack = `${p.name} ${p.description ?? ""}`.toLowerCase();
 
-    // 2) Sub-brand/series detection (e.g., TUF, ROG, Legion, Predator)
-    if (brandAssets.subbrands) {
-      for (const [keyword, logoPath] of Object.entries(brandAssets.subbrands)) {
-        if (haystack.includes(keyword)) {
-          out.add(logoPath);
-          // Only one subbrand is needed; keep scanning CPUs/GPUs regardless
-        }
+    // 2) Additional brand detection from keywords
+    for (const [keyword, logoPath] of Object.entries(brandMap)) {
+      if (haystack.includes(keyword)) {
+        logos.set(logoPath, logoPath);
       }
     }
 
@@ -115,7 +133,8 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     const processor = p.specification?.processor?.toLowerCase() || "";
     for (const [key, path] of Object.entries(brandAssets.cpus)) {
       if (processor.includes(key)) {
-        out.add(path);
+        const logoUrl = resolveImageUrl(path);
+        logos.set(logoUrl, logoUrl);
         break;
       }
     }
@@ -124,12 +143,13 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     const graphics = p.specification?.graphics?.toLowerCase() || "";
     for (const [key, path] of Object.entries(brandAssets.gpus)) {
       if (graphics.includes(key)) {
-        out.add(path);
+        const logoUrl = resolveImageUrl(path);
+        logos.set(logoUrl, logoUrl);
         break;
       }
     }
 
-    return Array.from(out);
+    return Array.from(logos.values());
   }
 
   const grouped: Record<string, CatalogItemProps[]> = {};
