@@ -17,4 +17,8 @@ export interface Transaction {
     notes?: string; // Notas adicionales (opcional)
 
     internalType?: "INCOME" | "EXPENSE" | "CLOSURE" | "UNKNOWN"; // 👈 NUEVO
+    clientName?: string;
+    clientDocument?: string;
+    clientDocumentType?: string;
+    voucher?: string | null;
   }

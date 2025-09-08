@@ -206,19 +206,22 @@ export async function executeSale(prisma: PrismaService, params: {
           if (!paymentMethod) {
             paymentMethod = await prismaTx.paymentMethod.create({ data: { name: methodName, isActive: true } });
           }
-          const transaction = await prismaTx.cashTransaction.create({
-            data: {
-              cashRegisterId: cashRegister.id,
-              type: 'INCOME',
-              amount: new Prisma.Decimal(payment.amount),
-              description: `Venta realizada. Pago vía ${paymentMethod.name}, ${descriptionTransaction}`,
-              userId,
-            },
-          });
-          await prismaTx.cashTransactionPaymentMethod.create({
-            data: { cashTransactionId: transaction.id, paymentMethodId: paymentMethod.id },
-          });
         }
+
+        const transaction = await prismaTx.cashTransaction.create({
+          data: {
+            cashRegisterId: cashRegister.id,
+            type: 'INCOME',
+            amount: new Prisma.Decimal(payment.amount),
+            description: `Venta realizada. Pago vía ${paymentMethod.name}, ${descriptionTransaction}`,
+            userId,
+          },
+        });
+
+        await prismaTx.cashTransactionPaymentMethod.create({
+          data: { cashTransactionId: transaction.id, paymentMethodId: paymentMethod.id },
+        });
+
         await prismaTx.salePayment.create({
           data: {
             salesId: sale.id,
@@ -226,6 +229,7 @@ export async function executeSale(prisma: PrismaService, params: {
             amount: payment.amount,
             currency: payment.currency,
             transactionId: payment.transactionId,
+            cashTransactionId: transaction.id,
           },
         });
       }

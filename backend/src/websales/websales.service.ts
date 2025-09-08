@@ -15,6 +15,7 @@ import {
 import { ActivityService } from '../activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { Request } from 'express';
+import { InventoryService } from 'src/inventory/inventory.service';
 
 @Injectable()
 export class WebSalesService {
@@ -24,6 +25,7 @@ export class WebSalesService {
     private prisma: PrismaService,
     private readonly activityService: ActivityService,
     private readonly accountingHook: AccountingHook,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   async payWithCulqi(token: string, amount: number, order: CreateWebSaleDto) {
@@ -305,6 +307,38 @@ export class WebSalesService {
       throw new BadRequestException('Orden no vÃ¡lida para completar');
     }
 
+    const payloadAny = (order.payload as any) || {};
+    const details: any[] = Array.isArray(payloadAny.details) ? payloadAny.details : [];
+    const storeId = payloadAny?.storeId ? Number(payloadAny.storeId) : undefined;
+
+    for (const d of details) {
+      const productId = Number(d.productId);
+      const quantity = Number(d.quantity);
+      const selectedSeries = Array.isArray(d.series) ? d.series : [];
+
+      let available: string[] = [];
+      if (storeId && !Number.isNaN(storeId)) {
+        available = await this.inventoryService.getSeriesByProductAndStore(storeId, productId);
+      } else {
+        const storeLinks = await this.prisma.storeOnInventory.findMany({
+          where: { inventory: { productId } },
+          select: { storeId: true },
+        });
+        const agg: string[] = [];
+        for (const link of storeLinks) {
+          const sers = await this.inventoryService.getSeriesByProductAndStore(link.storeId, productId);
+          agg.push(...sers);
+        }
+        available = Array.from(new Set(agg));
+      }
+
+      if (available.length > 0 && selectedSeries.length !== quantity) {
+        throw new BadRequestException(
+          `El producto ${productId} requiere ${quantity} series`,
+        );
+      }
+    }
+
     const sale = await this.createWebSale(order.payload as any, true);
 
     await this.prisma.orders.update({
@@ -314,7 +348,6 @@ export class WebSalesService {
 
     // Fallback to sale.userId when req is not present so we always capture the actor
     // Prefer attributing the update to the web customer when no staff context is present
-    const payloadAny = (order?.payload as any) || {};
     const customerEmail = payloadAny?.email ?? payloadAny?.customerEmail ?? payloadAny?.customer?.email ?? payloadAny?.user?.email;
     const completedActorId = (req as any)?.user?.userId ?? undefined;
     const completedActorEmail = (req as any)?.user?.username ?? customerEmail ?? undefined; // ActivityService will resolve from actorId only if email is absent

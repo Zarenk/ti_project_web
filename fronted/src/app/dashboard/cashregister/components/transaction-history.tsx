@@ -49,8 +49,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
       const matchesSearch =
       (transaction.employee ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (transaction.description ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(transaction.id).toLowerCase().includes(searchTerm.toLowerCase()) || 
+      String(transaction.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(transaction.amount).includes(searchTerm) || // 👈 para buscar también por monto si quieres
+      (transaction.voucher ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (transaction.clientName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (transaction.clientDocument ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (transaction.paymentMethods ?? []).some((method) =>
         method.toLowerCase().includes(searchTerm.toLowerCase())
       );
@@ -215,7 +218,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
                       ))}
                   </div>
                 </TableHead>
-                <TableHead className="cursor-pointer" onClick={() => handleSort("amount")}>
+                <TableHead className="cursor-pointer" onClick={() => handleSort("amount")}> 
                   <div className="flex items-center">
                     Monto
                     {sortConfig.key === "amount" &&
@@ -226,7 +229,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
                       ))}
                   </div>
                 </TableHead>
-                {!isMobile && <TableHead className="cursor-pointer" onClick={() => handleSort("employee")}>
+                {!isMobile && <TableHead>Comprobante</TableHead>}
+                {!isMobile && <TableHead>Cliente</TableHead>}
+                {!isMobile && <TableHead className="cursor-pointer" onClick={() => handleSort("employee")}> 
                   <div className="flex items-center">
                     Encargado
                     {sortConfig.key === "employee" &&
@@ -278,6 +283,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
                         </div>
                       )}
                     </TableCell>
+                    {!isMobile && <TableCell>{transaction.voucher || "-"}</TableCell>}
+                    {!isMobile && (
+                      <TableCell className="max-w-[200px] truncate">
+                        {transaction.clientName
+                          ? `${transaction.clientName} (${transaction.clientDocumentType}: ${transaction.clientDocument})`
+                          : "-"}
+                      </TableCell>
+                    )}
                     {!isMobile &&<TableCell>{transaction.employee}</TableCell>}
                      {!isMobile && <TableCell className="flex flex-wrap gap-1">
                     {transaction.paymentMethods && transaction.paymentMethods.length > 0 ? (
@@ -299,7 +312,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">
+                  <TableCell colSpan={8} className="h-24 text-center">
                     No se encontraron transacciones.
                   </TableCell>
                 </TableRow>
@@ -322,6 +335,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
                   <p><strong>Métodos de Pago:</strong> {modalTransaction.paymentMethods?.join(", ") || "-"}</p>
                   <p><strong>Notas:</strong> {modalTransaction.description || "-"}</p>
                   <p><strong>ID:</strong> {modalTransaction.id}</p>
+                  {modalTransaction.voucher && (
+                    <p><strong>Comprobante:</strong> {modalTransaction.voucher}</p>
+                  )}
+                  {modalTransaction.clientName && (
+                    <p><strong>Cliente:</strong> {modalTransaction.clientName}</p>
+                  )}
+                  {modalTransaction.clientDocument && (
+                    <p>
+                      <strong>Documento:</strong> {modalTransaction.clientDocumentType}: {modalTransaction.clientDocument}
+                    </p>
+                  )}
                   {modalTransaction.status && (
                     <p><strong>Estado:</strong> {modalTransaction.status}</p>
                   )}

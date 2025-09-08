@@ -72,6 +72,7 @@ export default function OrderDetailPage() {
   const [selectedSeries, setSelectedSeries] = useState<string[]>([]);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [seriesByProduct, setSeriesByProduct] = useState<Record<number, string[]>>({});
+  const [availableSeriesByProduct, setAvailableSeriesByProduct] = useState<Record<number, string[]>>({});
   const [storeLabel, setStoreLabel] = useState<string>("WEB POS");
 
   // Guard + fetch order/sale
@@ -163,24 +164,63 @@ export default function OrderDetailPage() {
   const payload = (order?.payload as any) || {};
   const payloadStoreId: number | undefined = payload?.storeId;
 
+  // Preload available series for each product depending on store
+  useEffect(() => {
+    async function preloadAvailableSeries() {
+      if (products.length === 0) return;
+      const map: Record<number, string[]> = {};
+      for (const prod of products) {
+        let series: string[] = [];
+        try {
+          if (payloadStoreId && Number(payloadStoreId) > 0) {
+            series = await fetchSeriesByProductAndStore(Number(payloadStoreId), Number(prod.id));
+          } else {
+            const stores = await getStoresWithProduct(Number(prod.id));
+            const agg: string[] = [];
+            for (const s of stores) {
+              const sid = Number(s.storeId ?? s.store?.id ?? s.id);
+              if (!sid) continue;
+              const sers = await fetchSeriesByProductAndStore(sid, Number(prod.id));
+              agg.push(...sers);
+            }
+            series = Array.from(new Set(agg));
+          }
+        } catch (err) {
+          console.error('Error fetching series', err);
+        }
+        if (Array.isArray(series) && series.length > 0) {
+          map[Number(prod.id)] = series;
+        }
+      }
+      setAvailableSeriesByProduct(map);
+    }
+    preloadAvailableSeries();
+  }, [products, payloadStoreId]);
+
   const openSeriesSelector = async (productId: number, quantity: number) => {
     try {
       setEditingProductId(productId);
       setSelectedSeries(seriesByProduct[productId] || []);
 
-      let series: string[] = [];
-      if (payloadStoreId && Number(payloadStoreId) > 0) {
-        series = await fetchSeriesByProductAndStore(Number(payloadStoreId), productId);
-      } else {
-        const stores = await getStoresWithProduct(productId);
-        const aggregations: string[] = [];
-        for (const s of stores) {
-          const sid = Number(s.storeId ?? s.store?.id ?? s.id);
-          if (!sid) continue;
-          const sers = await fetchSeriesByProductAndStore(sid, productId);
-          aggregations.push(...sers);
+      let series: string[] = availableSeriesByProduct[productId];
+      if (!series || series.length === 0) {
+        if (payloadStoreId && Number(payloadStoreId) > 0) {
+          series = await fetchSeriesByProductAndStore(Number(payloadStoreId), productId);
+        } else {
+          const stores = await getStoresWithProduct(productId);
+          const aggregations: string[] = [];
+          for (const s of stores) {
+            const sid = Number(s.storeId ?? s.store?.id ?? s.id);
+            if (!sid) continue;
+            const sers = await fetchSeriesByProductAndStore(sid, productId);
+            aggregations.push(...sers);
+          }
+          series = Array.from(new Set(aggregations));
         }
-        series = Array.from(new Set(aggregations));
+        setAvailableSeriesByProduct((prev) => ({
+          ...prev,
+          [productId]: Array.isArray(series) ? series : [],
+        }));
       }
 
       if (!Array.isArray(series) || series.length === 0) {
@@ -776,17 +816,21 @@ export default function OrderDetailPage() {
                       <AlertDialogAction
                         onClick={async () => {
                           try {
-                            // Validar y persistir series seleccionadas antes de completar
-                            const items = Object.entries(seriesByProduct).map(([pid, ser]) => ({ productId: Number(pid), series: ser }));
-                            if (items.length > 0) {
-                              // Validar cantidades
-                              for (const it of items) {
-                                const prod = products.find((p: any) => Number(p.id) === Number(it.productId));
-                                if (prod && Number(prod.quantity) !== it.series.length) {
+                            // Validar que todos los productos con series disponibles tengan la cantidad correcta seleccionada
+                            for (const prod of products) {
+                              const required = availableSeriesByProduct[Number(prod.id)] || [];
+                              if (required.length > 0) {
+                                const selected = seriesByProduct[Number(prod.id)] || [];
+                                if (selected.length !== Number(prod.quantity)) {
                                   toast.error(`El producto ${prod.name} requiere ${prod.quantity} series.`);
                                   return;
                                 }
                               }
+                            }
+
+                            // Persistir series seleccionadas
+                            const items = Object.entries(seriesByProduct).map(([pid, ser]) => ({ productId: Number(pid), series: ser }));
+                            if (items.length > 0) {
                               await updateOrderSeries(order.id, items);
                             }
 

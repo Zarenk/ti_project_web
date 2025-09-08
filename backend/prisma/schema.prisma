@@ -427,9 +427,12 @@ model SalePayment {
   referenceNote    String?        // (opcional) para agregar voucher, observación, etc.
   sale             Sales          @relation(fields: [salesId], references: [id])
   paymentMethod    PaymentMethod  @relation(fields: [paymentMethodId], references: [id])
+  cashTransactionId Int?
+  cashTransaction   CashTransaction? @relation(fields: [cashTransactionId], references: [id])
 
   @@index([salesId])
   @@index([paymentMethodId])
+  @@index([cashTransactionId])
 }
 
 model SalesDetail {
@@ -545,6 +548,7 @@ model CashTransaction {
   cashRegister    CashRegister     @relation(fields: [cashRegisterId], references: [id])
   paymentMethods  CashTransactionPaymentMethod[] // Relación con la tabla intermedia
   user            User             @relation(fields: [userId], references: [id])
+  salePayments   SalePayment[]
 
   @@map("cash_transactions")
 }

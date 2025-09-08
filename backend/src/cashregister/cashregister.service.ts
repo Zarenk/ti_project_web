@@ -69,6 +69,16 @@
               paymentMethod: true,
             }
           },
+          salePayments: {
+            include: {
+              sale: {
+                include: {
+                  client: true,
+                  invoices: true,
+                },
+              },
+            },
+          },
         },
         orderBy: {
           createdAt: 'desc',
@@ -104,6 +114,12 @@
         employee: tx.user?.username || "Sistema",
         description: tx.description,
         paymentMethods: tx.paymentMethods.map(pm => pm.paymentMethod?.name).filter(Boolean) || [],
+        voucher: tx.salePayments[0]?.sale?.invoices[0]
+          ? `${tx.salePayments[0].sale.invoices[0].serie}-${tx.salePayments[0].sale.invoices[0].nroCorrelativo}`
+          : null,
+        clientName: tx.salePayments[0]?.sale?.client?.name || null,
+        clientDocument: tx.salePayments[0]?.sale?.client?.typeNumber || null,
+        clientDocumentType: tx.salePayments[0]?.sale?.client?.type || null,
       }));
     
       const formattedClosures = closures.map((closure) => ({
