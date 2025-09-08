@@ -16,26 +16,45 @@ export class SaleAccountingService {
       0,
     );
 
+    const invoice = sale.invoices?.[0];
+    const invoiceCode = invoice
+      ? `${invoice.serie}-${invoice.nroCorrelativo}`
+      : '';
+    const paymentMethod = sale.payments?.[0]?.paymentMethod?.name ?? '';
+    const accountCode = /yape|transfer/i.test(paymentMethod) ? '1041' : '1011';
+    const productName =
+      sale.salesDetails?.[0]?.entryDetail?.product?.name ?? '';
+
     const lines: SaleEntryLine[] = [
-      { account: '1011', description: 'Caja', debit: sale.total, credit: 0 },
-      { account: '7011', description: 'Ventas', debit: 0, credit: subtotal },
+      {
+        account: accountCode,
+        description: `Cobro ${invoiceCode} – ${paymentMethod || 'Caja'}`.trim(),
+        debit: sale.total,
+        credit: 0,
+      },
+      {
+        account: '7011',
+        description: `Venta ${invoiceCode} – ${productName}`.trim(),
+        debit: 0,
+        credit: subtotal,
+      },
       {
         account: '4011',
-        description: 'IGV por pagar',
+        description: `IGV 18% Venta ${invoiceCode}`.trim(),
         debit: 0,
         credit: igv,
         igv: true,
       },
       {
         account: '6911',
-        description: 'Costo de ventas',
+        description: `Costo de ventas ${productName} – ${invoiceCode}`.trim(),
         debit: cost,
         credit: 0,
         cogs: true,
       },
       {
         account: '2011',
-        description: 'Mercaderías',
+        description: `Salida mercaderías por ${invoiceCode}`.trim(),
         debit: 0,
         credit: cost,
       },

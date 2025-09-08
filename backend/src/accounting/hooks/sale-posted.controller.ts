@@ -22,7 +22,13 @@ export class SalePostedController {
       this.logger.log(`Received sale-posted event for sale ${data.saleId}`);
       const sale = await this.prisma.sales.findUnique({
         where: { id: data.saleId },
-        include: { salesDetails: { include: { entryDetail: true } } },
+        include: {
+          salesDetails: {
+            include: { entryDetail: { include: { product: true } } },
+          },
+          payments: { include: { paymentMethod: true } },
+          invoices: true,
+        },
       });
       if (!sale) {
         return { status: 'not_found' };

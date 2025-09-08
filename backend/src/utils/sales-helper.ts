@@ -127,6 +127,15 @@ export async function executeSale(prisma: PrismaService, params: {
 
     let descriptionTransaction = 'Venta registrada: ';
 
+    const client = await prismaTx.client.findUnique({
+      where: { id: clientId },
+      select: {
+        name: true,
+        type: true,
+        typeNumber: true,
+      },
+    });
+
     for (const { detail, storeInventory } of allocations) {
       const product = await prisma.product.findUnique({ where: { id: detail.productId } });
       if (!product) {
@@ -215,6 +224,9 @@ export async function executeSale(prisma: PrismaService, params: {
             amount: new Prisma.Decimal(payment.amount),
             description: `Venta realizada. Pago vía ${paymentMethod.name}, ${descriptionTransaction}`,
             userId,
+            clientName: client?.name ?? null,
+            clientDocument: client?.typeNumber ?? null,
+            clientDocumentType: client?.type ?? null,
           },
         });
 

@@ -880,7 +880,7 @@ export default function OrderDetailPage() {
                                       createdSale.client?.typeNumber ||
                                       "",
                                     nombre:
-                                      payload.nombre ||
+                                      payload.invoiceName ||
                                       createdSale.client?.name ||
                                       "",
                                   };

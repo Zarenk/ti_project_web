@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   rowFieldLeft: {
     flexDirection: 'row',
     marginBottom: 2,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   observaciones: {
     fontSize: 7,
@@ -221,11 +221,11 @@ export function InvoiceDocument({
             <Image src="/logo_ti.png" style={styles.logo} />
             <Text style={styles.companyName}>TEGNOLOGIA INFORMATICA EIRL</Text>
             <Text>
-              AV. CORONEL MENDOZA 1945 INT. K367 AS.C.C MERCADILLO{'\n'} 
+              AV. CORONEL MENDOZA 1945 INT. K367 AS.C.C MERCADILLO{"\n"}
               BOLOGNESI - TACNA - TACNA - TACNA
             </Text>
             <Text>
-              TELEFONO: 052-413038{'\n'}
+              TELEFONO: 052-413038{"\n"}
             </Text>
           </View>
           <View style={styles.rightColumn}>
@@ -297,11 +297,11 @@ export function InvoiceDocument({
               <Text style={styles.cellCenter}>{item.cantidad}</Text>
               <Text style={styles.cellCenter}>NIU</Text>
               <Text style={[styles.cell, { flex: 3 }]}>
-                {item.descripcion}
+                {(item.descripcion || '').replace(/\\n/g, '\n')}
                 {item.series && item.series.length > 0 && (
                   <Text style={{ fontSize: 9 }}>
-                    {"\\n"}
-                    {item.series.length === 1 ? 'SERIE N°:\\n' : 'SERIES N°:\\n'}
+                    {"\n"}
+                    {item.series.length === 1 ? 'SERIE N°:\n' : 'SERIES N°:\n'}
                     {item.series.join(', ')}
                   </Text>
                 )}

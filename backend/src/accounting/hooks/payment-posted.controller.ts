@@ -29,6 +29,10 @@ export class PaymentPostedController {
       if (!payment) {
         return { status: 'not_found' };
       }
+      if (payment.salesId) {
+        // Payments linked to sales are already accounted in sale entry
+        return { status: 'ignored' };
+      }
       const lines = this.mapper.buildEntryFromPayment(payment);
       const entry = await this.entries.createDraft({
         period: format(new Date(data.timestamp), 'yyyy-MM'),
