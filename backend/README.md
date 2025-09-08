@@ -78,6 +78,22 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## API Endpoints
+
+### `GET /api/keywords`
+
+Returns all available keywords for search in the frontend. Each item includes the
+keyword text and the logo URL resolved from the associated brand's `logoSvg` or
+`logoPng`.
+
+**Example response:**
+
+```json
+[
+  { "keyword": "acme", "logoUrl": "/uploads/brands/acme.svg" }
+]
+```
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

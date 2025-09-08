@@ -6,7 +6,7 @@ import { CatalogItem } from "@/templates/catalog/catalog-item";
 import type { CatalogItemProps } from "@/templates/catalog/catalog-item";
 import { brandAssets } from "@/catalog/brandAssets";
 import { resolveImageUrl } from "@/lib/images";
-import { getBrands } from "../brands/brands.api";
+import { getBrands, getKeywords } from "../brands/brands.api";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
@@ -57,12 +57,23 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
   useEffect(() => {
     async function fetchBrands() {
       try {
-        const { data } = await getBrands(1, 1000);
+        const [{ data }, keywordRes] = await Promise.all([
+          getBrands(1, 1000),
+          getKeywords(),
+        ]);
         const map: Record<string, string> = {};
         for (const b of data) {
           const logo = b.logoSvg || b.logoPng;
           if (logo) {
             map[b.name.toLowerCase()] = resolveImageUrl(logo);
+          }
+        }
+        for (const k of keywordRes?.data || []) {
+          const keyword = k.keyword?.toLowerCase();
+          const brandName = k.brand?.name?.toLowerCase();
+          const logo = brandName ? map[brandName] : undefined;
+          if (keyword && logo) {
+            map[keyword] = logo;
           }
         }
         setBrandMap(map);
@@ -114,19 +125,20 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
   }
 
   function getLogos(p: Product): string[] {
-    const logos = new Map<string, string>();
+    const logos = new Set<string>();
 
     // 1) Primary brand logo from backend
     const primaryName = p.brand?.name?.toLowerCase();
     const primaryLogo = resolveImageUrl(p.brand?.logoSvg || p.brand?.logoPng);
-    if (primaryName && primaryLogo) logos.set(primaryName, primaryLogo);
+    if (primaryLogo) logos.add(primaryLogo);
 
     const haystack = `${p.name} ${p.description ?? ""}`.toLowerCase();
 
     // 2) Additional brand detection from keywords
     for (const [keyword, logoPath] of Object.entries(brandMap)) {
+      if (keyword === primaryName) continue;
       if (haystack.includes(keyword)) {
-        logos.set(keyword, logoPath);
+        logos.add(logoPath);
       }
     }
 
@@ -135,7 +147,7 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     for (const [key, brandKey] of Object.entries(brandAssets.cpus)) {
       if (processor.includes(key)) {
         const logoUrl = brandMap[brandKey];
-        if (logoUrl) logos.set(brandKey, logoUrl);
+        if (logoUrl) logos.add(logoUrl);
         break;
       }
     }
@@ -145,12 +157,12 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     for (const [key, brandKey] of Object.entries(brandAssets.gpus)) {
       if (graphics.includes(key)) {
         const logoUrl = brandMap[brandKey];
-        if (logoUrl) logos.set(brandKey, logoUrl);
+        if (logoUrl) logos.add(logoUrl);
         break;
       }
     }
 
-    return Array.from(logos.values());
+    return Array.from(logos);
   }
 
   const grouped: Record<string, CatalogItemProps[]> = {};

@@ -9,6 +9,30 @@ import path from 'path';
 import fs from 'fs';
 import SVGtoPDF from 'svg-to-pdfkit';
 import sharp from 'sharp';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+let cachedBrandLogos: Record<string, string> | null = null;
+async function getBrandLogos(): Promise<Record<string, string>> {
+  if (!cachedBrandLogos) {
+    const brands = await prisma.brand.findMany({
+      select: { name: true, logoSvg: true, logoPng: true },
+    });
+    cachedBrandLogos = {};
+    for (const b of brands) {
+      const rel = b.logoSvg || b.logoPng;
+      if (rel) {
+        cachedBrandLogos[b.name.toLowerCase()] = path.resolve(
+          __dirname,
+          '../..',
+          rel.replace(/^\//, ''),
+        );
+      }
+    }
+  }
+  return cachedBrandLogos;
+}
 
 export function renderCatalogHtml(items: CatalogItem[]): string {
   const templateItems = items.map((item) => ({
@@ -33,14 +57,15 @@ function normalizeLogo(logoPath: string | undefined): Logo | null {
   return fs.existsSync(pngFallback) ? { path: pngFallback, isSvg: false } : null;
 }
 
-function getLogos(item: CatalogItem): Logo[] {
+async function getLogos(item: CatalogItem): Promise<Logo[]> {
   const logos: Logo[] = [];
   const pushLogo = (logo?: string) => {
     const normalized = normalizeLogo(logo);
     if (normalized) logos.push(normalized);
   };
   if (item.brand) {
-    pushLogo(brandAssets.brands[item.brand.toLowerCase()]);
+    const brandLogos = await getBrandLogos();
+    pushLogo(brandLogos[item.brand.toLowerCase()]);
   }
   const cpu = item.cpu?.toLowerCase() || '';
   for (const [key, logoPath] of Object.entries(brandAssets.cpus)) {
@@ -121,14 +146,13 @@ async function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
         doc.fontSize(12).text(item.price.toString(), { align: 'center' });
       }
 
-      const logos = getLogos(item);
+      const logos = await getLogos(item);
       if (logos.length > 0) {
         doc.moveDown(0.5);
         const startX = doc.x;
         const y = doc.y;
         for (const [idx, logo] of logos.entries()) {
           try {
-            doc.image(logo, startX + idx * 26, y, { width: 24, height: 24 });
             if (logo.isSvg) {
               const svg = fs.readFileSync(logo.path, 'utf8');
               SVGtoPDF(doc, svg, startX + idx * 26, y, {

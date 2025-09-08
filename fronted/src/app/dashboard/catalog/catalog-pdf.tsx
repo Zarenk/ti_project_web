@@ -10,7 +10,7 @@ import {
   StyleSheet
 } from '@react-pdf/renderer'
 import { brandAssets } from '@/catalog/brandAssets'
-import { getBrands } from '../brands/brands.api'
+import { getBrands, getKeywords } from '../brands/brands.api'
 import { resolveImageUrl } from '@/lib/images'
 
 interface Product {
@@ -51,19 +51,20 @@ interface CatalogSection {
 }
 
 function getLogos(p: Product, brandMap: Record<string, string>): string[] {
-  const out = new Map<string, string>()
+  const logos = new Set<string>()
 
   // Primary brand
   const primaryName = p.brand?.name?.toLowerCase()
   const brandLogo = resolveImageUrl(p.brand?.logoSvg || p.brand?.logoPng)
-  if (primaryName && brandLogo) out.set(primaryName, brandLogo)
+  if (brandLogo) logos.add(brandLogo)
 
   const haystack = `${p.name} ${p.description ?? ''}`.toLowerCase()
 
   // Additional brands detected from keywords
   for (const [keyword, logoPath] of Object.entries(brandMap)) {
+    if (keyword === primaryName) continue
     if (haystack.includes(keyword)) {
-      out.set(keyword, logoPath)
+      logos.add(logoPath)
     }
   }
 
@@ -72,7 +73,7 @@ function getLogos(p: Product, brandMap: Record<string, string>): string[] {
   for (const [key, brandKey] of Object.entries(brandAssets.cpus)) {
     if (processor.includes(key)) {
       const logoUrl = brandMap[brandKey]
-      if (logoUrl) out.set(brandKey, logoUrl)
+      if (logoUrl) logos.add(logoUrl)
       break
     }
   }
@@ -82,12 +83,12 @@ function getLogos(p: Product, brandMap: Record<string, string>): string[] {
   for (const [key, brandKey] of Object.entries(brandAssets.gpus)) {
     if (graphics.includes(key)) {
       const logoUrl = brandMap[brandKey]
-      if (logoUrl) out.set(brandKey, logoUrl)
+      if (logoUrl) logos.add(logoUrl)
       break
     }
   }
 
-  return Array.from(out.values())
+  return Array.from(logos)
 }
 
 function formatPrice(value: number): string {
@@ -237,12 +238,23 @@ async function normalizeLogo(src: string): Promise<string | null> {
 }
 
 export async function generateCatalogPdf(products: Product[]): Promise<Blob> {
-  const { data } = await getBrands(1, 1000)
+  const [{ data }, keywordRes] = await Promise.all([
+    getBrands(1, 1000),
+    getKeywords(),
+  ])
   const brandMap: Record<string, string> = {}
   for (const b of data) {
     const logo = b.logoSvg || b.logoPng
     if (logo) {
       brandMap[b.name.toLowerCase()] = resolveImageUrl(logo)
+    }
+  }
+  for (const k of keywordRes?.data || []) {
+    const keyword = k.keyword?.toLowerCase()
+    const brandName = k.brand?.name?.toLowerCase()
+    const logo = brandName ? brandMap[brandName] : undefined
+    if (keyword && logo) {
+      brandMap[keyword] = logo
     }
   }
 

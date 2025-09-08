@@ -32,6 +32,9 @@ export class BrandsService {
     const brand = await this.prisma.brand.create({
       data: { ...createBrandDto, name },
     });
+    await this.prisma.keyword.create({
+      data: { name: brand.name, brandId: brand.id },
+    });
     const { actorId, actorEmail } = await this.getActorInfo(req);
     await this.activityService.log(
       {
@@ -54,7 +57,9 @@ export class BrandsService {
       where: { name: normalized },
     });
     if (existing) return existing;
-    return this.prisma.brand.create({ data: { name: normalized } });
+    const brand = await this.prisma.brand.create({ data: { name: normalized } });
+    await this.prisma.keyword.create({ data: { name: brand.name, brandId: brand.id } });
+    return brand;
   }
 
   async findAll(page = 1, limit = 10) {
@@ -80,6 +85,12 @@ export class BrandsService {
       ? { ...updateBrandDto, name: this.normalizeName(updateBrandDto.name) }
       : updateBrandDto;
     const updated = await this.prisma.brand.update({ where: { id }, data });
+    if (updateBrandDto.name && before) {
+      await this.prisma.keyword.updateMany({
+        where: { brandId: id, name: before.name },
+        data: { name: updated.name },
+      });
+    }
     const { actorId, actorEmail } = await this.getActorInfo(req);
     const diff: any = { before: {}, after: {} };
     for (const key of Object.keys(updated)) {

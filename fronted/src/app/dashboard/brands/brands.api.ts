@@ -11,6 +11,16 @@ export async function getBrands(page = 1, limit = 10) {
   return res.json();
 }
 
+export async function getKeywords() {
+  const res = await fetch(`${BACKEND_URL}/api/brands/keywords`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error('Error al obtener las palabras clave');
+  }
+  return res.json();
+}
+
 export async function createBrand(data: {
   name: string;
   logoSvg?: File;

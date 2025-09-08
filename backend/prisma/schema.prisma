@@ -93,6 +93,17 @@ model Brand {
   updatedAt DateTime @updatedAt
 
   products  Product[]
+  keywords  Keyword[]
+}
+
+model Keyword {
+  id      Int    @id @default(autoincrement())
+  name    String
+  brandId Int
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([name])
+  @@index([brandId])
 }
 
 model Category{
