@@ -9,9 +9,10 @@
   import { Badge } from "@/components/ui/badge"
   import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
   import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-  import { format, isSameDay } from "date-fns"
+  import { format } from "date-fns"
   import { Transaction } from "../types/cash-register"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
   interface TransactionHistoryProps {
     transactions: Transaction[]
@@ -22,7 +23,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
   export default function TransactionHistory({ transactions, selectedDate, onDateChange }: TransactionHistoryProps) {
     const [searchTerm, setSearchTerm] = useState("")
     const [typeFilter, setTypeFilter] = useState<string | null>(null)
-    const [date, setDate] = useState<Date | undefined>(undefined)
     const [modalTransaction, setModalTransaction] = useState<Transaction | null>(null)
     const [sortConfig, setSortConfig] = useState<{
       key: keyof Transaction
@@ -144,7 +144,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
     const clearFilters = () => {
       setSearchTerm("")
       setTypeFilter(null)
-      setDate(undefined)
       onDateChange(new Date()) // 👈 esto reinicia el filtro a hoy
     }
 
@@ -249,66 +248,90 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
             <TableBody>
               {sortedTransactions.length > 0 ? (
                 sortedTransactions.map((transaction) => (
-                  <TableRow 
-                    key={transaction.id}
-                    className="cursor-pointer"
-                    onClick={() => setModalTransaction(transaction)}
-                  >
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getTransactionIcon(transaction.type)}
-                        {getTransactionBadge(transaction.type)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-[100px] truncate whitespace-nowrap overflow-hidden">
-                      {new Date(transaction.timestamp).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="font-medium">S/.{transaction.amount.toFixed(2)}</div>
-                      {transaction.type === "deposit" && transaction.discrepancy !== undefined && (
-                        <div
-                          className={`text-xs ${
-                            transaction.discrepancy === 0
-                              ? "text-green-500"
-                              : transaction.discrepancy > 0
-                                ? "text-amber-500"
-                                : "text-red-500"
-                          }`}
-                        >
-                          {transaction.discrepancy === 0
-                            ? "Balanced"
-                            : transaction.discrepancy > 0
-                              ? `+$${transaction.discrepancy.toFixed(2)} overage`
-                              : `-$${Math.abs(transaction.discrepancy).toFixed(2)} shortage`}
-                        </div>
+                  <Tooltip key={transaction.id}>
+                    <TooltipTrigger asChild>
+                      <TableRow
+                        className="cursor-pointer"
+                        onClick={() => setModalTransaction(transaction)}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getTransactionIcon(transaction.type)}
+                            {getTransactionBadge(transaction.type)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-[100px] truncate whitespace-nowrap overflow-hidden">
+                          {new Date(transaction.timestamp).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <div className="font-medium">S/.{transaction.amount.toFixed(2)}</div>
+                          {transaction.type === "deposit" && transaction.discrepancy !== undefined && (
+                            <div
+                              className={`text-xs ${
+                                transaction.discrepancy === 0
+                                  ? "text-green-500"
+                                  : transaction.discrepancy > 0
+                                    ? "text-amber-500"
+                                    : "text-red-500"
+                              }`}
+                            >
+                              {transaction.discrepancy === 0
+                                ? "Balanced"
+                                : transaction.discrepancy > 0
+                                  ? `+$${transaction.discrepancy.toFixed(2)} overage`
+                                  : `-$${Math.abs(transaction.discrepancy).toFixed(2)} shortage`}
+                            </div>
+                          )}
+                        </TableCell>
+                        {!isMobile && <TableCell>{transaction.voucher || "-"}</TableCell>}
+                        {!isMobile && (
+                          <TableCell className="max-w-[200px] truncate">
+                            {transaction.clientName
+                              ? `${transaction.clientName} (${transaction.clientDocumentType}: ${transaction.clientDocument})`
+                              : "-"}
+                          </TableCell>
+                        )}
+                        {!isMobile && <TableCell>{transaction.employee}</TableCell>}
+                        {!isMobile && (
+                          <TableCell className="flex flex-wrap gap-1">
+                            {transaction.paymentMethods && transaction.paymentMethods.length > 0 ? (
+                              transaction.paymentMethods.map((method, index) => (
+                                <Badge
+                                  key={index}
+                                  variant="outline"
+                                  className={getBadgeColor(method)}
+                                >
+                                  {method}
+                                </Badge>
+                              ))
+                            ) : (
+                              "-"
+                            )}
+                          </TableCell>
+                        )}
+                        {!isMobile && (
+                          <TableCell className="max-w-[200px] truncate">
+                            {transaction.description || "-"}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs space-y-1 text-left">
+                      <p>
+                        <span className="font-medium">Encargado:</span> {transaction.employee || "-"}
+                      </p>
+                      {transaction.clientName && (
+                        <p>
+                          <span className="font-medium">Cliente:</span> {transaction.clientName}
+                        </p>
                       )}
-                    </TableCell>
-                    {!isMobile && <TableCell>{transaction.voucher || "-"}</TableCell>}
-                    {!isMobile && (
-                      <TableCell className="max-w-[200px] truncate">
-                        {transaction.clientName
-                          ? `${transaction.clientName} (${transaction.clientDocumentType}: ${transaction.clientDocument})`
-                          : "-"}
-                      </TableCell>
-                    )}
-                    {!isMobile &&<TableCell>{transaction.employee}</TableCell>}
-                     {!isMobile && <TableCell className="flex flex-wrap gap-1">
-                    {transaction.paymentMethods && transaction.paymentMethods.length > 0 ? (
-                      transaction.paymentMethods.map((method, index) => (
-                        <Badge
-                          key={index}
-                          variant="outline"
-                          className={getBadgeColor(method)}
-                        >
-                          {method}
-                        </Badge>
-                      ))
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>}
-                  {!isMobile && <TableCell className="max-w-[200px] truncate">{transaction.description || "-"}</TableCell>}
-                  </TableRow>
+                      {transaction.description && (
+                        <p>
+                          <span className="font-medium">Notas:</span> {transaction.description}
+                        </p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
                 ))
               ) : (
                 <TableRow>

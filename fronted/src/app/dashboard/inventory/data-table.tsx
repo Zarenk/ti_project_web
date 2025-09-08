@@ -35,11 +35,13 @@ import {
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[]
     data: TData[]
+    inStockOnly?: boolean
   }
-   
+
   export function DataTable<TData extends{id:string}, TValue>({
     columns,
     data,
+    inStockOnly = false,
   }: DataTableProps<TData, TValue>) {
     // ROUTER PARA MANEJAR LA NAVEGACION
     const router = useRouter();
@@ -85,10 +87,11 @@ interface DataTableProps<TData, TValue> {
             (s: any) => String(s.store.id) === selectedStore
           );
           if (!storeData) return null;
+          if (inStockOnly && storeData.stock <= 0) return null;
           return { ...item, stock: storeData.stock };
         })
         .filter(Boolean) as TData[];
-    }, [data, selectedStore]);
+    }, [data, selectedStore, inStockOnly]);
 
     const table = useReactTable({
         data: filteredData,

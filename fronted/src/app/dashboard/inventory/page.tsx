@@ -185,8 +185,8 @@ export default function InventoryPage() {
               </div>
             </div>
             <div className="overflow-x-auto">
-            <DataTable columns={columns} data={inventory}></DataTable>
-          </div>          
+            <DataTable columns={columns} data={inventory} inStockOnly={inStockOnly}></DataTable>
+          </div>
         </div>
       </section>
    </>
