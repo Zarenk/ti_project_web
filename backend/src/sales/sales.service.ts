@@ -613,20 +613,47 @@ export class SalesService {
       }
     }
 
-    return this.prisma.sales.findMany({
+    const sales = await this.prisma.sales.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       include: {
-        user: true,
+        client: true,
+        invoices: true,
         payments: { include: { paymentMethod: true } },
         salesDetails: {
           include: {
             entryDetail: {
-              include: { product: true },
+              include: {
+                product: true,
+                series: true,
+              },
             },
           },
         },
       },
+    });
+
+    return sales.map((sale) => {
+      const invoice = sale.invoices?.[0];
+      return {
+        date: sale.createdAt,
+        serie: invoice?.serie ?? null,
+        correlativo: invoice?.nroCorrelativo ?? null,
+        tipoComprobante: invoice?.tipoComprobante ?? null,
+        customerName: sale.client?.name ?? null,
+        total: sale.total,
+        payments: sale.payments.map((p) => ({
+          method: p.paymentMethod?.name,
+          amount: p.amount,
+        })),
+        items: sale.salesDetails.map((detail) => ({
+          qty: detail.quantity,
+          unitPrice: detail.price,
+          costUnit: detail.entryDetail.price,
+          productName: detail.entryDetail.product.name,
+          series: detail.entryDetail.series?.map((s) => s.serial) ?? [],
+        })),
+      };
     });
   }
 

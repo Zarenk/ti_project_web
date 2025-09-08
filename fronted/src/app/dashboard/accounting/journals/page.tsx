@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +23,7 @@ import { JournalForm } from "./journal-form";
 import { Input } from "@/components/ui/input";
 import { BACKEND_URL } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getAuthHeaders } from "@/utils/auth-token";
 
 type DailyLine = {
   date: string;
@@ -29,6 +31,7 @@ type DailyLine = {
   description?: string;
   debit: number;
   credit: number;
+  quantity: number;
   provider?: string;
   voucher?: string;
 };
@@ -51,35 +54,84 @@ type Sale = {
   customerName: string;
   total: number;
   payments: { paymentMethodId: number; amount: number }[];
-  items: { qty: number; unitPrice: number; costUnit: number }[];
+  items: { qty: number; unitPrice: number; costUnit: number; name?: string }[];
 };
 
 function buildJournalFromSale(sale: Sale): DailyLine[] {
-  const desc = `${sale.tipoComprobante} ${sale.serie}-${sale.correlativo}`;
-  const base = Number((sale.total / 1.18).toFixed(2));
-  const igv = Number((sale.total - base).toFixed(2));
-  const cost = Number(
-    sale.items.reduce((sum, i) => sum + i.qty * (i.costUnit ?? 0), 0).toFixed(2)
+  const totalSale = sale.items.reduce(
+    (sum, i) => sum + i.qty * (i.unitPrice ?? 0),
+    0
   );
-  const lines: DailyLine[] = sale.payments.map((p) => ({
-    date: sale.date,
-    account: p.paymentMethodId === -1 ? "1011" : "1041",
-    description: desc,
-    debit: Number(p.amount),
-    credit: 0,
-  }));
+  const payments =
+    sale.payments && sale.payments.length > 0
+      ? sale.payments
+      : [{ paymentMethodId: -1, amount: totalSale }];
 
-  lines.push(
-    { date: sale.date, account: "7011", description: desc, debit: 0, credit: base },
-    { date: sale.date, account: "4011", description: desc, debit: 0, credit: igv },
-    { date: sale.date, account: "6911", description: desc, debit: cost, credit: 0 },
-    { date: sale.date, account: "2011", description: desc, debit: 0, credit: cost }
-  );
+  const lines: DailyLine[] = [];
+
+  for (const item of sale.items) {
+    const itemTotal = Number((item.qty * (item.unitPrice ?? 0)).toFixed(2));
+    const itemBase = Number((itemTotal / 1.18).toFixed(2));
+    const itemIgv = Number((itemTotal - itemBase).toFixed(2));
+    const itemCost = Number((item.qty * (item.costUnit ?? 0)).toFixed(2));
+    const productName = item.name ?? "producto";
+    const saleDesc = `Venta ${productName} ${sale.serie}`;
+    const costDesc = `costo unidad ${productName} vendido`;
+
+    for (const p of payments) {
+      const proportion = p.amount / totalSale || 0;
+      const amount = Number((itemTotal * proportion).toFixed(2));
+      lines.push({
+        date: sale.date,
+        account: p.paymentMethodId === -1 ? "1011" : "1041",
+        description: saleDesc,
+        debit: amount,
+        credit: 0,
+        quantity: item.qty,
+      });
+    }
+
+    lines.push(
+      {
+        date: sale.date,
+        account: "7011",
+        description: saleDesc,
+        debit: 0,
+        credit: itemBase,
+        quantity: item.qty,
+      },
+      {
+        date: sale.date,
+        account: "4011",
+        description: "IGV 18%",
+        debit: 0,
+        credit: itemIgv,
+        quantity: item.qty,
+      },
+      {
+        date: sale.date,
+        account: "6911",
+        description: costDesc,
+        debit: itemCost,
+        credit: 0,
+        quantity: item.qty,
+      },
+      {
+        date: sale.date,
+        account: "2011",
+        description: costDesc,
+        debit: 0,
+        credit: itemCost,
+        quantity: item.qty,
+      }
+    );
+  }
 
   return lines;
 }
 
 export default function JournalsPage() {
+  const router = useRouter();
   const [journals, setJournals] = useState<Journal[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Journal | null>(null);
@@ -101,14 +153,30 @@ export default function JournalsPage() {
     const loadDaily = async () => {
       setDailyLoading(true);
       try {
+        const headers = await getAuthHeaders();
+        if (!headers.Authorization) {
+          setDailyLines([]);
+          router.push("/login");
+          return;
+        }
         const from = new Date(`${selectedDate}T00:00:00.000Z`).toISOString();
         const to = new Date(`${selectedDate}T23:59:59.999Z`).toISOString();
         const params = new URLSearchParams({ from, to, page: "1", size: "500" });
         const salesParams = new URLSearchParams({ from, to });
         const [res, salesRes] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/accounting/entries?${params.toString()}`),
-          fetch(`${BACKEND_URL}/api/sales/transactions?${salesParams.toString()}`),
+          fetch(`${BACKEND_URL}/api/accounting/entries?${params.toString()}`, {
+            headers,
+          }),
+          fetch(`${BACKEND_URL}/api/sales/transactions?${salesParams.toString()}`, {
+            headers,
+          }),
         ]);
+
+        if (res.status === 401 || salesRes.status === 401) {
+          setDailyLines([]);
+          router.push("/login");
+          return;
+        }
 
         let lines: DailyLine[] = [];
         if (res.ok) {
@@ -128,6 +196,7 @@ export default function JournalsPage() {
                 description: baseDesc ? `${baseDesc}${extra}` : extra || undefined,
                 debit: Number(l.debit ?? 0),
                 credit: Number(l.credit ?? 0),
+                quantity: Number(l.quantity ?? 0),
                 provider: e.provider ?? undefined,
                 voucher,
               } as DailyLine;
@@ -201,6 +270,7 @@ export default function JournalsPage() {
                   <TableHead className="w-[120px]">Fecha</TableHead>
                   <TableHead className="min-w-[200px]">Cuenta</TableHead>
                   <TableHead className="min-w-[320px]">Glosa</TableHead>
+                  <TableHead className="text-right w-[100px]">Cantidad</TableHead>
                   <TableHead className="text-right w-[140px]">Debe</TableHead>
                   <TableHead className="text-right w-[140px]">Haber</TableHead>
                 </TableRow>
@@ -214,11 +284,12 @@ export default function JournalsPage() {
                       <TableCell><Skeleton className="h-4 w-80" /></TableCell>
                       <TableCell className="text-right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
                       <TableCell className="text-right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
                     </TableRow>
                   ))
                 ) : dailyLines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                       Sin movimientos para la fecha seleccionada.
                     </TableCell>
                   </TableRow>
@@ -238,6 +309,7 @@ export default function JournalsPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">{l.description ?? "-"}</TableCell>
+                        <TableCell className="text-right">{l.quantity ? l.quantity : ""}</TableCell>
                         <TableCell className="text-right">
                           {l.debit ? l.debit.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
                         </TableCell>
@@ -247,7 +319,7 @@ export default function JournalsPage() {
                       </TableRow>
                     ))}
                     <TableRow>
-                      <TableCell colSpan={3} className="text-right font-medium">Totales</TableCell>
+                      <TableCell colSpan={4} className="text-right font-medium">Totales</TableCell>
                       <TableCell className="text-right font-medium">
                         {totals.debit.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>

@@ -33,43 +33,44 @@ export function TransactionHistoryTable({ transactions }: TransactionHistoryTabl
         <TableHeader>
           <TableRow>
             <TableHead>Fecha/Hora</TableHead>
-            <TableHead>Origen</TableHead>
-            <TableHead>Método de Pago</TableHead>
-            <TableHead>Monto</TableHead>
-            <TableHead>Tipo Usuario</TableHead>
-            <TableHead>Nombre</TableHead>
-            <TableHead>Descripción</TableHead>
+            <TableHead>Serie</TableHead>
+            <TableHead>Correlativo</TableHead>
+            <TableHead>Comprobante</TableHead>
+            <TableHead>Cliente</TableHead>
+            <TableHead>Pagos</TableHead>
+            <TableHead>Total</TableHead>
             <TableHead>Productos</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           <AnimatePresence>
-            {displayed.map((tx: any) => {
-              const paymentMethods = tx.payments?.map((p: any) => p.paymentMethod?.name).join(", ") || "-"
+            {displayed.map((tx: any, index: number) => {
+              const paymentMethods =
+                tx.payments?.map((p: any) => `${p.method}: S/ ${p.amount.toFixed(2)}`).join(", ") || "-"
               const products =
-                tx.salesDetails?.map((sd: any) => ({
-                  name: sd.entryDetail?.product?.name,
-                  series: sd.series,
+                tx.items?.map((item: any) => ({
+                  name: item.productName,
+                  series: item.series,
                 })) || []
               return (
                 <motion.tr
-                  key={tx.id}
+                  key={index}
                   initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
                   transition={{ duration: 0.2 }}
                 >
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {new Date(tx.createdAt).toLocaleString("es-PE")}
+                    {new Date(tx.date).toLocaleString("es-PE")}
                   </TableCell>
-                  <TableCell>{tx.source}</TableCell>
+                  <TableCell>{tx.serie || "-"}</TableCell>
+                  <TableCell>{tx.correlativo || "-"}</TableCell>
+                  <TableCell>{tx.tipoComprobante || "-"}</TableCell>
+                  <TableCell>{tx.customerName || "-"}</TableCell>
                   <TableCell>{paymentMethods}</TableCell>
                   <TableCell className="text-green-600 font-medium whitespace-nowrap">
                     {typeof tx.total === "number" ? `S/ ${tx.total.toFixed(2)}` : tx.total}
                   </TableCell>
-                  <TableCell>{tx.user?.role || "-"}</TableCell>
-                  <TableCell>{tx.user?.username || "-"}</TableCell>
-                  <TableCell>{tx.description || "-"}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {products.map((p: any, i: number) => (

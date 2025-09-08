@@ -10,6 +10,18 @@ export interface Journal {
   amount: number;
 }
 
+interface InventoryHistoryRecord {
+  id: number;
+  action: string;
+  createdAt: Date;
+  stockChange: number;
+  inventory: { product: { name: string } };
+  serial?: string;
+  serie?: string;
+  quantity?: number;
+  cantidad?: number;
+}
+
 @Injectable()
 export class JournalsService {
   private journals: Journal[] = [];
@@ -59,12 +71,29 @@ export class JournalsService {
       amount: s.total,
     }));
 
-    const inventoryEntries: Journal[] = inventory.map((i) => ({
-      id: `inv-${i.id}`,
-      date: i.createdAt.toISOString(),
-      description: `${i.action} ${i.inventory.product.name}`,
-      amount: i.stockChange,
-    }));
+    const inventoryEntries: Journal[] = (
+      inventory as InventoryHistoryRecord[]
+    ).map((i) => {
+      const action = i.action === 'sales' ? 'Venta' : i.action;
+      let description = `${action} ${i.inventory.product.name}`;
+
+      const serial = i.serial ?? i.serie;
+      if (serial) {
+        description += ` Serie ${serial}`;
+      }
+
+      const quantity = i.quantity ?? i.cantidad;
+      if (quantity) {
+        description += ` Cantidad ${quantity}`;
+      }
+
+      return {
+        id: `inv-${i.id}`,
+        date: i.createdAt.toISOString(),
+        description,
+        amount: i.stockChange,
+      };
+    });
 
     const manualToday = this.journals.filter((j) => {
       const d = new Date(j.date);

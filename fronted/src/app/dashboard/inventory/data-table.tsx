@@ -22,7 +22,7 @@ import { useDebounce } from "@/app/hooks/useDebounce";
 import { useRouter, useSearchParams } from "next/navigation";
 import OutOfStockDialog from "./data-table-components/OutOfStockDialog";
 import { BookOpenIcon, FilterIcon, StoreIcon } from "lucide-react";
-import { getCategoriesFromInventory } from "./inventory.api";
+import { getCategoriesFromInventory, getAllStores } from "./inventory.api";
 import {
   Select,
   SelectContent,
@@ -70,11 +70,28 @@ interface DataTableProps<TData, TValue> {
     // ESTADO PARA MANEJAR EL FILTRO DE CATEGORIAS
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+
+    // ESTADO PARA MANEJAR EL FILTRO DE TIENDAS
+    const [selectedStore, setSelectedStore] = useState('all');
+    const [storeOptions, setStoreOptions] = useState<{id:number; name:string}[]>([]);
     //
  
     // ESTADOS DE LA TABLA
+    const filteredData = React.useMemo(() => {
+      if (selectedStore === 'all') return data;
+      return data
+        .map((item: any) => {
+          const storeData = item.storeOnInventory.find(
+            (s: any) => String(s.store.id) === selectedStore
+          );
+          if (!storeData) return null;
+          return { ...item, stock: storeData.stock };
+        })
+        .filter(Boolean) as TData[];
+    }, [data, selectedStore]);
+
     const table = useReactTable({
-        data,
+        data: filteredData,
         columns,
         onColumnFiltersChange: setColumnFilters,
         onSortingChange: setSorting,
@@ -125,10 +142,15 @@ interface DataTableProps<TData, TValue> {
   useEffect(() => {
     async function loadCategories() {
       const products = await getCategoriesFromInventory();
-      const categories = Array.from(new Set(products.map((product:any) => product.product.category))); // Extraer categorÃ­as Ãºnicas
+      const categories = Array.from(new Set(products.map((product:any) => product.product.category)));
       setCategoryOptions(categories);
     }
+    async function loadStores() {
+      const stores = await getAllStores();
+      setStoreOptions(stores);
+    }
     loadCategories();
+    loadStores();
   }, []);
   
   // Actualiza el filtro cuando cambia el valor debounced
@@ -152,27 +174,51 @@ return (
           />
 
           <div className="w-[250px]">
-          <Select
-            value={selectedCategory}
-            onValueChange={(value) => setSelectedCategory(value)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Selecciona una categorÃ­a" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                <div className="flex items-center gap-2 font-semibold text-muted-foreground">
-                  <FilterIcon className="w-4 h-4" />
-                  Todas las categorias
-                </div>
-              </SelectItem>
-              {categoryOptions.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
+            <Select
+              value={selectedCategory}
+              onValueChange={(value) => setSelectedCategory(value)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecciona una categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  <div className="flex items-center gap-2 font-semibold text-muted-foreground">
+                    <FilterIcon className="w-4 h-4" />
+                    Todas las categorias
+                  </div>
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                {categoryOptions.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-[250px]">
+            <Select
+              value={selectedStore}
+              onValueChange={(value) => setSelectedStore(value)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecciona una tienda" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  <div className="flex items-center gap-2 font-semibold text-muted-foreground">
+                    <StoreIcon className="w-4 h-4" />
+                    Todas las tiendas
+                  </div>
+                </SelectItem>
+                {storeOptions.map((store) => (
+                  <SelectItem key={store.id} value={String(store.id)}>
+                    {store.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex justify-between items-center">
             <Button

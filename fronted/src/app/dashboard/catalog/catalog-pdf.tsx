@@ -54,15 +54,17 @@ function getLogos(p: Product, brandMap: Record<string, string>): string[] {
   const logos = new Set<string>()
 
   // Primary brand
-  const primaryName = p.brand?.name?.toLowerCase()
-  const brandLogo = resolveImageUrl(p.brand?.logoSvg || p.brand?.logoPng)
+  const brandKey = p.brand?.name?.toLowerCase()
+  const brandLogo =
+    resolveImageUrl(p.brand?.logoSvg || p.brand?.logoPng) ||
+    brandAssets.brands[brandKey ?? '']
   if (brandLogo) logos.add(brandLogo)
 
   const haystack = `${p.name} ${p.description ?? ''}`.toLowerCase()
 
   // Additional brands detected from keywords
   for (const [keyword, logoPath] of Object.entries(brandMap)) {
-    if (keyword === primaryName) continue
+    if (keyword === brandKey) continue
     if (haystack.includes(keyword)) {
       logos.add(logoPath)
     }
@@ -262,10 +264,9 @@ export async function generateCatalogPdf(products: Product[]): Promise<Blob> {
 
   for (const p of products) {
     const priceValue = p.priceSell ?? p.price
-    const imageUrl = p.imageUrl ?? p.image ?? p.images?.[0]
-    const proxied = imageUrl
-      ? `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
-      : undefined
+    const raw = p.imageUrl ?? p.image ?? p.images?.[0]
+    const img = resolveImageUrl(raw)
+    const proxied = img ? `/api/image?url=${encodeURIComponent(img)}` : undefined
 
     const logos = (
       await Promise.all(getLogos(p, brandMap).map(normalizeLogo))

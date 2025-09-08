@@ -127,16 +127,18 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
   function getLogos(p: Product): string[] {
     const logos = new Set<string>();
 
-    // 1) Primary brand logo from backend
-    const primaryName = p.brand?.name?.toLowerCase();
-    const primaryLogo = resolveImageUrl(p.brand?.logoSvg || p.brand?.logoPng);
+    // 1) Primary brand logo from backend or fallback assets
+    const brandKey = p.brand?.name?.toLowerCase();
+    const primaryLogo =
+      resolveImageUrl(p.brand?.logoSvg || p.brand?.logoPng) ||
+      brandAssets.brands[brandKey ?? ""];
     if (primaryLogo) logos.add(primaryLogo);
 
     const haystack = `${p.name} ${p.description ?? ""}`.toLowerCase();
 
     // 2) Additional brand detection from keywords
     for (const [keyword, logoPath] of Object.entries(brandMap)) {
-      if (keyword === primaryName) continue;
+      if (keyword === brandKey) continue;
       if (haystack.includes(keyword)) {
         logos.add(logoPath);
       }

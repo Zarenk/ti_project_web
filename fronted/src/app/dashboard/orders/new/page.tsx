@@ -662,7 +662,12 @@ export default function NewOrderPage() {
       total: Number(total.toFixed(2)),
       tipoMoneda: currency,
       description: `Orden creada por ${role ?? "empleado"}`,
-      details: items.map((i) => ({ productId: i.productId, quantity: i.quantity, price: i.price })),
+      details: items.map((i) => ({
+        productId: i.productId,
+        name: i.name,
+        quantity: i.quantity,
+        price: i.price,
+      })),
       payments: [
         {
           paymentMethodId:

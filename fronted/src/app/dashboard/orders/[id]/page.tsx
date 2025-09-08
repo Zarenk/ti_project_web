@@ -140,6 +140,25 @@ export default function OrderDetailPage() {
     fetchProducts();
   }, [order, sale]);
 
+  // Preload existing series from order payload
+  useEffect(() => {
+    if (!order) return;
+    const payload: any = order.payload || {};
+    const details: any[] = Array.isArray(payload.details) ? payload.details : [];
+    const initial: Record<number, string[]> = {};
+    for (const d of details) {
+      if (
+        d &&
+        typeof d.productId === "number" &&
+        Array.isArray(d.series) &&
+        d.series.length > 0
+      ) {
+        initial[Number(d.productId)] = d.series as string[];
+      }
+    }
+    setSeriesByProduct(initial);
+  }, [order]);
+
   // Helpers
   const payload = (order?.payload as any) || {};
   const payloadStoreId: number | undefined = payload?.storeId;
@@ -325,7 +344,9 @@ export default function OrderDetailPage() {
     },
     shipping: {
       name: order.shippingName,
-      address: order.shippingAddress,
+      address: [order.shippingAddress, order.city, order.postalCode]
+        .filter(Boolean)
+        .join(", "),
       method: payload.shippingMethod ?? "-",
       estimatedDelivery: payload.estimatedDelivery ?? "-",
     },
@@ -555,11 +576,22 @@ export default function OrderDetailPage() {
                       <div className="text-right space-y-1">
                         <p className="text-sm text-slate-500 dark:text-slate-400">S/. {product.unitPrice.toFixed(2)} c/u</p>
                         <p className="font-bold text-blue-900 dark:text-blue-100">S/. {product.subtotal.toFixed(2)}</p>
-                        <div className="pt-1">
-                          <Button variant="outline" size="sm" onClick={() => openSeriesSelector(Number(product.id), Number(product.quantity))}>
-                            Seleccionar series
-                          </Button>
-                        </div>
+                        {order.status === "PENDING" && (
+                          <div className="pt-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                openSeriesSelector(
+                                  Number(product.id),
+                                  Number(product.quantity),
+                                )
+                              }
+                            >
+                              Seleccionar series
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
