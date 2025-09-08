@@ -49,7 +49,7 @@ export function CatalogItem({
               key={idx}
               src={logo}
               alt="logo"
-              className="h-8 w-8 object-contain"
+              className="h-12 w-12 object-contain"
             />
           ))}
         </div>

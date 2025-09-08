@@ -51,40 +51,43 @@ interface CatalogSection {
 }
 
 function getLogos(p: Product, brandMap: Record<string, string>): string[] {
-  const out = new Set<string>()
+  const out = new Map<string, string>()
 
   // Primary brand
+  const primaryName = p.brand?.name?.toLowerCase()
   const brandLogo = resolveImageUrl(p.brand?.logoSvg || p.brand?.logoPng)
-  if (brandLogo) out.add(brandLogo)
+  if (primaryName && brandLogo) out.set(primaryName, brandLogo)
 
   const haystack = `${p.name} ${p.description ?? ''}`.toLowerCase()
 
   // Additional brands detected from keywords
   for (const [keyword, logoPath] of Object.entries(brandMap)) {
     if (haystack.includes(keyword)) {
-      out.add(logoPath)
+      out.set(keyword, logoPath)
     }
   }
 
-  // CPU
+  // CPU brand detection using backend brands
   const processor = p.specification?.processor?.toLowerCase() || ''
-  for (const [key, path] of Object.entries(brandAssets.cpus)) {
+  for (const [key, brandKey] of Object.entries(brandAssets.cpus)) {
     if (processor.includes(key)) {
-      out.add(resolveImageUrl(path))
+      const logoUrl = brandMap[brandKey]
+      if (logoUrl) out.set(brandKey, logoUrl)
       break
     }
   }
 
-  // GPU
+  // GPU brand detection using backend brands
   const graphics = p.specification?.graphics?.toLowerCase() || ''
-  for (const [key, path] of Object.entries(brandAssets.gpus)) {
+  for (const [key, brandKey] of Object.entries(brandAssets.gpus)) {
     if (graphics.includes(key)) {
-      out.add(resolveImageUrl(path))
+      const logoUrl = brandMap[brandKey]
+      if (logoUrl) out.set(brandKey, logoUrl)
       break
     }
   }
 
-  return Array.from(out)
+  return Array.from(out.values())
 }
 
 function formatPrice(value: number): string {
@@ -133,7 +136,7 @@ const styles = StyleSheet.create({
   description: { fontSize: 10, marginTop: 2, textAlign: 'center' },
   price: { fontSize: 10, fontWeight: 'bold', marginTop: 4, textAlign: 'center' },
   logos: { flexDirection: 'row', marginTop: 4 },
-  logo: { width: 24, height: 24, marginRight: 4 },
+  logo: { width: 40, height: 40, marginRight: 4 },
   companyLogo: { position: 'absolute', top: 4, right: 4, width: 24, height: 24 }
 })
 

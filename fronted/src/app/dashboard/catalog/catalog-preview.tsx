@@ -117,34 +117,35 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     const logos = new Map<string, string>();
 
     // 1) Primary brand logo from backend
-    const brandLogo = resolveImageUrl(p.brand?.logoSvg || p.brand?.logoPng);
-    if (brandLogo) logos.set(brandLogo, brandLogo);
+    const primaryName = p.brand?.name?.toLowerCase();
+    const primaryLogo = resolveImageUrl(p.brand?.logoSvg || p.brand?.logoPng);
+    if (primaryName && primaryLogo) logos.set(primaryName, primaryLogo);
 
     const haystack = `${p.name} ${p.description ?? ""}`.toLowerCase();
 
     // 2) Additional brand detection from keywords
     for (const [keyword, logoPath] of Object.entries(brandMap)) {
       if (haystack.includes(keyword)) {
-        logos.set(logoPath, logoPath);
+        logos.set(keyword, logoPath);
       }
     }
 
-    // 3) CPU brand detection
+    // 3) CPU brand detection using backend brands
     const processor = p.specification?.processor?.toLowerCase() || "";
-    for (const [key, path] of Object.entries(brandAssets.cpus)) {
+    for (const [key, brandKey] of Object.entries(brandAssets.cpus)) {
       if (processor.includes(key)) {
-        const logoUrl = resolveImageUrl(path);
-        logos.set(logoUrl, logoUrl);
+        const logoUrl = brandMap[brandKey];
+        if (logoUrl) logos.set(brandKey, logoUrl);
         break;
       }
     }
 
-    // 4) GPU brand detection
+    // 4) GPU brand detection using backend brands
     const graphics = p.specification?.graphics?.toLowerCase() || "";
-    for (const [key, path] of Object.entries(brandAssets.gpus)) {
+    for (const [key, brandKey] of Object.entries(brandAssets.gpus)) {
       if (graphics.includes(key)) {
-        const logoUrl = resolveImageUrl(path);
-        logos.set(logoUrl, logoUrl);
+        const logoUrl = brandMap[brandKey];
+        if (logoUrl) logos.set(brandKey, logoUrl);
         break;
       }
     }

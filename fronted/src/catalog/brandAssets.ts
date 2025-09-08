@@ -1,11 +1,12 @@
 export interface BrandAssets {
   brands: Record<string, string>
+  // Keyword mappings for detecting GPU brands. The value must match a
+  // brand name present in the backend `brands` section so the logo can be
+  // resolved dynamically from there.
   gpus: Record<string, string>
+  // Keyword mappings for detecting CPU brands. Values reference brand names
+  // from the backend as well.
   cpus: Record<string, string>
-  storage: Record<string, string>
-  // Optional sub-brand/series logos keyed by keyword in product name
-  // Example: 'tuf' (ASUS TUF), 'rog' (ASUS ROG), 'predator' (Acer Predator)
-  subbrands?: Record<string, string>
 }
 
 export const brandAssets: BrandAssets = {
@@ -17,40 +18,23 @@ export const brandAssets: BrandAssets = {
     asus: '/assets/logos/asus.svg',
     lenovo: '/assets/logos/lenovo.svg',
   },
+  // Keyword lookups for GPU brands mapped to a brand name defined in the
+  // backend.
   gpus: {
-    nvidia: '/assets/logos/nvidia.svg',
-    geforce: '/assets/logos/nvidia.svg',
-    rtx: '/assets/logos/nvidia.svg',
-    gtx: '/assets/logos/nvidia.svg',
-    amd: '/assets/logos/amd.svg',
-    radeon: '/assets/logos/amd.svg',
+    nvidia: 'nvidia',
+    geforce: 'nvidia',
+    rtx: 'nvidia',
+    gtx: 'nvidia',
+    amd: 'amd',
+    radeon: 'amd',
   },
+  // Keyword lookups for CPU brands mapped to a brand name defined in the
+  // backend.
   cpus: {
-    intel: '/assets/logos/intel.svg',
-    core: '/assets/logos/intel.svg',
-    amd: '/assets/logos/amd.svg',
-    ryzen: '/assets/logos/amd.svg',
-  },
-  storage: {
-    samsung: '/assets/logos/samsung.svg',
-    seagate: '/assets/logos/seagate.svg',
-  },
-  // Keywords detected from product titles/descriptions to show an additional logo
-  // Add the corresponding SVG/PNG to public/assets/logos if available.
-  subbrands: {
-    // ASUS series
-    tuf: '/assets/logos/asus-tuf.svg',
-    rog: '/assets/logos/asus-rog.svg',
-    // HP series
-    omen: '/assets/logos/hp-omen.svg',
-    victus: '/assets/logos/hp-victus.svg',
-    // Lenovo series
-    legion: '/assets/logos/lenovo-legion.svg',
-    // Acer series
-    predator: '/assets/logos/acer-predator.svg',
-    nitro: '/assets/logos/acer-nitro.svg',
-    // Dell series (example)
-    alienware: '/assets/logos/dell-alienware.svg',
+    intel: 'intel',
+    core: 'intel',
+    amd: 'amd',
+    ryzen: 'amd',
   },
 }
 
