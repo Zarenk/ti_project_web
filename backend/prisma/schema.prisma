@@ -1055,6 +1055,8 @@ model AccEntry {
   serie       String?
   correlativo String?
   invoiceUrl  String?
+  source      String?
+  sourceId    Int?
   period      AccPeriod @relation(fields: [periodId], references: [id])
   provider    Provider?  @relation(fields: [providerId], references: [id])
   lines       AccEntryLine[]

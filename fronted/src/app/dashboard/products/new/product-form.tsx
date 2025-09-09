@@ -38,7 +38,12 @@ export function ProductForm({product, categories}: {product: any; categories: an
       }).min(0, "El precio de venta debe ser un número positivo")
       .max(99999999.99, "El precio no puede exceder 99999999.99"),
     images: z
-      .array(z.string().url("La imagen debe ser una URL válida"))
+      .array(
+        z.string().refine(
+          (val) => /^https?:\/\//.test(val) || val.startsWith('/uploads'),
+          'La imagen debe ser una URL válida o una ruta relativa'
+        )
+      )
       .optional(),
     status: z.enum(["Activo", "Inactivo"]).optional(),
     categoryId: z.string().nonempty("Debe seleccionar una categoría"), // Validar categoría

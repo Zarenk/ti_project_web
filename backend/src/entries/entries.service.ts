@@ -14,6 +14,7 @@ import { CategoryService } from 'src/category/category.service';
 import { ActivityService } from 'src/activity/activity.service';
 import { AuditAction } from '@prisma/client';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
+import { AccountingService } from 'src/accounting/accounting.service';
 
 @Injectable()
 export class EntriesService {
@@ -23,6 +24,7 @@ export class EntriesService {
     private categoryService: CategoryService,
     private activityService: ActivityService,
     private accountingHook: AccountingHook,
+    private accountingService: AccountingService,
   ) {}
 
   private handlePrismaError(error: any): never {
@@ -238,6 +240,7 @@ export class EntriesService {
         }
       }
       console.log("Entrada creada:", entry);
+      await this.accountingService.createJournalForInventoryEntry(entry.id);
       return entry;
     });
 

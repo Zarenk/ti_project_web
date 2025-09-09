@@ -42,6 +42,13 @@ export class EntriesRepository {
     });
   }
 
+  async findByInvoice(serie: string, correlativo: string) {
+    return this.prisma.accEntry.findFirst({
+      where: { serie, correlativo },
+      include: { lines: true, period: true, provider: true },
+    });
+  }
+
   async getPeriod(name: string) {
     return this.prisma.accPeriod.findUnique({ where: { name } });
   }
@@ -63,6 +70,7 @@ export class EntriesRepository {
     serie?: string;
     correlativo?: string;
     invoiceUrl?: string;
+    referenceId?: string;
     lines: { account: string; description?: string; debit: number; credit: number }[];
   }) {
     return this.prisma.accEntry.create({
@@ -75,6 +83,7 @@ export class EntriesRepository {
         serie: data.serie,
         correlativo: data.correlativo,
         invoiceUrl: data.invoiceUrl,
+        referenceId: data.referenceId,
         lines: {
           create: data.lines.map((l) => ({
             account: l.account,
@@ -84,6 +93,13 @@ export class EntriesRepository {
           })),
         },
       },
+      include: { lines: true, period: true, provider: true },
+    });
+  }
+
+  async findByReferenceId(referenceId: string) {
+    return this.prisma.accEntry.findFirst({
+      where: { referenceId },
       include: { lines: true, period: true, provider: true },
     });
   }

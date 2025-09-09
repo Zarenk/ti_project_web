@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { zonedTimeToUtc } from 'date-fns-tz';
-import { endOfDay, startOfDay, parse, endOfMonth } from 'date-fns';
+import { endOfDay, startOfDay, parse, endOfMonth, format } from 'date-fns';
 
 export interface AccountNode {
   id: number;
@@ -193,5 +193,87 @@ export class AccountingService {
     }
 
     return results;
+  }
+
+  async createJournalForInventoryEntry(entryId: number) {
+    await this.prisma.$transaction(async (prisma) => {
+      const entry = await prisma.entry.findUnique({
+        where: { id: entryId },
+        include: {
+          details: { include: { product: true } },
+          invoice: true,
+          provider: true,
+        },
+      });
+      if (!entry) return;
+
+      const total = entry.details.reduce(
+        (sum: number, d: any) =>
+          sum + ((d.priceInSoles ?? d.price ?? 0) * d.quantity),
+        0,
+      );
+      const subtotal = +(total / 1.18).toFixed(2);
+      const igv = +(total - subtotal).toFixed(2);
+
+      const invoiceCode = entry.invoice
+        ? `${entry.invoice.serie}-${entry.invoice.nroCorrelativo}`
+        : '';
+      const itemName = entry.details[0]?.product?.name ?? '';
+
+      const paymentMethod = (entry.invoice as any)?.paymentMethod ?? '';
+      let creditAccount = '1011';
+      if (/credito/i.test(paymentMethod)) {
+        creditAccount = '4211';
+      } else if (/transfer|yape/i.test(paymentMethod)) {
+        creditAccount = '1041';
+      }
+
+      const periodName = format(new Date(), 'yyyy-MM');
+      let period = await prisma.accPeriod.findUnique({
+        where: { name: periodName },
+      });
+      if (!period) {
+        period = await prisma.accPeriod.create({ data: { name: periodName } });
+      }
+
+      const amount = +(subtotal + igv).toFixed(2);
+
+      await prisma.accEntry.create({
+        data: {
+          periodId: period.id,
+          date: zonedTimeToUtc(new Date(), 'America/Lima'),
+          totalDebit: amount,
+          totalCredit: amount,
+          providerId: entry.providerId ?? undefined,
+          serie: entry.invoice?.serie,
+          correlativo: entry.invoice?.nroCorrelativo,
+          invoiceUrl: (entry as any).pdfUrl ?? undefined,
+          source: 'inventory_entry',
+          sourceId: entryId,
+          lines: {
+            create: [
+              {
+                account: '2011',
+                description: `Ingreso ${itemName} – Compra ${invoiceCode} (${invoiceCode})`.trim(),
+                debit: subtotal,
+                credit: 0,
+              },
+              {
+                account: '4011',
+                description: `IGV 18% Compra ${invoiceCode} (${invoiceCode})`.trim(),
+                debit: igv,
+                credit: 0,
+              },
+              {
+                account: creditAccount,
+                description: `Pago/Obligación Compra ${invoiceCode} (${invoiceCode})`.trim(),
+                debit: 0,
+                credit: amount,
+              },
+            ],
+          },
+        },
+      });
+    });
   }
 }

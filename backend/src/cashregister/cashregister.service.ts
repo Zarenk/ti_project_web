@@ -103,24 +103,29 @@
         },
       });
     
-      const formattedTransactions = transactions.map((tx) => ({
-        id: tx.id.toString(),
-        cashRegisterId: tx.cashRegisterId,
-        type: tx.type,
-        amount: Number(tx.amount),
-        createdAt: tx.createdAt,
-        timestamp: tx.createdAt,
-        userId: tx.userId,
-        employee: tx.user?.username || "Sistema",
-        description: tx.description,
-        paymentMethods: tx.paymentMethods.map(pm => pm.paymentMethod?.name).filter(Boolean) || [],
-        voucher: tx.salePayments[0]?.sale?.invoices[0]
-          ? `${tx.salePayments[0].sale.invoices[0].serie}-${tx.salePayments[0].sale.invoices[0].nroCorrelativo}`
-          : null,
-        clientName: tx.salePayments[0]?.sale?.client?.name ?? null,
-        clientDocument: tx.salePayments[0]?.sale?.client?.typeNumber ?? null,
-        clientDocumentType: tx.salePayments[0]?.sale?.client?.type ?? null,
-      }));
+      const formattedTransactions = transactions.map((tx) => {
+        const linkedClient = tx.salePayments[0]?.sale?.client;
+        return {
+          id: tx.id.toString(),
+          cashRegisterId: tx.cashRegisterId,
+          type: tx.type,
+          amount: Number(tx.amount),
+          createdAt: tx.createdAt,
+          timestamp: tx.createdAt,
+          userId: tx.userId,
+          employee: tx.user?.username || "Sistema",
+          description: tx.description,
+          paymentMethods:
+            tx.paymentMethods.map((pm) => pm.paymentMethod?.name).filter(Boolean) || [],
+          voucher: tx.salePayments[0]?.sale?.invoices[0]
+            ? `${tx.salePayments[0].sale.invoices[0].serie}-${tx.salePayments[0].sale.invoices[0].nroCorrelativo}`
+            : null,
+          clientName: linkedClient?.name ?? tx.clientName ?? null,
+          clientDocument: linkedClient?.typeNumber ?? tx.clientDocument ?? null,
+          clientDocumentType:
+            linkedClient?.type ?? tx.clientDocumentType ?? null,
+        };
+      });
     
       const formattedClosures = closures.map((closure) => ({
         id: `closure-${closure.id}`,

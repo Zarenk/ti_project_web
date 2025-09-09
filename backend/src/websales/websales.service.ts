@@ -121,9 +121,65 @@ export class WebSalesService {
       postalCode,
       phone,
       code,
+      personalDni,
+      ruc,
+      firstName,
+      lastName,
+      invoiceName,
+      razonSocial,
     } = data;
 
-    const { store, cashRegister, clientIdToUse } = await prepareSaleContext(this.prisma, storeId, clientId);
+    let resolvedClientId = clientId;
+
+    if (!resolvedClientId) {
+      const documentNumber = personalDni || ruc;
+      const documentType = personalDni ? 'DNI' : ruc ? 'RUC' : undefined;
+      const orderName =
+        invoiceName ||
+        razonSocial ||
+        `${firstName ?? ''} ${lastName ?? ''}`.trim();
+
+      if (documentNumber && documentType && orderName) {
+        const existingClient = await this.prisma.client.findUnique({
+          where: { typeNumber: documentNumber },
+          select: { id: true },
+        });
+
+        if (existingClient) {
+          resolvedClientId = existingClient.id;
+        } else {
+          const unique = Date.now();
+          const user = await this.prisma.user.create({
+            data: {
+              email: `web_${unique}@client.local`,
+              username: `web_${unique}`,
+              password: 'default_password',
+              role: 'CLIENT',
+            },
+            select: { id: true },
+          });
+
+          const newClient = await this.prisma.client.create({
+            data: {
+              name: orderName,
+              type: documentType,
+              typeNumber: documentNumber,
+              userId: user.id,
+              status: 'Activo',
+            },
+            select: { id: true },
+          });
+
+          resolvedClientId = newClient.id;
+        }
+      }
+    }
+
+    const { store, cashRegister, clientIdToUse } = await prepareSaleContext(
+      this.prisma,
+      storeId,
+      resolvedClientId,
+    );
 
     const allocations: SaleAllocation[] = [];
     
