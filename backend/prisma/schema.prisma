@@ -13,20 +13,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Product{
-  id Int @id @default(autoincrement())
-  name String @unique
-  barcode   String?  @unique // Opcional pero único
-  qrCode    String?  @unique // Opcional pero único
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  barcode     String?  @unique // Opcional pero único
+  qrCode      String?  @unique // Opcional pero único
   description String?
-  brandName String? @map("brand")
-  price Float
-  priceSell Float?
-  status String?
-  image String?
-  images String[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  brandName   String?  @map("brand")
+  price       Float
+  priceSell   Float?
+  status      String?
+  image       String?
+  images      String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relación con Brand
   brandId Int?
@@ -34,9 +34,9 @@ model Product{
 
   // Relación con Category
   categoryId  Int
-  category    Category @relation(fields: [categoryId], references: [id])
+  category    Category      @relation(fields: [categoryId], references: [id])
   entryDetail EntryDetail[]
-  inventory Inventory[]
+  inventory   Inventory[]
 
   specification ProductSpecification?
   features      ProductFeature[]
@@ -44,7 +44,7 @@ model Product{
   favorites     Favorite[]
 
   // Relación con Transfer
-  transfers   Transfer[] // Relación con el modelo Transfer
+  transfers Transfer[] // Relación con el modelo Transfer
 
   @@index([categoryId])
   @@index([name])
@@ -52,20 +52,20 @@ model Product{
 }
 
 model ProductSpecification {
-  id         Int      @id @default(autoincrement())
-  productId  Int      @unique
-  processor  String?
-  ram        String?
-  storage    String?
-  graphics   String?
-  screen     String?
-  resolution String?
-  refreshRate String?
+  id           Int      @id @default(autoincrement())
+  productId    Int      @unique
+  processor    String?
+  ram          String?
+  storage      String?
+  graphics     String?
+  screen       String?
+  resolution   String?
+  refreshRate  String?
   connectivity String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  product    Product  @relation(fields: [productId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
 
   @@index([productId])
 }
@@ -79,7 +79,7 @@ model ProductFeature {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  product     Product  @relation(fields: [productId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
 
   @@index([productId])
 }
@@ -92,8 +92,8 @@ model Brand {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  products  Product[]
-  keywords  Keyword[]
+  products Product[]
+  keywords Keyword[]
 }
 
 model Keyword {
@@ -106,17 +106,17 @@ model Keyword {
   @@index([brandId])
 }
 
-model Category{
-  id Int @id @default(autoincrement())
-  name String @unique
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
   description String?
-  status String?
-  image String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status      String?
+  image       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relación con Product
-  products    Product[]
+  products Product[]
 }
 
 enum UserRole {
@@ -127,92 +127,97 @@ enum UserRole {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  username  String   @unique
-  password  String
-  role      UserRole @default(CLIENT) // Enum para roles de usuario
-  client    Client?  // Relación opcional con el modelo Client
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tokenVersion Int @default(0)
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  username     String   @unique
+  password     String
+  role         UserRole @default(CLIENT) // Enum para roles de usuario
+  client       Client? // Relación opcional con el modelo Client
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tokenVersion Int      @default(0)
 
-  entrys           Entry[]   // Relación con el modelo Entry
+  entrys           Entry[] // Relación con el modelo Entry
   inventoryHistory InventoryHistory[] // Relación con el modelo InventoryHistory
   // Relación con Sales
   sales            Sales[]
   cashTransactions CashTransaction[] // Relación con la tabla de transacciones de caja
   cashClosures     CashClosure[] // Relación con la tabla de cierres de caja
-  reviews       Review[]
-  clientMessages ChatMessage[] @relation("ClientMessages")
-  sentMessages   ChatMessage[] @relation("SenderMessages")
-  favorites     Favorite[]
+  reviews          Review[]
+  clientMessages   ChatMessage[]      @relation("ClientMessages")
+  sentMessages     ChatMessage[]      @relation("SenderMessages")
+  favorites        Favorite[]
 
   @@index([email])
   @@index([username])
 }
 
-model Client{
-  id      Int      @id @default(autoincrement())
-  userId    Int      @unique
-  name    String   
-  type String?
-  typeNumber String? @unique
-  phone String?
-  adress String?
-  email String? 
-  status  String?
-  image   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Client {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @unique
+  name       String
+  type       String?
+  typeNumber String?  @unique
+  phone      String?
+  adress     String?
+  email      String?
+  status     String?
+  image      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id])
+  user  User    @relation(fields: [userId], references: [id])
   // Relación con Sales
   sales Sales[] // Relación con el modelo Sales
 }
 
-model Provider{
-  id      Int      @id @default(autoincrement())
-  name    String   
-  document String?
+model Provider {
+  id             Int      @id @default(autoincrement())
+  name           String
+  document       String?
   documentNumber String?  @unique
-  description String?
-  phone String?
-  adress String?
-  email String? 
-  website String?
-  status  String?
-  image   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  description    String?
+  phone          String?
+  adress         String?
+  email          String?
+  website        String?
+  status         String?
+  image          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  entrys    Entry[]   // Relación con el modelo Entry
+  entrys     Entry[] // Relación con el modelo Entry
   accEntries AccEntry[] // Relación con el modelo AccEntry
 }
 
+enum PaymentTerm {
+  CASH
+  CREDIT
+}
+
 model Entry {
-  id          Int       @id @default(autoincrement())
-  storeId     Int       // Almacén relacionado con la entrada  
-  userId      Int       // Usuario que realiza la entrada
-  providerId  Int       // Proveedor relacionado con la entrada
-  journalId   Int?      // Diario contable relacionado con la entrada
-  date        DateTime  @default(now()) // Fecha de la entrada
-  description String?   // Descripción opcional
-  tipoMoneda  String?   // Tipo de moneda (e.g., PEN, USD)
-  tipoCambioId Int?      // FK a TipoCambio
-  pdfUrl      String?
-  guiaUrl     String?   // URL del PDF de la guía de remisión
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           Int      @id @default(autoincrement())
+  storeId      Int // Almacén relacionado con la entrada  
+  userId       Int // Usuario que realiza la entrada
+  providerId   Int // Proveedor relacionado con la entrada
+  journalId    Int? // Diario contable relacionado con la entrada
+  date         DateTime @default(now()) // Fecha de la entrada
+  description  String? // Descripción opcional
+  tipoMoneda   String? // Tipo de moneda (e.g., PEN, USD)
+  tipoCambioId Int? // FK a TipoCambio
+  pdfUrl       String?
+  guiaUrl      String? // URL del PDF de la guía de remisión
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  store       Store     @relation(fields: [storeId], references: [id]) // Relación con el modelo Store
-  user        User      @relation(fields: [userId], references: [id]) // Relación con el modelo User
-  provider    Provider  @relation(fields: [providerId], references: [id]) // Relación con el modelo Provider
-  journal     Journal?  @relation(fields: [journalId], references: [id])
-  details     EntryDetail[]
+  store    Store         @relation(fields: [storeId], references: [id]) // Relación con el modelo Store
+  user     User          @relation(fields: [userId], references: [id]) // Relación con el modelo User
+  provider Provider      @relation(fields: [providerId], references: [id]) // Relación con el modelo Provider
+  journal  Journal?      @relation(fields: [journalId], references: [id])
+  details  EntryDetail[]
 
-  invoice     Invoice?  @relation // Relación 1:1 con Comprobante (sin `fields` ni `references`)
-  tipoCambio   TipoCambio? @relation(fields: [tipoCambioId], references: [id])
+  invoice    Invoice?    @relation // Relación 1:1 con Comprobante (sin `fields` ni `references`)
+  tipoCambio TipoCambio? @relation(fields: [tipoCambioId], references: [id])
 
   shippingGuides ShippingGuide[]
 
@@ -224,32 +229,32 @@ model Entry {
 }
 
 model Invoice {
-  id          Int       @id @default(autoincrement())
-  entryId     Int       @unique // Clave foránea única para la relación 1:1// Relación con la entrada
-  serie       String   // Serie del comprobante
-  nroCorrelativo String // Número correlativo del comprobante
-  tipoComprobante String?   // Número del comprobante
-  tipoMoneda  String?   // Tipo de moneda (e.g., PEN, USD)
-  total       Float?    // Total del comprobante
-  fechaEmision DateTime? // Fecha de emisión del comprobante
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              Int       @id @default(autoincrement())
+  entryId         Int       @unique // Clave foránea única para la relación 1:1// Relación con la entrada
+  serie           String // Serie del comprobante
+  nroCorrelativo  String // Número correlativo del comprobante
+  tipoComprobante String? // Número del comprobante
+  tipoMoneda      String? // Tipo de moneda (e.g., PEN, USD)
+  total           Float? // Total del comprobante
+  fechaEmision    DateTime? // Fecha de emisión del comprobante
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  entry       Entry     @relation(fields: [entryId], references: [id], onDelete:  Cascade) // Relación con Entry
+  entry Entry @relation(fields: [entryId], references: [id], onDelete: Cascade) // Relación con Entry
 
   @@index([entryId])
 }
 
 model Inventory {
-  id          Int       @id @default(autoincrement())
-  productId   Int       
-  storeId     Int  
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt 
+  id        Int      @id @default(autoincrement())
+  productId Int
+  storeId   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   InventoryHistory InventoryHistory[] // Relación con el modelo InventoryHistory
   storeOnInventory StoreOnInventory[] // Relación con la tabla intermedia
-  product     Product   @relation(fields: [productId], references: [id])
+  product          Product            @relation(fields: [productId], references: [id])
 
   entryDetails EntryDetail[] // Relación uno-a-muchos con EntryDetail
 
@@ -257,54 +262,54 @@ model Inventory {
 }
 
 model EntryDetail {
-  id          Int       @id @default(autoincrement())
-  entryId     Int       // Relación con la entrada
-  productId   Int       // Producto relacionado
-  quantity    Int       // Cantidad de productos ingresados
-  price       Float     // Precio unitario del producto
-  priceInSoles  Float?      // Precio en soles ya congelado
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           Int      @id @default(autoincrement())
+  entryId      Int // Relación con la entrada
+  productId    Int // Producto relacionado
+  quantity     Int // Cantidad de productos ingresados
+  price        Float // Precio unitario del producto
+  priceInSoles Float? // Precio en soles ya congelado
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  inventoryId Int?      // Relación con Inventory
+  inventoryId Int? // Relación con Inventory
 
-  entry       Entry     @relation(fields: [entryId], references: [id], onDelete: Cascade) // Relación con el modelo Entry
-  product     Product   @relation(fields: [productId], references: [id]) // Relación con el modelo Product
-  series      EntryDetailSeries[] // Relación con las series
-  inventory   Inventory? @relation(fields: [inventoryId], references: [id]) // Relación con Inventory
+  entry        Entry               @relation(fields: [entryId], references: [id], onDelete: Cascade) // Relación con el modelo Entry
+  product      Product             @relation(fields: [productId], references: [id]) // Relación con el modelo Product
+  series       EntryDetailSeries[] // Relación con las series
+  inventory    Inventory?          @relation(fields: [inventoryId], references: [id]) // Relación con Inventory
   // Relación con SalesDetail
   salesDetails SalesDetail[] // Relación con el modelo SalesDetail
 
-  @@index([entryId])  
+  @@index([entryId])
   @@index([productId])
 }
 
 model EntryDetailSeries {
-  id          Int             @id @default(autoincrement())
+  id            Int         @id @default(autoincrement())
   entryDetailId Int
-  serial      String          @unique
-  status      String   @default("active") // Nuevo campo
-  entryDetail EntryDetail     @relation(fields: [entryDetailId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  serial        String      @unique
+  status        String      @default("active") // Nuevo campo
+  entryDetail   EntryDetail @relation(fields: [entryDetailId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
-model Store{
-  id      Int      @id @default(autoincrement())
-  name    String   @unique
+model Store {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
   description String?
-  ruc String?
-  phone String?
-  adress String?
-  email String? 
-  website String?
-  status  String?
-  image   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  ruc         String?
+  phone       String?
+  adress      String?
+  email       String?
+  website     String?
+  status      String?
+  image       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   storeOnInventory StoreOnInventory[] // Relación con la tabla intermedia
-  entries   Entry[]   // Relación con el modelo Entry
+  entries          Entry[] // Relación con el modelo Entry
 
   // Relación con Transfer como tienda de origen
   transfersFrom Transfer[] @relation("SourceStore")
@@ -314,21 +319,21 @@ model Store{
 
   // Relación con Sales
   sales Sales[] // Relación con el modelo Sales
-  
+
   // Relación con la tabla de caja
   CashRegister CashRegister[]
 }
 
 model StoreOnInventory {
-  id          Int       @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   inventoryId Int
   storeId     Int
-  stock       Int       @default(0) // Stock específico para esta relación
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  stock       Int      @default(0) // Stock específico para esta relación
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  inventory   Inventory @relation(fields: [inventoryId], references: [id])
-  store       Store     @relation(fields: [storeId], references: [id])
+  inventory    Inventory     @relation(fields: [inventoryId], references: [id])
+  store        Store         @relation(fields: [storeId], references: [id])
   // Relación con SalesDetail
   salesDetails SalesDetail[] // Relación con el modelo SalesDetail
 
@@ -337,18 +342,18 @@ model StoreOnInventory {
 }
 
 model InventoryHistory {
-  id          Int       @id @default(autoincrement())
-  inventoryId Int       // Relación con el inventario
-  userId      Int       // Usuario que realiza el cambio
-  action      String    // Tipo de acción: "create", "update", "delete"
-  description String?   // Descripción opcional
-  stockChange Int       // Cambio en el stock (positivo o negativo)
-  previousStock Int?    // Stock anterior (opcional)
-  newStock    Int?      // Stock nuevo (opcional)
-  createdAt   DateTime  @default(now()) // Fecha del cambio
+  id            Int      @id @default(autoincrement())
+  inventoryId   Int // Relación con el inventario
+  userId        Int // Usuario que realiza el cambio
+  action        String // Tipo de acción: "create", "update", "delete"
+  description   String? // Descripción opcional
+  stockChange   Int // Cambio en el stock (positivo o negativo)
+  previousStock Int? // Stock anterior (opcional)
+  newStock      Int? // Stock nuevo (opcional)
+  createdAt     DateTime @default(now()) // Fecha del cambio
 
-  inventory   Inventory @relation(fields: [inventoryId], references: [id])
-  user        User      @relation(fields: [userId], references: [id]) // Relación con la tabla de usuarios
+  inventory Inventory @relation(fields: [inventoryId], references: [id])
+  user      User      @relation(fields: [userId], references: [id]) // Relación con la tabla de usuarios
 
   @@index([inventoryId])
   @@index([userId])
@@ -356,22 +361,22 @@ model InventoryHistory {
 }
 
 model Transfer {
-  id                Int       @id @default(autoincrement())
-  sourceStoreId     Int       // ID de la tienda de origen
-  destinationStoreId Int      // ID de la tienda de destino
-  productId         Int       // ID del producto trasladado
-  quantity          Int       // Cantidad trasladada
-  description       String?   // Descripción opcional
-  createdAt         DateTime  @default(now()) // Fecha del traslado
+  id                 Int      @id @default(autoincrement())
+  sourceStoreId      Int // ID de la tienda de origen
+  destinationStoreId Int // ID de la tienda de destino
+  productId          Int // ID del producto trasladado
+  quantity           Int // Cantidad trasladada
+  description        String? // Descripción opcional
+  createdAt          DateTime @default(now()) // Fecha del traslado
 
   // Relación con la tabla Store para la tienda de origen
-  sourceStore       Store     @relation("SourceStore", fields: [sourceStoreId], references: [id])
+  sourceStore Store @relation("SourceStore", fields: [sourceStoreId], references: [id])
 
   // Relación con la tabla Store para la tienda de destino
-  destinationStore  Store     @relation("DestinationStore", fields: [destinationStoreId], references: [id])
+  destinationStore Store @relation("DestinationStore", fields: [destinationStoreId], references: [id])
 
   // Relación con la tabla Product
-  product           Product   @relation(fields: [productId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
 
   @@index([sourceStoreId]) // Índice para optimizar consultas por tienda de origen
   @@index([destinationStoreId]) // Índice para optimizar consultas por tienda de destino
@@ -379,24 +384,24 @@ model Transfer {
 }
 
 model Sales {
-  id          Int       @id @default(autoincrement())
-  userId      Int       // Usuario que realiza la venta
-  storeId     Int       // Tienda donde se realiza la venta
-  clientId    Int       // Cliente asociado a la venta
-  total       Float     // Total de la venta
-  description String?   // Descripción opcional
+  id          Int        @id @default(autoincrement())
+  userId      Int // Usuario que realiza la venta
+  storeId     Int // Tienda donde se realiza la venta
+  clientId    Int // Cliente asociado a la venta
+  total       Float // Total de la venta
+  description String? // Descripción opcional
   source      SaleSource @default(POS)
-  createdAt   DateTime  @default(now()) // Fecha de la venta
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime   @default(now()) // Fecha de la venta
+  updatedAt   DateTime   @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id]) // Relación con el usuario
-  store       Store     @relation(fields: [storeId], references: [id]) // Relación con la tienda
-  client      Client    @relation(fields: [clientId], references: [id]) // Relación con el cliente
-  salesDetails SalesDetail[] // Relación con los detalles de la venta
-  invoices InvoiceSales[] // Relación con las facturas de venta
-  payments      SalePayment[]   // 👈 Relación con tabla intermedia
+  user           User            @relation(fields: [userId], references: [id]) // Relación con el usuario
+  store          Store           @relation(fields: [storeId], references: [id]) // Relación con la tienda
+  client         Client          @relation(fields: [clientId], references: [id]) // Relación con el cliente
+  salesDetails   SalesDetail[] // Relación con los detalles de la venta
+  invoices       InvoiceSales[] // Relación con las facturas de venta
+  payments       SalePayment[] // 👈 Relación con tabla intermedia
   shippingGuides ShippingGuide[]
-  order         Orders?
+  order          Orders?
 
   @@index([userId])
   @@index([storeId])
@@ -408,25 +413,25 @@ model Sales {
 model PaymentMethod {
   id          Int      @id @default(autoincrement())
   name        String   @unique // Ejemplo: "Visa", "Yape", "Plin", "Efectivo", "Transferencia"
-  description String?  // Descripción opcional del método de pago
+  description String? // Descripción opcional del método de pago
   isActive    Boolean  @default(true) // Indica si el método de pago está habilitado
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  payments    SalePayment[]  // 👈 Relación con tabla intermedia
+  payments                SalePayment[] // 👈 Relación con tabla intermedia
   cashTransactionPayments CashTransactionPaymentMethod[] // Relación con la tabla intermedia de transacciones de caja
 }
 
 model SalePayment {
-  id               Int            @id @default(autoincrement())
+  id                Int              @id @default(autoincrement())
   salesId           Int
-  paymentMethodId  Int
-  amount           Float          // 👈 Monto pagado con ese método
-  currency         String @default("PEN")        // Tipo de moneda (e.g., PEN, USD)
-  transactionId    String?        // ✅ ID de transacción para rastrear pagos digitales
-  referenceNote    String?        // (opcional) para agregar voucher, observación, etc.
-  sale             Sales          @relation(fields: [salesId], references: [id])
-  paymentMethod    PaymentMethod  @relation(fields: [paymentMethodId], references: [id])
+  paymentMethodId   Int
+  amount            Float // 👈 Monto pagado con ese método
+  currency          String           @default("PEN") // Tipo de moneda (e.g., PEN, USD)
+  transactionId     String? // ✅ ID de transacción para rastrear pagos digitales
+  referenceNote     String? // (opcional) para agregar voucher, observación, etc.
+  sale              Sales            @relation(fields: [salesId], references: [id])
+  paymentMethod     PaymentMethod    @relation(fields: [paymentMethodId], references: [id])
   cashTransactionId Int?
   cashTransaction   CashTransaction? @relation(fields: [cashTransactionId], references: [id])
 
@@ -436,19 +441,19 @@ model SalePayment {
 }
 
 model SalesDetail {
-  id          Int       @id @default(autoincrement())
-  salesId      Int       // Relación con la venta
-  entryDetailId Int          // Relación con el detalle de la entrada
+  id                 Int      @id @default(autoincrement())
+  salesId            Int // Relación con la venta
+  entryDetailId      Int // Relación con el detalle de la entrada
   storeOnInventoryId Int // Relación con el inventario de la tienda
-  productId   Int       // Producto relacionado
-  series      String[] // Arreglo de series
-  quantity    Int       // Cantidad de productos vendidos
-  price       Float     // Precio unitario del producto
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  productId          Int // Producto relacionado
+  series             String[] // Arreglo de series
+  quantity           Int // Cantidad de productos vendidos
+  price              Float // Precio unitario del producto
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  sale        Sales     @relation(fields: [salesId], references: [id], onDelete: Cascade) // Relación con el modelo Sales
-  entryDetail EntryDetail @relation(fields: [entryDetailId], references: [id]) // Relación con el modelo EntryDetail
+  sale             Sales            @relation(fields: [salesId], references: [id], onDelete: Cascade) // Relación con el modelo Sales
+  entryDetail      EntryDetail      @relation(fields: [entryDetailId], references: [id]) // Relación con el modelo EntryDetail
   storeOnInventory StoreOnInventory @relation(fields: [storeOnInventoryId], references: [id]) // Relación con el inventario de la tienda
 
   @@index([salesId])
@@ -458,39 +463,40 @@ model SalesDetail {
 }
 
 model InvoiceSales {
-  id          Int       @id @default(autoincrement())
-  salesId     Int       @unique // Clave foránea única para la relación 1:1// Relación con la entrada
-  serie       String   // Serie del comprobante
-  nroCorrelativo String // Número correlativo del comprobante
-  tipoComprobante String   // Número del comprobante
-  tipoMoneda  String?   // Tipo de moneda (e.g., PEN, USD)
-  total       Float?    // Total del comprobante
-  fechaEmision DateTime? // Fecha de emisión del comprobante
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              Int       @id @default(autoincrement())
+  salesId         Int       @unique // Clave foránea única para la relación 1:1// Relación con la entrada
+  serie           String // Serie del comprobante
+  nroCorrelativo  String // Número correlativo del comprobante
+  tipoComprobante String // Número del comprobante
+  tipoMoneda      String? // Tipo de moneda (e.g., PEN, USD)
+  total           Float? // Total del comprobante
+  fechaEmision    DateTime? // Fecha de emisión del comprobante
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  sales       Sales     @relation(fields: [salesId], references: [id], onDelete:  Cascade) // Relación con Entry
+  sales Sales @relation(fields: [salesId], references: [id], onDelete: Cascade) // Relación con Entry
+
   @@unique([tipoComprobante, serie, nroCorrelativo]) // Restricción única compuesta
 }
 
 model Orders {
-  id             Int      @id @default(autoincrement())
-  code           String   @unique
-  salesId        Int?     @unique
-  status         OrderStatus @default(PENDING)
-  payload        Json?
-  shippingName   String
+  id              Int         @id @default(autoincrement())
+  code            String      @unique
+  salesId         Int?        @unique
+  status          OrderStatus @default(PENDING)
+  payload         Json?
+  shippingName    String
   shippingAddress String
-  city           String
-  postalCode     String
-  phone          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  city            String
+  postalCode      String
+  phone           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  sale           Sales?   @relation(fields: [salesId], references: [id])
+  sale          Sales?          @relation(fields: [salesId], references: [id])
+  OrderTracking OrderTracking[]
 
   @@index([salesId])
-  OrderTracking OrderTracking[]
 }
 
 model OrderTracking {
@@ -500,84 +506,84 @@ model OrderTracking {
   description String
   createdAt   DateTime @default(now())
 
-  order       Orders   @relation(fields: [orderId], references: [id])
+  order Orders @relation(fields: [orderId], references: [id])
 
   @@index([orderId])
 }
 
 model TipoCambio {
   id        Int      @id @default(autoincrement())
-  fecha     DateTime           // Fecha del tipo de cambio
-  moneda    String             // Ej: "USD", "EUR", "CLP"
-  valor     Float              // Cuánto vale 1 unidad de esa moneda en soles
+  fecha     DateTime // Fecha del tipo de cambio
+  moneda    String // Ej: "USD", "EUR", "CLP"
+  valor     Float // Cuánto vale 1 unidad de esa moneda en soles
   createdAt DateTime @default(now())
 
-  entries   Entry[]            // Relación con entradas
-  @@unique([fecha, moneda])    // Evita duplicados
+  entries Entry[] // Relación con entradas
 
+  @@unique([fecha, moneda]) // Evita duplicados
   @@index([fecha, moneda]) // 🚀 índice compuesto
 }
 
 model CashRegister {
-  id             Int              @id @default(autoincrement())
-  name           String           @unique
+  id             Int                @id @default(autoincrement())
+  name           String             @unique
   description    String?
   storeId        Int
-  initialBalance Decimal          @default(0.00)
-  currentBalance Decimal          @default(0.00)
+  initialBalance Decimal            @default(0.00)
+  currentBalance Decimal            @default(0.00)
   status         CashRegisterStatus @default(ACTIVE)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
-  store          Store            @relation(fields: [storeId], references: [id])
-  transactions   CashTransaction[]
-  closures       CashClosure[]
+  store        Store             @relation(fields: [storeId], references: [id])
+  transactions CashTransaction[]
+  closures     CashClosure[]
 
   @@map("cash_registers")
 }
 
 model CashTransaction {
-  id              Int              @id @default(autoincrement())
-  cashRegisterId  Int
-  type            CashTransactionType
-  amount          Decimal
-  description     String?
-  clientName      String?
-  clientDocument  String?
+  id                 Int                 @id @default(autoincrement())
+  cashRegisterId     Int
+  type               CashTransactionType
+  amount             Decimal
+  description        String?
+  clientName         String?
+  clientDocument     String?
   clientDocumentType String?
-  userId          Int
-  createdAt       DateTime         @default(now())
+  userId             Int
+  createdAt          DateTime            @default(now())
 
-  cashRegister    CashRegister     @relation(fields: [cashRegisterId], references: [id])
-  paymentMethods  CashTransactionPaymentMethod[] // Relación con la tabla intermedia
-  user            User             @relation(fields: [userId], references: [id])
+  cashRegister   CashRegister                   @relation(fields: [cashRegisterId], references: [id])
+  paymentMethods CashTransactionPaymentMethod[] // Relación con la tabla intermedia
+  user           User                           @relation(fields: [userId], references: [id])
   salePayments   SalePayment[]
 
   @@map("cash_transactions")
 }
 
 model CashTransactionPaymentMethod {
-  id                Int             @id @default(autoincrement())
+  id                Int @id @default(autoincrement())
   cashTransactionId Int
-  paymentMethodId   Int            // Hacer que el campo sea opcional
+  paymentMethodId   Int // Hacer que el campo sea opcional
 
-  cashTransaction   CashTransaction @relation(fields: [cashTransactionId], references: [id])
-  paymentMethod     PaymentMethod  @relation(fields: [paymentMethodId], references: [id]) // Relación opcional
+  cashTransaction CashTransaction @relation(fields: [cashTransactionId], references: [id])
+  paymentMethod   PaymentMethod   @relation(fields: [paymentMethodId], references: [id]) // Relación opcional
 }
 
 model CashClosure {
-  id              Int             @id @default(autoincrement())
-  cashRegisterId  Int
-  userId          Int
-  openingBalance  Decimal
-  closingBalance  Decimal
-  totalIncome     Decimal
-  notes           String?
-  totalExpense    Decimal
-  createdAt       DateTime         @default(now())
+  id             Int      @id @default(autoincrement())
+  cashRegisterId Int
+  userId         Int
+  openingBalance Decimal
+  closingBalance Decimal
+  totalIncome    Decimal
+  notes          String?
+  totalExpense   Decimal
+  createdAt      DateTime @default(now())
 
-  cashRegister    CashRegister     @relation(fields: [cashRegisterId], references: [id])
-  user            User             @relation(fields: [userId], references: [id])
+  cashRegister CashRegister @relation(fields: [cashRegisterId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
 
   @@map("cash_closures")
 }
@@ -606,22 +612,22 @@ enum OrderStatus {
 }
 
 model ShippingGuide {
-  id              Int      @id @default(autoincrement())
-  serie           String
-  correlativo     String
-  motivoTraslado  String
-  fechaTraslado   DateTime
-  puntoPartida    String
-  puntoLlegada    String
+  id             Int      @id @default(autoincrement())
+  serie          String
+  correlativo    String
+  motivoTraslado String
+  fechaTraslado  DateTime
+  puntoPartida   String
+  puntoLlegada   String
 
-  transportistaTipoDocumento  String
+  transportistaTipoDocumento   String
   transportistaNumeroDocumento String
   transportistaRazonSocial     String
   transportistaNumeroPlaca     String
 
-  destinatarioTipoDocumento    String
-  destinatarioNumeroDocumento  String
-  destinatarioRazonSocial      String
+  destinatarioTipoDocumento   String
+  destinatarioNumeroDocumento String
+  destinatarioRazonSocial     String
 
   xmlName        String?
   zipName        String?
@@ -629,13 +635,13 @@ model ShippingGuide {
   cdrCode        String?
   cdrDescription String?
 
-  ventaId        Int?       // si está asociada a una venta
-  entryId        Int?       // si está asociada a una entrada (traslado)
+  ventaId Int? // si está asociada a una venta
+  entryId Int? // si está asociada a una entrada (traslado)
 
-  createdAt      DateTime  @default(now())
+  createdAt DateTime @default(now())
 
-  sale           Sales?    @relation(fields: [ventaId], references: [id])
-  entry          Entry?    @relation(fields: [entryId], references: [id])
+  sale  Sales? @relation(fields: [ventaId], references: [id])
+  entry Entry? @relation(fields: [entryId], references: [id])
 }
 
 model Review {
@@ -647,8 +653,8 @@ model Review {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  product   Product  @relation(fields: [productId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 
   @@unique([productId, userId])
   @@index([productId])
@@ -656,12 +662,12 @@ model Review {
 }
 
 model ChatMessage {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   clientId  Int
   senderId  Int
   text      String
   file      String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   updatedAt DateTime? @updatedAt
   deletedAt DateTime?
   seenAt    DateTime?
@@ -679,8 +685,8 @@ model Favorite {
   productId Int
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
 
   @@unique([userId, productId])
   @@index([userId])
@@ -703,19 +709,19 @@ enum AuditAction {
 }
 
 model AuditLog {
-  id         String      @id @default(uuid())
-  actorId    Int?
-  actorEmail String?
-  entityType String?
-  entityId   String?
-  action     AuditAction
-  summary    String?
-  diff       Json?
-  ip         String?
-  userAgent  String?
+  id             String        @id @default(uuid())
+  actorId        Int?
+  actorEmail     String?
+  entityType     String?
+  entityId       String?
+  action         AuditAction
+  summary        String?
+  diff           Json?
+  ip             String?
+  userAgent      String?
   journalEntryId Int?
   journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
-  createdAt  DateTime    @default(now())
+  createdAt      DateTime      @default(now())
 
   @@index([createdAt])
   @@index([actorId])
@@ -909,11 +915,11 @@ enum PeriodStatus {
 }
 
 model Account {
-  id        Int      @id @default(autoincrement())
-  code      String   @unique
+  id        Int       @id @default(autoincrement())
+  code      String    @unique
   name      String
   parentId  Int?
-  parent    Account? @relation("AccountChildren", fields: [parentId], references: [id])
+  parent    Account?  @relation("AccountChildren", fields: [parentId], references: [id])
   children  Account[] @relation("AccountChildren")
   level     Int
   isPosting Boolean   @default(false)
@@ -927,14 +933,14 @@ model Journal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entries   Entry[]
+  entries Entry[]
 }
 
 model Period {
-  id         Int          @id @default(autoincrement())
+  id         Int            @id @default(autoincrement())
   startDate  DateTime
   endDate    DateTime
-  status     PeriodStatus @default(OPEN)
+  status     PeriodStatus   @default(OPEN)
   entries    JournalEntry[]
   pleExports PleExport[]
 
@@ -951,49 +957,49 @@ model JournalEntry {
   debitTotal  Decimal     @default(0.00)
   creditTotal Decimal     @default(0.00)
 
-  period    Period    @relation(fields: [periodId], references: [id])
+  period    Period         @relation(fields: [periodId], references: [id])
   lines     JournalLine[]
   documents DocumentLink[]
   auditLogs AuditLog[]
+  // @@check(name: "balance_check", expression: "debitTotal = creditTotal")
 
   @@index([journalId])
   @@index([periodId])
-  // @@check(name: "balance_check", expression: "debitTotal = creditTotal")
 }
 
 model JournalLine {
-  id        Int      @id @default(autoincrement())
-  entryId   Int
-  accountId Int
-  taxCodeId Int?
+  id          Int     @id @default(autoincrement())
+  entryId     Int
+  accountId   Int
+  taxCodeId   Int?
   description String?
-  debit     Decimal @default(0.00)
-  credit    Decimal @default(0.00)
+  debit       Decimal @default(0.00)
+  credit      Decimal @default(0.00)
 
   entry   JournalEntry @relation(fields: [entryId], references: [id])
   taxCode TaxCode?     @relation(fields: [taxCodeId], references: [id])
+  // @@check(name: "debit_credit_check", expression: "(debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0)")
 
   @@index([entryId])
   @@index([accountId])
-  // @@check(name: "debit_credit_check", expression: "(debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0)")
 }
 
 model TaxCode {
-  id    Int      @id @default(autoincrement())
-  code  String   @unique
-  rate  Decimal
-  lines JournalLine[]
-  name              String
-  sunatTributoCode  String
+  id                 Int           @id @default(autoincrement())
+  code               String        @unique
+  rate               Decimal
+  lines              JournalLine[]
+  name               String
+  sunatTributoCode   String
   sunatOperacionType String
-  contraAccountId   Int?
-  contraAccount     Account? @relation(fields: [contraAccountId], references: [id])
+  contraAccountId    Int?
+  contraAccount      Account?      @relation(fields: [contraAccountId], references: [id])
 
   @@index([code])
 }
 
 model DocumentLink {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   entryId     Int
   url         String
   description String?
@@ -1004,11 +1010,11 @@ model DocumentLink {
 }
 
 model PleExport {
-  id         Int       @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   periodId   Int
   type       PleType
   fileUrl    String
-  exportedAt DateTime  @default(now())
+  exportedAt DateTime @default(now())
 
   period Period @relation(fields: [periodId], references: [id])
 
@@ -1036,16 +1042,16 @@ enum AccPeriodStatus {
 }
 
 model AccPeriod {
-  id        Int @id @default(autoincrement())
-  name      String @unique
+  id        Int             @id @default(autoincrement())
+  name      String          @unique
   status    AccPeriodStatus @default(OPEN)
   entries   AccEntry[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 }
 
 model AccEntry {
-  id          Int       @id @default(autoincrement())
+  id          Int            @id @default(autoincrement())
   periodId    Int
   date        DateTime
   status      AccEntryStatus @default(DRAFT)
@@ -1057,13 +1063,14 @@ model AccEntry {
   invoiceUrl  String?
   source      String?
   sourceId    Int?
-  referenceId String? @unique
-  period      AccPeriod @relation(fields: [periodId], references: [id])
-  provider    Provider?  @relation(fields: [providerId], references: [id])
+  referenceId String?        @unique
+  period      AccPeriod      @relation(fields: [periodId], references: [id])
+  provider    Provider?      @relation(fields: [providerId], references: [id])
   lines       AccEntryLine[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
+  @@unique([source, sourceId])
   @@index([periodId])
   @@index([providerId])
 }

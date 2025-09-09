@@ -200,31 +200,44 @@ export class AccountingService {
       const entry = await prisma.entry.findUnique({
         where: { id: entryId },
         include: {
-          details: { include: { product: true } },
+          details: { include: { product: true, series: true } },
           invoice: true,
           provider: true,
         },
       });
       if (!entry) return;
 
-      const total = entry.details.reduce(
-        (sum: number, d: any) =>
-          sum + ((d.priceInSoles ?? d.price ?? 0) * d.quantity),
-        0,
-      );
-      const subtotal = +(total / 1.18).toFixed(2);
-      const igv = +(total - subtotal).toFixed(2);
+      const existing = await prisma.accEntry.findFirst({
+        where: { source: 'inventory_entry', sourceId: entryId },
+      });
+      if (existing) return;
+
+      const provider = await prisma.provider.findFirst({
+        where: { name: entry.providerName },
+      });
+
+      const igvRate = entry.igvRate ?? 0;
+      const totalGross = entry.totalGross ?? 0;
+      const net = +(totalGross / (1 + igvRate)).toFixed(2);
+      const igv = +(totalGross - net).toFixed(2);
 
       const invoiceCode = entry.invoice
         ? `${entry.invoice.serie}-${entry.invoice.nroCorrelativo}`
         : '';
-      const itemName = entry.details[0]?.product?.name ?? '';
 
-      const paymentMethod = (entry.invoice as any)?.paymentMethod ?? '';
+      const firstDetail = entry.details[0];
+      const itemName = firstDetail?.product?.name ?? '';
+      const firstSerie = firstDetail?.series?.[0]?.serial ?? '';
+      const extraItems = entry.details.length - 1;
+
+      const seriesText = firstSerie ? ` (${firstSerie})` : '';
+      const extraItemsText =
+        extraItems > 0 ? ` (+ ${extraItems} ítems)…` : '';
+
       let creditAccount = '1011';
-      if (/credito/i.test(paymentMethod)) {
+      if (entry.paymentTerm === 'CREDIT') {
         creditAccount = '4211';
-      } else if (/transfer|yape/i.test(paymentMethod)) {
+      } else if (/transfer|yape|plin/i.test((entry as any).paymentMethod ?? '')) {
         creditAccount = '1041';
       }
 
@@ -236,7 +249,7 @@ export class AccountingService {
         period = await prisma.accPeriod.create({ data: { name: periodName } });
       }
 
-      const amount = +(subtotal + igv).toFixed(2);
+      const amount = +(net + igv).toFixed(2);
 
       await prisma.accEntry.create({
         data: {
@@ -244,9 +257,9 @@ export class AccountingService {
           date: zonedTimeToUtc(new Date(), 'America/Lima'),
           totalDebit: amount,
           totalCredit: amount,
-          providerId: entry.providerId ?? undefined,
-          serie: entry.invoice?.serie,
-          correlativo: entry.invoice?.nroCorrelativo,
+          providerId: provider?.id ?? undefined,
+          serie: entry.serie,
+          correlativo: entry.correlativo,
           invoiceUrl: (entry as any).pdfUrl ?? undefined,
           source: 'inventory_entry',
           sourceId: entryId,
@@ -254,19 +267,19 @@ export class AccountingService {
             create: [
               {
                 account: '2011',
-                description: `Ingreso ${itemName} – Compra ${invoiceCode} (${invoiceCode})`.trim(),
+                description: `Ingreso ${itemName}${seriesText}${extraItemsText} – Compra ${invoiceCode} (${invoiceCode})`.trim(),
                 debit: subtotal,
                 credit: 0,
               },
               {
                 account: '4011',
-                description: `IGV 18% Compra ${invoiceCode} (${invoiceCode})`.trim(),
+                description: description2.trim(),
                 debit: igv,
                 credit: 0,
               },
               {
                 account: creditAccount,
-                description: `Pago/Obligación Compra ${invoiceCode} (${invoiceCode})`.trim(),
+                description: description3.trim(),
                 debit: 0,
                 credit: amount,
               },

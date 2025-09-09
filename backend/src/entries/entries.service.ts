@@ -53,6 +53,12 @@ export class EntriesService {
     description?: string;
     tipoMoneda?: string;
     tipoCambioId?: number;
+    paymentTerm?: string;
+    serie?: string;
+    correlativo?: string;
+    providerName?: string;
+    totalGross?: number;
+    igvRate?: number;
     details: { productId: number; name: string; quantity: number; price: number; priceInSoles: number; series?: string[]; }[];
     invoice?: { serie: string; nroCorrelativo: string; tipoComprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
   }) {
@@ -116,6 +122,12 @@ export class EntriesService {
           description: data.description,
           tipoMoneda: data.tipoMoneda,
           tipoCambioId: data.tipoCambioId,
+          paymentTerm: data.paymentTerm,
+          serie: data.serie,
+          correlativo: data.correlativo,
+          providerName: data.providerName,
+          totalGross: data.totalGross,
+          igvRate: data.igvRate,
           details: {
             create: verifiedProducts.map((product) => ({
               productId: product.productId,
@@ -124,7 +136,7 @@ export class EntriesService {
               priceInSoles: product.priceInSoles,
             })),
           },
-        },
+        } as any,
         include: { details: true },
       });
 
@@ -240,9 +252,10 @@ export class EntriesService {
         }
       }
       console.log("Entrada creada:", entry);
-      await this.accountingService.createJournalForInventoryEntry(entry.id);
       return entry;
     });
+
+    await this.accountingService.createJournalForInventoryEntry(entry.id);
 
     const summary = verifiedProducts
       .map((d) => `${d.quantity}x ${d.name}`)

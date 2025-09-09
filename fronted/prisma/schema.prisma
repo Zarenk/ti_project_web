@@ -106,13 +106,24 @@ model Provider{
   entrys    Entry[]   // Relación con el modelo Entry
 }
 
+enum PaymentTerm {
+  CASH
+  CREDIT
+}
+
 model Entry {
   id          Int       @id @default(autoincrement())
-  storeId     Int       // Almacén relacionado con la entrada  
+  storeId     Int       // Almacén relacionado con la entrada
   userId      Int       // Usuario que realiza la entrada
   providerId  Int       // Proveedor relacionado con la entrada
   date        DateTime  @default(now()) // Fecha de la entrada
   description String?   // Descripción opcional
+  paymentTerm PaymentTerm @default(CASH)
+  serie        String?
+  correlativo  String?
+  providerName String?
+  totalGross   Decimal?
+  igvRate      Decimal? @default(0.18)
   pdfUrl      String?
   guiaUrl     String?   // URL del PDF de la guía de remisión
   createdAt   DateTime  @default(now())
