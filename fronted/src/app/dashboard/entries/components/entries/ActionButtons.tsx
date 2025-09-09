@@ -115,11 +115,12 @@ export function ActionButtons({
           setPdfFile(null);
           setPdfGuiaFile(null);
         }}
+        disabled={isSubmitting}
       >
         Limpiar
       </Button>
 
-      <Button type="button" onClick={() => router.back()}>
+      <Button type="button" onClick={() => router.back()} disabled={isSubmitting}>
         Volver
       </Button>
 

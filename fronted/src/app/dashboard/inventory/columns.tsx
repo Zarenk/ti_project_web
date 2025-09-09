@@ -30,6 +30,7 @@ interface InventoryItem {
       };
       quantity: number;
     }[]; // Added entryDetails property
+    serialNumbers: string[];
 }
 
 export const columns: ColumnDef<InventoryItem>[] = [
@@ -71,5 +72,10 @@ export const columns: ColumnDef<InventoryItem>[] = [
       accessorKey: "updateAt", // Acceder a la última actualización
       header: "Última Actualización",
       cell: ({ row }) => new Date(row.original.updateAt).toLocaleDateString(), // Formatear la fecha
+    },
+    {
+      id: "serialNumbers",
+      accessorKey: "serialNumbers",
+      header: "Series",
     },
   ];

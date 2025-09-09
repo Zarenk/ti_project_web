@@ -63,6 +63,9 @@ interface DataTableProps<TData, TValue> {
     const [sorting, setSorting] = React.useState<SortingState>([
       { id: "createdAt", desc: true },
     ])
+    const [columnVisibility, setColumnVisibility] = React.useState<{[key:string]: boolean}>({
+      serialNumbers: false,
+    })
 
     // ESTADO PARA MANEJAR LOS MODALS
     const [isModalOpen, setIsModalOpen] = React.useState(false); // Estado del modal
@@ -98,6 +101,7 @@ interface DataTableProps<TData, TValue> {
         columns,
         onColumnFiltersChange: setColumnFilters,
         onSortingChange: setSorting,
+        onColumnVisibilityChange: setColumnVisibility,
         getFilteredRowModel: getFilteredRowModel(),
         getSortedRowModel: getSortedRowModel(),
         getCoreRowModel: getCoreRowModel(),
@@ -105,6 +109,7 @@ interface DataTableProps<TData, TValue> {
         state: {
             columnFilters,
             sorting,
+            columnVisibility,
         },
       })
 
@@ -159,6 +164,7 @@ interface DataTableProps<TData, TValue> {
   // Actualiza el filtro cuando cambia el valor debounced
   useEffect(() => {
     table.getColumn("product_name")?.setFilterValue(debouncedValue);
+    table.getColumn("serialNumbers")?.setFilterValue(debouncedValue);
     table.getColumn("product.category")?.setFilterValue(
       selectedCategory === "all" ? undefined : selectedCategory
     );

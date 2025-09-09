@@ -3,8 +3,18 @@ import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
+interface InventoryApiEntryDetail {
+  series?: { serial: string }[];
+  [key: string]: any;
+}
+
+export interface InventoryApiItem {
+  entryDetails?: InventoryApiEntryDetail[];
+  [key: string]: any;
+}
+
 // Obtener todo el inventario
-export async function getInventory() {
+export async function getInventory(): Promise<InventoryApiItem[]> {
   const response = await fetch(`${BACKEND_URL}/api/inventory`, {
     cache: 'no-store',
     method: 'GET',
@@ -17,7 +27,7 @@ export async function getInventory() {
     throw new Error('Error al obtener el inventario');
   }
 
-  return await response.json();
+  return (await response.json()) as InventoryApiItem[];
 }
 
 export async function getAllPurchasePrices() {
@@ -109,7 +119,7 @@ export async function getAllStores() {
 }
 
 // Obtener el inventario con desglose por moneda
-export async function getInventoryWithCurrency() {
+export async function getInventoryWithCurrency(): Promise<InventoryApiItem[]> {
   try {
     const response = await fetch(`${BACKEND_URL}/api/inventory/with-currency`, {
       method: 'GET',
@@ -123,7 +133,7 @@ export async function getInventoryWithCurrency() {
       throw new Error('Error al obtener el inventario con desglose por moneda');
     }
 
-    return await response.json();
+    return (await response.json()) as InventoryApiItem[];
   } catch (error: any) {
     console.error('Error al obtener el inventario con desglose por moneda:', error.message || error);
     throw error;

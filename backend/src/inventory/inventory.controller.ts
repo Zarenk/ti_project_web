@@ -28,6 +28,7 @@ export class InventoryController {
         entryDetails:{
           include: {
             entry: true, // Incluye información de la entrada
+            series: true, // Incluir series disponibles
           },
         },
         storeOnInventory: {      // Incluye información de las tiendas

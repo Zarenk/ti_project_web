@@ -322,6 +322,7 @@ export class InventoryService {
           include: {
             entry: true, // Incluye información de la entrada
             salesDetails: true, // Necesario para calcular stock restante
+            series: true, // Incluir series disponibles
           },
         },
         storeOnInventory: {

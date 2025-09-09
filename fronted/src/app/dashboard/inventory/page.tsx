@@ -31,6 +31,7 @@ interface InventoryItem {
       name: string;
     };
   }[];
+  serialNumbers: string[];
 }
 
 export default function InventoryPage() {
@@ -76,6 +77,7 @@ export default function InventoryPage() {
                 createdAt: item.createdAt,
                 updateAt: item.updatedAt,
                 storeOnInventory: [],
+                serialNumbers: [],
                 highestPurchasePrice: priceMap[item.product.id]?.highestPurchasePrice || 0, // Precio más alto
                 lowestPurchasePrice: priceMap[item.product.id]?.lowestPurchasePrice || 0, // Precio más bajo
               };
@@ -95,6 +97,12 @@ export default function InventoryPage() {
   
             // Agregar las tiendas al inventario agrupado
             acc[productName].storeOnInventory.push(...item.storeOnInventory);
+
+            // Agregar números de serie disponibles
+            item.entryDetails?.forEach((detail: any) => {
+              const series = detail.series?.map((s: any) => s.serial) || [];
+              acc[productName].serialNumbers.push(...series);
+            });
   
             // Calcular el updateAt más reciente entre las entradas de storeOnInventory
             const latestUpdateAt = item.storeOnInventory.reduce(

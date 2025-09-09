@@ -224,28 +224,29 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   //
 
   //handlesubmit para manejar los datos y el ingreso de los productos
-  const onSubmit = handleSubmit((data) =>{
-
+  const onSubmit = handleSubmit(async (data) => {
     if (isSubmitting) return; // ✅ Evita clicks repetidos
     setIsSubmitting(true); // ✅ Bloquea nuevos intentos
-
-    handleFormSubmission({
-      data,
-      form,
-      stores,
-      providers,
-      selectedProducts,
-      isNewInvoiceBoolean,
-      validateSeriesBeforeSubmit,
-      categories,
-      pdfFile,
-      pdfGuiaFile,
-      router,
-      getUserIdFromToken,
-      tipoMoneda, // Pasar el tipo de moneda
-      tipoCambioActual, // Pasar el tipo de cambio actual
-    })
-    setIsSubmitting(false); // ✅ Libera el botón cuando termina
+    try {
+      await handleFormSubmission({
+        data,
+        form,
+        stores,
+        providers,
+        selectedProducts,
+        isNewInvoiceBoolean,
+        validateSeriesBeforeSubmit,
+        categories,
+        pdfFile,
+        pdfGuiaFile,
+        router,
+        getUserIdFromToken,
+        tipoMoneda, // Pasar el tipo de moneda
+        tipoCambioActual, // Pasar el tipo de cambio actual
+      });
+    } finally {
+      setIsSubmitting(false); // ✅ Libera el botón cuando termina
+    }
   });
 
   // Actualizar el valor del formulario cuando cambie el estado local
@@ -538,8 +539,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   return (
     <div className="mx-auto w-full max-w-4xl px-1 sm:px-2 lg:px-8">
-      <form className='flex flex-col gap-2' onSubmit={onSubmit}>
-                    
+      <form className='relative flex flex-col gap-2' onSubmit={onSubmit}>
+        <fieldset disabled={isSubmitting} className='flex flex-col gap-2'>
                   <div className="flex flex-col sm:flex-row flex-wrap gap-2">
                     <UploadSection
                       register={register}
@@ -560,8 +561,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setOpenCalendar={setOpenCalendar}
                       setValue={setValue}
                     />
-                  </div>     
-                  
+                  </div>
+
                   <div className="flex flex-wrap gap-2">
                     <ProviderSection
                       valueProvider={valueProvider}
@@ -574,7 +575,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setProviders={setProviders}
                       setValue={form.setValue}
                       register={register}
-                    />  
+                    />
                     <StoreSection
                       openStore={openStore}
                       setOpenStore={setOpenStore}
@@ -588,7 +589,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setStores={setStores}
                       setIsProviderComboTouched={setIsProviderComboTouched}
                       valueProvider={valueProvider}
-                    />          
+                    />
                      <ProductSelection
                       open={open}
                       setOpen={setOpen}
@@ -614,7 +615,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       getAllSeriesFromDataTable={getAllSeriesFromDataTable}
                       isNewCategoryBoolean={isNewCategoryBoolean}
                       setIsNewCategoryBoolean={setIsNewCategoryBoolean}
-                    />   
+                    />
                   </div>
                     <SelectedProductsTable
                       selectedProducts={selectedProducts}
@@ -643,9 +644,29 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setPdfFile={setPdfFile}
                       setPdfGuiaFile={setPdfGuiaFile}
                       router={router}
-                      isSubmitting={isSubmitting} 
-                    /> 
-        </form>
+                      isSubmitting={isSubmitting}
+                    />
+        </fieldset>
+        {isSubmitting && (
+          <div className="absolute inset-0 z-50 bg-black/40 flex items-center justify-center">
+            <svg className="w-6 h-6 animate-spin text-white" viewBox="0 0 24 24">
+              <circle
+                className="opacity-25"
+                cx="12" cy="12" r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+                fill="none"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+              />
+            </svg>
+            <span className="ml-2 text-white">Procesando...</span>
+          </div>
+        )}
+      </form>
     </div>
   )
 }
