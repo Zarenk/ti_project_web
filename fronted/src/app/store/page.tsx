@@ -489,7 +489,11 @@ export default function StorePage() {
                       <CardHeader className="p-0">
                         <div className="relative overflow-hidden rounded-t-lg">
                           <Image
-                            src={product.images[0] || "/placeholder.svg"}
+                            src={
+                              product.images[0]
+                                ? resolveImageUrl(product.images[0])
+                                : "/placeholder.svg"
+                            }
                             alt={product.name}
                             width={300}
                             height={300}
@@ -576,7 +580,7 @@ export default function StorePage() {
                               id: product.id,
                               name: product.name,
                               price: product.price,
-                              image: product.images[0],
+                              image: resolveImageUrl(product.images[0]),
                             })
                             toast.success("Producto agregado al carrito")
                           }}

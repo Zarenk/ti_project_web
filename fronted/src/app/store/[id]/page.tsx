@@ -595,8 +595,8 @@ export default function ProductPage({ params }: Props) {
                           price: product.priceSell ?? product.price,
                           image:
                             product.images && product.images.length > 0
-                              ? product.images[0]
-                              : product.image,
+                              ? resolveImageUrl(product.images[0])
+                              : resolveImageUrl(product.image),
                           quantity,
                         })
                         toast.success("Producto agregado al carrito")
@@ -634,8 +634,8 @@ export default function ProductPage({ params }: Props) {
                         price: product.priceSell ?? product.price,
                         image:
                           product.images && product.images.length > 0
-                            ? product.images[0]
-                            : product.image,
+                            ? resolveImageUrl(product.images[0])
+                            : resolveImageUrl(product.image),
                         quantity,
                       })
                       router.push("/cart")

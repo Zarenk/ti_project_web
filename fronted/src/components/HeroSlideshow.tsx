@@ -6,6 +6,7 @@ import Link from "next/link"
 import { AnimatePresence, motion, useMotionValue } from "framer-motion"
 import { ChevronLeft, ChevronRight, Shield } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import { resolveImageUrl } from "@/lib/images"
 
 interface Brand {
   name: string
@@ -130,8 +131,9 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
                 <Link href={`/store/${product.id}`}>
                   <Image
                     src={
-                      product.images[0] ||
-                      "/placeholder.svg?height=500&width=600&text=Hero+Banner"
+                      product.images[0]
+                        ? resolveImageUrl(product.images[0])
+                        : "/placeholder.svg?height=500&width=600&text=Hero+Banner"
                     }
                     alt={product.name}
                     width={600}

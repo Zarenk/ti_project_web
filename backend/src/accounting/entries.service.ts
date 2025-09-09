@@ -21,7 +21,6 @@ export interface Entry {
   serie?: string;
   correlativo?: string;
   invoiceUrl?: string;
-  referenceId?: string;
   lines: EntryLine[];
   status: EntryStatus;
   totalDebit: number;
@@ -62,7 +61,6 @@ export class EntriesService {
         serie: (e as any).serie ?? undefined,
         correlativo: (e as any).correlativo ?? undefined,
         invoiceUrl: (e as any).invoiceUrl ?? undefined,
-        referenceId: (e as any).referenceId ?? undefined,
         status: e.status,
         totalDebit: e.totalDebit,
         totalCredit: e.totalCredit,
@@ -91,7 +89,6 @@ export class EntriesService {
       serie: (entry as any).serie ?? undefined,
       correlativo: (entry as any).correlativo ?? undefined,
       invoiceUrl: (entry as any).invoiceUrl ?? undefined,
-      referenceId: (entry as any).referenceId ?? undefined,
       status: entry.status,
       totalDebit: entry.totalDebit,
       totalCredit: entry.totalCredit,
@@ -141,7 +138,6 @@ export class EntriesService {
     serie?: string;
     correlativo?: string;
     invoiceUrl?: string;
-    referenceId?: string;
   }): Promise<Entry> {
     const period = await this.repo.ensurePeriod(data.period);
     if (period.status === PeriodStatus.LOCKED) {
@@ -161,7 +157,6 @@ export class EntriesService {
       serie: data.serie,
       correlativo: data.correlativo,
       invoiceUrl: data.invoiceUrl,
-      referenceId: data.referenceId,
       lines: data.lines,
     });
     return {
@@ -173,7 +168,6 @@ export class EntriesService {
       serie: (entry as any).serie ?? undefined,
       correlativo: (entry as any).correlativo ?? undefined,
       invoiceUrl: (entry as any).invoiceUrl ?? undefined,
-      referenceId: (entry as any).referenceId ?? undefined,
       status: entry.status,
       totalDebit: entry.totalDebit,
       totalCredit: entry.totalCredit,
@@ -208,7 +202,6 @@ export class EntriesService {
       serie: (updated as any).serie ?? undefined,
       correlativo: (updated as any).correlativo ?? undefined,
       invoiceUrl: (updated as any).invoiceUrl ?? undefined,
-      referenceId: (updated as any).referenceId ?? undefined,
       status: updated.status,
       totalDebit: updated.totalDebit,
       totalCredit: updated.totalCredit,
@@ -243,38 +236,10 @@ export class EntriesService {
       serie: (updated as any).serie ?? undefined,
       correlativo: (updated as any).correlativo ?? undefined,
       invoiceUrl: (updated as any).invoiceUrl ?? undefined,
-      referenceId: (updated as any).referenceId ?? undefined,
       status: updated.status,
       totalDebit: updated.totalDebit,
       totalCredit: updated.totalCredit,
       lines: updated.lines.map((l) => ({
-        account: l.account,
-        description: l.description ?? undefined,
-      debit: l.debit,
-      credit: l.credit,
-    })),
-  };
-}
-
-  async findByReferenceId(referenceId: string): Promise<Entry | null> {
-    const entry = await this.repo.findByReferenceId(referenceId);
-    if (!entry) {
-      return null;
-    }
-    return {
-      id: entry.id,
-      period: entry.period.name,
-      date: entry.date,
-      description: (entry as any).description ?? undefined,
-      provider: (entry.provider as any)?.name ?? undefined,
-      serie: (entry as any).serie ?? undefined,
-      correlativo: (entry as any).correlativo ?? undefined,
-      invoiceUrl: (entry as any).invoiceUrl ?? undefined,
-      referenceId: (entry as any).referenceId ?? undefined,
-      status: entry.status,
-      totalDebit: entry.totalDebit,
-      totalCredit: entry.totalCredit,
-      lines: entry.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
         debit: l.debit,

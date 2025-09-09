@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AccEntryStatus, Prisma } from '@prisma/client';
 
+type EntryWithRelations = Prisma.AccEntryGetPayload<{
+  include: { lines: true; period: true; provider: true };
+}>;
+
 @Injectable()
 export class EntriesRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -12,7 +16,7 @@ export class EntriesRepository {
     to?: Date;
     skip: number;
     take: number;
-  }) {
+  }): Promise<{ data: EntryWithRelations[]; total: number }> {
     const where: Prisma.AccEntryWhereInput = {};
     if (params.period) {
       where.period = { name: params.period };
@@ -35,14 +39,17 @@ export class EntriesRepository {
     return { data, total };
   }
 
-  async findOne(id: number) {
+  async findOne(id: number): Promise<EntryWithRelations | null> {
     return this.prisma.accEntry.findUnique({
       where: { id },
       include: { lines: true, period: true, provider: true },
     });
   }
 
-  async findByInvoice(serie: string, correlativo: string) {
+  async findByInvoice(
+    serie: string,
+    correlativo: string,
+  ): Promise<EntryWithRelations | null> {
     return this.prisma.accEntry.findFirst({
       where: { serie, correlativo },
       include: { lines: true, period: true, provider: true },
@@ -70,9 +77,8 @@ export class EntriesRepository {
     serie?: string;
     correlativo?: string;
     invoiceUrl?: string;
-    referenceId?: string;
     lines: { account: string; description?: string; debit: number; credit: number }[];
-  }) {
+  }): Promise<EntryWithRelations> {
     return this.prisma.accEntry.create({
       data: {
         periodId: data.periodId,
@@ -83,7 +89,6 @@ export class EntriesRepository {
         serie: data.serie,
         correlativo: data.correlativo,
         invoiceUrl: data.invoiceUrl,
-        referenceId: data.referenceId,
         lines: {
           create: data.lines.map((l) => ({
             account: l.account,
@@ -97,7 +102,9 @@ export class EntriesRepository {
     });
   }
 
-  async findByReferenceId(referenceId: string) {
+  async findByReferenceId(
+    referenceId: string,
+  ): Promise<EntryWithRelations | null> {
     return this.prisma.accEntry.findFirst({
       where: { referenceId },
       include: { lines: true, period: true, provider: true },

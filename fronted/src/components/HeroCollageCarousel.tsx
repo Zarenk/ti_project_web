@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { useState } from "react";
+import { resolveImageUrl } from "@/lib/images";
 
 interface Brand {
   name: string;
@@ -60,7 +61,7 @@ export default function HeroCollageCarousel({ products }: HeroCollageCarouselPro
           onClick={() => setSelectedIndex(idx)}
         >
           <Image
-            src={product.images[0]}
+            src={resolveImageUrl(product.images[0])}
             alt={product.name}
             fill
             sizes="(min-width: 768px) 160px, 128px"

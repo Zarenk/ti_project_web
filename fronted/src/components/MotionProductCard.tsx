@@ -64,7 +64,7 @@ export default function MotionProductCard({ product, withActions = false, priori
       id: product.id,
       name: product.name,
       price: product.price,
-      image: product.images[0],
+      image: resolveImageUrl(product.images[0]),
       quantity: 1,
     })
     toast.success("Producto agregado al carrito")
@@ -92,7 +92,11 @@ export default function MotionProductCard({ product, withActions = false, priori
           <CardHeader className="p-0">
             <div className="relative h-56 flex items-center justify-center overflow-hidden rounded-t-lg">
               <Image
-                src={product.images[0] || "/placeholder.svg"}
+                src={
+                  product.images[0]
+                    ? resolveImageUrl(product.images[0])
+                    : "/placeholder.svg"
+                }
                 alt={product.name}
                 width={300}
                 height={300}
