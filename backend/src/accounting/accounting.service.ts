@@ -213,11 +213,11 @@ export class AccountingService {
       if (existing) return;
 
       const provider = await prisma.provider.findFirst({
-        where: { name: entry.providerName },
+        where: { name: entry.provider?.name },
       });
 
-      const igvRate = entry.igvRate ?? 0;
-      const totalGross = entry.totalGross ?? 0;
+      const igvRate = (entry as any).igvRate ?? 0;
+      const totalGross = (entry as any).totalGross ?? 0;
       const net = +(totalGross / (1 + igvRate)).toFixed(2);
       const igv = +(totalGross - net).toFixed(2);
 
@@ -235,7 +235,7 @@ export class AccountingService {
         extraItems > 0 ? ` (+ ${extraItems} ítems)…` : '';
 
       let creditAccount = '1011';
-      if (entry.paymentTerm === 'CREDIT') {
+      if ((entry as any).paymentTerm === 'CREDIT') {
         creditAccount = '4211';
       } else if (/transfer|yape|plin/i.test((entry as any).paymentMethod ?? '')) {
         creditAccount = '1041';
@@ -258,8 +258,8 @@ export class AccountingService {
           totalDebit: amount,
           totalCredit: amount,
           providerId: provider?.id ?? undefined,
-          serie: entry.serie,
-          correlativo: entry.correlativo,
+          serie: (entry as any).serie ?? undefined,
+          correlativo: (entry as any).correlativo ?? undefined,
           invoiceUrl: (entry as any).pdfUrl ?? undefined,
           source: 'inventory_entry',
           sourceId: entryId,
@@ -268,18 +268,18 @@ export class AccountingService {
               {
                 account: '2011',
                 description: `Ingreso ${itemName}${seriesText}${extraItemsText} – Compra ${invoiceCode} (${invoiceCode})`.trim(),
-                debit: subtotal,
+                debit: net,
                 credit: 0,
               },
               {
                 account: '4011',
-                description: description2.trim(),
+                description: `IGV Compra ${invoiceCode}`.trim(),
                 debit: igv,
                 credit: 0,
               },
               {
                 account: creditAccount,
-                description: description3.trim(),
+                description: `Pago Compra ${invoiceCode}`.trim(),
                 debit: 0,
                 credit: amount,
               },
