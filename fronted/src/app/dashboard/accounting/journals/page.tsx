@@ -237,12 +237,6 @@ export default function JournalsPage() {
           );
         }
 
-        if (salesRes.ok) {
-          const salesJson = await salesRes.json();
-          const sales = Array.isArray(salesJson) ? salesJson : salesJson.data ?? [];
-          lines = lines.concat(sales.flatMap(buildJournalFromSale));
-        }
-
         setDailyLines(sortByDateDesc(lines));
       } catch {
         setDailyLines([]);
