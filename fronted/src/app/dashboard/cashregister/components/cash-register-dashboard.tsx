@@ -76,9 +76,9 @@ export default function CashRegisterDashboard() {
         description: transaction.description || "",
         paymentMethods: transaction.paymentMethods || [],
         voucher: transaction.voucher || null,
-        clientName: transaction.clientName || "",
-        clientDocument: transaction.clientDocument || "",
-        clientDocumentType: transaction.clientDocumentType || "",
+        clientName: transaction.clientName ?? null,
+        clientDocument: transaction.clientDocument ?? null,
+        clientDocumentType: transaction.clientDocumentType ?? null,
       }));
 
       const income = validTransactions
@@ -265,9 +265,9 @@ export default function CashRegisterDashboard() {
             userId: transaction.userId,
             cashRegisterId: transaction.cashRegisterId,
             voucher: transaction.voucher || null,
-            clientName: transaction.clientName || "",
-            clientDocument: transaction.clientDocument || "",
-            clientDocumentType: transaction.clientDocumentType || "",
+            clientName: transaction.clientName ?? null,
+            clientDocument: transaction.clientDocument ?? null,
+            clientDocumentType: transaction.clientDocumentType ?? null,
           }));
   
           setTransactions(validTransactions);

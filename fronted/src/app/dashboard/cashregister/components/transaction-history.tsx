@@ -265,7 +265,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           <div className="font-medium">S/.{transaction.amount.toFixed(2)}</div>
-                          {transaction.type === "deposit" && transaction.discrepancy !== undefined && (
+                          {transaction.type === "CLOSURE" && transaction.discrepancy !== undefined && (
                             <div
                               className={`text-xs ${
                                 transaction.discrepancy === 0
@@ -287,7 +287,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
                         {!isMobile && (
                           <TableCell className="max-w-[200px] truncate">
                             {transaction.clientName
-                              ? `${transaction.clientName} (${transaction.clientDocumentType}: ${transaction.clientDocument})`
+                              ? `${transaction.clientName}${transaction.clientDocumentType && transaction.clientDocument ? ` (${transaction.clientDocumentType} ${transaction.clientDocument})` : ""}`
                               : "-"}
                           </TableCell>
                         )}
@@ -323,6 +323,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
                       {transaction.clientName && (
                         <p>
                           <span className="font-medium">Cliente:</span> {transaction.clientName}
+                        </p>
+                      )}
+                      {transaction.clientDocument && transaction.clientDocumentType && (
+                        <p>
+                          <span className="font-medium">Documento:</span> {transaction.clientDocumentType} {transaction.clientDocument}
                         </p>
                       )}
                       {transaction.description && (
@@ -364,9 +369,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
                   {modalTransaction.clientName && (
                     <p><strong>Cliente:</strong> {modalTransaction.clientName}</p>
                   )}
-                  {modalTransaction.clientDocument && (
+                  {modalTransaction.clientDocument && modalTransaction.clientDocumentType && (
                     <p>
-                      <strong>Documento:</strong> {modalTransaction.clientDocumentType}: {modalTransaction.clientDocument}
+                      <strong>Documento:</strong> {modalTransaction.clientDocumentType} {modalTransaction.clientDocument}
                     </p>
                   )}
                   {modalTransaction.status && (

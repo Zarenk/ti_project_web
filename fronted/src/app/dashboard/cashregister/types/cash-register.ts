@@ -2,7 +2,7 @@ export interface Transaction {
     id: string; // ID único de la transacción
     cashRegisterId: number; // ID de la caja asociada
     cashRegisterName?: string; // Nombre de la caja (opcional)
-    type: "deposit" | "withdrawal" | "closure"; // Tipo de transacción (alineado con el backend)
+    type: "INCOME" | "EXPENSE" | "CLOSURE"; // Tipo de transacción (alineado con el backend)
     amount: number; // Monto de la transacción
     createdAt: Date; 
     currency?: string; // Moneda de la transacción (e.g., "PEN", "USD")
@@ -17,8 +17,8 @@ export interface Transaction {
     notes?: string; // Notas adicionales (opcional)
 
     internalType?: "INCOME" | "EXPENSE" | "CLOSURE" | "UNKNOWN"; // 👈 NUEVO
-    clientName?: string;
-    clientDocument?: string;
-    clientDocumentType?: string;
+    clientName?: string | null;
+    clientDocument?: string | null;
+    clientDocumentType?: string | null;
     voucher?: string | null;
   }

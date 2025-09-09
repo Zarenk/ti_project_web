@@ -34,7 +34,7 @@ export class SalePostedController {
         return { status: 'not_found' };
       }
       const lines = this.mapper.buildEntryFromSale(sale);
-      const entry = this.entries.createDraft({
+      const draft = await this.entries.createDraft({
         period: format(new Date(data.timestamp), 'yyyy-MM'),
         date: new Date(data.timestamp),
         lines: lines.map(({ account, description, debit, credit }) => ({
@@ -44,9 +44,9 @@ export class SalePostedController {
           credit,
         })),
       });
-      this.entries.post((await entry).id);
-      this.logger.log(`Entry ${(await entry).id} created for sale ${data.saleId}`);
-      return { status: 'posted', entryId: (await entry).id };
+      await this.entries.post(draft.id);
+      this.logger.log(`Entry ${draft.id} created for sale ${data.saleId}`);
+      return { status: 'posted', entryId: draft.id };
     } catch (err) {
       this.logger.error('Failed to process sale-posted hook', err as any);
       throw err;

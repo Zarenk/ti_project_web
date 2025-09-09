@@ -6,6 +6,21 @@ interface SaleEntryLine extends EntryLine {
   cogs?: boolean;
 }
 
+function aggregateSaleLines(lines: SaleEntryLine[]): SaleEntryLine[] {
+  const aggregated = new Map<string, SaleEntryLine>();
+  for (const line of lines) {
+    const key = `${line.account}|${line.description}`;
+    const current = aggregated.get(key);
+    if (current) {
+      current.debit += line.debit;
+      current.credit += line.credit;
+    } else {
+      aggregated.set(key, { ...line });
+    }
+  }
+  return Array.from(aggregated.values());
+}
+
 @Injectable()
 export class SaleAccountingService {
   buildEntryFromSale(sale: any): SaleEntryLine[] {
@@ -60,8 +75,8 @@ export class SaleAccountingService {
       },
     ];
 
-    return lines;
+    return aggregateSaleLines(lines);
   }
 }
 
-export { SaleEntryLine };
+export { SaleEntryLine, aggregateSaleLines };

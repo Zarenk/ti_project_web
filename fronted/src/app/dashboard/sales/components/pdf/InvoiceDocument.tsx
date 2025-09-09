@@ -186,6 +186,25 @@ const styles = StyleSheet.create({
   },
 });
 
+function wrapText(text: string, maxLength: number) {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+
+  words.forEach((word) => {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+    if (nextLine.length <= maxLength) {
+      currentLine = nextLine;
+    } else {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    }
+  });
+
+  if (currentLine) lines.push(currentLine);
+  return lines.join('\n');
+}
+
 export function InvoiceDocument({
   data,
   qrCode,
@@ -207,10 +226,7 @@ export function InvoiceDocument({
   const Moneda =
   data.tipoMoneda === 'PEN' ? 'SOLES' : data.tipoMoneda.toUpperCase();
 
-  const direccionFormateada = (data.cliente.direccion || 'N/A').replace(
-    /(.{40})/g,
-    '$1\n'
-  );
+  const direccionFormateada = wrapText(data.cliente.direccion || 'N/A', 40);
 
   return (
     <Document>
@@ -259,7 +275,12 @@ export function InvoiceDocument({
             <View style={styles.rowFieldLeft}>
             <Text style={styles.labelBox}>Dirección</Text>
             <Text style={styles.colon}>:</Text>
-            <Text style={styles.valueLeft}>{direccionFormateada}</Text>
+              <Text
+                style={styles.valueLeft}
+                hyphenationCallback={(word) => [word]}
+              >
+                {direccionFormateada}
+              </Text>
             </View>
         </View>
 
