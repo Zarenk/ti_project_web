@@ -3,6 +3,7 @@ import { EntriesService } from './entries.service';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { EntryPaymentMethod } from '@prisma/client';
 import { multerConfig } from 'src/config/multer.config';
 import pdfParse from 'pdf-parse';
 import { diskStorage } from 'multer';
@@ -24,6 +25,7 @@ export class EntriesController {
       description?: string;
       tipoMoneda?: string;
       tipoCambioId?: number;
+      paymentMethod?: EntryPaymentMethod;
       details: { productId: number, name:string; quantity: number; price: number, priceInSoles: number }[];
       invoice?: {serie:string; nroCorrelativo:string; tipoComprobante:string; tipoMoneda:string; total:number; fechaEmision: Date;}
     },

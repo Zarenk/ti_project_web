@@ -62,7 +62,8 @@ const entriesSchema = z.object({
   fecha_emision_comprobante: z.string({}),
   comprobante: z.string({}),
   total_comprobante: z.string({}),
-  tipo_moneda: z.string({})
+  tipo_moneda: z.string({}),
+  payment_method: z.enum(['CASH', 'CREDIT'])
 })
 //inferir el tipo de dato
 export type EntriesType = z.infer<typeof entriesSchema>;
@@ -93,6 +94,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
         comprobante: entries?.comprobante || '', // Valor predeterminado
         total_comprobante: entries?.total_comprobante || '', // Valor predeterminado
         tipo_moneda: entries?.total_comprobante || '', // Valor predeterminado
+        payment_method: entries?.payment_method || 'CASH',
     }
     });
 

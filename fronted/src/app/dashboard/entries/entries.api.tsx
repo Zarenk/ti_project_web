@@ -12,6 +12,7 @@ export async function createEntry(data: {
   description?: string;
   tipoMoneda?: string;
   tipoCambioId?: number;
+  paymentMethod?: string;
   details: { productId: number; quantity: number; price: number; priceInSoles: number }[];
   invoice?: { serie: string; nroCorrelativo: string; comprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
 }) {

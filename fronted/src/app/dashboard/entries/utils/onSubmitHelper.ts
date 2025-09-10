@@ -124,6 +124,7 @@ export async function handleFormSubmission({
       date: data.entry_date,
       description: data.entry_description,
       tipoMoneda: data.tipo_moneda,
+      paymentMethod: data.payment_method,
       details: updatedProducts,
       invoice: {
         serie: data.serie,

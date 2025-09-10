@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 
 interface AdditionalInfoSectionProps {
   register: any;
@@ -78,6 +79,18 @@ export function AdditionalInfoSection({
           />
         </PopoverContent>
       </Popover>
+
+      <Label className="text-sm font-medium py-2">Método de Pago</Label>
+      <Select defaultValue="CASH" onValueChange={(value) => setValue('payment_method', value)}>
+        <SelectTrigger>
+          <SelectValue placeholder="Seleccione un método" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="CASH">Al contado</SelectItem>
+          <SelectItem value="CREDIT">Crédito</SelectItem>
+        </SelectContent>
+      </Select>
+      <input type="hidden" {...register('payment_method')} />
     </div>
   )
 }

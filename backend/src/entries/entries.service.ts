@@ -6,13 +6,12 @@ import {
   InternalServerErrorException,
   HttpException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, AuditAction, EntryPaymentMethod } from '@prisma/client';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CategoryService } from 'src/category/category.service';
 import { ActivityService } from 'src/activity/activity.service';
-import { AuditAction } from '@prisma/client';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { AccountingService } from 'src/accounting/accounting.service';
 
@@ -53,6 +52,7 @@ export class EntriesService {
     description?: string;
     tipoMoneda?: string;
     tipoCambioId?: number;
+    paymentMethod?: EntryPaymentMethod;
     paymentTerm?: string;
     serie?: string;
     correlativo?: string;
@@ -122,6 +122,7 @@ export class EntriesService {
           description: data.description,
           tipoMoneda: data.tipoMoneda,
           tipoCambioId: data.tipoCambioId,
+          paymentMethod: data.paymentMethod,
           paymentTerm: data.paymentTerm,
           serie: data.serie,
           correlativo: data.correlativo,

@@ -195,6 +195,11 @@ enum PaymentTerm {
   CREDIT
 }
 
+enum EntryPaymentMethod {
+  CASH
+  CREDIT
+}
+
 model Entry {
   id           Int      @id @default(autoincrement())
   storeId      Int // Almacén relacionado con la entrada  
@@ -205,6 +210,7 @@ model Entry {
   description  String? // Descripción opcional
   tipoMoneda   String? // Tipo de moneda (e.g., PEN, USD)
   tipoCambioId Int? // FK a TipoCambio
+  paymentMethod EntryPaymentMethod @default(CASH)
   pdfUrl       String?
   guiaUrl      String? // URL del PDF de la guía de remisión
   createdAt    DateTime @default(now())
