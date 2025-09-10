@@ -77,7 +77,7 @@ export class EntriesRepository {
     serie?: string;
     correlativo?: string;
     invoiceUrl?: string;
-    lines: { account: string; description?: string; debit: number; credit: number }[];
+    lines: { account: string; description?: string; debit: number; credit: number; quantity?: number }[];
   }): Promise<EntryWithRelations> {
     return this.prisma.accEntry.create({
       data: {
@@ -95,6 +95,7 @@ export class EntriesRepository {
             description: l.description,
             debit: l.debit,
             credit: l.credit,
+            quantity: (l as any).quantity,
           })),
         },
       },

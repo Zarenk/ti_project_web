@@ -229,6 +229,10 @@ export class AccountingService {
       const itemName = firstDetail?.product?.name ?? '';
       const firstSerie = firstDetail?.series?.[0]?.serial ?? '';
       const extraItems = entry.details.length - 1;
+      const totalQty = entry.details.reduce(
+        (s: number, d: any) => s + (d.quantity || 0),
+        0,
+      );
 
       const seriesText = firstSerie ? ` (${firstSerie})` : '';
       const extraItemsText =
@@ -270,18 +274,21 @@ export class AccountingService {
                 description: `Ingreso ${itemName}${seriesText}${extraItemsText} – Compra ${invoiceCode} (${invoiceCode})`.trim(),
                 debit: net,
                 credit: 0,
+                quantity: totalQty,
               },
               {
                 account: '4011',
                 description: `IGV Compra ${invoiceCode}`.trim(),
                 debit: igv,
                 credit: 0,
+                quantity: null,
               },
               {
                 account: creditAccount,
                 description: `Pago Compra ${invoiceCode}`.trim(),
                 debit: 0,
                 credit: amount,
+                quantity: null,
               },
             ],
           },

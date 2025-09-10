@@ -176,7 +176,7 @@ return (
     <div className="gap-2">
         <div className="flex items-center gap-4 py-4 flex-wrap">
           <Input
-            placeholder="Filtrar por producto..."
+            placeholder="Filtrar por producto o serie..."
             value={inputValue}
             onChange={(event) => setInputValue(event.target.value)}
             className="max-w-sm"

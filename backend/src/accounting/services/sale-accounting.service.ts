@@ -14,6 +14,9 @@ function aggregateSaleLines(lines: SaleEntryLine[]): SaleEntryLine[] {
     if (current) {
       current.debit += line.debit;
       current.credit += line.credit;
+      if (line.quantity != null || current.quantity != null) {
+        current.quantity = (current.quantity ?? 0) + (line.quantity ?? 0);
+      }
     } else {
       aggregated.set(key, { ...line });
     }
@@ -28,6 +31,10 @@ export class SaleAccountingService {
     const igv = +(sale.total - subtotal).toFixed(2);
     const cost = (sale.salesDetails || []).reduce(
       (sum: number, d: any) => sum + (d.entryDetail?.price ?? 0) * d.quantity,
+      0,
+    );
+    const totalQty = (sale.salesDetails || []).reduce(
+      (s: number, d: any) => s + d.quantity,
       0,
     );
 
@@ -46,12 +53,14 @@ export class SaleAccountingService {
         description: `Cobro ${invoiceCode} – ${paymentMethod || 'Caja'}`.trim(),
         debit: sale.total,
         credit: 0,
+        quantity: null,
       },
       {
         account: '7011',
         description: `Venta ${invoiceCode} – ${productName}`.trim(),
         debit: 0,
         credit: subtotal,
+        quantity: null,
       },
       {
         account: '4011',
@@ -59,6 +68,7 @@ export class SaleAccountingService {
         debit: 0,
         credit: igv,
         igv: true,
+        quantity: null,
       },
       {
         account: '6911',
@@ -66,12 +76,14 @@ export class SaleAccountingService {
         debit: cost,
         credit: 0,
         cogs: true,
+        quantity: totalQty,
       },
       {
         account: '2011',
         description: `Salida mercaderías por ${invoiceCode}`.trim(),
         debit: 0,
         credit: cost,
+        quantity: totalQty,
       },
     ];
 

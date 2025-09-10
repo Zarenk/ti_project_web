@@ -6,6 +6,7 @@ interface InventoryAdjustment {
   description: string;
   amount: number; // positive increase, negative decrease
   inventoryAccount?: string;
+  quantity?: number;
 }
 
 @Injectable()
@@ -19,12 +20,14 @@ export class InventoryAccountingService {
         description: adj.description,
         debit: adj.amount > 0 ? amount : 0,
         credit: adj.amount < 0 ? amount : 0,
+        quantity: adj.quantity ?? null,
       },
       {
         account: adj.account,
         description: adj.description,
         debit: adj.amount < 0 ? amount : 0,
         credit: adj.amount > 0 ? amount : 0,
+        quantity: adj.quantity ?? null,
       },
     ];
   }

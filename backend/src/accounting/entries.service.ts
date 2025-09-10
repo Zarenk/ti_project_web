@@ -10,6 +10,7 @@ export interface EntryLine {
   description?: string;
   debit: number;
   credit: number;
+  quantity?: number | null;
 }
 
 export interface Entry {
@@ -69,6 +70,7 @@ export class EntriesService {
           description: l.description ?? undefined,
           debit: l.debit,
           credit: l.credit,
+          quantity: (l as any).quantity ?? undefined,
         })),
       })),
       total,
@@ -97,6 +99,7 @@ export class EntriesService {
         description: l.description ?? undefined,
         debit: l.debit,
         credit: l.credit,
+        quantity: (l as any).quantity ?? undefined,
       })),
     };
   }
@@ -126,6 +129,7 @@ export class EntriesService {
         description: l.description ?? undefined,
         debit: l.debit,
         credit: l.credit,
+        quantity: (l as any).quantity ?? undefined,
       })),
     };
   }
@@ -176,6 +180,7 @@ export class EntriesService {
         description: l.description ?? undefined,
         debit: l.debit,
         credit: l.credit,
+        quantity: (l as any).quantity ?? undefined,
       })),
     };
   }
@@ -210,6 +215,7 @@ export class EntriesService {
         description: l.description ?? undefined,
         debit: l.debit,
         credit: l.credit,
+        quantity: (l as any).quantity ?? undefined,
       })),
     };
   }
@@ -244,6 +250,7 @@ export class EntriesService {
         description: l.description ?? undefined,
         debit: l.debit,
         credit: l.credit,
+        quantity: (l as any).quantity ?? undefined,
       })),
     };
   }

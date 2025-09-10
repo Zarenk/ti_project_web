@@ -47,5 +47,15 @@ describe('SaleAccountingService', () => {
     expect(lines).toHaveLength(5);
     const cobro = lines.find((l) => l.account === '1011');
     expect(cobro?.debit).toBe(118);
+    // quantity expectations
+    const cogs = lines.find((l) => l.account === '6911');
+    const inventory = lines.find((l) => l.account === '2011');
+    expect(cogs?.quantity).toBe(1);
+    expect(inventory?.quantity).toBe(1);
+    expect(cobro?.quantity).toBeNull();
+    const igvLine = lines.find((l) => l.account === '4011');
+    const saleLine = lines.find((l) => l.account === '7011');
+    expect(igvLine?.quantity).toBeNull();
+    expect(saleLine?.quantity).toBeNull();
   });
 });
