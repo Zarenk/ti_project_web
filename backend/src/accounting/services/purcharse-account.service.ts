@@ -4,7 +4,7 @@ import { EntryLine } from '../entries.service';
 export interface PurchaseEntryLine extends EntryLine {}
 
 interface PurchaseData {
-  total: number;
+  subtotal: number;
   igv: number;
   provider?: { name?: string } | null;
 }
@@ -12,13 +12,13 @@ interface PurchaseData {
 @Injectable()
 export class PurchaseAccountingService {
   buildEntryFromPurchase(purchase: PurchaseData): PurchaseEntryLine[] {
-    const subtotal = +(purchase.total - purchase.igv).toFixed(2);
+    const total = +(purchase.subtotal + purchase.igv).toFixed(2);
 
     return [
       {
         account: '2011',
         description: 'Mercaderías',
-        debit: subtotal,
+        debit: purchase.subtotal,
         credit: 0,
       },
       {
@@ -31,7 +31,7 @@ export class PurchaseAccountingService {
         account: '4212',
         description: `Cuentas por pagar ${purchase.provider?.name ?? ''}`.trim(),
         debit: 0,
-        credit: purchase.total,
+        credit: total,
       },
     ];
   }

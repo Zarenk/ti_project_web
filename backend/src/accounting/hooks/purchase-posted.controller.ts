@@ -5,6 +5,8 @@ import { EntriesService } from '../entries.service';
 import { format } from 'date-fns';
 import { PurchaseAccountingService } from '../services/purcharse-account.service';
 
+const IGV_RATE = 0.18;
+
 @Controller('accounting/hooks/purchase-posted')
 export class PurchasePostedController {
   private readonly logger = new Logger(PurchasePostedController.name);
@@ -27,16 +29,27 @@ export class PurchasePostedController {
       if (!purchase) {
         return { status: 'not_found' };
       }
-      const total = purchase.invoice?.total ?? purchase.details.reduce(
-        (sum: number, d: any) => sum + (d.price ?? 0) * d.quantity,
+      const total = purchase.details.reduce(
+        (sum: number, d: any) =>
+          sum + ((d.priceInSoles ?? d.price ?? 0) * d.quantity),
         0,
       );
-      const igv = +(total - total / 1.18).toFixed(2);
+      const roundedTotal = +total.toFixed(2);
+      const subtotal = +(roundedTotal / (1 + IGV_RATE)).toFixed(2);
+      const igv = +(roundedTotal - subtotal).toFixed(2);
       const lines = this.mapper.buildEntryFromPurchase({
-        total,
+        subtotal,
         igv,
         provider: purchase.provider,
       });
+      const totalDebit = lines.reduce((sum, l) => sum + (l.debit ?? 0), 0);
+      const totalCredit = lines.reduce((sum, l) => sum + (l.credit ?? 0), 0);
+      if (totalDebit !== totalCredit) {
+        this.logger.error(
+          `Unbalanced entry generated for purchase ${data.purchaseId}: ${totalDebit} != ${totalCredit}`,
+        );
+        return { status: 'unbalanced' };
+      }
       const entry = await this.entries.createDraft({
         period: format(new Date(data.timestamp), 'yyyy-MM'),
         date: new Date(data.timestamp),
