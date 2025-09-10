@@ -35,8 +35,9 @@ interface InventoryItem {
 
 export const columns: ColumnDef<InventoryItem>[] = [
     {
+      id: "product_name",
       accessorKey: "product.name", // Acceder al nombre del producto
-      header: "Producto", 
+      header: "Producto",
     },
     {
       id: "product.category",

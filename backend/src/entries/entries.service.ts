@@ -549,7 +549,9 @@ export class EntriesService {
       });
 
       const result: any[] = []
+      const seen = new Set<number>()
       for (const d of details) {
+        if (seen.has(d.product.id)) continue
         const stock =
           d.inventory?.storeOnInventory?.reduce((s, i) => s + i.stock, 0) ?? 0
         if (stock > 0) {
@@ -563,6 +565,7 @@ export class EntriesService {
             images: d.product.images ?? [],
             stock,
           })
+          seen.add(d.product.id)
           if (result.length >= limit) break
         }
       }

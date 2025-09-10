@@ -13,6 +13,7 @@ import {
     getSortedRowModel,
     SortingState,
     useReactTable,
+    FilterFn,
   } from "@tanstack/react-table"
 import React, { useEffect, useState } from "react";
 import InventoryModal from "./data-table-components/InventoryModal";
@@ -37,6 +38,18 @@ interface DataTableProps<TData, TValue> {
     data: TData[]
     inStockOnly?: boolean
   }
+
+const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
+  const search = String(filterValue).toLowerCase();
+  const name = row.original?.product?.name?.toLowerCase() || "";
+  const serials: string[] = Array.isArray(row.original?.serialNumbers)
+    ? row.original.serialNumbers
+    : [];
+  return (
+    name.includes(search) ||
+    serials.some((sn) => sn.toLowerCase().includes(search))
+  );
+};
 
   export function DataTable<TData extends{id:string}, TValue>({
     columns,
@@ -79,8 +92,11 @@ interface DataTableProps<TData, TValue> {
     // ESTADO PARA MANEJAR EL FILTRO DE TIENDAS
     const [selectedStore, setSelectedStore] = useState('all');
     const [storeOptions, setStoreOptions] = useState<{id:number; name:string}[]>([]);
+
+    const [globalFilter, setGlobalFilter] = useState("")
+    const debouncedGlobalFilter = useDebounce(globalFilter, 600)
     //
- 
+
     // ESTADOS DE LA TABLA
     const filteredData = React.useMemo(() => {
       if (selectedStore === 'all') return data;
@@ -99,9 +115,11 @@ interface DataTableProps<TData, TValue> {
     const table = useReactTable({
         data: filteredData,
         columns,
+        globalFilterFn,
         onColumnFiltersChange: setColumnFilters,
         onSortingChange: setSorting,
         onColumnVisibilityChange: setColumnVisibility,
+        onGlobalFilterChange: setGlobalFilter,
         getFilteredRowModel: getFilteredRowModel(),
         getSortedRowModel: getSortedRowModel(),
         getCoreRowModel: getCoreRowModel(),
@@ -110,6 +128,7 @@ interface DataTableProps<TData, TValue> {
             columnFilters,
             sorting,
             columnVisibility,
+            globalFilter: debouncedGlobalFilter,
         },
       })
 
@@ -142,10 +161,6 @@ interface DataTableProps<TData, TValue> {
     const totalSelectedRows = Object.keys(globalRowSelection).length;
     //
 
-  const [inputValue, setInputValue] = useState("")
-  // Aplica el debounce con 600ms
-  const debouncedValue = useDebounce(inputValue, 600)
-
   // Cargar las categorÃ­as desde el backend
   useEffect(() => {
     async function loadCategories() {
@@ -161,14 +176,12 @@ interface DataTableProps<TData, TValue> {
     loadStores();
   }, []);
   
-  // Actualiza el filtro cuando cambia el valor debounced
+  // Actualiza el filtro cuando cambia la categoría
   useEffect(() => {
-    table.getColumn("product_name")?.setFilterValue(debouncedValue);
-    table.getColumn("serialNumbers")?.setFilterValue(debouncedValue);
     table.getColumn("product.category")?.setFilterValue(
       selectedCategory === "all" ? undefined : selectedCategory
     );
-  }, [debouncedValue, selectedCategory, table])
+  }, [selectedCategory, table])
   //
 
 
@@ -177,8 +190,8 @@ return (
         <div className="flex items-center gap-4 py-4 flex-wrap">
           <Input
             placeholder="Filtrar por producto o serie..."
-            value={inputValue}
-            onChange={(event) => setInputValue(event.target.value)}
+            value={globalFilter}
+            onChange={(event) => setGlobalFilter(event.target.value)}
             className="max-w-sm"
           />
 

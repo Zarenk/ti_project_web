@@ -161,7 +161,10 @@ export class EntriesService {
       serie: data.serie,
       correlativo: data.correlativo,
       invoiceUrl: data.invoiceUrl,
-      lines: data.lines,
+      lines: data.lines.map(line => ({
+        ...line,
+        quantity: line.quantity ?? undefined
+      })),
     });
     return {
       id: entry.id,

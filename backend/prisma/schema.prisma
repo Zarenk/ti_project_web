@@ -1082,6 +1082,7 @@ model AccEntryLine {
   description String?
   debit       Float    @default(0)
   credit      Float    @default(0)
+  quantity    Float?
   entry       AccEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 
   @@index([entryId])
