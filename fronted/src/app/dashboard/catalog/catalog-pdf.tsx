@@ -328,7 +328,7 @@ function CatalogPdfDocument({
   selectionSummary?: string
   companyLogo: string
 }) {
-  const ITEMS_PER_PAGE = 9
+  const ITEMS_PER_PAGE = 6
   const pages: { category: string; items: CatalogPdfItem[] }[] = []
 
   for (const section of sections) {

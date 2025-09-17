@@ -18,6 +18,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Journal, fetchJournals, deleteJournal } from "./journals.api";
 import { JournalForm } from "./journal-form";
 import { Input } from "@/components/ui/input";
@@ -32,17 +40,26 @@ const sortByDateDesc = <T extends { date: string }>(arr: T[]) =>
     .slice()
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-type DailyLine = {
+type EntryLineDetail = {
   date: string;
   account: string;
   description?: string;
   debit: number;
   credit: number;
-  quantity: number;
+  quantity?: number;
+};
+
+type DailyLine = EntryLineDetail & {
+  date: string;
   provider?: string;
   voucher?: string;
   documentType?: string;
   series?: string[];
+  entryId?: number;
+  invoiceUrl?: string;
+  entryDescription?: string;
+  sale?: Sale;
+  entryLines?: EntryLineDetail[];
 };
 
 const accountNames: Record<string, string> = {
@@ -136,8 +153,11 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
         debit: amount,
         credit: 0,
         quantity: item.qty,
+        provider: sale.customerName ?? undefined,
         documentType: formattedSale.documentType,
         series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
+        voucher,
+        sale,
       });
     }
 
@@ -161,6 +181,9 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
         quantity: item.qty,
         documentType: formattedSale.documentType,
         series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
+        provider: sale.customerName ?? undefined,
+        voucher,
+        sale,
       },
       {
         date: sale.date,
@@ -171,6 +194,9 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
         quantity: item.qty,
         documentType: formattedSale.documentType,
         series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
+        provider: sale.customerName ?? undefined,
+        voucher,
+        sale,
       },
       {
         date: sale.date,
@@ -181,6 +207,9 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
         quantity: item.qty,
         documentType: formattedSale.documentType,
         series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
+        provider: sale.customerName ?? undefined,
+        voucher,
+        sale,
       }
     );
   }
@@ -202,6 +231,7 @@ export default function JournalsPage() {
   });
   const [dailyLines, setDailyLines] = useState<DailyLine[]>([]);
   const [dailyLoading, setDailyLoading] = useState(false);
+  const [selectedLine, setSelectedLine] = useState<DailyLine | null>(null);
 
   useEffect(() => {
     fetchJournals()
@@ -239,11 +269,39 @@ export default function JournalsPage() {
         }
 
         let lines: DailyLine[] = [];
+        let sales: Sale[] = [];
+        if (salesRes.ok) {
+          try {
+            sales = await salesRes.json();
+          } catch {
+            sales = [];
+          }
+        }
+
+        const salesByVoucher = new Map<string, Sale>();
+        for (const sale of sales) {
+          if (sale.serie && sale.correlativo) {
+            salesByVoucher.set(`${sale.serie}-${sale.correlativo}`, sale);
+          }
+        }
+
         if (res.ok) {
           const json = await res.json();
-          lines = (json.data ?? []).flatMap((e: any) =>
-            (e.lines ?? []).map((l: any) => {
-              const voucher = e.serie && e.correlativo ? `${e.serie}-${e.correlativo}` : undefined;
+          lines = (json.data ?? []).flatMap((e: any) => {
+            const voucher = e.serie && e.correlativo ? `${e.serie}-${e.correlativo}` : undefined;
+            const sale = voucher ? salesByVoucher.get(voucher) : undefined;
+            const entryLines: EntryLineDetail[] = (e.lines ?? []).map((line: any) => ({
+              account: line.account,
+              description: line.description ?? undefined,
+              debit: Number(line.debit ?? 0),
+              credit: Number(line.credit ?? 0),
+              quantity:
+                line.quantity !== undefined && line.quantity !== null
+                  ? Number(line.quantity)
+                  : undefined,
+            }));
+
+            return (e.lines ?? []).map((l: any, idx: number) => {
               const formatted = formatDisplayGlosa({
                 baseDescription: l.description ?? e.description ?? undefined,
                 provider: e.provider ?? undefined,
@@ -251,20 +309,37 @@ export default function JournalsPage() {
                 serie: e.serie ?? undefined,
                 tipoComprobante: (e as any).tipoComprobante ?? null,
               });
-              return {
-                date: e.date,
+
+              const entryLine = entryLines[idx] ?? {
                 account: l.account,
-                description: formatted.description,
+                description: l.description ?? undefined,
                 debit: Number(l.debit ?? 0),
                 credit: Number(l.credit ?? 0),
-                quantity: Number(l.quantity ?? 0),
+                quantity:
+                  l.quantity !== undefined && l.quantity !== null
+                    ? Number(l.quantity)
+                    : undefined,
+              };
+
+              return {
+                date: e.date,
+                account: entryLine.account,
+                description: formatted.description,
+                debit: entryLine.debit,
+                credit: entryLine.credit,
+                quantity: entryLine.quantity,
                 provider: e.provider ?? undefined,
                 voucher,
                 documentType: formatted.documentType,
                 series: formatted.series,
+                entryId: e.id,
+                invoiceUrl: e.invoiceUrl ?? undefined,
+                entryDescription: e.description ?? undefined,
+                sale: sale ?? undefined,
+                entryLines,
               } as DailyLine;
-            })
-          );
+            });
+          });
         }
 
         setDailyLines(sortByDateDesc(lines));
@@ -367,7 +442,10 @@ export default function JournalsPage() {
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">
+                        <TableCell
+                          className="text-sm cursor-zoom-in"
+                          onDoubleClick={() => setSelectedLine(l)}
+                        >
                           <div>{l.description ?? "-"}</div>
                           {l.documentType && (
                             <div className="mt-1 text-xs font-medium text-muted-foreground">
@@ -379,6 +457,9 @@ export default function JournalsPage() {
                               Series: {l.series.join(", ")}
                             </div>
                           )}
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            Doble clic para ver detalle
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">{l.quantity ? l.quantity : ""}</TableCell>
                         <TableCell className="text-right">
@@ -475,6 +556,226 @@ export default function JournalsPage() {
         defaultValues={editing ?? undefined}
         onUpdate={handleUpdate}
       />
+
+      <Dialog open={!!selectedLine} onOpenChange={(open) => !open && setSelectedLine(null)}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Detalle de glosa</DialogTitle>
+            {(selectedLine?.description || selectedLine?.entryDescription) && (
+              <DialogDescription>
+                {selectedLine?.description ?? selectedLine?.entryDescription}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {selectedLine && (
+            <div className="space-y-6">
+              <div className="grid gap-4 text-sm sm:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Fecha y hora</p>
+                  <p className="font-medium">
+                    {new Date(selectedLine.date).toLocaleString("es-PE", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Cuenta</p>
+                  <p className="font-medium">{selectedLine.account}</p>
+                </div>
+                {selectedLine.documentType && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Tipo de comprobante</p>
+                    <p className="font-medium">{selectedLine.documentType}</p>
+                  </div>
+                )}
+                {selectedLine.voucher && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Comprobante</p>
+                    <p className="font-medium">{selectedLine.voucher}</p>
+                  </div>
+                )}
+                {(selectedLine.provider || selectedLine.sale?.customerName) && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">
+                      {selectedLine.provider ? "Proveedor" : "Cliente"}
+                    </p>
+                    <p className="font-medium">
+                      {selectedLine.provider ?? selectedLine.sale?.customerName}
+                    </p>
+                  </div>
+                )}
+                {selectedLine.quantity !== undefined && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Cantidad</p>
+                    <p className="font-medium">{selectedLine.quantity}</p>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Debe</p>
+                  <p className="font-medium">
+                    {selectedLine.debit
+                      ? selectedLine.debit.toLocaleString("es-PE", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })
+                      : "0.00"}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Haber</p>
+                  <p className="font-medium">
+                    {selectedLine.credit
+                      ? selectedLine.credit.toLocaleString("es-PE", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })
+                      : "0.00"}
+                  </p>
+                </div>
+              </div>
+
+              {selectedLine.series && selectedLine.series.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Series asociadas</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedLine.series.map((serie) => (
+                      <span
+                        key={serie}
+                        className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs"
+                      >
+                        {serie}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedLine.sale && selectedLine.sale.items.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex flex-col gap-1">
+                    <p className="text-sm font-semibold">Ítems del comprobante</p>
+                    {selectedLine.sale.total !== undefined && (
+                      <p className="text-xs text-muted-foreground">
+                        Total: {selectedLine.sale.total.toLocaleString("es-PE", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
+                    )}
+                  </div>
+                  <div className="max-h-56 overflow-y-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Producto</TableHead>
+                          <TableHead className="text-right">Cantidad</TableHead>
+                          <TableHead className="text-right">Precio unitario</TableHead>
+                          <TableHead className="text-right">Importe</TableHead>
+                          <TableHead>Series</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedLine.sale.items.map((item, index) => {
+                          const amount = Number(
+                            ((item.qty ?? 0) * (item.unitPrice ?? 0)).toFixed(2)
+                          );
+                          return (
+                            <TableRow key={`${item.productName}-${index}`}>
+                              <TableCell className="max-w-[180px] whitespace-normal">
+                                {item.productName}
+                              </TableCell>
+                              <TableCell className="text-right">{item.qty}</TableCell>
+                              <TableCell className="text-right">
+                                {item.unitPrice?.toLocaleString("es-PE", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {amount.toLocaleString("es-PE", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </TableCell>
+                              <TableCell className="max-w-[160px] whitespace-normal">
+                                {item.series && item.series.length > 0
+                                  ? item.series.join(", ")
+                                  : "-"}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {selectedLine.entryLines && selectedLine.entryLines.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold">Detalle contable</p>
+                  <div className="max-h-64 overflow-y-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Cuenta</TableHead>
+                          <TableHead>Descripción</TableHead>
+                          <TableHead className="text-right">Debe</TableHead>
+                          <TableHead className="text-right">Haber</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedLine.entryLines.map((line, index) => (
+                          <TableRow key={`${line.account}-${index}`}>
+                            <TableCell>{line.account}</TableCell>
+                            <TableCell className="max-w-[220px] whitespace-normal">
+                              {line.description ?? "-"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {line.debit.toLocaleString("es-PE", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {line.credit.toLocaleString("es-PE", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {(selectedLine?.invoiceUrl || selectedLine?.voucher) && (
+            <DialogFooter>
+              {selectedLine?.invoiceUrl && (
+                <Button asChild variant="outline">
+                  <a
+                    href={selectedLine.invoiceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Abrir comprobante
+                  </a>
+                </Button>
+              )}
+              {!selectedLine?.invoiceUrl && selectedLine?.voucher && (
+                <span className="text-xs text-muted-foreground">
+                  No se encontró un enlace de comprobante para {selectedLine.voucher}.
+                </span>
+              )}
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+      
     </div>
   );
 }
