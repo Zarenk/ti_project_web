@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 
 import Navbar from "@/components/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,8 +17,10 @@ import {
 } from "@/components/ui/table";
 import { getWebOrderByCode } from "@/app/dashboard/sales/sales.api";
 import { getProduct } from "@/app/dashboard/products/products.api";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import OrderTimeline from "@/components/order-timeline";
+import { Button } from "@/components/ui/button";
+import { resolveImageUrl } from "@/lib/images";
 
 interface TrackingEvent {
   id: number;
@@ -76,7 +79,7 @@ export default function TrackOrderDetailsPage() {
               let image: string | null = null;
               try {
                 const p = await getProduct(String(detail.productId));
-                image = Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : null;
+                image = Array.isArray(p.images) && p.images.length > 0 ? resolveImageUrl(p.images[0]) : null;
               } catch (err) {
                 console.error("Error fetching product", detail.productId, err);
               }
@@ -137,6 +140,13 @@ export default function TrackOrderDetailsPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
       <Navbar />
       <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="mb-6">
+          <Link href="/track-order" className="inline-flex items-center">
+            <Button variant="outline" className="shadow-sm">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Volver a buscar pedido
+            </Button>
+          </Link>
+        </div>
         {/* Timeline */}
         <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0 mb-6">
           <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
