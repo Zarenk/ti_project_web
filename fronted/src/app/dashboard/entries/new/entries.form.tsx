@@ -650,8 +650,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                     />
         </fieldset>
         {isSubmitting && (
-          <div className="absolute inset-0 z-50 bg-black/40 flex items-center justify-center">
-            <svg className="w-6 h-6 animate-spin text-white" viewBox="0 0 24 24">
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-black/40">
+            <svg className="w-6 h-6 animate-spin text-gray-800 dark:text-white" viewBox="0 0 24 24">
               <circle
                 className="opacity-25"
                 cx="12" cy="12" r="10"
@@ -665,7 +665,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                 d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
               />
             </svg>
-            <span className="ml-2 text-white">Procesando...</span>
+            <span className="ml-2 text-gray-800 dark:text-white">Procesando...</span>
           </div>
         )}
       </form>

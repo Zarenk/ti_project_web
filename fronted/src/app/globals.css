@@ -196,14 +196,22 @@
 }
 
 /* Scroll reveal animation for sections */
+/* Scroll reveal animation for sections */
+/* Mobile: keep fully opaque to avoid dim look */
 .scroll-up-section {
-  /* start slightly faded so the upcoming sections are visible */
-  opacity: 0.4;
-  transform: translateY(40px);
+  opacity: 1;
+  transform: none;
 }
 
-.scroll-up-section.is-visible {
-  animation: slide-fade-up 0.6s ease-out forwards;
+/* Apply reveal effect only on md+ screens */
+@media (min-width: 768px) {
+  .scroll-up-section {
+    opacity: 0.4;
+    transform: translateY(40px);
+  }
+  .scroll-up-section.is-visible {
+    animation: slide-fade-up 0.6s ease-out forwards;
+  }
 }
 
 @keyframes slide-fade-up {
@@ -216,6 +224,15 @@
     transform: translateY(0);
   }
 }  
+
+/* Hide horizontal scrollbar visually while keeping scroll */
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
 
 @keyframes accordion-down {
   from {
@@ -254,5 +271,82 @@
   }
   to {
     transform: rotateY(-360deg);
+  }
+}
+
+/* Blue border trace that travels around the edges */
+.blue-scan-border {
+  /* Do NOT change positioning; element may be absolute */
+  overflow: hidden;
+}
+
+.blue-scan-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  /* Base border + soft glow */
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.55) inset,
+    0 0 10px rgba(59, 130, 246, 0.3);
+
+  /* Animated highlight ring using conic-gradient */
+  padding: 2px; /* border thickness for the trace */
+  background:
+    conic-gradient(
+      from var(--scan-angle, 0deg),
+      rgba(59, 130, 246, 0) 0deg,
+      rgba(59, 130, 246, 0) 345deg,
+      rgba(147, 197, 253, 0.95) 352deg,
+      rgba(59, 130, 246, 0.9) 356deg,
+      rgba(59, 130, 246, 0) 360deg
+    ) border-box;
+
+  /* Show only the border ring area */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+
+  animation: border-trace-rotate 3.2s linear infinite;
+}
+
+/* Tighter, fully-contained effect on small screens */
+@media (max-width: 640px) {
+  .blue-scan-border::before {
+    /* Fully contained: no outer glow, no masks, no padding */
+    box-shadow: none;
+    padding: 0;
+    border: 1px solid transparent; /* defines border box for clipping */
+    background:
+      /* keep content area transparent */
+      linear-gradient(transparent, transparent) padding-box,
+      /* base blue border */
+      linear-gradient(rgba(59,130,246,0.5), rgba(59,130,246,0.5)) border-box,
+      /* moving highlight along the border */
+      conic-gradient(
+        from var(--scan-angle, 0deg),
+        rgba(59,130,246,0) 0deg,
+        rgba(59,130,246,0) 345deg,
+        rgba(147,197,253,0.95) 352deg,
+        rgba(59,130,246,0.9) 356deg,
+        rgba(59,130,246,0) 360deg
+      ) border-box;
+    background-clip: padding-box, border-box, border-box;
+  }
+}
+
+/* Smoothly animate custom angle for cross-browser */
+@property --scan-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes border-trace-rotate {
+  to {
+    --scan-angle: 360deg; /* clockwise: left→right on top, then around */
   }
 }

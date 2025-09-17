@@ -36,8 +36,8 @@ describe('SalePostedController', () => {
     const controller = new SalePostedController(prisma, entries, mapper);
 
     const dto = { saleId: 1, timestamp: new Date().toISOString() };
-    const first = await controller.handle(dto);
-    const second = await controller.handle(dto);
+    const first = await controller.handle(dto, {} as any);
+    const second = await controller.handle(dto, {} as any);
 
     expect(first).toEqual({ status: 'posted', entryId: 10 });
     expect(second).toEqual({ status: 'duplicate' });

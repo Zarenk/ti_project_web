@@ -3,7 +3,7 @@ import { EntriesService } from './entries.service';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { EntryPaymentMethod } from '@prisma/client';
+import { EntryPaymentMethod, PaymentTerm } from '@prisma/client';
 import { multerConfig } from 'src/config/multer.config';
 import pdfParse from 'pdf-parse';
 import { diskStorage } from 'multer';
@@ -26,10 +26,25 @@ export class EntriesController {
       tipoMoneda?: string;
       tipoCambioId?: number;
       paymentMethod?: EntryPaymentMethod;
+      paymentTerm?: PaymentTerm;
+      serie?: string;
+      correlativo?: string;
+      providerName?: string;
+      totalGross?: number;
+      igvRate?: number;
       details: { productId: number, name:string; quantity: number; price: number, priceInSoles: number }[];
       invoice?: {serie:string; nroCorrelativo:string; tipoComprobante:string; tipoMoneda:string; total:number; fechaEmision: Date;}
     },
   ) {
+    if (body.paymentTerm && !Object.values(PaymentTerm).includes(body.paymentTerm)) {
+      throw new BadRequestException('paymentTerm inválido.');
+    }
+    if (body.totalGross !== undefined && typeof body.totalGross !== 'number') {
+      throw new BadRequestException('totalGross debe ser un número.');
+    }
+    if (body.igvRate !== undefined && typeof body.igvRate !== 'number') {
+      throw new BadRequestException('igvRate debe ser un número.');
+    }
     return this.entriesService.createEntry(body);
   }
 

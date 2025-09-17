@@ -6,7 +6,7 @@ import {
   InternalServerErrorException,
   HttpException,
 } from '@nestjs/common';
-import { Prisma, AuditAction, EntryPaymentMethod } from '@prisma/client';
+import { Prisma, AuditAction, EntryPaymentMethod, PaymentTerm } from '@prisma/client';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -53,7 +53,7 @@ export class EntriesService {
     tipoMoneda?: string;
     tipoCambioId?: number;
     paymentMethod?: EntryPaymentMethod;
-    paymentTerm?: string;
+    paymentTerm?: PaymentTerm;
     serie?: string;
     correlativo?: string;
     providerName?: string;
@@ -66,7 +66,26 @@ export class EntriesService {
   try{
     console.log("Datos recibidos en createEntry:", data);
     // Declarar fuera de la transacción para usarlo después (actividad/auditoría)
-    const verifiedProducts: { productId: number; name: string; quantity: number; price: number; priceInSoles: number; series?: string[] }[] = [];
+    const verifiedProducts: {
+      productId: number;
+      name: string;
+      quantity: number;
+      price: number;
+      priceInSoles: number;
+      series?: string[];
+    }[] = [];
+
+    const totalGross =
+      data.totalGross ??
+      data.details.reduce(
+        (sum, item) => sum + (item.priceInSoles || 0) * (item.quantity || 0),
+        0,
+      );
+    const igvRate = data.igvRate ?? 0.18;
+    const paymentTerm = (data.paymentTerm as any) ?? 'CASH';
+    const totalNet = +(totalGross / (1 + igvRate)).toFixed(2);
+    const totalIgv = +(totalGross - totalNet).toFixed(2);
+
     const entry = await this.prisma.$transaction(async (prisma) => {
       // Verificar que la tienda exista
       const store = await prisma.store.findUnique({ where: { id: data.storeId } });
@@ -123,12 +142,12 @@ export class EntriesService {
           tipoMoneda: data.tipoMoneda,
           tipoCambioId: data.tipoCambioId,
           paymentMethod: data.paymentMethod,
-          paymentTerm: data.paymentTerm,
+          paymentTerm,
           serie: data.serie,
           correlativo: data.correlativo,
           providerName: data.providerName,
-          totalGross: data.totalGross,
-          igvRate: data.igvRate,
+          totalGross,
+          igvRate,
           details: {
             create: verifiedProducts.map((product) => ({
               productId: product.productId,
@@ -274,6 +293,11 @@ export class EntriesService {
         date: (data.date as any) ? new Date(data.date as any).toISOString() : null,
         description: data.description,
         currency: data.tipoMoneda,
+        paymentTerm,
+        totalGross,
+        totalNet,
+        totalIgv,
+        igvRate,
         details: verifiedProducts,
         invoice: data.invoice ?? null,
       } as any,
@@ -283,7 +307,7 @@ export class EntriesService {
     } catch (err) {
       // Accounting hook failures shouldn't block operation
     }
-    return entry;
+    return { ...entry, totalNet, totalIgv } as any;
 
     }catch (error: any) {
       if (error instanceof HttpException) {

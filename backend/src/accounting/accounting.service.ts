@@ -217,7 +217,15 @@ export class AccountingService {
       });
 
       const igvRate = (entry as any).igvRate ?? 0;
-      const totalGross = (entry as any).totalGross ?? 0;
+      let totalGross = (entry as any).totalGross as number | undefined;
+      if (totalGross == null) {
+        totalGross = entry.details.reduce(
+          (s: number, d: any) =>
+            s + ((d.priceInSoles ?? d.price ?? 0) * (d.quantity ?? 0)),
+          0,
+        );
+      }
+      totalGross = +totalGross.toFixed(2);
       const net = +(totalGross / (1 + igvRate)).toFixed(2);
       const igv = +(totalGross - net).toFixed(2);
 
@@ -253,7 +261,7 @@ export class AccountingService {
         period = await prisma.accPeriod.create({ data: { name: periodName } });
       }
 
-      const amount = +(net + igv).toFixed(2);
+      const amount = totalGross;
 
       await prisma.accEntry.create({
         data: {
@@ -279,18 +287,21 @@ export class AccountingService {
               {
                 account: '4011',
                 description: `IGV Compra ${invoiceCode}`.trim(),
-                debit: igv,
-                credit: 0,
+                debit: 0,
+                credit: igv,
                 quantity: null,
               },
               {
                 account: creditAccount,
-                description: `Pago Compra ${invoiceCode}`.trim(),
+                description: (() => {
+                  const payInfo = `${(entry as any).paymentTerm ?? ''} ${(entry as any).paymentMethod ?? ''}`.trim();
+                  return `Pago Compra ${invoiceCode}${payInfo ? ` – ${payInfo}` : ''}`.trim();
+                })(),
                 debit: 0,
                 credit: amount,
                 quantity: null,
               },
-            ],
+            ] as any,
           },
         },
       });

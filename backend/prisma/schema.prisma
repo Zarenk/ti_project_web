@@ -211,6 +211,12 @@ model Entry {
   tipoMoneda   String? // Tipo de moneda (e.g., PEN, USD)
   tipoCambioId Int? // FK a TipoCambio
   paymentMethod EntryPaymentMethod @default(CASH)
+  paymentTerm  PaymentTerm        @default(CASH)
+  serie        String?
+  correlativo  String?
+  providerName String?
+  totalGross   Decimal?
+  igvRate      Decimal            @default(0.18)
   pdfUrl       String?
   guiaUrl      String? // URL del PDF de la guía de remisión
   createdAt    DateTime @default(now())
