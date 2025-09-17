@@ -15,6 +15,40 @@ import Navbar from "@/components/navbar"
 import { getWebSaleById } from "@/app/dashboard/sales/sales.api"
 import { resolveImageUrl } from "@/lib/images"
 
+const normalizeTextValue = (value: unknown) => {
+  if (typeof value !== "string") return ""
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase()
+}
+
+const normalizeCarrierModeValue = (value: unknown) => {
+  const normalized = normalizeTextValue(value)
+  if (
+    normalized === "DELIVERY" ||
+    normalized === "HOME_DELIVERY" ||
+    normalized === "ENTREGA A DOMICILIO"
+  ) {
+    return "HOME_DELIVERY"
+  }
+  if (
+    normalized === "AGENCY_PICKUP" ||
+    normalized === "PICKUP" ||
+    normalized === "RETIRO EN AGENCIA" ||
+    normalized === "AGENCIA"
+  ) {
+    return "AGENCY_PICKUP"
+  }
+  return normalized || ""
+}
+
+const carrierModeLabels: Record<string, string> = {
+  HOME_DELIVERY: "Entrega a domicilio",
+  AGENCY_PICKUP: "Retiro en agencia",
+}
+
 export default function OrderDetails() {
   const params = useParams()
   const id = Array.isArray(params.id) ? params.id[0] : params.id
@@ -49,6 +83,38 @@ export default function OrderDetails() {
 
   const subtotal = products.reduce((s: number, p: any) => s + p.subtotal, 0)
 
+  const orderPayload: any = order.order?.payload || {}
+  const salePayload: any = order.payload || {}
+  const shippingMethodSource =
+    typeof orderPayload.shippingMethod === "string"
+      ? orderPayload.shippingMethod
+      : typeof salePayload.shippingMethod === "string"
+        ? salePayload.shippingMethod
+        : ""
+  const normalizedShippingMethod = normalizeTextValue(shippingMethodSource)
+  let shippingMethodLabel = shippingMethodSource || "-"
+  let estimatedDelivery =
+    orderPayload.estimatedDelivery ?? salePayload.estimatedDelivery ?? "-"
+  if (
+    normalizedShippingMethod === "PICKUP" ||
+    normalizedShippingMethod === "RECOJO EN TIENDA"
+  ) {
+    shippingMethodLabel = "RECOJO EN TIENDA"
+    estimatedDelivery = "Inmediata"
+  } else if (
+    normalizedShippingMethod === "DELIVERY" ||
+    normalizedShippingMethod === "ENVIO A DOMICILIO"
+  ) {
+    shippingMethodLabel =
+      normalizedShippingMethod === "DELIVERY"
+        ? "DELIVERY"
+        : "ENVIO A DOMICILIO"
+    estimatedDelivery = "entre 24 a 72 horas"
+  }
+  const carrierModeLabel =
+    carrierModeLabels[normalizeCarrierModeValue(order.order?.carrierMode)] ||
+    (order.order?.carrierMode ?? "")
+
   const orderData = {
     orderNumber: order.invoices[0]
       ? `${order.invoices[0].serie}-${order.invoices[0].nroCorrelativo}`
@@ -63,8 +129,11 @@ export default function OrderDetails() {
     shipping: {
       name: order.order?.shippingName ?? `${order.client.name}`,
       address: order.order?.shippingAddress ?? order.client.adress ?? "",
-      method: "-",
-      estimatedDelivery: "-",
+      method: shippingMethodLabel,
+      estimatedDelivery,
+      carrierName: order.order?.carrierName ?? "",
+      carrierId: order.order?.carrierId ?? "",
+      carrierModeLabel,
     },
     products,
     summary: {
@@ -192,16 +261,37 @@ export default function OrderDetails() {
                       </div>
                     </div>
                   </div>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Método de Envío</p>
-                      <p className="font-semibold text-slate-700 dark:text-slate-300">{orderData.shipping.method}</p>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Método de Envío</p>
+                        <p className="font-semibold text-slate-700 dark:text-slate-300">{orderData.shipping.method}</p>
+                      </div>
+                      {orderData.shipping.carrierName && (
+                        <div>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Transportista</p>
+                          <p className="font-semibold text-slate-700 dark:text-slate-300">
+                            {orderData.shipping.carrierName}
+                            {orderData.shipping.carrierId && (
+                              <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+                                ID: {orderData.shipping.carrierId}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      )}
+                      {orderData.shipping.carrierModeLabel && (
+                        <div>
+                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Modalidad</p>
+                          <p className="font-semibold text-slate-700 dark:text-slate-300">
+                            {orderData.shipping.carrierModeLabel}
+                          </p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Entrega Estimada</p>
+                        <p className="font-semibold text-sky-600 dark:text-sky-400">{orderData.shipping.estimatedDelivery}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Entrega Estimada</p>
-                      <p className="font-semibold text-sky-600 dark:text-sky-400">{orderData.shipping.estimatedDelivery}</p>
-                    </div>
-                  </div>
                 </div>
               </CardContent>
             </Card>
