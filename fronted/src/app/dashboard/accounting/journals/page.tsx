@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -25,6 +25,7 @@ import { BACKEND_URL } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAuthHeaders } from "@/utils/auth-token";
 import { formatGlosa } from "./formatGlosa";
+import { formatDisplayGlosa } from "./formatDisplayGlosa";
 
 const sortByDateDesc = <T extends { date: string }>(arr: T[]) =>
   arr
@@ -40,6 +41,8 @@ type DailyLine = {
   quantity: number;
   provider?: string;
   voucher?: string;
+  documentType?: string;
+  series?: string[];
 };
 
 const accountNames: Record<string, string> = {
@@ -100,7 +103,26 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
       item.series && item.series.length > 0
         ? ` (${item.series.join(", ")})`
         : "";
-    const saleDesc = `Venta ${productName}${seriesPart} ${sale.serie}-${sale.correlativo}`;
+    const voucher = `${sale.serie}-${sale.correlativo}`;
+    const saleDesc = `Venta ${productName}${seriesPart} ${voucher}`;
+    const formattedSale = formatDisplayGlosa({
+      baseDescription: saleDesc,
+      voucher,
+      serie: sale.serie,
+      tipoComprobante: sale.tipoComprobante ?? null,
+    });
+    const revenueBase = formatGlosa({
+      account: "7011",
+      serie: sale.serie,
+      correlativo: sale.correlativo,
+      productName,
+    });
+    const formattedRevenue = formatDisplayGlosa({
+      baseDescription: revenueBase,
+      voucher,
+      serie: sale.serie,
+      tipoComprobante: sale.tipoComprobante ?? null,
+    });
 
     for (const p of payments) {
       const proportion = p.amount / totalSale || 0;
@@ -110,10 +132,12 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
       lines.push({
         date: sale.date,
         account,
-        description: saleDesc,
+        description: formattedSale.description ?? saleDesc,
         debit: amount,
         credit: 0,
         quantity: item.qty,
+        documentType: formattedSale.documentType,
+        series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
       });
     }
 
@@ -121,39 +145,42 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
       {
         date: sale.date,
         account: "7011",
-        description: formatGlosa({
-          account: "7011",
-          serie: sale.serie,
-          correlativo: sale.correlativo,
-          productName,
-        }),
+        description: formattedRevenue.description ?? revenueBase,
         debit: 0,
         credit: itemBase,
         quantity: item.qty,
+        documentType: formattedRevenue.documentType ?? formattedSale.documentType,
+        series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
       },
       {
         date: sale.date,
         account: "4011",
-        description: saleDesc,
+        description: formattedSale.description ?? saleDesc,
         debit: 0,
         credit: itemIgv,
         quantity: item.qty,
+        documentType: formattedSale.documentType,
+        series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
       },
       {
         date: sale.date,
         account: "6911",
-        description: saleDesc,
+        description: formattedSale.description ?? saleDesc,
         debit: itemCost,
         credit: 0,
         quantity: item.qty,
+        documentType: formattedSale.documentType,
+        series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
       },
       {
         date: sale.date,
         account: "2011",
-        description: saleDesc,
+        description: formattedSale.description ?? saleDesc,
         debit: 0,
         credit: itemCost,
         quantity: item.qty,
+        documentType: formattedSale.documentType,
+        series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
       }
     );
   }
@@ -217,21 +244,24 @@ export default function JournalsPage() {
           lines = (json.data ?? []).flatMap((e: any) =>
             (e.lines ?? []).map((l: any) => {
               const voucher = e.serie && e.correlativo ? `${e.serie}-${e.correlativo}` : undefined;
-              const baseDesc = l.description ?? e.description ?? undefined;
-              const extra = e.provider
-                ? ` (${e.provider}${voucher ? ` · ${voucher}` : ""})`
-                : voucher
-                ? ` (${voucher})`
-                : "";
+              const formatted = formatDisplayGlosa({
+                baseDescription: l.description ?? e.description ?? undefined,
+                provider: e.provider ?? undefined,
+                voucher,
+                serie: e.serie ?? undefined,
+                tipoComprobante: (e as any).tipoComprobante ?? null,
+              });
               return {
                 date: e.date,
                 account: l.account,
-                description: baseDesc ? `${baseDesc}${extra}` : extra || undefined,
+                description: formatted.description,
                 debit: Number(l.debit ?? 0),
                 credit: Number(l.credit ?? 0),
                 quantity: Number(l.quantity ?? 0),
                 provider: e.provider ?? undefined,
                 voucher,
+                documentType: formatted.documentType,
+                series: formatted.series,
               } as DailyLine;
             })
           );
@@ -337,7 +367,19 @@ export default function JournalsPage() {
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{l.description ?? "-"}</TableCell>
+                        <TableCell className="text-sm">
+                          <div>{l.description ?? "-"}</div>
+                          {l.documentType && (
+                            <div className="mt-1 text-xs font-medium text-muted-foreground">
+                              Tipo: {l.documentType}
+                            </div>
+                          )}
+                          {l.series && l.series.length > 0 && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              Series: {l.series.join(", ")}
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right">{l.quantity ? l.quantity : ""}</TableCell>
                         <TableCell className="text-right">
                           {l.debit ? l.debit.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}

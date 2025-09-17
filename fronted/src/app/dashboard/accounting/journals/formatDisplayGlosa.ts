@@ -1,1 +1,159 @@
-﻿硥潰瑲映湵瑣潩⁮潦浲瑡楄灳慬䝹潬慳瀨牡浡㩳笠 愠捣畯瑮›瑳楲杮਻†慢敳敄捳㨿猠牴湩㭧 焠慵瑮瑩㽹›畮扭牥਻†牰癯摩牥㨿猠牴湩㭧 瘠畯档牥㨿猠牴湩㭧⼠ 硥数瑣摥氠歩⁥匧剅䕉䌭剏䕒䅌䥔佖ਧ†潶捵敨呲灹㽥›瑳楲杮਻⥽›瑳楲杮簠甠摮晥湩摥笠 挠湯瑳笠愠捣畯瑮‬慢敳敄捳‬畱湡楴祴‬牰癯摩牥素㴠瀠牡浡㭳 挠湯瑳瘠畯档牥㴠瀠牡浡⹳潶捵敨㽲琮楲⡭㬩 挠湯瑳瘠畯档牥祔数㴠瀠牡浡⹳潶捵敨呲灹㽥琮楲⡭⸩潴灕数䍲獡⡥㬩ਊ†潣獮⁴潶捵敨䱲扡汥㴠⠠⤨㴠‾੻††晩⠠瘡畯档牥 敲畴湲甠摮晥湩摥਻††晩⠠瘡畯档牥祔数 敲畴湲瘠畯档牥਻††敲畴湲怠笤潶捵敨呲灹絥␠登畯档牥恽਻†⥽⤨਻ ⼠ 硅牴捡⁴牰摯捵⁴慮敭映潲⁭慢敳搠獥牣灩楴湯氠歩⁥䤧杮敲潳㰠剐䑏䍕㹔ⴠ䌠浯牰⁡⸮✮ 挠湯瑳攠瑸慲瑣牐摯捵⁴‽猨㨿猠牴湩⥧›瑳楲杮簠甠摮晥湩摥㴠‾੻††晩⠠猡 敲畴湲甠摮晥湩摥਻††潣獮⁴⁭‽⹳慭捴⡨䤯杮敲潳獜⠫⨮⤿獜嬪畜〲㌱ⵜ屝⩳潃灭慲椯㬩 †椠⁦洨☠…孭崱 敲畴湲洠ㅛ⹝牴浩⤨਻††敲畴湲甠摮晥湩摥਻†㭽ਊ†潣獮⁴瑱䱹扡汥㴠⠠㽱›畮扭牥㨩猠牴湩⁧㸽笠 †挠湯瑳渠㴠琠灹潥⁦ⁱ㴽‽渢浵敢≲☠…獩楆楮整焨 ‿慍桴爮畯摮焨 ›㬰 †椠⁦渨㰠‽⤰爠瑥牵⁮∢਻††敲畴湲怠笤絮␠湻㴠㴽ㄠ㼠∠乕䑉䑁•›唢䥎䅄䕄≓恽਻†㭽ਊ†潣獮⁴牰癯畓晦硩㴠⠠牰癯㨿猠牴湩Ⱨ瘠档㨿猠牴湩⥧›瑳楲杮㴠‾੻††晩⠠瘡档☠…瀡潲⥶爠瑥牵⁮∢਻††晩⠠牰癯☠…捶⥨爠瑥牵⁮⁠‭␨灻潲絶尠ふ戰‷笤捶絨怩਻††晩⠠牰癯 敲畴湲怠ⴠ⠠笤牰癯⥽㭠 †爠瑥牵⁮⁠‭␨登档⥽㭠 素਻ 挠湯瑳栠獡潖捵敨⁲‽℡潶捵敨㭲 椠⁦栨獡潖捵敨⥲笠 †椠⁦愨捣畯瑮㴠㴽∠〲ㄱ⤢笠 ††挠湯瑳瀠潲畤瑣㴠攠瑸慲瑣牐摯捵⡴慢敳敄捳㬩 ††椠⁦ℨ牰摯捵⥴爠瑥牵⁮慢敳敄捳※⼯欠敥⁰牯杩湩污椠⁦敷挠湡琧猠晡汥⁹慰獲੥†††潣獮⁴瑱⁹‽瑱䱹扡汥焨慵瑮瑩⥹਻†††潣獮⁴瑱偹牡⁴‽瑱⁹‿①煻祴⁽⁠›∢਻†††敲畴湲怠湉牧獥⁯笤瑱偹牡絴笤牰摯捵絴ⴠ䌠浯牰⁡笤潶捵敨䱲扡汥㼠‿潶捵敨絲笤牰癯畓晦硩瀨潲楶敤Ⱳ瘠畯档牥慌敢⁬㼿瘠畯档牥紩⹠牴浩⤨਻††੽††晩⠠捡潣湵⁴㴽‽㐢㄰∱ ੻†††敲畴湲怠䝉⁖潃灭慲␠登畯档牥慌敢⁬㼿瘠畯档牥⑽灻潲卶晵楦⡸牰癯摩牥‬潶捵敨䱲扡汥㼠‿潶捵敨⥲恽਻††੽††晩⠠捡潣湵⁴㴽‽ㄢ㄰∱簠⁼捡潣湵⹴瑳牡獴楗桴∨〱∴⤩笠 ††爠瑥牵⁮偠条⁯潃灭慲␠登畯档牥慌敢⁬㼿瘠畯档牥⑽灻潲卶晵楦⡸牰癯摩牥‬潶捵敨䱲扡汥㼠‿潶捵敨⥲恽਻††੽†੽ ⼠ 慆汬慢正›敫灥漠楲楧慮⁬慢敳搠獥牣灩楴湯 爠瑥牵⁮慢敳敄捳਻ൽ
+﻿export type FormattedGlosa = {
+  description?: string;
+  series: string[];
+  documentType?: string;
+};
+
+export type FormatDisplayGlosaParams = {
+  baseDescription?: string;
+  provider?: string;
+  voucher?: string;
+  serie?: string;
+  tipoComprobante?: string | null;
+};
+
+const escapeRegExp = (value: string) => value.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+
+const normalizeDocumentType = (docType?: string | null): string | undefined => {
+  if (!docType) return undefined;
+  const normalized = docType.trim().toUpperCase();
+  if (!normalized) return undefined;
+  if (normalized === "INVOICE" || normalized === "FACTURA" || normalized === "01") {
+    return "FACTURA";
+  }
+  if (normalized === "BOLETA" || normalized === "03") {
+    return "BOLETA";
+  }
+  if (normalized === "TICKET" || normalized === "RECIBO") {
+    return normalized;
+  }
+  if (normalized.includes("FACT")) {
+    return "FACTURA";
+  }
+  if (normalized.includes("BOL")) {
+    return "BOLETA";
+  }
+  if (normalized.includes("SIN COMPROBANTE")) {
+    return undefined;
+  }
+  return normalized;
+};
+
+const inferDocumentTypeFromSerie = (serie?: string): string | undefined => {
+  if (!serie) return undefined;
+  const prefix = serie.trim().toUpperCase();
+  if (!prefix) return undefined;
+  if (prefix.startsWith("F")) return "FACTURA";
+  if (prefix.startsWith("B")) return "BOLETA";
+  return undefined;
+};
+
+const dedupeVoucherOccurrences = (text: string, voucher: string) => {
+  if (!text) return text;
+  const escaped = escapeRegExp(voucher);
+  const hyphenPattern = new RegExp(`(${escaped})(?:\s*[\-–]\s*${escaped})+`, "gi");
+  let result = text.replace(hyphenPattern, voucher);
+  const repeatedPattern = new RegExp(`(${escaped})(?:\s+${escaped})+`, "gi");
+  result = result.replace(repeatedPattern, voucher);
+  result = result.replace(/\s{2,}/g, " ");
+  result = result.replace(/-\s+-/g, "-");
+  result = result.replace(/\s+–\s+/g, " – ");
+  return result.trim();
+};
+
+const ensureDocTypeInBase = (text: string, voucher: string, docType: string) => {
+  if (!text) return text;
+  const escapedVoucher = escapeRegExp(voucher);
+  const uppercaseDocType = docType.toUpperCase();
+  const docTypeWithVoucher = new RegExp(`${uppercaseDocType}\\s+${escapedVoucher}`, "i");
+  if (docTypeWithVoucher.test(text)) {
+    return text;
+  }
+  const voucherRegex = new RegExp(escapedVoucher, "i");
+  if (voucherRegex.test(text)) {
+    return text.replace(voucherRegex, `${uppercaseDocType} ${voucher}`);
+  }
+  return `${text} ${uppercaseDocType} ${voucher}`.trim();
+};
+
+const extractSeriesFromDescription = (description?: string) => {
+  if (!description) {
+    return { sanitized: undefined as string | undefined, series: [] as string[] };
+  }
+  const [leftPart, ...restParts] = description.split(" – ");
+  let series: string[] = [];
+  let sanitizedLeft = leftPart;
+  if (leftPart) {
+    const matches = [...leftPart.matchAll(/\(([^()]+)\)/g)]
+      .map((match) => match[1].trim())
+      .filter((value) => value && !/sin comprobante/i.test(value));
+    series = matches
+      .flatMap((value) => value.split(/[,;]/))
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+    if (matches.length > 0) {
+      sanitizedLeft = leftPart.replace(/\s*\([^()]*\)/g, "").replace(/\s{2,}/g, " ").trim();
+    }
+  }
+  const sanitized = [sanitizedLeft, ...restParts].filter(Boolean).join(" – ").trim();
+  return { sanitized: sanitized || undefined, series };
+};
+
+export function formatDisplayGlosa({
+  baseDescription,
+  provider,
+  voucher,
+  serie,
+  tipoComprobante,
+}: FormatDisplayGlosaParams): FormattedGlosa {
+  const normalizedVoucher = voucher?.trim();
+  const normalizedDocType =
+    normalizeDocumentType(tipoComprobante) ?? inferDocumentTypeFromSerie(serie);
+
+  const { sanitized: sanitizedBase, series } = extractSeriesFromDescription(baseDescription);
+
+  let description = sanitizedBase ?? "";
+
+  if (normalizedVoucher) {
+    description = dedupeVoucherOccurrences(description, normalizedVoucher);
+  }
+
+  if (description && normalizedVoucher && normalizedDocType) {
+    description = ensureDocTypeInBase(description, normalizedVoucher, normalizedDocType);
+  }
+
+  const extras: string[] = [];
+  if (provider) {
+    const providerRegex = new RegExp(escapeRegExp(provider.trim()), "i");
+    if (!providerRegex.test(description)) {
+      extras.push(provider.trim());
+    }
+  }
+
+  if (normalizedDocType) {
+    const docTypeRegex = new RegExp(normalizedDocType, "i");
+    if (!docTypeRegex.test(description)) {
+      extras.push(normalizedDocType);
+    }
+  }
+
+  if (normalizedVoucher) {
+    const voucherRegex = new RegExp(escapeRegExp(normalizedVoucher), "i");
+    if (!voucherRegex.test(description)) {
+      extras.push(normalizedVoucher);
+    }
+  }
+
+  let finalDescription = description.trim();
+  if (finalDescription && extras.length > 0) {
+    finalDescription = `${finalDescription} (${extras.join(" · ")})`;
+  } else if (!finalDescription && extras.length > 0) {
+    finalDescription = extras.join(" · ");
+  }
+
+  return {
+    description: finalDescription || undefined,
+    series,
+    documentType: normalizedDocType,
+  };
+}
