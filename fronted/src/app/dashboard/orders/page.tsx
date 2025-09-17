@@ -66,6 +66,10 @@ export default function OrdersPage() {
             total: o.payload?.total ?? 0,
             status: o.status,
             origin,
+            shippingMethod: typeof o?.payload?.shippingMethod === 'string' ? o.payload.shippingMethod : undefined,
+            carrierName: o.carrierName ?? undefined,
+            carrierId: o.carrierId ?? undefined,
+            carrierMode: o.carrierMode ?? undefined,
           };
         });
         setOrders(mapped);

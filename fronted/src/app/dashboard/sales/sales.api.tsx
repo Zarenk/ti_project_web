@@ -100,9 +100,19 @@ export async function payWithCulqi(token: string, amount: number, order: any) {
   return res.json();
 }
 
-export async function completeWebOrder(id: number) {
+export async function completeWebOrder(
+  id: number,
+  data?: {
+    carrierId?: string;
+    carrierName?: string;
+    carrierMode?: string;
+    shippingMethod?: string;
+  },
+) {
   const response = await fetch(`${BACKEND_URL}/api/web-sales/order/${id}/complete`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data ?? {}),
   });
   if (!response.ok) {
     const errorText = await response.text();

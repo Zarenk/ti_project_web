@@ -19,6 +19,7 @@ import { extname } from 'path';
 import { Request } from 'express';
 import { WebSalesService } from './websales.service';
 import { CreateWebSaleDto } from './dto/create-websale.dto';
+import { CompleteOrderDto } from './dto/complete-order.dto';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
@@ -49,9 +50,10 @@ export class WebSalesController {
   @Post('order/:id/complete')
   async completeOrder(
     @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CompleteOrderDto,
     @Req() req: Request,
   ) {
-    return this.webSalesService.completeWebOrder(id, req);
+    return this.webSalesService.completeWebOrder(id, dto, req);
   }
 
   @Patch('order/:id/series')
@@ -60,11 +62,13 @@ export class WebSalesController {
     @Body('items') items: { productId: number; series: string[] }[],
   ) {
     if (!Array.isArray(items)) {
-      throw new BadRequestException('Formato inválido: items debe ser un arreglo');
+      throw new BadRequestException(
+        'Formato inválido: items debe ser un arreglo',
+      );
     }
     return this.webSalesService.updateOrderSeries(id, items);
   }
-  
+
   @Post('order/:id/reject')
   async rejectOrder(@Param('id', ParseIntPipe) id: number) {
     return this.webSalesService.rejectWebOrder(id);

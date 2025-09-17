@@ -24,6 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -54,6 +55,45 @@ import { toast } from "sonner";
 // Components
 import { AddSeriesDialog as SelectSeriesDialog } from "@/app/dashboard/sales/components/AddSeriesDialog";
 
+const normalizeTextValue = (value: unknown) => {
+  if (typeof value !== "string") return "";
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+};
+
+const isDeliveryShippingMethod = (value: unknown) => {
+  const normalized = normalizeTextValue(value);
+  return normalized === "DELIVERY" || normalized === "ENVIO A DOMICILIO";
+};
+
+const normalizeCarrierModeValue = (value: unknown) => {
+  const normalized = normalizeTextValue(value);
+  if (
+    normalized === "DELIVERY" ||
+    normalized === "HOME_DELIVERY" ||
+    normalized === "ENTREGA A DOMICILIO"
+  ) {
+    return "HOME_DELIVERY";
+  }
+  if (
+    normalized === "AGENCY_PICKUP" ||
+    normalized === "PICKUP" ||
+    normalized === "RETIRO EN AGENCIA" ||
+    normalized === "AGENCIA"
+  ) {
+    return "AGENCY_PICKUP";
+  }
+  return normalized || "";
+};
+
+const carrierModeLabels: Record<string, string> = {
+  HOME_DELIVERY: "Entrega a domicilio",
+  AGENCY_PICKUP: "Retiro en agencia",
+};
+
 export default function OrderDetailPage() {
   // Routing / params
   const params = useParams();
@@ -75,6 +115,9 @@ export default function OrderDetailPage() {
   const [seriesByProduct, setSeriesByProduct] = useState<Record<number, string[]>>({});
   const [availableSeriesByProduct, setAvailableSeriesByProduct] = useState<Record<number, string[]>>({});
   const [storeLabel, setStoreLabel] = useState<string>("WEB POS");
+  const [carrierNameInput, setCarrierNameInput] = useState<string>("");
+  const [carrierIdInput, setCarrierIdInput] = useState<string>("");
+  const [carrierMode, setCarrierMode] = useState<string>("");
 
   // Guard + fetch order/sale
   useEffect(() => {
@@ -161,9 +204,25 @@ export default function OrderDetailPage() {
     setSeriesByProduct(initial);
   }, [order]);
 
+  useEffect(() => {
+    if (!order) {
+      setCarrierNameInput("");
+      setCarrierIdInput("");
+      setCarrierMode("");
+      return;
+    }
+    setCarrierNameInput(order.carrierName ?? "");
+    setCarrierIdInput(order.carrierId ?? "");
+    setCarrierMode(normalizeCarrierModeValue(order.carrierMode));
+  }, [order]);
+
   // Helpers
   const payload = (order?.payload as any) || {};
   const payloadStoreId: number | undefined = payload?.storeId;
+  const shippingMethodValue =
+    typeof payload.shippingMethod === "string" ? payload.shippingMethod : "";
+  const normalizedShippingMethodValue = normalizeTextValue(shippingMethodValue);
+  const isDeliveryOrder = isDeliveryShippingMethod(shippingMethodValue);
 
   // Preload available series for each product depending on store
   useEffect(() => {
@@ -347,6 +406,7 @@ export default function OrderDetailPage() {
 
   // Derived data
   const subtotal = products.reduce((s, p) => s + p.subtotal, 0);
+  const isOrderPending = order.status === "PENDING";
   const statusText = order.status === "PENDING" ? "Pendiente" : order.status === "DENIED" ? "Denegado" : "Completado";
   const statusColor =
     order.status === "PENDING"
@@ -365,14 +425,22 @@ export default function OrderDetailPage() {
     [-6]: "OTRO MEDIO DE PAGO",
   };
 
-  const rawShippingMethod = payload.shippingMethod ?? "-";
-  let shippingMethodLabel = rawShippingMethod;
+  let shippingMethodLabel = shippingMethodValue || "-";
   let estimatedDelivery = payload.estimatedDelivery ?? "-";
-  if (["PICKUP", "RECOJO EN TIENDA"].includes(rawShippingMethod)) {
+  if (
+    normalizedShippingMethodValue === "PICKUP" ||
+    normalizedShippingMethodValue === "RECOJO EN TIENDA"
+  ) {
     shippingMethodLabel = "RECOJO EN TIENDA";
     estimatedDelivery = "Inmediata";
-  } else if (["DELIVERY", "ENVIO A DOMICILIO"].includes(rawShippingMethod)) {
-    shippingMethodLabel = rawShippingMethod === "DELIVERY" ? "DELIVERY" : "ENVIO A DOMICILIO";
+  } else if (
+    normalizedShippingMethodValue === "DELIVERY" ||
+    normalizedShippingMethodValue === "ENVIO A DOMICILIO"
+  ) {
+    shippingMethodLabel =
+      normalizedShippingMethodValue === "DELIVERY"
+        ? "DELIVERY"
+        : "ENVIO A DOMICILIO";
     estimatedDelivery = "entre 24 a 72 horas";
   }
 
@@ -401,6 +469,12 @@ export default function OrderDetailPage() {
         .join(", "),
       method: shippingMethodLabel,
       estimatedDelivery,
+      carrierName: order.carrierName ?? "",
+      carrierId: order.carrierId ?? "",
+      carrierMode: normalizeCarrierModeValue(order.carrierMode),
+      carrierModeLabel:
+        carrierModeLabels[normalizeCarrierModeValue(order.carrierMode)] ||
+        (order.carrierMode ?? ""),
     },
     payments: payments.map((p: any) => ({
       method: paymentMethodMap[p.paymentMethodId] || `Método ${p.paymentMethodId}`,
@@ -592,16 +666,37 @@ export default function OrderDetailPage() {
                     </div>
                   </div>
                 </div>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Método de Envío</p>
-                    <p className="font-semibold text-slate-700 dark:text-slate-300">{orderData.shipping.method}</p>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Método de Envío</p>
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">{orderData.shipping.method}</p>
+                    </div>
+                    {orderData.shipping.carrierName && (
+                      <div>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Transportista</p>
+                        <p className="font-semibold text-slate-700 dark:text-slate-300">
+                          {orderData.shipping.carrierName}
+                          {orderData.shipping.carrierId && (
+                            <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+                              ID: {orderData.shipping.carrierId}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    )}
+                    {orderData.shipping.carrierModeLabel && (
+                      <div>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Modalidad</p>
+                        <p className="font-semibold text-slate-700 dark:text-slate-300">
+                          {orderData.shipping.carrierModeLabel}
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Entrega Estimada</p>
+                      <p className="font-semibold text-sky-600 dark:text-sky-400">{orderData.shipping.estimatedDelivery}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Entrega Estimada</p>
-                    <p className="font-semibold text-sky-600 dark:text-sky-400">{orderData.shipping.estimatedDelivery}</p>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -802,6 +897,61 @@ export default function OrderDetailPage() {
                 </div>
               </div>
 
+              {isDeliveryOrder && (
+                <div className="mt-6 space-y-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-slate-900/40">
+                  <div className="space-y-1">
+                    <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+                      Datos del transporte
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400">
+                      Registra el transportista y la modalidad antes de completar pedidos con envío a domicilio.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label htmlFor="carrier-name" className="block text-slate-600 dark:text-slate-300">
+                        Transportista
+                      </label>
+                      <Input
+                        id="carrier-name"
+                        value={carrierNameInput}
+                        onChange={(event) => setCarrierNameInput(event.target.value)}
+                        placeholder="Nombre del transportista"
+                        disabled={!isOrderPending}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="carrier-id" className="block text-slate-600 dark:text-slate-300">
+                        ID / Código (opcional)
+                      </label>
+                      <Input
+                        id="carrier-id"
+                        value={carrierIdInput}
+                        onChange={(event) => setCarrierIdInput(event.target.value)}
+                        placeholder="Identificador interno o guía"
+                        disabled={!isOrderPending}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="carrier-mode" className="block text-slate-600 dark:text-slate-300">
+                        Modalidad de entrega
+                      </label>
+                      <select
+                        id="carrier-mode"
+                        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-sky-500 dark:focus:ring-sky-500"
+                        value={carrierMode}
+                        onChange={(event) => setCarrierMode(event.target.value)}
+                        disabled={!isOrderPending}
+                      >
+                        <option value="">Selecciona una opción</option>
+                        <option value="HOME_DELIVERY">Entrega a domicilio</option>
+                        <option value="AGENCY_PICKUP">Retiro en agencia</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700 space-y-2">
                 {order.status === "PENDING" && (
                   <div className="flex flex-col gap-2">
@@ -840,14 +990,49 @@ export default function OrderDetailPage() {
                               }
                             }
 
+                            const trimmedCarrierName = carrierNameInput.trim();
+                            const trimmedCarrierId = carrierIdInput.trim();
+
+                            if (isDeliveryOrder) {
+                              if (!trimmedCarrierName) {
+                                toast.error('Debes indicar el transportista para envíos a domicilio.');
+                                return;
+                              }
+                              if (!carrierMode) {
+                                toast.error('Selecciona la modalidad de entrega.');
+                                return;
+                              }
+                            }
+
                             // Persistir series seleccionadas
                             const items = Object.entries(seriesByProduct).map(([pid, ser]) => ({ productId: Number(pid), series: ser }));
                             if (items.length > 0) {
                               await updateOrderSeries(order.id, items);
                             }
 
-                            const createdSale = await completeWebOrder(order.id);
+                            const completionPayload = {
+                              carrierId: trimmedCarrierId || undefined,
+                              carrierName: trimmedCarrierName || undefined,
+                              carrierMode: carrierMode || undefined,
+                              shippingMethod: shippingMethodValue || undefined,
+                            };
+
+                            const createdSale = await completeWebOrder(order.id, completionPayload);
+                            setSale(createdSale);
+                            setOrder((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    status: 'COMPLETED',
+                                    salesId: createdSale.id,
+                                    carrierName: completionPayload.carrierName ?? prev.carrierName,
+                                    carrierId: completionPayload.carrierId ?? prev.carrierId,
+                                    carrierMode: completionPayload.carrierMode ?? prev.carrierMode,
+                                  }
+                                : prev,
+                            );
                             toast.success("Orden completada");
+                            setOpenComplete(false);
 
                             const invoice = createdSale && Array.isArray(createdSale.invoices) && createdSale.invoices.length > 0 ? createdSale.invoices[0] : null;
                             if (invoice) {

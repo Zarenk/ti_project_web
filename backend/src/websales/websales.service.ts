@@ -8,6 +8,12 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AuditAction } from '@prisma/client';
 import { CreateWebSaleDto } from './dto/create-websale.dto';
 import {
+  CompleteOrderDto,
+  isDeliveryShipping,
+  normalizeCarrierMode,
+  normalizeShippingMethod,
+} from './dto/complete-order.dto';
+import {
   prepareSaleContext,
   executeSale,
   SaleAllocation,
@@ -82,11 +88,21 @@ export class WebSalesService {
     });
 
     // Ensure actor is recorded even when req is not provided
-    const webEmail = (data as any)?.email ?? (data as any)?.customerEmail ?? (data as any)?.customer?.email ?? undefined;
+    const webEmail =
+      (data as any)?.email ??
+      (data as any)?.customerEmail ??
+      (data as any)?.customer?.email ??
+      undefined;
     const isWebSource = (data as any)?.source === 'WEB' || !!webEmail;
-    const createdActorId = isWebSource ? undefined : (req as any)?.user?.userId ?? undefined;
-    const createdActorEmail = isWebSource ? webEmail : (req as any)?.user?.username ?? undefined;
-    const createdByLabel = createdActorEmail ?? (createdActorId ? `ID ${createdActorId}` : undefined);
+    const createdActorId = isWebSource
+      ? undefined
+      : ((req as any)?.user?.userId ?? undefined);
+    const createdActorEmail = isWebSource
+      ? webEmail
+      : ((req as any)?.user?.username ?? undefined);
+    const createdByLabel =
+      createdActorEmail ??
+      (createdActorId ? `ID ${createdActorId}` : undefined);
     await this.activityService.log(
       {
         actorId: createdActorId,
@@ -182,7 +198,7 @@ export class WebSalesService {
     );
 
     const allocations: SaleAllocation[] = [];
-    
+
     let total = 0;
     for (const detail of details) {
       const storeInventory = await this.prisma.storeOnInventory.findFirst({
@@ -194,7 +210,9 @@ export class WebSalesService {
       });
 
       if (!storeInventory) {
-        throw new BadRequestException(`Stock insuficiente para el producto con ID ${detail.productId}.`);
+        throw new BadRequestException(
+          `Stock insuficiente para el producto con ID ${detail.productId}.`,
+        );
       }
 
       allocations.push({ detail, storeInventory });
@@ -233,11 +251,9 @@ export class WebSalesService {
       try {
         await this.accountingHook.postPayment(payment.id);
       } catch (err) {
-        this.logger.warn(
-          `Retrying accounting post for payment ${payment.id}`,
-        );
+        this.logger.warn(`Retrying accounting post for payment ${payment.id}`);
       }
-    }    
+    }
 
     if (!skipOrder && shippingName && shippingAddress && city && postalCode) {
       await this.prisma.orders.create({
@@ -301,7 +317,7 @@ export class WebSalesService {
     return order;
   }
 
-   async getWebOrderByCode(code: string) {
+  async getWebOrderByCode(code: string) {
     const order = await this.prisma.orders.findUnique({ where: { code } });
     if (!order) {
       throw new NotFoundException(
@@ -357,15 +373,83 @@ export class WebSalesService {
     });
   }
 
-  async completeWebOrder(id: number, req?: Request) {
+  async completeWebOrder(id: number, dto?: CompleteOrderDto, req?: Request) {
     const order = await this.prisma.orders.findUnique({ where: { id } });
     if (!order || order.status !== 'PENDING' || !order.payload) {
       throw new BadRequestException('Orden no vÃ¡lida para completar');
     }
 
     const payloadAny = (order.payload as any) || {};
-    const details: any[] = Array.isArray(payloadAny.details) ? payloadAny.details : [];
-    const storeId = payloadAny?.storeId ? Number(payloadAny.storeId) : undefined;
+    const details: any[] = Array.isArray(payloadAny.details)
+      ? payloadAny.details
+      : [];
+    const storeId = payloadAny?.storeId
+      ? Number(payloadAny.storeId)
+      : undefined;
+
+    const rawShippingMethod = dto?.shippingMethod ?? payloadAny?.shippingMethod;
+    const normalizedShippingMethod = rawShippingMethod
+      ? normalizeShippingMethod(String(rawShippingMethod))
+      : undefined;
+    const requiresCarrier = isDeliveryShipping(
+      normalizedShippingMethod ?? rawShippingMethod,
+    );
+
+    const requestedCarrierName = dto?.carrierName?.trim();
+    const requestedCarrierId = dto?.carrierId?.trim();
+    const requestedCarrierMode = normalizeCarrierMode(dto?.carrierMode);
+
+    const existingCarrierName = order.carrierName?.trim() || undefined;
+    const existingCarrierId = order.carrierId?.trim() || undefined;
+    const existingCarrierMode = normalizeCarrierMode(order.carrierMode);
+
+    const carrierNameToPersist = requestedCarrierName || existingCarrierName;
+    const carrierIdToPersist = requestedCarrierId || existingCarrierId;
+    const carrierModeToPersist = requestedCarrierMode || existingCarrierMode;
+
+    if (requiresCarrier && (!carrierNameToPersist || !carrierModeToPersist)) {
+      throw new BadRequestException(
+        'Los pedidos con envío a domicilio requieren el transportista y su modalidad.',
+      );
+    }
+
+    const updateData: Prisma.OrdersUpdateInput = {};
+    if (
+      requestedCarrierName !== undefined ||
+      carrierNameToPersist !== existingCarrierName
+    ) {
+      if (carrierNameToPersist) {
+        updateData.carrierName = carrierNameToPersist;
+      } else if (requestedCarrierName !== undefined) {
+        updateData.carrierName = null;
+      }
+    }
+
+    if (
+      requestedCarrierId !== undefined ||
+      carrierIdToPersist !== existingCarrierId
+    ) {
+      if (carrierIdToPersist) {
+        updateData.carrierId = carrierIdToPersist;
+      } else if (requestedCarrierId !== undefined) {
+        updateData.carrierId = null;
+      }
+    }
+
+    if (
+      requestedCarrierMode !== undefined ||
+      carrierModeToPersist !== existingCarrierMode
+    ) {
+      if (carrierModeToPersist) {
+        updateData.carrierMode = carrierModeToPersist;
+      } else if (requestedCarrierMode !== undefined) {
+        updateData.carrierMode = null;
+      }
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await this.prisma.orders.update({ where: { id }, data: updateData });
+    }
 
     for (const d of details) {
       const productId = Number(d.productId);
@@ -374,7 +458,10 @@ export class WebSalesService {
 
       let available: string[] = [];
       if (storeId && !Number.isNaN(storeId)) {
-        available = await this.inventoryService.getSeriesByProductAndStore(storeId, productId);
+        available = await this.inventoryService.getSeriesByProductAndStore(
+          storeId,
+          productId,
+        );
       } else {
         const storeLinks = await this.prisma.storeOnInventory.findMany({
           where: { inventory: { productId } },
@@ -382,7 +469,10 @@ export class WebSalesService {
         });
         const agg: string[] = [];
         for (const link of storeLinks) {
-          const sers = await this.inventoryService.getSeriesByProductAndStore(link.storeId, productId);
+          const sers = await this.inventoryService.getSeriesByProductAndStore(
+            link.storeId,
+            productId,
+          );
           agg.push(...sers);
         }
         available = Array.from(new Set(agg));
@@ -399,15 +489,28 @@ export class WebSalesService {
 
     await this.prisma.orders.update({
       where: { id },
-      data: { status: 'COMPLETED', salesId: sale.id },
+      data: {
+        status: 'COMPLETED',
+        salesId: sale.id,
+        ...(carrierNameToPersist ? { carrierName: carrierNameToPersist } : {}),
+        ...(carrierIdToPersist ? { carrierId: carrierIdToPersist } : {}),
+        ...(carrierModeToPersist ? { carrierMode: carrierModeToPersist } : {}),
+      },
     });
 
     // Fallback to sale.userId when req is not present so we always capture the actor
     // Prefer attributing the update to the web customer when no staff context is present
-    const customerEmail = payloadAny?.email ?? payloadAny?.customerEmail ?? payloadAny?.customer?.email ?? payloadAny?.user?.email;
+    const customerEmail =
+      payloadAny?.email ??
+      payloadAny?.customerEmail ??
+      payloadAny?.customer?.email ??
+      payloadAny?.user?.email;
     const completedActorId = (req as any)?.user?.userId ?? undefined;
-    const completedActorEmail = (req as any)?.user?.username ?? customerEmail ?? undefined; // ActivityService will resolve from actorId only if email is absent
-    const completedByLabel = completedActorEmail ?? (completedActorId ? `ID ${completedActorId}` : undefined);
+    const completedActorEmail =
+      (req as any)?.user?.username ?? customerEmail ?? undefined; // ActivityService will resolve from actorId only if email is absent
+    const completedByLabel =
+      completedActorEmail ??
+      (completedActorId ? `ID ${completedActorId}` : undefined);
     await this.activityService.log(
       {
         actorId: completedActorId,
@@ -470,15 +573,20 @@ export class WebSalesService {
       throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
     }
     const payload: any = order.payload || {};
-    const details: any[] = Array.isArray(payload.details) ? payload.details : [];
+    const details: any[] = Array.isArray(payload.details)
+      ? payload.details
+      : [];
 
     if (details.length === 0) {
-      throw new BadRequestException('La orden no contiene detalles para actualizar series');
+      throw new BadRequestException(
+        'La orden no contiene detalles para actualizar series',
+      );
     }
 
     const map = new Map<number, string[]>();
     for (const it of items) {
-      if (!it || typeof it.productId !== 'number' || !Array.isArray(it.series)) continue;
+      if (!it || typeof it.productId !== 'number' || !Array.isArray(it.series))
+        continue;
       // Unicos y sin falsy
       const uniq = Array.from(new Set(it.series.filter(Boolean)));
       map.set(it.productId, uniq);
@@ -488,7 +596,10 @@ export class WebSalesService {
       if (map.has(Number(d.productId))) {
         const series = map.get(Number(d.productId))!;
         // Validación opcional: si hay series provistas, deben ser exactamente igual a la cantidad
-        if (typeof d.quantity === 'number' && series.length !== Number(d.quantity)) {
+        if (
+          typeof d.quantity === 'number' &&
+          series.length !== Number(d.quantity)
+        ) {
           throw new BadRequestException(
             `El producto ${d.productId} requiere ${d.quantity} series, se recibieron ${series.length}`,
           );
@@ -500,7 +611,7 @@ export class WebSalesService {
 
     const updated = await this.prisma.orders.update({
       where: { id },
-      data: { payload: { ...payload, details: updatedDetails } as any },
+      data: { payload: { ...payload, details: updatedDetails } },
     });
 
     return { success: true, order: updated };
@@ -518,11 +629,7 @@ export class WebSalesService {
     return { success: true };
   }
 
-  async addOrderProofs(
-    id: number,
-    images: string[],
-    description?: string,
-  ) {
+  async addOrderProofs(id: number, images: string[], description?: string) {
     const order = await this.prisma.orders.findUnique({ where: { id } });
     if (!order) {
       throw new NotFoundException(`No se encontrÃ³ la orden con ID ${id}.`);
