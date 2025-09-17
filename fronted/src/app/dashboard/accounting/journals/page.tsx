@@ -89,6 +89,39 @@ type Sale = {
   }[];
 };
 
+const dedupeVoucherValue = (value?: string | null): string | undefined => {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const repeatedWithDash = trimmed.match(/^(.+?)(?:\s*[-–]\s*\1)+$/);
+  if (repeatedWithDash) {
+    return repeatedWithDash[1];
+  }
+
+  const repeatedWithSpaces = trimmed.match(/^(.+?)(?:\s+\1)+$/);
+  if (repeatedWithSpaces) {
+    return repeatedWithSpaces[1];
+  }
+
+  return trimmed;
+};
+
+const buildVoucher = (
+  serie?: string | null,
+  correlativo?: string | null
+): string | undefined => {
+  const serieValue = dedupeVoucherValue(serie);
+  const correlativoValue = dedupeVoucherValue(correlativo);
+
+  if (serieValue && correlativoValue) {
+    return dedupeVoucherValue(`${serieValue}-${correlativoValue}`) ??
+      `${serieValue}-${correlativoValue}`;
+  }
+
+  return serieValue ?? correlativoValue ?? undefined;
+};
+
 function buildJournalFromSale(sale: Sale): DailyLine[] {
   const totalSale = sale.items.reduce(
     (sum, i) => sum + i.qty * (i.unitPrice ?? 0),
@@ -120,8 +153,8 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
       item.series && item.series.length > 0
         ? ` (${item.series.join(", ")})`
         : "";
-    const voucher = `${sale.serie}-${sale.correlativo}`;
-    const saleDesc = `Venta ${productName}${seriesPart} ${voucher}`;
+    const voucher = buildVoucher(sale.serie, sale.correlativo);
+    const saleDesc = `Venta ${productName}${seriesPart}${voucher ? ` ${voucher}` : ""}`;
     const formattedSale = formatDisplayGlosa({
       baseDescription: saleDesc,
       voucher,
@@ -171,6 +204,9 @@ function buildJournalFromSale(sale: Sale): DailyLine[] {
         quantity: item.qty,
         documentType: formattedRevenue.documentType ?? formattedSale.documentType,
         series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
+        provider: sale.customerName ?? undefined,
+        voucher,
+        sale,
       },
       {
         date: sale.date,
@@ -280,8 +316,9 @@ export default function JournalsPage() {
 
         const salesByVoucher = new Map<string, Sale>();
         for (const sale of sales) {
-          if (sale.serie && sale.correlativo) {
-            salesByVoucher.set(`${sale.serie}-${sale.correlativo}`, sale);
+          const saleVoucher = buildVoucher(sale.serie, sale.correlativo);
+          if (saleVoucher) {
+            salesByVoucher.set(saleVoucher, sale);
           }
         }
 
@@ -775,7 +812,7 @@ export default function JournalsPage() {
           )}
         </DialogContent>
       </Dialog>
-      
+
     </div>
   );
 }
