@@ -34,6 +34,7 @@ import {
 
 import { Input } from "@/components/ui/input"
 import { deleteProducts, updateManyProducts } from "./products.api"
+import { normalizeProductStatus } from "./status.utils"
 import { Button } from "@/components/ui/button"
 import { DataTablePagination } from "../../../components/data-table-pagination"
 
@@ -315,7 +316,7 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
                     <td class="truncate">${(typeof row.brand === 'string' ? row.brand : row.brand?.name) ?? ''}</td>
                     <td>S/. ${row.price}</td>
                     <td>S/. ${row.priceSell}</td>
-                    <td>${row.status === 'active' ? 'Activo' : 'Inactivo'}</td>
+                    <td>${normalizeProductStatus(row.status)}</td>
                     <td>${new Date(row.createdAt).toLocaleDateString()}</td>
                   </tr>
                 `
@@ -774,7 +775,7 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
                     <div><strong>Descripción:</strong> {selectedRowData.description}</div>
                     <div><strong>Precio:</strong> S/. {selectedRowData.price}</div>
                     <div><strong>Precio de Venta:</strong> S/. {selectedRowData.priceSell}</div>
-                    <div><strong>Estado:</strong> {selectedRowData.status === 'active' ? 'Activo' : 'Inactivo'}</div>
+                    <div><strong>Estado:</strong> {normalizeProductStatus(selectedRowData.status)}</div>
                     <div><strong>Fecha de Creación:</strong> {new Date(selectedRowData.createdAt).toLocaleDateString()}</div>
                 </span>
                 <AlertDialogFooter>
@@ -819,7 +820,7 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
                           <strong>Categoría:</strong> {row.category_name}
                         </div>
                         <div>
-                          <strong>Estado:</strong> {row.status === 'active' ? 'Activo' : 'Inactivo'}
+                          <strong>Estado:</strong> {normalizeProductStatus(row.status)}
                         </div>
                         <div>
                           <strong>Fecha de Creación:</strong>{" "}

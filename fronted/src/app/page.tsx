@@ -51,25 +51,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Homepage() {
   const sectionsRef = useRef<HTMLDivElement>(null)
-  const [email, setEmail] = useState("")
+  
 
-  const handleSubscribe = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    try {
-      const res = await fetch('/api/newsletter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      if (!res.ok) throw new Error('Failed');
-      toast.success('Suscripción exitosa');
-      setEmail('');
-    } catch (err) {
-      console.error(err);
-      toast.error('Error al suscribirse');
-    }
-  };
-
+  
   interface Brand {
     name: string
     logoSvg?: string
@@ -227,7 +211,7 @@ export default function Homepage() {
         gsapModule.default.registerPlugin(ScrollTrigger.default)
         ctx = gsapModule.default.context(() => {
           const gsap = gsapModule.default
-          const sections = gsap.utils.toArray<HTMLElement>(".gsap-section")
+          const sections = (gsap.utils.toArray as any)(".gsap-section") as HTMLElement[]
           // Only clear any leftover inline styles; rely on ScrollUpSection for reveals
           gsap.set(sections, { clearProps: "all" })
         }, sectionsRef)
@@ -431,6 +415,7 @@ export default function Homepage() {
             </div>
           ) : (
             <CategoriesSection
+              categories={categories}
               visibleCategories={visibleCategories}
               categoryIndex={categoryIndex}
               direction={direction}
@@ -447,13 +432,12 @@ export default function Homepage() {
           <TestimonialsSection testimonials={testimonials} />
         </section>
         <section className="gsap-section" data-navcolor="#ecfccb">
-          <NewsletterSection
-            email={email}
-            setEmail={setEmail}
-            handleSubscribe={handleSubscribe}
-          />
+          <NewsletterSection />
         </section>
       </div>
     </div>
   )
 }
+
+
+

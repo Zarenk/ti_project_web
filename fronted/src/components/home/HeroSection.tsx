@@ -1,9 +1,11 @@
 "use client"
 
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 import HeroSlideshow from '@/components/HeroSlideshow';
 import SectionBackground from '@/components/SectionBackground';
 import { ChevronRight } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useRef } from 'react';
 import HeroCollageCarousel from '../HeroCollageCarousel';
 
@@ -95,19 +97,47 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
                 Equipos de alto rendimiento para trabajo, estudio y gaming. Encuentra la tecnología perfecta para tus necesidades.
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4 hero-buttons">
-              <Button size="lg" className="bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 text-lg transition-transform duration-300 ease-in-out hover:scale-105">
-                Ver productos
-                <ChevronRight className="w-5 h-5 ml-2" />
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="border-sky-300 text-sky-600 hover:bg-sky-50 px-8 py-3 text-lg bg-transparent transition-transform duration-300 ease-in-out hover:scale-105"
-              >
-                Ofertas especiales
-              </Button>
-            </div>
+            <TooltipProvider delayDuration={150}>
+              <div className="flex flex-col sm:flex-row gap-4 hero-buttons">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      asChild
+                      size="lg"
+                      className="spin-parent diag-shimmer bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 text-lg transition-transform duration-300 ease-in-out hover:scale-105"
+                    >
+                      <Link href="/store">
+                        <span className="spin-content">
+                          Ver productos
+                          <ChevronRight className="w-5 h-5 ml-2" />
+                        </span>
+                      </Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="center">
+                    Ir a Productos (/store)
+                  </TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="lg"
+                      className="spin-parent diag-shimmer diag-shimmer--delay border-sky-300 text-sky-600 hover:bg-sky-50 px-8 py-3 text-lg bg-transparent transition-transform duration-300 ease-in-out hover:scale-105"
+                    >
+                      <Link href="/store">
+                        <span className="spin-content">Ofertas especiales</span>
+                      </Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="center">
+                    Ver Ofertas especiales
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
           </div>
           <HeroSlideshow products={heroProducts} />
         </div>

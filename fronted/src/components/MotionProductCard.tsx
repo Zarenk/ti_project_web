@@ -49,9 +49,10 @@ interface MotionProductCardProps {
   product: Product
   withActions?: boolean
   priority?: boolean
+  highlightPrice?: boolean
 }
 
-export default function MotionProductCard({ product, withActions = false, priority = false }: MotionProductCardProps) {
+export default function MotionProductCard({ product, withActions = false, priority = false, highlightPrice = false }: MotionProductCardProps) {
 
   const { addItem } = useCart()
   const [isFavorite, setIsFavorite] = useState(false)
@@ -128,9 +129,32 @@ export default function MotionProductCard({ product, withActions = false, priori
                 {product.brand?.name}
               </span>
             <div className="flex items-center justify-between">
-              <span className="text-2xl font-bold text-green-600">
-                S/.{product.price.toFixed(2)}
-              </span>
+              {highlightPrice ? (
+                <motion.span
+                  aria-label="Precio"
+                  className="inline-block origin-left font-extrabold text-sky-600"
+                  animate={{
+                    x: [0, 6, 0],
+                    scale: [1, 1.08, 1],
+                    opacity: [1, 0.98, 1],
+                    color: [
+                      "#0369a1", // sky-700
+                      "#0ea5e9", // sky-500
+                      "#0369a1",
+                    ],
+                    textShadow: [
+                      "0 0 0 rgba(14,165,233,0)",
+                      "0 0 12px rgba(14,165,233,0.9), 0 0 24px rgba(14,165,233,0.6)",
+                      "0 0 0 rgba(14,165,233,0)",
+                    ],
+                  }}
+                  transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <span className="text-3xl">S/.{product.price.toFixed(2)}</span>
+                </motion.span>
+              ) : (
+                <span className="text-2xl font-bold text-green-600">S/.{product.price.toFixed(2)}</span>
+              )}
             </div>
             <p
               className={`text-xs mt-1 flex items-center gap-1 ${

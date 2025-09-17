@@ -5,6 +5,7 @@ import { ArrowUpDown } from "lucide-react"
 
 import { MoreHorizontal } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { normalizeProductStatus } from './status.utils'
 
 import { deleteProduct } from "./products.api";
 
@@ -180,7 +181,7 @@ export const columns: ColumnDef<Products>[] = [
         },
         cell: ({ row }) => {
           const status = row.getValue('status') as string | null;
-          return <div className="font-medium">{status === 'active' ? 'Activo' : 'Inactivo'}</div>;
+          return <div className="font-medium">{normalizeProductStatus(status)}</div>;
         },
     },
     {

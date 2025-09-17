@@ -143,6 +143,7 @@ function DebouncedInput({ id, onDebouncedChange, value, ...props }: DebouncedInp
 }
 
 export default function Component() {
+  const [checkoutStep, setCheckoutStep] = useState(2)
   const [paymentMethod, setPaymentMethod] = useState("visa")
   const [sameAsShipping, setSameAsShipping] = useState(true)
   const [pickupInStore, setPickupInStore] = useState(false)
@@ -574,7 +575,7 @@ export default function Component() {
       {isProcessing && <ProcessingOverlay />}
       <Navbar />
       <div className="container mx-auto px-4 py-8">
-        <CheckoutSteps step={3} />
+        <CheckoutSteps step={checkoutStep} />
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Completa Tu Compra</h1>
@@ -650,7 +651,10 @@ export default function Component() {
                   Ingrese sus datos de facturación para la emisión de la factura
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-6 space-y-4">
+              <CardContent
+                className="p-6 space-y-4"
+                onFocusCapture={() => setCheckoutStep(2)}
+              >
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">Nombres Completos *</Label>
@@ -810,7 +814,10 @@ export default function Component() {
                 </CardTitle>
                 <CardDescription className="text-blue-100 dark:text-blue-200">Seleccione el tipo de comprobante</CardDescription>
               </CardHeader>
-              <CardContent className="p-6 space-y-4">
+              <CardContent
+                className="p-6 space-y-4"
+                onFocusCapture={() => setCheckoutStep(2)}
+              >
                 <RadioGroup
                   value={formData.invoiceType}
                   onValueChange={(value) =>
@@ -916,7 +923,10 @@ export default function Component() {
                 </CardTitle>
                 <CardDescription className="text-blue-100 dark:text-blue-200">A donde debemos enviar tu orden?</CardDescription>
               </CardHeader>
-              <CardContent className="p-6 space-y-4">
+              <CardContent
+                className="p-6 space-y-4"
+                onFocusCapture={() => setCheckoutStep(2)}
+              >
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="sameAsShipping"
@@ -1028,8 +1038,18 @@ export default function Component() {
                 </CardTitle>
                 <CardDescription className="text-blue-100 dark:text-blue-200">Elija el método de pago que prefiera</CardDescription>
               </CardHeader>
-              <CardContent className="p-6">
-                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-4">
+              <CardContent
+                className="p-6"
+                onFocusCapture={() => setCheckoutStep(3)}
+              >
+                <RadioGroup
+                  value={paymentMethod}
+                  onValueChange={(val) => {
+                    setPaymentMethod(val)
+                    setCheckoutStep(3)
+                  }}
+                  className="space-y-4"
+                >
                   {/* Visa Card */}
                   <div className="space-y-4">
                     <div className="flex items-center space-x-3 p-4 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-300 transition-colors">

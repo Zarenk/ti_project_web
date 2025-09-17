@@ -7,6 +7,7 @@ export interface Journal {
   date: string;
   description: string;
   amount: number;
+  series?: string[];
 }
 
 export async function fetchJournals(): Promise<Journal[]> {

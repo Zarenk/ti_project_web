@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { exportCatalog } from "./catalog.api";
 import { generateCatalogPdf } from "./catalog-pdf";
+import { getCatalogCover, uploadCatalogCover, type CatalogCover } from "./catalog-cover.api";
+import { resolveImageUrl } from "@/lib/images";
 import { getProducts } from "../products/products.api";
 import { getStoresWithProduct } from "../inventory/inventory.api";
 import CategoryFilter from "./category-filter";
@@ -14,6 +16,9 @@ export default function CatalogPage() {
   const [downloading, setDownloading] = useState<"pdf" | "excel" | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [cover, setCover] = useState<CatalogCover | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function fetchProducts() {
@@ -45,6 +50,49 @@ export default function CatalogPage() {
     fetchProducts();
   }, [selectedCategories]);
 
+  useEffect(() => {
+    async function fetchCover() {
+      try {
+        const current = await getCatalogCover();
+        setCover(current);
+      } catch (error) {
+        console.error('Error fetching catalog cover:', error);
+      }
+    }
+    fetchCover();
+  }, []);
+
+  function handleSelectCover() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleCoverSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const allowed = ['image/jpeg', 'image/png'];
+    if (!allowed.includes(file.type)) {
+      toast.error('Solo se permiten imagenes JPG o PNG');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      setUploadingCover(true);
+      const updated = await uploadCatalogCover(file);
+      setCover(updated);
+      toast.success('Caratula guardada');
+    } catch (error) {
+      console.error('Error uploading catalog cover:', error);
+      toast.error('No se pudo guardar la caratula');
+    } finally {
+      setUploadingCover(false);
+      event.target.value = '';
+    }
+  }
+
   async function handleDownload(format: "pdf" | "excel") {
     if (selectedCategories.length === 0) {
       toast.error("Debes seleccionar una categoría");
@@ -54,7 +102,8 @@ export default function CatalogPage() {
       setDownloading(format);
       let blob: Blob;
       if (format === "pdf") {
-        blob = await generateCatalogPdf(products);
+        const coverImage = cover?.imageUrl ?? cover?.imagePath ?? undefined;
+        blob = await generateCatalogPdf(products, coverImage);
       } else {
         const params = { categories: selectedCategories };
         blob = await exportCatalog("excel", params);
@@ -74,6 +123,10 @@ export default function CatalogPage() {
     }
   }
 
+  const coverUrl = cover?.imageUrl || cover?.imagePath
+    ? resolveImageUrl(cover?.imageUrl ?? cover?.imagePath)
+    : null;
+
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-bold">Exportar Catálogo</h1>
@@ -81,6 +134,37 @@ export default function CatalogPage() {
         selected={selectedCategories}
         onChange={setSelectedCategories}
       />
+      <div className="flex flex-wrap items-center gap-4">
+        <Button
+          variant="outline"
+          onClick={handleSelectCover}
+          disabled={uploadingCover}
+        >
+          {uploadingCover
+            ? "Guardando caratula..."
+            : cover
+            ? "Actualizar caratula"
+            : "Agregar caratula"}
+        </Button>
+        {coverUrl && (
+          <div className="flex items-center gap-2">
+            <img
+              src={coverUrl}
+              alt="Caratula del catalogo"
+              className="h-16 w-32 rounded border object-cover"
+            />
+            <span className="text-sm text-muted-foreground">Vista previa</span>
+          </div>
+        )}
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png"
+        className="hidden"
+        onChange={handleCoverSelected}
+      />
+
       <div className="flex gap-4">
         <Button onClick={() => handleDownload("pdf")} disabled={downloading === "pdf"}>
           {downloading === "pdf" ? "Generando..." : "Descargar PDF"}

@@ -25,9 +25,19 @@ export class ProductsService {
     };
   }
 
+  private normalizeStatus(status?: string | null) {
+    if (!status) return 'Activo';
+    const normalized = status.trim().toLowerCase();
+    if (normalized === 'inactivo' || normalized === 'inactive') {
+      return 'Inactivo';
+    }
+    return 'Activo';
+  }
+
   async create(createProductDto: CreateProductDto) {
-    const { specification, images, features, brandId, brand, ...data } =
+    const { specification, images, features, brandId, brand, status, ...data } =
       createProductDto as any;
+    const normalizedStatus = this.normalizeStatus(status);
     try {
       let brandEntity: Brand | null = null;
       if (!brandId && brand) {
@@ -40,6 +50,7 @@ export class ProductsService {
       return await this.prismaService.product.create({
         data: {
           ...data,
+          status: normalizedStatus,
           brandId: brandEntity ? brandEntity.id : brandId ?? undefined,
           brandName: brandEntity ? brandEntity.name : undefined,
           images: images ?? [],
@@ -114,6 +125,7 @@ export class ProductsService {
             brandId: product.brandId || null,
             categoryId: product.categoryId || defaultCategory.id,
             images: [],
+            status: 'Activo',
           },
         });
         createdProducts.push(newProduct);
@@ -181,8 +193,9 @@ export class ProductsService {
   }
 
   async update(id: number, updateProductDto: UpdateProductDto) {
-    const { specification, images, features, brandId, brand, ...data } =
+    const { specification, images, features, brandId, brand, status, ...data } =
       updateProductDto as any;
+    const normalizedStatus = status !== undefined ? this.normalizeStatus(status) : undefined;
     try {
       let brandEntity: Brand | null = null;
       if (!brandId && brand) {
@@ -192,6 +205,7 @@ export class ProductsService {
         where: { id: Number(id) },
         data: {
           ...data,
+          ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {}),
           brandId: brandEntity ? brandEntity.id : brandId ?? undefined,
           brandName: brandEntity ? brandEntity.name : undefined,
           images: images ?? undefined,
@@ -239,19 +253,24 @@ export class ProductsService {
   
       // Ejecutar la transacción para actualizar múltiples productos
       const updatedProducts = await this.prismaService.$transaction(
-        products.map((product) =>
-          this.prismaService.product.update({
+        products.map((product) => {
+          const normalizedStatus =
+            typeof product.status === 'string'
+              ? this.normalizeStatus(product.status)
+              : undefined;
+
+          return this.prismaService.product.update({
             where: { id: Number(product.id) },
-            data: {             
+            data: {
               price: product.price,
               priceSell: product.priceSell,
-              status: product.status,
+              ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {}),
               name: product.name,
               description: product.description,
               brandId: product.brandId,
             },
-          })
-        )
+          });
+        }),
       );
   
       return {

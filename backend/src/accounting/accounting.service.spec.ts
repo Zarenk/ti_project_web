@@ -37,8 +37,8 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
 
     const lines = prisma.accEntry.create.mock.calls[0][0].data.lines.create;
     const igvLine = lines.find((l: any) => l.account === '4011');
-    expect(igvLine.debit).toBe(0);
-    expect(igvLine.credit).toBe(18);
+    expect(igvLine.debit).toBe(18);
+    expect(igvLine.credit).toBe(0);
 
     const netLine = lines.find((l: any) => l.account === '2011');
     expect(netLine.debit).toBe(100);

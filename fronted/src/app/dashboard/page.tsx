@@ -307,7 +307,7 @@ useEffect(() => {
                   {loading
                     ? "Cargando..."
                     : monthlySales
-                    ? `S/.${monthlySales.total.toFixed(2)}`
+                    ? `S/. ${monthlySales.total.toFixed(2)}`
                     : "Sin datos"}
                 </div>
                 <p className="text-xs text-muted-foreground">

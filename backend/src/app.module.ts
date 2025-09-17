@@ -30,6 +30,7 @@ import { NewsletterModule } from './newsletter/newsletter.module';
 import { OrdertrackingModule } from './ordertracking/ordertracking.module';
 import { CatalogexportModule } from './catalogexport/catalogexport.module';
 import { CatalogExportController } from './routes/catalogExport';
+import { CatalogCoverController } from './routes/catalogCover';
 import { PrismaService } from './prisma/prisma.service';
 import { BrandsModule } from './brands/brands.module';
 import { ActivityModule } from './activity/activity.module';
@@ -48,7 +49,7 @@ import { KeywordsModule } from './keywords/keywords.module';
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
       ProductsModule, UsersModule, CategoryModule, StoresModule,
       ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule, WebsalesModule, ContactModule, ChatModule, FavoritesModule, NewsletterModule, OrdertrackingModule, CatalogexportModule, BrandsModule, ActivityModule, AuthModule, CampaignsModule, AdsModule, PublishModule, MetricsModule, AccountingModule, JournalsModule, AccReportsModule, KeywordsModule],
-  controllers: [AppController, CatalogExportController],
+  controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [AppService, BarcodeGateway, PrismaService],
 })
 export class AppModule {}

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { zonedTimeToUtc } from 'date-fns-tz';
 import { EntriesRepository } from './services/entries.repository';
 import {
   AccEntryStatus as EntryStatus,
@@ -26,6 +27,8 @@ export interface Entry {
   status: EntryStatus;
   totalDebit: number;
   totalCredit: number;
+  source?: string;
+  sourceId?: number;
 }
 
 @Injectable()
@@ -39,16 +42,28 @@ export class EntriesService {
 
   async findAll(params: {
     period?: string;
-    from?: Date;
-    to?: Date;
+    from?: string;
+    to?: string;
+    tz?: string;
     page?: number;
     size?: number;
   }): Promise<{ data: Entry[]; total: number }> {
-    const { period, from, to, page = 1, size = 25 } = params;
+    const { period, from, to, tz = 'America/Lima', page = 1, size = 25 } = params;
+
+    // Normaliza YYYY-MM-DD a rango del día en tz; si viene ISO, se usa tal cual
+    const toDayStart = (d: string | undefined) => (d && d.length === 10 ? `${d}T00:00:00` : d);
+    const toDayEnd = (d: string | undefined) => (d && d.length === 10 ? `${d}T23:59:59.999` : d);
+
+    const fromIso = toDayStart(from ?? undefined);
+    const toIso = toDayEnd(to ?? from ?? undefined);
+
+    const fromUtc = fromIso ? zonedTimeToUtc(fromIso, tz) : undefined;
+    const toUtc = toIso ? zonedTimeToUtc(toIso, tz) : undefined;
+
     const { data, total } = await this.repo.findAll({
       period,
-      from,
-      to,
+      from: fromUtc,
+      to: toUtc,
       skip: (page - 1) * size,
       take: size,
     });
@@ -62,14 +77,16 @@ export class EntriesService {
         serie: (e as any).serie ?? undefined,
         correlativo: (e as any).correlativo ?? undefined,
         invoiceUrl: (e as any).invoiceUrl ?? undefined,
+        source: (e as any).source ?? undefined,
+        sourceId: (e as any).sourceId ?? undefined,
         status: e.status,
         totalDebit: e.totalDebit,
         totalCredit: e.totalCredit,
         lines: e.lines.map((l) => ({
           account: l.account,
           description: l.description ?? undefined,
-          debit: l.debit,
-          credit: l.credit,
+          debit: Number((l as any).debit ?? 0),
+          credit: Number((l as any).credit ?? 0),
           quantity: (l as any).quantity ?? undefined,
         })),
       })),
@@ -82,7 +99,7 @@ export class EntriesService {
     if (!entry) {
       throw new NotFoundException(`Entry ${id} not found`);
     }
-    return {
+  return {
       id: entry.id,
       period: entry.period.name,
       date: entry.date,
@@ -91,14 +108,16 @@ export class EntriesService {
       serie: (entry as any).serie ?? undefined,
       correlativo: (entry as any).correlativo ?? undefined,
       invoiceUrl: (entry as any).invoiceUrl ?? undefined,
+      source: (entry as any).source ?? undefined,
+      sourceId: (entry as any).sourceId ?? undefined,
       status: entry.status,
       totalDebit: entry.totalDebit,
       totalCredit: entry.totalCredit,
       lines: entry.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
-        debit: l.debit,
-        credit: l.credit,
+        debit: Number((l as any).debit ?? 0),
+        credit: Number((l as any).credit ?? 0),
         quantity: (l as any).quantity ?? undefined,
       })),
     };
@@ -127,8 +146,8 @@ export class EntriesService {
       lines: entry.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
-        debit: l.debit,
-        credit: l.credit,
+        debit: Number((l as any).debit ?? 0),
+        credit: Number((l as any).credit ?? 0),
         quantity: (l as any).quantity ?? undefined,
       })),
     };
@@ -216,8 +235,8 @@ export class EntriesService {
       lines: updated.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
-        debit: l.debit,
-        credit: l.credit,
+        debit: Number((l as any).debit ?? 0),
+        credit: Number((l as any).credit ?? 0),
         quantity: (l as any).quantity ?? undefined,
       })),
     };
@@ -251,8 +270,8 @@ export class EntriesService {
       lines: updated.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
-        debit: l.debit,
-        credit: l.credit,
+        debit: Number((l as any).debit ?? 0),
+        credit: Number((l as any).credit ?? 0),
         quantity: (l as any).quantity ?? undefined,
       })),
     };

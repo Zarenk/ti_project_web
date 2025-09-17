@@ -156,6 +156,16 @@ export class EntriesController {
     return this.entriesService.findEntryById(numericId);
   }
 
+  // Alias para compatibilidad: GET /entries/:id
+  @Get('id/:id')
+  async findEntryAlias(@Param('id') id: string) {
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) {
+      throw new BadRequestException('El ID de la entrada debe ser un número válido.');
+    }
+    return this.entriesService.findEntryById(numericId);
+  }
+
   @Get('store/:storeId')
   findAllByStore(@Param('storeId') storeId: string) {
     const numericStoreId = parseInt(storeId, 10);

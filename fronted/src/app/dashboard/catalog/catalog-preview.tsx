@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+type PrimitiveSpecValue = string | number | boolean | null | undefined;
+
+type SpecificationValue = PrimitiveSpecValue | PrimitiveSpecValue[];
+
+interface ProductSpecification {
+  processor?: string;
+  ram?: string;
+  storage?: string;
+  graphics?: string;
+  screen?: string;
+  resolution?: string;
+  refreshRate?: string;
+  connectivity?: string;
+  [key: string]: SpecificationValue;
+}
 
 interface Product {
   id: number;
@@ -36,14 +52,120 @@ interface Product {
     id: number;
     name: string;
   };
-  specification?: {
-    processor?: string;
-    graphics?: string;
-  };
+  specification?: ProductSpecification;
 }
 
 interface CatalogPreviewProps {
   products: Product[];
+}
+
+const SPEC_CONFIG: Array<{ key: string; label: string }> = [
+  { key: "processor", label: "Procesador" },
+  { key: "ram", label: "Memoria" },
+  { key: "storage", label: "Almacenamiento" },
+  { key: "graphics", label: "Graficos" },
+  { key: "screen", label: "Pantalla" },
+  { key: "resolution", label: "Resolucion" },
+  { key: "refreshRate", label: "Refresco" },
+  { key: "connectivity", label: "Conectividad" },
+];
+const IGNORED_SPEC_KEYS = new Set([
+  "id",
+  "productid",
+  "product_id",
+  "createdat",
+  "created_at",
+  "updatedat",
+  "updated_at",
+  "createdon",
+  "updatedon",
+]);
+
+type CatalogItemDetailItem = NonNullable<CatalogItemProps["details"]>[number];
+
+function normalizePrimitiveSpecValue(value: PrimitiveSpecValue): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : null;
+  }
+  if (typeof value === "boolean") {
+    return value ? "Si" : "No";
+  }
+  return String(value);
+}
+
+function normalizeSpecValue(value: SpecificationValue | undefined): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    const normalizedItems = value
+      .map((item) => normalizePrimitiveSpecValue(item))
+      .filter((item): item is string => !!item);
+    return normalizedItems.length > 0 ? normalizedItems.join(", ") : null;
+  }
+  return normalizePrimitiveSpecValue(value);
+}
+
+function formatAdditionalSpecLabel(key: string): string {
+  if (!key) {
+    return "";
+  }
+  const spaced = key
+    .replace(/[_-]+/g, " ")
+    .replace(/([A-Z])/g, " $1")
+    .trim();
+  if (!spaced) {
+    return key;
+  }
+  return spaced
+    .split(" ")
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function buildItemDetails(spec?: ProductSpecification): CatalogItemDetailItem[] {
+  if (!spec) {
+    return [];
+  }
+  const details: CatalogItemDetailItem[] = [];
+  const handled = new Set<string>();
+
+  for (const { key, label } of SPEC_CONFIG) {
+    const value = normalizeSpecValue(spec[key]);
+    if (!value) {
+      continue;
+    }
+    details.push({ label, value });
+    handled.add(key.toLowerCase());
+  }
+
+  const additionalEntries = Object.entries(spec).filter(([key]) => !handled.has(key.toLowerCase()));
+  additionalEntries.sort(([a], [b]) => a.localeCompare(b));
+
+  for (const [key, rawValue] of additionalEntries) {
+    const normalizedKey = key.toLowerCase();
+    if (IGNORED_SPEC_KEYS.has(normalizedKey)) {
+      continue;
+    }
+    const value = normalizeSpecValue(rawValue);
+    if (!value) {
+      continue;
+    }
+    details.push({
+      label: formatAdditionalSpecLabel(key),
+      value,
+    });
+  }
+
+  return details;
 }
 
 export function CatalogPreview({ products }: CatalogPreviewProps) {
@@ -168,16 +290,18 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
   }
 
   const grouped: Record<string, CatalogItemProps[]> = {};
-    for (const p of filteredProducts) {
+  for (const p of filteredProducts) {
     const priceValue = p.priceSell ?? p.price;
+    const details = buildItemDetails(p.specification);
     const item: CatalogItemProps = {
       title: p.name,
       description: p.description,
       price: typeof priceValue === "number" ? formatPrice(priceValue) : undefined,
       imageUrl: p.imageUrl ?? p.image ?? p.images?.[0],
       logos: getLogos(p),
+      details: details.length > 0 ? details : undefined,
     };
-  const catName = p.category?.name || "Sin categoría";
+    const catName = p.category?.name || "Sin categoria";
     grouped[catName] = grouped[catName] ? [...grouped[catName], item] : [item];
   }
   const categories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
@@ -185,7 +309,7 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Vista previa del catálogo</CardTitle>
+        <CardTitle>Vista previa del catalogo</CardTitle>
         <div className="mt-4 flex flex-wrap gap-4">
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -247,3 +371,6 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
 }
 
 export default CatalogPreview;
+
+
+

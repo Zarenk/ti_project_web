@@ -34,6 +34,10 @@ export class EntriesService {
     ) {
       throw new NotFoundException(error.meta?.cause ?? 'No data found');
     }
+    if (error instanceof Prisma.PrismaClientValidationError) {
+      // Errores de validación de tipos/enum -> 400 con detalle
+      throw new BadRequestException(error.message);
+    }
     if (
       error instanceof Prisma.PrismaClientInitializationError &&
       error.errorCode === 'P1000'
@@ -65,6 +69,46 @@ export class EntriesService {
 
   try{
     console.log("Datos recibidos en createEntry:", data);
+    // Normalizar y validar para evitar errores de Prisma por tipos inesperados
+    const normalizedDetails = (data.details ?? []).map((d: any) => ({
+      productId: Number(d.productId),
+      name: d.name,
+      quantity: d.quantity != null ? Number(d.quantity) : 0,
+      price: d.price != null ? Number(d.price) : 0,
+      priceInSoles:
+        d.priceInSoles == null || d.priceInSoles === ''
+          ? null
+          : Number(d.priceInSoles),
+      series: Array.isArray(d.series)
+        ? d.series.map((s: any) => String(s))
+        : undefined,
+    }));
+
+    const normalizedDate = data.date ? new Date(data.date as any) : new Date();
+
+    if (
+      data.paymentMethod &&
+      !(['CASH', 'CREDIT'] as string[]).includes(String(data.paymentMethod))
+    ) {
+      throw new BadRequestException('paymentMethod inválido. Use CASH o CREDIT');
+    }
+
+    // Aceptar alias "comprobante" desde el frontend
+    const invoicePayload: any = data.invoice
+      ? {
+          serie: (data.invoice as any).serie,
+          nroCorrelativo: (data.invoice as any).nroCorrelativo,
+          tipoComprobante:
+            (data.invoice as any).tipoComprobante ??
+            (data.invoice as any).comprobante ??
+            undefined,
+          tipoMoneda: (data.invoice as any).tipoMoneda,
+          total: (data.invoice as any).total,
+          fechaEmision: (data.invoice as any).fechaEmision
+            ? new Date((data.invoice as any).fechaEmision)
+            : undefined,
+        }
+      : undefined;
     // Declarar fuera de la transacción para usarlo después (actividad/auditoría)
     const verifiedProducts: {
       productId: number;
@@ -77,12 +121,19 @@ export class EntriesService {
 
     const totalGross =
       data.totalGross ??
-      data.details.reduce(
-        (sum, item) => sum + (item.priceInSoles || 0) * (item.quantity || 0),
+      normalizedDetails.reduce(
+        (sum, item) => sum + (Number(item.priceInSoles) || 0) * (Number(item.quantity) || 0),
         0,
       );
     const igvRate = data.igvRate ?? 0.18;
-    const paymentTerm = (data.paymentTerm as any) ?? 'CASH';
+    // Normalizar término de pago (CASH/CREDIT) aceptando alias desde el frontend
+    const paymentTerm = (data as any).paymentTerm
+      ? String((data as any).paymentTerm).toUpperCase() === 'CREDIT'
+        ? 'CREDIT'
+        : 'CASH'
+      : (data.paymentMethod && String(data.paymentMethod).toUpperCase() === 'CREDIT')
+      ? 'CREDIT'
+      : 'CASH';
     const totalNet = +(totalGross / (1 + igvRate)).toFixed(2);
     const totalIgv = +(totalGross - totalNet).toFixed(2);
 
@@ -108,7 +159,7 @@ export class EntriesService {
       }
 
       // Verificar que los productos existan
-      for (const detail of data.details) {
+      for (const detail of normalizedDetails) {
 
         if (!detail.productId) {
           throw new BadRequestException('El campo "productId" es obligatorio en los detalles.');
@@ -126,7 +177,7 @@ export class EntriesService {
           name: product.name,
           quantity: detail.quantity,
           price: detail.price,
-          priceInSoles: detail.priceInSoles,
+          priceInSoles: detail.priceInSoles ?? 0,
           series: (detail as any)?.series ?? undefined,
         });
       }
@@ -137,12 +188,12 @@ export class EntriesService {
           storeId: data.storeId,
           userId: data.userId,
           providerId: data.providerId,
-          date: data.date,
+          date: normalizedDate,
           description: data.description,
           tipoMoneda: data.tipoMoneda,
           tipoCambioId: data.tipoCambioId,
           paymentMethod: data.paymentMethod,
-          paymentTerm,
+          paymentTerm: paymentTerm as any,
           serie: data.serie,
           correlativo: data.correlativo,
           providerName: data.providerName,
@@ -151,9 +202,12 @@ export class EntriesService {
           details: {
             create: verifiedProducts.map((product) => ({
               productId: product.productId,
-              quantity: product.quantity,
-              price: product.price,
-              priceInSoles: product.priceInSoles,
+              quantity: Number(product.quantity) || 0,
+              price: Number(product.price) || 0,
+              priceInSoles:
+                (product as any).priceInSoles == null || (product as any).priceInSoles === ''
+                  ? null
+                  : Number((product as any).priceInSoles),
             })),
           },
         } as any,
@@ -161,23 +215,23 @@ export class EntriesService {
       });
 
       // Crear el comprobante si se proporcionan datos
-      if (data.invoice) {
+      if (invoicePayload) {
         await prisma.invoice.create({
           data: {
             entryId: entry.id,
-            serie: data.invoice.serie,
-            nroCorrelativo: data.invoice.nroCorrelativo,
-            tipoComprobante: data.invoice.tipoComprobante,
-            tipoMoneda: data.invoice.tipoMoneda,
-            total: data.invoice.total,
-            fechaEmision: data.invoice.fechaEmision,
+            serie: invoicePayload.serie,
+            nroCorrelativo: invoicePayload.nroCorrelativo,
+            tipoComprobante: invoicePayload.tipoComprobante,
+            tipoMoneda: invoicePayload.tipoMoneda,
+            total: invoicePayload.total,
+            fechaEmision: invoicePayload.fechaEmision,
           },
         });
       }
 
       // Asociar series a los detalles de entrada
       for (const detail of entry.details) {
-        const detailData = data.details.find((d) => d.productId === detail.productId);
+        const detailData = normalizedDetails.find((d) => d.productId === detail.productId);
         if (detailData?.series && detailData.series.length > 0) {
           // Filtrar valores únicos de 'serial' para evitar duplicados
           const uniqueSeries = Array.from(new Set(detailData.series));
@@ -185,7 +239,7 @@ export class EntriesService {
           await prisma.entryDetailSeries.createMany({
             data: uniqueSeries.map((serial) => ({
               entryDetailId: detail.id,
-              serial,
+              serial: String(serial),
             })),
             skipDuplicates: true, // Ignorar duplicados en la base de datos
           });

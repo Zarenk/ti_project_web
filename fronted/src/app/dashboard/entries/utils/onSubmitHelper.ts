@@ -125,11 +125,12 @@ export async function handleFormSubmission({
       description: data.entry_description,
       tipoMoneda: data.tipo_moneda,
       paymentMethod: data.payment_method,
+      paymentTerm: data.payment_method, // Contado/Crédito para asientos contables
       details: updatedProducts,
       invoice: {
         serie: data.serie,
         nroCorrelativo: data.nroCorrelativo,
-        comprobante: data.comprobante,
+        tipoComprobante: data.comprobante,
         tipoMoneda: data.tipo_moneda,
         total: parseFloat(data.total_comprobante),
         fechaEmision: new Date(data.fecha_emision_comprobante),

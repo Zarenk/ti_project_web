@@ -1,7 +1,7 @@
 import { PurchasePostedController } from './purchase-posted.controller';
 import { EntriesService } from '../entries.service';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { PurchaseAccountingService } from '../services/purcharse-account.service';
+import { PurchaseAccountingService } from '../services/purchase-account.service';
 
 describe('PurchasePostedController', () => {
   const timestamp = new Date().toISOString();
@@ -34,9 +34,9 @@ describe('PurchasePostedController', () => {
     const result = await controller.handle({ purchaseId: 1, timestamp });
 
     expect(mapper.buildEntryFromPurchase).toHaveBeenCalledWith({
-      subtotal: 100,
-      igv: 18,
+      total: 118,
       provider: purchase.provider,
+      isCredit: false,
     });
     expect(entries.createDraft).toHaveBeenCalled();
     expect(entries.post).toHaveBeenCalledWith(10);
@@ -71,9 +71,9 @@ describe('PurchasePostedController', () => {
     const result = await controller.handle({ purchaseId: 1, timestamp });
 
     expect(mapper.buildEntryFromPurchase).toHaveBeenCalledWith({
-      subtotal: 100,
-      igv: 18,
+      total: 118,
       provider: null,
+      isCredit: false,
     });
     expect(entries.createDraft).toHaveBeenCalled();
     expect(result).toEqual({ status: 'posted', entryId: 20 });

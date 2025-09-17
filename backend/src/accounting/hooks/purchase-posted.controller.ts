@@ -3,7 +3,7 @@ import { PurchasePostedDto } from './dto/purchase-posted.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EntriesService } from '../entries.service';
 import { format } from 'date-fns';
-import { PurchaseAccountingService } from '../services/purcharse-account.service';
+import { PurchaseAccountingService } from '../services/purchase-account.service';
 
 const IGV_RATE = 0.18;
 
@@ -34,13 +34,12 @@ export class PurchasePostedController {
           sum + ((d.priceInSoles ?? d.price ?? 0) * d.quantity),
         0,
       );
-      const roundedTotal = +total.toFixed(2);
-      const subtotal = +(roundedTotal / (1 + IGV_RATE)).toFixed(2);
-      const igv = +(roundedTotal - subtotal).toFixed(2);
       const lines = this.mapper.buildEntryFromPurchase({
-        subtotal,
-        igv,
+        total,
         provider: purchase.provider,
+        isCredit:
+          (purchase as any).paymentTerm === 'CREDIT' ||
+          (purchase as any).paymentMethod === 'CREDIT',
       });
       const totalDebit = lines.reduce((sum, l) => sum + (l.debit ?? 0), 0);
       const totalCredit = lines.reduce((sum, l) => sum + (l.credit ?? 0), 0);

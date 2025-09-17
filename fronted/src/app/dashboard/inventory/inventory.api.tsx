@@ -192,7 +192,7 @@ export async function getSeriesByProductAndStore(storeId: number, productId: num
 
 export async function updateProductPriceSell(productId: number, priceSell: number) {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/products/${productId}/price-sell`, {
+    const response = await authFetch(`${BACKEND_URL}/api/products/${productId}/price-sell`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -213,7 +213,7 @@ export async function updateProductPriceSell(productId: number, priceSell: numbe
 
 export async function updateProductCategory(productId: number, categoryId: number) {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/products/${productId}/category`, {
+    const response = await authFetch(`${BACKEND_URL}/api/products/${productId}/category`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

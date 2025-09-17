@@ -10,6 +10,7 @@ import fs from 'fs';
 import SVGtoPDF from 'svg-to-pdfkit';
 import sharp from 'sharp';
 import { PrismaClient } from '@prisma/client';
+import { resolveBackendPath } from '../utils/path-utils';
 
 const prisma = new PrismaClient();
 
@@ -32,6 +33,22 @@ async function getBrandLogos(): Promise<Record<string, string>> {
     }
   }
   return cachedBrandLogos;
+}
+
+async function getActiveCoverPath(): Promise<string | null> {
+  const cover = await prisma.catalogCover.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!cover) {
+    return null;
+  }
+  if (cover.imagePath.startsWith('http')) {
+    return null;
+  }
+  const relative = cover.imagePath.replace(/^[/\\]+/, '');
+  const absolute = resolveBackendPath(...relative.split(/[\\/]+/));
+  return fs.existsSync(absolute) ? absolute : null;
 }
 
 export function renderCatalogHtml(items: CatalogItem[]): string {
@@ -84,8 +101,9 @@ async function getLogos(item: CatalogItem): Promise<Logo[]> {
   return logos;
 }
 
-async function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
+async function itemsToPdf(items: CatalogItem[], options: { coverImagePath?: string | null } = {}): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: 50 });
+  const { coverImagePath } = options;
   const buffers: Buffer[] = [];
   doc.on('data', (b) => buffers.push(b));
   const endPromise = new Promise<Buffer>((resolve) =>
@@ -102,16 +120,55 @@ async function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
   const categories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
   const title = `CATALOGO DE ${categories.join(', ')} de la empresa TECNOLOGIA INFORMATICA de la fecha ${new Date().toLocaleDateString()}`;
 
-  doc.rect(0, 0, doc.page.width, 80).fill('#333333');
-  doc
-    .fillColor('white')
-    .font('Helvetica-Bold')
-    .fontSize(20)
-    .text(title, doc.page.margins.left, 30, {
-      width:
-        doc.page.width - doc.page.margins.left - doc.page.margins.right,
-      align: 'center',
-    });
+  const drawTitleBanner = () => {
+    doc.rect(0, 0, doc.page.width, 80).fill('#333333');
+    doc
+      .fillColor('white')
+      .font('Helvetica-Bold')
+      .fontSize(20)
+      .text(title, doc.page.margins.left, 30, {
+        width:
+          doc.page.width - doc.page.margins.left - doc.page.margins.right,
+        align: 'center',
+      });
+  };
+
+  let coverRendered = false;
+  if (coverImagePath) {
+    try {
+      const coverWidth = Math.max(800, Math.round(doc.page.width * 4));
+      const coverHeight = Math.max(1120, Math.round(doc.page.height * 4));
+      const coverBuffer = await sharp(coverImagePath)
+        .resize({ width: coverWidth, height: coverHeight, fit: 'cover' })
+        .jpeg()
+        .toBuffer();
+      doc.image(coverBuffer, 0, 0, {
+        width: doc.page.width,
+        height: doc.page.height,
+      });
+      doc.save();
+      doc.fillOpacity(0.55);
+      doc.rect(0, doc.page.height - 160, doc.page.width, 160).fill('#000000');
+      doc.restore();
+      doc
+        .fillColor('white')
+        .font('Helvetica-Bold')
+        .fontSize(26)
+        .text(title, doc.page.margins.left, doc.page.height - 130, {
+          width:
+            doc.page.width - doc.page.margins.left - doc.page.margins.right,
+          align: 'center',
+        });
+      coverRendered = true;
+    } catch (error) {
+      coverRendered = false;
+    }
+  }
+
+  if (!coverRendered) {
+    drawTitleBanner();
+  }
+
   doc.addPage();
   doc.fillColor('black');
 
@@ -188,8 +245,12 @@ async function itemsToPdf(items: CatalogItem[]): Promise<Buffer> {
 export async function exportCatalogPdf(
   filters: Record<string, any>,
 ): Promise<Buffer> {
-  const items = await getCatalogItems(filters);
-  return itemsToPdf(items);
+  const [items, coverImagePath] = await Promise.all([
+    getCatalogItems(filters),
+    getActiveCoverPath(),
+  ]);
+  return itemsToPdf(items, { coverImagePath });
 }
 
 export { itemsToPdf };
+

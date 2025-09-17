@@ -15,6 +15,7 @@ import { z } from 'zod'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { IconName, icons } from '@/lib/icons'
+import { Loader2 } from 'lucide-react'
 
 export function ProductForm({product, categories}: {product: any; categories: any}) {
 
@@ -116,6 +117,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
   const [brands, setBrands] = useState<any[]>([]);
   // Estado para manejar el error del nombre si se repite
   const [nameError, setNameError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     getBrands(1, 1000)
@@ -148,7 +150,9 @@ export function ProductForm({product, categories}: {product: any; categories: an
 
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
-    try{
+    setIsProcessing(true);
+    setNameError(null);
+    try {
         const { processor, ram, storage, graphics, screen, resolution, refreshRate, connectivity, features, ...productData } = data
         const spec: any = {}
         if (processor) spec.processor = processor
@@ -178,20 +182,18 @@ export function ProductForm({product, categories}: {product: any; categories: an
               : undefined,
         }
 
-        if(params?.id){
+        if (params?.id) {
             await updateProduct(params.id, payload)
-            toast.success("Producto actualizado correctamente."); // Notificación de éxito
-            router.push("/dashboard/products"),
+            toast.success("Producto actualizado correctamente."); // Notificaci??n de ?xito
+            router.push("/dashboard/products");
             router.refresh();
-        }
-        else{
+        } else {
             await createProduct(payload);
-            toast.success("Producto creado correctamente."); // Notificación de éxito
+            toast.success("Producto creado correctamente."); // Notificaci??n de ?xito
             router.push("/dashboard/products");
             router.refresh();
         }
-    }
-    catch(error: any){
+    } catch (error: any) {
         const message = error.response?.data?.message || error.message || 'Error inesperado'
 
         if (error.response?.status === 409 || message.includes('ya existe')) {
@@ -200,9 +202,10 @@ export function ProductForm({product, categories}: {product: any; categories: an
         } else {
             console.error("Error inesperado:", message);
         }
+    } finally {
+      setIsProcessing(false);
     }
-        
-    })      
+  });
 
     useEffect(() => {
         console.log("Estado nameError:", nameError);
@@ -213,7 +216,16 @@ export function ProductForm({product, categories}: {product: any; categories: an
 
   return (
     <div className="container mx-auto max-w-lg grid sm:max-w-md md:max-w-lg lg:max-w-xl">
-      <form className='flex flex-col gap-2'onSubmit={onSubmit}>
+      <form className='relative flex flex-col gap-2' onSubmit={onSubmit}>
+        {isProcessing && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm font-medium text-foreground">Registrando producto...</p>
+            </div>
+          </div>
+        )}
+        <fieldset disabled={isProcessing} className="contents">
                     <div className='flex flex-col'>
                         <Label className='py-3'>
                             Nombre del Producto
@@ -319,6 +331,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
                         <Label className='py-3'>Categoría</Label>  
                         {categories.length > 0 ? (                  
                         <Select
+                            disabled={isProcessing}
                             value={form.watch("categoryId")}                       
                             onValueChange={(value) => setValue("categoryId", value, { shouldValidate: true })
                         }
@@ -367,6 +380,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
                         {featureFields.map((field, index) => (
                           <div key={field.id} className="flex flex-col md:flex-row gap-2 mb-2">
                             <Select
+                              disabled={isProcessing}
                               value={form.watch(`features.${index}.icon` as const)}
                               onValueChange={(value) =>
                                 setValue(`features.${index}.icon` as const, value as IconName)
@@ -400,7 +414,7 @@ export function ProductForm({product, categories}: {product: any; categories: an
                         <Label className='py-3'>
                             Seleccion un estado
                         </Label>
-                        <Select value={form.watch("status")} // Sincroniza el valor del Select con el formulario
+                        <Select value={form.watch("status")} disabled={isProcessing} // Sincroniza el valor del Select con el formulario
                         defaultValue={form.getValues("status")} onValueChange={(value) => setValue("status", value as "Activo" | "Inactivo", {shouldValidate: true})}>
                             <SelectTrigger>
                                 <SelectValue /> {/*placeholder="Estado" */}
@@ -449,7 +463,8 @@ export function ProductForm({product, categories}: {product: any; categories: an
                     >
                         Volver
                     </Button>
-        </form>
+        </fieldset>
+      </form>
     </div>
   )
 }

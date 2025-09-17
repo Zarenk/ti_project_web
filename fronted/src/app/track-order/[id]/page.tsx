@@ -95,8 +95,9 @@ export default function TrackOrderDetailsPage() {
 
         const backendUrl =
           process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+        // Backend has a global '/api' prefix; include it here
         const res = await fetch(
-          `${backendUrl}/orders/${encodeURIComponent(id)}/tracking`
+          `${backendUrl}/api/orders/${encodeURIComponent(id)}/tracking`
         );
         if (res.ok) {
           const trackingData = await res.json();

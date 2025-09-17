@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import Image from "next/image"
+import { resolveImageUrl } from "@/lib/images"
 import { Minus, Plus, X, Heart, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -18,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { getAuthToken } from "@/utils/auth-token"
 import { isTokenValid } from "@/lib/auth"
 import { jwtDecode } from "jwt-decode"
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -320,6 +322,7 @@ export default function ShoppingCart() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      <TooltipProvider delayDuration={150}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <CheckoutSteps step={1} />
         <h1 className="text-3xl font-light text-foreground mb-8 text-center">Verifique su pedido</h1>
@@ -436,12 +439,17 @@ export default function ShoppingCart() {
                       onChange={(e) => setCouponCode(e.target.value)}
                       className="flex-grow rounded-xl border-border focus:border-sky-400 focus:ring-sky-400"
                     />
-                    <Button
-                      onClick={applyCoupon}
-                      className="bg-sky-500 hover:bg-sky-600 text-white rounded-xl px-8 py-2 font-medium transition-colors duration-200"
-                    >
-                      Aplicar
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={applyCoupon}
+                          className="cursor-pointer bg-sky-500 hover:bg-sky-600 text-white rounded-xl px-8 py-2 font-medium transition-colors duration-200"
+                        >
+                          Aplicar
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Aplicar cupón de descuento</TooltipContent>
+                    </Tooltip>
                   </div>
                   {couponApplied && <p className="text-green-600 text-sm mt-2 font-medium">✓ {couponApplied}</p>}
                 <p className="text-xs text-muted-foreground mt-2">Ingresa tus cupones de descuento aqui</p>
@@ -470,7 +478,96 @@ export default function ShoppingCart() {
                {(recommendedLoading || recommended.length > 0) && (
                   <div className="bg-card rounded-2xl shadow-sm p-6">
                     <h3 className="text-lg font-medium text-foreground mb-4">Te podría interesar</h3>
-                    <div className="relative px-6 sm:px-10">
+                    <div className="relative px-2 sm:px-10">
+                      {/* Mobile chevrons */}
+                      {!recommendedLoading && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              const el = document.getElementById("mobile-reco-row")
+                              el?.scrollBy({ left: -240, behavior: "smooth" })
+                            }}
+                            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 flex sm:hidden"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              const el = document.getElementById("mobile-reco-row")
+                              el?.scrollBy({ left: 240, behavior: "smooth" })
+                            }}
+                            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 flex sm:hidden"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        </>
+                      )}
+
+                      {/* Mobile: one-line horizontal scroll */}
+                      <div id="mobile-reco-row" className="sm:hidden flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 px-6">
+                        {recommendedLoading
+                          ? Array.from({ length: 4 }).map((_, i) => (
+                              <div key={i} className="min-w-[220px] snap-start space-y-2">
+                                <Skeleton className="h-24 w-full rounded-lg" />
+                                <Skeleton className="h-4 w-3/4" />
+                                <Skeleton className="h-5 w-1/2" />
+                                <Skeleton className="h-8 w-full" />
+                              </div>
+                            ))
+                          : recommended.map((rp: any) => (
+                              <Card key={rp.id} className="group p-2 overflow-hidden min-w-[220px] snap-start">
+                                <Link href={`/store/${rp.id}`} className="block">
+                                  <Image
+                                    src={resolveImageUrl(rp.images[0]) || "/placeholder.svg"}
+                                    alt={rp.name}
+                                    width={160}
+                                    height={120}
+                                    className="w-full h-28 object-cover rounded-lg group-hover:scale-105 transition-transform"
+                                  />
+                                  <div className="mt-2 space-y-1">
+                                    <p className="text-sm font-medium line-clamp-2">{rp.name}</p>
+                                    <p className="text-xs text-muted-foreground line-clamp-2">{rp.description}</p>
+                                    <p className="text-sky-600 font-semibold">S/.{rp.price.toFixed(2)}</p>
+                                  </div>
+                                </Link>
+                                <div className="mt-2">
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="icon"
+                                      variant="secondary"
+                                      className="cursor-pointer"
+                                      onClick={() => addRecommendedToFavorites(rp.id)}
+                                      aria-label="Agregar a favoritos"
+                                    >
+                                      <Heart className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      className="flex-1 cursor-pointer"
+                                      onClick={() =>
+                                        addItem({
+                                          id: rp.id,
+                                          name: rp.name,
+                                          price: rp.price,
+                                          image: resolveImageUrl(rp.images[0]),
+                                          quantity: 1,
+                                        })
+                                      }
+                                      aria-label="Agregar al carrito"
+                                    >
+                                      Agregar
+                                    </Button>
+                                  </div>
+                                </div>
+                              </Card>
+                            ))}
+                      </div>
+
+                      {/* Desktop: grid with chevrons */}
                       {!recommendedLoading && (
                         <Button
                           variant="outline"
@@ -482,7 +579,7 @@ export default function ShoppingCart() {
                           <ChevronLeft className="w-4 h-4" />
                         </Button>
                       )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {recommendedLoading
                           ? Array.from({ length: 4 }).map((_, i) => (
                               <div key={i} className="space-y-2">
@@ -496,7 +593,7 @@ export default function ShoppingCart() {
                               <Card key={rp.id} className="group p-2 overflow-hidden">
                                 <Link href={`/store/${rp.id}`} className="block">
                                   <Image
-                                    src={rp.images[0] || "/placeholder.svg"}
+                                    src={resolveImageUrl(rp.images[0]) || "/placeholder.svg"}
                                     alt={rp.name}
                                     width={120}
                                     height={120}
@@ -510,30 +607,41 @@ export default function ShoppingCart() {
                                 </Link>
                                 <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <div className="flex gap-2">
-                                    <Button
-                                      size="icon"
-                                      variant="secondary"
-                                      onClick={() => addRecommendedToFavorites(rp.id)}
-                                      aria-label="Agregar a favoritos"
-                                    >
-                                      <Heart className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      className="flex-1"
-                                      onClick={() =>
-                                        addItem({
-                                          id: rp.id,
-                                          name: rp.name,
-                                          price: rp.price,
-                                          image: rp.images[0],
-                                          quantity: 1,
-                                        })
-                                      }
-                                      aria-label="Agregar al carrito"
-                                    >
-                                      Agregar
-                                    </Button>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="icon"
+                                          variant="secondary"
+                                          className="cursor-pointer"
+                                          onClick={() => addRecommendedToFavorites(rp.id)}
+                                          aria-label="Agregar a favoritos"
+                                        >
+                                          <Heart className="w-4 h-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">Agregar a Favoritos</TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="sm"
+                                          className="flex-1 cursor-pointer"
+                                          onClick={() =>
+                                            addItem({
+                                              id: rp.id,
+                                              name: rp.name,
+                                              price: rp.price,
+                                              image: rp.images[0],
+                                              quantity: 1,
+                                            })
+                                          }
+                                          aria-label="Agregar al carrito"
+                                        >
+                                          Agregar
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">Agregar al carrito</TooltipContent>
+                                    </Tooltip>
                                   </div>
                                 </div>
                               </Card>
@@ -620,6 +728,7 @@ export default function ShoppingCart() {
           </div>
         </div>
       </div>
+      </TooltipProvider>
       <FavoritesConfirmDialog
         open={favDialogOpen}
         onOpenChange={setFavDialogOpen}

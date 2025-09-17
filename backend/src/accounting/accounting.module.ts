@@ -13,7 +13,7 @@ import { EntriesService } from './entries.service';
 import { EntriesRepository } from './services/entries.repository';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { SaleAccountingService } from './services/sale-accounting.service';
-import { PurchaseAccountingService } from './services/purcharse-account.service';
+import { PurchaseAccountingService } from './services/purchase-account.service';
 import { InventoryAccountingService } from './services/inventory-account.service';
 import { PaymentAccountingService } from './services/payment-accounting.service';
 import { DebitNoteAccountingService } from './services/debit-note-accounting.service';

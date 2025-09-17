@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { Progress } from "@/components/progress"
 
 interface CheckoutStepsProps {
@@ -6,7 +7,15 @@ interface CheckoutStepsProps {
 
 export default function CheckoutSteps({ step }: CheckoutStepsProps) {
   const steps = ["Carrito", "Envío", "Pago", "Confirmación"]
-  const progress = ((step - 1) / (steps.length - 1)) * 100
+  const segment = 100 / (steps.length - 1)
+  // Include current step segment so landing on step 1 shows visible fill
+  const target = Math.min(100, Math.max(0, step * segment))
+  const [value, setValue] = useState(0)
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setValue(target))
+    return () => cancelAnimationFrame(id)
+  }, [target])
 
   return (
     <div className="mb-8">
@@ -36,10 +45,11 @@ export default function CheckoutSteps({ step }: CheckoutStepsProps) {
         })}
       </div>
       <Progress
-        value={progress}
+        value={value}
         className="h-2 bg-sky-100"
-        indicatorClassName="bg-sky-600"
+        indicatorClassName="bg-sky-800"
       />
     </div>
   )
 }
+

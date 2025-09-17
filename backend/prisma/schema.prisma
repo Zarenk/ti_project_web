@@ -106,6 +106,19 @@ model Keyword {
   @@index([brandId])
 }
 
+
+model CatalogCover {
+  id           Int      @id @default(autoincrement())
+  imagePath    String
+  originalName String?
+  mimeType     String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isActive])
+}
+
 model Category {
   id          Int      @id @default(autoincrement())
   name        String   @unique

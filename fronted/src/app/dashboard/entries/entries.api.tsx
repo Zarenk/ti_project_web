@@ -13,8 +13,9 @@ export async function createEntry(data: {
   tipoMoneda?: string;
   tipoCambioId?: number;
   paymentMethod?: string;
+  paymentTerm?: 'CASH' | 'CREDIT';
   details: { productId: number; quantity: number; price: number; priceInSoles: number }[];
-  invoice?: { serie: string; nroCorrelativo: string; comprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
+  invoice?: { serie: string; nroCorrelativo: string; tipoComprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
 }) {
     try{
       const response = await fetch(`${BACKEND_URL}/api/entries`, {
@@ -56,7 +57,7 @@ export async function getAllEntries() {
 
 // Obtener una entrada específica por ID
 export async function getEntryById(id: string) {
-  const response = await fetch(`${BACKEND_URL}/api/entries/${id}`, {
+  const response = await fetch(`${BACKEND_URL}/api/entries/by-id/${id}`, {
     method: 'GET',
   });
 

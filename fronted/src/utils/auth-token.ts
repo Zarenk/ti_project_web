@@ -10,8 +10,9 @@ export async function getAuthToken(): Promise<string | null> {
   if (typeof window === 'undefined') {
     try {
       const { cookies } = await import('next/headers')
-      const store = cookies()
-      return (await store).get(TOKEN_KEY)?.value ?? null
+      // In Next.js 14.3+ the dynamic API is async; await the store
+      const store = await cookies()
+      return store.get(TOKEN_KEY)?.value ?? null
     } catch {
       return null
     }

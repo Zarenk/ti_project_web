@@ -34,12 +34,19 @@ export class AccountingHook {
   }
 
   async postPurchase(id: number): Promise<void> {
+    // Toggle por env para evitar duplicados con el asiento local
+    const enabled = (process.env.ACCOUNTING_HOOK_PURCHASE_ENABLED ?? 'false') === 'true'
+    if (!enabled) {
+      this.logger.log(`purchase hook disabled; skipping postPurchase(${id})`)
+      return
+    }
     const payload = {
         purchaseId: id,
         timestamp: new Date().toISOString(),
       };
 
-      const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:3000';
+      // Align default with other hooks (port + /api prefix)
+      const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:4000/api';
       const url = `${baseUrl}/accounting/hooks/purchase-posted`;
       const maxRetries = 3;
 

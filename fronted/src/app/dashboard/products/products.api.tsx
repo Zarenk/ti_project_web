@@ -1,11 +1,20 @@
 import { getAuthHeaders } from '@/utils/auth-token'
+import { isProductActive, normalizeProductStatus } from './status.utils'
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 export async function getProducts(){
-  const data = await fetch(`${BACKEND_URL}/api/products`, {
+  const response = await fetch(`${BACKEND_URL}/api/products`, {
       'cache': 'no-store',
   });
-  return data.json()
+  const raw = await response.json();
+  const products = Array.isArray(raw) ? raw : [];
+
+  return products
+    .map((product: any) => ({
+      ...product,
+      status: normalizeProductStatus(product?.status ?? null),
+    }))
+    .filter((product: any) => isProductActive(product.status));
 }
 
 export async function getProduct(id: string){
@@ -18,6 +27,7 @@ export async function getProduct(id: string){
   // Convierte `createdAt` a un objeto `Date`
   const formattedProduct = {
       ...json,
+      status: normalizeProductStatus(json.status),
       createAt: new Date(json.createdAt), // Convierte la fecha
   };
 
@@ -50,8 +60,12 @@ export async function createProduct(productData: any){
     }
 
     const data = await res.json();
-    console.log(data);
-    return data; // Asegúrate de que el backend devuelva un objeto con `id`, `name`, y `price`
+    const normalized = {
+      ...data,
+      status: normalizeProductStatus(data?.status ?? null),
+    };
+    console.log(normalized);
+    return normalized; // Asegúrate de que el backend devuelva un objeto con `id`, `name`, y `price`
 }
 
 export async function verifyOrCreateProducts(products: { name: string; price: number; description?: string; brand?: string; categoryId?: number }[]){
@@ -107,7 +121,11 @@ export async function updateProduct(id: string, newProduct: any){
         throw { response: { status: res.status, data: errorData } }; // Lanza un error con la estructura esperada
     }
 
-    return await res.json()
+    const data = await res.json()
+    return {
+        ...data,
+        status: normalizeProductStatus(data?.status ?? null),
+    }
 }
 
 export async function updateManyProducts(products: any[]) {

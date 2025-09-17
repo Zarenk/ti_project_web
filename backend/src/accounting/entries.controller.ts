@@ -10,13 +10,15 @@ export class EntriesController {
     @Query('period') period?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('tz') tz = 'America/Lima',
     @Query('page') page = '1',
     @Query('size') size = '25',
   ): Promise<{ data: Entry[]; total: number }> {
     const { data, total } = await this.service.findAll({
       period,
-      from: from ? new Date(from) : undefined,
-      to: to ? new Date(to) : undefined,
+      from,
+      to,
+      tz,
       page: Number(page),
       size: Number(size),
     });

@@ -10,6 +10,7 @@ export interface CatalogItemProps {
   logos?: string[]
   brand?: string
   logoUrls?: string[]
+  details?: { label: string; value: string }[]
 }
 
 export function CatalogItem({
@@ -19,10 +20,13 @@ export function CatalogItem({
   imageUrl,
   logos,
   logoUrls,
+  details,
 }: CatalogItemProps) {
+  const displayLogos = logos ?? logoUrls
+
   return (
     <div className="catalog-item flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-md">
-      <div className="p-3 space-y-2 text-center">
+      <div className="space-y-2 p-3 text-center">
         <h3 className="text-base font-semibold text-gray-800 leading-tight">{title}</h3>
       </div>
       {imageUrl && (
@@ -34,17 +38,27 @@ export function CatalogItem({
           />
         </div>
       )}
-      <div className="p-3 space-y-1 text-center">
+      <div className="space-y-3 p-3">
         {description && (
-          <p className="text-sm text-gray-600 line-clamp-2">{description}</p>
+          <p className="text-center text-sm text-gray-600 line-clamp-2">{description}</p>
+        )}
+        {details && details.length > 0 && (
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-left text-sm text-gray-600">
+            {details.map((detail, idx) => (
+              <li key={idx} className="leading-snug">
+                <span className="font-semibold text-gray-700">{detail.label}:</span>{" "}
+                <span>{detail.value}</span>
+              </li>
+            ))}
+          </ul>
         )}
         {price && (
-          <p className="text-lg font-bold text-gray-900 dark:text-gray-900">{price}</p>
+          <p className="text-center text-lg font-bold text-gray-900 dark:text-gray-900">{price}</p>
         )}
       </div>
-      {logos && logos.length > 0 && (
+      {displayLogos && displayLogos.length > 0 && (
         <div className="flex flex-wrap justify-center gap-2 p-1 pb-2">
-          {logos.map((logo, idx) => (
+          {displayLogos.map((logo, idx) => (
             <BrandLogo
               key={idx}
               src={logo}
@@ -59,3 +73,4 @@ export function CatalogItem({
 }
 
 export type { CatalogItemProps as CatalogItemProperties }
+

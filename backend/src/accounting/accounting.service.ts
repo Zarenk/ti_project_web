@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AccEntryStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { zonedTimeToUtc } from 'date-fns-tz';
 import { endOfDay, startOfDay, parse, endOfMonth, format } from 'date-fns';
@@ -17,6 +18,27 @@ function toUtc(date: string, end = false): Date {
   const time = end ? 'T23:59:59.999' : 'T00:00:00';
   return zonedTimeToUtc(`${date}${time}`, LIMA_TZ);
 }
+
+// === Helpers robustos y flags ===
+const toNum = (v: any, def = 0): number => {
+  if (v == null) return def;
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : def;
+  }
+  if (typeof v === 'object' && typeof (v as any).toNumber === 'function') {
+    const n = (v as any).toNumber();
+    return Number.isFinite(n) ? n : def;
+  }
+  const val = (v as any).valueOf?.();
+  const n = Number(val);
+  return Number.isFinite(n) ? n : def;
+};
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const REQUIRE_INVOICE_TO_RECOGNIZE_TAX =
+  (process.env.REQUIRE_INVOICE_TO_RECOGNIZE_TAX ?? 'true') !== 'false';
+const IGV_SUSPENSE_ACCOUNT = process.env.IGV_SUSPENSE_ACCOUNT ?? '4091';
 
 @Injectable()
 export class AccountingService {
@@ -216,22 +238,26 @@ export class AccountingService {
         where: { name: entry.provider?.name },
       });
 
-      const igvRate = (entry as any).igvRate ?? 0;
-      let totalGross = (entry as any).totalGross as number | undefined;
-      if (totalGross == null) {
-        totalGross = entry.details.reduce(
-          (s: number, d: any) =>
-            s + ((d.priceInSoles ?? d.price ?? 0) * (d.quantity ?? 0)),
-          0,
-        );
+      const igvRate = toNum((entry as any).igvRate, 0.18);
+      let totalGross = toNum((entry as any).totalGross, 0);
+      if (totalGross <= 0) {
+        totalGross = entry.details.reduce((s: number, d: any) => {
+          const pu = toNum(d.priceInSoles, NaN);
+          const unit = Number.isFinite(pu) ? pu : toNum(d.price, 0);
+          return s + unit * toNum(d.quantity, 0);
+        }, 0);
       }
-      totalGross = +totalGross.toFixed(2);
-      const net = +(totalGross / (1 + igvRate)).toFixed(2);
-      const igv = +(totalGross - net).toFixed(2);
+      if (totalGross <= 0 && entry.invoice?.total != null) {
+        totalGross = toNum(entry.invoice.total, 0);
+      }
+      const amount = r2(totalGross);
+      if (amount <= 0) return; // evita asientos vacíos
+      const net = r2(amount / (1 + igvRate));
+      const igv = r2(amount - net);
 
-      const invoiceCode = entry.invoice
-        ? `${entry.invoice.serie}-${entry.invoice.nroCorrelativo}`
-        : '';
+      const invoiceSerie = (entry as any).serie ?? entry.invoice?.serie ?? null;
+      const invoiceCorr  = (entry as any).correlativo ?? entry.invoice?.nroCorrelativo ?? null;
+      const invoiceCode  = invoiceSerie && invoiceCorr ? `${invoiceSerie}-${invoiceCorr}` : '';
 
       const firstDetail = entry.details[0];
       const itemName = firstDetail?.product?.name ?? '';
@@ -250,10 +276,12 @@ export class AccountingService {
       if ((entry as any).paymentTerm === 'CREDIT') {
         creditAccount = '4211';
       } else if (/transfer|yape|plin/i.test((entry as any).paymentMethod ?? '')) {
+        // Si el método de pago indica transferencia o billeteras, usar bancos
         creditAccount = '1041';
       }
 
-      const periodName = format(new Date(), 'yyyy-MM');
+      const entryDate = new Date(entry.date);
+      const periodName = format(entryDate, 'yyyy-MM');
       let period = await prisma.accPeriod.findUnique({
         where: { name: periodName },
       });
@@ -261,50 +289,61 @@ export class AccountingService {
         period = await prisma.accPeriod.create({ data: { name: periodName } });
       }
 
-      const amount = totalGross;
+      // Evita duplicados por misma factura dentro del periodo
+      if (invoiceSerie && invoiceCorr) {
+        const dup = await prisma.accEntry.findFirst({
+          where: { periodId: period.id, serie: invoiceSerie, correlativo: invoiceCorr },
+        });
+        if (dup) return;
+      }
+
+      // Líneas dependiendo de si hay comprobante
+      const baseDesc = `Ingreso ${itemName}${seriesText}${extraItemsText} – Compra ${invoiceCode || '(sin comprobante)'}`.trim();
+      let linesToCreate: any[] = [];
+      if (invoiceSerie && invoiceCorr) {
+        // Con comprobante: 2011 + 4011 + 1011/1041/4211
+        linesToCreate = [
+          { account: '2011', description: baseDesc, debit: net, credit: 0, quantity: totalQty },
+          { account: '4011', description: `IGV Compra ${invoiceCode}`.trim(), debit: igv, credit: 0, quantity: null },
+          { account: creditAccount, description: `Pago Compra ${invoiceCode}`.trim(), debit: 0, credit: amount, quantity: null },
+        ];
+      } else {
+        if (REQUIRE_INVOICE_TO_RECOGNIZE_TAX) {
+          // Sin comprobante: capitaliza IGV en inventario
+          linesToCreate = [
+            { account: '2011', description: `${baseDesc} (sin comprobante)`, debit: amount, credit: 0, quantity: totalQty },
+            { account: creditAccount, description: `Pago Compra (sin comprobante)`, debit: 0, credit: amount, quantity: null },
+          ];
+        } else {
+          // Alternativa: IGV a cuenta transitoria
+          linesToCreate = [
+            { account: '2011', description: `${baseDesc} (sin comprobante)`, debit: net, credit: 0, quantity: totalQty },
+            { account: IGV_SUSPENSE_ACCOUNT, description: `IGV por sustentar (sin comprobante)`, debit: igv, credit: 0, quantity: null },
+            { account: creditAccount, description: `Pago Compra (sin comprobante)`, debit: 0, credit: amount, quantity: null },
+          ];
+        }
+      }
 
       await prisma.accEntry.create({
         data: {
           periodId: period.id,
-          date: zonedTimeToUtc(new Date(), 'America/Lima'),
+          date: zonedTimeToUtc(entryDate, 'America/Lima'),
+          status: invoiceSerie && invoiceCorr ? AccEntryStatus.POSTED : AccEntryStatus.DRAFT,
           totalDebit: amount,
           totalCredit: amount,
-          providerId: provider?.id ?? undefined,
-          serie: (entry as any).serie ?? undefined,
-          correlativo: (entry as any).correlativo ?? undefined,
+          providerId: (entry as any).providerId ?? provider?.id ?? undefined,
+          serie: invoiceSerie ?? undefined,
+          correlativo: invoiceCorr ?? undefined,
           invoiceUrl: (entry as any).pdfUrl ?? undefined,
           source: 'inventory_entry',
           sourceId: entryId,
-          lines: {
-            create: [
-              {
-                account: '2011',
-                description: `Ingreso ${itemName}${seriesText}${extraItemsText} – Compra ${invoiceCode} (${invoiceCode})`.trim(),
-                debit: net,
-                credit: 0,
-                quantity: totalQty,
-              },
-              {
-                account: '4011',
-                description: `IGV Compra ${invoiceCode}`.trim(),
-                debit: 0,
-                credit: igv,
-                quantity: null,
-              },
-              {
-                account: creditAccount,
-                description: (() => {
-                  const payInfo = `${(entry as any).paymentTerm ?? ''} ${(entry as any).paymentMethod ?? ''}`.trim();
-                  return `Pago Compra ${invoiceCode}${payInfo ? ` – ${payInfo}` : ''}`.trim();
-                })(),
-                debit: 0,
-                credit: amount,
-                quantity: null,
-              },
-            ] as any,
-          },
+          lines: { create: linesToCreate as any },
         },
       });
     });
   }
 }
+
+
+
+

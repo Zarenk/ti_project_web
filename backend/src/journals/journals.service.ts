@@ -8,6 +8,7 @@ export interface Journal {
   date: string;
   description: string;
   amount: number;
+  series?: string[];
 }
 
 interface InventoryHistoryRecord {
@@ -20,6 +21,7 @@ interface InventoryHistoryRecord {
   serie?: string;
   quantity?: number;
   cantidad?: number;
+  inventoryId: number;
 }
 
 @Injectable()
@@ -54,7 +56,7 @@ export class JournalsService {
     const start = startOfDay(new Date());
     const end = endOfDay(new Date());
 
-    const [sales, inventory] = await Promise.all([
+    const [sales, inventory, entryDetails] = await Promise.all([
       this.prisma.sales.findMany({
         where: { createdAt: { gte: start, lte: end } },
       }),
@@ -62,7 +64,26 @@ export class JournalsService {
         where: { createdAt: { gte: start, lte: end } },
         include: { inventory: { include: { product: true } } },
       }),
+      this.prisma.entryDetail.findMany({
+        where: {
+          createdAt: { gte: start, lte: end },
+          inventoryId: { not: null },
+        },
+        include: { series: true },
+      }),
     ]);
+
+    // Indexar series por inventoryId del día
+    const seriesByInventory = new Map<number, string[]>();
+    for (const d of entryDetails) {
+      const invId = (d as any).inventoryId as number | null;
+      if (!invId) continue;
+      const list = seriesByInventory.get(invId) ?? [];
+      for (const s of d.series) {
+        if (!list.includes(s.serial)) list.push(s.serial);
+      }
+      seriesByInventory.set(invId, list);
+    }
 
     const saleEntries: Journal[] = sales.map((s) => ({
       id: `sale-${s.id}`,
@@ -74,14 +95,32 @@ export class JournalsService {
     const inventoryEntries: Journal[] = (
       inventory as InventoryHistoryRecord[]
     ).map((i) => {
-      const action = i.action === 'sales' ? 'Venta' : i.action;
-      let description = `${action} ${i.inventory.product.name}`;
+      // Construir una glosa más amigable según el tipo de movimiento
+      // Regla: si hay ingreso (stockChange > 0) => "Ingreso al Inventario del Item …"
+      //        si hay salida (stockChange < 0)  => "Salida del Inventario del Item …"
+      //        para ventas explícitas => "Venta …"
+      const lowerAction = (i.action || '').toLowerCase();
+      let base: string;
+      if (lowerAction === 'sales' || lowerAction === 'venta') {
+        base = 'Venta';
+      } else if ((i.stockChange ?? 0) > 0) {
+        base = 'Ingreso al Inventario del Item';
+      } else if ((i.stockChange ?? 0) < 0) {
+        base = 'Salida del Inventario del Item';
+      } else {
+        // fallback al nombre de la acción original si no se puede inferir
+        base = i.action || 'Movimiento de Inventario';
+      }
 
+      let description = `${base} ${i.inventory.product.name}`;
+
+      // Serie (o serial) si existe
       const serial = i.serial ?? i.serie;
       if (serial) {
         description += ` Serie ${serial}`;
       }
 
+      // Cantidad si viene informada
       const quantity = i.quantity ?? i.cantidad;
       if (quantity) {
         description += ` Cantidad ${quantity}`;
@@ -92,6 +131,7 @@ export class JournalsService {
         date: i.createdAt.toISOString(),
         description,
         amount: i.stockChange,
+        series: seriesByInventory.get(i.inventoryId) ?? undefined,
       };
     });
 

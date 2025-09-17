@@ -140,19 +140,45 @@
   padding: 0.5rem;
 }
 
-.banner-track {
-  display: inline-block;
-  white-space: nowrap;
-  animation: banner-marquee 15s linear infinite;
+/* Banner encima del navbar */
+.top-banner {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  overflow: hidden;
+  font-size: 0.875rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
 }
 
-@keyframes banner-marquee {
-  0% {
-    transform: translateX(100%);
-  }
-  100% {
-    transform: translateX(-100%);
-  }
+/* Solo fade a la izquierda para que a la derecha sea nítido */
+.marquee {
+  --edge-fade: 12px;
+  --marquee-gap: 2rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black var(--edge-fade), black 100%);
+          mask-image: linear-gradient(to right, transparent 0, black var(--edge-fade), black 100%);
+}
+
+.marquee__inner {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  gap: var(--marquee-gap);
+  will-change: transform;
+  animation: marquee-scroll var(--marquee-duration, 18s) linear infinite;
+}
+
+/* Pausa al hover */
+.marquee:hover .marquee__inner { animation-play-state: paused; }
+
+/* Usamos variables en px calculadas en runtime */
+@keyframes marquee-scroll {
+  from { transform: translateX(var(--start-x, 100%)); } /* fallback por si acaso */
+  to   { transform: translateX(var(--end-x, -100%)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee__inner { animation: none; }
 }
 
 @keyframes banner-bg {
@@ -276,8 +302,9 @@
 
 /* Blue border trace that travels around the edges */
 .blue-scan-border {
-  /* Do NOT change positioning; element may be absolute */
   overflow: hidden;
+  /* control the border trace thickness */
+  --scan-border-width: 3px; /* was 2px */
 }
 
 .blue-scan-border::before {
@@ -292,7 +319,7 @@
     0 0 10px rgba(59, 130, 246, 0.3);
 
   /* Animated highlight ring using conic-gradient */
-  padding: 2px; /* border thickness for the trace */
+  padding: var(--scan-border-width); /* border thickness for the trace */
   background:
     conic-gradient(
       from var(--scan-angle, 0deg),
@@ -315,11 +342,12 @@
 
 /* Tighter, fully-contained effect on small screens */
 @media (max-width: 640px) {
+  .blue-scan-border { --scan-border-width: 2px; }
   .blue-scan-border::before {
     /* Fully contained: no outer glow, no masks, no padding */
     box-shadow: none;
     padding: 0;
-    border: 1px solid transparent; /* defines border box for clipping */
+    border: var(--scan-border-width) solid transparent; /* defines border box for clipping */
     background:
       /* keep content area transparent */
       linear-gradient(transparent, transparent) padding-box,
@@ -349,4 +377,130 @@
   to {
     --scan-angle: 360deg; /* clockwise: left→right on top, then around */
   }
+}
+
+/* Blue scanning underline (for section subtitles) */
+.blue-scan-underline {
+  position: relative;
+  display: inline-block; /* shrink underline to text width */
+  padding-bottom: 8px;   /* spacing above the underline */
+  /* width of the moving highlight segment (desktop default) */
+  --underline-scan-width: 110px;
+  overflow: hidden; /* <— evita sangrado fuera de la línea */
+}
+
+/* Base line (always visible) */
+.blue-scan-underline::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(59,130,246,0.45);
+}
+
+/* Moving highlight sweeping RIGHT -> LEFT intermittently */
+.blue-scan-underline::after {
+  content: "";
+  position: absolute;
+  left: auto;
+  right: calc(-1 * var(--underline-scan-width)); /* start fully outside at right */
+  bottom: 0;
+  height: 2px;
+  width: var(--underline-scan-width); /* highlight length */
+  border-radius: 2px;
+  background: linear-gradient(
+    to left,
+    rgba(59,130,246,0) 0%,
+    rgba(147,197,253,0.95) 50%,
+    rgba(59,130,246,0) 100%
+  );
+  filter: drop-shadow(0 0 6px rgba(59,130,246,0.35));
+  animation: underline-scan-rtl 5s ease-in-out infinite;
+}
+
+@keyframes underline-scan-rtl {
+  0%   { right: calc(-1 * var(--underline-scan-width)); opacity: 0; }
+  10%  { opacity: 1; }
+  60%  { right: 100%; opacity: 1; } /* traverse fully from right to left edge */
+  70%  { opacity: 0; }
+  100% { right: 100%; opacity: 0; }
+}
+
+@media (max-width: 640px) {
+  .blue-scan-underline { padding-bottom: 6px; --underline-scan-width: 80px; }
+  .blue-scan-underline::before { height: 1.5px; }
+  .blue-scan-underline::after { height: 1.5px; filter: none; animation-duration: 5.5s; }
+}
+
+/* Hero buttons: spin content 360° and return (front↔back flip) */
+.spin-parent { perspective: 800px; cursor: pointer; }
+.spin-parent .spin-content {
+  display: inline-flex;
+  align-items: center;
+  transform-origin: center;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
+}
+
+@keyframes spin-return {
+  0% { transform: rotateX(0deg); }
+  50% { transform: rotateX(360deg); }
+  100% { transform: rotateX(0deg); }
+}
+
+.spin-parent:hover .spin-content,
+.spin-parent:focus-visible .spin-content,
+.spin-parent:active .spin-content {
+  animation: spin-return 0.6s ease-in-out;
+}
+
+/* Diagonal 45° shimmer sweep for buttons */
+.diag-shimmer {
+  position: relative;
+  overflow: hidden; /* contain the sweep line */
+  isolation: isolate; /* ensure stacking context for z-index */
+}
+
+.diag-shimmer::after {
+  content: "";
+  position: absolute;
+  top: -200%;
+  left: -60%;
+  width: 30%;           /* relative width of the sweep */
+  height: 500%;         /* tall so it spans diagonally */
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    to right,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0.5) 38%,
+    rgba(255,255,255,0.95) 50%,
+    rgba(255,255,255,0.5) 62%,
+    rgba(255,255,255,0) 100%
+  );
+  transform: rotate(45deg);
+  filter: drop-shadow(0 0 10px rgba(255,255,255,0.55));
+  opacity: 0;
+  animation: diag-sweep 3s ease-in-out infinite;
+}
+
+.diag-shimmer--delay::after {
+  animation-delay: 1.5s; /* offset for staggered sweeps */
+}
+
+@keyframes diag-sweep {
+  0%   { left: -70%; opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { left: 170%; opacity: 1; }
+  90%  { opacity: 0; }
+  100% { left: 170%; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diag-shimmer::after { animation: none; opacity: 0; }
 }
