@@ -30,6 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // APIs / utils
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth";
 import { uploadPdfToServer } from "@/lib/utils";
+import { resolveImageUrl } from "@/lib/images";
 import { numeroALetrasCustom } from "@/app/dashboard/sales/components/utils/numeros-a-letras";
 import { InvoiceDocument } from "@/app/dashboard/sales/components/pdf/InvoiceDocument";
 import {
@@ -122,7 +123,7 @@ export default function OrderDetailPage() {
           let image: string | null = null;
           try {
             const p = await getProduct(String(detail.productId));
-            image = Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : null;
+            image = Array.isArray(p.images) && p.images.length > 0 ? resolveImageUrl(p.images[0]) : null;
           } catch (err) {
             console.error("Error fetching product", detail.productId, err);
           }

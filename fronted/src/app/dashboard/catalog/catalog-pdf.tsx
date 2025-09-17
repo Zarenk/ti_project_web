@@ -119,6 +119,10 @@ const LOGO_DISPLAY_SIZE = 25
 const LOGO_RASTER_SCALE = 4
 const IMAGE_OVERLAY_COLOR = '#145DA0'
 const TECH_LABEL = 'TECNOLOGIA INFORMATICA'
+const COMPANY_LOGO_PATH = '/ti_logo_final_2024.png'
+
+const svgRasterCache = new Map<string, string>()
+const rasterLogoCache = new Map<string, string>()
 
 const SPEC_CONFIG: Array<{ key: SpecKey; label: string }> = [
   { key: 'processor', label: 'Procesador' },
@@ -214,16 +218,27 @@ const styles = StyleSheet.create({
   pageBackgroundOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.55)' },
   pageContent: { position: 'relative', zIndex: 1, flex: 1, padding: 16 },
   coverPageContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 48, paddingBottom: 48 },
+  coverHeading: { width: '100%', alignItems: 'center' },
   coverLogo: { width: 96, height: 96, marginBottom: 16 },
-  coverTechLabel: { fontSize: 12, textAlign: 'center', marginTop: 12, color: '#1f2937', letterSpacing: 1 },
-  coverTechLabelOnImage: { color: '#e2e8f0' },
+  coverTextBox: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginTop: 12,
+    alignSelf: 'stretch',
+  },
+  coverTextBoxFirst: { marginTop: 0 },
+  coverTextBoxOnImage: { backgroundColor: 'rgba(15, 23, 42, 0.78)' },
+  coverTextBoxPlain: { backgroundColor: '#e2e8f0' },
+  coverTechLabel: { fontSize: 12, textAlign: 'center', color: '#1f2937', letterSpacing: 1 },
+  coverTechLabelOnImage: { color: '#f8fafc' },
   headerContainer: { alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   headerLogo: { width: 56, height: 56, marginBottom: 8 },
   coverTitle: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', color: '#0f172a' },
   coverTitleOnImage: { color: '#f8fafc' },
-  coverSubtitle: { fontSize: 12, textAlign: 'center', marginTop: 4, color: '#1f2937' },
+  coverSubtitle: { fontSize: 12, textAlign: 'center', marginTop: 0, color: '#1f2937' },
   coverSubtitleOnImage: { color: '#e2e8f0' },
-  coverSelection: { fontSize: 14, fontWeight: 'bold', textAlign: 'center', marginTop: 8, color: '#0f172a', letterSpacing: 0.5 },
+  coverSelection: { fontSize: 14, fontWeight: 'bold', textAlign: 'center', marginTop: 0, color: '#0f172a', letterSpacing: 0.5 },
   coverSelectionOnImage: { color: '#f8fafc' },
   category: { fontSize: 20, fontWeight: 'bold', marginBottom: 8, textAlign: 'center', color: '#0f172a' },
   categoryCover: { color: '#f8fafc' },
@@ -304,12 +319,14 @@ function CatalogPdfDocument({
   title,
   subtitle,
   selectionSummary,
+  companyLogo,
 }: {
   sections: CatalogSection[]
   coverImage?: string
   title: string
   subtitle: string
   selectionSummary?: string
+  companyLogo: string
 }) {
   const ITEMS_PER_PAGE = 9
   const pages: { category: string; items: CatalogPdfItem[] }[] = []
@@ -331,41 +348,74 @@ function CatalogPdfDocument({
           </View>
         )}
         <View style={[styles.pageContent, styles.coverPageContent]}>
-          <PdfImage style={styles.coverLogo} src='/ti_logo_final_2024.png' />
-          <Text
-            style={[
-              styles.coverTitle,
-              ...(coverImage ? [styles.coverTitleOnImage] : []),
-            ]}
-          >
-            {title}
-          </Text>
-          {selectionSummary && (
-            <Text
+          <PdfImage style={styles.coverLogo} src={companyLogo} />
+          <View style={styles.coverHeading}>
+            <View
               style={[
-                styles.coverSelection,
-                ...(coverImage ? [styles.coverSelectionOnImage] : []),
+                styles.coverTextBox,
+                styles.coverTextBoxFirst,
+                coverImage ? styles.coverTextBoxOnImage : styles.coverTextBoxPlain,
               ]}
             >
-              {selectionSummary}
-            </Text>
-          )}
-          <Text
-            style={[
-              styles.coverSubtitle,
-              ...(coverImage ? [styles.coverSubtitleOnImage] : []),
-            ]}
-          >
-            {subtitle}
-          </Text>
-          <Text
-            style={[
-              styles.coverTechLabel,
-              ...(coverImage ? [styles.coverTechLabelOnImage] : []),
-            ]}
-          >
-            {TECH_LABEL}
-          </Text>
+            <Text
+                style={[
+                  styles.coverTitle,
+                  ...(coverImage ? [styles.coverTitleOnImage] : []),
+                ]}
+              >
+                {title.toUpperCase()}
+              </Text>
+            </View>
+            {selectionSummary && (
+              <View
+                style={[
+                  styles.coverTextBox,
+                  coverImage
+                    ? styles.coverTextBoxOnImage
+                    : styles.coverTextBoxPlain,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.coverSelection,
+                    ...(coverImage ? [styles.coverSelectionOnImage] : []),
+                  ]}
+                >
+                  {selectionSummary}
+                </Text>
+              </View>
+            )}
+            <View
+              style={[
+                styles.coverTextBox,
+                coverImage ? styles.coverTextBoxOnImage : styles.coverTextBoxPlain,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.coverSubtitle,
+                  ...(coverImage ? [styles.coverSubtitleOnImage] : []),
+                ]}
+              >
+                {subtitle}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.coverTextBox,
+                coverImage ? styles.coverTextBoxOnImage : styles.coverTextBoxPlain,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.coverTechLabel,
+                  ...(coverImage ? [styles.coverTechLabelOnImage] : []),
+                ]}
+              >
+                {TECH_LABEL}
+              </Text>
+            </View>
+          </View>
         </View>
       </Page>
       {pages.map((page, index) => (
@@ -376,7 +426,7 @@ function CatalogPdfDocument({
             <View style={styles.grid}>
               {page.items.map((item, idx) => (
                 <View key={idx} style={styles.item}>
-                  <PdfImage style={styles.companyLogo} src='/ti_logo_final_2024.png' />
+                  <PdfImage style={styles.companyLogo} src={companyLogo} />
                   <View style={styles.imageWrapper}>
                     {item.imageUrl ? (
                       <PdfImage style={styles.image} src={item.imageUrl} />
@@ -387,7 +437,7 @@ function CatalogPdfDocument({
                   <View style={styles.imageBadge}>
                     <View style={[styles.badgeEdge, styles.badgeEdgeLeft]} />
                     <View style={styles.badgeCenter}>
-                      <PdfImage style={styles.badgeLogo} src='/ti_logo_final_2024.png' />
+                      <PdfImage style={styles.badgeLogo} src={companyLogo} />
                       <Text style={styles.badgeText}>{TECH_LABEL}</Text>
                     </View>
                     <View style={[styles.badgeEdge, styles.badgeEdgeRight]} />
@@ -428,6 +478,10 @@ function CatalogPdfDocument({
 }
 
 async function svgToPngDataUrl(src: string, size = LOGO_DISPLAY_SIZE): Promise<string> {
+  const cacheKey = `${src}@${size}`
+  if (svgRasterCache.has(cacheKey)) {
+    return svgRasterCache.get(cacheKey) as string
+  }
   const response = await fetch(src)
   if (!response.ok) {
     throw new Error(`Failed to fetch SVG: ${response.status}`)
@@ -459,23 +513,60 @@ async function svgToPngDataUrl(src: string, size = LOGO_DISPLAY_SIZE): Promise<s
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(img, 0, 0, targetSize, targetSize)
   URL.revokeObjectURL(url)
-  return canvas.toDataURL('image/png')
+  const dataUrl = canvas.toDataURL('image/png')
+  svgRasterCache.set(cacheKey, dataUrl)
+  return dataUrl
 }
 
-async function normalizeLogo(src: string): Promise<string | null> {
-  if (src.endsWith('.svg')) {
+async function rasterImageToDataUrl(src: string): Promise<string | null> {
+  if (src.startsWith('data:')) {
+    return src
+  }
+
+  if (rasterLogoCache.has(src)) {
+    return rasterLogoCache.get(src) as string
+  }
+
+  try {
+    const response = await fetch(src)
+    if (!response.ok) {
+      return null
+    }
+    const blob = await response.blob()
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = () => reject(new Error('Unable to convert image to data URL'))
+      reader.readAsDataURL(blob)
+    })
+    rasterLogoCache.set(src, dataUrl)
+    return dataUrl
+  } catch {
+    return null
+  }
+}
+
+function resolveLogoSource(src: string): string {
+  if (src.startsWith('data:')) return src
+  if (src.startsWith('/api/image?url=')) return src
+  if (src.startsWith('http')) {
+    return `/api/image?url=${encodeURIComponent(src)}`
+  }
+  return src
+}
+
+async function normalizeLogo(src?: string): Promise<string | null> {
+  if (!src) return null
+  const resolved = resolveLogoSource(src)
+  const lower = resolved.toLowerCase()
+  if (/\.svg($|\?)/.test(lower)) {
     try {
-      return await svgToPngDataUrl(src)
+      return await svgToPngDataUrl(resolved)
     } catch {
       return null
     }
   }
-  try {
-    const response = await fetch(src)
-    return response.ok ? src : null
-  } catch {
-    return null
-  }
+  return rasterImageToDataUrl(resolved)
 }
 
 export async function generateCatalogPdf(
@@ -503,6 +594,9 @@ export async function generateCatalogPdf(
       brandMap[keyword] = logo
     }
   }
+
+  const companyLogo =
+    (await normalizeLogo(COMPANY_LOGO_PATH)) ?? COMPANY_LOGO_PATH
 
   const grouped: Record<string, CatalogPdfItem[]> = {}
 
@@ -583,6 +677,7 @@ export async function generateCatalogPdf(
       title={title}
       subtitle={subtitle}
       selectionSummary={selectionSummary}
+      companyLogo={companyLogo}
     />
   )
 

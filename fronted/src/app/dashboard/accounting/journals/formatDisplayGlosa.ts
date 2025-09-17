@@ -48,6 +48,24 @@ const inferDocumentTypeFromSerie = (serie?: string): string | undefined => {
   return undefined;
 };
 
+const dedupeVoucherValue = (value: string) => {
+  if (!value) return value;
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+
+  const repeatedWithDash = trimmed.match(/^(.+?)(?:\s*[-–]\s*\1)+$/);
+  if (repeatedWithDash) {
+    return repeatedWithDash[1];
+  }
+
+  const repeatedWithSpaces = trimmed.match(/^(.+?)(?:\s+\1)+$/);
+  if (repeatedWithSpaces) {
+    return repeatedWithSpaces[1];
+  }
+
+  return trimmed;
+};
+
 const dedupeVoucherOccurrences = (text: string, voucher: string) => {
   if (!text) return text;
   const escaped = escapeRegExp(voucher);
@@ -106,7 +124,7 @@ export function formatDisplayGlosa({
   serie,
   tipoComprobante,
 }: FormatDisplayGlosaParams): FormattedGlosa {
-  const normalizedVoucher = voucher?.trim();
+  const normalizedVoucher = voucher ? dedupeVoucherValue(voucher) : undefined;
   const normalizedDocType =
     normalizeDocumentType(tipoComprobante) ?? inferDocumentTypeFromSerie(serie);
 
