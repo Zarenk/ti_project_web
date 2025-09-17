@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import {
   pdf,
@@ -223,6 +223,8 @@ const styles = StyleSheet.create({
   coverTitleOnImage: { color: '#f8fafc' },
   coverSubtitle: { fontSize: 12, textAlign: 'center', marginTop: 4, color: '#1f2937' },
   coverSubtitleOnImage: { color: '#e2e8f0' },
+  coverSelection: { fontSize: 14, fontWeight: 'bold', textAlign: 'center', marginTop: 8, color: '#0f172a', letterSpacing: 0.5 },
+  coverSelectionOnImage: { color: '#f8fafc' },
   category: { fontSize: 20, fontWeight: 'bold', marginBottom: 8, textAlign: 'center', color: '#0f172a' },
   categoryCover: { color: '#f8fafc' },
   categorySeparator: { width: '100%', height: 4, backgroundColor: '#007bff', marginBottom: 8 },
@@ -301,11 +303,13 @@ function CatalogPdfDocument({
   coverImage,
   title,
   subtitle,
+  selectionSummary,
 }: {
   sections: CatalogSection[]
   coverImage?: string
   title: string
   subtitle: string
+  selectionSummary?: string
 }) {
   const ITEMS_PER_PAGE = 9
   const pages: { category: string; items: CatalogPdfItem[] }[] = []
@@ -336,6 +340,16 @@ function CatalogPdfDocument({
           >
             {title}
           </Text>
+          {selectionSummary && (
+            <Text
+              style={[
+                styles.coverSelection,
+                ...(coverImage ? [styles.coverSelectionOnImage] : []),
+              ]}
+            >
+              {selectionSummary}
+            </Text>
+          )}
           <Text
             style={[
               styles.coverSubtitle,
@@ -547,12 +561,20 @@ export async function generateCatalogPdf(
     }
   }
 
-  const categoriesList = sections.map((s) => s.category).join(', ')
+  const categories = sections.map((s) => s.category)
+  const catalogSubject =
+    categories.length === 1
+      ? categories[0]
+      : categories.length > 1
+        ? categories.join(', ')
+        : 'productos'
+  const selectionSummary =
+    categories.length > 0
+      ? categories.map((name) => name.toUpperCase()).join(' • ')
+      : undefined
   const printedDate = new Date().toLocaleDateString()
-    const title = categoriesList
-    ? `Catalogo de "${categoriesList}"`
-    : 'Catalogo de productos'
-  const subtitle = `En la fecha ${printedDate}`
+  const title = `Catalogo de ${catalogSubject}`
+  const subtitle = `Fecha: ${printedDate}`
 
   const document = (
     <CatalogPdfDocument
@@ -560,6 +582,7 @@ export async function generateCatalogPdf(
       coverImage={coverSrc}
       title={title}
       subtitle={subtitle}
+      selectionSummary={selectionSummary}
     />
   )
 

@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import Navbar from "@/components/navbar"
 import { getWebSaleById } from "@/app/dashboard/sales/sales.api"
+import { resolveImageUrl } from "@/lib/images"
 
 export default function OrderDetails() {
   const params = useParams()
@@ -38,7 +39,9 @@ export default function OrderDetails() {
   const products = order.salesDetails.map((detail: any) => ({
     id: detail.productId,
     name: detail.entryDetail.product.name,
-    image: detail.entryDetail.product.images?.[0] ?? "/placeholder.svg",
+    image:
+      resolveImageUrl(detail.entryDetail.product.images?.[0]) ||
+      "/placeholder.svg",
     quantity: detail.quantity,
     unitPrice: detail.price,
     subtotal: detail.quantity * detail.price,
