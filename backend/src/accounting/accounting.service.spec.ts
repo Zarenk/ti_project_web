@@ -4,6 +4,7 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
   const setup = (entryOverrides: any = {}) => {
     const entry = {
       id: 1,
+      date: '2024-09-23T21:55:00.000Z',
       details: [
         {
           quantity: 2,
@@ -23,7 +24,11 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
     const prisma = {
       $transaction: async (fn: any) => fn(prisma),
       entry: { findUnique: jest.fn().mockResolvedValue(entry) },
-      accEntry: { findFirst: jest.fn().mockResolvedValue(null), create: accEntryCreate },
+      accEntry: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        count: jest.fn().mockResolvedValue(0),
+        create: accEntryCreate,
+      },
       provider: { findFirst: jest.fn().mockResolvedValue({ id: 1 }) },
       accPeriod: { findUnique: jest.fn().mockResolvedValue({ id: 1 }), create: jest.fn() },
     } as any;
@@ -46,8 +51,7 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
     const payLine = lines.find((l: any) => !['2011', '4011'].includes(l.account));
     expect(payLine.account).toBe('1011');
     expect(payLine.credit).toBe(118);
-    expect(payLine.description).toContain('CASH');
-    expect(payLine.description).toContain('EFECTIVO');
+    expect(payLine.description).toBe('Pago Compra F001-1');
   });
 
   it('handles credit payments', async () => {
@@ -57,7 +61,7 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
     const lines = prisma.accEntry.create.mock.calls[0][0].data.lines.create;
     const payLine = lines.find((l: any) => !['2011', '4011'].includes(l.account));
     expect(payLine.account).toBe('4211');
-    expect(payLine.description).toContain('CREDIT');
+    expect(payLine.description).toBe('Pago Compra F001-1');
   });
 
   it('handles transfer payments', async () => {
@@ -67,6 +71,24 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
     const lines = prisma.accEntry.create.mock.calls[0][0].data.lines.create;
     const payLine = lines.find((l: any) => !['2011', '4011'].includes(l.account));
     expect(payLine.account).toBe('1041');
-    expect(payLine.description).toContain('TRANSFERENCIA');
+    expect(payLine.description).toBe('Pago Compra F001-1');
+
+    expect(prisma.accEntry.count).toHaveBeenCalledWith({
+      where: { periodId: 1, serie: 'F001', correlativo: '1' },
+    });
+  });
+
+  it('appends duplicate suffix when invoice already exists in period', async () => {
+    const { service, prisma } = setup();
+    prisma.accEntry.count.mockResolvedValue(1);
+
+    await service.createJournalForInventoryEntry(1);
+
+    const lines = prisma.accEntry.create.mock.calls[0][0].data.lines.create;
+    const inventoryLine = lines.find((l: any) => l.account === '2011');
+    const paymentLine = lines.find((l: any) => !['2011', '4011'].includes(l.account));
+
+    expect(inventoryLine.description).toContain('Registro 2');
+    expect(paymentLine.description).toContain('Registro 2');
   });
 });

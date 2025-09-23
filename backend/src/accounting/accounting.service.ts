@@ -290,36 +290,58 @@ export class AccountingService {
       }
 
       // Evita duplicados por misma factura dentro del periodo
+      let duplicateSuffix = '';
       if (invoiceSerie && invoiceCorr) {
-        const dup = await prisma.accEntry.findFirst({
-          where: { periodId: period.id, serie: invoiceSerie, correlativo: invoiceCorr },
+        const duplicates = await prisma.accEntry.count({
+          where: {
+            periodId: period.id,
+            serie: invoiceSerie,
+            correlativo: invoiceCorr,
+          },
         });
-        if (dup) return;
+        if (duplicates > 0) {
+          duplicateSuffix = ` · Registro ${duplicates + 1}`;
+        }
       }
 
       // Líneas dependiendo de si hay comprobante
       const baseDesc = `Ingreso ${itemName}${seriesText}${extraItemsText} – Compra ${invoiceCode || '(sin comprobante)'}`.trim();
+      const inventoryDesc = `${baseDesc}${duplicateSuffix}`.trim();
+      const igvDesc = `IGV Compra ${invoiceCode}`.trim();
+      const paymentDesc = `Pago Compra ${invoiceCode}`.trim();
+      const igvDescWithSuffix = `${igvDesc}${duplicateSuffix}`.trim();
+      const paymentDescWithSuffix = `${paymentDesc}${duplicateSuffix}`.trim();
       let linesToCreate: any[] = [];
       if (invoiceSerie && invoiceCorr) {
         // Con comprobante: 2011 + 4011 + 1011/1041/4211
         linesToCreate = [
-          { account: '2011', description: baseDesc, debit: net, credit: 0, quantity: totalQty },
-          { account: '4011', description: `IGV Compra ${invoiceCode}`.trim(), debit: igv, credit: 0, quantity: null },
-          { account: creditAccount, description: `Pago Compra ${invoiceCode}`.trim(), debit: 0, credit: amount, quantity: null },
+          { account: '2011', description: inventoryDesc, debit: net, credit: 0, quantity: totalQty },
+          { account: '4011', description: igvDescWithSuffix, debit: igv, credit: 0, quantity: null },
+          { account: creditAccount, description: paymentDescWithSuffix, debit: 0, credit: amount, quantity: null },
         ];
       } else {
         if (REQUIRE_INVOICE_TO_RECOGNIZE_TAX) {
           // Sin comprobante: capitaliza IGV en inventario
+          const withoutInvoiceBase = `${baseDesc} (sin comprobante)`;
+          const withoutInvoiceDesc = `${withoutInvoiceBase}${duplicateSuffix}`.trim();
+          const paymentWithoutInvoiceBase = `Pago Compra (sin comprobante)`;
+          const paymentWithoutInvoiceDesc = `${paymentWithoutInvoiceBase}${duplicateSuffix}`.trim();
           linesToCreate = [
-            { account: '2011', description: `${baseDesc} (sin comprobante)`, debit: amount, credit: 0, quantity: totalQty },
-            { account: creditAccount, description: `Pago Compra (sin comprobante)`, debit: 0, credit: amount, quantity: null },
+            { account: '2011', description: withoutInvoiceDesc, debit: amount, credit: 0, quantity: totalQty },
+            { account: creditAccount, description: paymentWithoutInvoiceDesc, debit: 0, credit: amount, quantity: null },
           ];
         } else {
           // Alternativa: IGV a cuenta transitoria
+          const withoutInvoiceBase = `${baseDesc} (sin comprobante)`;
+          const withoutInvoiceDesc = `${withoutInvoiceBase}${duplicateSuffix}`.trim();
+          const paymentWithoutInvoiceBase = `Pago Compra (sin comprobante)`;
+          const paymentWithoutInvoiceDesc = `${paymentWithoutInvoiceBase}${duplicateSuffix}`.trim();
+          const suspenseBase = `IGV por sustentar (sin comprobante)`;
+          const suspenseDesc = `${suspenseBase}${duplicateSuffix}`.trim();
           linesToCreate = [
-            { account: '2011', description: `${baseDesc} (sin comprobante)`, debit: net, credit: 0, quantity: totalQty },
-            { account: IGV_SUSPENSE_ACCOUNT, description: `IGV por sustentar (sin comprobante)`, debit: igv, credit: 0, quantity: null },
-            { account: creditAccount, description: `Pago Compra (sin comprobante)`, debit: 0, credit: amount, quantity: null },
+            { account: '2011', description: withoutInvoiceDesc, debit: net, credit: 0, quantity: totalQty },
+            { account: IGV_SUSPENSE_ACCOUNT, description: suspenseDesc, debit: igv, credit: 0, quantity: null },
+            { account: creditAccount, description: paymentWithoutInvoiceDesc, debit: 0, credit: amount, quantity: null },
           ];
         }
       }

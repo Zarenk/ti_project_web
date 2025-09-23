@@ -221,12 +221,19 @@ export default function ProductPage({ params }: Props) {
     loadReviews()
   }, [id])
 
-  const images: string[] =
+  const baseImages: string[] =
     product?.images && product.images.length > 0
       ? product.images
       : product?.image
         ? [product.image]
         : ["/placeholder.svg?height=600&width=600"]
+  
+  const images = baseImages.map((image) => {
+    const resolved = resolveImageUrl(image)
+    return resolved && resolved.trim() !== ""
+      ? resolved
+      : "/placeholder.svg?height=600&width=600"
+  })
 
   const salePrice = product?.priceSell ?? product?.price ?? 0
   const originalPrice = +(salePrice * 1.20).toFixed(2)
