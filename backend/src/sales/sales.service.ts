@@ -651,7 +651,10 @@ export class SalesService {
           unitPrice: detail.price,
           costUnit: detail.entryDetail.price,
           productName: detail.entryDetail.product.name,
-          series: detail.entryDetail.series?.map((s) => s.serial) ?? [],
+          series:
+            (detail.series?.length
+              ? detail.series
+              : detail.entryDetail.series?.map((s) => s.serial)) ?? [],
         })),
       };
     });
