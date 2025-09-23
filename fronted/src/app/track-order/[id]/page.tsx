@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -128,13 +128,83 @@ export default function TrackOrderDetailsPage() {
     );
   }
 
-  const statusText = order.status === "PENDING" ? "Pendiente" : "Completado";
+  const normalizedStatus = order.status?.toLowerCase();
+  const orderLabel = order.code ? `El pedido ${order.code}` : id ? `El pedido ${id}` : "El pedido";
+  const statusText =
+    normalizedStatus === "cancelado" || normalizedStatus === "anulado"
+      ? "El Pedido ha sido cancelado, si requiere mayor información comuníquese con nosotros para mayor detalle."
+      : normalizedStatus === "pendiente"
+        ? "El Pedido sigue en procesado."
+        : normalizedStatus === "completado"
+          ? "El pedido se ha completado correctamente."
+          : normalizedStatus === "pending"
+            ? `${orderLabel} se encuentra PENDIENTE.`
+            : normalizedStatus === "completed"
+              ? `${orderLabel} se encuentra COMPLETADO.`
+              : normalizedStatus === "denied"
+                ? `${orderLabel} ha sido RECHAZADO.`
+                : order.status ?? "";
   const orderDate = new Date(order.createdAt).toLocaleDateString("es-ES");
   const lastUpdate = events.length
     ? new Date(events[events.length - 1].createdAt).toLocaleDateString("es-ES")
     : new Date(order.updatedAt || order.createdAt).toLocaleDateString("es-ES");
 
   const subtotal = products.reduce((s, p) => s + p.subtotal, 0);
+
+  const orderPayload: any = order.payload || {};
+  const orderRecord: any = order || {};
+  const shippingMethodValue =
+    typeof orderPayload.shippingMethod === 'string' ? orderPayload.shippingMethod : '';
+  const normalizedShippingMethod = shippingMethodValue
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+  let shippingMethodLabel = shippingMethodValue || '-';
+  let estimatedDelivery = orderPayload.estimatedDelivery ?? '-';
+  if (normalizedShippingMethod === 'PICKUP' || normalizedShippingMethod === 'RECOJO EN TIENDA') {
+    shippingMethodLabel = 'RECOJO EN TIENDA';
+    estimatedDelivery = 'Inmediata';
+  } else if (
+    normalizedShippingMethod === 'DELIVERY' ||
+    normalizedShippingMethod === 'ENVIO A DOMICILIO'
+  ) {
+    shippingMethodLabel =
+      normalizedShippingMethod === 'DELIVERY' ? 'DELIVERY' : 'ENVIO A DOMICILIO';
+    estimatedDelivery = 'entre 24 a 72 horas';
+  }
+  const shippingName = orderRecord.shippingName ?? orderPayload.shippingName ?? '';
+  const shippingAddressParts = [
+    orderRecord.shippingAddress ?? orderPayload.shippingAddress ?? '',
+    orderRecord.city ?? orderPayload.city ?? '',
+    orderRecord.postalCode ?? orderPayload.postalCode ?? '',
+  ].filter(Boolean);
+  const carrierName = orderRecord.carrierName ?? '';
+  const carrierId = orderRecord.carrierId ?? '';
+  const carrierModeRaw = orderRecord.carrierMode ?? '';
+  const carrierModeNormalized = carrierModeRaw
+    ? carrierModeRaw
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toUpperCase()
+    : '';
+  let carrierModeLabel = '';
+  if (
+    carrierModeNormalized === 'HOME_DELIVERY' ||
+    carrierModeNormalized === 'DELIVERY' ||
+    carrierModeNormalized === 'ENTREGA A DOMICILIO'
+  ) {
+    carrierModeLabel = 'Entrega a domicilio';
+  } else if (
+    carrierModeNormalized === 'AGENCY_PICKUP' ||
+    carrierModeNormalized === 'PICKUP' ||
+    carrierModeNormalized === 'RETIRO EN AGENCIA' ||
+    carrierModeNormalized === 'AGENCIA'
+  ) {
+    carrierModeLabel = 'Retiro en agencia';
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
@@ -155,7 +225,7 @@ export default function TrackOrderDetailsPage() {
           <CardContent className="p-6">
             {events.length === 0 ? (
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                No hay actualizaciones disponibles.
+                {statusText || "No hay actualizaciones disponibles."}
               </p>
             ) : (
               <OrderTimeline events={events} />
@@ -173,7 +243,7 @@ export default function TrackOrderDetailsPage() {
           <CardContent className="p-6 grid gap-4 sm:grid-cols-2">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                Número de Pedido
+                Numero de Pedido
               </p>
               <p className="font-semibold text-blue-900 dark:text-blue-100">
                 #{order.code}
@@ -189,7 +259,7 @@ export default function TrackOrderDetailsPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                Fecha de Creación
+                Fecha de Creacion
               </p>
               <p className="font-semibold text-slate-700 dark:text-slate-300">
                 {orderDate}
@@ -197,12 +267,52 @@ export default function TrackOrderDetailsPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                Última Actualización
+                Ultima Actualizacion
               </p>
               <p className="font-semibold text-slate-700 dark:text-slate-300">
                 {lastUpdate}
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-blue-100 dark:border-blue-700 shadow-sm pt-0 mb-6">
+          <CardHeader className="bg-blue-50 dark:bg-blue-900 border-b border-blue-100 dark:border-blue-700 rounded-t-lg p-4">
+            <CardTitle className="text-blue-900 dark:text-blue-100">Detalles de EnvÃ­o</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Destinatario</p>
+              <p className="font-semibold text-slate-700 dark:text-slate-300">{shippingName || 'â€”'}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Metodo de Envi­o</p>
+              <p className="font-semibold text-slate-700 dark:text-slate-300">{shippingMethodLabel}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Direccion</p>
+              <p className="text-slate-700 dark:text-slate-300">
+                {shippingAddressParts.length > 0 ? shippingAddressParts.join(', ') : 'â€”'}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Entrega Estimada</p>
+              <p className="font-semibold text-sky-600 dark:text-sky-400">{estimatedDelivery}</p>
+            </div>
+            {(carrierName || carrierModeLabel) && (
+              <div>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Transportista</p>
+                <p className="font-semibold text-slate-700 dark:text-slate-300">
+                  {carrierName || 'â€”'}
+                  {carrierId && carrierName && (
+                    <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">ID: {carrierId}</span>
+                  )}
+                </p>
+                {carrierModeLabel && (
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{carrierModeLabel}</p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -269,3 +379,8 @@ export default function TrackOrderDetailsPage() {
     </div>
   );
 }
+
+
+
+
+

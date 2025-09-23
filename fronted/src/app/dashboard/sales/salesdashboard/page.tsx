@@ -232,8 +232,8 @@ export default function SalesDashboard() {
         <TabsContent value="transactions" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Transaction History</CardTitle>
-              <CardDescription>Complete record of all sales transactions</CardDescription>
+              <CardTitle>Historial de Transacciones</CardTitle>
+              <CardDescription>Registro completo de todas las transacciones de ventas</CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <TransactionHistoryTable transactions={transactions} />

@@ -31,6 +31,10 @@ export type Order = {
   total: number;
   status: string;
   origin?: string;
+  shippingMethod?: string;
+  carrierName?: string;
+  carrierId?: string;
+  carrierMode?: string;
 };
 
 export function getColumns(
@@ -114,12 +118,39 @@ export function getColumns(
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={async () => {
-                        try {
-                          const createdSale = await completeWebOrder(row.original.id);
-                          toast.success("Orden completada");
-                          if (onStatusUpdate) {
-                            onStatusUpdate(row.original.id, "COMPLETED");
+                onClick={async () => {
+                  try {
+                        const shippingMethodValue = row.original.shippingMethod ?? '';
+                        const normalizedShipping = shippingMethodValue
+                          ? shippingMethodValue
+                              .normalize('NFD')
+                              .replace(/[\u0300-\u036f]/g, '')
+                              .trim()
+                              .toUpperCase()
+                          : '';
+                        const requiresCarrier =
+                          normalizedShipping === 'DELIVERY' ||
+                          normalizedShipping === 'ENVIO A DOMICILIO';
+
+                        if (
+                          requiresCarrier &&
+                          (!row.original.carrierName || !row.original.carrierMode)
+                        ) {
+                          toast.error(
+                            'Completa los datos de transporte desde el detalle de la orden antes de confirmar.',
+                          );
+                          return;
+                        }
+
+                        const createdSale = await completeWebOrder(row.original.id, {
+                          carrierId: row.original.carrierId,
+                          carrierName: row.original.carrierName,
+                          carrierMode: row.original.carrierMode,
+                          shippingMethod: row.original.shippingMethod,
+                        });
+                        toast.success("Orden completada");
+                        if (onStatusUpdate) {
+                          onStatusUpdate(row.original.id, "COMPLETED");
                           }
                           const invoice =
                             createdSale && Array.isArray(createdSale.invoices) && createdSale.invoices.length > 0

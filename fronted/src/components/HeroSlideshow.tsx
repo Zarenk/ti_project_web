@@ -7,6 +7,7 @@ import { AnimatePresence, motion, useMotionValue } from "framer-motion"
 import { ChevronLeft, ChevronRight, Shield } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import { resolveImageUrl } from "@/lib/images"
+import { AdminProductImageButton } from "@/components/admin/AdminProductImageButton"
 
 interface Brand {
   name: string
@@ -36,36 +37,40 @@ interface Product {
 }
 
 export default function HeroSlideshow({ products }: { products: Product[] }) {
+  const [items, setItems] = useState<Product[]>(products)
   const [index, setIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isManual, setIsManual] = useState(false)
   const autoDuration = 4;      // tiempo visible entre cambios
   const fadeDuration = 0.6;    // duración del difuminado
 
-  // Start from a random product when the list changes
   useEffect(() => {
+    setItems(products)
     if (products.length > 0) {
       const random = Math.floor(Math.random() * products.length)
       setIndex(random)
+    } else {
+      setIndex(0)
     }
   }, [products])
 
   const next = (manualTrigger = false) => {
     if (manualTrigger) setIsManual(true)
-    setIndex((i) => (products.length > 0 ? (i + 1) % products.length : i))
+    setIndex((i) => (items.length > 0 ? (i + 1) % items.length : i))
   }
   const prev = (manualTrigger = false) => {
     if (manualTrigger) setIsManual(true)
-    setIndex((i) => (products.length > 0 ? (i - 1 + products.length) % products.length : i))
+    setIndex((i) => (items.length > 0 ? (i - 1 + items.length) % items.length : i))
   }
 
   useEffect(() => {
-    if (isPaused || isManual || products.length <= 1) return
-    const timer = setTimeout(() => next(), autoDuration * 1000)
+    if (isPaused || isManual || items.length <= 1) return
+    const timer = setTimeout(() => {
+      setIndex((i) => (items.length > 0 ? (i + 1) % items.length : i))
+    }, autoDuration * 1000)
     return () => clearTimeout(timer)
-  }, [index, isPaused, isManual, products.length])
-
-  const product = products[index]
+  }, [index, isPaused, isManual, items.length, autoDuration])
+  const product = items[index]
 
   const offsetX = useMotionValue(0)
   const offsetY = useMotionValue(0)
@@ -82,6 +87,14 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
   const resetMove = () => {
     offsetX.set(0)
     offsetY.set(0)
+  }
+
+  const handleImageUpdate = (productId: number, nextImages: string[]) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === productId ? { ...item, images: nextImages } : item
+      )
+    )
   }
 
   const autoVariants = {
@@ -122,31 +135,42 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
               style={{ x: offsetX, y: offsetY }}
               className="h-full w-full cursor-pointer"
             >
-              {product ? (
-                <Link href={`/store/${product.id}`}>
+              <div className="relative h-full w-full">
+                {product && (
+                  <div className="absolute right-3 top-3 z-20">
+                    <AdminProductImageButton
+                      productId={product.id}
+                      currentImages={product.images ?? []}
+                      onImageUpdated={(nextImages) => handleImageUpdate(product.id, nextImages)}
+                    />
+                  </div>
+                )}
+                {product ? (
+                  <Link href={`/store/${product.id}`} className="block h-full">
+                    <Image
+                      src={
+                        product.images[0]
+                          ? resolveImageUrl(product.images[0])
+                          : "/placeholder.svg?height=500&width=600&text=Hero+Banner"
+                      }
+                      alt={product.name}
+                      width={600}
+                      height={500}
+                      className="h-full w-full object-cover object-center"
+                      priority
+                    />
+                  </Link>
+                ) : (
                   <Image
-                    src={
-                      product.images[0]
-                        ? resolveImageUrl(product.images[0])
-                        : "/placeholder.svg?height=500&width=600&text=Hero+Banner"
-                    }
-                    alt={product.name}
+                    src="/placeholder.svg?height=500&width=600&text=Hero+Banner"
+                    alt="Producto"
                     width={600}
                     height={500}
                     className="h-full w-full object-cover object-center"
                     priority
                   />
-                </Link>
-              ) : (
-                <Image
-                  src="/placeholder.svg?height=500&width=600&text=Hero+Banner"
-                  alt="Producto"
-                  width={600}
-                  height={500}
-                  className="h-full w-full object-cover object-center"
-                  priority
-                />
-              )}
+                )}
+              </div>
             </motion.div>
           </motion.div>
         </AnimatePresence>
@@ -264,7 +288,7 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
         </div>
       </div>
 
-      {products.length > 1 && (
+      {items.length > 1 && (
         <>
           <button
             aria-label="Anterior"
@@ -285,3 +309,15 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
     </div>
   )
 }
+
+
+
+
+
+
+
+
+
+
+
+

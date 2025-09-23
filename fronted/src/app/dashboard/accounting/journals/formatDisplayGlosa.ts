@@ -52,8 +52,7 @@ const dedupeVoucherValue = (value: string) => {
   if (!value) return value;
   const trimmed = value.trim();
   if (!trimmed) return trimmed;
-
-  const repeatedWithDash = trimmed.match(/^(.+?)(?:\s*[-–]\s*\1)+$/);
+  const repeatedWithDash = trimmed.match(/^(.+?)(?:\s*[-–—]\s*\1)+$/);
   if (repeatedWithDash) {
     return repeatedWithDash[1];
   }
@@ -69,7 +68,7 @@ const dedupeVoucherValue = (value: string) => {
 const dedupeVoucherOccurrences = (text: string, voucher: string) => {
   if (!text) return text;
   const escaped = escapeRegExp(voucher);
-  const hyphenPattern = new RegExp(`(${escaped})(?:\s*[\-–]\s*${escaped})+`, "gi");
+  const hyphenPattern = new RegExp(`(${escaped})(?:\s*[-–—]\s*${escaped})+`, "gi");
   let result = text.replace(hyphenPattern, voucher);
   const repeatedPattern = new RegExp(`(${escaped})(?:\s+${escaped})+`, "gi");
   result = result.replace(repeatedPattern, voucher);
@@ -175,3 +174,5 @@ export function formatDisplayGlosa({
     documentType: normalizedDocType,
   };
 }
+
+

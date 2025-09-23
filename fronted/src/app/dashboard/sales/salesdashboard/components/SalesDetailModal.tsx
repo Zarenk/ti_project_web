@@ -43,8 +43,13 @@ export function SaleDetailModal({ sale, open, onClose }: { sale: any, open: bool
             <strong>Productos:</strong>
             <ul className="mt-1 space-y-1">
               {sale.products.map((p: any, i: number) => (
-                <li key={i}>
-                  <Badge variant="outline">{p.name} × {p.quantity}</Badge>
+                <li key={i} className="space-y-1">
+                  <Badge variant="outline">{`${p.name} x ${p.quantity}`}</Badge>
+                  {Array.isArray(p.series) && p.series.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Serie{p.series.length > 1 ? "s" : ""}: {p.series.join(", ")}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
@@ -54,3 +59,4 @@ export function SaleDetailModal({ sale, open, onClose }: { sale: any, open: bool
     </Dialog>
   );
 }
+

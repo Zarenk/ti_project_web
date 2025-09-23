@@ -266,6 +266,14 @@ export default function Navbar() {
             <Link href="/store" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Productos
             </Link>
+            <Link
+              href="/track-order"
+              className="group relative text-sm font-semibold text-sky-600 transition-colors duration-300 dark:text-sky-300"
+            >
+              <span className="relative inline-block bg-gradient-to-r from-sky-600 via-sky-400 to-sky-600 bg-[length:200%_100%] bg-[position:0%_0] bg-clip-text text-transparent transition-[background-position] duration-500 ease-out group-hover:bg-[position:100%_0] group-focus-visible:bg-[position:100%_0] dark:from-sky-400 dark:via-white/70 dark:to-sky-400">
+                Rastrea tu pedido
+              </span>
+            </Link>
             {/* Usuario */}
             {/* ... (todo lo tuyo igual) ... */}
             <Link
@@ -352,6 +360,14 @@ export default function Navbar() {
                     <Link href="/faq" className="block px-3 py-2 rounded hover:bg-accent">FAQ</Link>
                     <Link href="/contact" className="block px-3 py-2 rounded hover:bg-accent">Contacto</Link>
                     <Link href="/store" className="block px-3 py-2 rounded hover:bg-accent">Productos</Link>
+                    <Link
+                      href="/track-order"
+                      className="group relative block px-3 py-2 rounded hover:bg-accent text-sky-600 font-semibold transition-colors duration-300 dark:text-sky-300"
+                    >
+                      <span className="relative inline-block bg-gradient-to-r from-sky-600 via-sky-400 to-sky-600 bg-[length:200%_100%] bg-[position:0%_0] bg-clip-text text-transparent transition-[background-position] duration-500 ease-out group-hover:bg-[position:100%_0] group-focus-visible:bg-[position:100%_0] dark:from-sky-400 dark:via-white/70 dark:to-sky-400">
+                        Rastrea tu pedido
+                      </span>
+                    </Link>
                     <Link href="/favorites" className="block px-3 py-2 rounded hover:bg-accent">Favoritos</Link>
 
                     {/* Auth actions */}

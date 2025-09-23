@@ -1,9 +1,41 @@
-import { toast } from "sonner"
+﻿import { toast } from "sonner"
 import { createProvider } from "../../providers/providers.api";
 import { verifyOrCreateProducts } from "../../products/products.api";
 import { createEntry, uploadGuiaPdf, uploadPdf } from "../entries.api";
 import { updateProductPriceSell } from "../../inventory/inventory.api";
 
+function parseMonetaryAmount(value?: string | number): number | undefined {
+  if (value == null) {
+    return undefined;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const sanitized = trimmed.replace(/[^0-9.,-]/g, "");
+  if (!sanitized) {
+    return undefined;
+  }
+  const lastComma = sanitized.lastIndexOf(",");
+  const lastDot = sanitized.lastIndexOf(".");
+  let normalized = sanitized;
+  if (lastComma > -1 && lastDot > -1) {
+    if (lastComma > lastDot) {
+      normalized = sanitized.replace(/\./g, "").replace(",", ".");
+    } else {
+      normalized = sanitized.replace(/,/g, "");
+    }
+  } else if (lastComma > -1) {
+    normalized = sanitized.replace(/\./g, "").replace(",", ".");
+  } else {
+    normalized = sanitized.replace(/,/g, "");
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
 export async function handleFormSubmission({
   data,
   form,
@@ -17,19 +49,19 @@ export async function handleFormSubmission({
   pdfGuiaFile,
   router,
   getUserIdFromToken,
-  tipoMoneda, // Nuevo parámetro
-  tipoCambioActual, // Nuevo parámetro
+  tipoMoneda, // Nuevo parÃ¡metro
+  tipoCambioActual, // Nuevo parÃ¡metro
 }: any) {
   const userId = await getUserIdFromToken();
   if (!userId) {
-    toast.error("No se pudo obtener el ID del usuario. Por favor, inicie sesión nuevamente.");
+    toast.error("No se pudo obtener el ID del usuario. Por favor, inicie sesiÃ³n nuevamente.");
     return;
   }
 
   try {
     const storeId = stores.find((store: any) => store.name === data.store_name)?.id;
     if (!storeId) {
-      toast.error("Debe seleccionar una tienda válida.");
+      toast.error("Debe seleccionar una tienda vÃ¡lida.");
       return;
     }
 
@@ -53,7 +85,7 @@ export async function handleFormSubmission({
           adress: form.getValues("provider_adress"),
           document: "RUC",
           documentNumber: form.getValues("provider_documentNumber"),
-          description: "Proveedor creado automáticamente desde el PDF",
+          description: "Proveedor creado automÃ¡ticamente desde el PDF",
         });
         if (!createdProvider?.id) throw new Error("No se pudo crear el proveedor. Verifique los datos.");
         providerIdBoolean = createdProvider.id;
@@ -64,7 +96,7 @@ export async function handleFormSubmission({
     let providerId = providers.find((p: any) => p.name === data.provider_name)?.id;
     if (!providerId) {
       if (!providerIdBoolean) {
-        toast.error("Debe seleccionar un proveedor válido.");
+        toast.error("Debe seleccionar un proveedor vÃ¡lido.");
         return;
       } else {
         providerId = providerIdBoolean;
@@ -75,7 +107,7 @@ export async function handleFormSubmission({
       name: product.name,
       price: product.price,
       quantity: product.quantity,
-      brand: product.brand || null, // Agregar la marca si está disponible
+      brand: product.brand || null, // Agregar la marca si estÃ¡ disponible
       categoryId: categories.find((cat: any) => cat.name === product.category_name)?.id || null,
     }));
 
@@ -99,7 +131,7 @@ export async function handleFormSubmission({
 
     const updatedProducts = selectedProducts.map((product: any) => {
       const verifiedProduct = verifiedProducts.find((vp: any) => vp.name === product.name);
-      if (!verifiedProduct) throw new Error(`No se encontró un ID para el producto con nombre: ${product.name}`);
+      if (!verifiedProduct) throw new Error(`No se encontrÃ³ un ID para el producto con nombre: ${product.name}`);
 
       // Calcular el precio en soles si la moneda es "USD"
       const priceInSoles = tipoMoneda === "USD" && tipoCambioActual
@@ -117,6 +149,12 @@ export async function handleFormSubmission({
 
     console.log("Productos actualizados:", updatedProducts);
 
+    const totalFromInput = parseMonetaryAmount(data.total_comprobante);
+    const fallbackDetailsTotal = selectedProducts.reduce(
+      (sum: number, product: any) => sum + (Number(product.price) || 0) * (Number(product.quantity) || 0),
+      0,
+    );
+
     const payload = {
       storeId,
       userId,
@@ -127,12 +165,13 @@ export async function handleFormSubmission({
       paymentMethod: data.payment_method,
       paymentTerm: data.payment_method, // Contado/Crédito para asientos contables
       details: updatedProducts,
+      totalGross: totalFromInput,
       invoice: {
         serie: data.serie,
         nroCorrelativo: data.nroCorrelativo,
         tipoComprobante: data.comprobante,
         tipoMoneda: data.tipo_moneda,
-        total: parseFloat(data.total_comprobante),
+        total: totalFromInput ?? fallbackDetailsTotal,
         fechaEmision: new Date(data.fecha_emision_comprobante),
       },
     };
@@ -148,6 +187,8 @@ export async function handleFormSubmission({
     router.refresh();
   } catch (error: any) {
     console.error("Error al crear/actualizar la entrada:", error);
-    toast.error("Ocurrió un error al guardar la entrada.");
+    toast.error("OcurriÃ³ un error al guardar la entrada.");
   }
 }
+
+

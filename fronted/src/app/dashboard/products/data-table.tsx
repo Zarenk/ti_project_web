@@ -50,15 +50,46 @@ import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
+
+type ProductSpecification = {
+  processor?: string | null
+  ram?: string | null
+  storage?: string | null
+  graphics?: string | null
+  screen?: string | null
+  resolution?: string | null
+  refreshRate?: string | null
+  connectivity?: string | null
+  [key: string]: string | null | undefined
+} | null
+
+const SPECIFICATION_LABELS: Record<string, string> = {
+  processor: "Procesador",
+  ram: "RAM",
+  storage: "Almacenamiento",
+  graphics: "Gráficos",
+  screen: "Pantalla",
+  resolution: "Resolución",
+  refreshRate: "Tasa de refresco",
+  connectivity: "Conectividad",
+}
+
+function formatSpecificationLabel(key: string) {
+  if (SPECIFICATION_LABELS[key]) {
+    return SPECIFICATION_LABELS[key]
+  }
+
+  return key.charAt(0).toUpperCase() + key.slice(1)
+}
  
 interface DataTableProps<TData extends {id:string, createdAt:Date, name:string,
-  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string}, TValue> {
+  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, specification?: ProductSpecification, images?: string[] | null}, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
 }
  
 export function DataTable<TData extends {id:string, createdAt:Date, name:string,
-  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string}, TValue>({
+  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, specification?: ProductSpecification, images?: string[] | null}, TValue>({
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
@@ -764,20 +795,77 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
         {/* Modal para mostrar detalles */}
         {isModalOpen && selectedRowData && (
             <AlertDialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-              <AlertDialogContent>
+              <AlertDialogContent className="max-h-[90vh] overflow-y-auto">
                 <AlertDialogHeader>
                   <AlertDialogTitle>Detalles del Producto</AlertDialogTitle>
                 </AlertDialogHeader>
-                <AlertDialogDescription>                
+                <AlertDialogDescription>
                 </AlertDialogDescription>
-                <span className="block space-y-2">
+                <div className="space-y-4">
+                  <div className="space-y-2 text-sm">
                     <div><strong>Nombre:</strong> {selectedRowData.name}</div>
                     <div><strong>Descripción:</strong> {selectedRowData.description}</div>
                     <div><strong>Precio:</strong> S/. {selectedRowData.price}</div>
                     <div><strong>Precio de Venta:</strong> S/. {selectedRowData.priceSell}</div>
                     <div><strong>Estado:</strong> {normalizeProductStatus(selectedRowData.status)}</div>
                     <div><strong>Fecha de Creación:</strong> {new Date(selectedRowData.createdAt).toLocaleDateString()}</div>
-                </span>
+                </div>
+
+                  <div className="border-t pt-4">
+                    <h3 className="text-base font-semibold mb-3">Especificaciones</h3>
+                    {(() => {
+                      const entries = Object.entries(selectedRowData.specification || {}).filter(([, value]) => {
+                        if (value === null || value === undefined) {
+                          return false
+                        }
+                        const normalized = String(value).trim()
+                        return normalized.length > 0
+                      })
+
+                      if (entries.length === 0) {
+                        return <p className="text-sm text-muted-foreground">Especificaciones no disponibles.</p>
+                      }
+
+                      return (
+                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                          {entries.map(([key, value]) => (
+                            <div key={key} className="flex flex-col">
+                              <dt className="font-medium text-muted-foreground">{formatSpecificationLabel(key)}</dt>
+                              <dd className="text-foreground">{String(value)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )
+                    })()}
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <h3 className="text-base font-semibold mb-3">Imágenes del producto</h3>
+                    {(() => {
+                      const images = Array.isArray(selectedRowData.images)
+                        ? selectedRowData.images.filter((img) => typeof img === "string" && img.trim().length > 0)
+                        : []
+
+                      if (images.length === 0) {
+                        return <p className="text-sm text-muted-foreground">No hay imágenes disponibles.</p>
+                      }
+
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {images.map((image, index) => (
+                            <div key={`${image}-${index}`} className="rounded-md border overflow-hidden">
+                              <img
+                                src={image}
+                                alt={`Imagen ${index + 1} de ${selectedRowData.name}`}
+                                className="h-48 w-full object-cover"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
                 <AlertDialogFooter>
                   <AlertDialogCancel onClick={() => setIsModalOpen(false)}>Cerrar</AlertDialogCancel>
                 </AlertDialogFooter>

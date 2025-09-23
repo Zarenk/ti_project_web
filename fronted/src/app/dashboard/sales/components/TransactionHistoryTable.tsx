@@ -74,10 +74,16 @@ export function TransactionHistoryTable({ transactions }: TransactionHistoryTabl
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {products.map((p: any, i: number) => (
-                        <Badge key={i} variant="secondary" className="text-xs font-normal">
-                          {p.name}
-                          {p.series && p.series.length > 0 && (
-                            <span className="ml-1">({p.series.join(", ")})</span>
+                        <Badge
+                          key={i}
+                          variant="secondary"
+                          className="flex flex-col items-start gap-0 text-xs font-normal"
+                        >
+                          <span>{p.name}</span>
+                          {Array.isArray(p.series) && p.series.length > 0 && (
+                            <span className="text-[10px] text-muted-foreground">
+                              Serie{p.series.length > 1 ? "s" : ""}: {p.series.join(", ")}
+                            </span>
                           )}
                         </Badge>
                       ))}
@@ -110,3 +116,4 @@ export function TransactionHistoryTable({ transactions }: TransactionHistoryTabl
 }
 
 export default TransactionHistoryTable
+

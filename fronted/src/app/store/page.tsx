@@ -25,6 +25,7 @@ import { getStoresWithProduct } from "../dashboard/inventory/inventory.api"
 import Link from "next/link"
 import { toast } from "sonner"
 import { useCart } from "@/context/cart-context"
+import { AdminProductImageButton } from "@/components/admin/AdminProductImageButton"
 
 // Tipos
 interface Brand {
@@ -270,6 +271,14 @@ export default function StorePage() {
     setSearchTerm("")
     setSortBy("name")
   }
+  const handleImageUpdate = (productId: number, nextImages: string[]) => {
+    setProducts((prev) =>
+      prev.map((item) =>
+        item.id === productId ? { ...item, images: nextImages } : item
+      )
+    )
+  }
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -479,13 +488,24 @@ export default function StorePage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {paginatedProducts.map((product, index) => (
-                  <Card
-                    key={product.id}
-                    className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border"
-                  >
-                    <Link href={`/store/${product.id}`}
-                      className="block">
+                {paginatedProducts.map((product, index) => {
+                  const primaryImage = product.images?.[0]
+                  const resolvedPrimaryImage = primaryImage ? resolveImageUrl(primaryImage) : "/placeholder.svg"
+                  return (
+                    <Card
+                      key={product.id}
+                      className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border"
+                    >
+                      <div className="pointer-events-none absolute right-3 top-3 z-20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                        <AdminProductImageButton
+                          productId={product.id}
+                          currentImages={product.images}
+                          onImageUpdated={(nextImages) => handleImageUpdate(product.id, nextImages)}
+                          className="pointer-events-auto"
+                        />
+                      </div>
+                      <Link href={`/store/${product.id}`}
+                        className="block">
                       <CardHeader className="p-0">
                         <div className="relative overflow-hidden rounded-t-lg">
                           <Image

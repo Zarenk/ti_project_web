@@ -3,7 +3,7 @@
 import Image from "next/image"
 import { resolveImageUrl } from "@/lib/images"
 import { BrandLogo } from "@/components/BrandLogo"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +14,7 @@ import { ShoppingCart, Heart } from "lucide-react"
 import { toggleFavorite } from "@/app/favorites/favorite.api"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import Link from "next/link"
+import { AdminProductImageButton } from "@/components/admin/AdminProductImageButton"
 
 // Use the new `motion.create` API to avoid deprecated `motion()` usage
 const MotionButton = motion.create(Button)
@@ -56,6 +57,12 @@ export default function MotionProductCard({ product, withActions = false, priori
 
   const { addItem } = useCart()
   const [isFavorite, setIsFavorite] = useState(false)
+  const [imageList, setImageList] = useState<string[]>(product.images ?? [])
+  useEffect(() => {
+    setImageList(product.images ?? [])
+  }, [product.id, product.images])
+  const primaryImage = imageList[0]
+  const resolvedPrimaryImage = primaryImage ? resolveImageUrl(primaryImage) : "/placeholder.svg"
   const canAddToCart = typeof product.stock === 'number' && product.stock > 0
 
   const handleAddToCart = (e: React.MouseEvent) => {
@@ -65,7 +72,7 @@ export default function MotionProductCard({ product, withActions = false, priori
       id: product.id,
       name: product.name,
       price: product.price,
-      image: resolveImageUrl(product.images[0]),
+      image: resolvedPrimaryImage,
       quantity: 1,
     })
     toast.success("Producto agregado al carrito")
@@ -89,15 +96,19 @@ export default function MotionProductCard({ product, withActions = false, priori
   return (
     <motion.div layout>
       <Card className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border">
+        <div className="pointer-events-none absolute right-3 top-3 z-20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <AdminProductImageButton
+            productId={product.id}
+            currentImages={imageList}
+            onImageUpdated={setImageList}
+            className="pointer-events-auto"
+          />
+        </div>
         <Link href={`/store/${product.id}`} className="block">
           <CardHeader className="p-0">
             <div className="relative h-56 flex items-center justify-center overflow-hidden rounded-t-lg">
               <Image
-                src={
-                  product.images[0]
-                    ? resolveImageUrl(product.images[0])
-                    : "/placeholder.svg"
-                }
+                src={resolvedPrimaryImage}
                 alt={product.name}
                 width={300}
                 height={300}
@@ -236,3 +247,4 @@ export default function MotionProductCard({ product, withActions = false, priori
     </motion.div>
   )
 }
+

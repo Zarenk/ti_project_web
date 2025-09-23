@@ -5,6 +5,16 @@ import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Card,
   CardContent,
   CardHeader,
@@ -87,6 +97,8 @@ type Sale = {
     productName: string;
     series: string[];
   }[];
+  voucher?: string;
+  pdfUrl?: string;
 };
 
 const dedupeVoucherValue = (value?: string | null): string | undefined => {
@@ -120,6 +132,83 @@ const buildVoucher = (
   }
 
   return serieValue ?? correlativoValue ?? undefined;
+};
+
+const normalizeVoucherKey = (value?: string | null): string | undefined => {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  const trimmed = value.toString().trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const sanitized = trimmed.replace(/[–—−]/g, "-").replace(/\s+/g, "");
+  const parts = sanitized.split("-").filter(Boolean);
+
+  if (parts.length >= 2) {
+    const serie = parts[0]?.toUpperCase();
+    const correlativoRaw = parts.slice(1).join("-");
+    const correlativoDigits = correlativoRaw.replace(/\D+/g, "");
+
+    if (correlativoDigits) {
+      const numeric = parseInt(correlativoDigits, 10);
+      if (!Number.isNaN(numeric)) {
+        return `${serie}-${numeric}`;
+      }
+    }
+
+    return `${serie}-${correlativoRaw.toUpperCase()}`;
+  }
+
+  const onlyPart = parts[0] ?? sanitized;
+  if (/^\d+$/.test(onlyPart)) {
+    return String(parseInt(onlyPart, 10));
+  }
+
+  return onlyPart.toUpperCase();
+};
+
+const buildInvoiceUrl = (invoiceUrl?: string | null): string | undefined => {
+  if (!invoiceUrl) {
+    return undefined;
+  }
+  const trimmed = invoiceUrl.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return trimmed.startsWith('/')
+    ? `${BACKEND_URL}${trimmed}`
+    : `${BACKEND_URL}/${trimmed}`;
+};
+
+const COMPANY_RUC = "20519857538";
+
+const buildSalePdfUrl = (sale: Sale): string | undefined => {
+  const tipo = sale.tipoComprobante?.toLowerCase();
+  const serie = sale.serie?.toString().trim();
+  const correlativo = sale.correlativo?.toString().trim();
+
+  if (!tipo || !serie || !correlativo) {
+    return undefined;
+  }
+
+  const typeInfo = tipo.includes("boleta")
+    ? { folder: "boleta", code: "03" }
+    : tipo.includes("factura")
+    ? { folder: "factura", code: "01" }
+    : null;
+
+  if (!typeInfo) {
+    return undefined;
+  }
+
+  const fileName = `${COMPANY_RUC}-${typeInfo.code}-${serie}-${correlativo}.pdf`;
+  return `${BACKEND_URL}/api/sunat/pdf/${typeInfo.folder}/${fileName}`;
 };
 
 function buildJournalFromSale(sale: Sale): DailyLine[] {
@@ -268,6 +357,8 @@ export default function JournalsPage() {
   const [dailyLines, setDailyLines] = useState<DailyLine[]>([]);
   const [dailyLoading, setDailyLoading] = useState(false);
   const [selectedLine, setSelectedLine] = useState<DailyLine | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Journal | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchJournals()
@@ -317,26 +408,43 @@ export default function JournalsPage() {
         const salesByVoucher = new Map<string, Sale>();
         for (const sale of sales) {
           const saleVoucher = buildVoucher(sale.serie, sale.correlativo);
-          if (saleVoucher) {
-            salesByVoucher.set(saleVoucher, sale);
+          const normalizedSaleVoucher = normalizeVoucherKey(saleVoucher);
+          if (normalizedSaleVoucher) {
+            const saleWithExtras: Sale = {
+              ...sale,
+              voucher: saleVoucher,
+              pdfUrl: sale.pdfUrl ?? buildSalePdfUrl(sale),
+            };
+            salesByVoucher.set(normalizedSaleVoucher, saleWithExtras);
           }
         }
 
         if (res.ok) {
           const json = await res.json();
           lines = (json.data ?? []).flatMap((e: any) => {
-            const voucher = e.serie && e.correlativo ? `${e.serie}-${e.correlativo}` : undefined;
-            const sale = voucher ? salesByVoucher.get(voucher) : undefined;
-            const entryLines: EntryLineDetail[] = (e.lines ?? []).map((line: any) => ({
-              account: line.account,
-              description: line.description ?? undefined,
-              debit: Number(line.debit ?? 0),
-              credit: Number(line.credit ?? 0),
-              quantity:
-                line.quantity !== undefined && line.quantity !== null
-                  ? Number(line.quantity)
-                  : undefined,
-            }));
+            const voucher = buildVoucher(e.serie ?? undefined, e.correlativo ?? undefined);
+            const normalizedVoucher = normalizeVoucherKey(voucher);
+            const sale = normalizedVoucher ? salesByVoucher.get(normalizedVoucher) : undefined;
+            const entryLines: EntryLineDetail[] = (e.lines ?? []).map((line: any) => {
+              const formattedLine = formatDisplayGlosa({
+                baseDescription: line.description,
+                provider: e.provider,
+                voucher,
+                serie: e.serie,
+                tipoComprobante: e.tipoComprobante,
+              });
+
+              return {
+                account: line.account,
+                description: formattedLine.description ?? line.description,
+                debit: Number(line.debit ?? 0),
+                credit: Number(line.credit ?? 0),
+                quantity:
+                  line.quantity !== undefined && line.quantity !== null
+                    ? Number(line.quantity)
+                    : undefined,
+              };
+            });
 
             return (e.lines ?? []).map((l: any, idx: number) => {
               const formatted = formatDisplayGlosa({
@@ -358,6 +466,19 @@ export default function JournalsPage() {
                     : undefined,
               };
 
+              const saleSeries = sale?.items
+                ?.flatMap((item) => item.series ?? [])
+                .filter((serie): serie is string => typeof serie === "string" && serie.trim().length > 0);
+              const combinedSeries =
+                formatted.series && formatted.series.length > 0
+                  ? formatted.series
+                  : saleSeries && saleSeries.length > 0
+                  ? Array.from(new Set(saleSeries))
+                  : [];
+
+              const entryInvoiceUrl = buildInvoiceUrl(e.invoiceUrl);
+              const invoiceUrl = entryInvoiceUrl ?? sale?.pdfUrl;
+
               return {
                 date: e.date,
                 account: entryLine.account,
@@ -367,10 +488,10 @@ export default function JournalsPage() {
                 quantity: entryLine.quantity,
                 provider: e.provider ?? undefined,
                 voucher,
-                documentType: formatted.documentType,
-                series: formatted.series,
+                documentType: formatted.documentType ?? sale?.tipoComprobante ?? undefined,
+                series: combinedSeries,
                 entryId: e.id,
-                invoiceUrl: e.invoiceUrl ?? undefined,
+                invoiceUrl,
                 entryDescription: e.description ?? undefined,
                 sale: sale ?? undefined,
                 entryLines,
@@ -410,9 +531,22 @@ export default function JournalsPage() {
     );
   };
 
-  const handleDelete = async (id: string) => {
+  const performDelete = async (id: string) => {
     await deleteJournal(id);
     setJournals((prev) => sortByDateDesc(prev.filter((j) => j.id !== id)));
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await performDelete(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error('Failed to delete journal entry', error);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -568,7 +702,7 @@ export default function JournalsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(j.id)}
+                        onClick={() => setDeleteTarget(j)}
                         aria-label="Eliminar"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -582,6 +716,26 @@ export default function JournalsPage() {
         </CardContent>
       </Card>
 
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => {
+        if (!open && !isDeleting) {
+          setDeleteTarget(null);
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar asiento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta accion borrara el asiento seleccionado. Esta operacion no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteTarget(null)} disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} disabled={isDeleting}>
+              {isDeleting ? 'Eliminando...' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <JournalForm
         open={createOpen}
         onOpenChange={setCreateOpen}
@@ -595,7 +749,7 @@ export default function JournalsPage() {
       />
 
       <Dialog open={!!selectedLine} onOpenChange={(open) => !open && setSelectedLine(null)}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalle de glosa</DialogTitle>
             {(selectedLine?.description || selectedLine?.entryDescription) && (
@@ -816,3 +970,4 @@ export default function JournalsPage() {
     </div>
   );
 }
+

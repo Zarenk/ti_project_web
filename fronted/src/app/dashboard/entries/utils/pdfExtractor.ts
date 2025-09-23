@@ -239,14 +239,24 @@ export function processExtractedText(
   }
 
   console.log("Productos extraídos:", products);
+  const applyIgv = /GRUPO\s+DELTRON\s+S\.A\.?/i.test(text);
   if (products.length > 0) {
-    setSelectedProducts(products.map((product, index) => ({
-      id: index+1,
-      name: product.name,
-      quantity: product.quantity,
-      price: product.unitPrice,
-      category_name: "Sin categoria",
-    })));
+    setSelectedProducts(
+      products.map((product, index) => {
+        const basePrice = parseFloat(product.unitPrice.toFixed(2));
+        const finalPrice = applyIgv
+          ? parseFloat((basePrice * 1.18).toFixed(2))
+          : basePrice;
+
+        return {
+          id: index+1,
+          name: product.name,
+          quantity: product.quantity,
+          price: finalPrice,
+          category_name: "Sin categoria",
+        };
+      })
+    );
   } else {
     toast.warning("No se encontraron productos en el archivo PDF.");
   }
@@ -393,15 +403,23 @@ export function processInvoiceText(
     }
   }
 
+  const applyIgv = /GRUPO\s+DELTRON\s+S\.A\.?/i.test(text);
   if (products.length > 0) {
     setSelectedProducts(
-      products.map((product, index) => ({
-        id: index + 1,
-        name: product.name,
-        quantity: product.quantity,
-        price: parseFloat(product.unitPrice.toFixed(2)),
-        category_name: "Sin categoria",
-      }))
+      products.map((product, index) => {
+        const basePrice = parseFloat(product.unitPrice.toFixed(2));
+        const finalPrice = applyIgv
+          ? parseFloat((basePrice * 1.18).toFixed(2))
+          : basePrice;
+
+        return {
+          id: index + 1,
+          name: product.name,
+          quantity: product.quantity,
+          price: finalPrice,
+          category_name: "Sin categoria",
+        };
+      })
     );
   } else {
     toast.warning("No se encontraron productos en el archivo PDF.");

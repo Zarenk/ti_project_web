@@ -35,123 +35,201 @@ export interface Entry {
 export class EntriesService {
   constructor(private readonly repo: EntriesRepository) {}
 
+  private normalizeInvoiceUrl(value?: string | null): string | undefined {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private getInventorySourceId(entry: any): number | undefined {
+    if (!entry) {
+      return undefined;
+    }
+    const source = (entry as any).source;
+    if (source !== "inventory_entry") {
+      return undefined;
+    }
+    const sourceId = Number((entry as any).sourceId);
+    return Number.isInteger(sourceId) ? sourceId : undefined;
+  }
+
+  private buildInvoiceUrlFromEntry(
+    entry: any,
+    inventoryInvoices?: Map<number, string | undefined>,
+  ): string | undefined {
+    const direct = this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined);
+    if (direct) {
+      return direct;
+    }
+    const sourceId = this.getInventorySourceId(entry);
+    if (sourceId == null) {
+      return undefined;
+    }
+    const fallback = inventoryInvoices?.get(sourceId);
+    return this.normalizeInvoiceUrl(fallback);
+  }
+
   private async getPeriodStatus(period: string): Promise<PeriodStatus> {
     const p = await this.repo.getPeriod(period);
     return p?.status ?? PeriodStatus.OPEN;
   }
 
   async findAll(params: {
-    period?: string;
-    from?: string;
-    to?: string;
-    tz?: string;
-    page?: number;
-    size?: number;
-  }): Promise<{ data: Entry[]; total: number }> {
-    const { period, from, to, tz = 'America/Lima', page = 1, size = 25 } = params;
+  period?: string;
+  from?: string;
+  to?: string;
+  tz?: string;
+  page?: number;
+  size?: number;
+}): Promise<{ data: Entry[]; total: number }> {
+  const { period, from, to, tz = 'America/Lima', page = 1, size = 25 } = params;
 
-    // Normaliza YYYY-MM-DD a rango del día en tz; si viene ISO, se usa tal cual
-    const toDayStart = (d: string | undefined) => (d && d.length === 10 ? `${d}T00:00:00` : d);
-    const toDayEnd = (d: string | undefined) => (d && d.length === 10 ? `${d}T23:59:59.999` : d);
+  // Normaliza YYYY-MM-DD a rango del dia en tz; si viene ISO, se usa tal cual
+  const toDayStart = (d: string | undefined) => (d && d.length === 10 ? `${d}T00:00:00` : d);
+  const toDayEnd = (d: string | undefined) => (d && d.length === 10 ? `${d}T23:59:59.999` : d);
 
-    const fromIso = toDayStart(from ?? undefined);
-    const toIso = toDayEnd(to ?? from ?? undefined);
+  const fromIso = toDayStart(from ?? undefined);
+  const toIso = toDayEnd(to ?? from ?? undefined);
 
-    const fromUtc = fromIso ? zonedTimeToUtc(fromIso, tz) : undefined;
-    const toUtc = toIso ? zonedTimeToUtc(toIso, tz) : undefined;
+  const fromUtc = fromIso ? zonedTimeToUtc(fromIso, tz) : undefined;
+  const toUtc = toIso ? zonedTimeToUtc(toIso, tz) : undefined;
 
-    const { data, total } = await this.repo.findAll({
-      period,
-      from: fromUtc,
-      to: toUtc,
-      skip: (page - 1) * size,
-      take: size,
-    });
-    return {
-      data: data.map((e) => ({
-        id: e.id,
-        period: e.period.name,
-        date: e.date,
-        description: (e as any).description ?? undefined,
-        provider: (e.provider as any)?.name ?? undefined,
-        serie: (e as any).serie ?? undefined,
-        correlativo: (e as any).correlativo ?? undefined,
-        invoiceUrl: (e as any).invoiceUrl ?? undefined,
-        source: (e as any).source ?? undefined,
-        sourceId: (e as any).sourceId ?? undefined,
-        status: e.status,
-        totalDebit: e.totalDebit,
-        totalCredit: e.totalCredit,
-        lines: e.lines.map((l) => ({
-          account: l.account,
-          description: l.description ?? undefined,
-          debit: Number((l as any).debit ?? 0),
-          credit: Number((l as any).credit ?? 0),
-          quantity: (l as any).quantity ?? undefined,
-        })),
-      })),
-      total,
-    };
-  }
+  const { data, total } = await this.repo.findAll({
+    period,
+    from: fromUtc,
+    to: toUtc,
+    skip: (page - 1) * size,
+    take: size,
+  });
 
-  async findOne(id: number): Promise<Entry> {
-    const entry = await this.repo.findOne(id);
-    if (!entry) {
-      throw new NotFoundException(`Entry ${id} not found`);
-    }
+  const entriesNeedingInvoice = data.filter(
+    (entry) =>
+      !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
+      this.getInventorySourceId(entry) !== undefined,
+  );
+
+  const inventorySourceIds = Array.from(
+    new Set(
+      entriesNeedingInvoice
+        .map((entry) => this.getInventorySourceId(entry))
+        .filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0),
+    ),
+  );
+
+  const inventoryInvoices =
+    inventorySourceIds.length > 0
+      ? await this.repo.findInventoryPdfUrls(inventorySourceIds)
+      : undefined;
+
   return {
-      id: entry.id,
-      period: entry.period.name,
-      date: entry.date,
-      description: (entry as any).description ?? undefined,
-      provider: (entry.provider as any)?.name ?? undefined,
-      serie: (entry as any).serie ?? undefined,
-      correlativo: (entry as any).correlativo ?? undefined,
-      invoiceUrl: (entry as any).invoiceUrl ?? undefined,
-      source: (entry as any).source ?? undefined,
-      sourceId: (entry as any).sourceId ?? undefined,
-      status: entry.status,
-      totalDebit: entry.totalDebit,
-      totalCredit: entry.totalCredit,
-      lines: entry.lines.map((l) => ({
+    data: data.map((e) => ({
+      id: e.id,
+      period: e.period.name,
+      date: e.date,
+      description: (e as any).description ?? undefined,
+      provider: (e.provider as any)?.name ?? undefined,
+      serie: (e as any).serie ?? undefined,
+      correlativo: (e as any).correlativo ?? undefined,
+      invoiceUrl: this.buildInvoiceUrlFromEntry(e, inventoryInvoices),
+      source: (e as any).source ?? undefined,
+      sourceId: (e as any).sourceId ?? undefined,
+      status: e.status,
+      totalDebit: e.totalDebit,
+      totalCredit: e.totalCredit,
+      lines: e.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
         debit: Number((l as any).debit ?? 0),
         credit: Number((l as any).credit ?? 0),
         quantity: (l as any).quantity ?? undefined,
       })),
-    };
+    })),
+    total,
+  };
+}
+
+  async findOne(id: number): Promise<Entry> {
+  const entry = await this.repo.findOne(id);
+  if (!entry) {
+    throw new NotFoundException(`Entry ${id} not found`);
   }
+
+  const sourceId = this.getInventorySourceId(entry);
+  const needsInventoryLookup =
+    !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
+    sourceId !== undefined;
+  const inventoryInvoices =
+    needsInventoryLookup && sourceId !== undefined
+      ? await this.repo.findInventoryPdfUrls([sourceId])
+      : undefined;
+  const invoiceUrl = this.buildInvoiceUrlFromEntry(entry, inventoryInvoices);
+
+  return {
+    id: entry.id,
+    period: entry.period.name,
+    date: entry.date,
+    description: (entry as any).description ?? undefined,
+    provider: (entry.provider as any)?.name ?? undefined,
+    serie: (entry as any).serie ?? undefined,
+    correlativo: (entry as any).correlativo ?? undefined,
+    invoiceUrl,
+    source: (entry as any).source ?? undefined,
+    sourceId: (entry as any).sourceId ?? undefined,
+    status: entry.status,
+    totalDebit: entry.totalDebit,
+    totalCredit: entry.totalCredit,
+    lines: entry.lines.map((l) => ({
+      account: l.account,
+      description: l.description ?? undefined,
+      debit: Number((l as any).debit ?? 0),
+      credit: Number((l as any).credit ?? 0),
+      quantity: (l as any).quantity ?? undefined,
+    })),
+  };
+}
 
   async findByInvoice(
     serie: string,
     correlativo: string,
-  ): Promise<Entry | null> {
-    const entry = await this.repo.findByInvoice(serie, correlativo);
-    if (!entry) {
-      return null;
-    }
-    return {
-      id: entry.id,
-      period: entry.period.name,
-      date: entry.date,
-      description: (entry as any).description ?? undefined,
-      provider: (entry.provider as any)?.name ?? undefined,
-      serie: (entry as any).serie ?? undefined,
-      correlativo: (entry as any).correlativo ?? undefined,
-      invoiceUrl: (entry as any).invoiceUrl ?? undefined,
-      status: entry.status,
-      totalDebit: entry.totalDebit,
-      totalCredit: entry.totalCredit,
-      lines: entry.lines.map((l) => ({
-        account: l.account,
-        description: l.description ?? undefined,
-        debit: Number((l as any).debit ?? 0),
-        credit: Number((l as any).credit ?? 0),
-        quantity: (l as any).quantity ?? undefined,
-      })),
-    };
+): Promise<Entry | null> {
+  const entry = await this.repo.findByInvoice(serie, correlativo);
+  if (!entry) {
+    return null;
   }
+
+  const sourceId = this.getInventorySourceId(entry);
+  const needsInventoryLookup =
+    !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
+    sourceId !== undefined;
+  const inventoryInvoices =
+    needsInventoryLookup && sourceId !== undefined
+      ? await this.repo.findInventoryPdfUrls([sourceId])
+      : undefined;
+  const invoiceUrl = this.buildInvoiceUrlFromEntry(entry, inventoryInvoices);
+
+  return {
+    id: entry.id,
+    period: entry.period.name,
+    date: entry.date,
+    description: (entry as any).description ?? undefined,
+    provider: (entry.provider as any)?.name ?? undefined,
+    serie: (entry as any).serie ?? undefined,
+    correlativo: (entry as any).correlativo ?? undefined,
+    invoiceUrl,
+    status: entry.status,
+    totalDebit: entry.totalDebit,
+    totalCredit: entry.totalCredit,
+    lines: entry.lines.map((l) => ({
+      account: l.account,
+      description: l.description ?? undefined,
+      debit: Number((l as any).debit ?? 0),
+      credit: Number((l as any).credit ?? 0),
+      quantity: (l as any).quantity ?? undefined,
+    })),
+  };
+}
 
   async createDraft(data: {
     period: string;

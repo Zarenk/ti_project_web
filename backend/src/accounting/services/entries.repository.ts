@@ -112,6 +112,33 @@ export class EntriesRepository {
     });
   }
 
+  async findInventoryPdfUrls(entryIds: number[]): Promise<Map<number, string | undefined>> {
+    if (!entryIds || entryIds.length === 0) {
+      return new Map();
+    }
+
+    const uniqueIds = Array.from(
+      new Set(
+        entryIds
+          .map((id) => Number(id))
+          .filter((id) => Number.isInteger(id))
+      )
+    );
+
+    if (uniqueIds.length === 0) {
+      return new Map();
+    }
+
+    const entries = await this.prisma.entry.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { id: true, pdfUrl: true },
+    });
+
+    return new Map(
+      entries.map((entry) => [entry.id, entry.pdfUrl?.trim() || undefined])
+    );
+  }
+
   async updateStatus(id: number, status: AccEntryStatus) {
     return this.prisma.accEntry.update({
       where: { id },
