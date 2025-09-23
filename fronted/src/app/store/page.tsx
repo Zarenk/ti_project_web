@@ -496,7 +496,7 @@ export default function StorePage() {
                       key={product.id}
                       className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border"
                     >
-                      <div className="pointer-events-none absolute right-3 top-3 z-20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                      <div className="pointer-events-none absolute right-3 top-3 z-20 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                         <AdminProductImageButton
                           productId={product.id}
                           currentImages={product.images}
@@ -610,7 +610,8 @@ export default function StorePage() {
                       </CardFooter>
                     )}
                   </Card>
-                ))}
+                  )
+                })}
               </div>
             )}
             <CatalogPagination
