@@ -495,6 +495,7 @@ export class SalesService {
             entryDetail: {
               include: {
                 product: { select: { name: true } },
+                series: true,
               },
             },
           },
@@ -517,6 +518,10 @@ export class SalesService {
           name: detail.entryDetail.product.name,
           quantity: detail.quantity,
           price: detail.price,
+          series:
+            (detail.series?.length
+              ? detail.series
+              : detail.entryDetail.series?.map((s) => s.serial)) ?? [],
         })),
         invoice: invoice
           ? {

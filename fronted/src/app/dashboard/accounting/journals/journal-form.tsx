@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -49,6 +50,14 @@ export function JournalForm({
     resolver: zodResolver(schema),
     defaultValues: defaultValues ?? { date: "", description: "", amount: 0 },
   });
+
+  useEffect(() => {
+    if (defaultValues) {
+      form.reset(defaultValues);
+    } else {
+      form.reset({ date: "", description: "", amount: 0 });
+    }
+  }, [defaultValues, form]);
 
   const handleSubmit = async (values: JournalFormValues) => {
     try {

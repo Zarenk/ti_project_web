@@ -696,16 +696,28 @@ export default function JournalsPage() {
                         size="icon"
                         onClick={() => setEditing(j)}
                         aria-label="Editar"
+                        className="group relative cursor-pointer"
                       >
                         <Pencil className="h-4 w-4" />
+                        <span
+                          className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-muted px-2 py-1 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                        >
+                          Editar
+                        </span>
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => setDeleteTarget(j)}
                         aria-label="Eliminar"
+                        className="group relative cursor-pointer"
                       >
                         <Trash2 className="h-4 w-4" />
+                        <span
+                          className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-destructive px-2 py-1 text-xs text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                        >
+                          Eliminar
+                        </span>
                       </Button>
                     </TableCell>
                   </TableRow>

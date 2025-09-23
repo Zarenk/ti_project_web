@@ -152,8 +152,17 @@ export function SalesTable({ dateRange }: Props) {
                   <TableCell className="hidden md:table-cell">
                     <div className="flex flex-wrap gap-1 max-w-full">
                       {sale.products.map((p: any, i: number) => (
-                        <Badge key={i} className="text-xs font-normal max-w-[120px] truncate" variant="secondary">
-                          {p.name} × {p.quantity}
+                        <Badge
+                          key={i}
+                          className="flex flex-col items-start gap-0 text-xs font-normal max-w-[160px] whitespace-normal"
+                          variant="secondary"
+                        >
+                          <span className="truncate w-full">{p.name} × {p.quantity}</span>
+                          {Array.isArray(p.series) && p.series.length > 0 && (
+                            <span className="text-[10px] text-muted-foreground">
+                              Serie{p.series.length > 1 ? "s" : ""}: {p.series.join(", ")}
+                            </span>
+                          )}
                         </Badge>
                       ))}
                     </div>
