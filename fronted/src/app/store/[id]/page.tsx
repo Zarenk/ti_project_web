@@ -514,7 +514,7 @@ export default function ProductPage({ params }: Props) {
                   {product?.description}
                 </p>
                 {hasSpecs ? (
-                  <div className="flex items-center gap-4 mt-4">
+                  <div className="flex flex-wrap items-center gap-3 mt-4">
                     <div className="flex items-center gap-2">
                       <Cpu className="w-5 h-5 text-blue-500" />
                       <span className="text-sm font-medium">{currentConfig.specs.processor}</span>
@@ -542,9 +542,9 @@ export default function ProductPage({ params }: Props) {
 
             {/* Precio y Cantidad */}
             <div className="bg-card p-6 rounded-xl shadow-sm border">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col gap-4 mb-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <span className="text-3xl font-bold text-green-600">S/.{currentConfig.price.toFixed(2)}</span>
                     <span className="text-xl text-gray-500 dark:text-gray-400 line-through">S/.{currentConfig.originalPrice.toFixed(2)}</span>
                     {currentConfig.originalPrice > currentConfig.price && (
@@ -557,39 +557,43 @@ export default function ProductPage({ params }: Props) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 mb-6">
-                <span className="text-sm font-medium">Cantidad:</span>
-                <div className="flex items-center border rounded-lg">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    disabled={quantity <= 1}
-                  >
-                    <Minus className="w-4 h-4" />
-                  </Button>
-                  <span className="px-4 py-2 font-medium">{quantity}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setQuantity(quantity + 1)}
-                    disabled={stock !== null && (stock <= 0 || quantity >= stock)}
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
+              <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:flex-wrap">
+                <div className="flex items-center justify-between gap-4 w-full sm:w-auto">
+                  <span className="text-sm font-medium">Cantidad:</span>
+                  <div className="flex items-center justify-between border rounded-lg w-full max-w-[220px] sm:w-auto sm:max-w-none">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      disabled={quantity <= 1}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </Button>
+                    <span className="px-4 py-2 font-medium">{quantity}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setQuantity(quantity + 1)}
+                      disabled={stock !== null && (stock <= 0 || quantity >= stock)}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
-                {stock !== null ? (
-                  stock > 0 ? (
-                    <span className="text-sm text-green-600">Solo quedan {stock} en stock</span>
+                <div className="w-full text-sm sm:w-auto">
+                  {stock !== null ? (
+                    stock > 0 ? (
+                      <span className="text-green-600">Solo quedan {stock} en stock</span>
+                    ) : (
+                      <span className="text-red-600">Sin stock disponible</span>
+                    )
                   ) : (
-                    <span className="text-sm text-red-600">Sin stock disponible</span>
-                  )
-                ) : (
-                  <span className="text-sm text-gray-600">Cargando stock...</span>
-                )}
+                      <span className="text-gray-600">Cargando stock...</span>
+                  )}
+                </div>
               </div>
 
-              <div className="flex gap-3 mb-4">
+              <div className="flex flex-col gap-3 mb-4 sm:flex-row">
                 {stock !== null && stock > 0 && (
                   <Button
                     size="lg"
@@ -620,7 +624,9 @@ export default function ProductPage({ params }: Props) {
                       size="lg"
                       variant="outline"
                       onClick={handleToggleFavorite}
-                      className={isInWishlist ? "text-red-500 border-red-500" : ""}
+                      className={`w-full sm:w-auto ${
+                        isInWishlist ? "text-red-500 border-red-500" : ""
+                      }`}
                     >
                       <Heart className={`w-5 h-5 ${isInWishlist ? "fill-current" : ""}`} />
                     </Button>
@@ -655,29 +661,29 @@ export default function ProductPage({ params }: Props) {
             </div>
 
             {/* Beneficios */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex items-center gap-3 p-4 bg-card rounded-lg shadow-sm sm:p-3">
                 <Truck className="w-6 h-6 text-green-500" />
                 <div>
                   <p className="font-medium text-sm">Envío Gratis</p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">Entrega en 24-48h</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm">
+              <div className="flex items-center gap-3 p-4 bg-card rounded-lg shadow-sm sm:p-3">
                 <Shield className="w-6 h-6 text-blue-500" />
                 <div>
                   <p className="font-medium text-sm">Garantía 1 año</p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">Soporte técnico</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm">
+              <div className="flex items-center gap-3 p-4 bg-card rounded-lg shadow-sm sm:p-3">
                 <Award className="w-6 h-6 text-purple-500" />
                 <div>
                   <p className="font-medium text-sm">Calidad Premium</p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">Certificado ISO</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm">
+              <div className="flex items-center gap-3 p-4 bg-card rounded-lg shadow-sm sm:p-3">
                 <Zap className="w-6 h-6 text-yellow-500" />
                 <div>
                   <p className="font-medium text-sm">Setup Gratis</p>
@@ -691,11 +697,31 @@ export default function ProductPage({ params }: Props) {
         {/* Tabs de Información Detallada */}
         <div className="mt-16">
           <Tabs defaultValue="specs" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="specs">Especificaciones</TabsTrigger>
-              <TabsTrigger value="features">Características</TabsTrigger>
-              <TabsTrigger value="reviews">Reseñas</TabsTrigger>
-              <TabsTrigger value="support">Soporte</TabsTrigger>
+            <TabsList className="flex w-full gap-2 overflow-x-auto rounded-lg bg-muted/50 p-1 sm:grid sm:grid-cols-4 sm:overflow-visible">
+              <TabsTrigger
+                value="specs"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm"
+              >
+                Especificaciones
+              </TabsTrigger>
+              <TabsTrigger
+                value="features"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm"
+              >
+                Características
+              </TabsTrigger>
+              <TabsTrigger
+                value="reviews"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm"
+              >
+                Reseñas
+              </TabsTrigger>
+              <TabsTrigger
+                value="support"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm"
+              >
+                Soporte
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="specs" className="mt-8">

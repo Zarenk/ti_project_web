@@ -263,6 +263,40 @@ const enhanceDescriptionWithInventorySummary = (
   return rest ? `${enhancedLeft} – ${rest}` : enhancedLeft;
 };
 
+type InventoryEntryDetail = {
+  product_name?: string | null;
+  product?: { name?: string | null } | null;
+  name?: string | null;
+  quantity?: number | string | null;
+  cantidad?: number | string | null;
+  qty?: number | string | null;
+  amount?: number | string | null;
+  stockChange?: number | string | null;
+};
+
+const normalizeInventoryDetails = (value: unknown): InventoryEntryDetail[] => {
+  if (!value) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value as InventoryEntryDetail[];
+  }
+
+  if (typeof value === "object") {
+    const maybeDetails =
+      (value as any)?.details ??
+      (value as any)?.data?.details ??
+      (value as any)?.entry?.details;
+
+    if (Array.isArray(maybeDetails)) {
+      return maybeDetails as InventoryEntryDetail[];
+    }
+  }
+
+  return [];
+};
+
 const buildInventoryEntrySummaries = async (
   entryIds: number[],
   headers: HeadersInit
@@ -292,17 +326,17 @@ const buildInventoryEntrySummaries = async (
         }
 
         const detailJson = await detailRes.json();
-        const details = Array.isArray(detailJson?.details)
-          ? detailJson.details
-          : [];
+        const details = normalizeInventoryDetails(detailJson);
 
         const summaryParts = details
-          .map((detail: any) => {
+          .map((detail) => {
             const rawName =
               typeof detail?.product_name === "string"
                 ? detail.product_name
                 : typeof detail?.product?.name === "string"
                 ? detail.product.name
+                : typeof detail?.name === "string"
+                ? detail.name
                 : undefined;
             const name = rawName?.trim();
             if (!name) {
