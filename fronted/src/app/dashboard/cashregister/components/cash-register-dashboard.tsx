@@ -19,6 +19,174 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input"
 import { format, isSameDay } from "date-fns"; // ya lo tienes en tus imports
 
+const isSaleTransaction = (description?: string | null) => {
+  if (!description) {
+    return false;
+  }
+  return description.toLowerCase().includes("venta realizada");
+};
+
+const splitSaleDescription = (description: string | null | undefined) => {
+  if (!description) {
+    return {
+      prefix: "",
+      suffix: "",
+      normalized: "",
+    };
+  }
+
+  const saleRegex = /(Venta realizada\.)\s*Pago vía[^,]*,(.*)/i;
+  const match = description.match(saleRegex);
+
+  if (match) {
+    const prefix = match[1]?.trim() ?? "";
+    const suffix = match[2]?.trim() ?? "";
+    const normalized = [prefix, suffix].filter(Boolean).join(" ").trim();
+
+    return {
+      prefix,
+      suffix,
+      normalized,
+    };
+  }
+
+  return {
+    prefix: description.trim(),
+    suffix: "",
+    normalized: description.trim(),
+  };
+};
+
+const getTimestampKey = (timestamp: Transaction["timestamp"]) => {
+  const parsedDate = new Date(timestamp as any);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+  return Math.floor(parsedDate.getTime() / 1000).toString();
+};
+
+const mergeSaleTransactions = (transactions: Transaction[]) => {
+  const aggregatedSales = new Map<
+    string,
+    {
+      transaction: Transaction;
+      prefix: string;
+      suffix: string;
+      breakdown: Map<string, number>;
+      originalDescription: string;
+      order: number;
+    }
+  >();
+
+  const nonSaleTransactions: { transaction: Transaction; order: number }[] = [];
+
+  transactions.forEach((transaction, index) => {
+    const description = transaction.description ?? "";
+
+    if (!isSaleTransaction(description)) {
+      nonSaleTransactions.push({ transaction, order: index });
+      return;
+    }
+
+    const { prefix, suffix, normalized } = splitSaleDescription(description);
+    const keyParts = [
+      transaction.type,
+      transaction.voucher ?? "",
+      normalized,
+      getTimestampKey(transaction.timestamp),
+      transaction.clientDocument ?? "",
+      transaction.clientName ?? "",
+    ];
+
+    const aggregationKey = keyParts.join("|");
+    const currentMethods = transaction.paymentMethods ? [...transaction.paymentMethods] : [];
+
+    let saleEntry = aggregatedSales.get(aggregationKey);
+
+    if (!saleEntry) {
+      saleEntry = {
+        transaction: {
+          ...transaction,
+          amount: Number(transaction.amount),
+          paymentMethods: [...currentMethods],
+        },
+        prefix,
+        suffix,
+        breakdown: new Map<string, number>(),
+        originalDescription: description,
+        order: index,
+      };
+
+      aggregatedSales.set(aggregationKey, saleEntry);
+    } else {
+      saleEntry.transaction.amount = Number(saleEntry.transaction.amount) + Number(transaction.amount);
+    }
+
+    const methodSet = new Set(saleEntry.transaction.paymentMethods ?? []);
+    currentMethods.forEach((method) => {
+      if (method) {
+        methodSet.add(method);
+      }
+    });
+    saleEntry.transaction.paymentMethods = Array.from(methodSet);
+
+    const methodsForBreakdown = currentMethods.length > 0 ? currentMethods : [];
+
+    if (methodsForBreakdown.length === 0) {
+      return;
+    }
+
+    if (methodsForBreakdown.length === 1) {
+      const method = methodsForBreakdown[0];
+      if (method) {
+        const previousAmount = saleEntry.breakdown.get(method) ?? 0;
+        saleEntry.breakdown.set(method, previousAmount + Number(transaction.amount));
+      }
+    } else {
+      methodsForBreakdown.forEach((method) => {
+        if (!method) return;
+        const previousAmount = saleEntry.breakdown.get(method) ?? 0;
+        saleEntry.breakdown.set(method, previousAmount + Number(transaction.amount));
+      });
+    }
+  });
+
+  const mergedTransactions = [
+    ...nonSaleTransactions,
+    ...Array.from(aggregatedSales.values()).map((saleEntry) => {
+      const breakdownEntries = Array.from(saleEntry.breakdown.entries());
+      const shouldIncludeBreakdown = breakdownEntries.length > 1;
+      const breakdownText = shouldIncludeBreakdown
+        ? `Métodos de pago: ${breakdownEntries
+            .map(([method, amount]) => `${method}: S/.${amount.toFixed(2)}`)
+            .join(" | ")}`
+        : "";
+
+      const finalDescription = shouldIncludeBreakdown
+        ? [
+            saleEntry.prefix.trim(),
+            `${breakdownText}.`,
+            saleEntry.suffix.trim(),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .replace(/\s+/g, " ")
+            .trim()
+        : saleEntry.originalDescription;
+
+      saleEntry.transaction.description = finalDescription;
+
+      return {
+        transaction: saleEntry.transaction,
+        order: saleEntry.order,
+      };
+    }),
+  ];
+
+  mergedTransactions.sort((a, b) => a.order - b.order);
+  return mergedTransactions.map((entry) => entry.transaction);
+};
+
 export default function CashRegisterDashboard() {
 
   const router = useRouter();
@@ -32,7 +200,7 @@ export default function CashRegisterDashboard() {
       if (!userData || !(await isTokenValid())) {
         router.replace("/login");
       } else {
-        setUserId(userData.userId);
+        setUserId(userData.id);
       }
       setCheckingSession(false);
     }
@@ -81,15 +249,17 @@ export default function CashRegisterDashboard() {
         clientDocumentType: transaction.clientDocumentType ?? null,
       }));
 
-      const income = validTransactions
-      .filter((t:any) => t.internalType === "INCOME")
-      .reduce((sum:any, t:any) => sum + t.amount, 0);
+      const mergedTransactions = mergeSaleTransactions(validTransactions);
 
-      const expense = validTransactions
-        .filter((t:any) => t.internalType === "EXPENSE")
-        .reduce((sum:any, t:any) => sum + t.amount, 0);
+      const income = mergedTransactions
+        .filter((t: any) => t.internalType === "INCOME")
+        .reduce((sum: any, t: any) => sum + t.amount, 0);
 
-      setTransactions(validTransactions);
+      const expense = mergedTransactions
+        .filter((t: any) => t.internalType === "EXPENSE")
+        .reduce((sum: any, t: any) => sum + t.amount, 0);
+
+      setTransactions(mergedTransactions);
       setTotalIncome(income);
       setTotalExpense(expense);
 
@@ -270,7 +440,8 @@ export default function CashRegisterDashboard() {
             clientDocumentType: transaction.clientDocumentType ?? null,
           }));
   
-          setTransactions(validTransactions);
+          const mergedTransactions = mergeSaleTransactions(validTransactions);
+          setTransactions(mergedTransactions);
         } catch (error) {
           console.error("Error al obtener transacciones por fecha:", error);
           setTransactions([]);

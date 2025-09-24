@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Transaction } from "../types/cash-register"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { createIndependentTransaction, getActiveCashRegister } from "../cashregister.api"; // 👈 Importar nueva función
-import { getUserDataFromToken, type UserTokenPayload } from "@/lib/auth";
+import { getUserDataFromToken } from "@/lib/auth";
 import { getUserProfileId } from "../../users/users.api"
 import { PaymentMethodsSelector } from "./uis/PaymentMethodsSelector"
 import { toast } from "sonner"
@@ -92,7 +92,7 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
   }, [storeId]);
 
   useEffect(() => {
-    getUserDataFromToken().then((u) => setUserId(u?.userId ?? null));
+    getUserDataFromToken().then((u) => setUserId(u?.id ?? null));
   }, []);
 
   const onSubmit = async (values: FormValues) => {
