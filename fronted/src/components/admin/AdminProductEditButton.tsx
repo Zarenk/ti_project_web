@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback } from "react"
+import { useCallback, type MouseEvent } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/context/auth-context"
@@ -10,11 +10,13 @@ import { cn } from "@/lib/utils"
 interface AdminProductEditButtonProps {
   productId: number
   className?: string
+  onClick?: (event: MouseEvent<HTMLButtonElement>) => void
 }
 
 export function AdminProductEditButton({
   productId,
   className,
+  onClick,
 }: AdminProductEditButtonProps) {
   const router = useRouter()
   const { role } = useAuth()
@@ -22,12 +24,16 @@ export function AdminProductEditButton({
   const isAdmin = role?.toUpperCase() === "ADMIN"
 
   const handleClick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
+    (event: MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
       event.stopPropagation()
+      if (onClick) {
+        onClick(event)
+        return
+      }
       router.push(`/dashboard/products/${productId}/edit`)
     },
-    [productId, router],
+    [onClick, productId, router],
   )
 
   if (!isAdmin) {

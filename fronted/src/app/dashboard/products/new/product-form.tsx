@@ -17,7 +17,19 @@ import { toast } from 'sonner'
 import { IconName, icons } from '@/lib/icons'
 import { Loader2 } from 'lucide-react'
 
-export function ProductForm({product, categories}: {product: any; categories: any}) {
+interface ProductFormProps {
+  product: any
+  categories: any
+  onSuccess?: (savedProduct: any) => void | Promise<void>
+  onCancel?: () => void
+}
+
+export function ProductForm({
+  product,
+  categories,
+  onSuccess,
+  onCancel,
+}: ProductFormProps) {
 
     //definir el esquema de validacion
     const productSchema = z.object({
@@ -182,14 +194,20 @@ export function ProductForm({product, categories}: {product: any; categories: an
               : undefined,
         }
 
+        let savedProduct: any = null
         if (params?.id) {
-            await updateProduct(params.id, payload)
+            savedProduct = await updateProduct(params.id, payload)
             toast.success("Producto actualizado correctamente."); // Notificaci??n de ?xito
             router.push("/dashboard/products");
             router.refresh();
         } else {
-            await createProduct(payload);
+            savedProduct = await createProduct(payload);
             toast.success("Producto creado correctamente."); // Notificaci??n de ?xito
+        }
+
+        if (onSuccess) {
+            await onSuccess(savedProduct)
+        } else {
             router.push("/dashboard/products");
             router.refresh();
         }
@@ -459,7 +477,13 @@ export function ProductForm({product, categories}: {product: any; categories: an
                     <Button 
                     className=""
                     type="button" // Evita que el botón envíe el formulario
-                    onClick={() => router.back()} // Regresa a la página anterior
+                    onClick={() => {
+                        if (onCancel) {
+                            onCancel()
+                        } else {
+                            router.back()
+                        }
+                    }} // Regresa a la página anterior o ejecuta onCancel
                     >
                         Volver
                     </Button>

@@ -330,14 +330,18 @@ const buildInventoryEntrySummaries = async (
 
         const summaryParts = details
           .map((detail) => {
-            const rawName =
+            const nameCandidates = [
+              typeof detail?.product?.name === "string"
+                ? detail.product.name
+                : undefined,
               typeof detail?.product_name === "string"
                 ? detail.product_name
-                : typeof detail?.product?.name === "string"
-                ? detail.product.name
-                : typeof detail?.name === "string"
-                ? detail.name
-                : undefined;
+                : undefined,
+              typeof detail?.name === "string" ? detail.name : undefined,
+            ];
+            const rawName = nameCandidates.find(
+              (candidate) => candidate && candidate.trim().length > 0
+            );
             const name = rawName?.trim();
             if (!name) {
               return undefined;

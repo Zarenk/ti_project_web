@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
+import type { MouseEvent } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -23,6 +24,7 @@ import {
   Package,
   PackageOpen,
   Maximize2,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -30,7 +32,13 @@ import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/progress"
 import Navbar from "@/components/navbar"
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogHeader,
+} from "@/components/ui/dialog"
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 import { getProduct, getProducts } from "../../dashboard/products/products.api"
 import { getReviews, submitReview } from "./reviews.api"
@@ -48,6 +56,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { getFavorites, toggleFavorite } from "@/app/favorites/favorite.api"
 import { Skeleton } from "@/components/ui/skeleton"
+import { AdminProductImageButton } from "@/components/admin/AdminProductImageButton"
+import { AdminProductEditButton } from "@/components/admin/AdminProductEditButton"
+import ProductForm from "@/app/dashboard/products/new/product-form"
+import { getCategories } from "@/app/dashboard/categories/categories.api"
 
 interface Props {
   params: Promise<{ id: string }>
@@ -101,18 +113,90 @@ export default function ProductPage({ params }: Props) {
   const [comment, setComment] = useState('')
   const commentRef = useRef<HTMLTextAreaElement | null>(null)
   const [userData, setUserData] = useState<{ id: number; name: string } | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [categories, setCategories] = useState<any[]>([])
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false)
+
+  const fetchProduct = useCallback(async () => {
+    try {
+      const data = await getProduct(id)
+      setProduct(data)
+    } catch (error) {
+      console.error("Error fetching product:", error)
+    }
+  }, [id])
 
   useEffect(() => {
-    async function fetchProduct() {
-      try {
-        const data = await getProduct(id)
-        setProduct(data)
-      } catch (error) {
-        console.error("Error fetching product:", error)
-      }
+    void fetchProduct()
+  }, [fetchProduct])
+
+  useEffect(() => {
+    if (!isEditDialogOpen) {
+      return
     }
-    fetchProduct()
-  }, [id])
+
+    let isMounted = true
+    setIsLoadingCategories(true)
+    getCategories()
+      .then((data) => {
+        if (!isMounted) {
+          return
+        }
+        setCategories(Array.isArray(data) ? data : [])
+      })
+      .catch((error) => {
+        if (!isMounted) {
+          return
+        }
+        console.error("Error fetching categories:", error)
+        setCategories([])
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingCategories(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [isEditDialogOpen])
+
+  const handleEditButtonClick = useCallback(
+    (_event: MouseEvent<HTMLButtonElement>) => {
+      setIsEditDialogOpen(true)
+    },
+    [],
+  )
+
+  const handleImageUpdated = useCallback(
+    (nextImages: string[]) => {
+      setProduct((prev:any) =>
+        prev
+          ? {
+              ...prev,
+              images: nextImages,
+            }
+          : prev,
+      )
+      setSelectedImage(0)
+      void fetchProduct()
+    },
+    [fetchProduct],
+  )
+
+  const handleProductUpdateSuccess = useCallback(
+    async (_updatedProduct: any) => {
+      setIsEditDialogOpen(false)
+      setSelectedImage(0)
+      try {
+        await fetchProduct()
+      } catch (error) {
+        console.error("Error refreshing product after update:", error)
+      }
+    },
+    [fetchProduct],
+  )
 
   useEffect(() => {
     async function fetchStock() {
@@ -302,6 +386,37 @@ export default function ProductPage({ params }: Props) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
       <Navbar />
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar producto</DialogTitle>
+            <DialogDescription>
+              Actualiza las características y detalles del producto sin salir de esta página.
+            </DialogDescription>
+          </DialogHeader>
+          {product ? (
+            isLoadingCategories && categories.length === 0 ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="pb-4">
+                <ProductForm
+                  key={product.id}
+                  product={product}
+                  categories={categories}
+                  onSuccess={handleProductUpdateSuccess}
+                  onCancel={() => setIsEditDialogOpen(false)}
+                />
+              </div>
+            )
+          ) : (
+            <div className="py-10">
+              <Skeleton className="h-6 w-40 mx-auto" />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <div className="max-w-7xl mx-auto px-4 py-8">
         {product === null ? (
           <>
@@ -392,7 +507,26 @@ export default function ProductPage({ params }: Props) {
                   -{discountPercentage}% OFF
                 </Badge>
               )}
-              <Badge className="absolute top-4 right-4 z-10 bg-green-500 hover:bg-green-600">Envío Gratis</Badge>
+              <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2">
+                <Badge className="bg-green-500 hover:bg-green-600">Envío Gratis</Badge>
+                {product && (
+                  <div className="pointer-events-none">
+                    <div className="pointer-events-auto flex gap-2">
+                      <AdminProductImageButton
+                        productId={product.id}
+                        currentImages={
+                          product.images ?? (product.image ? [product.image] : [])
+                        }
+                        onImageUpdated={handleImageUpdated}
+                      />
+                      <AdminProductEditButton
+                        productId={product.id}
+                        onClick={handleEditButtonClick}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
               <div
                 className="aspect-square rounded-2xl overflow-hidden bg-card shadow-lg relative"
                 onMouseEnter={() => setZoomActive(true)}

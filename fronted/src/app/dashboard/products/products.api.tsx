@@ -19,7 +19,7 @@ export async function getProducts(){
 
 export async function getProduct(id: string){
   const data = await fetch(`${BACKEND_URL}/api/products/${id}`, {
-      'cache': 'force-cache',
+      'cache': 'no-store',
   });
 
   const json = await data.json();
