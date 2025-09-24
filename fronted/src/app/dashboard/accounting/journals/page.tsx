@@ -748,6 +748,8 @@ export default function JournalsPage() {
     }
   };
 
+  const openLineDetail = (line: DailyLine) => setSelectedLine(line);
+
   return (
     <div className="space-y-4">
       <Card className="shadow-sm">
@@ -766,8 +768,8 @@ export default function JournalsPage() {
             />
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto rounded-md border">
+        <CardContent className="space-y-4">
+          <div className="overflow-x-auto rounded-md border hidden md:block">
             <Table>
               <TableHeader className="sticky top-0 bg-background">
                 <TableRow>
@@ -814,7 +816,7 @@ export default function JournalsPage() {
                         </TableCell>
                         <TableCell
                           className="text-sm cursor-zoom-in"
-                          onDoubleClick={() => setSelectedLine(l)}
+                          onDoubleClick={() => openLineDetail(l)}
                         >
                           <div>{l.description ?? "-"}</div>
                           {l.documentType && (
@@ -854,6 +856,120 @@ export default function JournalsPage() {
               </TableBody>
             </Table>
           </div>
+
+          <div className="space-y-3 md:hidden">
+            {dailyLoading ? (
+              Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="space-y-2 rounded-md border p-4 shadow-sm"
+                >
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-full" />
+                  <div className="grid grid-cols-2 gap-3 pt-2 text-xs text-muted-foreground">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                </div>
+              ))
+            ) : dailyLines.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground">
+                Sin movimientos para la fecha seleccionada.
+              </p>
+            ) : (
+              dailyLines.map((line, index) => (
+                <div
+                  key={`${line.account}-${index}`}
+                  className="space-y-3 rounded-md border p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm font-medium">
+                      {new Date(line.date).toLocaleString("es-PE", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </div>
+                    <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium">
+                      {line.account}
+                    </span>
+                  </div>
+                  {accountNames[line.account] && (
+                    <p className="text-xs text-muted-foreground">
+                      {accountNames[line.account]}
+                    </p>
+                  )}
+                  <div className="space-y-1 text-sm">
+                    <p className="font-medium">Glosa</p>
+                    <p className="whitespace-pre-wrap text-muted-foreground">
+                      {line.description ?? "-"}
+                    </p>
+                    {line.documentType && (
+                      <p className="text-xs text-muted-foreground">
+                        Tipo: {line.documentType}
+                      </p>
+                    )}
+                    {line.series && line.series.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Series: {line.series.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Cantidad</p>
+                      <p className="font-medium">{line.quantity ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Proveedor</p>
+                      <p className="font-medium">{line.provider ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Debe</p>
+                      <p className="font-medium">
+                        {line.debit
+                          ? line.debit.toLocaleString("es-PE", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })
+                          : "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Haber</p>
+                      <p className="font-medium">
+                        {line.credit
+                          ? line.credit.toLocaleString("es-PE", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })
+                          : "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => openLineDetail(line)}
+                  >
+                    Ver detalle
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border px-4 py-3 text-sm font-medium md:hidden">
+            <span>Totales</span>
+            <div className="space-x-4">
+              <span>Debe: {totals.debit.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span>Haber: {totals.credit.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          </div>
+
         </CardContent>
       </Card>
 

@@ -573,7 +573,7 @@ export default function StorePage() {
                             alt={product.name}
                             width={300}
                             height={300}
-                            className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
+                            className="w-full h-60 sm:h-48 object-cover group-hover:scale-105 transition-transform duration-200"
                             priority={index === 0}
                           />
                         </div>
