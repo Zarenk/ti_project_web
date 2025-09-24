@@ -338,7 +338,7 @@ export default function StorePage() {
                 <AccordionItem value="categories">
                   <AccordionTrigger className="text-base">Categorías</AccordionTrigger>
                   <AccordionContent>
-                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                    <div className="space-y-3 max-h-60 overflow-y-auto pb-3">
                       {categories.map((category) => (
                         <div key={category} className="flex items-center space-x-2">
                           <Checkbox
@@ -359,7 +359,7 @@ export default function StorePage() {
                 <AccordionItem value="brands">
                   <AccordionTrigger className="text-base">Marcas</AccordionTrigger>
                   <AccordionContent>
-                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                    <div className="space-y-3 max-h-60 overflow-y-auto pb-3">
                       {brands.map((brand) => (
                         <div key={brand} className="flex items-center space-x-2">
                           <Checkbox
@@ -382,7 +382,7 @@ export default function StorePage() {
                     Disponibilidad
                   </AccordionTrigger>
                   <AccordionContent>
-                    <div className="space-y-3">
+                    <div className="space-y-3 pb-3">
                       <div className="flex items-center space-x-2">
                         <Checkbox
                           id="availability-stock"
