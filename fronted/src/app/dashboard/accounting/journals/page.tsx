@@ -466,15 +466,37 @@ export default function JournalsPage() {
                     : undefined,
               };
 
-              const saleSeries = sale?.items
-                ?.flatMap((item) => item.series ?? [])
-                .filter((serie): serie is string => typeof serie === "string" && serie.trim().length > 0);
-              const combinedSeries =
-                formatted.series && formatted.series.length > 0
-                  ? formatted.series
-                  : saleSeries && saleSeries.length > 0
-                  ? Array.from(new Set(saleSeries))
-                  : [];
+              const saleSeries =
+                sale?.items
+                  ?.flatMap((item) => item.series ?? [])
+                  .filter((serie): serie is string => typeof serie === "string")
+                  .map((serie) => serie.trim())
+                  .filter((serie) => serie.length > 0) ?? [];
+
+              const formattedSeries = (formatted.series ?? []).flatMap((serie) => {
+                if (!serie) return [];
+                const trimmed = serie.trim();
+                if (!trimmed) return [];
+
+                const plusPattern = /^(.*?)(?:\s*\+\s*\d+\s*(?:ítems?|items?))$/i;
+                const plusOnlyPattern = /^\+\s*\d+\s*(?:ítems?|items?)$/i;
+
+                if (plusOnlyPattern.test(trimmed)) {
+                  return [];
+                }
+
+                const match = trimmed.match(plusPattern);
+                if (match) {
+                  const base = match[1]?.trim();
+                  return base ? [base] : [];
+                }
+
+                return [trimmed];
+              });
+
+              const combinedSeries = Array.from(
+                new Set([...saleSeries, ...formattedSeries])
+              );
 
               const entryInvoiceUrl = buildInvoiceUrl(e.invoiceUrl);
               const invoiceUrl = entryInvoiceUrl ?? sale?.pdfUrl;

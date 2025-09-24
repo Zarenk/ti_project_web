@@ -951,7 +951,7 @@ export default function ProductPage({ params }: Props) {
                       <CardHeader className="p-0">
                         <div className="relative overflow-hidden rounded-t-lg">
                           <Image
-                            src={rp.images[0] || "/placeholder.svg"}
+                            src={resolveImageUrl(rp.images[0]) || "/placeholder.svg"}
                             alt={rp.name}
                             width={300}
                             height={300}

@@ -43,6 +43,7 @@ interface Product {
   category: string
   images: string[]
   stock: number | null
+  createdAt?: string | null
   specification?: {
     processor?: string
     ram?: string
@@ -95,6 +96,7 @@ export default function StorePage() {
               category: p.category?.name || 'Sin categoría',
               images: p.images || [],
               stock,
+              createdAt: p.createdAt ?? null,
               specification: p.specification ?? undefined,
             }
           })
@@ -120,7 +122,7 @@ export default function StorePage() {
   const [searchTerm, setSearchTerm] = useState("")
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300)
-  const [sortBy, setSortBy] = useState("name")
+  const [sortBy, setSortBy] = useState("newest")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedBrands, setSelectedBrands] = useState<string[]>([])
   const [selectedAvailability, setSelectedAvailability] = useState<string[]>([])
@@ -221,6 +223,11 @@ export default function StorePage() {
     // Ordenar productos
     filtered.sort((a: Product, b: Product) => {
       switch (sortBy) {
+        case "newest": {
+          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+          return dateB - dateA
+        }
         case "name":
           return a.name.localeCompare(b.name)
         case "price-low":
@@ -269,7 +276,7 @@ export default function StorePage() {
     setSelectedBrands([])
     setSelectedAvailability([])
     setSearchTerm("")
-    setSortBy("name")
+    setSortBy("newest")
   }
   const handleImageUpdate = (productId: number, nextImages: string[]) => {
     setProducts((prev) =>
@@ -435,6 +442,12 @@ export default function StorePage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="newest">
+                        <div className="flex items-center gap-2">
+                          <PackageOpen className="h-4 w-4" />
+                          Más recientes
+                        </div>
+                      </SelectItem>
                       <SelectItem value="name">
                         <div className="flex items-center gap-2">
                           <Tag className="h-4 w-4" />

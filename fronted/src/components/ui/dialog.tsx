@@ -50,6 +50,7 @@ function DialogContent({
   className,
   children,
   draggable = false,
+  "aria-describedby": ariaDescribedby,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   draggable?: boolean
