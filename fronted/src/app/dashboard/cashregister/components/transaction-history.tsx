@@ -1,18 +1,145 @@
-  "use client"
+"use client"
 
-  import { useState } from "react"
-  import { ArrowDown, ArrowUp, Calculator, Search, ChevronDown, ChevronUp, Calendar } from "lucide-react"
-  import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-  import { Input } from "@/components/ui/input"
-  import { Button } from "@/components/ui/button"
-  import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-  import { Badge } from "@/components/ui/badge"
-  import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-  import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-  import { format } from "date-fns"
-  import { Transaction } from "../types/cash-register"
+import { useState } from "react"
+import { ArrowDown, ArrowUp, Calculator, Search, ChevronDown, ChevronUp, Calendar } from "lucide-react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { format } from "date-fns"
+import { BACKEND_URL } from "@/lib/utils"
+import { Transaction } from "../types/cash-register"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+
+const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
+
+  const cleanValue = (value?: string | null) => {
+    if (!value) return ""
+    return value.replace(/[;]+$/g, "").trim()
+  }
+
+  const formatSaleDescription = (description?: string | null) => {
+    if (!description) return ""
+
+    const label = "venta registrada:"
+    const lowerDescription = description.toLowerCase()
+    const labelIndex = lowerDescription.indexOf(label)
+
+    if (labelIndex === -1) {
+      return description.trim()
+    }
+
+    const originalLabel = description.slice(labelIndex, labelIndex + label.length)
+    const prefix = description.slice(0, labelIndex).trimEnd()
+    const details = description.slice(labelIndex + label.length).trim()
+
+    const quantityIndex = details.toLowerCase().indexOf("cantidad:")
+    const seriesIndex = details.toLowerCase().indexOf("series:")
+
+    let productSegment = details
+    if (quantityIndex !== -1) {
+      productSegment = details.slice(0, quantityIndex)
+    } else if (seriesIndex !== -1) {
+      productSegment = details.slice(0, seriesIndex)
+    }
+    const productSegmentForRemoval = productSegment
+    const cleanedProductSegment = productSegment.replace(/^[-\s]+/, "").replace(/[-\s]+$/, "").trim()
+
+    const quantityMatch = details.match(/Cantidad:\s*([^,;]+)/i)
+    const priceMatch = details.match(/Precio\s*Unitario:\s*([^,;]+)/i)
+    const seriesMatch = details.match(/Series:\s*([^;]+)/i)
+
+    const formattedParts: string[] = []
+    const productPart = cleanValue(cleanedProductSegment)
+    if (productPart) {
+      formattedParts.push(`${originalLabel.trim()} ${productPart}`.trim())
+    } else {
+      formattedParts.push(originalLabel.trim())
+    }
+
+    if (seriesMatch?.[1]) {
+      formattedParts.push(`Series: ${cleanValue(seriesMatch[1])}`)
+    }
+
+    const quantityPieces: string[] = []
+    if (quantityMatch?.[1]) {
+      quantityPieces.push(`Cantidad: ${cleanValue(quantityMatch[1])}`)
+    }
+    if (priceMatch?.[1]) {
+      quantityPieces.push(`Precio Unitario: ${cleanValue(priceMatch[1])}`)
+    }
+    if (quantityPieces.length > 0) {
+      formattedParts.push(quantityPieces.join(", "))
+    }
+
+    const formattedDescription = formattedParts.join(" - ")
+
+    const consumedParts = [
+      productSegmentForRemoval,
+      quantityMatch?.[0] ?? "",
+      priceMatch?.[0] ?? "",
+      seriesMatch?.[0] ?? "",
+    ]
+
+    let remaining = details
+    consumedParts.forEach((part) => {
+      if (!part) return
+      const escaped = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      remaining = remaining.replace(new RegExp(escaped, "i"), "")
+    })
+    remaining = remaining.replace(/[-\s,;]+/g, " ").trim()
+
+    const segments = [prefix, formattedDescription, remaining]
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0)
+
+    return segments.join(" ").replace(/\s+/g, " ").trim()
+  }
+
+  const normalizeInvoiceUrl = (invoiceUrl?: string | null) => {
+    if (!invoiceUrl) return null
+    const trimmed = invoiceUrl.trim()
+    if (!trimmed) return null
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed
+    }
+    return trimmed.startsWith("/") ? `${BACKEND_URL}${trimmed}` : `${BACKEND_URL}/${trimmed}`
+  }
+
+  const buildInvoiceUrlFromVoucher = (voucher?: string | null) => {
+    if (!voucher) return null
+    const [rawSerie, rawCorrelativo] = voucher.split("-")
+    if (!rawSerie || !rawCorrelativo) return null
+
+    const serie = rawSerie.trim().toUpperCase()
+    const correlativo = rawCorrelativo.trim()
+    if (!serie || !correlativo) return null
+
+    const prefix = serie.charAt(0)
+    let folder: "boleta" | "factura" | null = null
+    let code: "03" | "01" | null = null
+
+    if (prefix === "B") {
+      folder = "boleta"
+      code = "03"
+    } else if (prefix === "F") {
+      folder = "factura"
+      code = "01"
+    }
+
+    if (!folder || !code) return null
+
+    const fileName = `${COMPANY_RUC}-${code}-${serie}-${correlativo}.pdf`
+    return `${BACKEND_URL}/api/sunat/pdf/${folder}/${fileName}`
+  }
+
+  const getInvoiceUrl = (transaction: Transaction) => {
+    return normalizeInvoiceUrl(transaction.invoiceUrl) ?? buildInvoiceUrlFromVoucher(transaction.voucher)
+  }
 
   interface TransactionHistoryProps {
     transactions: Transaction[]
@@ -148,6 +275,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
     }
 
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768
+    const modalFormattedDescription = modalTransaction ? formatSaleDescription(modalTransaction.description) : ""
+    const modalInvoiceUrl = modalTransaction ? getInvoiceUrl(modalTransaction) : null
 
     return (
       <div className="space-y-4">
@@ -247,97 +376,81 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
             </TableHeader>
             <TableBody>
               {sortedTransactions.length > 0 ? (
-                sortedTransactions.map((transaction) => (
-                  <Tooltip key={transaction.id}>
-                    <TooltipTrigger asChild>
-                      <TableRow
-                        className="cursor-pointer"
-                        onClick={() => setModalTransaction(transaction)}
-                      >
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getTransactionIcon(transaction.type)}
-                            {getTransactionBadge(transaction.type)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-[100px] truncate whitespace-nowrap overflow-hidden">
-                          {new Date(transaction.timestamp).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <div className="font-medium">S/.{transaction.amount.toFixed(2)}</div>
-                          {transaction.type === "CLOSURE" && transaction.discrepancy !== undefined && (
-                            <div
-                              className={`text-xs ${
-                                transaction.discrepancy === 0
-                                  ? "text-green-500"
-                                  : transaction.discrepancy > 0
-                                    ? "text-amber-500"
-                                    : "text-red-500"
-                              }`}
-                            >
-                              {transaction.discrepancy === 0
-                                ? "Balanced"
-                                : transaction.discrepancy > 0
-                                  ? `+$${transaction.discrepancy.toFixed(2)} overage`
-                                  : `-$${Math.abs(transaction.discrepancy).toFixed(2)} shortage`}
+                sortedTransactions.map((transaction) => {
+                  const formattedDescription = formatSaleDescription(transaction.description)
+
+                  return (
+                    <Tooltip key={transaction.id}>
+                      <TooltipTrigger asChild>
+                        <TableRow
+                          className="cursor-pointer"
+                          onClick={() => setModalTransaction(transaction)}
+                        >
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {getTransactionIcon(transaction.type)}
+                              {getTransactionBadge(transaction.type)}
                             </div>
-                          )}
-                        </TableCell>
+                          </TableCell>
+                          <TableCell className="max-w-[100px] truncate whitespace-nowrap overflow-hidden">
+                            {new Date(transaction.timestamp).toLocaleString()}
+                          </TableCell>
                         {!isMobile && <TableCell>{transaction.voucher || "-"}</TableCell>}
-                        {!isMobile && (
-                          <TableCell className="max-w-[200px] truncate">
-                            {transaction.clientName
-                              ? `${transaction.clientName}${transaction.clientDocumentType && transaction.clientDocument ? ` (${transaction.clientDocumentType} ${transaction.clientDocument})` : ""}`
-                              : "-"}
-                          </TableCell>
-                        )}
-                        {!isMobile && <TableCell>{transaction.employee}</TableCell>}
-                        {!isMobile && (
-                          <TableCell className="flex flex-wrap gap-1">
-                            {transaction.paymentMethods && transaction.paymentMethods.length > 0 ? (
-                              transaction.paymentMethods.map((method, index) => (
-                                <Badge
-                                  key={index}
-                                  variant="outline"
-                                  className={getBadgeColor(method)}
-                                >
-                                  {method}
-                                </Badge>
-                              ))
-                            ) : (
-                              "-"
-                            )}
-                          </TableCell>
-                        )}
-                        {!isMobile && (
-                          <TableCell className="max-w-[200px] truncate">
-                            {transaction.description || "-"}
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-xs space-y-1 text-left">
-                      <p>
-                        <span className="font-medium">Encargado:</span> {transaction.employee || "-"}
-                      </p>
-                      {transaction.clientName && (
+                          {!isMobile && (
+                            <TableCell className="max-w-[200px] truncate">
+                              {transaction.clientName
+                                ? `${transaction.clientName}${transaction.clientDocumentType && transaction.clientDocument ? ` (${transaction.clientDocumentType} ${transaction.clientDocument})` : ""}`
+                                : "-"}
+                            </TableCell>
+                          )}
+                          {!isMobile && <TableCell>{transaction.employee}</TableCell>}
+                          {!isMobile && (
+                            <TableCell className="flex flex-wrap gap-1">
+                              {transaction.paymentMethods && transaction.paymentMethods.length > 0 ? (
+                                transaction.paymentMethods.map((method, index) => (
+                                  <Badge
+                                    key={index}
+                                    variant="outline"
+                                    className={getBadgeColor(method)}
+                                  >
+                                    {method}
+                                  </Badge>
+                                ))
+                              ) : (
+                                "-"
+                              )}
+                            </TableCell>
+                          )}
+                          {!isMobile && (
+                            <TableCell className="max-w-[200px] truncate">
+                              {formattedDescription || transaction.description || "-"}
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs space-y-1 text-left">
                         <p>
-                          <span className="font-medium">Cliente:</span> {transaction.clientName}
+                          <span className="font-medium">Encargado:</span> {transaction.employee || "-"}
                         </p>
-                      )}
-                      {transaction.clientDocument && transaction.clientDocumentType && (
-                        <p>
-                          <span className="font-medium">Documento:</span> {transaction.clientDocumentType} {transaction.clientDocument}
-                        </p>
-                      )}
-                      {transaction.description && (
-                        <p>
-                          <span className="font-medium">Notas:</span> {transaction.description}
-                        </p>
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                ))
+                        {transaction.clientName && (
+                          <p>
+                            <span className="font-medium">Cliente:</span> {transaction.clientName}
+                          </p>
+                        )}
+                        {transaction.clientDocument && transaction.clientDocumentType && (
+                          <p>
+                            <span className="font-medium">Documento:</span> {transaction.clientDocumentType} {transaction.clientDocument}
+                          </p>
+                        )}
+                        {formattedDescription && (
+                          <p>
+                            <span className="font-medium">Notas:</span> {formattedDescription}
+                          </p>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                })
               ) : (
                 <TableRow>
                   <TableCell colSpan={8} className="h-24 text-center">
@@ -361,10 +474,24 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
                   <p><strong>Monto:</strong> S/. {modalTransaction.amount.toFixed(2)}</p>
                   <p><strong>Encargado:</strong> {modalTransaction.employee}</p>
                   <p><strong>Métodos de Pago:</strong> {modalTransaction.paymentMethods?.join(", ") || "-"}</p>
-                  <p><strong>Notas:</strong> {modalTransaction.description || "-"}</p>
+                  <p><strong>Notas:</strong> {modalFormattedDescription || "-"}</p>
                   <p><strong>ID:</strong> {modalTransaction.id}</p>
                   {modalTransaction.voucher && (
-                    <p><strong>Comprobante:</strong> {modalTransaction.voucher}</p>
+                    <p>
+                      <strong>Comprobante:</strong>{" "}
+                      {modalInvoiceUrl ? (
+                        <a
+                          href={modalInvoiceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 underline"
+                        >
+                          {modalTransaction.voucher}
+                        </a>
+                      ) : (
+                        modalTransaction.voucher
+                      )}
+                    </p>
                   )}
                   {modalTransaction.clientName && (
                     <p><strong>Cliente:</strong> {modalTransaction.clientName}</p>

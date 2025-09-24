@@ -21,4 +21,5 @@ export interface Transaction {
     clientDocument?: string | null;
     clientDocumentType?: string | null;
     voucher?: string | null;
+    invoiceUrl?: string | null;
   }

@@ -249,6 +249,7 @@ export default function Navbar() {
               alt="TI"
               width={64}
               height={64}
+              priority
               className="h-16 w-16 transition duration-300 group-hover:brightness-110 group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.7)]"
             />
             <span className="transition-colors duration-300 group-hover:text-sky-600">Tienda TI</span>
