@@ -72,6 +72,8 @@ type DailyLine = EntryLineDetail & {
   entryLines?: EntryLineDetail[];
 };
 
+type InventoryEntrySummaryMap = Map<number, string>;
+
 const accountNames: Record<string, string> = {
   "1011": "Caja",
   "1041": "Banco – Yape/Transferencia",
@@ -209,6 +211,139 @@ const buildSalePdfUrl = (sale: Sale): string | undefined => {
 
   const fileName = `${COMPANY_RUC}-${typeInfo.code}-${serie}-${correlativo}.pdf`;
   return `${BACKEND_URL}/api/sunat/pdf/${typeInfo.folder}/${fileName}`;
+};
+
+const formatInventoryQuantity = (value: number): string => {
+  if (!Number.isFinite(value)) {
+    return "";
+  }
+
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+
+  return value.toFixed(2).replace(/\.00$/, "");
+};
+
+const enhanceDescriptionWithInventorySummary = (
+  baseDescription?: string | null,
+  summary?: string
+): string | undefined => {
+  const description = baseDescription ?? undefined;
+
+  if (!summary || !summary.trim()) {
+    return description;
+  }
+
+  const trimmedSummary = summary.trim();
+
+  if (!description) {
+    return trimmedSummary;
+  }
+
+  if (description.toLowerCase().includes(trimmedSummary.toLowerCase())) {
+    return description;
+  }
+
+  const [leftRaw, ...restParts] = description.split(" – ");
+  const left = leftRaw?.trim() ?? "";
+
+  if (!left) {
+    const rest = restParts.join(" – ").trim();
+    return rest ? `${trimmedSummary} – ${rest}` : trimmedSummary;
+  }
+
+  const prefixMatch = left.match(
+    /^(Ingreso|Salida)(?:\s+al\s+Inventario(?:\s+del\s+Item)?)?/i
+  );
+  const prefix = prefixMatch ? prefixMatch[0].trim() : left;
+  const rest = restParts.join(" – ").trim();
+  const enhancedLeft = `${prefix} ${trimmedSummary}`.trim();
+
+  return rest ? `${enhancedLeft} – ${rest}` : enhancedLeft;
+};
+
+const buildInventoryEntrySummaries = async (
+  entryIds: number[],
+  headers: HeadersInit
+): Promise<InventoryEntrySummaryMap> => {
+  if (entryIds.length === 0) {
+    return new Map();
+  }
+
+  const uniqueIds = Array.from(new Set(entryIds)).filter((id) => id > 0);
+
+  if (uniqueIds.length === 0) {
+    return new Map();
+  }
+
+  const results = await Promise.all(
+    uniqueIds.map(async (entryId) => {
+      try {
+        const detailRes = await fetch(
+          `${BACKEND_URL}/api/entries/by-id/${entryId}`,
+          {
+            headers,
+          }
+        );
+
+        if (!detailRes.ok) {
+          return null;
+        }
+
+        const detailJson = await detailRes.json();
+        const details = Array.isArray(detailJson?.details)
+          ? detailJson.details
+          : [];
+
+        const summaryParts = details
+          .map((detail: any) => {
+            const rawName =
+              typeof detail?.product_name === "string"
+                ? detail.product_name
+                : typeof detail?.product?.name === "string"
+                ? detail.product.name
+                : undefined;
+            const name = rawName?.trim();
+            if (!name) {
+              return undefined;
+            }
+
+            const quantityRaw =
+              detail?.quantity ??
+              detail?.cantidad ??
+              detail?.qty ??
+              detail?.amount ??
+              detail?.stockChange;
+
+            const quantityValue =
+              typeof quantityRaw === "string"
+                ? Number(quantityRaw.replace(/,/g, "."))
+                : Number(quantityRaw);
+
+            const formattedQuantity = formatInventoryQuantity(quantityValue);
+
+            return formattedQuantity
+              ? `${name} - ${formattedQuantity}`
+              : name;
+          })
+          .filter((value:any): value is string => typeof value === "string" && value.trim().length > 0);
+
+        const summary = summaryParts.join(", ");
+        if (!summary.trim()) {
+          return null;
+        }
+
+        return [entryId, summary] as const;
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  return new Map(
+    results.filter((result): result is [number, string] => Array.isArray(result))
+  );
 };
 
 function buildJournalFromSale(sale: Sale): DailyLine[] {
@@ -421,13 +556,48 @@ export default function JournalsPage() {
 
         if (res.ok) {
           const json = await res.json();
-          lines = (json.data ?? []).flatMap((e: any) => {
+          const entriesData = Array.isArray(json.data) ? json.data : [];
+
+          const inventoryEntryIds = entriesData
+            .filter((entry: any) => (entry?.source ?? "") === "inventory_entry")
+            .map((entry: any) => {
+              const rawId =
+                entry?.sourceId ??
+                entry?.source_id ??
+                (entry?.source === "inventory_entry" ? entry?.id : undefined);
+              const numericId = Number(rawId);
+              return Number.isInteger(numericId) ? numericId : undefined;
+            })
+            .filter((id:any): id is number => typeof id === "number");
+
+          const inventorySummaries = await buildInventoryEntrySummaries(
+            inventoryEntryIds,
+            headers
+          );
+
+          lines = entriesData.flatMap((e: any) => {
             const voucher = buildVoucher(e.serie ?? undefined, e.correlativo ?? undefined);
             const normalizedVoucher = normalizeVoucherKey(voucher);
             const sale = normalizedVoucher ? salesByVoucher.get(normalizedVoucher) : undefined;
+            const rawSourceId =
+              e?.sourceId ??
+              e?.source_id ??
+              (e?.source === "inventory_entry" ? e?.id : undefined);
+            const numericSourceId = Number(rawSourceId);
+            const inventorySummary =
+              e?.source === "inventory_entry" && Number.isInteger(numericSourceId)
+                ? inventorySummaries.get(numericSourceId)
+                : undefined;
             const entryLines: EntryLineDetail[] = (e.lines ?? []).map((line: any) => {
+              const baseLineDescription =
+                line.account === "2011"
+                  ? enhanceDescriptionWithInventorySummary(
+                      line.description,
+                      inventorySummary
+                    )
+                  : line.description;
               const formattedLine = formatDisplayGlosa({
-                baseDescription: line.description,
+                baseDescription: baseLineDescription,
                 provider: e.provider,
                 voucher,
                 serie: e.serie,
@@ -447,8 +617,15 @@ export default function JournalsPage() {
             });
 
             return (e.lines ?? []).map((l: any, idx: number) => {
+              const baseDescription =
+                l.account === "2011"
+                  ? enhanceDescriptionWithInventorySummary(
+                      l.description ?? e.description ?? undefined,
+                      inventorySummary
+                    )
+                  : l.description ?? e.description ?? undefined;
               const formatted = formatDisplayGlosa({
-                baseDescription: l.description ?? e.description ?? undefined,
+                baseDescription,
                 provider: e.provider ?? undefined,
                 voucher,
                 serie: e.serie ?? undefined,

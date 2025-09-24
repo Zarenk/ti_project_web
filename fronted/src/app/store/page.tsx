@@ -20,6 +20,13 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/accordion"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 import { getProducts } from "../dashboard/products/products.api"
 import { getStoresWithProduct } from "../dashboard/inventory/inventory.api"
 import Link from "next/link"
@@ -287,6 +294,112 @@ export default function StorePage() {
     )
   }
 
+  const FiltersContent = () => (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <Filter className="h-5 w-5" />
+          Filtros
+        </h2>
+        <Button variant="ghost" size="sm" onClick={clearFilters}>
+          Limpiar
+        </Button>
+      </div>
+
+      <Accordion
+        type="multiple"
+        defaultValue={["categories", "brands", "availability"]}
+        className="w-full"
+      >
+        {/* Filtro por categorías */}
+        <AccordionItem value="categories">
+          <AccordionTrigger className="text-base">Categorías</AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-3 max-h-60 overflow-y-auto pb-3">
+              {categories.map((category) => (
+                <div key={category} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`category-${category}`}
+                    checked={selectedCategories.includes(category)}
+                    onCheckedChange={(checked) =>
+                      handleCategoryChange(category, checked as CheckedState)
+                    }
+                  />
+                  <Label htmlFor={`category-${category}`} className="text-sm font-normal">
+                    {category}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Filtro por marcas */}
+        <AccordionItem value="brands">
+          <AccordionTrigger className="text-base">Marcas</AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-3 max-h-60 overflow-y-auto pb-3">
+              {brands.map((brand) => (
+                <div key={brand} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`brand-${brand}`}
+                    checked={selectedBrands.includes(brand)}
+                    onCheckedChange={(checked) =>
+                      handleBrandChange(brand, checked as CheckedState)
+                    }
+                  />
+                  <Label htmlFor={`brand-${brand}`} className="text-sm font-normal">
+                    {brand}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Filtro por disponibilidad */}
+        <AccordionItem value="availability">
+          <AccordionTrigger className="text-base">
+            Disponibilidad
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-3 pb-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="availability-stock"
+                  checked={selectedAvailability.includes('stock')}
+                  onCheckedChange={(checked) =>
+                    handleAvailabilityChange('stock', checked as CheckedState)
+                  }
+                />
+                <Label
+                  htmlFor="availability-stock"
+                  className="text-sm font-normal"
+                >
+                  Stock
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="availability-noStock"
+                  checked={selectedAvailability.includes('noStock')}
+                  onCheckedChange={(checked) =>
+                    handleAvailabilityChange('noStock', checked as CheckedState)
+                  }
+                />
+                <Label
+                  htmlFor="availability-noStock"
+                  className="text-sm font-normal"
+                >
+                  Sin stock
+                </Label>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </>
+  )
 
   return (
     <div className="min-h-screen bg-background">
@@ -317,108 +430,30 @@ export default function StorePage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar con filtros */}
-          <aside className="lg:w-64 flex-shrink-0">
-            <div className="bg-card rounded-lg shadow-sm border p-6 sticky top-8">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <Filter className="h-5 w-5" />
-                  Filtros
-                </h2>
-                <Button variant="ghost" size="sm" onClick={clearFilters}>
-                  Limpiar
+          <div className="lg:hidden">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  <span className="flex items-center gap-2 font-semibold">
+                    <Filter className="h-4 w-4" />
+                    FILTRAR Y MARCAS
+                  </span>
                 </Button>
-              </div>
-
-              <Accordion
-                type="multiple"
-                defaultValue={["categories", "brands", "availability"]}
-                className="w-full"
-              >
-                {/* Filtro por categorías */}
-                <AccordionItem value="categories">
-                  <AccordionTrigger className="text-base">Categorías</AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-3 max-h-60 overflow-y-auto pb-3">
-                      {categories.map((category) => (
-                        <div key={category} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`category-${category}`}
-                            checked={selectedCategories.includes(category)}
-                            onCheckedChange={(checked) => handleCategoryChange(category, checked as CheckedState)}
-                          />
-                          <Label htmlFor={`category-${category}`} className="text-sm font-normal">
-                            {category}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                {/* Filtro por marcas */}
-                <AccordionItem value="brands">
-                  <AccordionTrigger className="text-base">Marcas</AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-3 max-h-60 overflow-y-auto pb-3">
-                      {brands.map((brand) => (
-                        <div key={brand} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`brand-${brand}`}
-                            checked={selectedBrands.includes(brand)}
-                            onCheckedChange={(checked) => handleBrandChange(brand, checked as CheckedState)}
-                          />
-                          <Label htmlFor={`brand-${brand}`} className="text-sm font-normal">
-                            {brand}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                {/* Filtro por disponibilidad */}
-                <AccordionItem value="availability">
-                  <AccordionTrigger className="text-base">
-                    Disponibilidad
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-3 pb-3">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="availability-stock"
-                          checked={selectedAvailability.includes('stock')}
-                          onCheckedChange={(checked) =>
-                            handleAvailabilityChange('stock', checked as CheckedState)
-                          }
-                        />
-                        <Label
-                          htmlFor="availability-stock"
-                          className="text-sm font-normal"
-                        >
-                          Stock
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="availability-noStock"
-                          checked={selectedAvailability.includes('noStock')}
-                          onCheckedChange={(checked) =>
-                            handleAvailabilityChange('noStock', checked as CheckedState)
-                          }
-                        />
-                        <Label
-                          htmlFor="availability-noStock"
-                          className="text-sm font-normal"
-                        >
-                          Sin stock
-                        </Label>
-                      </div>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-                
-              </Accordion>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[85vw] sm:max-w-sm p-0">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Filtros</SheetTitle>
+                </SheetHeader>
+                <div className="p-6 overflow-y-auto h-full">
+                  <FiltersContent />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+          {/* Sidebar con filtros */}
+          <aside className="hidden lg:block lg:w-64 flex-shrink-0">
+            <div className="bg-card rounded-lg shadow-sm border p-6 sticky top-8">
+              <FiltersContent />
             </div>
           </aside>
 
