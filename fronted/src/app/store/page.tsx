@@ -26,6 +26,7 @@ import Link from "next/link"
 import { toast } from "sonner"
 import { useCart } from "@/context/cart-context"
 import { AdminProductImageButton } from "@/components/admin/AdminProductImageButton"
+import { AdminProductEditButton } from "@/components/admin/AdminProductEditButton"
 
 // Tipos
 interface Brand {
@@ -510,12 +511,14 @@ export default function StorePage() {
                       className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border"
                     >
                       <div className="pointer-events-none absolute right-3 top-3 z-20 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-                        <AdminProductImageButton
-                          productId={product.id}
-                          currentImages={product.images}
-                          onImageUpdated={(nextImages) => handleImageUpdate(product.id, nextImages)}
-                          className="pointer-events-auto"
-                        />
+                        <div className="flex gap-2 pointer-events-auto">
+                          <AdminProductImageButton
+                            productId={product.id}
+                            currentImages={product.images}
+                            onImageUpdated={(nextImages) => handleImageUpdate(product.id, nextImages)}
+                          />
+                          <AdminProductEditButton productId={product.id} />
+                        </div>
                       </div>
                       <Link href={`/store/${product.id}`}
                         className="block">

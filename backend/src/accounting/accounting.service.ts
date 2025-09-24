@@ -261,14 +261,30 @@ export class AccountingService {
 
       const firstDetail = entry.details[0];
       const itemName = firstDetail?.product?.name ?? '';
-      const firstSerie = firstDetail?.series?.[0]?.serial ?? '';
+      const allSeries = entry.details.flatMap((detail: any) =>
+        Array.isArray(detail?.series)
+          ? detail.series
+              .map((serie: any) =>
+                typeof serie === 'string'
+                  ? serie
+                  : (serie as any)?.serial ?? undefined,
+              )
+              .map((value: any) =>
+                value != null ? String(value).trim() : undefined,
+              )
+              .filter((value: any): value is string =>
+                typeof value === 'string' && value.length > 0,
+              )
+          : [],
+      );
+      const uniqueSeries = Array.from(new Set(allSeries));
       const extraItems = entry.details.length - 1;
       const totalQty = entry.details.reduce(
         (s: number, d: any) => s + (d.quantity || 0),
         0,
       );
 
-      const seriesText = firstSerie ? ` (${firstSerie})` : '';
+      const seriesText = uniqueSeries.length > 0 ? ` (${uniqueSeries.join(', ')})` : '';
       const extraItemsText =
         extraItems > 0 ? ` (+ ${extraItems} ítems)…` : '';
 

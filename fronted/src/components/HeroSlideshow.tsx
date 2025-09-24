@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight, Shield } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import { resolveImageUrl } from "@/lib/images"
 import { AdminProductImageButton } from "@/components/admin/AdminProductImageButton"
+import { AdminProductEditButton } from "@/components/admin/AdminProductEditButton"
 
 interface Brand {
   name: string
@@ -138,11 +139,14 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
               <div className="relative h-full w-full">
                 {product && (
                   <div className="absolute right-3 top-3 z-20">
-                    <AdminProductImageButton
-                      productId={product.id}
-                      currentImages={product.images ?? []}
-                      onImageUpdated={(nextImages) => handleImageUpdate(product.id, nextImages)}
-                    />
+                    <div className="flex gap-2">
+                      <AdminProductImageButton
+                        productId={product.id}
+                        currentImages={product.images ?? []}
+                        onImageUpdated={(nextImages) => handleImageUpdate(product.id, nextImages)}
+                      />
+                      <AdminProductEditButton productId={product.id} />
+                    </div>
                   </div>
                 )}
                 {product ? (

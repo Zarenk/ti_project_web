@@ -15,6 +15,7 @@ import { toggleFavorite } from "@/app/favorites/favorite.api"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import Link from "next/link"
 import { AdminProductImageButton } from "@/components/admin/AdminProductImageButton"
+import { AdminProductEditButton } from "@/components/admin/AdminProductEditButton"
 
 // Use the new `motion.create` API to avoid deprecated `motion()` usage
 const MotionButton = motion.create(Button)
@@ -97,12 +98,14 @@ export default function MotionProductCard({ product, withActions = false, priori
     <motion.div layout>
       <Card className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border">
         <div className="pointer-events-none absolute right-3 top-3 z-20 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-          <AdminProductImageButton
-            productId={product.id}
-            currentImages={imageList}
-            onImageUpdated={setImageList}
-            className="pointer-events-auto"
-          />
+          <div className="flex gap-2 pointer-events-auto">
+            <AdminProductImageButton
+              productId={product.id}
+              currentImages={imageList}
+              onImageUpdated={setImageList}
+            />
+            <AdminProductEditButton productId={product.id} />
+          </div>
         </div>
         <Link href={`/store/${product.id}`} className="block">
           <CardHeader className="p-0">
