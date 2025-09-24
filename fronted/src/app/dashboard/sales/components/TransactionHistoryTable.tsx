@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import SimplePagination from "@/components/simple-pagination"
 import { motion, AnimatePresence } from "framer-motion"
+import { BACKEND_URL } from "@/lib/utils"
 
 interface TransactionHistoryTableProps {
   transactions: any[]
@@ -52,6 +53,15 @@ export function TransactionHistoryTable({ transactions }: TransactionHistoryTabl
                   name: item.productName,
                   series: item.series,
                 })) || []
+              const hasInvoice = Boolean(tx.tipoComprobante && tx.serie && tx.correlativo)
+              const invoiceType = hasInvoice ? tx.tipoComprobante.toLowerCase() : null
+              const invoiceCode = invoiceType === "boleta" ? "03" : "01"
+              const invoiceFile = hasInvoice
+                ? `20519857538-${invoiceCode}-${tx.serie}-${tx.correlativo}.pdf`
+                : null
+              const invoiceUrl = invoiceType && invoiceFile
+                ? `${BACKEND_URL}/api/sunat/pdf/${invoiceType}/${invoiceFile}`
+                : null
               return (
                 <motion.tr
                   key={index}
@@ -65,7 +75,23 @@ export function TransactionHistoryTable({ transactions }: TransactionHistoryTabl
                   </TableCell>
                   <TableCell>{tx.serie || "-"}</TableCell>
                   <TableCell>{tx.correlativo || "-"}</TableCell>
-                  <TableCell>{tx.tipoComprobante || "-"}</TableCell>
+                  <TableCell>
+                    {hasInvoice && invoiceUrl ? (
+                      <div className="flex flex-col">
+                        <span className="font-medium">{tx.tipoComprobante}</span>
+                        <a
+                          href={invoiceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 underline"
+                        >
+                          Ver comprobante ({tx.serie}-{tx.correlativo})
+                        </a>
+                      </div>
+                    ) : (
+                      <span>-</span>
+                    )}
+                  </TableCell>
                   <TableCell>{tx.customerName || "-"}</TableCell>
                   <TableCell>{paymentMethods}</TableCell>
                   <TableCell className="text-green-600 font-medium whitespace-nowrap">
