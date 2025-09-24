@@ -26,6 +26,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
+  SheetDescription,
 } from "@/components/ui/sheet"
 import { getProducts } from "../dashboard/products/products.api"
 import { getStoresWithProduct } from "../dashboard/inventory/inventory.api"
@@ -436,13 +437,17 @@ export default function StorePage() {
                 <Button variant="outline" className="w-full justify-between">
                   <span className="flex items-center gap-2 font-semibold">
                     <Filter className="h-4 w-4" />
-                    FILTRAR Y MARCAS
+                    FILTROS DE BUSQUEDA
                   </span>
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-[85vw] sm:max-w-sm p-0">
                 <SheetHeader className="sr-only">
                   <SheetTitle>Filtros</SheetTitle>
+                  <SheetDescription>
+                    Panel lateral con los filtros y marcas disponibles para el
+                    catálogo.
+                  </SheetDescription>
                 </SheetHeader>
                 <div className="p-6 overflow-y-auto h-full">
                   <FiltersContent />
