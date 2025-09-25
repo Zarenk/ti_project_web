@@ -15,13 +15,18 @@ export class ProductsService {
     private brandsService: BrandsService,
   ) {}
 
-  private mapBrand(brand: string | null) {
+  private mapBrand(brand: Pick<Brand, 'name' | 'logoSvg' | 'logoPng'> | null) {
     if (!brand) return null;
-    const slug = brand.trim().toLowerCase();
+    const name = brand.name?.trim();
+    if (!name) return null;
+
+    const slug = name.toLowerCase();
+    const fallbackSvg = `/assets/logos/${slug}.svg`;
+    const fallbackPng = `/assets/logos/${slug}.png`;
     return {
-      name: brand,
-      logoSvg: `/assets/logos/${slug}.svg`,
-      logoPng: `/assets/logos/${slug}.png`,
+      name,
+      logoSvg: brand.logoSvg ?? fallbackSvg,
+      logoPng: brand.logoPng ?? fallbackPng,
     };
   }
 
@@ -47,7 +52,8 @@ export class ProductsService {
           where: { id: brandId },
         });
       }
-      return await this.prismaService.product.create({
+
+      const createdProduct = await this.prismaService.product.create({
         data: {
           ...data,
           status: normalizedStatus,
@@ -63,6 +69,12 @@ export class ProductsService {
           brand: { select: { id: true, name: true, logoSvg: true, logoPng: true } },
         },
       });
+
+      return {
+        ...createdProduct,
+        brand: this.mapBrand(createdProduct.brand),
+      };
+
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -165,7 +177,7 @@ export class ProductsService {
     });
     return products.map((p) => ({
       ...p,
-      brand: this.mapBrand(p.brand?.name ?? null),
+      brand: this.mapBrand(p.brand),
     }));
   }
 
@@ -189,7 +201,7 @@ export class ProductsService {
       throw new NotFoundException(`Product with id ${id} not found`)
     }
 
-    return { ...productFound, brand: this.mapBrand(productFound.brand?.name ?? null) };
+    return { ...productFound, brand: this.mapBrand(productFound.brand) };
   }
 
   async update(id: number, updateProductDto: UpdateProductDto) {
@@ -224,7 +236,10 @@ export class ProductsService {
         throw new NotFoundException(`Product with id ${id} not found`);
       }
   
-      return productFound;
+      return {
+        ...productFound,
+        brand: this.mapBrand(productFound.brand),
+      };
     } catch (error){
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&

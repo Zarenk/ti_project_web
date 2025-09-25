@@ -225,6 +225,15 @@ const formatInventoryQuantity = (value: number): string => {
   return value.toFixed(2).replace(/\.00$/, "");
 };
 
+// --- NUEVO: glosa corta para vista compacta (móvil)
+const shortGlosa = (desc?: string, max = 80) => {
+  if (!desc) return '-';
+  // Toma la parte izquierda antes del " – " (para no mostrar proveedor/voucher)
+  const [left] = desc.split(' – ');
+  const clean = left.trim().replace(/\s{2,}/g, ' ');
+  return clean.length > max ? clean.slice(0, max - 1).trimEnd() + '…' : clean;
+};
+
 const enhanceDescriptionWithInventorySummary = (
   baseDescription?: string | null,
   summary?: string
@@ -265,8 +274,13 @@ const enhanceDescriptionWithInventorySummary = (
 
 type InventoryEntryDetail = {
   product_name?: string | null;
+  productName?: string | null;
   product?: { name?: string | null } | null;
+  item?: { name?: string | null; productName?: string | null } | null;
   name?: string | null;
+  itemName?: string | null;
+  descripcion?: string | null;
+  description?: string | null;
   quantity?: number | string | null;
   cantidad?: number | string | null;
   qty?: number | string | null;
@@ -331,13 +345,29 @@ const buildInventoryEntrySummaries = async (
         const summaryParts = details
           .map((detail) => {
             const nameCandidates = [
+              typeof detail?.productName === "string"
+                ? detail.productName
+                : undefined,
               typeof detail?.product?.name === "string"
                 ? detail.product.name
+                : undefined,
+              typeof detail?.item?.productName === "string"
+                ? detail.item.productName
+                : undefined,
+              typeof detail?.item?.name === "string"
+                ? detail.item.name
                 : undefined,
               typeof detail?.product_name === "string"
                 ? detail.product_name
                 : undefined,
               typeof detail?.name === "string" ? detail.name : undefined,
+              typeof detail?.itemName === "string" ? detail.itemName : undefined,
+              typeof detail?.descripcion === "string"
+                ? detail.descripcion
+                : undefined,
+              typeof detail?.description === "string"
+                ? detail.description
+                : undefined,
             ];
             const rawName = nameCandidates.find(
               (candidate) => candidate && candidate.trim().length > 0
@@ -346,6 +376,8 @@ const buildInventoryEntrySummaries = async (
             if (!name) {
               return undefined;
             }
+
+            const normalizedName = name.replace(/\s{2,}/g, " ");
 
             const quantityRaw =
               detail?.quantity ??
@@ -362,12 +394,21 @@ const buildInventoryEntrySummaries = async (
             const formattedQuantity = formatInventoryQuantity(quantityValue);
 
             return formattedQuantity
-              ? `${name} - ${formattedQuantity}`
-              : name;
+              ? `${normalizedName} - ${formattedQuantity}`
+              : normalizedName;
           })
           .filter((value:any): value is string => typeof value === "string" && value.trim().length > 0);
 
-        const summary = summaryParts.join(", ");
+        const dedupedSummaryParts = Array.from(
+          new Map(
+            summaryParts.map((part) => {
+              const key = part.replace(/\s*-\s*\d+(?:\.\d+)?$/, "").trim();
+              return [key.toLowerCase(), part] as const;
+            })
+          ).values()
+        );
+
+        const summary = dedupedSummaryParts.join(", ");
         if (!summary.trim()) {
           return null;
         }
@@ -856,7 +897,10 @@ export default function JournalsPage() {
                           className="text-sm cursor-zoom-in"
                           onDoubleClick={() => openLineDetail(l)}
                         >
-                          <div>{l.description ?? "-"}</div>
+                          {/* UNA LÍNEA con ellipsis y tooltip */}
+                          <div className="max-w-[520px] truncate" title={l.description ?? '-'}>
+                            {l.description ?? '-'}
+                          </div>
                           {l.documentType && (
                             <div className="mt-1 text-xs font-medium text-muted-foreground">
                               Tipo: {l.documentType}
@@ -942,7 +986,7 @@ export default function JournalsPage() {
                   <div className="space-y-1 text-sm">
                     <p className="font-medium">Glosa</p>
                     <p className="whitespace-pre-wrap text-muted-foreground">
-                      {line.description ?? "-"}
+                      {shortGlosa(line.description)}
                     </p>
                     {line.documentType && (
                       <p className="text-xs text-muted-foreground">

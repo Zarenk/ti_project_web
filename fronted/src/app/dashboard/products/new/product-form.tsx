@@ -238,18 +238,21 @@ export function ProductForm({
         if (params?.id) {
             savedProduct = await updateProduct(params.id, payload)
             toast.success("Producto actualizado correctamente."); // Notificaci??n de ?xito
-            router.push("/dashboard/products");
-            router.refresh();
+            if (!onSuccess) {
+                router.push("/dashboard/products");
+                router.refresh();
+            }
         } else {
             savedProduct = await createProduct(payload);
             toast.success("Producto creado correctamente."); // Notificaci??n de ?xito
+            if (!onSuccess) {
+                router.push("/dashboard/products");
+                router.refresh();
+            }
         }
 
         if (onSuccess) {
-            await onSuccess(savedProduct)
-        } else {
-            router.push("/dashboard/products");
-            router.refresh();
+            await onSuccess(savedProduct);
         }
     } catch (error: any) {
         const message = error.response?.data?.message || error.message || 'Error inesperado'
