@@ -49,7 +49,7 @@ import { useRouter } from "next/navigation"
 import ProductBreadcrumb from "@/components/product-breadcrumb"
 import { icons } from "@/lib/icons"
 import { getUserDataFromToken } from "@/lib/auth"
-import { resolveImageUrl } from "@/lib/images"
+import { getBrandLogoSources, resolveImageUrl } from "@/lib/images"
 import { BrandLogo } from "@/components/BrandLogo"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -116,6 +116,7 @@ export default function ProductPage({ params }: Props) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [categories, setCategories] = useState<any[]>([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(false)
+  const [productBrandLogo, ...productBrandLogoFallbacks] = getBrandLogoSources(product?.brand ?? null)
 
   const fetchProduct = useCallback(async () => {
     try {
@@ -633,10 +634,11 @@ export default function ProductPage({ params }: Props) {
               <div className="bg-card p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center gap-3 mb-3">
                   <Badge className="bg-blue-500 hover:bg-blue-600 flex items-center gap-1">
-                    {product?.brand?.logoSvg && (
+                    {productBrandLogo && (
                       <BrandLogo
-                        src={resolveImageUrl(product.brand.logoSvg)}
-                        alt={product.brand.name}
+                        src={productBrandLogo}
+                        alt={product?.brand?.name}
+                        fallbackSrc={productBrandLogoFallbacks}
                         className="h-4 w-auto"
                       />
                     )}
@@ -1102,92 +1104,96 @@ export default function ProductPage({ params }: Props) {
             <div className="mt-16">
               <h2 className="text-2xl font-bold mb-6">Productos relacionados</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {relatedProducts.map((rp) => (
-                  <Card
-                    key={rp.id}
-                    className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border"
-                  >
-                    <Link href={`/store/${rp.id}`} className="block">
-                      <CardHeader className="p-0">
-                        <div className="relative overflow-hidden rounded-t-lg">
-                          <Image
-                            src={resolveImageUrl(rp.images[0]) || "/placeholder.svg"}
-                            alt={rp.name}
-                            width={300}
-                            height={300}
-                            className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
-                          />
-                        </div>
-                      </CardHeader>
-                      <CardContent className="p-4">
-                        <div className="mb-2">
-                          <Badge variant="outline" className="text-xs">
-                            {rp.category}
-                          </Badge>
-                        </div>
-                        <h3 className="font-semibold text-base sm:text-lg mb-1 break-words whitespace-normal">
-                          {rp.name}
-                        </h3>
-                        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                          {rp.description}
-                        </p>
-                        <span className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
-                          {rp.brand?.logoSvg && (
-                            <BrandLogo
-                              src={resolveImageUrl(rp.brand.logoSvg)}
-                              alt={rp.brand.name}
-                              className="h-4 w-auto"
+                {relatedProducts.map((rp) => {
+                  const [brandLogo, ...brandLogoFallbacks] = getBrandLogoSources(rp.brand ?? null)
+                  return (
+                    <Card
+                      key={rp.id}
+                      className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border"
+                    >
+                      <Link href={`/store/${rp.id}`} className="block">
+                        <CardHeader className="p-0">
+                          <div className="relative overflow-hidden rounded-t-lg">
+                            <Image
+                              src={resolveImageUrl(rp.images[0]) || "/placeholder.svg"}
+                              alt={rp.name}
+                              width={300}
+                              height={300}
+                              className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
                             />
-                          )}
-                          {rp.brand?.name}
-                        </span>
-                        <div className="flex items-center justify-between">
-                          <span className="text-2xl font-bold text-green-600">S/.{rp.price.toFixed(2)}</span>
-                        </div>
-                        <p
-                          className={`text-xs mt-1 flex items-center gap-1 ${rp.stock !== null && rp.stock > 0 ? 'text-green-600' : 'text-red-600'}`}
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-4">
+                          <div className="mb-2">
+                            <Badge variant="outline" className="text-xs">
+                              {rp.category}
+                            </Badge>
+                          </div>
+                          <h3 className="font-semibold text-base sm:text-lg mb-1 break-words whitespace-normal">
+                            {rp.name}
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                            {rp.description}
+                          </p>
+                          <span className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                            {brandLogo && (
+                              <BrandLogo
+                                src={brandLogo}
+                                alt={rp.brand?.name}
+                                fallbackSrc={brandLogoFallbacks}
+                                className="h-4 w-auto"
+                              />
+                            )}
+                            {rp.brand?.name}
+                          </span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-2xl font-bold text-green-600">S/.{rp.price.toFixed(2)}</span>
+                          </div>
+                          <p
+                            className={`text-xs mt-1 flex items-center gap-1 ${rp.stock !== null && rp.stock > 0 ? 'text-green-600' : 'text-red-600'}`}
+                          >
+                            {rp.stock !== null && rp.stock > 0 ? (
+                              <PackageOpen className="w-4 h-4" />
+                            ) : (
+                              <Package className="w-4 h-4" />
+                            )}
+                            {rp.stock !== null && rp.stock > 0 ? `Stock: ${rp.stock}` : 'Sin stock'}
+                          </p>
+                          <div className="hidden group-hover:block mt-2 space-y-1 text-xs text-muted-foreground">
+                            {rp.specification?.processor && <p>Procesador: {rp.specification.processor}</p>}
+                            {rp.specification?.ram && <p>RAM: {rp.specification.ram}</p>}
+                            {rp.specification?.storage && <p>Almacenamiento: {rp.specification.storage}</p>}
+                            {rp.specification?.graphics && <p>Gráficos: {rp.specification.graphics}</p>}
+                            {rp.specification?.screen && <p>Pantalla: {rp.specification.screen}</p>}
+                            {rp.specification?.resolution && <p>Resolución: {rp.specification.resolution}</p>}
+                            {rp.specification?.refreshRate && <p>Tasa de refresco: {rp.specification.refreshRate}</p>}
+                            {rp.specification?.connectivity && <p>Conectividad: {rp.specification.connectivity}</p>}
+                          </div>
+                        </CardContent>
+                      </Link>
+                      {rp.stock !== null && rp.stock > 0 && (
+                        <CardFooter
+                          className="p-4 pt-0 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 transition-all"
                         >
-                          {rp.stock !== null && rp.stock > 0 ? (
-                            <PackageOpen className="w-4 h-4" />
-                          ) : (
-                            <Package className="w-4 h-4" />
-                          )}
-                          {rp.stock !== null && rp.stock > 0 ? `Stock: ${rp.stock}` : 'Sin stock'}
-                        </p>
-                        <div className="hidden group-hover:block mt-2 space-y-1 text-xs text-muted-foreground">
-                          {rp.specification?.processor && <p>Procesador: {rp.specification.processor}</p>}
-                          {rp.specification?.ram && <p>RAM: {rp.specification.ram}</p>}
-                          {rp.specification?.storage && <p>Almacenamiento: {rp.specification.storage}</p>}
-                          {rp.specification?.graphics && <p>Gráficos: {rp.specification.graphics}</p>}
-                          {rp.specification?.screen && <p>Pantalla: {rp.specification.screen}</p>}
-                          {rp.specification?.resolution && <p>Resolución: {rp.specification.resolution}</p>}
-                          {rp.specification?.refreshRate && <p>Tasa de refresco: {rp.specification.refreshRate}</p>}
-                          {rp.specification?.connectivity && <p>Conectividad: {rp.specification.connectivity}</p>}
-                        </div>
-                      </CardContent>
-                    </Link>
-                    {rp.stock !== null && rp.stock > 0 && (
-                      <CardFooter
-                        className="p-4 pt-0 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 transition-all"
-                      >
-                      <Button
-                          className="w-full"
-                          onClick={() => {
-                            addItem({
-                              id: rp.id,
-                              name: rp.name,
-                              price: rp.price,
-                              image: rp.images[0],
-                            })
-                            toast.success('Producto agregado al carrito')
-                          }}
-                        >
-                          Agregar al Carrito
-                        </Button>
-                      </CardFooter>
-                    )}
-                  </Card>
-                ))}
+                        <Button
+                            className="w-full"
+                            onClick={() => {
+                              addItem({
+                                id: rp.id,
+                                name: rp.name,
+                                price: rp.price,
+                                image: rp.images[0],
+                              })
+                              toast.success('Producto agregado al carrito')
+                            }}
+                          >
+                            Agregar al Carrito
+                          </Button>
+                        </CardFooter>
+                      )}
+                    </Card>
+                  )
+                })}
               </div>
             </div>
           )}

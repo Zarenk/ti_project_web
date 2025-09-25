@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { resolveImageUrl } from "@/lib/images"
+import { getBrandLogoSources, resolveImageUrl } from "@/lib/images"
 import { BrandLogo } from "@/components/BrandLogo"
 import { Search, Filter, Package, PackageOpen, DollarSign, Tag, Loader2 } from "lucide-react"
 import Navbar from "@/components/navbar"
@@ -545,6 +545,7 @@ export default function StorePage() {
                 {paginatedProducts.map((product, index) => {
                   const primaryImage = product.images?.[0]
                   const resolvedPrimaryImage = primaryImage ? resolveImageUrl(primaryImage) : "/placeholder.svg"
+                  const [brandLogo, ...brandLogoFallbacks] = getBrandLogoSources(product.brand ?? null)
                   return (
                     <Card
                       key={product.id}
@@ -588,10 +589,11 @@ export default function StorePage() {
                         <h3 className="font-semibold text-base sm:text-lg mb-1 break-words whitespace-normal">{product.name}</h3>
                         <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{product.description}</p>
                         <span className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
-                          {product.brand?.logoSvg && (
+                          {brandLogo && (
                             <BrandLogo
-                              src={resolveImageUrl(product.brand.logoSvg)}
-                              alt={product.brand.name}
+                              src={brandLogo}
+                              alt={product.brand?.name}
+                              fallbackSrc={brandLogoFallbacks}
                               className="h-4 w-auto"
                             />
                           )}

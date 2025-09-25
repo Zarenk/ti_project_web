@@ -12,7 +12,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { SelectTrigger, SelectValue } from '@radix-ui/react-select'
 import { Select, SelectContent, SelectItem } from '@/components/ui/select'
 import { z } from 'zod'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { IconName, icons } from '@/lib/icons'
 import { Loader2 } from 'lucide-react'
@@ -82,32 +82,68 @@ export function ProductForm({
     //inferir el tipo de dato
     type ProductType = z.infer<typeof productSchema>;
 
+    const buildFormValues = (source?: any): ProductType => {
+      const specification = source?.specification ?? {}
+      const brandName =
+        typeof source?.brand === 'string'
+          ? source.brand
+          : source?.brand?.name ?? ''
+
+      const toNumber = (value: unknown): number => {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          return value
+        }
+        if (typeof value === 'string') {
+          const parsed = Number(value)
+          return Number.isFinite(parsed) ? parsed : 0
+        }
+        return 0
+      }
+
+      const images = Array.isArray(source?.images)
+        ? source.images.filter((img: unknown): img is string => typeof img === 'string')
+        : []
+
+      const features = Array.isArray(source?.features)
+        ? source.features.map((feature: any) => ({
+            icon: feature?.icon ?? '',
+            title: feature?.title ?? '',
+            description: feature?.description ?? '',
+          }))
+        : []
+
+      return {
+        name: source?.name ?? '',
+        description: source?.description ?? '',
+        brand: brandName,
+        price: toNumber(source?.price),
+        priceSell: toNumber(source?.priceSell),
+        images: images.length > 0 ? images : [''],
+        status: (source?.status as 'Activo' | 'Inactivo') ?? 'Activo',
+        categoryId:
+          source?.categoryId != null
+            ? String(source.categoryId)
+            : source?.category?.id != null
+              ? String(source.category.id)
+              : '',
+        processor: specification?.processor ?? '',
+        ram: specification?.ram ?? '',
+        storage: specification?.storage ?? '',
+        graphics: specification?.graphics ?? '',
+        screen: specification?.screen ?? '',
+        resolution: specification?.resolution ?? '',
+        refreshRate: specification?.refreshRate ?? '',
+        connectivity: specification?.connectivity ?? '',
+        features,
+      }
+    }
+
+    const defaultValues = useMemo(() => buildFormValues(product), [product])
+
     //hook de react-hook-form
     const form = useForm<ProductType>({
     resolver: zodResolver(productSchema),
-    defaultValues: {
-        name: product?.name || '',
-        description: product?.description || '',
-        brand: product?.brand || '',
-        price: product?.price || 0.00,
-        priceSell: product?.priceSell || 0.00,
-        status: product?.status || "Activo" , // Valor predeterminado
-        images: product?.images?.length ? product.images : [],   
-        categoryId: product?.categoryId? String(product.categoryId) : '',
-        processor: product?.specification?.processor || '',
-        ram: product?.specification?.ram || '',
-        storage: product?.specification?.storage || '',
-        graphics: product?.specification?.graphics || '',
-        screen: product?.specification?.screen || '',
-        resolution: product?.specification?.resolution || '',
-        refreshRate: product?.specification?.refreshRate || '',
-        connectivity: product?.specification?.connectivity || '',
-        features: product?.features?.map((f: any) => ({
-          icon: f.icon || '',
-          title: f.title || '',
-          description: f.description || '',
-        })) || [],
-    }
+    defaultValues,
     });
 
   const { handleSubmit, register, setValue, control } = form;
@@ -130,6 +166,10 @@ export function ProductForm({
   // Estado para manejar el error del nombre si se repite
   const [nameError, setNameError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    form.reset(defaultValues)
+  }, [defaultValues, form])
 
   useEffect(() => {
     getBrands(1, 1000)

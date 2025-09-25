@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { resolveImageUrl } from "@/lib/images"
+import { getBrandLogoSources, resolveImageUrl } from "@/lib/images"
 import { BrandLogo } from "@/components/BrandLogo"
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
@@ -65,6 +65,7 @@ export default function MotionProductCard({ product, withActions = false, priori
   const primaryImage = imageList[0]
   const resolvedPrimaryImage = primaryImage ? resolveImageUrl(primaryImage) : "/placeholder.svg"
   const canAddToCart = typeof product.stock === 'number' && product.stock > 0
+  const [brandLogo, ...brandLogoFallbacks] = getBrandLogoSources(product.brand ?? null)
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -133,10 +134,11 @@ export default function MotionProductCard({ product, withActions = false, priori
                 {product.description}
               </p>
               <span className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
-                {product.brand?.logoSvg && (
+                {brandLogo && (
                   <BrandLogo
-                    src={resolveImageUrl(product.brand.logoSvg)}
-                    alt={product.brand.name}
+                    src={brandLogo}
+                    alt={product.brand?.name}
+                    fallbackSrc={brandLogoFallbacks}
                     className="h-4 w-auto"
                   />
                 )}

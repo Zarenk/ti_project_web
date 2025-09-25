@@ -36,3 +36,27 @@ export function resolveImageUrl(path?: string): string {
   // Otherwise return as-is
   return path;
 }
+
+interface BrandLike {
+  logoSvg?: string | null
+  logoPng?: string | null
+}
+
+export function getBrandLogoSources(brand?: BrandLike | null): string[] {
+  if (!brand) return []
+  const sources: string[] = []
+  const push = (path?: string | null) => {
+    if (!path) return
+    const resolved = resolveImageUrl(path)
+    if (resolved && !sources.includes(resolved)) {
+      sources.push(resolved)
+    }
+  }
+  push(brand.logoPng ?? undefined)
+  push(brand.logoSvg ?? undefined)
+  return sources
+}
+
+export function resolveBrandLogo(brand?: BrandLike | null): string {
+  return getBrandLogoSources(brand)[0] ?? ""
+}
