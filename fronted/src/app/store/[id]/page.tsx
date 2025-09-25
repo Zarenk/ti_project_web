@@ -729,11 +729,11 @@ export default function ProductPage({ params }: Props) {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 mb-4 sm:flex-row">
+              <div className="flex flex-col gap-3 mb-4 sm:flex-row">  
                 {stock !== null && stock > 0 && (
                   <Button
                     size="lg"
-                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                    className="w-full sm:flex-1 sm:w-auto bg-blue-600 hover:bg-blue-700"
                     onClick={() => {
                       if (product) {
                         addItem({
@@ -833,28 +833,28 @@ export default function ProductPage({ params }: Props) {
         {/* Tabs de Información Detallada */}
         <div className="mt-16">
           <Tabs defaultValue="specs" className="w-full">
-            <TabsList className="flex w-full gap-2 overflow-x-auto rounded-lg bg-muted/50 p-1 sm:grid sm:grid-cols-4 sm:overflow-visible">
+            <TabsList className="flex w-full gap-0 overflow-x-auto rounded-lg bg-muted/50 p-0 sm:grid sm:grid-cols-4 sm:overflow-visible">
               <TabsTrigger
                 value="specs"
-                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
               >
                 Especificaciones
               </TabsTrigger>
               <TabsTrigger
                 value="features"
-                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
               >
                 Características
               </TabsTrigger>
               <TabsTrigger
                 value="reviews"
-                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
               >
                 Reseñas
               </TabsTrigger>
               <TabsTrigger
                 value="support"
-                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
               >
                 Soporte
               </TabsTrigger>

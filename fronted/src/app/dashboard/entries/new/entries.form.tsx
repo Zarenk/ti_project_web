@@ -5,7 +5,7 @@ import { checkSeries, processPDF } from '../entries.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { z } from 'zod'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import React from 'react'
 import { getProducts } from '../../products/products.api'
@@ -23,6 +23,7 @@ import { handleFormSubmission } from '../utils/onSubmitHelper'
 import { ActionButtons } from '../components/entries/ActionButtons'
 import { getLatestExchangeRateByCurrency } from '../../exchange/exchange.api'
 import { detectInvoiceProvider, processExtractedText, processInvoiceText } from '../utils/pdfExtractor'
+import { numeroALetrasCustom } from '../../sales/components/utils/numeros-a-letras'
 
 // Función para obtener el userId del token JWT almacenado en localStorage
 async function getUserIdFromToken(): Promise<number | null> {
@@ -158,7 +159,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [series, setSeries] = useState<string[]>([]);
 
   // COMBOBOX DE TIENDAS
-  const [stores, setStores] = useState<{ id: number; 
+  const [stores, setStores] = useState<{ id: number;
     name: string, description: string, adress: string }[]>([]); // Estado para as tiendas
   const [openStore, setOpenStore] = React.useState(false)
   const [valueStore, setValueStore] = React.useState("")
@@ -218,6 +219,54 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // CONTROLAR LA MONEDA
   const [currency, setCurrency] = useState<string>(form.getValues("tipo_moneda") || "PEN");
+
+  const normalizedCurrency = currency === 'USD' ? 'USD' : 'PEN';
+
+  const totalAmount = useMemo(() => {
+    return selectedProducts.reduce((sum, product) => {
+      const price = Number(product.price) || 0;
+      const quantityValue = Number(product.quantity) || 0;
+      return sum + price * quantityValue;
+    }, 0);
+  }, [selectedProducts]);
+
+  const amountInWords = useMemo(() => {
+    if (selectedProducts.length === 0) {
+      return '';
+    }
+
+    const roundedTotal = Math.round(totalAmount * 100) / 100;
+    const integerPart = Math.floor(roundedTotal);
+    const cents = Math.round((roundedTotal % 1) * 100)
+      .toString()
+      .padStart(2, '0');
+
+    const currencyLabels: Record<string, { singular: string; plural: string }> = {
+      PEN: { singular: 'SOL', plural: 'SOLES' },
+      USD: { singular: 'DÓLAR AMERICANO', plural: 'DÓLARES AMERICANOS' },
+      EUR: { singular: 'EURO', plural: 'EUROS' }
+    };
+
+    const currencyLabel = currencyLabels[normalizedCurrency] ?? {
+      singular: 'MONEDA',
+      plural: 'MONEDAS'
+    };
+
+    const currencyText = integerPart === 1 ? currencyLabel.singular : currencyLabel.plural;
+
+    const literal = numeroALetrasCustom(roundedTotal, normalizedCurrency)
+      .replace('IMPORTE EN LETRAS:', '')
+      .trim();
+
+    const [amountWords] = literal.split(` ${currencyText} CON `);
+
+    if (!amountWords) {
+      return `SON ${literal}`;
+    }
+
+    return `SON ${amountWords} CON ${cents}/100 ${currencyText}`;
+  }, [normalizedCurrency, selectedProducts.length, totalAmount]);
+
 
   // Función para eliminar un producto del datatable
   const removeProduct = (id: number) => {
@@ -627,6 +676,18 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       getAllSeriesFromDataTable={getAllSeriesFromDataTable}
                       removeProduct={removeProduct}
                     />
+
+                    {selectedProducts.length > 0 && (
+                      <div className="mt-4 w-full rounded-md border border-primary/20 bg-primary/5 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary">
+                          {amountInWords}
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-muted-foreground">
+                          Total: {normalizedCurrency === 'USD' ? '$' : 'S/.'}{' '}
+                          {totalAmount.toFixed(2)}
+                        </p>
+                      </div>
+                    )}
 
                     <ActionButtons
                       setIsDialogOpen={setIsDialogOpen}
