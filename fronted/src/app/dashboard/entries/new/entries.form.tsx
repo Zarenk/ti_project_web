@@ -101,6 +101,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // Extraer funciones y estados del formulario
   const { handleSubmit, register, setValue, formState: {errors} } = form;
+  const purchasePrice = form.watch('price');
 
   // Estado para manejar el envío del formulario
   const [isSubmitting, setIsSubmitting] = useState(false);

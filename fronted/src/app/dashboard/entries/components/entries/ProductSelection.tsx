@@ -1,4 +1,5 @@
 import { Barcode, Check, ChevronsUpDown, Plus, Save } from 'lucide-react'
+import { useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,6 +22,7 @@ export function ProductSelection({
   setCurrentProduct,
   register,
   setValue,
+  purchasePrice,
   addProduct,
   isDialogOpenSeries,
   setIsDialogOpenSeries,
@@ -34,6 +36,12 @@ export function ProductSelection({
   isNewCategoryBoolean,
   setIsNewCategoryBoolean,
 }: any) {
+  const totalPurchasePrice = useMemo(() => {
+    const price = currentProduct?.price ?? Number(purchasePrice ?? 0)
+    const numericQuantity = Number(quantity) || 0
+    return (price * numericQuantity).toFixed(2)
+  }, [currentProduct, quantity, purchasePrice])
+
   return (
     <div className="flex-1 flex-col border border-gray-600 rounded-md p-2">
       <Label htmlFor="product-combobox" className="text-sm font-medium mb-2">
@@ -151,6 +159,8 @@ export function ProductSelection({
 
       <Label className="text-sm font-medium py-2">Categoria</Label>
       <Input {...register("category_name")} readOnly />
+      <Label className="text-sm font-medium py-2">Descripcion</Label>
+      <Input {...register("description")} readOnly />
       <div className="flex justify-between gap-1">
         <div className="flex flex-col flex-grow">
           <Label className="text-sm font-medium py-2">Precio de Compra</Label>
@@ -183,25 +193,31 @@ export function ProductSelection({
           />
         </div>
       </div>
-      <Label className="text-sm font-medium py-2">Descripcion</Label>
-      <Input {...register("description")} readOnly />
-      <Label className="text-sm font-medium py-2">Cantidad</Label>
-      <Input
-        type="text"
-        placeholder="Cantidad"
-        value={quantity.toString()}
-        maxLength={10}
-        onChange={(e) => {
-          const value = e.target.value;
-          if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
-            setQuantity(Number(value));
-          }
-        }}
-        onBlur={() => {
-          const numericValue = parseFloat(String(quantity));
-          setQuantity(!isNaN(numericValue) ? numericValue : 1);
-        }}
-      />
+      <div className="flex justify-between gap-1">
+        <div className="flex flex-col flex-grow">
+          <Label className="text-sm font-medium py-2">Cantidad</Label>
+          <Input
+            type="text"
+            placeholder="Cantidad"
+            value={quantity.toString()}
+            maxLength={10}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
+                setQuantity(Number(value));
+              }
+            }}
+            onBlur={() => {
+              const numericValue = parseFloat(String(quantity));
+              setQuantity(!isNaN(numericValue) ? numericValue : 1);
+            }}
+          />
+        </div>
+        <div className="flex flex-col flex-grow">
+          <Label className="text-sm font-medium py-2">Precio Total Unitario</Label>
+          <Input value={totalPurchasePrice} readOnly />
+        </div>
+      </div>
     </div>
   )
 }
