@@ -633,17 +633,46 @@ export default function ProductPage({ params }: Props) {
             <div className="space-y-4">
               <div className="bg-card p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center gap-3 mb-3">
-                  <Badge className="bg-blue-500 hover:bg-blue-600 flex items-center gap-1">
-                    {productBrandLogo && (
-                      <BrandLogo
-                        src={productBrandLogo}
-                        alt={product?.brand?.name}
-                        fallbackSrc={productBrandLogoFallbacks}
-                        className="h-4 w-auto"
-                      />
-                    )}
-                    {product?.brand?.name}
-                  </Badge>
+                  {product?.brand?.name ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Link
+                          href={`/store?brand=${encodeURIComponent(product.brand.name)}`}
+                          className="group inline-flex"
+                          aria-label={`Ver catálogo de ${product.brand.name}`}
+                        >
+                          <Badge
+                            className="flex items-center gap-2 bg-blue-500 transition-all duration-200 hover:bg-blue-600 hover:shadow-lg cursor-pointer group-hover:-translate-y-0.5"
+                          >
+                            {productBrandLogo && (
+                              <BrandLogo
+                                src={productBrandLogo}
+                                alt={product.brand.name}
+                                fallbackSrc={productBrandLogoFallbacks}
+                                className="h-4 w-auto transition-transform duration-200 group-hover:scale-110"
+                              />
+                            )}
+                            <span className="font-semibold tracking-wide">
+                              {product.brand.name}
+                            </span>
+                          </Badge>
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent>Ver catálogo de {product.brand.name}</TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Badge className="bg-blue-500 hover:bg-blue-600 flex items-center gap-1">
+                      {productBrandLogo && (
+                        <BrandLogo
+                          src={productBrandLogo}
+                          alt={product?.brand?.name}
+                          fallbackSrc={productBrandLogoFallbacks}
+                          className="h-4 w-auto"
+                        />
+                      )}
+                      {product?.brand?.name}
+                    </Badge>
+                  )}
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{product?.name}</h2>
                 </div>
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -702,6 +731,7 @@ export default function ProductPage({ params }: Props) {
                       size="sm"
                       onClick={() => setQuantity(Math.max(1, quantity - 1))}
                       disabled={quantity <= 1}
+                      className="transition-all duration-150 hover:bg-blue-50 hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-70 active:scale-95"
                     >
                       <Minus className="w-4 h-4" />
                     </Button>
@@ -711,6 +741,7 @@ export default function ProductPage({ params }: Props) {
                       size="sm"
                       onClick={() => setQuantity(quantity + 1)}
                       disabled={stock !== null && (stock <= 0 || quantity >= stock)}
+                      className="transition-all duration-150 hover:bg-blue-50 hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-70 active:scale-95"
                     >
                       <Plus className="w-4 h-4" />
                     </Button>
@@ -733,7 +764,7 @@ export default function ProductPage({ params }: Props) {
                 {stock !== null && stock > 0 && (
                   <Button
                     size="lg"
-                    className="w-full sm:flex-1 sm:w-auto bg-blue-600 hover:bg-blue-700"
+                    className="w-full sm:flex-1 sm:w-auto bg-blue-600 hover:bg-blue-700 transition-transform duration-200 hover:shadow-lg hover:-translate-y-0.5 active:scale-95"
                     onClick={() => {
                       if (product) {
                         addItem({
@@ -760,7 +791,7 @@ export default function ProductPage({ params }: Props) {
                       size="lg"
                       variant="outline"
                       onClick={handleToggleFavorite}
-                      className={`w-full sm:w-auto ${
+                      className={`w-full sm:w-auto transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
                         isInWishlist ? "text-red-500 border-red-500" : ""
                       }`}
                     >
@@ -774,7 +805,7 @@ export default function ProductPage({ params }: Props) {
               {stock !== null && stock > 0 && (
                 <Button
                   size="lg"
-                  className="w-full bg-green-600 hover:bg-green-700"
+                  className="w-full bg-green-600 hover:bg-green-700 transition-transform duration-200 hover:shadow-lg hover:-translate-y-0.5 active:scale-95"
                   onClick={() => {
                     if (product) {
                       addItem({
@@ -836,25 +867,25 @@ export default function ProductPage({ params }: Props) {
             <TabsList className="flex w-full gap-0 overflow-x-auto rounded-lg bg-muted/50 p-0 sm:grid sm:grid-cols-4 sm:overflow-visible">
               <TabsTrigger
                 value="specs"
-                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs transition-all duration-150 hover:bg-blue-50 hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
               >
                 Especificaciones
               </TabsTrigger>
               <TabsTrigger
                 value="features"
-                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs transition-all duration-150 hover:bg-blue-50 hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
               >
                 Características
               </TabsTrigger>
               <TabsTrigger
                 value="reviews"
-                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs transition-all duration-150 hover:bg-blue-50 hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
               >
                 Reseñas
               </TabsTrigger>
               <TabsTrigger
                 value="support"
-                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
+                className="flex-1 whitespace-normal break-words px-3 py-2 text-xs transition-all duration-150 hover:bg-blue-50 hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-sm sm:h-full sm:items-center sm:justify-center sm:text-center"
               >
                 Soporte
               </TabsTrigger>

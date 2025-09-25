@@ -49,6 +49,7 @@ export const SelectedProductsTable = ({
             <TableHead className="text-left max-w-[150px] truncate hidden sm:table-cell">Categoria</TableHead>
             <TableHead className="text-left max-w-[150px] truncate">Cantidad</TableHead>
             <TableHead className="text-left max-w-[150px] truncate">Precio Compra</TableHead>
+            <TableHead className="text-left max-w-[150px] truncate">Precio Compra Total</TableHead>
             <TableHead className="text-left max-w-[150px] truncate hidden sm:table-cell">Precio Venta</TableHead>
             <TableHead className="text-left max-w-[150px] truncate hidden sm:table-cell">Series</TableHead>
             <TableHead className="text-left max-w-[150px] truncate">Acciones</TableHead>
@@ -99,6 +100,9 @@ export const SelectedProductsTable = ({
                   }}
                   className="w-full"
                 />
+              </TableCell>
+              <TableCell className="max-w-[120px] truncate overflow-hidden whitespace-nowrap">
+                {(Number(product.quantity) * Number(product.price || 0)).toFixed(2)}
               </TableCell>
               <TableCell className="max-w-[100px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell">
                 <Input

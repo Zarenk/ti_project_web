@@ -24,6 +24,7 @@ export function MobileProductModal({ product, onClose }: { product: Product | nu
           <div><strong>Categoría:</strong> {product.category_name}</div>
           <div><strong>Cantidad:</strong> {product.quantity}</div>
           <div><strong>Precio Compra:</strong> S/. {Number(product.price || 0).toFixed(2)}</div>
+          <div><strong>Precio Compra Total:</strong> S/. {(Number(product.quantity) * Number(product.price || 0)).toFixed(2)}</div>
           <div><strong>Precio Venta:</strong> S/. {Number(product.priceSell || 0).toFixed(2)}</div>
           <div><strong>Series:</strong> {product.series?.join(", ") || "Sin series"}</div>
         </div>
