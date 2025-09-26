@@ -116,6 +116,8 @@ export default function ProductPage({ params }: Props) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [categories, setCategories] = useState<any[]>([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(false)
+  const [productToEdit, setProductToEdit] = useState<any | null>(null)
+  const [isLoadingProductToEdit, setIsLoadingProductToEdit] = useState(false)
   const [productBrandLogo, ...productBrandLogoFallbacks] = getBrandLogoSources(product?.brand ?? null)
 
   const fetchProduct = useCallback(async () => {
@@ -163,11 +165,38 @@ export default function ProductPage({ params }: Props) {
     }
   }, [isEditDialogOpen])
 
-  const handleEditButtonClick = useCallback(
-    (_event: MouseEvent<HTMLButtonElement>) => {
+  const handleEditButtonClick = useCallback(() => {
+    if (!product) {
+      return
+    }
+    setProductToEdit(product)
+    setIsLoadingProductToEdit(false)
+    setIsEditDialogOpen(true)
+  }, [product])
+
+  const handleRelatedProductEditClick = useCallback(
+    async (productId: number) => {
       setIsEditDialogOpen(true)
+      if (product && product.id === productId) {
+        setProductToEdit(product)
+        setIsLoadingProductToEdit(false)
+        return
+      }
+
+      setIsLoadingProductToEdit(true)
+      setProductToEdit(null)
+
+      try {
+        const productData = await getProduct(String(productId))
+        setProductToEdit(productData)
+      } catch (error) {
+        console.error("Error fetching product for edit:", error)
+        setProductToEdit(null)
+      } finally {
+        setIsLoadingProductToEdit(false)
+      }
     },
-    [],
+    [product],
   )
 
   const handleImageUpdated = useCallback(
@@ -180,24 +209,61 @@ export default function ProductPage({ params }: Props) {
             }
           : prev,
       )
+      setProductToEdit((prev: any) =>
+        prev && product && prev.id === product.id
+          ? {
+              ...prev,
+              images: nextImages,
+            }
+          : prev,
+      )
       setSelectedImage(0)
       void fetchProduct()
     },
-    [fetchProduct],
+    [fetchProduct, product],
   )
 
   const handleProductUpdateSuccess = useCallback(
-    async (_updatedProduct: any) => {
+    async (updatedProduct: any) => {
       setIsEditDialogOpen(false)
+      setProductToEdit(null)
       setSelectedImage(0)
       try {
         await fetchProduct()
       } catch (error) {
         console.error("Error refreshing product after update:", error)
       }
-    },
+      if (updatedProduct?.id != null) {
+        setRelatedProducts((prev) =>
+          prev.map((relatedProduct) =>
+            relatedProduct.id === updatedProduct.id
+              ? {
+                  ...relatedProduct,
+                  ...updatedProduct,
+                  brand: updatedProduct.brand ?? relatedProduct.brand,
+                  category:
+                    typeof updatedProduct.category === "string"
+                      ? updatedProduct.category
+                      : updatedProduct.category?.name ?? relatedProduct.category,
+                  images:
+                    Array.isArray(updatedProduct.images) && updatedProduct.images.length > 0
+                      ? updatedProduct.images
+                      : relatedProduct.images,
+                }
+              : relatedProduct,
+          ),
+        )
+      }
+    },  
     [fetchProduct],
   )
+
+  useEffect(() => {
+    if (!isEditDialogOpen) {
+      setProductToEdit(null)
+      setIsLoadingProductToEdit(false)
+    }
+  }, [isEditDialogOpen])
 
   const handleRelatedImageUpdated = useCallback(
     (productId: number, nextImages: string[]) => {
@@ -210,6 +276,14 @@ export default function ProductPage({ params }: Props) {
               }
             : relatedProduct,
         ),
+      )
+      setProductToEdit((prev: any) =>
+        prev && prev.id === productId
+          ? {
+              ...prev,
+              images: nextImages,
+            }
+          : prev,
       )
     },
     [],
@@ -411,7 +485,11 @@ export default function ProductPage({ params }: Props) {
               Actualiza las características y detalles del producto sin salir de esta página.
             </DialogDescription>
           </DialogHeader>
-          {product ? (
+          {isLoadingProductToEdit ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : productToEdit ? (
             isLoadingCategories && categories.length === 0 ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -419,8 +497,8 @@ export default function ProductPage({ params }: Props) {
             ) : (
               <div className="pb-4">
                 <ProductForm
-                  key={product.id}
-                  product={product}
+                  key={productToEdit.id}
+                  product={productToEdit}
                   categories={categories}
                   onSuccess={handleProductUpdateSuccess}
                   onCancel={() => setIsEditDialogOpen(false)}
@@ -536,10 +614,10 @@ export default function ProductPage({ params }: Props) {
                         }
                         onImageUpdated={handleImageUpdated}
                       />
-                      <AdminProductEditButton
-                        productId={product.id}
-                        onClick={handleEditButtonClick}
-                      />
+                        <AdminProductEditButton
+                          productId={product.id}
+                          onClick={handleEditButtonClick}
+                        />
                     </div>
                   </div>
                 )}
@@ -1193,7 +1271,12 @@ export default function ProductPage({ params }: Props) {
                             handleRelatedImageUpdated(rp.id, nextImages)
                           }
                         />
-                        <AdminProductEditButton productId={rp.id} />
+                        <AdminProductEditButton
+                          productId={rp.id}
+                          onClick={() => {
+                            void handleRelatedProductEditClick(rp.id)
+                          }}
+                        />
                       </div>
                       <Link href={`/store/${rp.id}`} className="block">
                         <CardHeader className="p-0">

@@ -282,68 +282,13 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     return `SON ${amountWords} CON ${cents}/100 ${currencyText}`;
   }, [normalizedCurrency, selectedProducts.length, totalAmount]);
 
-  const handleCurrencyToggle = async () => {
+  const handleCurrencyToggle = () => {
     if (isConvertingCurrency) return;
 
     const targetCurrency = (currency === 'PEN' ? 'USD' : 'PEN') as 'USD' | 'PEN';
 
-    setIsConvertingCurrency(true);
-
-    try {
-      let exchangeRate = tipoCambioActual;
-
-      if (!exchangeRate || exchangeRate <= 0) {
-        exchangeRate = await getLatestExchangeRateByCurrency('USD');
-        if (!exchangeRate || exchangeRate <= 0) {
-          toast.error('No se encontró un tipo de cambio válido.');
-          return;
-        }
-      }
-
-      const convertValue = (value: number | string | null | undefined) => {
-        const numericValue = Number(value) || 0;
-        if (targetCurrency === 'USD') {
-          return Number((numericValue / exchangeRate!).toFixed(2));
-        }
-        return Number((numericValue * exchangeRate!).toFixed(2));
-      };
-
-      setSelectedProducts((prev) =>
-        prev.map((product) => ({
-          ...product,
-          price: convertValue(product.price),
-        }))
-      );
-
-      setCurrentProduct((prev) => {
-        if (!prev) {
-          return prev;
-        }
-        const updatedPrice = convertValue(prev.price);
-        form.setValue('price', updatedPrice, { shouldValidate: true });
-        return { ...prev, price: updatedPrice };
-      });
-
-      if (!currentProduct) {
-        const rawPrice = form.getValues('price');
-        const updatedPrice = convertValue(rawPrice);
-        form.setValue('price', updatedPrice, { shouldValidate: true });
-      }
-
-      setCurrency(targetCurrency);
-      setTipoMoneda(targetCurrency);
-      setTipoCambioActual(exchangeRate);
-      form.setValue('tipo_moneda', targetCurrency, { shouldValidate: true });
-
-      toast.success(
-        `Precios convertidos a ${targetCurrency === 'USD' ? 'dólares estadounidenses' : 'soles peruanos'}.`
-      );
-    } catch (error) {
-      console.error('Error al convertir la moneda:', error);
-      toast.error('No se pudo convertir la moneda. Inténtalo nuevamente.');
-    } finally {
-      setIsConvertingCurrency(false);
-    }
+    setPendingCurrency(targetCurrency);
+    setIsCurrencyDialogOpen(true);
   };
 
   const convertProductsByCurrency = (
@@ -396,7 +341,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     }
 
     try {
-      if (shouldConvertPrices && selectedProducts.length > 0) {
+      if (shouldConvertPrices) {
         let exchangeRate = tipoCambioActual;
 
         if (currency === 'PEN' && newCurrency === 'USD') {
@@ -411,9 +356,46 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
             return false;
           }
 
+          const convertValue = (value: number | string | null | undefined) => {
+            const numericValue = Number(value);
+            if (Number.isNaN(numericValue)) {
+              return value;
+            }
+
+            const converted = numericValue / (exchangeRate as number);
+            return Number(converted.toFixed(2));
+          };
+
           setSelectedProducts((prev) =>
             convertProductsByCurrency(prev, exchangeRate as number, 'USD')
           );
+
+          setCurrentProduct((prev) => {
+            if (!prev) {
+              return prev;
+            }
+
+            const updatedPrice = convertValue(prev.price);
+            const updatedPriceSell = convertValue(prev.priceSell);
+            const finalPrice = typeof updatedPrice === 'number' ? updatedPrice : 0;
+            const finalPriceSell = typeof updatedPriceSell === 'number' ? updatedPriceSell : 0;
+            form.setValue('price', finalPrice, { shouldValidate: true });
+            form.setValue('priceSell', finalPriceSell, { shouldValidate: true });
+
+            return {
+              ...prev,
+              price: finalPrice,
+              priceSell: finalPriceSell,
+            };
+          });
+
+          const rawPrice = form.getValues('price');
+          const rawPriceSell = form.getValues('priceSell');
+          const convertedPrice = convertValue(rawPrice);
+          const convertedPriceSell = convertValue(rawPriceSell);
+          form.setValue('price', typeof convertedPrice === 'number' ? convertedPrice : 0, { shouldValidate: true });
+          form.setValue('priceSell', typeof convertedPriceSell === 'number' ? convertedPriceSell : 0, { shouldValidate: true });
+
           setTipoCambioActual(exchangeRate);
           toast.success('Los precios se actualizaron a dólares.');
         } else if (currency === 'USD' && newCurrency === 'PEN') {
@@ -428,15 +410,55 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
             return false;
           }
 
+          const convertValue = (value: number | string | null | undefined) => {
+            const numericValue = Number(value);
+            if (Number.isNaN(numericValue)) {
+              return value;
+            }
+
+            const converted = numericValue * (exchangeRate as number);
+            return Number(converted.toFixed(2));
+          };
+
           setSelectedProducts((prev) =>
             convertProductsByCurrency(prev, exchangeRate as number, 'PEN')
           );
+
+          setCurrentProduct((prev) => {
+            if (!prev) {
+              return prev;
+            }
+
+            const updatedPrice = convertValue(prev.price);
+            const updatedPriceSell = convertValue(prev.priceSell);
+            const finalPrice = typeof updatedPrice === 'number' ? updatedPrice : 0;
+            const finalPriceSell = typeof updatedPriceSell === 'number' ? updatedPriceSell : 0;
+            form.setValue('price', finalPrice, { shouldValidate: true });
+            form.setValue('priceSell', finalPriceSell, { shouldValidate: true });
+
+            return {
+              ...prev,
+              price: finalPrice,
+              priceSell: finalPriceSell,
+            };
+          });
+
+          const rawPrice = form.getValues('price');
+          const rawPriceSell = form.getValues('priceSell');
+          const convertedPrice = convertValue(rawPrice);
+          const convertedPriceSell = convertValue(rawPriceSell);
+          form.setValue('price', typeof convertedPrice === 'number' ? convertedPrice : 0, { shouldValidate: true });
+          form.setValue('priceSell', typeof convertedPriceSell === 'number' ? convertedPriceSell : 0, { shouldValidate: true });
+
+          setTipoCambioActual(exchangeRate);
+
           toast.success('Los precios se actualizaron a soles.');
         }
       }
 
       setCurrency(newCurrency);
       setTipoMoneda(newCurrency);
+      form.setValue('tipo_moneda', newCurrency, { shouldValidate: true });
 
       return true;
     } catch (error) {
@@ -815,8 +837,6 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       handlePDFGuiaUpload={handlePDFGuiaUpload}
                       currency={currency}
                       onCurrencyChange={handleCurrencySelection}
-                      onToggleCurrency={handleCurrencyToggle}
-                      isConvertingCurrency={isConvertingCurrency}
                     />
                     <AdditionalInfoSection
                       register={register}
@@ -927,6 +947,9 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setPdfGuiaFile={setPdfGuiaFile}
                       router={router}
                       isSubmitting={isSubmitting}
+                      onCurrencyToggle={handleCurrencyToggle}
+                      currency={currency}
+                      isConvertingCurrency={isConvertingCurrency}
                     />
         </fieldset>
         <AlertDialog

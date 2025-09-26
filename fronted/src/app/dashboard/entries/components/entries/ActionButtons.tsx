@@ -1,6 +1,7 @@
 // components/entries/ActionButtons.tsx
 import { Button } from "@/components/ui/button"
 import { ConfirmationDialog } from "./ConfirmationDialog"
+import { RefreshCcw } from "lucide-react"
 
 interface ActionButtonsProps {
   setIsDialogOpen: (value: boolean) => void;
@@ -21,6 +22,9 @@ interface ActionButtonsProps {
   setPdfGuiaFile: Function;
   router: any;
   isSubmitting: boolean; // Agregado aquí
+  onCurrencyToggle: () => void;
+  currency: 'USD' | 'PEN';
+  isConvertingCurrency: boolean;
 }
 
 export function ActionButtons({
@@ -42,6 +46,9 @@ export function ActionButtons({
   setPdfGuiaFile,
   router,
   isSubmitting,
+  onCurrencyToggle,
+  currency,
+  isConvertingCurrency,
 }: ActionButtonsProps) {
 
   return (
@@ -73,6 +80,20 @@ export function ActionButtons({
         ) : (
           "Crear Ingreso de Productos"
         )}
+      </Button>
+
+      <Button
+        type="button"
+        onClick={onCurrencyToggle}
+        disabled={isSubmitting || isConvertingCurrency}
+        className="mt-4 flex items-center justify-center gap-2 rounded-md bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_20px_-12px_rgba(59,130,246,0.7)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_35px_-15px_rgba(59,130,246,0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        <RefreshCcw
+          className={`h-4 w-4 transition-transform duration-200 ${isConvertingCurrency ? 'animate-spin' : ''}`}
+        />
+        {isConvertingCurrency
+          ? 'Convirtiendo...'
+          : `Convertir a ${currency === 'PEN' ? 'USD' : 'PEN'}`}
       </Button>
 
       <Button

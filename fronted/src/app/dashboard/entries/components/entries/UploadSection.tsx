@@ -1,12 +1,11 @@
 'use client'
 
-import { FileSpreadsheet, FileText, RefreshCcw } from 'lucide-react';
+import { FileSpreadsheet, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils';
 
 interface UploadSectionProps {
   register: any;
@@ -14,8 +13,6 @@ interface UploadSectionProps {
   handlePDFGuiaUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   currency: string;
   onCurrencyChange: (value: 'USD' | 'PEN') => void;
-  onToggleCurrency: () => void;
-  isConvertingCurrency: boolean;
 }
 
 export function UploadSection({
@@ -24,8 +21,6 @@ export function UploadSection({
   handlePDFGuiaUpload,
   currency,
   onCurrencyChange,
-  onToggleCurrency,
-  isConvertingCurrency,
 }: UploadSectionProps) {
 
   const router = useRouter();
@@ -108,21 +103,6 @@ export function UploadSection({
           </Select>
         </div>
       </div>
-      <Button
-        type="button"
-        onClick={onToggleCurrency}
-        disabled={isConvertingCurrency}
-        className={cn(
-          'mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 py-2 text-sm font-semibold text-white',
-          'shadow-[0_10px_20px_-12px_rgba(59,130,246,0.7)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_35px_-15px_rgba(59,130,246,0.8)]',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-70'
-        )}
-      >
-        <RefreshCcw className={`h-4 w-4 transition-transform duration-200 ${isConvertingCurrency ? 'animate-spin' : ''}`} />
-        {isConvertingCurrency
-          ? 'Convirtiendo...'
-          : `Convertir a ${currency === 'PEN' ? 'USD' : 'PEN'}`}
-      </Button>
     </div>
   );
 }
