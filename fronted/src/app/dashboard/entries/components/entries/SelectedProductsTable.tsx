@@ -5,10 +5,13 @@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { X } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Check, ChevronsUpDown, X } from "lucide-react"
 import { EditSeriesModal } from "../EditSeriesModal"
 import { useState } from "react"
 import { MobileProductModal } from "../MobileProductModal"
+import { cn } from "@/lib/utils"
 
 interface Product {
   id: number
@@ -27,6 +30,7 @@ interface Props {
   setOpenSeriesModal: React.Dispatch<React.SetStateAction<number | null>>
   getAllSeriesFromDataTable: () => string[]
   removeProduct: (id: number) => void
+  categories: { id: number; name: string }[]
 }
 
 export const SelectedProductsTable = ({
@@ -36,9 +40,11 @@ export const SelectedProductsTable = ({
   setOpenSeriesModal,
   getAllSeriesFromDataTable,
   removeProduct,
+  categories,
 }: Props) => {
 
   const [activeProduct, setActiveProduct] = useState<Product | null>(null)
+  const [categoryPopoverIndex, setCategoryPopoverIndex] = useState<number | null>(null)
 
   return (
     <div className='border px-2 overflow-x-auto max-w-full'>
@@ -63,7 +69,74 @@ export const SelectedProductsTable = ({
               className="cursor-pointer sm:cursor-default"
             >
               <TableCell className="w-[100px] sm:w-[300px] max-w-[400px] truncate overflow-hidden whitespace-nowrap">{product.name}</TableCell>
-              <TableCell className="max-w-[150px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell">{product.category_name}</TableCell>
+              <TableCell className="max-w-[150px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell">
+                <Popover
+                  open={categoryPopoverIndex === index}
+                  onOpenChange={(open) => setCategoryPopoverIndex(open ? index : null)}
+                >
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      {product.category_name || "Sin categoría"}
+                      <ChevronsUpDown className="opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-0">
+                    <Command>
+                      <CommandInput placeholder="Buscar categoría..." />
+                      <CommandList>
+                        <CommandEmpty>No se encontraron categorías.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="Sin categoría"
+                            onSelect={() => {
+                              setSelectedProducts((prev) =>
+                                prev.map((p, i) =>
+                                  i === index ? { ...p, category_name: "" } : p
+                                )
+                              )
+                              setCategoryPopoverIndex(null)
+                            }}
+                          >
+                            Sin categoría
+                            <Check
+                              className={cn(
+                                "ml-auto",
+                                !product.category_name ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                          </CommandItem>
+                          {categories.map((category) => (
+                            <CommandItem
+                              key={category.id}
+                              value={category.name}
+                              onSelect={() => {
+                                setSelectedProducts((prev) =>
+                                  prev.map((p, i) =>
+                                    i === index
+                                      ? { ...p, category_name: category.name }
+                                      : p
+                                  )
+                                )
+                                setCategoryPopoverIndex(null)
+                              }}
+                            >
+                              {category.name}
+                              <Check
+                                className={cn(
+                                  "ml-auto",
+                                  product.category_name === category.name
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </TableCell>
               <TableCell className="max-w-[100px] truncate overflow-hidden whitespace-nowrap">
                 <Input
                   type="number"

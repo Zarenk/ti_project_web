@@ -1,5 +1,5 @@
 import { Barcode, Check, ChevronsUpDown, Plus, Save } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,6 +22,7 @@ export function ProductSelection({
   setCurrentProduct,
   register,
   setValue,
+  categoryValue,
   purchasePrice,
   addProduct,
   isDialogOpenSeries,
@@ -43,6 +44,31 @@ export function ProductSelection({
     const numericQuantity = Number(quantity) || 0
     return (price * numericQuantity).toFixed(2)
   }, [currentProduct, quantity, purchasePrice])
+
+  const [isCategoryPopoverOpen, setIsCategoryPopoverOpen] = useState(false)
+
+  const categoryField = register('category_name')
+
+  const selectedCategoryId = useMemo(() => {
+    if (currentProduct?.categoryId) {
+      return currentProduct.categoryId
+    }
+    const match = categories.find((cat: any) => cat.name === categoryValue)
+    return match?.id ?? null
+  }, [categories, categoryValue, currentProduct?.categoryId])
+
+  const handleCategorySelection = (category: { id: number; name: string }) => {
+    setValue('category_name', category.name, { shouldValidate: true, shouldDirty: true })
+    if (currentProduct) {
+      setCurrentProduct({
+        ...currentProduct,
+        categoryId: category.id,
+        category_name: category.name,
+      })
+    }
+    setIsCategoryPopoverOpen(false)
+    setIsNewCategoryBoolean(false)
+  }
 
   return (
     <div className="flex-1 flex-col border border-gray-600 rounded-md p-2">
@@ -164,7 +190,63 @@ export function ProductSelection({
       </div>
 
       <Label className="text-sm font-medium py-2">Categoria</Label>
-      <Input {...register("category_name")} readOnly />
+      <input type="hidden" {...categoryField} value={categoryValue || ''} />
+      {isNewCategoryBoolean ? (
+        <Input
+          value={categoryValue || ''}
+          onChange={(event) => {
+            setValue('category_name', event.target.value, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+            if (currentProduct) {
+              setCurrentProduct({
+                ...currentProduct,
+                category_name: event.target.value,
+              })
+            }
+          }}
+          placeholder="Ingresa el nombre de la categoría"
+        />
+      ) : (
+        <Popover open={isCategoryPopoverOpen} onOpenChange={setIsCategoryPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              className="w-full justify-between"
+            >
+              {categoryValue || 'Selecciona una categoría...'}
+              <ChevronsUpDown className="opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-full min-w-[200px] p-0">
+            <Command>
+              <CommandInput placeholder="Buscar categoría..." />
+              <CommandList>
+                <CommandEmpty>No se encontraron categorías.</CommandEmpty>
+                <CommandGroup>
+                  {categories.map((category: any) => (
+                    <CommandItem
+                      key={category.id}
+                      value={category.name}
+                      onSelect={() => handleCategorySelection(category)}
+                    >
+                      {category.name}
+                      <Check
+                        className={cn(
+                          'ml-auto',
+                          selectedCategoryId === category.id ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      )}
       <Label className="text-sm font-medium py-2">Descripcion</Label>
       <Input {...register("description")} readOnly />
       <div className="flex justify-between gap-1">

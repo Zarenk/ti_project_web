@@ -160,7 +160,18 @@ export function ProductForm({
   } = useFieldArray<ProductType, 'features'>({ control, name: 'features' });
 
   const router = useRouter();
-  const params = useParams<{id: string}>();
+  const params = useParams();
+  const rawRouteId = params?.id;
+  const routeProductId =
+    typeof rawRouteId === 'string'
+      ? rawRouteId
+      : Array.isArray(rawRouteId)
+        ? rawRouteId[0]
+        : undefined;
+  const currentProductId =
+    product?.id != null
+      ? product.id
+      : routeProductId;
 
   const [brands, setBrands] = useState<any[]>([]);
   // Estado para manejar el error del nombre si se repite
@@ -235,8 +246,12 @@ export function ProductForm({
         }
 
         let savedProduct: any = null
-        if (params?.id) {
-            savedProduct = await updateProduct(params.id, payload)
+        const formProductId =
+          currentProductId != null ? String(currentProductId) : undefined
+        const targetProductId = formProductId ?? undefined
+
+        if (targetProductId) {
+            savedProduct = await updateProduct(targetProductId, payload)
             toast.success("Producto actualizado correctamente."); // Notificaci??n de ?xito
             if (!onSuccess) {
                 router.push("/dashboard/products");
@@ -488,7 +503,7 @@ export function ProductForm({
                     </div>
                     <Button className='mt-4'>
                         {
-                            params.id ? 'Actualizar Producto' : 'Crear Producto'
+                            currentProductId ? 'Actualizar Producto' : 'Crear Producto'
                         }
                     </Button>
                     <Button className=''

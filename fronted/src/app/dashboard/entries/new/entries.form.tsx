@@ -112,6 +112,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   // Extraer funciones y estados del formulario
   const { handleSubmit, register, setValue, formState: {errors} } = form;
   const purchasePrice = form.watch('price');
+  const categoryValue = form.watch('category_name');
   const initialCurrency = (form.getValues("tipo_moneda") as 'USD' | 'PEN') || 'PEN';
 
   // Estado para manejar el envío del formulario
@@ -629,6 +630,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     setOpen(false); // Cierra el combobox
     // **Limpia las series**
     setSeries([]); // Resetea el estado de las series
+    setIsNewCategoryBoolean(false);
   };
   //
 
@@ -890,6 +892,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setCurrentProduct={setCurrentProduct}
                       register={register}
                       setValue={form.setValue}
+                      categoryValue={categoryValue}
                       purchasePrice={purchasePrice}
                       addProduct={addProduct}
                       isDialogOpenSeries={isDialogOpenSeries}
@@ -914,6 +917,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setOpenSeriesModal={setOpenSeriesModal}
                       getAllSeriesFromDataTable={getAllSeriesFromDataTable}
                       removeProduct={removeProduct}
+                      categories={categories}
                     />
 
                     {selectedProducts.length > 0 && (
