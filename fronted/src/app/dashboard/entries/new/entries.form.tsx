@@ -24,6 +24,16 @@ import { ActionButtons } from '../components/entries/ActionButtons'
 import { getLatestExchangeRateByCurrency } from '../../exchange/exchange.api'
 import { detectInvoiceProvider, processExtractedText, processInvoiceText } from '../utils/pdfExtractor'
 import { numeroALetrasCustom } from '../../sales/components/utils/numeros-a-letras'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 // Función para obtener el userId del token JWT almacenado en localStorage
 async function getUserIdFromToken(): Promise<number | null> {
@@ -102,6 +112,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   // Extraer funciones y estados del formulario
   const { handleSubmit, register, setValue, formState: {errors} } = form;
   const purchasePrice = form.watch('price');
+  const initialCurrency = (form.getValues("tipo_moneda") as 'USD' | 'PEN') || 'PEN';
 
   // Estado para manejar el envío del formulario
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -128,7 +139,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   };
 
   // ESTADO PARA EL TIPO DE CAMBIO
-  const [tipoMoneda, setTipoMoneda] = useState<'USD' | 'PEN'>('PEN');
+  const [tipoMoneda, setTipoMoneda] = useState<'USD' | 'PEN'>(initialCurrency);
   const [tipoCambioActual, setTipoCambioActual] = useState<number | null>(null);
 
   // ALERT DIALOG PARA AGREGAR PROVEEDORES
@@ -219,7 +230,10 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [isProviderComboTouched, setIsProviderComboTouched] = useState(false);
 
   // CONTROLAR LA MONEDA
-  const [currency, setCurrency] = useState<string>(form.getValues("tipo_moneda") || "PEN");
+  const [currency, setCurrency] = useState<'USD' | 'PEN'>(initialCurrency);
+  const [isCurrencyDialogOpen, setIsCurrencyDialogOpen] = useState(false);
+  const [pendingCurrency, setPendingCurrency] = useState<'USD' | 'PEN' | null>(null);
+  const [isConvertingCurrency, setIsConvertingCurrency] = useState(false);
 
   const normalizedCurrency = currency === 'USD' ? 'USD' : 'PEN';
 
@@ -268,6 +282,207 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     return `SON ${amountWords} CON ${cents}/100 ${currencyText}`;
   }, [normalizedCurrency, selectedProducts.length, totalAmount]);
 
+  const handleCurrencyToggle = async () => {
+    if (isConvertingCurrency) return;
+
+    const targetCurrency = (currency === 'PEN' ? 'USD' : 'PEN') as 'USD' | 'PEN';
+
+    setIsConvertingCurrency(true);
+
+    try {
+      let exchangeRate = tipoCambioActual;
+
+      if (!exchangeRate || exchangeRate <= 0) {
+        exchangeRate = await getLatestExchangeRateByCurrency('USD');
+        if (!exchangeRate || exchangeRate <= 0) {
+          toast.error('No se encontró un tipo de cambio válido.');
+          return;
+        }
+      }
+
+      const convertValue = (value: number | string | null | undefined) => {
+        const numericValue = Number(value) || 0;
+        if (targetCurrency === 'USD') {
+          return Number((numericValue / exchangeRate!).toFixed(2));
+        }
+        return Number((numericValue * exchangeRate!).toFixed(2));
+      };
+
+      setSelectedProducts((prev) =>
+        prev.map((product) => ({
+          ...product,
+          price: convertValue(product.price),
+        }))
+      );
+
+      setCurrentProduct((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        const updatedPrice = convertValue(prev.price);
+        form.setValue('price', updatedPrice, { shouldValidate: true });
+        return { ...prev, price: updatedPrice };
+      });
+
+      if (!currentProduct) {
+        const rawPrice = form.getValues('price');
+        const updatedPrice = convertValue(rawPrice);
+        form.setValue('price', updatedPrice, { shouldValidate: true });
+      }
+
+      setCurrency(targetCurrency);
+      setTipoMoneda(targetCurrency);
+      setTipoCambioActual(exchangeRate);
+      form.setValue('tipo_moneda', targetCurrency, { shouldValidate: true });
+
+      toast.success(
+        `Precios convertidos a ${targetCurrency === 'USD' ? 'dólares estadounidenses' : 'soles peruanos'}.`
+      );
+    } catch (error) {
+      console.error('Error al convertir la moneda:', error);
+      toast.error('No se pudo convertir la moneda. Inténtalo nuevamente.');
+    } finally {
+      setIsConvertingCurrency(false);
+    }
+  };
+
+  const convertProductsByCurrency = (
+    products: {
+      id: number;
+      name: string;
+      price: number;
+      priceSell: number;
+      quantity: number;
+      category_name: string;
+      series?: string[];
+      newSeries?: string;
+    }[],
+    exchangeRate: number,
+    targetCurrency: 'USD' | 'PEN'
+  ) => {
+    const convertValue = (value: number | undefined) => {
+      if (typeof value !== 'number' || Number.isNaN(value)) {
+        return value;
+      }
+
+      const converted =
+        targetCurrency === 'USD' ? value / exchangeRate : value * exchangeRate;
+
+      return Number(converted.toFixed(2));
+    };
+
+    return products.map((product) => {
+      const convertedPrice = convertValue(product.price);
+      const convertedPriceSell = convertValue(product.priceSell);
+
+      return {
+        ...product,
+        price:
+          typeof convertedPrice === 'number' ? convertedPrice : product.price,
+        priceSell:
+          typeof convertedPriceSell === 'number'
+            ? convertedPriceSell
+            : product.priceSell,
+      };
+    });
+  };
+
+  const applyCurrencyChange = async (
+    newCurrency: 'USD' | 'PEN',
+    shouldConvertPrices: boolean
+  ): Promise<boolean> => {
+    if (newCurrency === currency) {
+      return true;
+    }
+
+    try {
+      if (shouldConvertPrices && selectedProducts.length > 0) {
+        let exchangeRate = tipoCambioActual;
+
+        if (currency === 'PEN' && newCurrency === 'USD') {
+          if (!exchangeRate || exchangeRate <= 0) {
+            exchangeRate = await getLatestExchangeRateByCurrency('USD');
+          }
+
+          if (!exchangeRate || exchangeRate <= 0) {
+            toast.error(
+              'No se pudo obtener un tipo de cambio válido para convertir a dólares.'
+            );
+            return false;
+          }
+
+          setSelectedProducts((prev) =>
+            convertProductsByCurrency(prev, exchangeRate as number, 'USD')
+          );
+          setTipoCambioActual(exchangeRate);
+          toast.success('Los precios se actualizaron a dólares.');
+        } else if (currency === 'USD' && newCurrency === 'PEN') {
+          if (!exchangeRate || exchangeRate <= 0) {
+            exchangeRate = await getLatestExchangeRateByCurrency('USD');
+          }
+
+          if (!exchangeRate || exchangeRate <= 0) {
+            toast.error(
+              'No se pudo obtener un tipo de cambio válido para convertir a soles.'
+            );
+            return false;
+          }
+
+          setSelectedProducts((prev) =>
+            convertProductsByCurrency(prev, exchangeRate as number, 'PEN')
+          );
+          toast.success('Los precios se actualizaron a soles.');
+        }
+      }
+
+      setCurrency(newCurrency);
+      setTipoMoneda(newCurrency);
+
+      return true;
+    } catch (error) {
+      console.error('Error al actualizar la moneda:', error);
+      toast.error('No se pudo actualizar la moneda.');
+      return false;
+    }
+  };
+
+  const handleCurrencySelection = (value: 'USD' | 'PEN') => {
+    if (value === currency) {
+      return;
+    }
+
+    if (selectedProducts.length > 0) {
+      setPendingCurrency(value);
+      setIsCurrencyDialogOpen(true);
+      return;
+    }
+
+    void applyCurrencyChange(value, false);
+  };
+
+  const confirmCurrencyChange = async () => {
+    if (!pendingCurrency) {
+      return;
+    }
+
+    setIsConvertingCurrency(true);
+    const success = await applyCurrencyChange(pendingCurrency, true);
+    setIsConvertingCurrency(false);
+
+    if (success) {
+      setIsCurrencyDialogOpen(false);
+      setPendingCurrency(null);
+    }
+  };
+
+  const cancelCurrencyChange = () => {
+    if (isConvertingCurrency) {
+      return;
+    }
+
+    setIsCurrencyDialogOpen(false);
+    setPendingCurrency(null);
+  };
 
   // Función para eliminar un producto del datatable
   const removeProduct = (id: number) => {
@@ -599,9 +814,9 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       handlePDFUpload={handlePDFUpload}
                       handlePDFGuiaUpload={handlePDFGuiaUpload}
                       currency={currency}
-                      setCurrency={setCurrency}
-                      setTipoMoneda={setTipoMoneda}
-                      form={form}
+                      onCurrencyChange={handleCurrencySelection}
+                      onToggleCurrency={handleCurrencyToggle}
+                      isConvertingCurrency={isConvertingCurrency}
                     />
                     <AdditionalInfoSection
                       register={register}
@@ -655,6 +870,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setCurrentProduct={setCurrentProduct}
                       register={register}
                       setValue={form.setValue}
+                      purchasePrice={purchasePrice}
                       addProduct={addProduct}
                       isDialogOpenSeries={isDialogOpenSeries}
                       setIsDialogOpenSeries={setIsDialogOpenSeries}
@@ -667,6 +883,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       getAllSeriesFromDataTable={getAllSeriesFromDataTable}
                       isNewCategoryBoolean={isNewCategoryBoolean}
                       setIsNewCategoryBoolean={setIsNewCategoryBoolean}
+                      currency={currency}
+                      tipoCambioActual={tipoCambioActual}
                     />
                   </div>
                     <SelectedProductsTable
@@ -711,6 +929,47 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       isSubmitting={isSubmitting}
                     />
         </fieldset>
+        <AlertDialog
+          open={isCurrencyDialogOpen}
+          onOpenChange={(open) => {
+            if (open) {
+              setIsCurrencyDialogOpen(true);
+            } else {
+              cancelCurrencyChange();
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cambiar moneda</AlertDialogTitle>
+              <AlertDialogDescription>
+                {selectedProducts.length > 0
+                  ? `Tienes productos agregados. ¿Deseas actualizar sus precios a ${
+                      pendingCurrency === 'USD'
+                        ? 'dólares (USD)'
+                        : pendingCurrency === 'PEN'
+                          ? 'soles (PEN)'
+                          : 'la moneda seleccionada'
+                    }? Se usará el tipo de cambio más reciente disponible.`
+                  : '¿Deseas cambiar la moneda seleccionada?'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                onClick={cancelCurrencyChange}
+                disabled={isConvertingCurrency}
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmCurrencyChange}
+                disabled={isConvertingCurrency}
+              >
+                {isConvertingCurrency ? 'Actualizando...' : 'Convertir precios'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         {isSubmitting && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-black/40">
             <svg className="w-6 h-6 animate-spin text-gray-800 dark:text-white" viewBox="0 0 24 24">

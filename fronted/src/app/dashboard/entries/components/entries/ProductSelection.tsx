@@ -35,6 +35,8 @@ export function ProductSelection({
   getAllSeriesFromDataTable,
   isNewCategoryBoolean,
   setIsNewCategoryBoolean,
+  currency,
+  tipoCambioActual,
 }: any) {
   const totalPurchasePrice = useMemo(() => {
     const price = currentProduct?.price ?? Number(purchasePrice ?? 0)
@@ -80,19 +82,23 @@ export function ProductSelection({
                           (p: any) => String(p.name) === currentValue
                         );
                         if (selectedProduct) {
+                          const purchasePrice =
+                            currency === 'USD' && tipoCambioActual && tipoCambioActual > 0
+                              ? Number((selectedProduct.price / tipoCambioActual).toFixed(2))
+                              : Number((selectedProduct.price || 0).toFixed(2))
                           const category = categories.find(
                             (cat: any) => cat.id === selectedProduct.categoryId
                           );
                           setCurrentProduct({
                             id: selectedProduct.id,
                             name: selectedProduct.name,
-                            price: selectedProduct.price,
+                            price: purchasePrice,
                             priceSell: selectedProduct.priceSell,
                             categoryId: selectedProduct.categoryId,
                             category_name: category?.name || selectedProduct.category_name || "Sin categoría",
                           });
                           setValue("category_name", category?.name || selectedProduct.category_name || "Sin categoría");
-                          setValue("price", selectedProduct.price || 0);
+                          setValue("price", purchasePrice || 0);
                           setValue("priceSell", selectedProduct.priceSell || 0);
                           setValue("description", selectedProduct.description || "");
                         }

@@ -199,6 +199,22 @@ export default function ProductPage({ params }: Props) {
     [fetchProduct],
   )
 
+  const handleRelatedImageUpdated = useCallback(
+    (productId: number, nextImages: string[]) => {
+      setRelatedProducts((prev) =>
+        prev.map((relatedProduct) =>
+          relatedProduct.id === productId
+            ? {
+                ...relatedProduct,
+                images: nextImages,
+              }
+            : relatedProduct,
+        ),
+      )
+    },
+    [],
+  )
+
   useEffect(() => {
     async function fetchStock() {
       try {
@@ -571,13 +587,40 @@ export default function ProductPage({ params }: Props) {
                   <DialogTitle>{product?.name || "Producto"}</DialogTitle>
                   <DialogDescription>Imagen ampliada</DialogDescription>
                 </VisuallyHidden>
-                <Image
-                  src={images[selectedImage] || "/placeholder.svg"}
-                  alt={product?.name || "Producto"}
-                  width={900}
-                  height={900}
-                  className="w-full h-full object-contain"
-                />
+                <div className="bg-card rounded-2xl p-4 sm:p-6 shadow-lg space-y-4">
+                  <div className="relative w-full">
+                    <Image
+                      src={images[selectedImage] || "/placeholder.svg"}
+                      alt={product?.name || "Producto"}
+                      width={900}
+                      height={900}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  {images.length > 1 && (
+                    <div className="flex gap-3 overflow-x-auto pb-2">
+                      {images.map((image: string, index: number) => (
+                        <button
+                          key={index}
+                          onClick={() => setSelectedImage(index)}
+                          className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                            selectedImage === index
+                              ? "border-blue-500 shadow-md"
+                              : "border-gray-200 hover:border-gray-300"
+                          }`}
+                        >
+                          <Image
+                            src={image || "/placeholder.svg"}
+                            alt={`Vista ${index + 1}`}
+                            width={80}
+                            height={80}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </DialogContent>
             </Dialog>
 
@@ -1142,6 +1185,16 @@ export default function ProductPage({ params }: Props) {
                       key={rp.id}
                       className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border"
                     >
+                      <div className="absolute top-3 right-3 z-20 flex flex-col gap-2">
+                        <AdminProductImageButton
+                          productId={rp.id}
+                          currentImages={rp.images}
+                          onImageUpdated={(nextImages) =>
+                            handleRelatedImageUpdated(rp.id, nextImages)
+                          }
+                        />
+                        <AdminProductEditButton productId={rp.id} />
+                      </div>
                       <Link href={`/store/${rp.id}`} className="block">
                         <CardHeader className="p-0">
                           <div className="relative overflow-hidden rounded-t-lg">
