@@ -37,7 +37,12 @@ interface Product {
   }
 }
 
-export default function HeroSlideshow({ products }: { products: Product[] }) {
+interface HeroSlideshowProps {
+  products: Product[]
+  onEditProduct?: (productId: number) => void
+}
+
+export default function HeroSlideshow({ products, onEditProduct }: HeroSlideshowProps) {
   const [items, setItems] = useState<Product[]>(products)
   const [index, setIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
@@ -145,7 +150,14 @@ export default function HeroSlideshow({ products }: { products: Product[] }) {
                         currentImages={product.images ?? []}
                         onImageUpdated={(nextImages) => handleImageUpdate(product.id, nextImages)}
                       />
-                      <AdminProductEditButton productId={product.id} />
+                      <AdminProductEditButton
+                        productId={product.id}
+                        onClick={
+                          onEditProduct
+                            ? () => onEditProduct(product.id)
+                            : undefined
+                        }
+                      />
                     </div>
                   </div>
                 )}

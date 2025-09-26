@@ -52,34 +52,34 @@ import { DataTableToolbar } from "./data-table-components/data-table-toolbar"
 import { deleteEntries, getPdfGuiaUrl, getPdfUrl } from "./entries.api"
  
 interface DataTableProps<TData extends {
-id:string, 
-createdAt:Date, 
+id:string,
+createdAt:Date,
 store_name:string,
-provider_name:string, 
+provider_name:string,
 user_username:string,
 date:Date,
 tipoMoneda:string,
 description:string,
 pdfUrl: string,
 guiaUrl: string,
-details: { product: string; quantity: number; price: number; series: string }[]; 
+details: { product_name: string; quantity: number; price: number; series?: string[]; category_name?: string }[];
 }, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
 }
  
 export function DataTable<TData extends {
-id:string, 
-createdAt:Date, 
+id:string,
+createdAt:Date,
 store_name:string,
-provider_name:string, 
+provider_name:string,
 user_username:string,
 date:Date,
 tipoMoneda:string,
 description:string,
 pdfUrl: string,
 guiaUrl: string,
-details: { product: string; quantity: number; price: number, series:string }[]; 
+details: { product_name: string; quantity: number; price: number; series?: string[]; category_name?: string }[]; 
 }, TValue>({
   columns,
   data,
@@ -682,6 +682,7 @@ details: { product: string; quantity: number; price: number, series:string }[];
                     <thead>
                       <tr>
                         <th className="border border-gray-300 px-4 py-2">Producto</th>
+                        <th className="border border-gray-300 px-4 py-2">Categoría</th>
                         <th className="border border-gray-300 px-4 py-2">Cant.</th>
                         <th className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">Precio</th>
                         <th className="border border-gray-300 px-4 py-2">Series</th>
@@ -691,6 +692,7 @@ details: { product: string; quantity: number; price: number, series:string }[];
                       {selectedRowData.details.map((detail: any, index) => (
                         <tr key={index}>
                           <td className="border border-gray-300 px-4 py-2">{detail.product_name}</td>
+                          <td className="border border-gray-300 px-4 py-2">{detail.category_name || "Sin categoría"}</td>
                           <td className="border border-gray-300 px-4 py-2">{detail.quantity}</td>
                           <td className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">
                             {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}
@@ -744,6 +746,7 @@ details: { product: string; quantity: number; price: number, series:string }[];
                           <thead>
                             <tr>
                               <th className="border border-gray-300 px-4 py-2">Producto</th>
+                              <th className="border border-gray-300 px-4 py-2">Categoría</th>
                               <th className="border border-gray-300 px-4 py-2">Cant.</th>
                               <th className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">Precio</th>
                               <th className="border border-gray-300 px-4 py-2">Series</th>
@@ -753,6 +756,7 @@ details: { product: string; quantity: number; price: number, series:string }[];
                             {entry.details.map((detail:any, detailIndex) => (
                               <tr key={detailIndex}>
                                 <td className="border border-gray-300 px-4 py-2">{detail.product_name}</td>
+                                <td className="border border-gray-300 px-4 py-2">{detail.category_name || "Sin categoría"}</td>
                                 <td className="border border-gray-300 px-4 py-2">{detail.quantity}</td>
                                 <td className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">
                                   {entry.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}

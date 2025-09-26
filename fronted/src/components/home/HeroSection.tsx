@@ -11,9 +11,10 @@ import HeroCollageCarousel from '../HeroCollageCarousel';
 
 interface HeroSectionProps {
   heroProducts: any[];
+  onEditProduct?: (productId: number) => void;
 }
 
-export default function HeroSection({ heroProducts }: HeroSectionProps) {
+export default function HeroSection({ heroProducts, onEditProduct }: HeroSectionProps) {
 
    const sectionRef = useRef<HTMLDivElement>(null);
 
@@ -139,7 +140,7 @@ export default function HeroSection({ heroProducts }: HeroSectionProps) {
               </div>
             </TooltipProvider>
           </div>
-          <HeroSlideshow products={heroProducts} />
+          <HeroSlideshow products={heroProducts} onEditProduct={onEditProduct} />
         </div>
       </div>
     </section>

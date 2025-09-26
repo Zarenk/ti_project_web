@@ -4,9 +4,10 @@ import HorizontalScroller from '@/components/HorizontalScroller';
 
 interface FeaturedProductsSectionProps {
   featuredProducts: any[];
+  onEditProduct?: (productId: number) => void;
 }
 
-export default function FeaturedProductsSection({ featuredProducts }: FeaturedProductsSectionProps) {
+export default function FeaturedProductsSection({ featuredProducts, onEditProduct }: FeaturedProductsSectionProps) {
   return (
     <ScrollUpSection className="py-12 bg-white dark:bg-gray-900">
       <div className="container mx-auto px-4">
@@ -26,6 +27,7 @@ export default function FeaturedProductsSection({ featuredProducts }: FeaturedPr
                 key={product.id}
                 product={product}
                 withActions
+                onEditProduct={onEditProduct}
               />
             ))}
           </HorizontalScroller>
@@ -38,6 +40,7 @@ export default function FeaturedProductsSection({ featuredProducts }: FeaturedPr
               key={product.id}
               product={product}
               withActions
+              onEditProduct={onEditProduct}
             />
           ))}
         </div>

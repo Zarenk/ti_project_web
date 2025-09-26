@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ShoppingCart,
   User,
@@ -32,12 +32,15 @@ import {
   Youtube,
   ChevronLeft,
   ChevronRight,
+  Loader2,
   type LucideIcon,
 } from "lucide-react"
 import Navbar from "@/components/navbar"
 import { toast } from "sonner"
-import { getProducts } from "./dashboard/products/products.api"
-import { getCategoriesWithCount } from "./dashboard/categories/categories.api"
+import ProductForm from "@/app/dashboard/products/new/product-form"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { getProducts, getProduct } from "./dashboard/products/products.api"
+import { getCategoriesWithCount, getCategories } from "./dashboard/categories/categories.api"
 import { getStoresWithProduct } from "./dashboard/inventory/inventory.api"
 import { getRecentEntries } from "./dashboard/entries/entries.api"
 import UltimosIngresosSection from '@/components/home/UltimosIngresosSection';
@@ -103,55 +106,131 @@ export default function Homepage() {
   const [recentProducts, setRecentProducts] = useState<RecentProduct[]>([])
   const [recentIndex, setRecentIndex] = useState(0)
   const [recentDirection, setRecentDirection] = useState(0)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [productToEdit, setProductToEdit] = useState<any | null>(null)
+  const [isLoadingProductToEdit, setIsLoadingProductToEdit] = useState(false)
+  const [productCategories, setProductCategories] = useState<any[]>([])
+  const [isLoadingProductCategories, setIsLoadingProductCategories] = useState(false)
+
+  const fetchProductsData = useCallback(async () => {
+    try {
+      const products = await getProducts()
+      const withImages = (products as any[])
+        .filter((p) => p.images && p.images.length > 0)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || "",
+          price: p.priceSell ?? p.price,
+          brand: p.brand
+            ? {
+                name: p.brand.name,
+                logoSvg: p.brand.logoSvg,
+                logoPng: p.brand.logoPng,
+              }
+            : null,
+          category: p.category?.name || "Sin categoría",
+          images: p.images || [],
+          stock: p.stock ?? null,
+          specification: p.specification ?? undefined,
+        })) as FeaturedProduct[]
+      // Compute stock for the top 10 items that we render
+      const topForStock = withImages.slice(0, 10)
+      const withStockTop = await Promise.all(
+        topForStock.map(async (p) => {
+          try {
+            const stores = await getStoresWithProduct(p.id)
+            const total = Array.isArray(stores)
+              ? stores.reduce((sum: number, s: any) => sum + (s.stock ?? 0), 0)
+              : 0
+            return { ...p, stock: total }
+          } catch {
+            return { ...p, stock: p.stock ?? null }
+          }
+        })
+      )
+      // Limit hero to 6 for layout/performance (with stock info)
+      setHeroProducts(withStockTop.slice(0, 6))
+      // Show up to 10 featured products as requested (with stock info)
+      setFeaturedProducts(withStockTop)
+    } catch (error) {
+      console.error("Error fetching featured products:", error)
+    }
+  }, [])
 
   useEffect(() => {
-    async function fetchProductsData() {
-      try {
-        const products = await getProducts()
-        const withImages = (products as any[])
-          .filter((p) => p.images && p.images.length > 0)
-          .map((p) => ({
-            id: p.id,
-            name: p.name,
-            description: p.description || "",
-            price: p.priceSell ?? p.price,
-            brand: p.brand
-              ? {
-                  name: p.brand.name,
-                  logoSvg: p.brand.logoSvg,
-                  logoPng: p.brand.logoPng,
-                }
-              : null,
-            category: p.category?.name || "Sin categoría",
-            images: p.images || [],
-            stock: p.stock ?? null,
-            specification: p.specification ?? undefined,
-          })) as FeaturedProduct[]
-        // Compute stock for the top 10 items that we render
-        const topForStock = withImages.slice(0, 10)
-        const withStockTop = await Promise.all(
-          topForStock.map(async (p) => {
-            try {
-              const stores = await getStoresWithProduct(p.id)
-              const total = Array.isArray(stores)
-                ? stores.reduce((sum: number, s: any) => sum + (s.stock ?? 0), 0)
-                : 0
-              return { ...p, stock: total }
-            } catch {
-              return { ...p, stock: p.stock ?? null }
-            }
-          })
-        )
-        // Limit hero to 6 for layout/performance (with stock info)
-        setHeroProducts(withStockTop.slice(0, 6))
-        // Show up to 10 featured products as requested (with stock info)
-        setFeaturedProducts(withStockTop)
-      } catch (error) {
-        console.error("Error fetching featured products:", error)
-      }
+    void fetchProductsData()
+  }, [fetchProductsData])
+
+  const handleEditProduct = useCallback(async (productId: number) => {
+    setProductToEdit(null)
+    setIsEditDialogOpen(true)
+    setIsLoadingProductToEdit(true)
+    try {
+      const productData = await getProduct(String(productId))
+      setProductToEdit(productData)
+    } catch (error) {
+      console.error("Error fetching product for edit:", error)
+      toast.error("No se pudo cargar el producto para editar")
+      setProductToEdit(null)
+    } finally {
+      setIsLoadingProductToEdit(false)
     }
-    fetchProductsData()
   }, [])
+
+  useEffect(() => {
+    if (!isEditDialogOpen) {
+      setIsLoadingProductCategories(false)
+      setProductToEdit(null)
+      setIsLoadingProductToEdit(false)
+      return
+    }
+
+    let isMounted = true
+    setIsLoadingProductCategories(true)
+    getCategories()
+      .then((data) => {
+        if (!isMounted) {
+          return
+        }
+        setProductCategories(Array.isArray(data) ? data : [])
+      })
+      .catch((error) => {
+        if (!isMounted) {
+          return
+        }
+        console.error("Error fetching product categories:", error)
+        setProductCategories([])
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingProductCategories(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [isEditDialogOpen])
+
+  const handleProductUpdateSuccess = useCallback(
+    async (_updatedProduct: any) => {
+      setIsEditDialogOpen(false)
+      setProductToEdit(null)
+      try {
+        await fetchProductsData()
+      } catch (error) {
+        console.error("Error refreshing products after update:", error)
+      }
+    try {
+        const data = await getRecentEntries(5)
+        setRecentProducts(data)
+      } catch (error) {
+        console.error("Error refreshing recent entries after update:", error)
+      }
+    },
+    [fetchProductsData],
+  )
 
   useEffect(() => {
     async function fetchRecent() {
@@ -321,6 +400,35 @@ export default function Homepage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-gray-950 dark:to-black">
       <Navbar />
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar producto</DialogTitle>
+            <DialogDescription>
+              Actualiza las características y detalles del producto sin salir de esta página.
+            </DialogDescription>
+          </DialogHeader>
+          {isLoadingProductToEdit || (isLoadingProductCategories && productCategories.length === 0) ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : productToEdit ? (
+            <div className="pb-4">
+              <ProductForm
+                key={productToEdit.id}
+                product={productToEdit}
+                categories={productCategories}
+                onSuccess={handleProductUpdateSuccess}
+                onCancel={() => setIsEditDialogOpen(false)}
+              />
+            </div>
+          ) : (
+            <div className="py-10">
+              <Skeleton className="h-6 w-40 mx-auto" />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <div ref={sectionsRef}>
         <section className="gsap-section" data-navcolor="#ffffff">
           {heroProducts.length === 0 ? (
@@ -338,7 +446,7 @@ export default function Homepage() {
               </div>
             </div>
           ) : (
-            <HeroSection heroProducts={heroProducts} />
+            <HeroSection heroProducts={heroProducts} onEditProduct={handleEditProduct} />
           )}
         </section>
         <section className="gsap-section" data-navcolor="#f1f5f9">
@@ -369,6 +477,7 @@ export default function Homepage() {
               nextRecent={nextRecent}
               prevRecent={prevRecent}
               recentProductsLength={recentProducts.length}
+              onEditProduct={handleEditProduct}
             />
           )}
         </section>
@@ -394,7 +503,10 @@ export default function Homepage() {
               </div>
             </div>
           ) : (
-            <FeaturedProductsSection featuredProducts={featuredProducts} />
+            <FeaturedProductsSection
+              featuredProducts={featuredProducts}
+              onEditProduct={handleEditProduct}
+            />
           )}
         </section>
         <section className="gsap-section" data-navcolor="#e0e7ff">

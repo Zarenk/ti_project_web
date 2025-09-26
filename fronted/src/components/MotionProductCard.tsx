@@ -52,9 +52,10 @@ interface MotionProductCardProps {
   withActions?: boolean
   priority?: boolean
   highlightPrice?: boolean
+  onEditProduct?: (productId: number) => void
 }
 
-export default function MotionProductCard({ product, withActions = false, priority = false, highlightPrice = false }: MotionProductCardProps) {
+export default function MotionProductCard({ product, withActions = false, priority = false, highlightPrice = false, onEditProduct }: MotionProductCardProps) {
 
   const { addItem } = useCart()
   const [isFavorite, setIsFavorite] = useState(false)
@@ -105,7 +106,12 @@ export default function MotionProductCard({ product, withActions = false, priori
               currentImages={imageList}
               onImageUpdated={setImageList}
             />
-            <AdminProductEditButton productId={product.id} />
+            <AdminProductEditButton
+              productId={product.id}
+              onClick={
+                onEditProduct ? () => onEditProduct(product.id) : undefined
+              }
+            />
           </div>
         </div>
         <Link href={`/store/${product.id}`} className="block">

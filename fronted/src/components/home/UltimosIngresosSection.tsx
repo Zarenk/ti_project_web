@@ -29,6 +29,7 @@ interface UltimosIngresosSectionProps {
   nextRecent: () => void;
   prevRecent: () => void;
   recentProductsLength: number;
+  onEditProduct?: (productId: number) => void;
 }
 
 export default function UltimosIngresosSection({
@@ -38,6 +39,7 @@ export default function UltimosIngresosSection({
   nextRecent,
   prevRecent,
   recentProductsLength,
+  onEditProduct,
 }: UltimosIngresosSectionProps) {
   return (
     <ScrollUpSection className="py-12 bg-white dark:bg-gray-900">
@@ -56,6 +58,7 @@ export default function UltimosIngresosSection({
                 key={`${product.id}-${idx}`}
                 product={product}
                 withActions
+                onEditProduct={onEditProduct}
               />
             ))}
           </HorizontalScroller>
