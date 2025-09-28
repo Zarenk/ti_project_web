@@ -203,8 +203,9 @@ export function ProductSelection({
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className="min-w-[150px] flex-1 sm:w-[300px] 
+              className="min-w-[150px] flex-1 sm:w-[300px]
               justify-between truncate text-xs sm:text-sm"
+              title="Busca y selecciona el producto que deseas ingresar"
             >
               {value
                 ? products.find((product: any) => String(product.name) === value)?.name
@@ -267,7 +268,12 @@ export function ProductSelection({
           </PopoverContent>
         </Popover>
 
-        <Button className="sm:w-auto sm:ml-2 ml-0 bg-green-700 hover:bg-green-800 text-white" type="button" onClick={addProduct}>
+        <Button
+          className="sm:w-auto sm:ml-2 ml-0 bg-green-700 hover:bg-green-800 text-white"
+          type="button"
+          onClick={addProduct}
+          title="Agrega el producto seleccionado a la lista del ingreso"
+        >
           <span className="hidden sm:block">Agregar</span>
           <Plus className="w-2 h-2" />
         </Button>
@@ -277,6 +283,7 @@ export function ProductSelection({
           type="button"
           onClick={() => setIsDialogOpenSeries(true)}
           disabled={!currentProduct}
+          title="Asigna series o códigos únicos al producto seleccionado"
         >
           <span className="hidden sm:block">Agregar Series</span>
           <Barcode className="w-6 h-6" />
@@ -291,7 +298,12 @@ export function ProductSelection({
           getAllSeriesFromDataTable={getAllSeriesFromDataTable}
         />
 
-        <Button className="sm:w-auto sm:ml-2 ml-0 bg-green-700 hover:bg-green-800 text-white" type="button" onClick={() => setIsDialogOpenProduct(true)}>
+        <Button
+          className="sm:w-auto sm:ml-2 ml-0 bg-green-700 hover:bg-green-800 text-white"
+          type="button"
+          onClick={() => setIsDialogOpenProduct(true)}
+          title="Crea un nuevo producto y añádelo al catálogo"
+        >
           <span className="hidden sm:block">Nuevo</span>
           <Save className="w-6 h-6" />
         </Button>
@@ -336,6 +348,7 @@ export function ProductSelection({
               variant="outline"
               role="combobox"
               className="w-full justify-between"
+              title="Selecciona o cambia la categoría asociada al producto"
             >
               {categoryValue || 'Selecciona una categoría...'}
               <ChevronsUpDown className="opacity-50" />
@@ -389,7 +402,11 @@ export function ProductSelection({
         </AlertDialogContent>
       </AlertDialog>
       <Label className="text-sm font-medium py-2">Descripcion</Label>
-      <Input {...register("description")} readOnly />
+      <Input
+        {...register("description")}
+        readOnly
+        title="Descripción del producto proveniente del catálogo"
+      />
       <div className="flex justify-between gap-1">
         <div className="flex flex-col flex-grow">
           <Label className="text-sm font-medium py-2">Precio de Compra</Label>
@@ -398,6 +415,7 @@ export function ProductSelection({
             readOnly
             step="0.01"
             min={0}
+            title="Precio de compra unitario del producto"
           />
         </div>
         <div className="flex flex-col flex-grow">
@@ -419,6 +437,7 @@ export function ProductSelection({
               // Asegurarse de que el valor sea un número válido o establecerlo en 0
               setValue("priceSell", !isNaN(value) ? value.toFixed(2) : "0.00");
             }}
+            title="Define el precio de venta sugerido para el producto"
           />
         </div>
       </div>
@@ -440,11 +459,16 @@ export function ProductSelection({
               const numericValue = parseFloat(String(quantity));
               setQuantity(!isNaN(numericValue) ? numericValue : 1);
             }}
+            title="Indica cuántas unidades ingresarás al inventario"
           />
         </div>
         <div className="flex flex-col flex-grow">
           <Label className="text-sm font-medium py-2">Precio Total Unitario</Label>
-          <Input value={totalPurchasePrice} readOnly />
+          <Input
+            value={totalPurchasePrice}
+            readOnly
+            title="Resultado del precio de compra multiplicado por la cantidad"
+          />
         </div>
       </div>
     </div>

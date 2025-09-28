@@ -982,20 +982,22 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel
-                onClick={cancelCurrencyChange}
-                disabled={isConvertingCurrency}
-              >
-                Cancelar
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={confirmCurrencyChange}
-                disabled={isConvertingCurrency}
-              >
-                {isConvertingCurrency ? 'Actualizando...' : 'Convertir precios'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
+            <AlertDialogCancel
+              onClick={cancelCurrencyChange}
+              disabled={isConvertingCurrency}
+              title="Mantén la moneda actual sin aplicar cambios"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCurrencyChange}
+              disabled={isConvertingCurrency}
+              title="Confirma el cambio de moneda y actualiza los precios"
+            >
+              {isConvertingCurrency ? 'Actualizando...' : 'Convertir precios'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
         </AlertDialog>
         {isSubmitting && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-black/40">

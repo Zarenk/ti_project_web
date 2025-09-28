@@ -35,12 +35,16 @@ export const ConfirmationDialog = ({
         </AlertDialogDescription>
         <p>¿Estás seguro de que deseas registrar este ingreso?</p>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => setIsDialogOpen(false)}>
+          <AlertDialogCancel
+            onClick={() => setIsDialogOpen(false)}
+            title="Cancela el registro y vuelve al formulario"
+          >
             Cancelar
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={onSubmit}  // No cierres el modal aquí, ya lo cierras dentro de handleConfirm
             disabled={isSubmitting}
+            title="Confirma y guarda el ingreso de productos"
           >
             {isSubmitting ? "Registrando..." : "Confirmar"}
           </AlertDialogAction>

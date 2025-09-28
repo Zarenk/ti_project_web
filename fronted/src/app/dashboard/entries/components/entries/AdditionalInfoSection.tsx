@@ -40,6 +40,7 @@ export function AdditionalInfoSection({
         {...register("entry_description", { maxLength: 100 })}
         maxLength={100}
         placeholder="Ingrese una observación (máx. 100 caracteres)"
+        title="Describe detalles adicionales sobre el ingreso para futuras consultas"
       />
       <Label className="text-sm font-medium py-2">Fecha de Compra</Label>
       <Popover open={openCalendar} onOpenChange={setOpenCalendar}>
@@ -50,6 +51,7 @@ export function AdditionalInfoSection({
               "w-[260px] justify-start text-left font-normal",
               !selectedDate && "text-muted-foreground"
             )}
+            title="Selecciona la fecha de compra registrada en el comprobante"
           >
             <CalendarIcon />
             {selectedDate
@@ -81,13 +83,16 @@ export function AdditionalInfoSection({
       </Popover>
 
       <Label className="text-sm font-medium py-2">Método de Pago</Label>
-      <Select defaultValue="CASH" onValueChange={(value) => setValue('payment_method', value)}>
-        <SelectTrigger>
+      <Select
+        defaultValue="CASH"
+        onValueChange={(value) => setValue('payment_method', value)}
+      >
+        <SelectTrigger title="Elige cómo se pagará este ingreso (contado o crédito)">
           <SelectValue placeholder="Seleccione un método" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="CASH">Al contado</SelectItem>
-          <SelectItem value="CREDIT">Crédito</SelectItem>
+          <SelectItem value="CASH" title="El pago se realiza en el momento del ingreso">Al contado</SelectItem>
+          <SelectItem value="CREDIT" title="El pago se realizará a futuro según acuerdo">Crédito</SelectItem>
         </SelectContent>
       </Select>
       <input type="hidden" {...register('payment_method')} />

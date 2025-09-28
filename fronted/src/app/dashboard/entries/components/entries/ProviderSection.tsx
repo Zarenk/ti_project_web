@@ -47,6 +47,7 @@ export function ProviderSection({
               role="combobox"
               aria-expanded={openProvider}
               className="w-[260px] justify-between"
+              title="Busca y selecciona el proveedor responsable del ingreso"
             >
               {valueProvider
                 ? providers.find((provider) => String(provider.name) === valueProvider)?.name
@@ -98,6 +99,7 @@ export function ProviderSection({
           className="sm:w-auto sm:ml-2 ml-0 bg-green-700 hover:bg-green-800 text-white"
           type="button"
           onClick={() => setIsDialogOpenProvider(true)}
+          title="Registra un nuevo proveedor sin salir del formulario"
         >
           <span className="hidden sm:block">Nuevo</span>
           <Save className="w-6 h-6" />
@@ -110,15 +112,27 @@ export function ProviderSection({
         />
       </div>
       <Label className="text-sm font-medium py-2">Nombre del Proveedor</Label>
-      <Input {...register("provider_name")} readOnly />
+      <Input
+        {...register("provider_name")}
+        readOnly
+        title="Nombre del proveedor seleccionado"
+      />
       <div className="flex justify-between gap-1">
         <div className="flex flex-col flex-grow">
           <Label className="text-sm font-medium py-2">Dirección del Proveedor</Label>
-          <Input {...register("provider_adress")} readOnly />
+          <Input
+            {...register("provider_adress")}
+            readOnly
+            title="Dirección fiscal registrada del proveedor"
+          />
         </div>
         <div className="flex flex-col">
           <Label className="text-sm font-medium py-2">Ruc</Label>
-          <Input {...register("provider_documentNumber")} readOnly />
+          <Input
+            {...register("provider_documentNumber")}
+            readOnly
+            title="Número de documento tributario del proveedor"
+          />
         </div>
       </div>
     </div>

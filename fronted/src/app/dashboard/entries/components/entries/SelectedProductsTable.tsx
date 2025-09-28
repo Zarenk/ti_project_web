@@ -75,7 +75,11 @@ export const SelectedProductsTable = ({
                   onOpenChange={(open) => setCategoryPopoverIndex(open ? index : null)}
                 >
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-between">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between"
+                      title="Cambia la categoría para este producto específico"
+                    >
                       {product.category_name || "Sin categoría"}
                       <ChevronsUpDown className="opacity-50" />
                     </Button>
@@ -153,6 +157,7 @@ export const SelectedProductsTable = ({
                     }
                   }}
                   className="w-full"
+                  title="Cantidad de unidades para este producto"
                 />
               </TableCell>
               <TableCell className="max-w-[100px] truncate overflow-hidden whitespace-nowrap">
@@ -172,6 +177,7 @@ export const SelectedProductsTable = ({
                     }
                   }}
                   className="w-full"
+                  title="Precio de compra unitario editable"
                 />
               </TableCell>
               <TableCell className="max-w-[120px] truncate overflow-hidden whitespace-nowrap">
@@ -194,12 +200,14 @@ export const SelectedProductsTable = ({
                     }
                   }}
                   className="w-full"
+                  title="Precio de venta sugerido para este producto"
                 />
               </TableCell>
               <TableCell className="text-xs max-w-[250px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell">
                 <div
                   className="cursor-pointer text-blue-500 underline"
                   onClick={() => setOpenSeriesModal(index)}
+                  title="Visualiza o edita las series asociadas al producto"
                 >
                   {product.series && product.series.length > 0
                     ? `${product.series.length} series`
@@ -231,6 +239,7 @@ export const SelectedProductsTable = ({
                     e.stopPropagation(); // 👈 Evita que el click llegue al TableRow
                     removeProduct(product.id);
                   }}
+                  title="Elimina este producto del ingreso"
                 >
                   <X className="w-4 h-4" color="red" />
                 </Button>

@@ -52,6 +52,7 @@ export const StoreSection = ({
               role="combobox"
               aria-expanded={openStore}
               className="w-[260px] justify-between"
+              title="Selecciona la tienda donde se registrará el ingreso"
             >
               {valueStore
                 ? stores.find((store) => String(store.name) === valueStore)?.name
@@ -98,15 +99,24 @@ export const StoreSection = ({
           className="sm:w-auto sm:ml-2 ml-0 bg-green-700 hover:bg-green-800 text-white"
           type="button"
           onClick={() => setIsDialogOpenStore(true)}
+          title="Crea una nueva tienda para asociarla al ingreso"
         >
           <span className="hidden sm:block">Nuevo</span>
           <Save className="w-6 h-6" />
         </Button>
       </div>
       <Label className="text-sm font-medium py-2">Tienda</Label>
-      <Input {...register("store_name")} readOnly />
+      <Input
+        {...register("store_name")}
+        readOnly
+        title="Nombre de la tienda seleccionada"
+      />
       <Label className="text-sm font-medium py-2">Direccion de la tienda</Label>
-      <Input {...register("store_adress")} readOnly />
+      <Input
+        {...register("store_adress")}
+        readOnly
+        title="Dirección comercial de la tienda asociada"
+      />
       <AddStoreDialog
         isOpen={isDialogOpenStore}
         onClose={() => setIsDialogOpenStore(false)}
