@@ -218,7 +218,7 @@ export default function MotionProductCard({ product, withActions = false, priori
           </CardContent>
         </Link>
         {withActions && (
-          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none md:flex-col md:gap-4 lg:flex-row lg:gap-2">
             {canAddToCart && (
               <MotionButton
                 size="sm"

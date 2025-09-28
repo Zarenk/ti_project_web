@@ -52,9 +52,9 @@ export function ActionButtons({
 }: ActionButtonsProps) {
 
   return (
-    <>
+    <div className="mt-4 flex flex-wrap items-center gap-2">
       <Button
-        className="mt-4 flex items-center gap-2"
+        className="flex items-center gap-2"
         type="button"
         onClick={() => setIsDialogOpen(true)}
         disabled={isSubmitting}
@@ -86,7 +86,7 @@ export function ActionButtons({
         type="button"
         onClick={onCurrencyToggle}
         disabled={isSubmitting || isConvertingCurrency}
-        className="mt-4 flex items-center justify-center gap-2 rounded-md bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_20px_-12px_rgba(59,130,246,0.7)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_35px_-15px_rgba(59,130,246,0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+        className="flex items-center justify-center gap-2 rounded-md bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_20px_-12px_rgba(59,130,246,0.7)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_35px_-15px_rgba(59,130,246,0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
       >
         <RefreshCcw
           className={`h-4 w-4 transition-transform duration-200 ${isConvertingCurrency ? 'animate-spin' : ''}`}
@@ -152,6 +152,6 @@ export function ActionButtons({
         onSubmit={onSubmit}
         isSubmitting={isSubmitting}
       />
-    </>
+    </div>
   );
 }

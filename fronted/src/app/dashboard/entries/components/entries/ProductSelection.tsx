@@ -8,6 +8,18 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from '@/lib/utils'
 import AddProductDialog from '../AddProductDialog'
 import { AddSeriesDialog } from '../AddSeriesDialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { toast } from 'sonner'
+import { updateProductCategory } from '@/app/dashboard/inventory/inventory.api'
 
 export function ProductSelection({
   open,
@@ -47,6 +59,13 @@ export function ProductSelection({
 
   const [isCategoryPopoverOpen, setIsCategoryPopoverOpen] = useState(false)
 
+  const [pendingCategory, setPendingCategory] = useState<{ id: number; name: string } | null>(null)
+  const [pendingProductId, setPendingProductId] = useState<number | null>(null)
+  const [previousCategoryName, setPreviousCategoryName] = useState<string | null>(null)
+  const [previousCategoryId, setPreviousCategoryId] = useState<number | null>(null)
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false)
+  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
+
   const categoryField = register('category_name')
 
   const selectedCategoryId = useMemo(() => {
@@ -57,17 +76,119 @@ export function ProductSelection({
     return match?.id ?? null
   }, [categories, categoryValue, currentProduct?.categoryId])
 
+  const applyCategoryUpdate = async (
+    productId: number,
+    category: { id: number; name: string },
+    previousName: string | null,
+    previousId: number | null,
+  ) => {
+    try {
+      setIsUpdatingCategory(true)
+      await updateProductCategory(productId, category.id)
+      toast.success('Categoría actualizada correctamente.')
+      setCurrentProduct((prev:any) => {
+        if (!prev || prev.id !== productId) {
+          return prev
+        }
+        return {
+          ...prev,
+          categoryId: category.id,
+          category_name: category.name,
+        }
+      })
+      setProducts((prev:any) =>
+        prev.map((product:any) =>
+          product.id === productId
+            ? { ...product, categoryId: category.id, category_name: category.name }
+            : product,
+        ),
+      )
+    } catch (error) {
+      console.error('Error al actualizar la categoría del producto:', error)
+      toast.error('No se pudo actualizar la categoría del producto.')
+      setValue('category_name', previousName || '', { shouldValidate: true })
+      setCurrentProduct((prev:any) => {
+        if (!prev || prev.id !== productId) {
+          return prev
+        }
+        return {
+          ...prev,
+          categoryId: previousId ?? prev.categoryId,
+          category_name: previousName ?? prev.category_name,
+        }
+      })
+    } finally {
+      setIsUpdatingCategory(false)
+      setIsConfirmDialogOpen(false)
+      setPendingCategory(null)
+      setPendingProductId(null)
+      setPreviousCategoryId(null)
+      setPreviousCategoryName(null)
+    }
+  }
+
   const handleCategorySelection = (category: { id: number; name: string }) => {
+    const productId = currentProduct?.id ?? null
+    const previousName = currentProduct?.category_name ?? null
+    const previousId = currentProduct?.categoryId ?? null
+
     setValue('category_name', category.name, { shouldValidate: true, shouldDirty: true })
-    if (currentProduct) {
+    setIsCategoryPopoverOpen(false)
+    setIsNewCategoryBoolean(false)
+
+    if (!productId) {
+      if (currentProduct) {
+        setCurrentProduct({
+          ...currentProduct,
+          categoryId: category.id,
+          category_name: category.name,
+        })
+      }
+      return
+    }
+
+    const normalizedPreviousName = previousName?.trim().toLowerCase()
+    const hadPreviousCategory = Boolean(
+      (previousId && previousId > 0) ||
+        (normalizedPreviousName && normalizedPreviousName !== '' && normalizedPreviousName !== 'sin categoría'),
+    )
+
+    if (previousId === category.id) {
       setCurrentProduct({
         ...currentProduct,
         categoryId: category.id,
         category_name: category.name,
       })
+      return
     }
-    setIsCategoryPopoverOpen(false)
-    setIsNewCategoryBoolean(false)
+
+    if (!hadPreviousCategory) {
+      void applyCategoryUpdate(productId, category, previousName, previousId)
+      return
+    }
+
+    setPendingCategory(category)
+    setPendingProductId(productId)
+    setPreviousCategoryName(previousName)
+    setPreviousCategoryId(previousId)
+    setIsConfirmDialogOpen(true)
+  }
+
+  const handleCancelCategoryUpdate = () => {
+    setIsConfirmDialogOpen(false)
+    setPendingCategory(null)
+    setPendingProductId(null)
+    setPreviousCategoryId(null)
+    setPreviousCategoryName(null)
+    if (currentProduct) {
+      setValue('category_name', currentProduct.category_name || '', { shouldValidate: true })
+    }
+  }
+
+  const handleConfirmCategoryUpdate = () => {
+    if (pendingCategory && pendingProductId) {
+      void applyCategoryUpdate(pendingProductId, pendingCategory, previousCategoryName, previousCategoryId)
+    }
   }
 
   return (
@@ -247,6 +368,26 @@ export function ProductSelection({
           </PopoverContent>
         </Popover>
       )}
+      <AlertDialog open={isConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Actualizar categoría del producto</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`El producto tiene la categoría "${previousCategoryName || 'Sin categoría'}".`}
+              <br />
+              {pendingCategory ? `¿Deseas actualizarla por "${pendingCategory.name}"?` : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelCategoryUpdate} disabled={isUpdatingCategory}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmCategoryUpdate} disabled={isUpdatingCategory}>
+              {isUpdatingCategory ? 'Actualizando...' : 'Actualizar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Label className="text-sm font-medium py-2">Descripcion</Label>
       <Input {...register("description")} readOnly />
       <div className="flex justify-between gap-1">
