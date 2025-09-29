@@ -239,7 +239,7 @@ const data = {
     },
     {
       name: "Opciones",
-      url: "#",
+      url: "/dashboard/options",
       icon: Settings2Icon,
     },
     {

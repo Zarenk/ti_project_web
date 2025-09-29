@@ -34,6 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 // Función para obtener el userId del token JWT almacenado en localStorage
 async function getUserIdFromToken(): Promise<number | null> {
@@ -982,20 +983,36 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={cancelCurrencyChange}
-              disabled={isConvertingCurrency}
-              title="Mantén la moneda actual sin aplicar cambios"
-            >
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmCurrencyChange}
-              disabled={isConvertingCurrency}
-              title="Confirma el cambio de moneda y actualiza los precios"
-            >
-              {isConvertingCurrency ? 'Actualizando...' : 'Convertir precios'}
-            </AlertDialogAction>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex w-full sm:w-auto">
+                  <AlertDialogCancel
+                    onClick={cancelCurrencyChange}
+                    disabled={isConvertingCurrency}
+                  >
+                    Cancelar
+                  </AlertDialogCancel>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={8}>
+                Mantén la moneda actual sin aplicar cambios
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex w-full sm:w-auto">
+                  <AlertDialogAction
+                    onClick={confirmCurrencyChange}
+                    disabled={isConvertingCurrency}
+                  >
+                    {isConvertingCurrency ? 'Actualizando...' : 'Convertir precios'}
+                  </AlertDialogAction>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={8}>
+                Confirma el cambio de moneda y actualiza los precios
+              </TooltipContent>
+            </Tooltip>
           </AlertDialogFooter>
         </AlertDialogContent>
         </AlertDialog>
