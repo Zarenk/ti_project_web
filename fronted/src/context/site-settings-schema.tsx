@@ -3,6 +3,11 @@ import { z } from "zod";
 export const siteSettingsSchema = z.object({
   company: z.object({
     name: z.string().min(1, "Este campo es obligatorio."),
+    receiptFormat: z.enum(["a4", "ticket"]),
+    documentNumber: z.string().optional().or(z.literal("")),
+    address: z.string().optional().or(z.literal("")),
+    phone: z.string().optional().or(z.literal("")),
+    email: z.string().email("Ingresa un correo válido.").optional().or(z.literal("")),
   }),
   brand: z.object({
     siteName: z.string().min(1, "Este campo es obligatorio."),
@@ -115,6 +120,11 @@ export type DeepPartial<T> = T extends (infer U)[]
 export const defaultSiteSettings: SiteSettings = {
   company: {
     name: "Mi Empresa",
+    receiptFormat: "a4",
+    documentNumber: "",
+    address: "",
+    phone: "",
+    email: "",
   },
   brand: {
     siteName: "Mi Sitio Web",

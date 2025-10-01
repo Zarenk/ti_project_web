@@ -73,6 +73,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { getAuthHeaders } from "@/utils/auth-token";
 import { useTheme } from "next-themes";
 import {
@@ -131,12 +132,16 @@ type SectionProps = {
   control: FormControl;
 };
 
-type SimpleSectionProps = Pick<SectionProps, "register" | "errors">;
+type SimpleSectionProps = {
+  register: Register;
+  errors: Errors;
+  control?: FormControl;
+};
 type BrandSectionProps = Pick<SectionProps, "register" | "errors" | "setValue" | "watch">;
 const deepEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export default function SettingsPage() {
-  const [activeSection, setActiveSection] = useState<SectionId>("brand");
+  const [activeSection, setActiveSection] = useState<SectionId>("company");
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importJson, setImportJson] = useState("");
   const [firstSave, setFirstSave] = useState(true);
@@ -478,7 +483,7 @@ export default function SettingsPage() {
                   transition={{ duration: 0.2 }}
                 >
                   {activeSection === "company" && (
-                    <CompanySection register={register} errors={errors} />
+                    <CompanySection register={register} errors={errors} control={control} />
                   )}
                   {activeSection === "brand" && (
                     <BrandSection register={register} errors={errors} setValue={setValue} watch={watch} />
@@ -684,7 +689,10 @@ export default function SettingsPage() {
   );
 }
 
-function CompanySection({ register, errors }: SimpleSectionProps) {
+function CompanySection({ register, errors, control }: SimpleSectionProps) {
+  if (!control) {
+    return null;
+  }
   return (
     <Card className="border-2">
       <CardHeader>
@@ -698,6 +706,80 @@ function CompanySection({ register, errors }: SimpleSectionProps) {
           {errors.company?.name?.message && (
             <p className="text-sm text-destructive">{errors.company.name.message}</p>
           )}
+        </div>
+        <Controller
+          control={control}
+          name="company.receiptFormat"
+          render={({ field }) => (
+            <div className="space-y-2">
+              <Label>Tipo de comprobante</Label>
+              <RadioGroup
+                value={field.value}
+                onValueChange={field.onChange}
+                className="flex flex-col gap-3 sm:flex-row sm:items-center"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="a4" id="receipt-format-a4" />
+                  <Label htmlFor="receipt-format-a4" className="font-normal">
+                    Hoja A4
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="ticket" id="receipt-format-ticket" />
+                  <Label htmlFor="receipt-format-ticket" className="font-normal">
+                    Ticket
+                  </Label>
+                </div>
+              </RadioGroup>
+              {errors.company?.receiptFormat?.message && (
+                <p className="text-sm text-destructive">{errors.company.receiptFormat.message}</p>
+              )}
+            </div>
+          )}
+        />
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="companyDocumentNumber">RUC / Documento</Label>
+            <Input
+              id="companyDocumentNumber"
+              {...register("company.documentNumber")}
+              placeholder="20123456789"
+            />
+            {errors.company?.documentNumber?.message && (
+              <p className="text-sm text-destructive">{errors.company.documentNumber.message}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="companyAddress">Dirección fiscal</Label>
+            <Input
+              id="companyAddress"
+              {...register("company.address")}
+              placeholder="Av. Ejemplo 123, Lima"
+            />
+            {errors.company?.address?.message && (
+              <p className="text-sm text-destructive">{errors.company.address.message}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="companyPhone">Teléfono</Label>
+            <Input id="companyPhone" {...register("company.phone")} placeholder="(+51) 999 999 999" />
+            {errors.company?.phone?.message && (
+              <p className="text-sm text-destructive">{errors.company.phone.message}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="companyEmail">Correo electrónico</Label>
+            <Input
+              id="companyEmail"
+              type="email"
+              {...register("company.email")}
+              placeholder="ventas@miempresa.com"
+            />
+            {errors.company?.email?.message && (
+              <p className="text-sm text-destructive">{errors.company.email.message}</p>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
