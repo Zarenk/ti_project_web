@@ -5,7 +5,52 @@ import { UpdateSiteSettingsDto } from './dto/update-site-setting.dto';
 
 const SETTINGS_ID = 1;
 
+function cloneJson<T extends Prisma.JsonValue>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function isPlainObject(value: Prisma.JsonValue): value is Prisma.JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function deepMergeJson(
+  target: Prisma.JsonObject,
+  source: Prisma.JsonObject,
+): Prisma.JsonObject {
+  const output = cloneJson(target);
+
+  for (const [key, value] of Object.entries(source)) {
+    if (value === undefined) {
+      continue;
+    }
+
+    const typedKey = key as keyof typeof output;
+    const targetValue = output[typedKey];
+
+    if (Array.isArray(value)) {
+      output[typedKey] = cloneJson(value) as Prisma.JsonValue;
+      continue;
+    }
+
+    if (
+      isPlainObject(value) &&
+      targetValue !== undefined &&
+      isPlainObject(targetValue)
+    ) {
+      output[typedKey] = deepMergeJson(targetValue, value);
+      continue;
+    }
+
+    output[typedKey] = value as Prisma.JsonValue;
+  }
+
+  return output;
+}
+
 const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
+  company: {
+    name: 'Mi Empresa',
+  },
   brand: {
     siteName: 'Mi Sitio Web',
     logoUrl: '',
@@ -140,29 +185,28 @@ export class SiteSettingsService {
     });
   }
 
-   private sanitizeSettingsData(data: Prisma.JsonValue): Prisma.JsonValue {
+  private sanitizeSettingsData(data: Prisma.JsonValue): Prisma.JsonValue {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       return data;
-    }
+  }
 
-    const sanitized = { ...(data as Prisma.JsonObject) };
-    const integrations = sanitized.integrations as Prisma.JsonValue;
+    const merged = deepMergeJson(
+      DEFAULT_SITE_SETTINGS,
+      data as Prisma.JsonObject,
+    );
+    const integrations = merged.integrations as Prisma.JsonValue;
 
-    if (
-      integrations &&
-      typeof integrations === 'object' &&
-      !Array.isArray(integrations)
-    ) {
+    if (integrations && isPlainObject(integrations)) {
       const integrationsObject = {
-        ...(integrations as Prisma.JsonObject),
-      } as Prisma.JsonObject;
+      ...integrations,
+      };
 
       delete integrationsObject.gaId;
       delete integrationsObject.metaPixelId;
 
-      sanitized.integrations = integrationsObject;
+      merged.integrations = integrationsObject;
     }
 
-    return sanitized;
+    return merged;
   }
 }

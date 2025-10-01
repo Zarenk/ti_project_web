@@ -14,6 +14,7 @@ import {
   HouseIcon,
   Link,
   Map,
+  Megaphone,
   PieChart,
   QrCode,
   Settings2,
@@ -307,17 +308,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
     if (canAccessAds) {
         items.push({
-          title: "AdsLab",
-          url: "#",
-          icon: Bot,
-          items: [
-            {
-              title: "AdsLab",
-              url: "/dashboard/adslab",
-            },
-          ],
-        })
-      }
+        title: "Publicidad",
+        url: "#",
+        icon: Megaphone,
+        items: [
+          {
+            title: "Publicidad",
+            url: "/ads",
+          },
+        ],
+      })
+    }
 
     return items
   }, [totalUnread, canAccessAds, accountingEnabled, canAccessAccounting])

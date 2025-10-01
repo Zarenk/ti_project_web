@@ -1,6 +1,9 @@
 import { z } from "zod";
 
 export const siteSettingsSchema = z.object({
+  company: z.object({
+    name: z.string().min(1, "Este campo es obligatorio."),
+  }),
   brand: z.object({
     siteName: z.string().min(1, "Este campo es obligatorio."),
     logoUrl: z.string().optional(),
@@ -110,6 +113,9 @@ export type DeepPartial<T> = T extends (infer U)[]
     : T;
 
 export const defaultSiteSettings: SiteSettings = {
+  company: {
+    name: "Mi Empresa",
+  },
   brand: {
     siteName: "Mi Sitio Web",
     logoUrl: "",

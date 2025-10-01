@@ -24,6 +24,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   AlertCircle,
+  Building2,
   Box,
   Download,
   ImageIcon,
@@ -84,6 +85,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:400
 export type SettingsFormData = SiteSettings;
 
 type SectionId =
+    "company"
   | "brand"
   | "theme"
   | "typography"
@@ -100,6 +102,7 @@ type SectionId =
 const defaultValues: SettingsFormData = defaultSiteSettings;
 
 const sections: { id: SectionId; label: string; icon: typeof Palette }[] = [
+  { id: "company", label: "Empresa", icon: Building2 },
   { id: "brand", label: "Marca", icon: Sparkles },
   { id: "theme", label: "Colores y tema", icon: Palette },
   { id: "typography", label: "Tipografía", icon: Type },
@@ -474,6 +477,9 @@ export default function SettingsPage() {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.2 }}
                 >
+                  {activeSection === "company" && (
+                    <CompanySection register={register} errors={errors} />
+                  )}
                   {activeSection === "brand" && (
                     <BrandSection register={register} errors={errors} setValue={setValue} watch={watch} />
                   )}
@@ -675,6 +681,26 @@ export default function SettingsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function CompanySection({ register, errors }: SimpleSectionProps) {
+  return (
+    <Card className="border-2">
+      <CardHeader>
+        <CardTitle>Empresa</CardTitle>
+        <CardDescription>Define la información principal de tu empresa.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-2">
+          <Label htmlFor="companyName">Nombre de la empresa *</Label>
+          <Input id="companyName" {...register("company.name")} placeholder="Mi Empresa" />
+          {errors.company?.name?.message && (
+            <p className="text-sm text-destructive">{errors.company.name.message}</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

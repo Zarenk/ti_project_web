@@ -100,6 +100,15 @@ function mergeDeep<T extends Record<string, unknown>>(target: T, source: DeepPar
   return output;
 }
 
+function withDefaultSettings(value?: DeepPartial<SiteSettings> | null): SiteSettings {
+  if (!value) {
+    return clone(defaultSiteSettings);
+  }
+
+  return mergeDeep(defaultSiteSettings, value);
+}
+
+
 function resolveUpdater(current: SiteSettings, updater: SiteSettingsUpdater): SiteSettings {
   if (typeof updater === "function") {
     const result = updater(clone(current));
@@ -366,10 +375,10 @@ export function SiteSettingsProvider({
   initialCreatedAt = null,
 }: SiteSettingsProviderProps) {
   const [settings, setSettings] = useState<SiteSettings>(() =>
-    clone(initialSettings ?? defaultSiteSettings),
+    withDefaultSettings(initialSettings),
   );
   const [persistedSettings, setPersistedSettings] = useState<SiteSettings>(() =>
-    clone(initialSettings ?? defaultSiteSettings),
+    withDefaultSettings(initialSettings),
   );
   const [persistedUpdatedAt, setPersistedUpdatedAt] = useState<string | null>(initialUpdatedAt);
   const [persistedCreatedAt, setPersistedCreatedAt] = useState<string | null>(initialCreatedAt);
@@ -388,8 +397,8 @@ export function SiteSettingsProvider({
         throw new Error(message);
       }
 
-      const payload = await response.json();
-      const parsed = siteSettingsSchema.parse(payload);
+      const payload = (await response.json()) as DeepPartial<SiteSettings>;
+      const parsed = siteSettingsSchema.parse(withDefaultSettings(payload));
 
       const nextPersisted = clone(parsed);
       const nextSettings = clone(parsed);
@@ -487,8 +496,8 @@ export function SiteSettingsProvider({
 
         let parsed: SiteSettings | null = null;
         if (response.headers.get("content-type")?.includes("application/json")) {
-          const payload = await response.json();
-          parsed = siteSettingsSchema.parse(payload);
+          const payload = (await response.json()) as DeepPartial<SiteSettings>;
+          parsed = siteSettingsSchema.parse(withDefaultSettings(payload));
         }
 
         const nextUpdatedAt = response.headers.get("x-site-settings-updated-at");
