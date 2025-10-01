@@ -144,6 +144,7 @@ export default function SettingsPage() {
   });
 
   const watchedValues = useWatch<SettingsFormData>({ control });
+  const skipPreviewUpdateRef = useRef(false);
   const themeMode = watchedValues?.theme?.mode ?? settings.theme.mode;
 
   const hasUnsavedChanges = useMemo(
@@ -156,10 +157,16 @@ export default function SettingsPage() {
       return;
     }
 
+    if (skipPreviewUpdateRef.current) {
+      skipPreviewUpdateRef.current = false;
+      return;
+    }
+
     if (deepEqual(watchedValues, settings)) {
       return;
     }
 
+    skipPreviewUpdateRef.current = true;
     previewSettings(watchedValues);
   }, [watchedValues, settings, previewSettings]);
 
@@ -175,7 +182,7 @@ export default function SettingsPage() {
     }
   }, [firstSave, persistedSettings]);
 
-   const handleSave = async (data: SettingsFormData) => {
+  const handleSave = async (data: SettingsFormData) => {
     try {
       await saveSettings(data);
       if (firstSave) {
