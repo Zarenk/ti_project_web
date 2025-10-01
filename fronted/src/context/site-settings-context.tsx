@@ -44,6 +44,8 @@ const SHADOW_MAP: Record<SiteSettings["layout"]["shadow"], string> = {
   lg: "0 15px 45px rgba(15, 23, 42, 0.18)",
 };
 
+const SHADCN_PRESET_ID = "shadcn-default";
+
 function clone<T>(value: T): T {
   if (typeof structuredClone === "function") {
     return structuredClone(value);
@@ -122,6 +124,47 @@ function buildLightPalette(settings: SiteSettings) {
   const background = colors.bg;
   const foreground = colors.text;
 
+  if (settings.theme.preset === SHADCN_PRESET_ID) {
+    const primary = colors.primary;
+    const accent = colors.accent;
+    const border = "#e2e8f0";
+    const mutedForeground = "#64748b";
+
+    return {
+      "--site-color-background": background,
+      "--site-color-foreground": foreground,
+      "--site-color-card": background,
+      "--site-color-card-foreground": foreground,
+      "--site-color-popover": background,
+      "--site-color-popover-foreground": foreground,
+      "--site-color-primary": primary,
+      "--site-color-primary-foreground": "#f8fafc",
+      "--site-color-secondary": accent,
+      "--site-color-secondary-foreground": foreground,
+      "--site-color-muted": accent,
+      "--site-color-muted-foreground": mutedForeground,
+      "--site-color-accent": accent,
+      "--site-color-accent-foreground": foreground,
+      "--site-color-destructive": "#ef4444",
+      "--site-color-border": border,
+      "--site-color-input": border,
+      "--site-color-ring": primary,
+      "--site-color-chart-1": primary,
+      "--site-color-chart-2": mix(primary, accent, 0.5),
+      "--site-color-chart-3": accent,
+      "--site-color-chart-4": mix(accent, "#10b981", 0.6),
+      "--site-color-chart-5": mix(primary, "#f97316", 0.4),
+      "--site-color-sidebar": background,
+      "--site-color-sidebar-foreground": foreground,
+      "--site-color-sidebar-primary": primary,
+      "--site-color-sidebar-primary-foreground": "#f8fafc",
+      "--site-color-sidebar-accent": accent,
+      "--site-color-sidebar-accent-foreground": foreground,
+      "--site-color-sidebar-border": border,
+      "--site-color-sidebar-ring": primary,
+    } satisfies Record<string, string>;
+  }
+
   return {
     "--site-color-background": background,
     "--site-color-foreground": foreground,
@@ -161,6 +204,52 @@ function buildDarkPalette(settings: SiteSettings) {
   const { colors } = settings.theme;
   const background = darken(colors.bg, 0.7);
   const foreground = lighten(colors.text, 0.85);
+
+  if (settings.theme.preset === SHADCN_PRESET_ID) {
+    const darkBackground = "#020817";
+    const darkForeground = "#f8fafc";
+    const darkPrimary = "#f8fafc";
+    const darkPrimaryForeground = "#0f172a";
+    const darkAccent = "#1e293b";
+    const darkBorder = "#1e293b";
+    const darkMutedForeground = "#94a3b8";
+    const darkRing = "#cbd5e1";
+    const darkSidebar = "#0b1220";
+
+    return {
+      "--site-dark-color-background": darkBackground,
+      "--site-dark-color-foreground": darkForeground,
+      "--site-dark-color-card": darkBackground,
+      "--site-dark-color-card-foreground": darkForeground,
+      "--site-dark-color-popover": darkBackground,
+      "--site-dark-color-popover-foreground": darkForeground,
+      "--site-dark-color-primary": darkPrimary,
+      "--site-dark-color-primary-foreground": darkPrimaryForeground,
+      "--site-dark-color-secondary": darkAccent,
+      "--site-dark-color-secondary-foreground": darkForeground,
+      "--site-dark-color-muted": darkAccent,
+      "--site-dark-color-muted-foreground": darkMutedForeground,
+      "--site-dark-color-accent": darkAccent,
+      "--site-dark-color-accent-foreground": darkForeground,
+      "--site-dark-color-destructive": "#7f1d1d",
+      "--site-dark-color-border": darkBorder,
+      "--site-dark-color-input": darkBorder,
+      "--site-dark-color-ring": darkRing,
+      "--site-dark-color-chart-1": darkPrimary,
+      "--site-dark-color-chart-2": mix(darkPrimary, darkAccent, 0.6),
+      "--site-dark-color-chart-3": mix(darkAccent, "#38bdf8", 0.5),
+      "--site-dark-color-chart-4": mix(darkAccent, "#facc15", 0.5),
+      "--site-dark-color-chart-5": mix(darkPrimary, "#f97316", 0.4),
+      "--site-dark-color-sidebar": darkSidebar,
+      "--site-dark-color-sidebar-foreground": darkForeground,
+      "--site-dark-color-sidebar-primary": darkPrimary,
+      "--site-dark-color-sidebar-primary-foreground": darkPrimaryForeground,
+      "--site-dark-color-sidebar-accent": darkAccent,
+      "--site-dark-color-sidebar-accent-foreground": darkForeground,
+      "--site-dark-color-sidebar-border": darkBorder,
+      "--site-dark-color-sidebar-ring": darkRing,
+    } satisfies Record<string, string>;
+  }
 
   return {
     "--site-dark-color-background": background,

@@ -129,7 +129,7 @@ export default function SettingsPage() {
   const [hasConflict, setHasConflict] = useState(false);
   const previewInitializedRef = useRef(false);
   const lastNonSystemModeRef = useRef<"light" | "dark">("light");
-  const { resolvedTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
 
   const {
     settings,
@@ -284,9 +284,13 @@ export default function SettingsPage() {
     }
   };
 
-  const handleThemeModeChange = (mode: "light" | "dark" | "system") => {
-    setValue("theme.mode", mode, { shouldDirty: true, shouldTouch: true });
-  };
+  const handleThemeModeChange = useCallback(
+    (mode: "light" | "dark" | "system") => {
+      setValue("theme.mode", mode, { shouldDirty: true, shouldTouch: true });
+      setTheme(mode);
+    },
+    [setTheme, setValue],
+  );
 
   const presets = useMemo(
     () => [
@@ -296,7 +300,7 @@ export default function SettingsPage() {
         primary: "#0f172a",
         accent: "#f1f5f9",
         bg: "#ffffff",
-        text: "#0f172a",
+        text: "#020817",
       },
       {
         id: "blue-classic",
@@ -769,7 +773,7 @@ function ThemeSection({ control, setValue, presets, themeMode, onThemeModeChange
         </div>
 
         <ColorField control={control} name="theme.colors.primary" label="Color primario" placeholder="#0f172a" />
-        <ColorField control={control} name="theme.colors.accent" label="Color de acento" placeholder="#f1f5f9" />
+        <ColorField control={control} name="theme.colors.text" label="Color de texto" placeholder="#020817" />
 
         <div className="flex items-center justify-between rounded-lg bg-muted p-4">
           <div>

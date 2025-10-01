@@ -121,7 +121,7 @@ export const defaultSiteSettings: SiteSettings = {
       primary: "#0f172a",
       accent: "#f1f5f9",
       bg: "#ffffff",
-      text: "#0f172a",
+      text: "#020817",
     },
     preset: "shadcn-default",
   },
