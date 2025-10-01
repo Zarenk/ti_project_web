@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { getCurrentUser } from "@/lib/current.user";
 import DashboardLoading from "./loading";
 import LogoutOverlay from "@/components/logout-overlay";
+import { DashboardCompanyName } from "./dashboard-company-name";
 
 export const revalidate = 0;
 
@@ -36,19 +37,18 @@ export default async function Page({ children }: { children: ReactNode }) {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <SidebarTrigger className="-ml-1"/>
+                <SidebarTrigger className="-ml-1" />
               </TooltipTrigger>
               <TooltipContent>
                 Abrir/Cerrar Sidebar
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-
-        <Separator
-         orientation="vertical"
-         className="mr-2 data-[orientation=vertical]:h-4"
-        />
-        TI Empresa
+          <Separator
+            orientation="vertical"
+            className="mr-2 data-[orientation=vertical]:h-4"
+          />
+          <DashboardCompanyName />
         </div>
         <Suspense fallback={<DashboardLoading />}>
           {children}
