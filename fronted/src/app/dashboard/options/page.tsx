@@ -1,6 +1,14 @@
 "use client";
 
-import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ChangeEvent,
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Controller,
   useForm,
@@ -107,6 +115,7 @@ type SectionProps = {
 };
 
 type SimpleSectionProps = Pick<SectionProps, "register" | "errors">;
+type BrandSectionProps = Pick<SectionProps, "register" | "errors" | "setValue">;
 const deepEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export default function SettingsPage() {
@@ -401,7 +410,9 @@ export default function SettingsPage() {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.2 }}
                 >
-                  {activeSection === "brand" && <BrandSection register={register} errors={errors} />}
+                  {activeSection === "brand" && (
+                    <BrandSection register={register} errors={errors} setValue={setValue} />
+                  )}
                   {activeSection === "theme" && (
                     <ThemeSection
                       register={register}
@@ -556,7 +567,30 @@ export default function SettingsPage() {
   );
 }
 
-function BrandSection({ register, errors }: SimpleSectionProps) {
+function BrandSection({ register, errors, setValue }: BrandSectionProps) {
+  const handleFileUpload = (
+    event: ChangeEvent<HTMLInputElement>,
+    field: "logoUrl" | "faviconUrl",
+  ) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        const formField: "brand.logoUrl" | "brand.faviconUrl" =
+          field === "logoUrl" ? "brand.logoUrl" : "brand.faviconUrl";
+        setValue(formField, reader.result, { shouldDirty: true });
+      }
+    };
+
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
+
   return (
     <Card className="border-2">
       <CardHeader>
@@ -576,13 +610,29 @@ function BrandSection({ register, errors }: SimpleSectionProps) {
           <div className="space-y-2">
             <Label htmlFor="logoUrl">URL del logo</Label>
             <Input id="logoUrl" {...register("brand.logoUrl")} placeholder="https://ejemplo.com/logo.png" />
-            <p className="text-xs text-muted-foreground">PNG o SVG recomendado</p>
+            <Input
+              id="logoFile"
+              type="file"
+              accept="image/*"
+              onChange={(event) => handleFileUpload(event, "logoUrl")}
+            />
+            <p className="text-xs text-muted-foreground">
+              PNG o SVG recomendado. Puedes subir un archivo o proporcionar una URL.
+            </p>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="faviconUrl">URL del favicon</Label>
             <Input id="faviconUrl" {...register("brand.faviconUrl")} placeholder="https://ejemplo.com/favicon.ico" />
-            <p className="text-xs text-muted-foreground">ICO, PNG o SVG</p>
+            <Input
+              id="faviconFile"
+              type="file"
+              accept="image/*"
+              onChange={(event) => handleFileUpload(event, "faviconUrl")}
+            />
+            <p className="text-xs text-muted-foreground">
+              ICO, PNG o SVG. Puedes subir un archivo o proporcionar una URL.
+            </p>
           </div>
         </div>
 
