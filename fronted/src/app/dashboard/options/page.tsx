@@ -51,6 +51,16 @@ import {
   siteSettingsSchema,
   type SiteSettings,
 } from "@/context/site-settings-schema";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -127,6 +137,9 @@ export default function SettingsPage() {
   const [serverSettings, setServerSettings] = useState<SettingsFormData>(defaultValues);
   const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
   const [hasConflict, setHasConflict] = useState(false);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [confirmExportOpen, setConfirmExportOpen] = useState(false);
+  const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
   const previewInitializedRef = useRef(false);
   const lastNonSystemModeRef = useRef<"light" | "dark">("light");
   const { resolvedTheme, setTheme } = useTheme();
@@ -284,6 +297,21 @@ export default function SettingsPage() {
     }
   };
 
+  const handleConfirmReset = () => {
+    handleReset();
+    setConfirmResetOpen(false);
+  };
+
+  const handleConfirmExport = () => {
+    handleExport();
+    setConfirmExportOpen(false);
+  };
+
+  const handleConfirmSave = () => {
+    void handleSubmit(handleSave)();
+    setConfirmSaveOpen(false);
+  };
+
   const handleThemeModeChange = useCallback(
     (mode: "light" | "dark" | "system") => {
       setValue("theme.mode", mode, { shouldDirty: true, shouldTouch: true });
@@ -369,7 +397,7 @@ export default function SettingsPage() {
               </Button>
             </div>
 
-            <Button variant="outline" size="sm" onClick={handleExport}>
+            <Button variant="outline" size="sm" onClick={() => setConfirmExportOpen(true)}>
               <Download className="mr-2 h-4 w-4" />
               Exportar JSON
             </Button>
@@ -539,62 +567,109 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <motion.div
-        className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-sm"
-        initial={{ y: 100 }}
-        animate={{ y: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      >
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-2">
-            {hasUnsavedChanges && (
-              <Badge variant="secondary" className="animate-pulse">
-                Cambios sin guardar
-              </Badge>
-            )}
-            {hasConflict && (
-              <Badge variant="destructive" className="gap-2">
-                <AlertCircle className="h-3 w-3" />
-                Configuración actualizada en otro lugar
-              </Badge>
-            )}
-          </div>
+      <div className="container mx-auto px-4 pb-8">
+        <motion.div
+          className="sticky bottom-4 z-50 border border-border bg-card/95 backdrop-blur-sm"
+          initial={{ y: 100 }}
+          animate={{ y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
+            <div className="flex items-center gap-2">
+              {hasUnsavedChanges && (
+                <Badge variant="secondary" className="animate-pulse">
+                  Cambios sin guardar
+                </Badge>
+              )}
+              {hasConflict && (
+                <Badge variant="destructive" className="gap-2">
+                  <AlertCircle className="h-3 w-3" />
+                  Configuración actualizada en otro lugar
+                </Badge>
+              )}
+            </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleReset}
-              disabled={isSaving}
-              className="gap-2 bg-transparent"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Restablecer
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleDiscard}
-              disabled={!hasUnsavedChanges || isSaving}
-              className="gap-2 bg-transparent"
-            >
-              <X className="h-4 w-4" />
-              Descartar
-            </Button>
-            <Button
-              type="submit"
-              form="settings-form"
-              disabled={!hasUnsavedChanges || isSaving}
-              className="gap-2"
-            >
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {isSaving ? "Guardando..." : "Guardar cambios"}
-            </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleReset}
+                disabled={isSaving}
+                className="gap-2 bg-transparent"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Restablecer
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDiscard}
+                disabled={!hasUnsavedChanges || isSaving}
+                className="gap-2 bg-transparent"
+              >
+                <X className="h-4 w-4" />
+                Descartar
+              </Button>
+              <Button
+                type="submit"
+                form="settings-form"
+                disabled={!hasUnsavedChanges || isSaving}
+                className="gap-2"
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {isSaving ? "Guardando..." : "Guardar cambios"}
+              </Button>
+            </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
 
       <div className="h-24" />
+
+      <AlertDialog open={confirmResetOpen} onOpenChange={setConfirmResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar acción</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Está seguro de los cambios que desea realizar antes de proseguir?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmReset}>Continuar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmExportOpen} onOpenChange={setConfirmExportOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar acción</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Está seguro de los cambios que desea realizar antes de proseguir?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmExport}>Continuar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmSaveOpen} onOpenChange={setConfirmSaveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar acción</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Está seguro de los cambios que desea realizar antes de proseguir?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSave}>Continuar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
