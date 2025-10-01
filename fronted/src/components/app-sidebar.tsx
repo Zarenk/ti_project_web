@@ -40,6 +40,7 @@ import { useMessages } from "@/context/messages-context"
 import { useAuth } from "@/context/auth-context"
 import { useFeatureFlag } from "@/app/hooks/use-feature-flags"
 import { useRBAC } from "@/app/hooks/use-rbac"
+import { useSiteSettings } from "@/context/site-settings-context"
 
 // Static navigation data
 const data = {
@@ -255,6 +256,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const { userName } = useAuth()
   const { totalUnread } = useMessages()
+  const { settings } = useSiteSettings()
 
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
   const canAccessAccounting = useRBAC(["admin", "accountant", "auditor"])
@@ -262,6 +264,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const adsEnabled = useFeatureFlag("ads")
   const canManageAds = useRBAC(["admin", "marketing"])
   const canAccessAds = adsEnabled && canManageAds
+
+  const teams = React.useMemo(() => {
+    const primaryTeam = data.teams[0]
+    const companyName = settings.company?.name?.trim()
+
+    return [
+      {
+        ...primaryTeam,
+        name: companyName || primaryTeam.name,
+      },
+      ...data.teams.slice(1),
+    ]
+  }, [settings.company?.name])
 
   const profile = {
     name: userName || "",
@@ -307,7 +322,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }
     }
     if (canAccessAds) {
-        items.push({
+      items.push({
         title: "Publicidad",
         url: "#",
         icon: Megaphone,
@@ -326,7 +341,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <TeamSwitcher teams={teams} initialTeamIndex={0} />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMain} />

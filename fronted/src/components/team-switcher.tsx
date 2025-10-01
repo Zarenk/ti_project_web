@@ -20,17 +20,43 @@ import {
 } from "@/components/ui/sidebar"
 import { ModeToggle } from "./mode-toggle"
 
-export function TeamSwitcher({
-  teams,
-}: {
-  teams: {
-    name: string
-    logo: React.ElementType
-    plan: string
-  }[]
-}) {
+type Team = {
+  name: string
+  logo: React.ElementType
+  plan: string
+}
+
+interface TeamSwitcherProps {
+  teams: Team[]
+  initialTeamIndex?: number
+}
+
+export function TeamSwitcher({ teams, initialTeamIndex = 0 }: TeamSwitcherProps) {
   const { isMobile } = useSidebar()
-  const [activeTeam, setActiveTeam] = React.useState(teams[0])
+  const [activeTeamIndex, setActiveTeamIndex] = React.useState(() => {
+    if (!teams.length) {
+      return 0
+    }
+
+    return Math.min(Math.max(initialTeamIndex, 0), teams.length - 1)
+  })
+
+  React.useEffect(() => {
+    if (!teams.length) {
+      setActiveTeamIndex(0)
+      return
+    }
+
+    setActiveTeamIndex((current) => {
+      if (current >= 0 && current < teams.length) {
+        return current
+      }
+
+      return Math.min(Math.max(initialTeamIndex, 0), teams.length - 1)
+    })
+  }, [teams, initialTeamIndex])
+
+  const activeTeam = teams[activeTeamIndex]
 
   if (!activeTeam) {
     return null
@@ -63,12 +89,12 @@ export function TeamSwitcher({
             sideOffset={4}
           >
             <DropdownMenuLabel className="text-muted-foreground text-xs">
-              Teams
+              Mis Empresas
             </DropdownMenuLabel>
             {teams.map((team, index) => (
               <DropdownMenuItem
                 key={team.name}
-                onClick={() => setActiveTeam(team)}
+                onClick={() => setActiveTeamIndex(index)}
                 className="gap-2 p-2"
               >
                 <div className="flex size-6 items-center justify-center rounded-md border">
@@ -83,7 +109,7 @@ export function TeamSwitcher({
               <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
                 <Plus className="size-4" />
               </div>
-              <div className="text-muted-foreground font-medium">Add team</div>
+              <div className="text-muted-foreground font-medium">Agregar Empresa</div>
             </DropdownMenuItem>
           </DropdownMenuContent>
           <div className="flex justify-end">
