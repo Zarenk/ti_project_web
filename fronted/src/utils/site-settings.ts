@@ -54,6 +54,66 @@ export function normalizeHref(href: string | null | undefined): string | null {
 
   return `https://${trimmed}`
 }
+export type SocialPlatform = keyof SiteSettings["social"]
+
+export interface SocialLinkEntry {
+  platform: SocialPlatform
+  url: string
+  handle?: string
+}
+
+const SOCIAL_KEYS: SocialPlatform[] = ["facebook", "instagram", "tiktok", "youtube", "x"]
+
+function extractXHandle(url: string): string | undefined {
+  try {
+    const parsed = new URL(url)
+    if (!parsed.hostname.includes("twitter.com") && !parsed.hostname.includes("x.com")) {
+      return undefined
+    }
+
+    const segments = parsed.pathname.split("/").filter(Boolean)
+    if (segments.length === 0) {
+      return undefined
+    }
+
+    const handle = segments[0]
+    if (!handle) {
+      return undefined
+    }
+
+    return handle.startsWith("@") ? handle : `@${handle}`
+  } catch {
+    return undefined
+  }
+}
+
+export function getSocialLinks(settings: SiteSettings | null | undefined): SocialLinkEntry[] {
+  if (!settings) {
+    return []
+  }
+
+  return SOCIAL_KEYS.reduce<SocialLinkEntry[]>((acc, key) => {
+    const value = normalizeHref(settings.social?.[key])
+    if (!value) {
+      return acc
+    }
+
+    const entry: SocialLinkEntry = {
+      platform: key,
+      url: value,
+    }
+
+    if (key === "x") {
+      const handle = extractXHandle(value)
+      if (handle) {
+        entry.handle = handle
+      }
+    }
+
+    acc.push(entry)
+    return acc
+  }, [])
+}
 
 export function getChipPresentation(settings: SiteSettings | null | undefined): {
   variant: "default" | "secondary" | "outline"

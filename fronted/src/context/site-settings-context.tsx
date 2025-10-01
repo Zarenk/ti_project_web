@@ -252,12 +252,28 @@ async function readErrorMessage(response: Response): Promise<string> {
   return response.statusText || "Error desconocido";
 }
 
-export function SiteSettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<SiteSettings>(() => clone(defaultSiteSettings));
-  const [persistedSettings, setPersistedSettings] = useState<SiteSettings>(() => clone(defaultSiteSettings));
-  const [persistedUpdatedAt, setPersistedUpdatedAt] = useState<string | null>(null);
-  const [persistedCreatedAt, setPersistedCreatedAt] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+interface SiteSettingsProviderProps {
+  children: React.ReactNode;
+  initialSettings?: SiteSettings | null;
+  initialUpdatedAt?: string | null;
+  initialCreatedAt?: string | null;
+}
+
+export function SiteSettingsProvider({
+  children,
+  initialSettings = null,
+  initialUpdatedAt = null,
+  initialCreatedAt = null,
+}: SiteSettingsProviderProps) {
+  const [settings, setSettings] = useState<SiteSettings>(() =>
+    clone(initialSettings ?? defaultSiteSettings),
+  );
+  const [persistedSettings, setPersistedSettings] = useState<SiteSettings>(() =>
+    clone(initialSettings ?? defaultSiteSettings),
+  );
+  const [persistedUpdatedAt, setPersistedUpdatedAt] = useState<string | null>(initialUpdatedAt);
+  const [persistedCreatedAt, setPersistedCreatedAt] = useState<string | null>(initialCreatedAt);
+  const [isLoading, setIsLoading] = useState<boolean>(!initialSettings);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(false);
@@ -296,10 +312,14 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
   }, []);
 
   useEffect(() => {
+    if (initialSettings) {
+      setIsLoading(false);
+      return;
+    }
     refresh().catch((err) => {
       console.error("Error initializing site settings", err);
     });
-  }, [refresh]);
+  }, [initialSettings, refresh]);
 
   useIsomorphicLayoutEffect(() => {
     if (typeof document !== "undefined") {

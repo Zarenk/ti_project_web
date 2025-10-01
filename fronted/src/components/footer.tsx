@@ -5,9 +5,17 @@ import { Button } from "@/components/ui/button"
 import { Monitor, Facebook, Twitter, Instagram, Youtube, Phone, Mail, MapPin, Headphones } from "lucide-react"
 import Image from "next/image"
 import { useSiteSettings } from "@/context/site-settings-context"
-import { getLogoForTheme, getSiteName, normalizeHref } from "@/utils/site-settings"
+import { getLogoForTheme, getSiteName, getSocialLinks, type SocialPlatform } from "@/utils/site-settings"
 import { useTheme } from "next-themes"
 import { useMemo } from "react"
+
+const SOCIAL_ICON_MAP: Record<SocialPlatform, { label: string; icon: typeof Facebook }> = {
+  facebook: { label: "Facebook", icon: Facebook },
+  instagram: { label: "Instagram", icon: Instagram },
+  tiktok: { label: "TikTok", icon: Monitor },
+  youtube: { label: "YouTube", icon: Youtube },
+  x: { label: "X", icon: Twitter },
+}
 
 export default function Footer() {
   const { settings } = useSiteSettings()
@@ -16,29 +24,16 @@ export default function Footer() {
   const logoSrc = getLogoForTheme(settings, resolvedTheme === "dark" ? "dark" : "light")
 
   const socialLinks = useMemo(() => {
-    const entries: Array<{
-      key: keyof typeof settings.social
-      label: string
-      href: string
-      icon: typeof Facebook
-    }> = [
-      { key: "facebook", label: "Facebook", icon: Facebook, href: "" },
-      { key: "instagram", label: "Instagram", icon: Instagram, href: "" },
-      { key: "tiktok", label: "TikTok", icon: Monitor, href: "" },
-      { key: "youtube", label: "YouTube", icon: Youtube, href: "" },
-      { key: "x", label: "X", icon: Twitter, href: "" },
-    ]
-
-    return entries
-      .map((entry) => {
-        const href = normalizeHref(settings.social[entry.key])
-        if (!href) {
-          return null
-        }
-        return { ...entry, href }
-      })
-      .filter(Boolean) as Array<{ key: string; label: string; href: string; icon: typeof Facebook }>
-  }, [settings.social])
+    return getSocialLinks(settings).map((entry) => {
+      const iconEntry = SOCIAL_ICON_MAP[entry.platform]
+      return {
+        key: entry.platform,
+        label: iconEntry.label,
+        icon: iconEntry.icon,
+        href: entry.url,
+      }
+    })
+  }, [settings])
 
   const currentYear = new Date().getFullYear()
 
