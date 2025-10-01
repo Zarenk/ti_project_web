@@ -46,6 +46,8 @@ import { Cross2Icon, TrashIcon } from "@radix-ui/react-icons"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { EyeIcon, FileText, PrinterIcon } from "lucide-react"
 
+import { BACKEND_URL } from "@/lib/utils"
+
 import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -81,6 +83,24 @@ function formatSpecificationLabel(key: string) {
 
   return key.charAt(0).toUpperCase() + key.slice(1)
 }
+
+function resolveImageUrl(path: string) {
+  if (!path) {
+    return ""
+  }
+
+  if (/^(?:https?:)?\/\//i.test(path) || path.startsWith("data:")) {
+    return path
+  }
+
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`
+  const normalizedBase = BACKEND_URL.endsWith("/")
+    ? BACKEND_URL.slice(0, -1)
+    : BACKEND_URL
+
+  return `${normalizedBase}${normalizedPath}`
+}
+ 
  
 interface DataTableProps<TData extends {id:string, createdAt:Date, name:string,
   description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, specification?: ProductSpecification, images?: string[] | null}, TValue> {
@@ -855,7 +875,7 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
                           {images.map((image, index) => (
                             <div key={`${image}-${index}`} className="rounded-md border overflow-hidden">
                               <img
-                                src={image}
+                                src={resolveImageUrl(image)}
                                 alt={`Imagen ${index + 1} de ${selectedRowData.name}`}
                                 className="h-48 w-full object-cover"
                               />

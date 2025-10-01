@@ -16,6 +16,7 @@ import Navbar from "@/components/navbar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getWebOrderById, getWebSaleById, uploadOrderProofs } from "@/app/dashboard/sales/sales.api"
 import { getProduct } from "@/app/dashboard/products/products.api"
+import { resolveImageUrl } from "@/lib/images"
 import { toast } from "sonner"
 
 export default function OrderDetails() {
@@ -58,7 +59,10 @@ export default function OrderDetails() {
           let image: string | null = null
           try {
             const p = await getProduct(String(detail.productId))
-            image = Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : null
+            image =
+              Array.isArray(p.images) && p.images.length > 0
+                ? resolveImageUrl(p.images[0])
+                : null
           } catch (err) {
             console.error('Error fetching product', detail.productId, err)
           }
