@@ -8,6 +8,8 @@ import { ChevronsUpDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDebouncedValue } from "@/app/hooks/useDebouncedValue";
 import { Badge } from "@/components/ui/badge";
+import { useSiteSettings } from "@/context/site-settings-context";
+import { getChipPresentation } from "@/utils/site-settings";
 
 type ProductOption = {
   id: number;
@@ -31,6 +33,8 @@ function norm(s: string) {
 }
 
 export default function ProductCombobox({ products, selectedId, selectedLabel, onPick, disabled }: ProductComboboxProps) {
+  const { settings } = useSiteSettings();
+  const chipPresentation = getChipPresentation(settings);
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const triggerRef = React.useRef<HTMLButtonElement>(null);
@@ -58,6 +62,23 @@ export default function ProductCombobox({ products, selectedId, selectedLabel, o
       })
       .slice(0, 50);
   }, [open, products, deferred]);
+
+  const stockBadgeClass = React.useCallback(
+    (stock: number | null | undefined) => {
+      const inStock = (stock ?? 0) > 0;
+
+      if (chipPresentation.variant === "outline") {
+        return inStock
+          ? "border border-green-500 text-green-600 dark:border-green-400 dark:text-green-200"
+          : "border border-red-500 text-red-600 dark:border-red-400 dark:text-red-200";
+      }
+
+      return inStock
+        ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+        : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+    },
+    [chipPresentation.variant],
+  );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -90,7 +111,10 @@ export default function ProductCombobox({ products, selectedId, selectedLabel, o
                     <span className="font-medium">{p.name}</span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">S/. {p.price.toFixed(2)}</span>
-                      <Badge className={(p.stock ?? 0) > 0 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}>
+                      <Badge
+                        variant={chipPresentation.variant}
+                        className={cn("text-xs", stockBadgeClass(p.stock))}
+                      >
                         Stock: {p.stock ?? '-'}
                       </Badge>
                     </div>

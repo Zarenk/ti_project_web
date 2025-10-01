@@ -8,6 +8,12 @@ import { ChevronRight } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useRef } from 'react';
 import HeroCollageCarousel from '../HeroCollageCarousel';
+import { useSiteSettings } from '@/context/site-settings-context';
+
+const DEFAULT_HERO_TITLE = 'Potencia tu productividad con nuestras laptops y componentes';
+const DEFAULT_HERO_SUBTITLE = 'Equipos de alto rendimiento para trabajo, estudio y gaming. Encuentra la tecnología perfecta para tus necesidades.';
+const DEFAULT_HERO_CTA = 'Ver productos';
+const DEFAULT_HERO_CTA_HREF = '/store';
 
 interface HeroSectionProps {
   heroProducts: any[];
@@ -15,8 +21,15 @@ interface HeroSectionProps {
 }
 
 export default function HeroSection({ heroProducts, onEditProduct }: HeroSectionProps) {
-
-   const sectionRef = useRef<HTMLDivElement>(null);
+  const { settings } = useSiteSettings();
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const heroSettings = settings.hero;
+  const heroTitle = heroSettings.title?.trim() || DEFAULT_HERO_TITLE;
+  const heroSubtitle = heroSettings.subtitle?.trim() || DEFAULT_HERO_SUBTITLE;
+  const heroCtaLabel = heroSettings.ctaLabel?.trim() || DEFAULT_HERO_CTA;
+  const heroCtaHref = heroSettings.ctaHref?.trim() || DEFAULT_HERO_CTA_HREF;
+  const heroEnableCarousel = heroSettings.enableCarousel;
+  const heroParticles = heroSettings.particles;
 
   const renderAnimatedText = (text: string) => {
     const words = text.split(' ');
@@ -82,43 +95,41 @@ export default function HeroSection({ heroProducts, onEditProduct }: HeroSection
       ref={sectionRef}
       className="relative z-0 bg-gradient-to-r from-sky-100 via-blue-50 to-sky-100 py-12 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800"
     >
-      <SectionBackground />
+      {heroParticles ? <SectionBackground /> : null}
       <div className="container mx-auto px-4">
         <div className="grid lg:grid-cols-2 gap-8 items-center">
           <div className="space-y-8">
             <div className="space-y-1 hero-title">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-800 dark:text-gray-100 leading-tight font-signika">
-                {renderAnimatedText('Potencia tu productividad con nuestras')}
-                <span className="text-sky-600">
-                  {' '}
-                  {renderAnimatedText('laptops y componentes')}
-                </span>
+                {renderAnimatedText(heroTitle)}
               </h1>
               <p className="text-xl text-gray-600 dark:text-gray-300 leading-relaxed hero-description">
-                Equipos de alto rendimiento para trabajo, estudio y gaming. Encuentra la tecnología perfecta para tus necesidades.
+                {heroSubtitle}
               </p>
             </div>
             <TooltipProvider delayDuration={150}>
               <div className="flex flex-col sm:flex-row gap-4 hero-buttons">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      asChild
-                      size="lg"
-                      className="spin-parent diag-shimmer bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 text-lg transition-transform duration-300 ease-in-out hover:scale-105"
-                    >
-                      <Link href="/store">
-                        <span className="spin-content">
-                          Ver productos
-                          <ChevronRight className="w-5 h-5 ml-2" />
-                        </span>
-                      </Link>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" align="center">
-                    Ir a Productos (/store)
-                  </TooltipContent>
-                </Tooltip>
+                {heroCtaLabel && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        asChild
+                        size="lg"
+                        className="spin-parent diag-shimmer bg-sky-500 hover:bg-sky-600 text-white px-8 py-3 text-lg transition-transform duration-300 ease-in-out hover:scale-105"
+                      >
+                        <Link href={heroCtaHref}>
+                          <span className="spin-content">
+                            {heroCtaLabel}
+                            <ChevronRight className="w-5 h-5 ml-2" />
+                          </span>
+                        </Link>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" align="center">
+                      {heroCtaHref}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
 
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -140,7 +151,11 @@ export default function HeroSection({ heroProducts, onEditProduct }: HeroSection
               </div>
             </TooltipProvider>
           </div>
-          <HeroSlideshow products={heroProducts} onEditProduct={onEditProduct} />
+          {heroEnableCarousel ? (
+            <HeroSlideshow products={heroProducts} onEditProduct={onEditProduct} />
+          ) : (
+            <HeroCollageCarousel products={heroProducts} />
+          )}
         </div>
       </div>
     </section>

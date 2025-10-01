@@ -4,40 +4,88 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Monitor, Facebook, Twitter, Instagram, Youtube, Phone, Mail, MapPin, Headphones } from "lucide-react"
 import Image from "next/image"
+import { useSiteSettings } from "@/context/site-settings-context"
+import { getLogoForTheme, getSiteName, normalizeHref } from "@/utils/site-settings"
+import { useTheme } from "next-themes"
+import { useMemo } from "react"
 
 export default function Footer() {
+  const { settings } = useSiteSettings()
+  const { resolvedTheme } = useTheme()
+  const siteName = getSiteName(settings)
+  const logoSrc = getLogoForTheme(settings, resolvedTheme === "dark" ? "dark" : "light")
+
+  const socialLinks = useMemo(() => {
+    const entries: Array<{
+      key: keyof typeof settings.social
+      label: string
+      href: string
+      icon: typeof Facebook
+    }> = [
+      { key: "facebook", label: "Facebook", icon: Facebook, href: "" },
+      { key: "instagram", label: "Instagram", icon: Instagram, href: "" },
+      { key: "tiktok", label: "TikTok", icon: Monitor, href: "" },
+      { key: "youtube", label: "YouTube", icon: Youtube, href: "" },
+      { key: "x", label: "X", icon: Twitter, href: "" },
+    ]
+
+    return entries
+      .map((entry) => {
+        const href = normalizeHref(settings.social[entry.key])
+        if (!href) {
+          return null
+        }
+        return { ...entry, href }
+      })
+      .filter(Boolean) as Array<{ key: string; label: string; href: string; icon: typeof Facebook }>
+  }, [settings.social])
+
+  const currentYear = new Date().getFullYear()
+
   return (
     <footer className="bg-blue-900 text-white py-16">
       <div className="container mx-auto px-4">
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           <div>
             <div className="flex items-center gap-2 mb-6">
-                <Image
-                  src="/ti_logo_final_2024.png"
-                  alt="TechPro"
-                  width={64}
-                  height={64}
-                  className="h-16 w-16"
-                />
-              <span className="text-2xl font-bold">TI Store</span>
+              <Image
+                src={logoSrc}
+                alt={siteName}
+                width={64}
+                height={64}
+                className="h-16 w-16"
+              />
+              <span className="text-2xl font-bold">{siteName}</span>
             </div>
             <p className="text-blue-200 mb-6">
-              Tu socio de confianza para computadoras, laptops y accesorios tecnológicos de primera calidad. Productos de calidad, soporte experto y precios inmejorables.
+              {siteName} es tu socio de confianza para computadoras, laptops y accesorios tecnológicos de primera calidad.
+              Productos de calidad, soporte experto y precios inmejorables.
             </p>
-            <div className="flex gap-4">
-              <Button size="icon" variant="ghost" className="text-blue-200 hover:text-white hover:bg-blue-800">
-                <Facebook className="h-5 w-5" />
-              </Button>
-              <Button size="icon" variant="ghost" className="text-blue-200 hover:text-white hover:bg-blue-800">
-                <Twitter className="h-5 w-5" />
-              </Button>
-              <Button size="icon" variant="ghost" className="text-blue-200 hover:text-white hover:bg-blue-800">
-                <Instagram className="h-5 w-5" />
-              </Button>
-              <Button size="icon" variant="ghost" className="text-blue-200 hover:text-white hover:bg-blue-800">
-                <Youtube className="h-5 w-5" />
-              </Button>
-            </div>
+            {socialLinks.length > 0 ? (
+              <div className="flex gap-4">
+                {socialLinks.map(({ key, icon: Icon, href, label }) => {
+                  const isExternal = href.startsWith("http")
+                  return (
+                    <Button
+                      key={key}
+                      size="icon"
+                      variant="ghost"
+                      className="text-blue-200 hover:text-white hover:bg-blue-800"
+                      asChild
+                    >
+                      <Link
+                        href={href}
+                        aria-label={label}
+                        target={isExternal ? "_blank" : undefined}
+                        rel={isExternal ? "noreferrer" : undefined}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </Link>
+                    </Button>
+                  )
+                })}
+              </div>
+            ) : null}
           </div>
 
           <div>
@@ -137,7 +185,7 @@ export default function Footer() {
 
         <div className="border-t border-blue-800 pt-8 flex flex-col md:flex-row justify-between items-center">
           <p className="text-blue-200 mb-4 md:mb-0">
-            © 2025 Tecnologia Informatica EIRL. Todos los derechos reservados. | Politicas de Privacidad | Terminos de Servicio
+            © {currentYear} {siteName}. Todos los derechos reservados. | Politicas de Privacidad | Terminos de Servicio
           </p>
           <div className="flex items-center gap-4 text-blue-200">
             <span>Pagos seguros a través de</span>

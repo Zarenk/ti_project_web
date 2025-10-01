@@ -16,6 +16,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import Link from "next/link"
 import { AdminProductImageButton } from "@/components/admin/AdminProductImageButton"
 import { AdminProductEditButton } from "@/components/admin/AdminProductEditButton"
+import { useSiteSettings } from "@/context/site-settings-context"
+import { getCardToneClass, getChipPresentation } from "@/utils/site-settings"
+import { cn } from "@/lib/utils"
 
 // Use the new `motion.create` API to avoid deprecated `motion()` usage
 const MotionButton = motion.create(Button)
@@ -58,6 +61,13 @@ interface MotionProductCardProps {
 export default function MotionProductCard({ product, withActions = false, priority = false, highlightPrice = false, onEditProduct }: MotionProductCardProps) {
 
   const { addItem } = useCart()
+  const { settings } = useSiteSettings()
+  const chipPresentation = getChipPresentation(settings)
+  const cardToneClass = getCardToneClass(settings)
+  const cardHoverClass =
+    settings.components.cardStyle === "shadow"
+      ? "border border-transparent hover:border-border hover:shadow-xl"
+      : "hover:border-primary/40"
   const [isFavorite, setIsFavorite] = useState(false)
   const [imageList, setImageList] = useState<string[]>(product.images ?? [])
   useEffect(() => {
@@ -98,7 +108,13 @@ export default function MotionProductCard({ product, withActions = false, priori
 
   return (
     <motion.div layout>
-      <Card className="group relative overflow-hidden hover:shadow-lg transition-shadow duration-200 card-stripes border-transparent hover:border-border">
+      <Card
+        className={cn(
+          "group relative overflow-hidden transition-shadow duration-200 card-stripes",
+          cardToneClass,
+          cardHoverClass,
+        )}
+      >
         <div className="pointer-events-none absolute right-3 top-3 z-20 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
           <div className="flex gap-2 pointer-events-auto">
             <AdminProductImageButton
@@ -129,7 +145,10 @@ export default function MotionProductCard({ product, withActions = false, priori
           </CardHeader>
           <CardContent className="p-4">
             <div className="mb-2">
-              <Badge variant="outline" className="text-xs">
+              <Badge
+                variant={chipPresentation.variant}
+                className={cn("text-xs", chipPresentation.className)}
+              >
                 {product.category}
               </Badge>
             </div>

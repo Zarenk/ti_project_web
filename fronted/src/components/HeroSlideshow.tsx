@@ -9,6 +9,7 @@ import { formatCurrency } from "@/lib/utils"
 import { resolveImageUrl } from "@/lib/images"
 import { AdminProductImageButton } from "@/components/admin/AdminProductImageButton"
 import { AdminProductEditButton } from "@/components/admin/AdminProductEditButton"
+import { useSiteSettings } from "@/context/site-settings-context"
 
 interface Brand {
   name: string
@@ -43,11 +44,14 @@ interface HeroSlideshowProps {
 }
 
 export default function HeroSlideshow({ products, onEditProduct }: HeroSlideshowProps) {
+  const { settings } = useSiteSettings()
+  const heroConfig = settings.hero
+  const autoDuration = Math.max(1, Math.min(10, heroConfig.speed || 4))
+  const allowAutoPlay = heroConfig.enableCarousel
   const [items, setItems] = useState<Product[]>(products)
   const [index, setIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isManual, setIsManual] = useState(false)
-  const autoDuration = 4;      // tiempo visible entre cambios
   const fadeDuration = 0.6;    // duración del difuminado
 
   useEffect(() => {
@@ -70,12 +74,12 @@ export default function HeroSlideshow({ products, onEditProduct }: HeroSlideshow
   }
 
   useEffect(() => {
-    if (isPaused || isManual || items.length <= 1) return
+    if (!allowAutoPlay || isPaused || isManual || items.length <= 1) return
     const timer = setTimeout(() => {
       setIndex((i) => (items.length > 0 ? (i + 1) % items.length : i))
     }, autoDuration * 1000)
     return () => clearTimeout(timer)
-  }, [index, isPaused, isManual, items.length, autoDuration])
+  }, [index, isPaused, isManual, items.length, autoDuration, allowAutoPlay])
   const product = items[index]
 
   const offsetX = useMotionValue(0)

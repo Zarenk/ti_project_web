@@ -2,19 +2,16 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useState, useRef, useEffect } from "react"
+import { useRef } from "react"
 import {
-  UserIcon,
-  Heart,
-  Menu,
   Home,
   HelpCircle,
   Phone,
   ShoppingBag,
-  LogOut,
-  LogIn,
   UserPlus,
 } from "lucide-react"
+import { FormEvent, useState, useEffect, useMemo } from "react"
+import { UserIcon, Heart, Menu, LogOut, LogIn } from "lucide-react"
 import { Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCart } from "@/context/cart-context"
@@ -33,11 +30,19 @@ import {
 } from "@/components/ui/sheet"
 import { useTheme } from "next-themes"
 import { useAuth } from "@/context/auth-context"
+import { Input } from "@/components/ui/input"
+import { useSiteSettings } from "@/context/site-settings-context"
+import { cn } from "@/lib/utils"
+import {
+  getLogoForTheme,
+  getNavbarLinks,
+  getSiteName,
+} from "@/utils/site-settings"
+
 
 export default function Navbar() {
-  const [open, setOpen] = useState(false)
+  const { settings } = useSiteSettings()
   const [loggingOut, setLoggingOut] = useState(false)
-  const closeTimer = useRef<NodeJS.Timeout | null>(null)
   const { logout, userName, userId } = useAuth()
   const router = useRouter()
   const { items } = useCart()
@@ -45,8 +50,68 @@ export default function Navbar() {
   // 🔄 Usa resolvedTheme para tener el modo “real” aplicado (incluye system)
   const { resolvedTheme } = useTheme()
 
-  const [logoSrc, setLogoSrc] = useState("/logo_ti.png")
+  const [logoSrc, setLogoSrc] = useState(
+    () =>
+      getLogoForTheme(
+        settings,
+        resolvedTheme === "dark" ? "dark" : "light",
+      ),
+  )
   const [navColor, setNavColor] = useState<string>("")
+  const [searchQuery, setSearchQuery] = useState("")
+
+  const siteName = useMemo(() => getSiteName(settings), [settings])
+  const navLinks = useMemo(() => getNavbarLinks(settings), [settings])
+  const navbarStyle = settings.navbar.style
+  const navbarPosition = settings.navbar.position
+  const showSearch = settings.navbar.showSearch
+
+  const navbarClassName = useMemo(
+    () =>
+      cn(
+        "relative transition-colors duration-500 ease-in-out",
+        navbarPosition === "fixed"
+          ? "md:sticky md:top-0 md:z-50"
+          : "md:relative md:top-auto md:z-40",
+        {
+          light: "bg-background text-foreground shadow-sm",
+          dark: "bg-slate-900 text-slate-50 shadow-lg",
+          transparent: "bg-transparent text-white",
+        }[navbarStyle],
+      ),
+    [navbarStyle, navbarPosition],
+  )
+
+  const desktopLinkClass = useMemo(() => {
+    if (navbarStyle === "dark" || navbarStyle === "transparent") {
+      return "text-sm font-medium text-slate-200 hover:text-white"
+    }
+
+    return "text-sm font-medium text-muted-foreground hover:text-foreground"
+  }, [navbarStyle])
+
+  const searchInputClass = useMemo(() => {
+    if (navbarStyle === "dark") {
+      return "bg-slate-800 text-slate-100 placeholder:text-slate-400 border-slate-700"
+    }
+
+    if (navbarStyle === "transparent") {
+      return "bg-white/10 text-white placeholder:text-white/70 border-white/30 focus:bg-white/20"
+    }
+
+    return ""
+  }, [navbarStyle])
+
+  const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const query = searchQuery.trim()
+    if (query.length === 0) {
+      router.push("/store")
+      return
+    }
+    const url = `/store?search=${encodeURIComponent(query)}`
+    router.push(url)
+  }
 
   // --- Helpers to constrain nav color to the light theme palette (whites/sky/blues) ---
   const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
@@ -136,21 +201,15 @@ export default function Navbar() {
     return ""
   }
 
-  // 🖼️ Logo según tema real
+  // 🖼️ Logo según tema real o personalizado
   useEffect(() => {
-    setLogoSrc(resolvedTheme === "dark" ? "/ti_logo_final_blanco.png" : "/logo_ti.png")
-  }, [resolvedTheme])
-
-  const handleMouseEnter = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current)
-    setOpen(true)
-  }
-  const handleMouseLeave = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current)
-    closeTimer.current = setTimeout(() => setOpen(false), 150)
-  }
-
-  const hasActiveOrder = items.length > 0
+    setLogoSrc(
+      getLogoForTheme(
+        settings,
+        resolvedTheme === "dark" ? "dark" : "light",
+      ),
+    )
+  }, [resolvedTheme, settings])
 
   const handleLogout = async () => {
     if (loggingOut) return
@@ -160,16 +219,12 @@ export default function Navbar() {
     setLoggingOut(false)
   }
 
-  const navLinks = [
-    { href: "/", label: "Inicio", icon: Home },
-    { href: "/faq", label: "FAQ", icon: HelpCircle },
-    { href: "/contact", label: "Contacto", icon: Phone },
-    { href: "/store", label: "Productos", icon: ShoppingBag },
-    { href: "/favorites", label: "Favoritos", icon: Heart },
-  ]
-
   // 👀 Observer de secciones (solo md+) — depende de resolvedTheme
   useEffect(() => {
+    if (navbarStyle !== "light") {
+      setNavColor("")
+      return
+    }
     if (!window.matchMedia("(min-width: 768px)").matches) return
 
     const sections = document.querySelectorAll<HTMLElement>("[data-navcolor]")
@@ -188,10 +243,14 @@ export default function Navbar() {
 
     sections.forEach((section) => observer.observe(section))
     return () => observer.disconnect()
-  }, [resolvedTheme])
+  }, [resolvedTheme, navbarStyle])
 
   // ⚡ Cambio inmediato al togglear tema (sin esperar scroll)
   useEffect(() => {
+    if (navbarStyle !== "light") {
+      setNavColor("")
+      return
+    }
     // 1) Limpia inline style para que bg-background responda al tema al instante
     setNavColor("")
 
@@ -229,15 +288,15 @@ export default function Navbar() {
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
 
     return () => mo.disconnect()
-  }, [resolvedTheme])
+  }, [resolvedTheme, navbarStyle])
 
   return (
     <>
       <TopBanner />
       <nav
-        className="relative bg-background shadow-sm md:sticky md:top-0 md:z-50 transition-colors duration-500 ease-in-out"
+        className={navbarClassName}
         /* ✅ inline style solo si hay navColor; si no, que mande Tailwind */
-        style={navColor ? { backgroundColor: navColor } : undefined}
+        style={navbarStyle === "light" && navColor ? { backgroundColor: navColor } : undefined}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <Link
@@ -246,27 +305,30 @@ export default function Navbar() {
           >
             <Image
               src={logoSrc}
-              alt="TI"
+              alt={siteName}
               width={64}
               height={64}
               priority
               className="h-16 w-16 transition duration-300 group-hover:brightness-110 group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.7)]"
             />
-            <span className="transition-colors duration-300 group-hover:text-sky-600">Tienda TI</span>
+            <span className="transition-colors duration-300 group-hover:text-sky-600">{siteName}</span>
           </Link>
           <div className="hidden md:flex items-center gap-4">
-            <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-              Inicio
-            </Link>
-            <Link href="/faq" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-              FAQ
-            </Link>
-            <Link href="/contact" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-              Contacto
-            </Link>
-            <Link href="/store" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-              Productos
-            </Link>
+            {showSearch && (
+              <form onSubmit={handleSearchSubmit} className="relative">
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Buscar productos"
+                  className={cn("h-9 w-48 lg:w-56", searchInputClass)}
+                />
+              </form>
+            )}
+            {navLinks.map((link:any) => (
+              <Link key={link.href} href={link.href} className={desktopLinkClass}>
+                {link.label}
+              </Link>
+            ))}
             <Link
               href="/track-order"
               className="group relative text-sm font-semibold text-sky-600 transition-colors duration-300 dark:text-sky-300"
@@ -351,16 +413,31 @@ export default function Navbar() {
                 <div className="flex h-full flex-col">
                   <div className="px-4 py-3 border-b">
                     <Link href="/" className="flex items-center gap-2 font-semibold">
-                      <Image src={logoSrc} alt="TI" width={28} height={28} />
-                      <span>Tienda TI</span>
+                      <Image src={logoSrc} alt={siteName} width={28} height={28} />
+                      <span>{siteName}</span>
                     </Link>
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 space-y-1">
+                    {showSearch && (
+                      <form onSubmit={handleSearchSubmit} className="mb-3">
+                        <Input
+                          value={searchQuery}
+                          onChange={(event) => setSearchQuery(event.target.value)}
+                          placeholder="Buscar productos"
+                          className={cn("h-10", searchInputClass)}
+                        />
+                      </form>
+                    )}
                     {/* Primary links */}
-                    <Link href="/" className="block px-3 py-2 rounded hover:bg-accent">Inicio</Link>
-                    <Link href="/faq" className="block px-3 py-2 rounded hover:bg-accent">FAQ</Link>
-                    <Link href="/contact" className="block px-3 py-2 rounded hover:bg-accent">Contacto</Link>
-                    <Link href="/store" className="block px-3 py-2 rounded hover:bg-accent">Productos</Link>
+                    {navLinks.map((link:any) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className="block px-3 py-2 rounded hover:bg-accent"
+                      >
+                        {link.label}
+                      </Link>
+                    ))}
                     <Link
                       href="/track-order"
                       className="group relative block px-3 py-2 rounded hover:bg-accent text-sky-600 font-semibold transition-colors duration-300 dark:text-sky-300"

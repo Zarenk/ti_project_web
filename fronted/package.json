@@ -7,7 +7,7 @@
     "build": "npm run check-logos && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node scripts/run-component-tests.cjs",
+    "test": "vitest run",
     "check-logos": "node scripts/run-check-logos.js"
   },
   "dependencies": {

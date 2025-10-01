@@ -1,12 +1,24 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
+import { useSiteSettings } from "@/context/site-settings-context"
+import { getChipPresentation, getSiteName } from "@/utils/site-settings"
+import { cn } from "@/lib/utils"
 
 export default function TopBanner() {
-  const messages = [
-    "¡Envíos gratis por compras superiores a S/. 500!",
-    "Visita nuestras nuevas ofertas semanales",
-  ]
+  const { settings } = useSiteSettings()
+  const siteName = getSiteName(settings)
+  const chip = getChipPresentation(settings)
+
+  const messages = useMemo(
+    () =>
+      [
+        `Bienvenido a ${siteName}`,
+        "¡Envíos gratis por compras superiores a S/. 500!",
+        "Visita nuestras nuevas ofertas semanales",
+      ].filter(Boolean),
+    [siteName],
+  )
 
   const containerRef = useRef<HTMLDivElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
@@ -46,7 +58,14 @@ export default function TopBanner() {
       <div className="marquee" ref={containerRef}>
         <div className="marquee__inner" ref={trackRef} aria-hidden="false">
           {messages.map((m, i) => (
-            <span key={`m-${i}`} className="whitespace-nowrap">
+            <span
+              key={`m-${i}`}
+              className={cn(
+                "whitespace-nowrap rounded-full px-4 py-1 text-sm font-medium",
+                chip.variant === "outline" ? "border border-current text-current" : "",
+                chip.className,
+              )}
+            >
               {m}
             </span>
           ))}
