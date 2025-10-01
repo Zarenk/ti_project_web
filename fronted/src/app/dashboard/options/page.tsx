@@ -1449,3 +1449,5 @@ function MaintenanceSection({ register, errors, watch, setValue }: SectionProps)
     </Card>
   );
 }
+
+export { MaintenanceSection };
