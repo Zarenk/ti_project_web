@@ -155,8 +155,13 @@ export default function SettingsPage() {
     if (!watchedValues) {
       return;
     }
-  previewSettings(watchedValues);
-  }, [watchedValues, previewSettings]);
+
+    if (deepEqual(watchedValues, settings)) {
+      return;
+    }
+
+    previewSettings(watchedValues);
+  }, [watchedValues, settings, previewSettings]);
 
   useEffect(() => {
     if (themeMode !== "system") {

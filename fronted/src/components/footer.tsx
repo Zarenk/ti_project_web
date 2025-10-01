@@ -7,7 +7,7 @@ import Image from "next/image"
 import { useSiteSettings } from "@/context/site-settings-context"
 import { getLogoForTheme, getSiteName, getSocialLinks, type SocialPlatform } from "@/utils/site-settings"
 import { useTheme } from "next-themes"
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 const SOCIAL_ICON_MAP: Record<SocialPlatform, { label: string; icon: typeof Facebook }> = {
   facebook: { label: "Facebook", icon: Facebook },
@@ -20,8 +20,23 @@ const SOCIAL_ICON_MAP: Record<SocialPlatform, { label: string; icon: typeof Face
 export default function Footer() {
   const { settings } = useSiteSettings()
   const { resolvedTheme } = useTheme()
+  const [logoTheme, setLogoTheme] = useState<"light" | "dark">(() =>
+    settings.theme.mode === "dark" ? "dark" : "light",
+  )
+
+  useEffect(() => {
+    if (settings.theme.mode === "light" || settings.theme.mode === "dark") {
+      setLogoTheme(settings.theme.mode === "dark" ? "dark" : "light")
+      return
+    }
+
+    if (resolvedTheme) {
+      setLogoTheme(resolvedTheme === "dark" ? "dark" : "light")
+    }
+  }, [resolvedTheme, settings.theme.mode])
+
   const siteName = getSiteName(settings)
-  const logoSrc = getLogoForTheme(settings, resolvedTheme === "dark" ? "dark" : "light")
+  const logoSrc = useMemo(() => getLogoForTheme(settings, logoTheme), [settings, logoTheme])
 
   const socialLinks = useMemo(() => {
     return getSocialLinks(settings).map((entry) => {

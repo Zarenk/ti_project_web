@@ -50,13 +50,23 @@ export default function Navbar() {
   // 🔄 Usa resolvedTheme para tener el modo “real” aplicado (incluye system)
   const { resolvedTheme } = useTheme()
 
-  const [logoSrc, setLogoSrc] = useState(
-    () =>
-      getLogoForTheme(
-        settings,
-        resolvedTheme === "dark" ? "dark" : "light",
-      ),
+  const [logoTheme, setLogoTheme] = useState<"light" | "dark">(() =>
+    settings.theme.mode === "dark" ? "dark" : "light",
   )
+
+  useEffect(() => {
+    if (settings.theme.mode === "light" || settings.theme.mode === "dark") {
+      setLogoTheme(settings.theme.mode === "dark" ? "dark" : "light")
+      return
+    }
+
+    if (resolvedTheme) {
+      setLogoTheme(resolvedTheme === "dark" ? "dark" : "light")
+    }
+  }, [resolvedTheme, settings.theme.mode])
+
+  const logoSrc = useMemo(() => getLogoForTheme(settings, logoTheme), [settings, logoTheme])
+
   const [navColor, setNavColor] = useState<string>("")
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -200,16 +210,6 @@ export default function Navbar() {
     }
     return ""
   }
-
-  // 🖼️ Logo según tema real o personalizado
-  useEffect(() => {
-    setLogoSrc(
-      getLogoForTheme(
-        settings,
-        resolvedTheme === "dark" ? "dark" : "light",
-      ),
-    )
-  }, [resolvedTheme, settings])
 
   const handleLogout = async () => {
     if (loggingOut) return
