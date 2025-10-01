@@ -1,6 +1,6 @@
 "use client";
 
-import { type MutableRefObject, useEffect, useMemo, useRef, useState } from "react";
+import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Controller,
   useForm,
@@ -31,12 +31,18 @@ import {
   Shield,
   Sparkles,
   Sun,
+  Loader2,
   Type,
   Upload,
   Wrench,
   X,
 } from "lucide-react";
-import * as z from "zod";
+import { useSiteSettings } from "@/context/site-settings-context";
+import {
+  defaultSiteSettings,
+  siteSettingsSchema,
+  type SiteSettings,
+} from "@/context/site-settings-schema";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,96 +54,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { getAuthHeaders } from "@/utils/auth-token";
 
-const settingsSchema = z.object({
-  brand: z.object({
-    siteName: z.string().min(1, "Este campo es obligatorio."),
-    logoUrl: z.string().optional(),
-    faviconUrl: z.string().optional(),
-  }),
-  theme: z.object({
-    mode: z.enum(["light", "dark", "system"]),
-    colors: z.object({
-      primary: z.string(),
-      accent: z.string(),
-      bg: z.string(),
-      text: z.string(),
-    }),
-    preset: z.string().optional(),
-  }),
-  typography: z.object({
-    fontFamily: z.string(),
-    baseSize: z.number().min(12).max(24),
-    scale: z.number().min(1).max(2),
-  }),
-  layout: z.object({
-    container: z.enum(["sm", "md", "lg", "full"]),
-    spacing: z.number().min(0).max(10),
-    radius: z.number().min(0).max(2),
-    shadow: z.enum(["none", "sm", "md", "lg"]),
-    buttonStyle: z.enum(["rounded", "pill", "rectangular"]),
-  }),
-  navbar: z.object({
-    style: z.enum(["light", "dark", "transparent"]),
-    position: z.enum(["fixed", "static"]),
-    showSearch: z.boolean(),
-    links: z
-      .array(
-        z.object({
-          label: z.string(),
-          href: z.string(),
-        }),
-      )
-      .min(1),
-  }),
-  hero: z.object({
-    title: z.string(),
-    subtitle: z.string(),
-    ctaLabel: z.string(),
-    ctaHref: z
-      .string()
-      .url("Ingresa una URL válida.")
-      .optional()
-      .or(z.literal("")),
-    enableCarousel: z.boolean(),
-    speed: z.number().min(1).max(10),
-    particles: z.boolean(),
-  }),
-  components: z.object({
-    cardStyle: z.enum(["border", "shadow"]),
-    chipStyle: z.enum(["solid", "outline"]),
-    tableDensity: z.enum(["compact", "normal"]),
-  }),
-  seo: z.object({
-    defaultTitle: z.string().min(1, "Este campo es obligatorio."),
-    defaultDescription: z.string().min(1, "Este campo es obligatorio."),
-    ogImage: z.string().optional(),
-    baseSlug: z.string().optional(),
-  }),
-  integrations: z.object({
-    gaId: z.string().optional(),
-    metaPixelId: z.string().optional(),
-    loadOnCookieAccept: z.boolean(),
-  }),
-  social: z.object({
-    facebook: z.string().url("Ingresa una URL válida.").optional().or(z.literal("")),
-    instagram: z.string().url("Ingresa una URL válida.").optional().or(z.literal("")),
-    tiktok: z.string().url("Ingresa una URL válida.").optional().or(z.literal("")),
-    youtube: z.string().url("Ingresa una URL válida.").optional().or(z.literal("")),
-    x: z.string().url("Ingresa una URL válida.").optional().or(z.literal("")),
-  }),
-  privacy: z.object({
-    cookieBanner: z.boolean(),
-    cookieText: z.string(),
-    acceptText: z.string(),
-  }),
-  maintenance: z.object({
-    enabled: z.boolean(),
-    message: z.string(),
-  }),
-});
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
-export type SettingsFormData = z.infer<typeof settingsSchema>;
+export type SettingsFormData = SiteSettings;
 
 type SectionId =
   | "brand"
@@ -153,86 +74,7 @@ type SectionId =
   | "privacy"
   | "maintenance";
 
-const defaultValues: SettingsFormData = {
-  brand: {
-    siteName: "Mi Sitio Web",
-    logoUrl: "",
-    faviconUrl: "",
-  },
-  theme: {
-    mode: "system",
-    colors: {
-      primary: "#3b82f6",
-      accent: "#38bdf8",
-      bg: "#ffffff",
-      text: "#0f172a",
-    },
-    preset: "blue-classic",
-  },
-  typography: {
-    fontFamily: "Inter",
-    baseSize: 16,
-    scale: 1.25,
-  },
-  layout: {
-    container: "lg",
-    spacing: 4,
-    radius: 0.75,
-    shadow: "md",
-    buttonStyle: "rounded",
-  },
-  navbar: {
-    style: "light",
-    position: "fixed",
-    showSearch: true,
-    links: [
-      { label: "Inicio", href: "/" },
-      { label: "Productos", href: "/productos" },
-      { label: "Contacto", href: "/contacto" },
-    ],
-  },
-  hero: {
-    title: "Bienvenido a nuestro sitio",
-    subtitle: "Descubre todo lo que tenemos para ti",
-    ctaLabel: "Comenzar",
-    ctaHref: "",
-    enableCarousel: false,
-    speed: 5,
-    particles: false,
-  },
-  components: {
-    cardStyle: "shadow",
-    chipStyle: "solid",
-    tableDensity: "normal",
-  },
-  seo: {
-    defaultTitle: "Mi Sitio Web",
-    defaultDescription: "Descripción de mi sitio web",
-    ogImage: "",
-    baseSlug: "",
-  },
-  integrations: {
-    gaId: "",
-    metaPixelId: "",
-    loadOnCookieAccept: true,
-  },
-  social: {
-    facebook: "",
-    instagram: "",
-    tiktok: "",
-    youtube: "",
-    x: "",
-  },
-  privacy: {
-    cookieBanner: true,
-    cookieText: "Este sitio utiliza cookies para mejorar tu experiencia.",
-    acceptText: "Aceptar",
-  },
-  maintenance: {
-    enabled: false,
-    message: "Estamos realizando mantenimiento. Vuelve pronto.",
-  },
-};
+const defaultValues: SettingsFormData = defaultSiteSettings;
 
 const sections: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "brand", label: "Marca", icon: Sparkles },
@@ -264,96 +106,57 @@ type SectionProps = {
 };
 
 type SimpleSectionProps = Pick<SectionProps, "register" | "errors">;
-
-const STORAGE_KEY = "website-settings";
+const deepEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<SectionId>("brand");
-  const [themeMode, setThemeMode] = useState<"light" | "dark" | "system">(defaultValues.theme.mode);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importJson, setImportJson] = useState("");
   const [firstSave, setFirstSave] = useState(true);
-  const skipUnsavedChangesRef = useRef(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [serverSettings, setServerSettings] = useState<SettingsFormData>(defaultValues);
+  const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
+  const [hasConflict, setHasConflict] = useState(false);
+  const previewInitializedRef = useRef(false);
   const lastNonSystemModeRef = useRef<"light" | "dark">("light");
+
+  const {
+    settings,
+    persistedSettings,
+    previewSettings,
+    resetPreview,
+    saveSettings,
+    isSaving,
+  } = useSiteSettings();
 
   const {
     register,
     handleSubmit,
     watch,
+    control,
     setValue,
     reset,
-    control,
     formState: { errors },
   } = useForm<SettingsFormData>({
-    resolver: zodResolver(settingsSchema),
-    defaultValues,
+    resolver: zodResolver(siteSettingsSchema),
+    values: settings,
     mode: "onBlur",
   });
 
-  const watchedValues = watch();
+  const watchedValues = useWatch<SettingsFormData>({ control });
+  const themeMode = watchedValues?.theme?.mode ?? settings.theme.mode;
+
+  const hasUnsavedChanges = useMemo(
+    () => !deepEqual(settings, persistedSettings),
+    [settings, persistedSettings],
+  );
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (!watchedValues) {
       return;
     }
-
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (!saved) {
-      setHasUnsavedChanges(false);
-      skipUnsavedChangesRef.current = true;
-      return;
-    }
-
-    try {
-      const parsed = settingsSchema.parse(JSON.parse(saved));
-      skipUnsavedChangesRef.current = true;
-      reset(parsed);
-      setHasUnsavedChanges(false);
-      setFirstSave(false);
-      const parsedMode = parsed.theme.mode;
-      setThemeMode(parsedMode);
-      if (parsedMode !== "system") {
-        lastNonSystemModeRef.current = parsedMode;
-      }
-    } catch (error) {
-      console.error("Error loading settings:", error);
-    } finally {
-      // The next watch cycle will reset this flag
-    }
-  }, [reset]);
-
-  useEffect(() => {
-    if (skipUnsavedChangesRef.current) {
-      skipUnsavedChangesRef.current = false;
-      return;
-    }
-
-    setHasUnsavedChanges(true);
-  }, [watchedValues]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-
-    if (themeMode === "system") {
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      const applyMode = (isDark: boolean) => {
-        root.classList.toggle("dark", isDark);
-      };
-
-      applyMode(mediaQuery.matches);
-
-      const listener = (event: MediaQueryListEvent) => {
-        applyMode(event.matches);
-      };
-
-      mediaQuery.addEventListener("change", listener);
-      return () => mediaQuery.removeEventListener("change", listener);
-    }
-
-    root.classList.toggle("dark", themeMode === "dark");
-    return undefined;
-  }, [themeMode]);
+  previewSettings(watchedValues);
+  }, [watchedValues, previewSettings]);
 
   useEffect(() => {
     if (themeMode !== "system") {
@@ -361,13 +164,15 @@ export default function SettingsPage() {
     }
   }, [themeMode]);
 
-  const handleSave = (data: SettingsFormData) => {
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      }
-      setHasUnsavedChanges(false);
+  useEffect(() => {
+    if (firstSave && !deepEqual(persistedSettings, defaultSiteSettings)) {
+      setFirstSave(false);
+    }
+  }, [firstSave, persistedSettings]);
 
+   const handleSave = async (data: SettingsFormData) => {
+    try {
+      await saveSettings(data);
       if (firstSave) {
         setFirstSave(false);
         toast.success("¡Cambios guardados correctamente!", {
@@ -379,53 +184,29 @@ export default function SettingsPage() {
       }
     } catch (error) {
       console.error(error);
-      toast.error("No se pudieron guardar los cambios.");
+      toast.error(
+        error instanceof Error ? error.message : "No se pudieron guardar los cambios.",
+      );
     }
   };
 
   const handleDiscard = () => {
-    if (typeof window === "undefined") {
-      skipUnsavedChangesRef.current = true;
-      reset(defaultValues);
-      setThemeMode(defaultValues.theme.mode);
-      setHasUnsavedChanges(false);
-      return;
-    }
-
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-
-    if (!saved) {
-      skipUnsavedChangesRef.current = true;
-      reset(defaultValues);
-      setThemeMode(defaultValues.theme.mode);
-      setHasUnsavedChanges(false);
+    reset(persistedSettings);
+    resetPreview();
+    if (hasUnsavedChanges) {
       toast.info("Cambios descartados.");
-      return;
-    }
-
-    try {
-      const parsed = settingsSchema.parse(JSON.parse(saved));
-      skipUnsavedChangesRef.current = true;
-      reset(parsed);
-      setThemeMode(parsed.theme.mode);
-      setHasUnsavedChanges(false);
-      toast.info("Cambios descartados.");
-    } catch (error) {
-      console.error(error);
-      toast.error("La configuración guardada es inválida.");
     }
   };
-
+  
   const handleReset = () => {
-    reset(defaultValues);
-    setThemeMode(defaultValues.theme.mode);
-    setHasUnsavedChanges(true);
+    reset(defaultSiteSettings);
+    previewSettings(defaultSiteSettings);
     toast.info("Se restablecieron los valores por defecto de esta sección.");
   };
 
   const handleExport = () => {
     try {
-      const data = watch();
+      const data = settings;
       const json = JSON.stringify(data, null, 2);
       const blob = new Blob([json], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -443,11 +224,9 @@ export default function SettingsPage() {
 
   const handleImport = () => {
     try {
-      const parsed = settingsSchema.parse(JSON.parse(importJson));
-      skipUnsavedChangesRef.current = true;
+      const parsed = siteSettingsSchema.parse(JSON.parse(importJson));
       reset(parsed);
-      setThemeMode(parsed.theme.mode);
-      setHasUnsavedChanges(true);
+      previewSettings(parsed);
       setImportDialogOpen(false);
       setImportJson("");
       toast.success("Configuración importada correctamente.");
@@ -458,8 +237,7 @@ export default function SettingsPage() {
   };
 
   const handleThemeModeChange = (mode: "light" | "dark" | "system") => {
-    setThemeMode(mode);
-    setValue("theme.mode", mode, { shouldDirty: true });
+    setValue("theme.mode", mode, { shouldDirty: true, shouldTouch: true });
   };
 
   const presets = useMemo(
@@ -472,7 +250,7 @@ export default function SettingsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-background font-sans">
+    <div className="min-h-screen bg-background font-site">
       <header className="sticky top-0 z-40 border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
           <div>
@@ -691,10 +469,22 @@ export default function SettingsPage() {
                 Cambios sin guardar
               </Badge>
             )}
+            {hasConflict && (
+              <Badge variant="destructive" className="gap-2">
+                <AlertCircle className="h-3 w-3" />
+                Configuración actualizada en otro lugar
+              </Badge>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={handleReset} className="gap-2 bg-transparent">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleReset}
+              disabled={isSaving}
+              className="gap-2 bg-transparent"
+            >
               <RotateCcw className="h-4 w-4" />
               Restablecer
             </Button>
@@ -702,15 +492,20 @@ export default function SettingsPage() {
               type="button"
               variant="outline"
               onClick={handleDiscard}
-              disabled={!hasUnsavedChanges}
+              disabled={!hasUnsavedChanges || isSaving}
               className="gap-2 bg-transparent"
             >
               <X className="h-4 w-4" />
               Descartar
             </Button>
-            <Button type="submit" form="settings-form" disabled={!hasUnsavedChanges} className="gap-2">
-              <Save className="h-4 w-4" />
-              Guardar cambios
+            <Button
+              type="submit"
+              form="settings-form"
+              disabled={!hasUnsavedChanges || isSaving}
+              className="gap-2"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {isSaving ? "Guardando..." : "Guardar cambios"}
             </Button>
           </div>
         </div>
@@ -822,7 +617,7 @@ function ThemeSection({ control, setValue, presets, themeMode, onThemeModeChange
           <Switch
             id="autoTheme"
             checked={autoThemeEnabled}
-            onCheckedChange={(checked:any) => {
+            onCheckedChange={(checked: boolean) => {
               const nextMode = checked ? "system" : lastNonSystemModeRef.current;
               onThemeModeChange(nextMode);
             }}
@@ -855,7 +650,7 @@ type ColorFieldProps = {
 
 function ColorField({ control, name, label, placeholder }: ColorFieldProps) {
   return (
-    <Controller
+    <Controller<SettingsFormData, ColorFieldProps["name"]>
       name={name}
       control={control}
       render={({ field }) => {
@@ -934,7 +729,11 @@ function TypographySection({ watch, setValue }: SectionProps) {
             max={24}
             step={1}
             value={[baseSize]}
-            onValueChange={(value:any) => setValue("typography.baseSize", value[0], { shouldDirty: true })}
+            onValueChange={(value: number[]) =>
+              setValue("typography.baseSize", value[0] ?? defaultValues.typography.baseSize, {
+                shouldDirty: true,
+              })
+            }
           />
         </div>
 
@@ -946,7 +745,9 @@ function TypographySection({ watch, setValue }: SectionProps) {
             max={2}
             step={0.05}
             value={[scale]}
-            onValueChange={(value:any) => setValue("typography.scale", value[0], { shouldDirty: true })}
+            onValueChange={(value: number[]) =>
+              setValue("typography.scale", value[0] ?? defaultValues.typography.scale, { shouldDirty: true })
+            }
           />
         </div>
 
@@ -1019,7 +820,9 @@ function LayoutSection({ watch, setValue }: SectionProps) {
             max={10}
             step={1}
             value={[spacing]}
-            onValueChange={(value:any) => setValue("layout.spacing", value[0], { shouldDirty: true })}
+            onValueChange={(value: number[]) =>
+              setValue("layout.spacing", value[0] ?? defaultValues.layout.spacing, { shouldDirty: true })
+            }
           />
         </div>
 
@@ -1031,7 +834,9 @@ function LayoutSection({ watch, setValue }: SectionProps) {
             max={2}
             step={0.05}
             value={[radius]}
-            onValueChange={(value:any) => setValue("layout.radius", value[0], { shouldDirty: true })}
+            onValueChange={(value: number[]) =>
+              setValue("layout.radius", value[0] ?? defaultValues.layout.radius, { shouldDirty: true })
+            }
           />
         </div>
 
@@ -1167,7 +972,9 @@ function NavbarSection({ watch, setValue }: SectionProps) {
           <Switch
             id="showSearch"
             checked={showSearch}
-            onCheckedChange={(checked:any) => setValue("navbar.showSearch", checked, { shouldDirty: true })}
+            onCheckedChange={(checked: boolean) =>
+              setValue("navbar.showSearch", checked, { shouldDirty: true })
+            }
           />
         </div>
 
@@ -1262,7 +1069,9 @@ function HeroSection({ register, errors, watch, setValue }: SectionProps) {
           <Switch
             id="enableCarousel"
             checked={enableCarousel}
-            onCheckedChange={(checked:any) => setValue("hero.enableCarousel", checked, { shouldDirty: true })}
+            onCheckedChange={(checked: boolean) =>
+              setValue("hero.enableCarousel", checked, { shouldDirty: true })
+            }
           />
         </div>
 
@@ -1275,7 +1084,9 @@ function HeroSection({ register, errors, watch, setValue }: SectionProps) {
               max={10}
               step={1}
               value={[speed]}
-              onValueChange={(value:any) => setValue("hero.speed", value[0], { shouldDirty: true })}
+              onValueChange={(value: number[]) =>
+                setValue("hero.speed", value[0] ?? defaultValues.hero.speed, { shouldDirty: true })
+              }
             />
           </div>
         )}
@@ -1288,7 +1099,9 @@ function HeroSection({ register, errors, watch, setValue }: SectionProps) {
           <Switch
             id="particles"
             checked={particles}
-            onCheckedChange={(checked:any) => setValue("hero.particles", checked, { shouldDirty: true })}
+            onCheckedChange={(checked: boolean) =>
+              setValue("hero.particles", checked, { shouldDirty: true })
+            }
           />
         </div>
       </CardContent>
@@ -1540,7 +1353,9 @@ function PrivacySection({ register, errors, watch, setValue }: SectionProps) {
           <Switch
             id="cookieBanner"
             checked={cookieBanner}
-            onCheckedChange={(checked:any) => setValue("privacy.cookieBanner", checked, { shouldDirty: true })}
+            onCheckedChange={(checked: boolean) =>
+              setValue("privacy.cookieBanner", checked, { shouldDirty: true })
+            }
           />
         </div>
 
@@ -1600,7 +1415,9 @@ function MaintenanceSection({ register, errors, watch, setValue }: SectionProps)
           <Switch
             id="maintenanceEnabled"
             checked={enabled}
-            onCheckedChange={(checked:any) => setValue("maintenance.enabled", checked, { shouldDirty: true })}
+            onCheckedChange={(checked: boolean) =>
+              setValue("maintenance.enabled", checked, { shouldDirty: true })
+            }
           />
         </div>
 
@@ -1614,8 +1431,8 @@ function MaintenanceSection({ register, errors, watch, setValue }: SectionProps)
                 placeholder="Estamos realizando mantenimiento..."
                 rows={4}
               />
-              {errors.maintenance?.message && (
-                <p className="text-sm text-destructive">{errors.maintenance.message.message}</p>
+              {errors.maintenance?.message?.message && (
+                <p className="text-sm text-destructive">{errors.maintenance?.message?.message}</p>
               )}
             </div>
 

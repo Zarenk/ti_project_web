@@ -10,6 +10,8 @@ import { AuthProvider } from "@/context/auth-context";
 import WhatsappButton from "@/components/whatsapp-button";
 import ChatButton from "@/components/ChatButton";
 import { MessagesProvider } from "@/context/messages-context";
+import { SiteSettingsProvider } from "@/context/site-settings-context";
+import { ThemeModeSync } from "./theme-mode-sync";
 
 const anton = localFont({
   src: [
@@ -41,24 +43,23 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={`${anton.variable} ${signika.variable}`}>
-      <body className="antialiased font-anton">
-        <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-        >
-          <AuthProvider>
-            <CartProvider>
-              <MessagesProvider>
-                <Toaster position="top-right" richColors /> {/* Configuración de Sonner */}
-                {children}
-                <WhatsappButton />
-                <ChatButton />
-                <ConditionalFooter />
-              </MessagesProvider>
-            </CartProvider>
-          </AuthProvider>
-        </ThemeProvider>
+      <body className="antialiased font-site">
+        <SiteSettingsProvider>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            <ThemeModeSync />
+            <AuthProvider>
+              <CartProvider>
+                <MessagesProvider>
+                  <Toaster position="top-right" richColors /> {/* Configuración de Sonner */}
+                  {children}
+                  <WhatsappButton />
+                  <ChatButton />
+                  <ConditionalFooter />
+                </MessagesProvider>
+              </CartProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </SiteSettingsProvider>
       </body>
     </html>
   );

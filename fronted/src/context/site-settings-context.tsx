@@ -1,0 +1,425 @@
+"use client";
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  defaultSiteSettings,
+  siteSettingsSchema,
+} from "./site-settings-schema";
+import type { DeepPartial, SiteSettings, SiteSettingsUpdater } from "./site-settings-schema";
+
+const API_ENDPOINT = "/api/site-settings";
+
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+interface SiteSettingsContextValue {
+  settings: SiteSettings;
+  persistedSettings: SiteSettings;
+  isLoading: boolean;
+  isSaving: boolean;
+  error: string | null;
+  previewSettings: (updater: SiteSettingsUpdater) => void;
+  resetPreview: () => void;
+  saveSettings: (next: SiteSettings) => Promise<SiteSettings>;
+  updateSettings: (updater: SiteSettingsUpdater) => Promise<SiteSettings>;
+  refresh: () => Promise<void>;
+}
+
+const SiteSettingsContext = createContext<SiteSettingsContextValue | undefined>(undefined);
+
+const SHADOW_MAP: Record<SiteSettings["layout"]["shadow"], string> = {
+  none: "none",
+  sm: "0 1px 2px rgba(15, 23, 42, 0.08)",
+  md: "0 8px 20px rgba(15, 23, 42, 0.08)",
+  lg: "0 15px 45px rgba(15, 23, 42, 0.18)",
+};
+
+function clone<T>(value: T): T {
+  if (typeof structuredClone === "function") {
+    return structuredClone(value);
+  }
+
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function mergeDeep<T>(target: T, source: DeepPartial<T>): T {
+  const output = clone(target);
+
+  (Object.keys(source) as Array<keyof T>).forEach((key) => {
+    const sourceValue = source[key];
+
+    if (sourceValue === undefined) {
+      return;
+    }
+
+    const targetValue = (output as Record<string, unknown>)[key as string];
+
+    if (Array.isArray(sourceValue)) {
+      (output as Record<string, unknown>)[key as string] = clone(sourceValue);
+      return;
+    }
+
+    if (isPlainObject(sourceValue) && isPlainObject(targetValue)) {
+      (output as Record<string, unknown>)[key as string] = mergeDeep(
+        targetValue as Record<string, unknown>,
+        sourceValue as DeepPartial<Record<string, unknown>>,
+      ) as unknown as T[keyof T];
+      return;
+    }
+
+    (output as Record<string, unknown>)[key as string] = sourceValue as unknown as T[keyof T];
+  });
+
+  return output;
+}
+
+function resolveUpdater(current: SiteSettings, updater: SiteSettingsUpdater): SiteSettings {
+  if (typeof updater === "function") {
+    const result = updater(clone(current));
+    return clone(result);
+  }
+
+  return mergeDeep(current, updater);
+}
+
+function mix(first: string, second: string, ratio: number): string {
+  const firstRatio = Math.min(Math.max(ratio, 0), 1);
+  const secondRatio = 1 - firstRatio;
+  return `color-mix(in srgb, ${first} ${Math.round(firstRatio * 100)}%, ${second} ${Math.round(secondRatio * 100)}%)`;
+}
+
+function lighten(color: string, amount: number): string {
+  return mix(color, "white", amount);
+}
+
+function darken(color: string, amount: number): string {
+  return mix(color, "black", amount);
+}
+
+function buildLightPalette(settings: SiteSettings) {
+  const { colors } = settings.theme;
+  const background = colors.bg;
+  const foreground = colors.text;
+
+  return {
+    "--site-color-background": background,
+    "--site-color-foreground": foreground,
+    "--site-color-card": lighten(colors.bg, 0.04),
+    "--site-color-card-foreground": foreground,
+    "--site-color-popover": lighten(colors.bg, 0.06),
+    "--site-color-popover-foreground": foreground,
+    "--site-color-primary": colors.primary,
+    "--site-color-primary-foreground": lighten(colors.primary, 0.85),
+    "--site-color-secondary": mix(colors.accent, colors.bg, 0.4),
+    "--site-color-secondary-foreground": foreground,
+    "--site-color-muted": mix(colors.bg, colors.text, 0.08),
+    "--site-color-muted-foreground": mix(colors.text, colors.bg, 0.25),
+    "--site-color-accent": colors.accent,
+    "--site-color-accent-foreground": lighten(colors.accent, 0.85),
+    "--site-color-destructive": "#ef4444",
+    "--site-color-border": mix(colors.text, colors.bg, 0.12),
+    "--site-color-input": mix(colors.text, colors.bg, 0.12),
+    "--site-color-ring": colors.primary,
+    "--site-color-chart-1": colors.primary,
+    "--site-color-chart-2": mix(colors.primary, colors.accent, 0.5),
+    "--site-color-chart-3": colors.accent,
+    "--site-color-chart-4": mix(colors.accent, "#10b981", 0.6),
+    "--site-color-chart-5": mix(colors.primary, "#f97316", 0.4),
+    "--site-color-sidebar": lighten(colors.bg, 0.02),
+    "--site-color-sidebar-foreground": foreground,
+    "--site-color-sidebar-primary": colors.primary,
+    "--site-color-sidebar-primary-foreground": lighten(colors.primary, 0.85),
+    "--site-color-sidebar-accent": mix(colors.accent, colors.bg, 0.25),
+    "--site-color-sidebar-accent-foreground": foreground,
+    "--site-color-sidebar-border": mix(colors.text, colors.bg, 0.12),
+    "--site-color-sidebar-ring": colors.primary,
+  } satisfies Record<string, string>;
+}
+
+function buildDarkPalette(settings: SiteSettings) {
+  const { colors } = settings.theme;
+  const background = darken(colors.bg, 0.7);
+  const foreground = lighten(colors.text, 0.85);
+
+  return {
+    "--site-dark-color-background": background,
+    "--site-dark-color-foreground": foreground,
+    "--site-dark-color-card": darken(colors.bg, 0.5),
+    "--site-dark-color-card-foreground": foreground,
+    "--site-dark-color-popover": darken(colors.bg, 0.55),
+    "--site-dark-color-popover-foreground": foreground,
+    "--site-dark-color-primary": lighten(colors.primary, 0.25),
+    "--site-dark-color-primary-foreground": darken(colors.primary, 0.6),
+    "--site-dark-color-secondary": mix(colors.accent, "#0f172a", 0.6),
+    "--site-dark-color-secondary-foreground": foreground,
+    "--site-dark-color-muted": mix(background, foreground, 0.2),
+    "--site-dark-color-muted-foreground": mix(foreground, background, 0.4),
+    "--site-dark-color-accent": lighten(colors.accent, 0.2),
+    "--site-dark-color-accent-foreground": darken(colors.accent, 0.65),
+    "--site-dark-color-destructive": "#f87171",
+    "--site-dark-color-border": mix(foreground, background, 0.18),
+    "--site-dark-color-input": mix(foreground, background, 0.18),
+    "--site-dark-color-ring": lighten(colors.primary, 0.2),
+    "--site-dark-color-chart-1": lighten(colors.primary, 0.1),
+    "--site-dark-color-chart-2": mix(colors.primary, colors.accent, 0.6),
+    "--site-dark-color-chart-3": lighten(colors.accent, 0.1),
+    "--site-dark-color-chart-4": mix(colors.accent, "#facc15", 0.5),
+    "--site-dark-color-chart-5": mix(colors.primary, "#f97316", 0.5),
+    "--site-dark-color-sidebar": darken(colors.bg, 0.55),
+    "--site-dark-color-sidebar-foreground": foreground,
+    "--site-dark-color-sidebar-primary": lighten(colors.primary, 0.25),
+    "--site-dark-color-sidebar-primary-foreground": darken(colors.primary, 0.65),
+    "--site-dark-color-sidebar-accent": mix(colors.accent, background, 0.5),
+    "--site-dark-color-sidebar-accent-foreground": foreground,
+    "--site-dark-color-sidebar-border": mix(foreground, background, 0.2),
+    "--site-dark-color-sidebar-ring": lighten(colors.primary, 0.25),
+  } satisfies Record<string, string>;
+}
+
+function applyCssVariables(settings: SiteSettings) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const root = document.documentElement;
+  if (!root) {
+    return;
+  }
+  const spacingRem = `${(settings.layout.spacing || 0) * 0.25}rem`;
+  const radiusRem = `${settings.layout.radius}rem`;
+  const baseFontSize = `${settings.typography.baseSize}px`;
+  const variables: Record<string, string> = {
+    "--site-spacing": spacingRem,
+    "--site-radius": radiusRem,
+    "--site-shadow": SHADOW_MAP[settings.layout.shadow],
+    "--site-font-body": settings.typography.fontFamily,
+    "--site-font-heading": settings.typography.fontFamily,
+    "--site-font-base-size": baseFontSize,
+    "--site-font-scale": settings.typography.scale.toString(),
+    "--site-theme-mode": settings.theme.mode,
+    ...buildLightPalette(settings),
+    ...buildDarkPalette(settings),
+  };
+
+  Object.entries(variables).forEach(([key, value]) => {
+    root.style.setProperty(key, value);
+  });
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const data = await response.clone().json();
+    if (typeof data?.error === "string") {
+      return data.error;
+    }
+    if (typeof data?.message === "string") {
+      return data.message;
+    }
+  } catch {
+    // Ignore JSON parsing errors.
+  }
+
+  try {
+    const text = await response.clone().text();
+    if (text) {
+      return text;
+    }
+  } catch {
+    // Ignore body parsing errors.
+  }
+
+  return response.statusText || "Error desconocido";
+}
+
+export function SiteSettingsProvider({ children }: { children: React.ReactNode }) {
+  const [settings, setSettings] = useState<SiteSettings>(() => clone(defaultSiteSettings));
+  const [persistedSettings, setPersistedSettings] = useState<SiteSettings>(() => clone(defaultSiteSettings));
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(false);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(API_ENDPOINT, { cache: "no-store" });
+
+      if (!response.ok) {
+        const message = await readErrorMessage(response);
+        throw new Error(message);
+      }
+
+      const payload = await response.json();
+      const parsed = siteSettingsSchema.parse(payload);
+
+      const nextPersisted = clone(parsed);
+      const nextSettings = clone(parsed);
+      setPersistedSettings(nextPersisted);
+      setSettings(nextSettings);
+      if (mountedRef.current) {
+        applyCssVariables(nextSettings);
+      }
+      setError(null);
+    } catch (err) {
+      console.error("Error loading site settings", err);
+      setError(err instanceof Error ? err.message : "No se pudieron cargar los ajustes del sitio.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh().catch((err) => {
+      console.error("Error initializing site settings", err);
+    });
+  }, [refresh]);
+
+  useIsomorphicLayoutEffect(() => {
+    if (typeof document !== "undefined") {
+      mountedRef.current = true;
+    }
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!mountedRef.current) {
+      return;
+    }
+
+    applyCssVariables(settings);
+  }, [settings]);
+
+  const previewSettings = useCallback((updater: SiteSettingsUpdater) => {
+    setSettings((current:any) => {
+      const next = resolveUpdater(current, updater);
+
+      if (mountedRef.current) {
+        applyCssVariables(next);
+      }
+
+      return next;
+    });
+  }, []);
+
+  const resetPreview = useCallback(() => {
+    const next = clone(persistedSettings);
+
+    if (mountedRef.current) {
+      applyCssVariables(next);
+    }
+
+    setSettings(next);
+  }, [persistedSettings]);
+
+  const saveSettings = useCallback(
+    async (next: SiteSettings): Promise<SiteSettings> => {
+      const validated = siteSettingsSchema.parse(next);
+      const previousPersisted = persistedSettings;
+
+      setIsSaving(true);
+      setPersistedSettings(clone(validated));
+      setSettings(clone(validated));
+
+      try {
+        const response = await fetch(API_ENDPOINT, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(validated),
+        });
+
+        if (!response.ok) {
+          const message = await readErrorMessage(response);
+          throw new Error(message);
+        }
+
+        let parsed: SiteSettings | null = null;
+        if (response.headers.get("content-type")?.includes("application/json")) {
+          const payload = await response.json();
+          parsed = siteSettingsSchema.parse(payload);
+        }
+
+        if (parsed) {
+          setPersistedSettings(clone(parsed));
+          setSettings(clone(parsed));
+          applyCssVariables(parsed);
+          setError(null);
+          return parsed;
+        }
+
+        applyCssVariables(validated);
+        setError(null);
+        return validated;
+      } catch (err) {
+        setPersistedSettings(clone(previousPersisted));
+        setSettings(clone(previousPersisted));
+        applyCssVariables(previousPersisted);
+        const message = err instanceof Error ? err.message : "No se pudieron guardar los ajustes.";
+        setError(message);
+        throw err instanceof Error ? err : new Error(message);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [persistedSettings],
+  );
+
+  const updateSettings = useCallback(
+    async (updater: SiteSettingsUpdater): Promise<SiteSettings> => {
+      const next = resolveUpdater(settings, updater);
+      return saveSettings(next);
+    },
+    [saveSettings, settings],
+  );
+
+  const value = useMemo<SiteSettingsContextValue>(
+    () => ({
+      settings,
+      persistedSettings,
+      isLoading,
+      isSaving,
+      error,
+      previewSettings,
+      resetPreview,
+      saveSettings,
+      updateSettings,
+      refresh,
+    }),
+    [
+      settings,
+      persistedSettings,
+      isLoading,
+      isSaving,
+      error,
+      previewSettings,
+      resetPreview,
+      saveSettings,
+      updateSettings,
+      refresh,
+    ],
+  );
+
+  return <SiteSettingsContext.Provider value={value}>{children}</SiteSettingsContext.Provider>;
+}
+
+export function useSiteSettings(): SiteSettingsContextValue {
+  const context = useContext(SiteSettingsContext);
+
+  if (!context) {
+    throw new Error("useSiteSettings must be used within a SiteSettingsProvider");
+  }
+
+  return context;
+}

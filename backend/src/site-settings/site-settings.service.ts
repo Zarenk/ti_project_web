@@ -116,11 +116,13 @@ export class SiteSettingsService {
         }
       }
 
+      const payload = (dto.data ?? DEFAULT_SITE_SETTINGS) as Prisma.InputJsonValue;
+
       if (!existing) {
         return tx.siteSettings.create({
           data: {
             id: SETTINGS_ID,
-            data: (dto.data as Prisma.JsonValue) ?? DEFAULT_SITE_SETTINGS,
+            data: payload,
           },
         });
       }
@@ -128,7 +130,7 @@ export class SiteSettingsService {
       return tx.siteSettings.update({
         where: { id: SETTINGS_ID },
         data: {
-          data: dto.data as Prisma.JsonValue,
+          data: payload,
         },
       });
     });
