@@ -167,28 +167,32 @@ export default function HeroSlideshow({ products, onEditProduct }: HeroSlideshow
                 )}
                 {product ? (
                   <Link href={`/store/${product.id}`} className="block h-full">
+                    <div className="relative h-full w-full">
+                      <Image
+                        src={
+                          product.images[0]
+                            ? resolveImageUrl(product.images[0])
+                            : "/placeholder.svg?height=500&width=600&text=Hero+Banner"
+                        }
+                        alt={product.name}
+                        fill
+                        sizes="(min-width: 1024px) 600px, 100vw"
+                        className="h-full w-full object-cover object-center"
+                        priority
+                      />
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="relative h-full w-full">
                     <Image
-                      src={
-                        product.images[0]
-                          ? resolveImageUrl(product.images[0])
-                          : "/placeholder.svg?height=500&width=600&text=Hero+Banner"
-                      }
-                      alt={product.name}
-                      width={600}
-                      height={500}
+                      src="/placeholder.svg?height=500&width=600&text=Hero+Banner"
+                      alt="Producto"
+                      fill
+                      sizes="(min-width: 1024px) 600px, 100vw"
                       className="h-full w-full object-cover object-center"
                       priority
                     />
-                  </Link>
-                ) : (
-                  <Image
-                    src="/placeholder.svg?height=500&width=600&text=Hero+Banner"
-                    alt="Producto"
-                    width={600}
-                    height={500}
-                    className="h-full w-full object-cover object-center"
-                    priority
-                  />
+                  </div>
                 )}
               </div>
             </motion.div>

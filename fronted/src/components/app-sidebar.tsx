@@ -252,23 +252,15 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
-  const { userName, userId, role } = useAuth()
+  const { userName } = useAuth()
   const { totalUnread } = useMessages()
 
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
   const canAccessAccounting = useRBAC(["admin", "accountant", "auditor"])
 
-  const adsLabEnabled = process.env.NEXT_PUBLIC_ADSLAB_ENABLED === 'true'
-  const allowUserIds = process.env.NEXT_PUBLIC_ADSLAB_ALLOWLIST_USER_IDS
-    ? process.env.NEXT_PUBLIC_ADSLAB_ALLOWLIST_USER_IDS.split(',').map((id) => id.trim()).filter(Boolean)
-    : []
-  const allowRoles = process.env.NEXT_PUBLIC_ADSLAB_ALLOWLIST_ROLES
-    ? process.env.NEXT_PUBLIC_ADSLAB_ALLOWLIST_ROLES.split(',').map((r) => r.trim()).filter(Boolean)
-    : []
-  const canAccessAdsLab = adsLabEnabled && (
-    (userId !== null && allowUserIds.includes(String(userId))) ||
-    (role !== null && allowRoles.includes(role))
-  )
+  const adsEnabled = useFeatureFlag("ads")
+  const canManageAds = useRBAC(["admin", "marketing"])
+  const canAccessAds = adsEnabled && canManageAds
 
   const profile = {
     name: userName || "",
@@ -313,7 +305,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         items.splice(insertIndex, 0, accountingItem)
       }
     }
-    if (canAccessAdsLab) {
+    if (canAccessAds) {
         items.push({
           title: "AdsLab",
           url: "#",
@@ -328,7 +320,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }
 
     return items
-  }, [totalUnread, canAccessAdsLab, accountingEnabled, canAccessAccounting])
+  }, [totalUnread, canAccessAds, accountingEnabled, canAccessAccounting])
 
   return (
     <Sidebar collapsible="icon" {...props}>
