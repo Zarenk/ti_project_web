@@ -18,10 +18,7 @@ import MaintenanceGate from "@/components/maintenance-gate";
 import { getSiteName, getSocialLinks } from "@/utils/site-settings";
 
 const anton = localFont({
-  src: [
-    { path: "../../public/fonts/anton.woff2", weight: "400" },
-    { path: "../../public/fonts/anton-bold.woff2", weight: "700" },
-  ],
+  src: "../../public/fonts/anton.woff2",
   variable: "--font-anton",
   display: "swap",
 });
