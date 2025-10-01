@@ -50,6 +50,11 @@ function deepMergeJson(
 const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
   company: {
     name: 'Mi Empresa',
+    receiptFormat: 'a4',
+    documentNumber: '',
+    address: '',
+    phone: '',
+    email: '',
   },
   brand: {
     siteName: 'Mi Sitio Web',
@@ -59,12 +64,12 @@ const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
   theme: {
     mode: 'system',
     colors: {
-      primary: '#3b82f6',
-      accent: '#38bdf8',
+      primary: '#0f172a',
+      accent: '#f1f5f9',
       bg: '#ffffff',
-      text: '#0f172a',
+      text: '#020817',
     },
-    preset: 'blue-classic',
+    preset: 'shadcn-default',
   },
   typography: {
     fontFamily: 'Inter',
@@ -104,7 +109,7 @@ const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
   },
   seo: {
     defaultTitle: 'Mi Sitio Web',
-    defaultDescription: 'Descripción de mi sitio web',
+    defaultDescription: 'Descripcion de mi sitio web',
     ogImage: '',
     baseSlug: '',
   },
