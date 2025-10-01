@@ -110,11 +110,11 @@ function mix(first: string, second: string, ratio: number): string {
 }
 
 function lighten(color: string, amount: number): string {
-  return mix(color, "white", amount);
+  return mix("white", color, amount);
 }
 
 function darken(color: string, amount: number): string {
-  return mix(color, "black", amount);
+   return mix("black", color, amount);
 }
 
 function buildLightPalette(settings: SiteSettings) {

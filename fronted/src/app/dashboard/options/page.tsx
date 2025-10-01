@@ -55,6 +55,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { getAuthHeaders } from "@/utils/auth-token";
+import { useTheme } from "next-themes";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
@@ -119,6 +120,7 @@ export default function SettingsPage() {
   const [hasConflict, setHasConflict] = useState(false);
   const previewInitializedRef = useRef(false);
   const lastNonSystemModeRef = useRef<"light" | "dark">("light");
+  const { resolvedTheme } = useTheme();
 
   const {
     settings,
@@ -190,6 +192,16 @@ export default function SettingsPage() {
       lastNonSystemModeRef.current = themeMode;
     }
   }, [themeMode]);
+
+  useEffect(() => {
+    if (themeMode === "system") {
+      if (resolvedTheme === "light" || resolvedTheme === "dark") {
+        lastNonSystemModeRef.current = resolvedTheme;
+      } else if (!lastNonSystemModeRef.current) {
+        lastNonSystemModeRef.current = "light";
+      }
+    }
+  }, [themeMode, resolvedTheme]);
 
   useEffect(() => {
     if (firstSave && !deepEqual(persistedSettings, defaultSiteSettings)) {
@@ -269,6 +281,7 @@ export default function SettingsPage() {
 
   const presets = useMemo(
     () => [
+      { id: "shadcn-default", label: "Shadcn predeterminado", primary: "#0f172a", accent: "#f1f5f9" },
       { id: "blue-classic", label: "Azul clásico", primary: "#3b82f6", accent: "#38bdf8" },
       { id: "blue-sky", label: "Azul celeste", primary: "#0ea5e9", accent: "#7dd3fc" },
       { id: "blue-night", label: "Azul nocturno", primary: "#1e40af", accent: "#60a5fa" },
@@ -633,8 +646,8 @@ function ThemeSection({ control, setValue, presets, themeMode, onThemeModeChange
           </div>
         </div>
 
-        <ColorField control={control} name="theme.colors.primary" label="Color primario" placeholder="#3b82f6" />
-        <ColorField control={control} name="theme.colors.accent" label="Color de acento" placeholder="#38bdf8" />
+        <ColorField control={control} name="theme.colors.primary" label="Color primario" placeholder="#0f172a" />
+        <ColorField control={control} name="theme.colors.accent" label="Color de acento" placeholder="#f1f5f9" />
 
         <div className="flex items-center justify-between rounded-lg bg-muted p-4">
           <div>
@@ -645,7 +658,15 @@ function ThemeSection({ control, setValue, presets, themeMode, onThemeModeChange
             id="autoTheme"
             checked={autoThemeEnabled}
             onCheckedChange={(checked: boolean) => {
-              const nextMode = checked ? "system" : lastNonSystemModeRef.current;
+              const resolvedMode =
+                themeMode === "system"
+                  ? lastNonSystemModeRef.current ?? "light"
+                  : themeMode;
+
+              const nextMode = checked ? "system" : resolvedMode;
+              if (!checked) {
+                lastNonSystemModeRef.current = resolvedMode;
+              }
               onThemeModeChange(nextMode);
             }}
           />

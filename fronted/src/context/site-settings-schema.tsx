@@ -118,12 +118,12 @@ export const defaultSiteSettings: SiteSettings = {
   theme: {
     mode: "system",
     colors: {
-      primary: "#3b82f6",
-      accent: "#38bdf8",
+      primary: "#0f172a",
+      accent: "#f1f5f9",
       bg: "#ffffff",
       text: "#0f172a",
     },
-    preset: "blue-classic",
+    preset: "shadcn-default",
   },
   typography: {
     fontFamily: "Inter",
