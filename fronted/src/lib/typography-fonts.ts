@@ -16,35 +16,35 @@ const inter = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   display: "swap",
-  variable: INTER_VARIABLE_NAME,
+  variable: "--font-inter",
 });
 
 const roboto = Roboto({
   subsets: ["latin"],
   weight: ["400", "500", "700"],
   display: "swap",
-  variable: ROBOTO_VARIABLE_NAME,
+  variable: "--font-roboto",
 });
 
 const poppins = Poppins({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   display: "swap",
-  variable: POPPINS_VARIABLE_NAME,
+  variable: "--font-poppins",
 });
 
 const openSans = Open_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   display: "swap",
-  variable: OPEN_SANS_VARIABLE_NAME,
+  variable: "--font-open-sans",
 });
 
 const lato = Lato({
   subsets: ["latin"],
   weight: ["400", "700"],
   display: "swap",
-  variable: LATO_VARIABLE_NAME,
+  variable: "--font-lato",
 });
 
 const toDefinition = (
