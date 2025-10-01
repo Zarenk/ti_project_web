@@ -290,10 +290,38 @@ export default function SettingsPage() {
 
   const presets = useMemo(
     () => [
-      { id: "shadcn-default", label: "Shadcn predeterminado", primary: "#0f172a", accent: "#f1f5f9" },
-      { id: "blue-classic", label: "Azul clásico", primary: "#3b82f6", accent: "#38bdf8" },
-      { id: "blue-sky", label: "Azul celeste", primary: "#0ea5e9", accent: "#7dd3fc" },
-      { id: "blue-night", label: "Azul nocturno", primary: "#1e40af", accent: "#60a5fa" },
+      {
+        id: "shadcn-default",
+        label: "Shadcn predeterminado",
+        primary: "#0f172a",
+        accent: "#f1f5f9",
+        bg: "#ffffff",
+        text: "#0f172a",
+      },
+      {
+        id: "blue-classic",
+        label: "Azul clásico",
+        primary: "#1d4ed8",
+        accent: "#3b82f6",
+        bg: "#f8fafc",
+        text: "#0f172a",
+      },
+      {
+        id: "blue-sky",
+        label: "Azul celeste",
+        primary: "#0284c7",
+        accent: "#7dd3fc",
+        bg: "#f0f9ff",
+        text: "#0c4a6e",
+      },
+      {
+        id: "blue-night",
+        label: "Azul nocturno",
+        primary: "#1e3a8a",
+        accent: "#60a5fa",
+        bg: "#020617",
+        text: "#e2e8f0",
+      },
     ],
     [],
   );
@@ -693,7 +721,7 @@ function BrandSection({ register, errors, setValue, watch }: BrandSectionProps) 
 }
 
 type ThemeSectionProps = SectionProps & {
-  presets: { id: string; label: string; primary: string; accent: string }[];
+  presets: { id: string; label: string; primary: string; accent: string; bg: string; text: string }[];
   themeMode: "light" | "dark" | "system";
   onThemeModeChange: (mode: "light" | "dark" | "system") => void;
   lastNonSystemModeRef: MutableRefObject<"light" | "dark">;
@@ -720,15 +748,19 @@ function ThemeSection({ control, setValue, presets, themeMode, onThemeModeChange
                 onClick={() => {
                   setValue("theme.colors.primary", preset.primary, { shouldDirty: true });
                   setValue("theme.colors.accent", preset.accent, { shouldDirty: true });
+                  setValue("theme.colors.bg", preset.bg, { shouldDirty: true });
+                  setValue("theme.colors.text", preset.text, { shouldDirty: true });
                   setValue("theme.preset", preset.id, { shouldDirty: true });
                 }}
                 className="rounded-xl border-2 border-border p-4 text-left transition-colors hover:border-primary"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                <div className="mb-2 flex gap-2">
+                <div className="mb-2 grid grid-cols-4 gap-2">
                   <div className="h-8 w-8 rounded-lg" style={{ backgroundColor: preset.primary }} />
                   <div className="h-8 w-8 rounded-lg" style={{ backgroundColor: preset.accent }} />
+                  <div className="h-8 w-8 rounded-lg" style={{ backgroundColor: preset.bg }} />
+                  <div className="h-8 w-8 rounded-lg border" style={{ backgroundColor: preset.text }} />
                 </div>
                 <p className="text-sm font-medium">{preset.label}</p>
               </motion.button>
@@ -1127,7 +1159,7 @@ function NavbarSection({ watch, setValue }: SectionProps) {
           <div className="space-y-2">
             {links.map((link, index) => (
               <motion.div
-                key={`${link.label}-${index}`}
+                key={index}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 className="flex gap-2"
