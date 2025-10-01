@@ -145,6 +145,7 @@ export default function SettingsPage() {
 
   const watchedValues = useWatch<SettingsFormData>({ control });
   const skipPreviewUpdateRef = useRef(false);
+  const previewUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const themeMode = watchedValues?.theme?.mode ?? settings.theme.mode;
 
   const hasUnsavedChanges = useMemo(
@@ -166,9 +167,23 @@ export default function SettingsPage() {
       return;
     }
 
-    skipPreviewUpdateRef.current = true;
-    previewSettings(watchedValues);
+    if (previewUpdateTimeoutRef.current) {
+      clearTimeout(previewUpdateTimeoutRef.current);
+    }
+
+    previewUpdateTimeoutRef.current = setTimeout(() => {
+      skipPreviewUpdateRef.current = true;
+      previewSettings(watchedValues);
+    }, 150);
   }, [watchedValues, settings, previewSettings]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUpdateTimeoutRef.current) {
+        clearTimeout(previewUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (themeMode !== "system") {
