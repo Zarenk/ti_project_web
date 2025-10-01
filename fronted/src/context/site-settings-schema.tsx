@@ -88,7 +88,20 @@ export const siteSettingsSchema = z.object({
   }),
 });
 
+export const siteSettingsWithMetaSchema = z.object({
+  settings: siteSettingsSchema,
+  updatedAt: z.string().nullable().optional(),
+  createdAt: z.string().nullable().optional(),
+});
+
+export const siteSettingsUpdatePayloadSchema = z.object({
+  data: siteSettingsSchema,
+  expectedUpdatedAt: z.string().nullable().optional(),
+});
+
 export type SiteSettings = z.infer<typeof siteSettingsSchema>;
+export type SiteSettingsWithMeta = z.infer<typeof siteSettingsWithMetaSchema>;
+export type SiteSettingsUpdatePayload = z.infer<typeof siteSettingsUpdatePayloadSchema>;
 
 export type DeepPartial<T> = T extends (infer U)[]
   ? DeepPartial<U>[]

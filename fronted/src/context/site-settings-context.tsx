@@ -20,9 +20,11 @@ const API_ENDPOINT = "/api/site-settings";
 
 const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-interface SiteSettingsContextValue {
+export interface SiteSettingsContextValue {
   settings: SiteSettings;
   persistedSettings: SiteSettings;
+  persistedUpdatedAt: string | null;
+  persistedCreatedAt: string | null;
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
@@ -54,33 +56,40 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function mergeDeep<T>(target: T, source: DeepPartial<T>): T {
+function mergeDeep<T extends Record<string, unknown>>(target: T, source: DeepPartial<T>): T {
   const output = clone(target);
 
-  (Object.keys(source) as Array<keyof T>).forEach((key) => {
-    const sourceValue = source[key];
+  if (!isPlainObject(source)) {
+    return output;
+  }
+
+  const sourceRecord = source as Record<string, unknown>;
+
+  for (const keyName of Object.keys(sourceRecord)) {
+    const typedKey = keyName as keyof T;
+    const sourceValue = sourceRecord[keyName];
 
     if (sourceValue === undefined) {
-      return;
+      continue;
     }
 
-    const targetValue = (output as Record<string, unknown>)[key as string];
+    const targetValue = output[typedKey];
 
     if (Array.isArray(sourceValue)) {
-      (output as Record<string, unknown>)[key as string] = clone(sourceValue);
-      return;
+      output[typedKey] = clone(sourceValue) as unknown as T[keyof T];
+      continue;
     }
 
     if (isPlainObject(sourceValue) && isPlainObject(targetValue)) {
-      (output as Record<string, unknown>)[key as string] = mergeDeep(
+      output[typedKey] = mergeDeep(
         targetValue as Record<string, unknown>,
         sourceValue as DeepPartial<Record<string, unknown>>,
       ) as unknown as T[keyof T];
-      return;
+      continue;
     }
 
-    (output as Record<string, unknown>)[key as string] = sourceValue as unknown as T[keyof T];
-  });
+    output[typedKey] = sourceValue as unknown as T[keyof T];
+  }
 
   return output;
 }
@@ -246,6 +255,8 @@ async function readErrorMessage(response: Response): Promise<string> {
 export function SiteSettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<SiteSettings>(() => clone(defaultSiteSettings));
   const [persistedSettings, setPersistedSettings] = useState<SiteSettings>(() => clone(defaultSiteSettings));
+  const [persistedUpdatedAt, setPersistedUpdatedAt] = useState<string | null>(null);
+  const [persistedCreatedAt, setPersistedCreatedAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -267,6 +278,10 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
       const nextPersisted = clone(parsed);
       const nextSettings = clone(parsed);
       setPersistedSettings(nextPersisted);
+      const nextUpdatedAt = response.headers.get("x-site-settings-updated-at");
+      const nextCreatedAt = response.headers.get("x-site-settings-created-at");
+      setPersistedUpdatedAt(nextUpdatedAt);
+      setPersistedCreatedAt(nextCreatedAt);
       setSettings(nextSettings);
       if (mountedRef.current) {
         applyCssVariables(nextSettings);
@@ -326,6 +341,8 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
     async (next: SiteSettings): Promise<SiteSettings> => {
       const validated = siteSettingsSchema.parse(next);
       const previousPersisted = persistedSettings;
+      const previousPersistedUpdatedAt = persistedUpdatedAt;
+      const previousPersistedCreatedAt = persistedCreatedAt;
 
       setIsSaving(true);
       setPersistedSettings(clone(validated));
@@ -337,7 +354,10 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(validated),
+          body: JSON.stringify({
+            data: validated,
+            expectedUpdatedAt: persistedUpdatedAt,
+          }),
         });
 
         if (!response.ok) {
@@ -351,13 +371,21 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
           parsed = siteSettingsSchema.parse(payload);
         }
 
+        const nextUpdatedAt = response.headers.get("x-site-settings-updated-at");
+        const nextCreatedAt = response.headers.get("x-site-settings-created-at");
+
         if (parsed) {
           setPersistedSettings(clone(parsed));
           setSettings(clone(parsed));
+          setPersistedUpdatedAt(nextUpdatedAt);
+          setPersistedCreatedAt(nextCreatedAt);
           applyCssVariables(parsed);
           setError(null);
           return parsed;
         }
+
+        setPersistedUpdatedAt(nextUpdatedAt);
+        setPersistedCreatedAt(nextCreatedAt);
 
         applyCssVariables(validated);
         setError(null);
@@ -365,6 +393,8 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
       } catch (err) {
         setPersistedSettings(clone(previousPersisted));
         setSettings(clone(previousPersisted));
+        setPersistedUpdatedAt(previousPersistedUpdatedAt);
+        setPersistedCreatedAt(previousPersistedCreatedAt);
         applyCssVariables(previousPersisted);
         const message = err instanceof Error ? err.message : "No se pudieron guardar los ajustes.";
         setError(message);
@@ -373,7 +403,7 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
         setIsSaving(false);
       }
     },
-    [persistedSettings],
+    [persistedSettings, persistedUpdatedAt, persistedCreatedAt],
   );
 
   const updateSettings = useCallback(
@@ -388,6 +418,8 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
     () => ({
       settings,
       persistedSettings,
+      persistedUpdatedAt,
+      persistedCreatedAt,
       isLoading,
       isSaving,
       error,
@@ -400,6 +432,8 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
     [
       settings,
       persistedSettings,
+      persistedUpdatedAt,
+      persistedCreatedAt,
       isLoading,
       isSaving,
       error,
