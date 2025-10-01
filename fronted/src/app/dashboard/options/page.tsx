@@ -115,7 +115,7 @@ type SectionProps = {
 };
 
 type SimpleSectionProps = Pick<SectionProps, "register" | "errors">;
-type BrandSectionProps = Pick<SectionProps, "register" | "errors" | "setValue">;
+type BrandSectionProps = Pick<SectionProps, "register" | "errors" | "setValue" | "watch">;
 const deepEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export default function SettingsPage() {
@@ -411,7 +411,7 @@ export default function SettingsPage() {
                   transition={{ duration: 0.2 }}
                 >
                   {activeSection === "brand" && (
-                    <BrandSection register={register} errors={errors} setValue={setValue} />
+                    <BrandSection register={register} errors={errors} setValue={setValue} watch={watch} />
                   )}
                   {activeSection === "theme" && (
                     <ThemeSection
@@ -567,7 +567,9 @@ export default function SettingsPage() {
   );
 }
 
-function BrandSection({ register, errors, setValue }: BrandSectionProps) {
+function BrandSection({ register, errors, setValue, watch }: BrandSectionProps) {
+  const logoUrl = watch("brand.logoUrl");
+  const faviconUrl = watch("brand.faviconUrl");
   const handleFileUpload = (
     event: ChangeEvent<HTMLInputElement>,
     field: "logoUrl" | "faviconUrl",
@@ -616,6 +618,18 @@ function BrandSection({ register, errors, setValue }: BrandSectionProps) {
               accept="image/*"
               onChange={(event) => handleFileUpload(event, "logoUrl")}
             />
+            {logoUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                onClick={() => setValue("brand.logoUrl", "", { shouldDirty: true, shouldValidate: true })}
+              >
+                <X className="h-4 w-4" />
+                Eliminar imagen
+              </Button>
+            )}
             <p className="text-xs text-muted-foreground">
               PNG o SVG recomendado. Puedes subir un archivo o proporcionar una URL.
             </p>
@@ -630,6 +644,18 @@ function BrandSection({ register, errors, setValue }: BrandSectionProps) {
               accept="image/*"
               onChange={(event) => handleFileUpload(event, "faviconUrl")}
             />
+            {faviconUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                onClick={() => setValue("brand.faviconUrl", "", { shouldDirty: true, shouldValidate: true })}
+              >
+                <X className="h-4 w-4" />
+                Eliminar imagen
+              </Button>
+            )}
             <p className="text-xs text-muted-foreground">
               ICO, PNG o SVG. Puedes subir un archivo o proporcionar una URL.
             </p>
@@ -638,12 +664,26 @@ function BrandSection({ register, errors, setValue }: BrandSectionProps) {
 
         <div className="rounded-lg bg-muted p-4">
           <p className="mb-2 text-sm font-medium">Vista previa</p>
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-border bg-background">
-              <Sparkles className="h-8 w-8 text-primary" />
+          <div className="flex flex-wrap gap-6">
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border-2 border-border bg-background">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Vista previa del logo" className="h-full w-full object-contain" />
+                ) : (
+                  <Sparkles className="h-8 w-8 text-primary" />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Logo</p>
             </div>
-            <div className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-border bg-card">
-              <Sparkles className="h-8 w-8 text-primary" />
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg border-2 border-border bg-card">
+                {faviconUrl ? (
+                  <img src={faviconUrl} alt="Vista previa del favicon" className="h-full w-full object-contain" />
+                ) : (
+                  <Sparkles className="h-6 w-6 text-primary" />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Favicon</p>
             </div>
           </div>
         </div>
