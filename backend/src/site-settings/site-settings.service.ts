@@ -102,7 +102,11 @@ export class SiteSettingsService {
   }
 
   async getSettings(): Promise<SiteSettings> {
-    return this.findOrCreate();
+    const settings = await this.findOrCreate();
+    return {
+      ...settings,
+      data: this.sanitizeSettingsData(settings.data),
+    };
   }
 
   async updateSettings(dto: UpdateSiteSettingsDto): Promise<SiteSettings> {
@@ -134,5 +138,31 @@ export class SiteSettingsService {
         },
       });
     });
+  }
+
+   private sanitizeSettingsData(data: Prisma.JsonValue): Prisma.JsonValue {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return data;
+    }
+
+    const sanitized = { ...(data as Prisma.JsonObject) };
+    const integrations = sanitized.integrations as Prisma.JsonValue;
+
+    if (
+      integrations &&
+      typeof integrations === 'object' &&
+      !Array.isArray(integrations)
+    ) {
+      const integrationsObject = {
+        ...(integrations as Prisma.JsonObject),
+      } as Prisma.JsonObject;
+
+      delete integrationsObject.gaId;
+      delete integrationsObject.metaPixelId;
+
+      sanitized.integrations = integrationsObject;
+    }
+
+    return sanitized;
   }
 }

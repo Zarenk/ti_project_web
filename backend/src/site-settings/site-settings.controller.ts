@@ -9,8 +9,6 @@ import { CreateSiteSettingDto } from './dto/create-site-setting.dto';
 import { UpdateSiteSettingsDto } from './dto/update-site-setting.dto';
 
 @Controller('site-settings')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN')
 export class SiteSettingsController {
   constructor(private readonly siteSettingsService: SiteSettingsService) {}
 
@@ -24,6 +22,8 @@ export class SiteSettingsController {
     });
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @Put()
   async updateSettings(@Body() dto: UpdateSiteSettingsDto): Promise<CreateSiteSettingDto> {
     const settings = await this.siteSettingsService.updateSettings(dto);
