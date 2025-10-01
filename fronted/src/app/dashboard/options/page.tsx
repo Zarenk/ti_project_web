@@ -74,6 +74,10 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { getAuthHeaders } from "@/utils/auth-token";
 import { useTheme } from "next-themes";
+import {
+  TYPOGRAPHY_FONT_OPTIONS,
+  getTypographyFont,
+} from "@/lib/typography-fonts";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
@@ -939,6 +943,7 @@ function TypographySection({ watch, setValue }: SectionProps) {
   const fontFamily = watch("typography.fontFamily") ?? defaultValues.typography.fontFamily;
   const baseSize = watch("typography.baseSize") ?? defaultValues.typography.baseSize;
   const scale = watch("typography.scale") ?? defaultValues.typography.scale;
+  const fontDefinition = getTypographyFont(fontFamily);
 
   return (
     <Card className="border-2">
@@ -961,11 +966,11 @@ function TypographySection({ watch, setValue }: SectionProps) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Inter">Inter</SelectItem>
-              <SelectItem value="Roboto">Roboto</SelectItem>
-              <SelectItem value="Poppins">Poppins</SelectItem>
-              <SelectItem value="Open Sans">Open Sans</SelectItem>
-              <SelectItem value="Lato">Lato</SelectItem>
+              {TYPOGRAPHY_FONT_OPTIONS.map((option:any) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -1002,7 +1007,10 @@ function TypographySection({ watch, setValue }: SectionProps) {
 
         <div className="space-y-4 rounded-lg bg-muted p-6">
           <p className="text-sm font-medium">Vista previa</p>
-          <div style={{ fontFamily, fontSize: `${baseSize}px` }}>
+          <div
+            className={fontDefinition.className}
+            style={{ fontFamily: fontDefinition.cssVariable, fontSize: `${baseSize}px` }}
+          >
             <h1 style={{ fontSize: `${baseSize * scale * scale * scale}px`, fontWeight: 700 }}>Título principal</h1>
             <h2 style={{ fontSize: `${baseSize * scale * scale}px`, fontWeight: 600 }}>Subtítulo secundario</h2>
             <p style={{ fontSize: `${baseSize}px`, lineHeight: 1.6 }}>

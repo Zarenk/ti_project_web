@@ -15,6 +15,10 @@ import {
   siteSettingsSchema,
 } from "./site-settings-schema";
 import type { DeepPartial, SiteSettings, SiteSettingsUpdater } from "./site-settings-schema";
+import {
+  TYPOGRAPHY_FONT_CLASSES,
+  getTypographyFont,
+} from "@/lib/typography-fonts";
 
 const API_ENDPOINT = "/api/site-settings";
 
@@ -295,6 +299,13 @@ function applyCssVariables(settings: SiteSettings) {
   if (!root) {
     return;
   }
+  const activeFont = getTypographyFont(settings.typography.fontFamily);
+  if (TYPOGRAPHY_FONT_CLASSES.length > 0) {
+    root.classList.remove(...TYPOGRAPHY_FONT_CLASSES);
+  }
+  if (activeFont.className) {
+    root.classList.add(activeFont.className);
+  }
   const spacingRem = `${(settings.layout.spacing || 0) * 0.25}rem`;
   const radiusRem = `${settings.layout.radius}rem`;
   const baseFontSize = `${settings.typography.baseSize}px`;
@@ -302,8 +313,8 @@ function applyCssVariables(settings: SiteSettings) {
     "--site-spacing": spacingRem,
     "--site-radius": radiusRem,
     "--site-shadow": SHADOW_MAP[settings.layout.shadow],
-    "--site-font-body": settings.typography.fontFamily,
-    "--site-font-heading": settings.typography.fontFamily,
+    "--site-font-body": activeFont.cssVariable,
+    "--site-font-heading": activeFont.cssVariable,
     "--site-font-base-size": baseFontSize,
     "--site-font-scale": settings.typography.scale.toString(),
     "--site-theme-mode": settings.theme.mode,

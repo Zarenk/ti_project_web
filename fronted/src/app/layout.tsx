@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Signika_Negative } from "next/font/google";
@@ -16,6 +17,7 @@ import { getSiteSettings } from "@/lib/site-settings";
 import CookieConsentBanner from "@/components/cookie-consent-banner";
 import MaintenanceGate from "@/components/maintenance-gate";
 import { getSiteName, getSocialLinks } from "@/utils/site-settings";
+import { getTypographyFont } from "@/lib/typography-fonts";
 
 const anton = localFont({
   src: "../../public/fonts/anton.woff2",
@@ -73,9 +75,15 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const { settings, updatedAt, createdAt } = await getSiteSettings();
+  const typographyFont = getTypographyFont(settings.typography.fontFamily);
+  const htmlClassName = `${anton.variable} ${signika.variable} ${typographyFont.className}`.trim();
+  const htmlStyle: CSSProperties = {
+    ["--site-font-body" as string]: typographyFont.cssVariable,
+    ["--site-font-heading" as string]: typographyFont.cssVariable,
+  };
 
   return (
-    <html lang="en" suppressHydrationWarning className={`${anton.variable} ${signika.variable}`}>
+    <html lang="en" suppressHydrationWarning className={htmlClassName} style={htmlStyle}>
       <body className="antialiased font-site">
         <SiteSettingsProvider
           initialSettings={settings}
