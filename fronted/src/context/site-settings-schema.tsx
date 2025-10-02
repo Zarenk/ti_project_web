@@ -94,6 +94,18 @@ export const siteSettingsSchema = z.object({
     enabled: z.boolean(),
     message: z.string(),
   }),
+  permissions: z.object({
+    dashboard: z.boolean(),
+    catalog: z.boolean(),
+    store: z.boolean(),
+    inventory: z.boolean(),
+    sales: z.boolean(),
+    purchases: z.boolean(),
+    accounting: z.boolean(),
+    marketing: z.boolean(),
+    ads: z.boolean(),
+    settings: z.boolean(),
+  }),
 });
 
 export const siteSettingsWithMetaSchema = z.object({
@@ -203,6 +215,18 @@ export const defaultSiteSettings: SiteSettings = {
   maintenance: {
     enabled: false,
     message: "Estamos realizando mantenimiento. Vuelve pronto.",
+  },
+  permissions: {
+    dashboard: true,
+    catalog: true,
+    store: true,
+    inventory: true,
+    sales: true,
+    purchases: true,
+    accounting: true,
+    marketing: true,
+    ads: true,
+    settings: true,
   },
 };
 

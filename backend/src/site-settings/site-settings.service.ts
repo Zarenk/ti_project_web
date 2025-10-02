@@ -134,6 +134,18 @@ const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
     enabled: false,
     message: 'Estamos realizando mantenimiento. Vuelve pronto.',
   },
+  permissions: {
+    dashboard: true,
+    catalog: true,
+    store: true,
+    inventory: true,
+    sales: true,
+    purchases: true,
+    accounting: true,
+    marketing: true,
+    ads: true,
+    settings: true,
+  },
 };
 
 @Injectable()

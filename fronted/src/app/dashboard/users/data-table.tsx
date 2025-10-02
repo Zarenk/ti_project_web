@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import {
@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { useDebounce } from "@/app/hooks/useDebounce";
 import { DataTablePagination } from "@/components/data-table-pagination";
 import type { DashboardUser } from "./users.api";
+import { columns as userColumns } from "./columns";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -186,4 +187,8 @@ export function DataTable<TValue>({ columns, data }: DataTableProps<UserRow, TVa
       <DataTablePagination table={table} />
     </div>
   );
+}
+
+export function UsersDataTable({ data }: { data: UserRow[] }) {
+  return <DataTable columns={userColumns} data={data} />;
 }

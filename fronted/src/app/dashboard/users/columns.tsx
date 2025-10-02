@@ -1,7 +1,9 @@
+﻿"use client";
+
 import { Button } from "@/components/ui/button";
 import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown } from "lucide-react";
-import { DashboardUser } from "./users.api";
+import type { DashboardUser } from "./users.api";
 
 type UserRow = DashboardUser & { createdAt: string };
 
