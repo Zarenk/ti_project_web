@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MODULE_PERMISSION_LABELS, useEnforcedModulePermission } from "@/hooks/use-enforced-module-permission";
 import { DataTable } from "./data-table";
 import { columns, Activity } from "./columns";
 import { getOrders } from "../orders/orders.api";
@@ -18,6 +19,8 @@ export default function ActivityPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const { allowed: dashboardAllowed, loading: permissionLoading } = useEnforcedModulePermission("dashboard");
+  const permissionToastShown = useRef(false);
   const authErrorShown = useRef(false);
 
   const handleAuthError = async (err: unknown) => {
@@ -37,6 +40,24 @@ export default function ActivityPage() {
   };
 
   useEffect(() => {
+    if (permissionLoading) return;
+
+    if (!dashboardAllowed) {
+      if (!permissionToastShown.current) {
+        permissionToastShown.current = true;
+        toast.error(`No tienes permisos para acceder a ${MODULE_PERMISSION_LABELS.dashboard}.`);
+      }
+      router.replace("/unauthorized");
+    } else {
+      permissionToastShown.current = false;
+    }
+  }, [dashboardAllowed, permissionLoading, router]);
+
+  useEffect(() => {
+    if (permissionLoading || !dashboardAllowed) {
+      return;
+    }
+
     async function fetchData() {
       const data = await getUserDataFromToken();
       if (!data || !(await isTokenValid()) || (data.role !== 'ADMIN' && data.role !== 'EMPLOYEE')) {
@@ -135,7 +156,11 @@ export default function ActivityPage() {
       }
     }
     fetchData();
-  }, []);
+  }, [dashboardAllowed, permissionLoading, router]);
+
+  if (permissionLoading || !dashboardAllowed) {
+    return null;
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
