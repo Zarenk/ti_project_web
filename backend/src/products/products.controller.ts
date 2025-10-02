@@ -25,8 +25,9 @@ import { extname } from 'path';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
+import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 
-
+@ModulePermission('catalog')
 @Controller('products')
 export class ProductsController {
   constructor(
@@ -37,8 +38,11 @@ export class ProductsController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({summary: 'Create a product'})    // Swagger 
-  async create(@Body() createProductDto: CreateProductDto, @Req() req: Request) {
+  @ApiOperation({ summary: 'Create a product' }) // Swagger
+  async create(
+    @Body() createProductDto: CreateProductDto,
+    @Req() req: Request,
+  ) {
     const product = await this.productsService.create(createProductDto);
     await this.activityService.log(
       {
@@ -71,30 +75,33 @@ export class ProductsController {
 
   @Post('upload-image')
     @UseInterceptors(
-      FileInterceptor('file', {
-        storage: diskStorage({
-          destination: './uploads/products',
-          filename: (req, file, cb) => {
-            const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-            cb(null, `${unique}${extname(file.originalname)}`);
-          },
-        }),
-        fileFilter: (req, file, cb) => {
-          if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
-            return cb(new BadRequestException('Solo se permiten imagenes'), false);
-          }
-          cb(null, true);
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads/products',
+        filename: (req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `${unique}${extname(file.originalname)}`);
         },
       }),
-    )
-    uploadImage(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
-      if (!file) {
-        throw new BadRequestException('No se proporcionó ninguna imagen');
-      }
-      const baseUrl =
-        process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
-      return { url: `${baseUrl}/uploads/products/${file.filename}` };
+    fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+          return cb(
+            new BadRequestException('Solo se permiten imagenes'),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadImage(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
+    if (!file) {
+      throw new BadRequestException('No se proporcionó ninguna imagen');
     }
+    const baseUrl =
+      process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+    return { url: `${baseUrl}/uploads/products/${file.filename}` };
+  }
 
   @Get()
   @ApiResponse({status: 200, description: 'Return all products'}) // Swagger 

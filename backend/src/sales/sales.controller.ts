@@ -15,9 +15,11 @@ import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { RolesGuard } from 'src/users/roles.guard';
 import { Roles } from 'src/users/roles.decorator';
+import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN', 'EMPLOYEE')
+@ModulePermission('sales')
 @Controller('sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}

@@ -1,4 +1,18 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, Query, UseInterceptors, UploadedFile, Header, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  BadRequestException,
+  Query,
+  UseInterceptors,
+  UploadedFile,
+  Header,
+  Res,
+} from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
@@ -8,10 +22,12 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { Response } from 'express';
 import { format } from 'date-fns';
+import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 
 @Controller('inventory')
 export class InventoryController {
-  constructor(private readonly prisma: PrismaService,
+  constructor(
+    private readonly prisma: PrismaService,
     private readonly inventoryService: InventoryService, // Inyectar el servicio
   ) {}
 
@@ -25,7 +41,7 @@ export class InventoryController {
             category: true, // Incluir información de la categoría del producto
           },
         }, // Incluye información del producto
-        entryDetails:{
+        entryDetails: {
           include: {
             entry: true, // Incluye información de la entrada
             series: true, // Incluir series disponibles
@@ -93,7 +109,7 @@ export class InventoryController {
 
   // Endpoint para obtener las tiendas que tienen un producto específico
   @Get('/stores-with-product/:productId')
-    async getStoresWithProduct(@Param('productId') productId: string) {
+  async getStoresWithProduct(@Param('productId') productId: string) {
     // Convertir el parámetro productId a un número
     const id = parseInt(productId, 10);
 
@@ -117,17 +133,22 @@ export class InventoryController {
   ) {
     const id = parseInt(storeId, 10);
     if (isNaN(id)) {
-      throw new BadRequestException('El ID de la tienda debe ser un número válido');
+      throw new BadRequestException(
+        'El ID de la tienda debe ser un número válido',
+      );
     }
 
-    return this.inventoryService.getProductsByStore(id, categoryId ? parseInt(categoryId, 10) : undefined);
+    return this.inventoryService.getProductsByStore(
+      id,
+      categoryId ? parseInt(categoryId, 10) : undefined,
+    );
   }
 
   // Endpoint para obtener el inventario de todos los productos por tienda sin stock
   @Get('/all-products-by-store/:storeId')
   async getAllProductsByStore(
     @Param('storeId') storeId: string,
-    @Query('categoryId') categoryId?: string
+    @Query('categoryId') categoryId?: string,
   ) {
     const id = parseInt(storeId, 10);
     if (isNaN(id)) {
@@ -233,14 +254,17 @@ export class InventoryController {
   
   // Endpoint Transferencia de productos entre tiendas
   @Post('/transfer')
-  async transferProduct(@Body() transferDto: {
-    sourceStoreId: number;
-    destinationStoreId: number;
-    productId: number;
-    quantity: number;
-    description?: string;
-    userId: number
-  }) {
+  async transferProduct(
+    @Body()
+    transferDto: {
+      sourceStoreId: number;
+      destinationStoreId: number;
+      productId: number;
+      quantity: number;
+      description?: string;
+      userId: number;
+    },
+  ) {
     return this.inventoryService.transferProduct(transferDto);
   }
 

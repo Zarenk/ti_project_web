@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ProductsModule } from './products/products.module';
@@ -44,13 +45,59 @@ import { JournalsModule } from './journals/journals.module';
 import { AccReportsModule } from './acc-reports/acc-reports.module';
 import { KeywordsModule } from './keywords/keywords.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
+import { ModulePermissionsGuard } from './common/guards/module-permissions.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
-      ProductsModule, UsersModule, CategoryModule, StoresModule,
-      ProvidersModule, EntriesModule, InventoryModule, MLModule, SalesModule, ClientsModule, SunatModule, SeriesModule, ExchangeModule, PaymentmethodsModule, CashregisterModule, GuideModule, ProductspecsModule, ProductofeaturesModule, ReviewsModule, WebsalesModule, ContactModule, ChatModule, FavoritesModule, NewsletterModule, OrdertrackingModule, CatalogexportModule, BrandsModule, ActivityModule, AuthModule, CampaignsModule, AdsModule, PublishModule, MetricsModule, AccountingModule, JournalsModule, AccReportsModule, KeywordsModule, SiteSettingsModule],
+      ProductsModule,
+    UsersModule,
+    CategoryModule,
+    StoresModule,
+    ProvidersModule,
+    EntriesModule,
+    InventoryModule,
+    MLModule,
+    SalesModule,
+    ClientsModule,
+    SunatModule,
+    SeriesModule,
+    ExchangeModule,
+    PaymentmethodsModule,
+    CashregisterModule,
+    GuideModule,
+    ProductspecsModule,
+    ProductofeaturesModule,
+    ReviewsModule,
+    WebsalesModule,
+    ContactModule,
+    ChatModule,
+    FavoritesModule,
+    NewsletterModule,
+    OrdertrackingModule,
+    CatalogexportModule,
+    BrandsModule,
+    ActivityModule,
+    AuthModule,
+    CampaignsModule,
+    AdsModule,
+    PublishModule,
+    MetricsModule,
+    AccountingModule,
+    JournalsModule,
+    AccReportsModule,
+    KeywordsModule,
+    SiteSettingsModule,
+  ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
-  providers: [AppService, BarcodeGateway, PrismaService],
+  providers: [
+    AppService,
+    BarcodeGateway,
+    PrismaService,
+    {
+      provide: APP_GUARD,
+      useClass: ModulePermissionsGuard,
+    },
+  ],
 })
 export class AppModule {}

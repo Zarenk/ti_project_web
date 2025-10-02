@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UseInterceptors, UploadedFile, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  BadRequestException,
+  UseInterceptors,
+  UploadedFile,
+  Query,
+} from '@nestjs/common';
 import { EntriesService } from './entries.service';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
@@ -8,7 +20,9 @@ import { multerConfig } from 'src/config/multer.config';
 import pdfParse from 'pdf-parse';
 import { diskStorage } from 'multer';
 import path from 'path';
+import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 
+@ModulePermission('purchases')
 @Controller('entries')
 export class EntriesController {
   constructor(private readonly entriesService: EntriesService) {}
@@ -18,7 +32,7 @@ export class EntriesController {
   async createEntry(
     @Body()
     body: {
-      storeId: number,
+      storeId: number;
       userId: number;
       providerId: number;
       date: Date;
@@ -32,11 +46,27 @@ export class EntriesController {
       providerName?: string;
       totalGross?: number;
       igvRate?: number;
-      details: { productId: number, name:string; quantity: number; price: number, priceInSoles: number }[];
-      invoice?: {serie:string; nroCorrelativo:string; tipoComprobante:string; tipoMoneda:string; total:number; fechaEmision: Date;}
+      details: {
+        productId: number;
+        name: string;
+        quantity: number;
+        price: number;
+        priceInSoles: number;
+      }[];
+      invoice?: {
+        serie: string;
+        nroCorrelativo: string;
+        tipoComprobante: string;
+        tipoMoneda: string;
+        total: number;
+        fechaEmision: Date;
+      };
     },
   ) {
-    if (body.paymentTerm && !Object.values(PaymentTerm).includes(body.paymentTerm)) {
+    if (
+      body.paymentTerm &&
+      !Object.values(PaymentTerm).includes(body.paymentTerm)
+    ) {
       throw new BadRequestException('paymentTerm inválido.');
     }
     if (body.totalGross !== undefined && typeof body.totalGross !== 'number') {
@@ -53,7 +83,7 @@ export class EntriesController {
   async createHistory(
     @Body()
     body: {
-      inventoryId: number,
+      inventoryId: number;
       userId: number;
       action: string;
       description?: string;
@@ -89,20 +119,28 @@ export class EntriesController {
       storage: diskStorage({
         destination: './uploads/invoices', // Carpeta donde se guardarán los PDFs
         filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
           const ext = path.extname(file.originalname);
           cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
         },
       }),
       fileFilter: (req, file, cb) => {
         if (!file.originalname.match(/\.(pdf)$/)) {
-          return cb(new BadRequestException('Solo se permiten archivos PDF'), false);
+          return cb(
+            new BadRequestException('Solo se permiten archivos PDF'),
+            false,
+          );
         }
         cb(null, true);
       },
     }),
   )
-  async uploadPdf(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+
+  async uploadPdf(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
     if (!file) {
       throw new BadRequestException('No se proporcionó un archivo PDF.');
     }
@@ -112,33 +150,40 @@ export class EntriesController {
   }
 
    // Endpoint para actualizar una entrada con un PDF GUIA
-   @Post(':id/upload-pdf-guia')
-   @UseInterceptors(
-     FileInterceptor('file', {
-       storage: diskStorage({
-         destination: './uploads/guides', // Carpeta donde se guardarán los PDFs
-         filename: (req, file, cb) => {
-           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-           const ext = path.extname(file.originalname);
-           cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
-         },
-       }),
-       fileFilter: (req, file, cb) => {
-         if (!file.originalname.match(/\.(pdf)$/)) {
-           return cb(new BadRequestException('Solo se permiten archivos PDF'), false);
-         }
-         cb(null, true);
-       },
-     }),
-   )
-   async uploadGuidePdf(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
-     if (!file) {
-       throw new BadRequestException('No se proporcionó un archivo PDF.');
-     }
- 
-     const pdfUrl = `/uploads/guides/${file.filename}`;
-     return this.entriesService.updateEntryPdfGuia(Number(id), pdfUrl);
-   }
+  @Post(':id/upload-pdf-guia')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads/guides', // Carpeta donde se guardarán los PDFs
+        filename: (req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = path.extname(file.originalname);
+          cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.originalname.match(/\.(pdf)$/)) {
+          return cb(
+            new BadRequestException('Solo se permiten archivos PDF'),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadGuidePdf(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No se proporcionó un archivo PDF.');
+    }
+
+    const pdfUrl = `/uploads/guides/${file.filename}`;
+    return this.entriesService.updateEntryPdfGuia(Number(id), pdfUrl);
+  }
 
   // Endpoint para listar todas las entradas
   @Get()
@@ -151,7 +196,9 @@ export class EntriesController {
   async findEntryById(@Param('id') id: string) {
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) {
-      throw new BadRequestException('El ID de la entrada debe ser un número válido.');
+      throw new BadRequestException(
+        'El ID de la entrada debe ser un número válido.',
+      );
     }
     return this.entriesService.findEntryById(numericId);
   }
@@ -161,7 +208,9 @@ export class EntriesController {
   async findEntryAlias(@Param('id') id: string) {
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) {
-      throw new BadRequestException('El ID de la entrada debe ser un número válido.');
+      throw new BadRequestException(
+        'El ID de la entrada debe ser un número válido.',
+      );
     }
     return this.entriesService.findEntryById(numericId);
   }
@@ -170,7 +219,9 @@ export class EntriesController {
   findAllByStore(@Param('storeId') storeId: string) {
     const numericStoreId = parseInt(storeId, 10);
     if (isNaN(numericStoreId)) {
-      throw new BadRequestException('El ID de la tienda debe ser un número válido.');
+      throw new BadRequestException(
+        'El ID de la tienda debe ser un número válido.',
+      );
     }
     return this.entriesService.findAllByStore(numericStoreId);
   }
@@ -183,7 +234,9 @@ export class EntriesController {
   @Delete()
   async deleteEntries(@Body('ids') ids: number[]) {
     if (!Array.isArray(ids) || ids.length === 0) {
-      throw new BadRequestException('No se proporcionaron IDs válidos para eliminar.');
+      throw new BadRequestException(
+        'No se proporcionaron IDs válidos para eliminar.',
+      );
     }
 
     return this.entriesService.deleteEntries(ids);
@@ -191,8 +244,8 @@ export class EntriesController {
 
   @Get('recent')
   async findRecent(@Query('limit') limit = '5') {
-    const take = parseInt(limit, 10)
-    return this.entriesService.findRecentEntries(isNaN(take) ? 5 : take)
+    const take = parseInt(limit, 10);
+    return this.entriesService.findRecentEntries(isNaN(take) ? 5 : take);
   }
   
 }

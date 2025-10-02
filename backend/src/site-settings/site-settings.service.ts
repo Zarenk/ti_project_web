@@ -24,7 +24,7 @@ function deepMergeJson(
       continue;
     }
 
-    const typedKey = key as keyof typeof output;
+    const typedKey = key;
     const targetValue = output[typedKey];
 
     if (Array.isArray(value)) {
@@ -148,8 +148,13 @@ const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
   },
 };
 
+
 @Injectable()
 export class SiteSettingsService {
+  private cachedSettings: SiteSettings | null = null;
+  private cacheTimestamp = 0;
+  private readonly CACHE_TTL_MS = 30_000;
+  
   constructor(private readonly prisma: PrismaService) {}
 
   async findOrCreate(): Promise<SiteSettings> {
@@ -164,16 +169,27 @@ export class SiteSettingsService {
   }
 
   async getSettings(): Promise<SiteSettings> {
+
+    if (this.cachedSettings && this.isCacheValid()) {
+      return this.cloneSettings(this.cachedSettings);
+    }
+
     const settings = await this.findOrCreate();
-    return {
+    const sanitized = {
       ...settings,
       data: this.sanitizeSettingsData(settings.data),
-    };
+    } as SiteSettings;
+
+    this.setCache(sanitized);
+
+    return this.cloneSettings(sanitized);
   }
 
   async updateSettings(dto: UpdateSiteSettingsDto): Promise<SiteSettings> {
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.siteSettings.findUnique({
+        where: { id: SETTINGS_ID },
+      });
 
       if (existing && dto.expectedUpdatedAt) {
         const expected = new Date(dto.expectedUpdatedAt);
@@ -200,12 +216,21 @@ export class SiteSettingsService {
         },
       });
     });
+
+    const sanitized = {
+      ...updated,
+      data: this.sanitizeSettingsData(updated.data),
+    } as SiteSettings;
+
+    this.setCache(sanitized);
+
+    return this.cloneSettings(sanitized);
   }
 
   private sanitizeSettingsData(data: Prisma.JsonValue): Prisma.JsonValue {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       return data;
-  }
+    }
 
     const merged = deepMergeJson(
       DEFAULT_SITE_SETTINGS,
@@ -215,7 +240,7 @@ export class SiteSettingsService {
 
     if (integrations && isPlainObject(integrations)) {
       const integrationsObject = {
-      ...integrations,
+        ...integrations,
       };
 
       delete integrationsObject.gaId;
@@ -226,4 +251,24 @@ export class SiteSettingsService {
 
     return merged;
   }
+
+  private isCacheValid(): boolean {
+      return (
+        !!this.cachedSettings &&
+        Date.now() - this.cacheTimestamp < this.CACHE_TTL_MS
+      );
+  }
+
+  private setCache(settings: SiteSettings): void {
+      this.cachedSettings = settings;
+      this.cacheTimestamp = Date.now();
+  }
+
+  private cloneSettings(settings: SiteSettings): SiteSettings {
+      return {
+        ...settings,
+        data: cloneJson(settings.data),
+      };
+  }
 }
+

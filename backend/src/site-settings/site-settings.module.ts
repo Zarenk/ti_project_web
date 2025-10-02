@@ -7,5 +7,6 @@ import { RolesGuard } from 'src/users/roles.guard';
 @Module({
   controllers: [SiteSettingsController],
   providers: [SiteSettingsService, PrismaService, RolesGuard],
+  exports: [SiteSettingsService],
 })
 export class SiteSettingsModule {}

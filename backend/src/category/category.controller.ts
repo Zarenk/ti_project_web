@@ -14,13 +14,15 @@ import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ModulePermission } from 'src/common/decorators/module-permission.decorator'
 
+@ModulePermission('catalog')
 @Controller('category')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
     @Post()
-    @ApiOperation({summary: 'Create a category'})    // Swagger
+    @ApiOperation({ summary: 'Create a category' }) // Swagger
     create(@Body() createCategoryDto: CreateCategoryDto, @Req() req: Request) {
       return this.categoryService.create(createCategoryDto, req);
     }
@@ -34,9 +36,9 @@ export class CategoryController {
     async verifyCategories(@Body() categories: { name: string }[]) {
       return this.categoryService.verifyCategories(categories);
     }
-  
+
     @Get()
-    @ApiResponse({status: 200, description: 'Return all categories'}) // Swagger
+    @ApiResponse({ status: 200, description: 'Return all categories' }) // Swagger
     findAll() {
       return this.categoryService.findAll();
     }
@@ -45,11 +47,11 @@ export class CategoryController {
     findAllWithCount() {
       return this.categoryService.findAllWithProductCount();
     }
-  
+
     @Get(':id')
     findOne(@Param('id') id: string) {
-      const numericId = parseInt(id, 10); // Convierte el ID a un número entero
-      if (isNaN(numericId)) {
+    const numericId = parseInt(id, 10); // Convierte el ID a un número entero
+    if (isNaN(numericId)) {
       throw new BadRequestException('El ID debe ser un número válido.');
       }
       return this.categoryService.findOne(numericId);
@@ -63,12 +65,12 @@ export class CategoryController {
     ) {
       return this.categoryService.update(+id, updateCategoryDto, req);
     }
-  
+
     @Delete(':id')
     remove(@Param('id') id: string, @Req() req: Request) {
       return this.categoryService.remove(+id, req);
     }
-  
+
     @Delete()
     async removes(@Body('ids') ids: number[], @Req() req: Request) {
       return this.categoryService.removes(ids, req);

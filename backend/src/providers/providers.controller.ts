@@ -4,7 +4,9 @@ import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
 import { Request } from 'express';
+import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 
+@ModulePermission('purchases')
 @Controller('providers')
 export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
