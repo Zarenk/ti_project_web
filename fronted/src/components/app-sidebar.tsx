@@ -24,6 +24,7 @@ import {
   Store,
   UserIcon,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
@@ -41,9 +42,45 @@ import { useAuth } from "@/context/auth-context"
 import { useFeatureFlag } from "@/app/hooks/use-feature-flags"
 import { useRBAC } from "@/app/hooks/use-rbac"
 import { useSiteSettings } from "@/context/site-settings-context"
+import { useModulePermission, type ModulePermissionKey } from "@/hooks/use-module-permission"
+
+type Team = {
+  name: string
+  logo: LucideIcon
+  plan: string
+}
+
+type NavSubItem = {
+  title: string
+  url: string
+  permission?: ModulePermissionKey
+  badge?: number
+}
+
+type NavItem = {
+  title: string
+  url: string
+  icon?: LucideIcon
+  isActive?: boolean
+  permission?: ModulePermissionKey
+  items?: NavSubItem[]
+}
+
+type ProjectItem = {
+  name: string
+  url: string
+  icon: LucideIcon
+  permission?: ModulePermissionKey
+}
+
+type SidebarData = {
+  teams: Team[]
+  navMain: NavItem[]
+  projects: ProjectItem[]
+}
 
 // Static navigation data
-const data = {
+const data: SidebarData = {
   teams: [
     {
       name: "Tecnologia Informatica",
@@ -66,22 +103,27 @@ const data = {
       title: "Almacen",
       url: "#",
       icon: HouseIcon,
+      permission: "inventory",
       items: [
         {
           title: "Inventario",
           url: "/dashboard/inventory",
+          permission: "inventory",
         },
         {
           title: "Nuevo Ingreso",
           url: "/dashboard/entries/new",
+          permission: "inventory",
         },
         {
           title: "Traslados",
           url: "#",
+          permission: "inventory",
         },
         {
           title: "Ver Almacen(es)",
           url: "/dashboard/entries",
+          permission: "inventory",
         },
       ],
     },
@@ -89,14 +131,17 @@ const data = {
       title: "Categorias",
       url: "/dashboard/categories",
       icon: BookOpen,
+      permission: "catalog",
       items: [
         {
           title: "Nueva Categoria",
           url: "/dashboard/categories/new",
+          permission: "catalog",
         },
         {
           title: "Ver Categorias",
           url: "/dashboard/categories",
+          permission: "catalog",
         },
       ],
     },
@@ -105,18 +150,22 @@ const data = {
       url: "/dashboard/products",
       icon: SquareTerminal,
       isActive: true,
+      permission: "catalog",
       items: [
         {
           title: "Administrar Marcas",
           url: "/dashboard/brands",
+          permission: "catalog",
         },
         {
           title: "Nuevo Producto",
           url: "/dashboard/products/new",
+          permission: "catalog",
         },
         {
           title: "Ver Productos",
           url: "/dashboard/products",
+          permission: "catalog",
         },
       ],
     },
@@ -125,14 +174,17 @@ const data = {
       url: "/dashboard/providers",
       icon: Globe,
       isActive: true,
+      permission: "purchases",
       items: [
         {
           title: "Nuevo Proveedor",
           url: "/dashboard/providers/new",
+          permission: "purchases",
         },
         {
           title: "Ver Proveedores",
           url: "/dashboard/providers",
+          permission: "purchases",
         },
       ],
     },
@@ -140,17 +192,21 @@ const data = {
       title: "Usuarios",
       url: "#",
       icon: Bot,
+      permission: "settings",
       items: [
         { title: "Historial de Modificaciones", 
-          url: "/dashboard/history" 
+          url: "/dashboard/history",
+          permission: "settings",
         },
         {
           title: "Nuevo Usuario",
           url: "/dashboard/users/new",
+          permission: "settings",
         },
         {
           title: "Ver Usuarios",
           url: "/dashboard/users",
+          permission: "settings",
         },
       ],
     },
@@ -158,14 +214,17 @@ const data = {
       title: "Tiendas",
       url: "#",
       icon: Store,
+      permission: "store",
       items: [
         {
           title: "Nueva Tienda",
           url: "/dashboard/stores/new",
+          permission: "store",
         },
         {
           title: "Ver Tiendas",
           url: "/dashboard/stores",
+          permission: "store",
         },
       ],
     },
@@ -173,14 +232,17 @@ const data = {
       title: "Tipo de Cambio",
       url: "#",
       icon: DollarSign,
+      permission: "accounting",
       items: [
         {
           title: "Nuevo Tipo de Cambio",
           url: "/dashboard/exchange/new",
+          permission: "accounting",
         },
         {
           title: "Ver Tipo de Cambio",
           url: "/dashboard/exchange",
+          permission: "accounting",
         },
       ],
     },
@@ -188,10 +250,12 @@ const data = {
       title: "Catálogo",
       url: "/dashboard/catalog",
       icon: Link,
+      permission: "store",
       items: [
         {
           title: "Exportar Catálogo",
           url: "/dashboard/catalog",
+          permission: "store",
         },
       ],
     },
@@ -199,30 +263,37 @@ const data = {
       title: "Ventas",
       url: "#",
       icon: ShoppingCart,
+      permission: "sales",
       items: [
         {
           title: "Caja",
           url: "/dashboard/cashregister",
+          permission: "sales",
         },
         {
           title: "Mensajes",
           url: "/dashboard/messages",
+          permission: "sales",
         },
         {
           title: "Pedidos",
           url: "/dashboard/orders",
+          permission: "sales",
         },
         {
           title: "Nueva Orden",
           url: "/dashboard/orders/new",
+          permission: "sales",
         },
         {
           title: "Realizar Venta",
           url: "/dashboard/sales/new",
+          permission: "sales",
         },
         {
           title: "Ver Historial de Ventas",
           url: "/dashboard/sales/salesdashboard",
+          permission: "sales",
         },
       ],
     },
@@ -243,20 +314,23 @@ const data = {
       name: "Opciones",
       url: "/dashboard/options",
       icon: Settings2Icon,
+      permission: "settings",
     },
     {
       name: "Pagina Web",
       url: "/store",
       icon: Globe,
+      permission: "store",
     },
   ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
-  const { userName } = useAuth()
+  const { userName, role } = useAuth()
   const { totalUnread } = useMessages()
   const { settings } = useSiteSettings()
+  const checkPermission = useModulePermission()
 
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
   const canAccessAccounting = useRBAC(["admin", "accountant", "auditor"])
@@ -284,8 +358,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     avatar: "/logo_ti.png",
   }
 
+  const filteredNav = data.navMain
+    .filter((item) => checkPermission(item.permission))
+    .map((item) => {
+      const items = item.items?.filter((subItem) =>
+        checkPermission(subItem.permission ?? item.permission)
+      )
+
+      return {
+        ...item,
+        items,
+      }
+    })
+    .filter((item) => !item.items || item.items.length > 0)
+
+  const filteredProjects = data.projects.filter((project) =>
+    checkPermission(project.permission)
+  )
+
   const navMain = React.useMemo(() => {
-    const items = data.navMain.map((item) => {
+    const items = filteredNav.map((item) => {
       if (item.title === "Ventas") {
         return {
           ...item,
@@ -296,19 +388,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }
       return item
     })
-    if (accountingEnabled && canAccessAccounting) {
+    if (accountingEnabled && canAccessAccounting && checkPermission("accounting")) {
       const accountingItem = {
         title: "Contabilidad",
         url: "/dashboard/accounting",
         icon: PieChart,
+        permission: "accounting" as const,
         items: [
-          { title: "Plan de Cuentas", url: "/dashboard/accounting/chart" },
-          { title: "Diarios", url: "/dashboard/accounting/journals" },
-          { title: "Asientos", url: "/dashboard/accounting/entries" },
-          { title: "Libro Mayor", url: "/dashboard/accounting/reports/ledger" },
+          { title: "Plan de Cuentas", url: "/dashboard/accounting/chart", permission: "accounting" as const },
+          { title: "Diarios", url: "/dashboard/accounting/journals", permission: "accounting" as const },
+          { title: "Asientos", url: "/dashboard/accounting/entries", permission: "accounting" as const },
+          { title: "Libro Mayor", url: "/dashboard/accounting/reports/ledger", permission: "accounting" as const },
           {
             title: "Balance de Comprobación",
             url: "/dashboard/accounting/reports/trial-balance",
+            permission: "accounting" as const,
           },
         ],
       }
@@ -321,22 +415,33 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         items.splice(insertIndex, 0, accountingItem)
       }
     }
-    if (canAccessAds) {
+    if (canAccessAds && checkPermission("ads")) {
       items.push({
         title: "Publicidad",
         url: "#",
         icon: Megaphone,
+        permission: "ads" as const,
         items: [
           {
             title: "Publicidad",
             url: "/ads",
+            permission: "ads" as const,
           },
         ],
       })
     }
 
     return items
-  }, [totalUnread, canAccessAds, accountingEnabled, canAccessAccounting])
+  }, [
+    filteredNav,
+    totalUnread,
+    canAccessAds,
+    accountingEnabled,
+    canAccessAccounting,
+    checkPermission,
+    settings.permissions,
+    role,
+  ])
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -345,7 +450,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMain} />
-        <NavProjects projects={data.projects} />
+        <NavProjects projects={filteredProjects} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={profile} />
