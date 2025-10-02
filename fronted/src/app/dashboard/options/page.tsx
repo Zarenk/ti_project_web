@@ -1930,4 +1930,4 @@ function PermissionsSection({ watch, setValue }: PermissionsSectionProps) {
   );
 }
 
-export { MaintenanceSection };
+export { MaintenanceSection, PermissionsSection };

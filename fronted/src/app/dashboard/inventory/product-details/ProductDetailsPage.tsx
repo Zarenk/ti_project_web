@@ -1,12 +1,59 @@
 "use client"
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import UpdatePriceDialog from "./inventory-product-details-components/UpdatePriceModal";
 import { getProductByInventoryId, getProductSales } from "../inventory.api";
 import { Book, DollarSign } from "lucide-react";
 import UpdateCategoryDialog from "./inventory-product-details-components/UpdateCategoryModal";
 import { QRCodeCanvas } from "qrcode.react";
+
+const CODE39_PATTERNS: Record<string, string> = {
+  "0": "nnnwwnwnn",
+  "1": "wnnwnnnnw",
+  "2": "nnwwnnnnw",
+  "3": "wnwwnnnnn",
+  "4": "nnnwwnnnw",
+  "5": "wnnwwnnnn",
+  "6": "nnwwwnnnn",
+  "7": "nnnwnnwnw",
+  "8": "wnnwnnwnn",
+  "9": "nnwwnnwnn",
+  A: "wnnnnwnnw",
+  B: "nnwnnwnnw",
+  C: "wnwnnwnnn",
+  D: "nnnnwwnnw",
+  E: "wnnnwwnnn",
+  F: "nnwnwwnnn",
+  G: "nnnnnwwnw",
+  H: "wnnnnwwnn",
+  I: "nnwnnwwnn",
+  J: "nnnnwwwnn",
+  K: "wnnnnnwnw",
+  L: "nnwnnnwnw",
+  M: "wnwnnnwnn",
+  N: "nnnnwnwnw",
+  O: "wnnnwnwnn",
+  P: "nnwnwnwnn",
+  Q: "nnnnnnwww",
+  R: "wnnnnnwwn",
+  S: "nnwnnnwwn",
+  T: "nnnnwnwwn",
+  U: "wwnnnnnnw",
+  V: "nwwnnnnnw",
+  W: "wwwnnnnnn",
+  X: "nwnnwnnnw",
+  Y: "wwnnwnnnn",
+  Z: "nwwnwnnnn",
+  "-": "nwnnnnwnw",
+  ".": "wwnnnnwnn",
+  " ": "nwwnnnwnn",
+  "$": "nwnwnwnnn",
+  "/": "nwnwnnnwn",
+  "+": "nwnnnwnwn",
+  "%": "nnnwnwnwn",
+  "*": "nwnnwnwnn",
+};
 
 interface ProductDetailsPageProps {
   product: {
@@ -29,6 +76,8 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
   const [isLoading, setIsLoading] = useState(true);
   // Estado para controlar la visibilidad del modal de QR
   const [showQR, setShowQR] = useState(false);
+  const [showBarcode, setShowBarcode] = useState(false);
+  const barcodeRef = useRef<HTMLCanvasElement | null>(null);
 
   if (!product) {
     return (
@@ -101,6 +150,72 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
     new Date(product.updateAt) // Comenzar con la fecha de actualización del producto
   );
 
+  const barcodeValue = product.barcode || product.qrCode || product.id.toString();
+  const sanitizedBarcodeValue = barcodeValue
+    .toString()
+    .toUpperCase()
+    .split("")
+    .filter((char:any) => char !== "*" && CODE39_PATTERNS[char])
+    .join("");
+  const code39Value = sanitizedBarcodeValue.length > 0 ? sanitizedBarcodeValue : product.id.toString();
+
+  useEffect(() => {
+    if (!showBarcode || !barcodeRef.current) return;
+
+    const canvas = barcodeRef.current;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    const narrowWidth = 2;
+    const wideWidth = narrowWidth * 3;
+    const barHeight = 80;
+    const gapWidth = narrowWidth;
+    const textHeight = 20;
+    const encodedValue = `*${code39Value}*`;
+    const sequences = encodedValue.split("").map((char) => CODE39_PATTERNS[char]);
+
+    let totalWidth = 0;
+    sequences.forEach((sequence, index) => {
+      if (!sequence) return;
+      sequence.split("").forEach((symbol) => {
+        totalWidth += symbol === "w" ? wideWidth : narrowWidth;
+      });
+      if (index < sequences.length - 1) {
+        totalWidth += gapWidth;
+      }
+    });
+
+    canvas.width = totalWidth;
+    canvas.height = barHeight + textHeight;
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#000";
+
+    let x = 0;
+    sequences.forEach((sequence, index) => {
+      if (!sequence) return;
+      sequence.split("").forEach((symbol, patternIndex) => {
+        const isBar = patternIndex % 2 === 0;
+        const width = symbol === "w" ? wideWidth : narrowWidth;
+        if (isBar) {
+          context.fillRect(x, 0, width, barHeight);
+        }
+        x += width;
+      });
+
+      if (index < sequences.length - 1) {
+        x += gapWidth;
+      }
+    });
+
+    context.font = "16px monospace";
+    context.textAlign = "center";
+    context.textBaseline = "bottom";
+    context.fillText(code39Value, canvas.width / 2, canvas.height);
+  }, [showBarcode, code39Value]);
+
   if (isLoading) {
     return (
       <div className="p-4 text-center text-muted-foreground">
@@ -139,6 +254,13 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
           onClick={() => setShowQR(!showQR)}
         >
           Generar Código QR
+        </Button>
+        <Button
+          className="shadow-sm"
+          variant="outline"
+          onClick={() => setShowBarcode(!showBarcode)}
+        >
+          Generar Código de Barras
         </Button>
         </div>
         <UpdatePriceDialog 
@@ -261,6 +383,16 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
               <p className="text-sm text-muted-foreground">
                 Contenido: {product.qrCode || product.barcode || product.id}
               </p>
+            </div>
+          </div>
+        )}
+
+        {showBarcode && (
+          <div className="border rounded-md p-4 shadow-sm">
+            <h2 className="text-xl font-semibold mb-2">Código de Barras del Producto</h2>
+            <div className="flex flex-col items-center space-y-2">
+              <canvas ref={barcodeRef} className="max-w-full h-auto" />
+              <p className="text-sm text-muted-foreground">Contenido: {code39Value}</p>
             </div>
           </div>
         )}   
