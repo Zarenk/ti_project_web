@@ -44,7 +44,7 @@ import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import { DataTableToolbar } from "./data-table-components/data-table-toolbar"
 import { Cross2Icon, TrashIcon } from "@radix-ui/react-icons"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { EyeIcon, FileText, PrinterIcon } from "lucide-react"
+import { EyeIcon, FileSpreadsheet, FileText, Loader2, PrinterIcon } from "lucide-react"
 
 import { BACKEND_URL } from "@/lib/utils"
 
@@ -63,6 +63,12 @@ type ProductSpecification = {
   refreshRate?: string | null
   connectivity?: string | null
   [key: string]: string | null | undefined
+} | null
+
+type ProductFeature = {
+  title?: string | null
+  description?: string | null
+  icon?: string | null
 } | null
 
 const SPECIFICATION_LABELS: Record<string, string> = {
@@ -102,14 +108,14 @@ function resolveImageUrl(path: string) {
 }
  
  
-interface DataTableProps<TData extends {id:string, createdAt:Date, name:string,
-  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, specification?: ProductSpecification, images?: string[] | null}, TValue> {
+interface DataTableProps<TData extends {id:string, createdAt:Date | string, name:string,
+  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, specification?: ProductSpecification, features?: ProductFeature[] | null, images?: string[] | null}, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
 }
  
-export function DataTable<TData extends {id:string, createdAt:Date, name:string,
-  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, specification?: ProductSpecification, images?: string[] | null}, TValue>({
+export function DataTable<TData extends {id:string, createdAt:Date | string, name:string,
+  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, specification?: ProductSpecification, features?: ProductFeature[] | null, images?: string[] | null}, TValue>({
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
@@ -118,6 +124,260 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
     React.useState<VisibilityState>({})
 
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
+
+  const [isExporting, setIsExporting] = useState(false);
+
+  const specificationKeys = useMemo(() => {
+    const keys = new Set<string>();
+    data.forEach((item) => {
+      const spec = item.specification ?? null;
+      if (spec) {
+        Object.keys(spec).forEach((key) => {
+          const value = spec[key];
+          if (value != null && String(value).trim() !== "") {
+            keys.add(key);
+          }
+        });
+      }
+    });
+    return Array.from(keys);
+  }, [data]);
+
+  const formatHtmlValue = (value: unknown) => {
+    if (value === null || value === undefined) {
+      return "—";
+    }
+    if (typeof value === "number") {
+      return value.toString();
+    }
+    const str = String(value);
+    if (!str.trim()) {
+      return "—";
+    }
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  };
+
+  const priceFormatter = useMemo(() => new Intl.NumberFormat("es-PE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }), []);
+
+  const handleExportExcel = async () => {
+    if (!data.length) {
+      toast.info("No hay productos para exportar.");
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+
+      const formattedRows = data
+        .map((product, index) => {
+          const brand = typeof product.brand === "string"
+            ? product.brand
+            : product.brand?.name ?? "Sin marca";
+          const createdAtDate = product.createdAt instanceof Date
+            ? product.createdAt
+            : new Date(product.createdAt);
+          const isValidDate = createdAtDate instanceof Date && !Number.isNaN(createdAtDate.getTime());
+          const formattedDate = isValidDate
+            ? createdAtDate.toLocaleString("es-PE", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })
+            : "—";
+          const normalizedStatus = normalizeProductStatus(product.status);
+          const statusClass = normalizedStatus === "Activo" ? "badge active" : "badge inactive";
+          const featureList = Array.isArray(product.features) && product.features.length > 0
+            ? `<ul>${product.features
+                .filter((feature) => feature && (feature.title || feature.description))
+                .map((feature) => {
+                  const title = feature?.title ? formatHtmlValue(feature.title) : "";
+                  const description = feature?.description
+                    ? `: ${formatHtmlValue(feature.description)}`
+                    : "";
+                  return `<li>${title}${description}</li>`;
+                })
+                .join("")}</ul>`
+            : "—";
+
+          const specificationCells = specificationKeys
+            .map((key) => `<td>${formatHtmlValue(product.specification?.[key] ?? "—")}</td>`)
+            .join("");
+
+          return `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${formatHtmlValue(product.name)}</td>
+              <td>${formatHtmlValue(product.description)}</td>
+              <td>${formatHtmlValue(brand)}</td>
+              <td>${formatHtmlValue(product.category_name)}</td>
+              <td class="numeric">S/. ${priceFormatter.format(Number(product.price ?? 0))}</td>
+              <td class="numeric">S/. ${priceFormatter.format(Number(product.priceSell ?? 0))}</td>
+              <td><span class="${statusClass}">${formatHtmlValue(normalizedStatus)}</span></td>
+              <td>${formatHtmlValue(formattedDate)}</td>
+              ${specificationCells}
+              <td>${featureList}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      const specificationHeaders = specificationKeys
+        .map((key) => `<th>${formatHtmlValue(formatSpecificationLabel(key))}</th>`)
+        .join("");
+
+      const generatedAt = new Date().toLocaleString("es-PE", {
+        dateStyle: "full",
+        timeStyle: "short",
+      });
+
+      const htmlContent = `<!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8" />
+          <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Reporte Maestro de Productos</title>
+          <style>
+            body {
+              font-family: 'Segoe UI', Tahoma, sans-serif;
+              color: #1f2937;
+              margin: 24px;
+            }
+            .title {
+              font-size: 20px;
+              font-weight: 700;
+              text-align: center;
+              color: #0f172a;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+              margin-bottom: 4px;
+            }
+            .subtitle {
+              text-align: center;
+              font-size: 13px;
+              color: #475569;
+              margin-bottom: 16px;
+            }
+            .meta {
+              text-align: right;
+              font-size: 11px;
+              color: #64748b;
+              margin-bottom: 12px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              border-radius: 12px;
+              overflow: hidden;
+              box-shadow: 0 10px 40px rgba(15, 23, 42, 0.08);
+            }
+            thead tr {
+              background: linear-gradient(90deg, #0f172a, #1e293b);
+            }
+            th {
+              padding: 14px 10px;
+              text-align: left;
+              color: #f8fafc;
+              font-size: 11px;
+              letter-spacing: 0.08em;
+              text-transform: uppercase;
+            }
+            td {
+              border: 1px solid #e2e8f0;
+              padding: 12px 10px;
+              vertical-align: top;
+              background: #ffffff;
+            }
+            tbody tr:nth-child(even) td {
+              background: #f8fafc;
+            }
+            tbody tr:hover td {
+              background: #e2e8f0;
+            }
+            .badge {
+              border-radius: 9999px;
+              padding: 4px 10px;
+              font-weight: 600;
+              font-size: 11px;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+            }
+            .badge.active {
+              background: #dcfce7;
+              color: #166534;
+            }
+            .badge.inactive {
+              background: #fee2e2;
+              color: #991b1b;
+            }
+            ul {
+              margin: 0;
+              padding-left: 18px;
+            }
+            ul li {
+              margin-bottom: 4px;
+            }
+            .numeric {
+              text-align: right;
+              font-variant-numeric: tabular-nums;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="title">Inventario maestro de productos</div>
+          <div class="subtitle">Listado consolidado para gestión y control físico</div>
+          <div class="meta">Generado: ${formatHtmlValue(generatedAt)}</div>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Nombre</th>
+                <th>Descripción</th>
+                <th>Marca</th>
+                <th>Categoría</th>
+                <th>Precio Compra (S/.)</th>
+                <th>Precio Venta (S/.)</th>
+                <th>Estado</th>
+                <th>Fecha de Creación</th>
+                ${specificationHeaders}
+                <th>Características destacadas</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${formattedRows}
+            </tbody>
+          </table>
+        </body>
+        </html>`;
+
+      const blob = new Blob([htmlContent], {
+        type: "application/vnd.ms-excel;charset=utf-8;",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const dateStamp = new Date().toISOString().split("T")[0];
+      link.href = url;
+      link.download = `reporte_productos_${dateStamp}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success("Reporte Excel generado correctamente.");
+    } catch (error) {
+      console.error("Error al exportar el reporte de productos", error);
+      toast.error("No se pudo generar el archivo Excel de productos.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
   
   // Filtrar los datos según el rango de fechas seleccionado
   const filteredData = useMemo(() => {
@@ -484,6 +744,25 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
             </div>
             <div className="px-0 sm:px-2">
               <DataTableToolbar table={table} />
+            </div>
+            <div className="px-0 sm:px-2">
+              <Button
+                onClick={handleExportExcel}
+                disabled={isExporting}
+                className="w-full sm:w-auto"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generando...
+                  </>
+                ) : (
+                  <>
+                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                    Exportar Excel
+                  </>
+                )}
+              </Button>
             </div>
             {/* Botón Reset: Solo aparece si hay filtros activos */}
             {(totalSelectedRows > 0 || isFiltered) && (

@@ -78,6 +78,7 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
   const [showQR, setShowQR] = useState(false);
   const [showBarcode, setShowBarcode] = useState(false);
   const barcodeRef = useRef<HTMLCanvasElement | null>(null);
+  const codesSectionRef = useRef<HTMLDivElement | null>(null);
 
   if (!product) {
     return (
@@ -158,6 +159,12 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
     .filter((char:any) => char !== "*" && CODE39_PATTERNS[char])
     .join("");
   const code39Value = sanitizedBarcodeValue.length > 0 ? sanitizedBarcodeValue : product.id.toString();
+
+  useEffect(() => {
+    if ((showQR || showBarcode) && codesSectionRef.current) {
+      codesSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [showQR, showBarcode]);
 
   useEffect(() => {
     if (!showBarcode || !barcodeRef.current) return;
@@ -372,31 +379,32 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
           )}
         </div>    
 
-        {showQR && (
-          <div className="border rounded-md p-4 shadow-sm">
-            <h2 className="text-xl font-semibold mb-2">Código QR del Producto</h2>
-            <div className="flex flex-col items-center space-y-2">
-              <QRCodeCanvas
-                value={product.qrCode || product.barcode || product.id.toString()}
-                size={200}
-              />
-              <p className="text-sm text-muted-foreground">
-                Contenido: {product.qrCode || product.barcode || product.id}
-              </p>
+        <div ref={codesSectionRef} className="space-y-4">
+          {showQR && (
+            <div className="border rounded-md p-4 shadow-sm">
+              <h2 className="text-xl font-semibold mb-2">Código QR del Producto</h2>
+              <div className="flex flex-col items-center space-y-2">
+                <QRCodeCanvas
+                  value={product.qrCode || product.barcode || product.id.toString()}
+                  size={200}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Contenido: {product.qrCode || product.barcode || product.id}
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {showBarcode && (
-          <div className="border rounded-md p-4 shadow-sm">
-            <h2 className="text-xl font-semibold mb-2">Código de Barras del Producto</h2>
-            <div className="flex flex-col items-center space-y-2">
-              <canvas ref={barcodeRef} className="max-w-full h-auto" />
-              <p className="text-sm text-muted-foreground">Contenido: {code39Value}</p>
+          {showBarcode && (
+            <div className="border rounded-md p-4 shadow-sm">
+              <h2 className="text-xl font-semibold mb-2">Código de Barras del Producto</h2>
+              <div className="flex flex-col items-center space-y-2">
+                <canvas ref={barcodeRef} className="max-w-full h-auto" />
+                <p className="text-sm text-muted-foreground">Contenido: {code39Value}</p>
+              </div>
             </div>
-          </div>
-        )}   
-        
+          )}
+        </div>         
     </div>
   );
 }
