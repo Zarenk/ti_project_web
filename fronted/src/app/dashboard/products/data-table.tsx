@@ -127,9 +127,33 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
 
   const [isExporting, setIsExporting] = useState(false);
 
+  const sanitizedData = useMemo(() => {
+    const uniqueProducts = new Map<string, TData>();
+
+    data.forEach((item) => {
+      uniqueProducts.set(item.id, item);
+    });
+
+    const toTimestamp = (value: Date | string) => {
+      if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? 0 : value.getTime();
+      }
+
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+    };
+
+    return Array.from(uniqueProducts.values()).sort((a, b) => {
+      const timeA = toTimestamp(a.createdAt);
+      const timeB = toTimestamp(b.createdAt);
+
+      return timeB - timeA;
+    });
+  }, [data]);
+
   const specificationKeys = useMemo(() => {
     const keys = new Set<string>();
-    data.forEach((item) => {
+    sanitizedData.forEach((item) => {
       const spec = item.specification ?? null;
       if (spec) {
         Object.keys(spec).forEach((key) => {
@@ -141,7 +165,7 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
       }
     });
     return Array.from(keys);
-  }, [data]);
+  }, [sanitizedData]);
 
   const formatHtmlValue = (value: unknown) => {
     if (value === null || value === undefined) {
@@ -168,15 +192,17 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
   }), []);
 
   const handleExportExcel = async () => {
-    if (!data.length) {
-      toast.info("No hay productos para exportar.");
+    if (!filteredData.length) {
+      toast.info("No hay productos para exportar con los filtros seleccionados.");
       return;
     }
 
     try {
       setIsExporting(true);
 
-      const formattedRows = data
+      toast.info("Generando el reporte de productos. La descarga iniciará en breve.");
+
+      const formattedRows = filteredData
         .map((product, index) => {
           const brand = typeof product.brand === "string"
             ? product.brand
@@ -280,14 +306,16 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
             }
             thead tr {
               background: linear-gradient(90deg, #0f172a, #1e293b);
+              background-color: #1f2937;
             }
             th {
               padding: 14px 10px;
               text-align: left;
-              color: #f8fafc;
-              font-size: 11px;
+              color: #ffffff;
+              font-size: 12px;
               letter-spacing: 0.08em;
               text-transform: uppercase;
+              border-bottom: 2px solid #0f172a;
             }
             td {
               border: 1px solid #e2e8f0;
@@ -382,17 +410,17 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
   // Filtrar los datos según el rango de fechas seleccionado
   const filteredData = useMemo(() => {
     if (!selectedDateRange?.from || !selectedDateRange?.to) {
-      return data; // Si no hay rango seleccionado, mostrar todos los datos
+      return sanitizedData; // Si no hay rango seleccionado, mostrar todos los datos
     }
 
     const from = new Date(selectedDateRange.from);
     const to = new Date(selectedDateRange.to);
 
-    return data.filter((item) => {
-      const itemDate = new Date(item.createdAt); // Asegúrate de que `item.date` sea una fecha válida
+    return sanitizedData.filter((item) => {
+      const itemDate = new Date(item.createdAt);
       return itemDate >= from && itemDate <= to;
     });
-  }, [data, selectedDateRange]);
+  }, [sanitizedData, selectedDateRange]);
   
   const handleDateSelect = (range: DateRange | undefined) => {
       setSelectedDateRange(range);

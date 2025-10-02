@@ -6,7 +6,14 @@ export const dynamic = "force-dynamic";
 export default async function UsersPage() {
   const users = await getUsers();
 
-  const mappedUsers = users.map((user) => ({
+  const filteredUsers = users.filter((user) => {
+    const hasCredentials = Boolean(user.email?.trim()) && Boolean(user.username?.trim());
+    const role = typeof user.role === "string" ? user.role.toUpperCase() : "";
+
+    return hasCredentials && role !== "GUEST";
+  });
+
+  const mappedUsers = filteredUsers.map((user) => ({
     ...user,
     createdAt: user.createdAt ?? "",
   }));
