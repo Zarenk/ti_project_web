@@ -43,6 +43,7 @@ import {
   Loader2,
   Type,
   Upload,
+  UserCog,
   Wrench,
   X,
 } from "lucide-react";
@@ -69,6 +70,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -98,7 +100,8 @@ type SectionId =
   | "integrations"
   | "social"
   | "privacy"
-  | "maintenance";
+  | "maintenance"
+  | "permissions";
 
 const defaultValues: SettingsFormData = defaultSiteSettings;
 
@@ -116,6 +119,64 @@ const sections: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "social", label: "Redes sociales", icon: Share2 },
   { id: "privacy", label: "Privacidad", icon: Shield },
   { id: "maintenance", label: "Modo mantenimiento", icon: AlertCircle },
+  { id: "permissions", label: "Permisos de usuarios", icon: UserCog },
+];
+
+const permissionModules: {
+  key: keyof SiteSettings["permissions"];
+  label: string;
+  description: string;
+}[] = [
+  {
+    key: "dashboard",
+    label: "Panel principal",
+    description: "Acceso al panel de control con métricas generales.",
+  },
+  {
+    key: "catalog",
+    label: "Catálogo",
+    description: "Gestionar los productos y sus categorías.",
+  },
+  {
+    key: "store",
+    label: "Tienda en línea",
+    description: "Configurar la vitrina y opciones de la tienda.",
+  },
+  {
+    key: "inventory",
+    label: "Inventario",
+    description: "Controlar el stock y movimientos de almacén.",
+  },
+  {
+    key: "sales",
+    label: "Ventas",
+    description: "Crear y revisar pedidos y comprobantes.",
+  },
+  {
+    key: "purchases",
+    label: "Compras",
+    description: "Registrar compras y proveedores.",
+  },
+  {
+    key: "accounting",
+    label: "Contabilidad",
+    description: "Ver reportes y conciliaciones contables.",
+  },
+  {
+    key: "marketing",
+    label: "Marketing",
+    description: "Gestionar campañas y automatizaciones.",
+  },
+  {
+    key: "ads",
+    label: "Publicidad",
+    description: "Administrar anuncios y audiencias.",
+  },
+  {
+    key: "settings",
+    label: "Configuraciones",
+    description: "Modificar la configuración general del sitio.",
+  },
 ];
 
 type Register = UseFormRegister<SettingsFormData>;
@@ -138,6 +199,7 @@ type SimpleSectionProps = {
   control?: FormControl;
 };
 type BrandSectionProps = Pick<SectionProps, "register" | "errors" | "setValue" | "watch">;
+type PermissionsSectionProps = Pick<SectionProps, "watch" | "setValue">;
 const deepEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export default function SettingsPage() {
@@ -574,6 +636,9 @@ export default function SettingsPage() {
                       setValue={setValue}
                       control={control}
                     />
+                  )}
+                  {activeSection === "permissions" && (
+                    <PermissionsSection watch={watch} setValue={setValue} />
                   )}
                 </motion.div>
               </AnimatePresence>
@@ -1810,6 +1875,56 @@ function MaintenanceSection({ register, errors, watch, setValue }: SectionProps)
             </div>
           </>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PermissionsSection({ watch, setValue }: PermissionsSectionProps) {
+  const permissions = watch("permissions");
+  const currentPermissions = permissions ?? defaultValues.permissions;
+
+  return (
+    <Card className="border-2">
+      <CardHeader>
+        <CardTitle>Permisos de usuarios</CardTitle>
+        <CardDescription>
+          Define a qué módulos puede acceder cada usuario de la plataforma.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {permissionModules.map((module) => {
+          const inputId = `permissions-${module.key}`;
+
+          return (
+            <div
+              key={module.key}
+              className="flex items-start justify-between gap-4 rounded-xl border border-border/60 bg-card/40 p-4"
+            >
+              <div className="space-y-1">
+                <Label htmlFor={inputId} className="text-base font-medium">
+                  {module.label}
+                </Label>
+                <p className="text-sm text-muted-foreground">{module.description}</p>
+              </div>
+              <Checkbox
+                id={inputId}
+                checked={currentPermissions[module.key] ?? false}
+                onCheckedChange={(checked) =>
+                  setValue(
+                    "permissions",
+                    {
+                      ...currentPermissions,
+                      [module.key]: checked === true,
+                    },
+                    { shouldDirty: true },
+                  )
+                }
+                aria-label={`Activar acceso a ${module.label}`}
+              />
+            </div>
+          );
+        })}
       </CardContent>
     </Card>
   );
