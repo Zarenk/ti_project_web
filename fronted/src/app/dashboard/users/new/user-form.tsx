@@ -20,6 +20,7 @@ const userSchema = z
     password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
     confirmPassword: z.string(),
     role: z.enum(['ADMIN', 'EMPLOYEE', 'CLIENT']),
+    status: z.enum(['ACTIVO', 'INACTIVO']),
   })
   .refine((data) => data.password === data.confirmPassword, {
     path: ['confirmPassword'],
@@ -38,6 +39,7 @@ export default function UserForm() {
       password: '',
       confirmPassword: '',
       role: 'EMPLOYEE',
+      status: 'ACTIVO',
     },
   });
 
@@ -45,9 +47,9 @@ export default function UserForm() {
 
   const onSubmit = handleSubmit(async (data) => {
     try {
-      await createUser(data.email, data.username, data.password, data.role);
+      await createUser(data.email, data.username, data.password, data.role, data.status);
       toast.success('Usuario creado correctamente');
-      router.push('/dashboard');
+      router.push('/dashboard/users');
     } catch (error: any) {
       toast.error(error.message || 'Error al crear usuario');
     }
@@ -97,6 +99,22 @@ export default function UserForm() {
             <SelectItem value="ADMIN">Administrador</SelectItem>
             <SelectItem value="EMPLOYEE">Empleado</SelectItem>
             <SelectItem value="CLIENT">Cliente</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex flex-col">
+        <Label className="py-3">Estado</Label>
+        <Select
+          value={form.watch('status')}
+          defaultValue={form.getValues('status')}
+          onValueChange={(value) => setValue('status', value as 'ACTIVO' | 'INACTIVO')}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ACTIVO">Activo</SelectItem>
+            <SelectItem value="INACTIVO">Inactivo</SelectItem>
           </SelectContent>
         </Select>
       </div>

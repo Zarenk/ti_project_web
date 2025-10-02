@@ -150,7 +150,7 @@ const data = {
         },
         {
           title: "Ver Usuarios",
-          url: "#",
+          url: "/dashboard/users",
         },
       ],
     },

@@ -32,7 +32,10 @@ export class UsersController {
   }
 
   @Post('register')
-  async register(@Body() body: { email: string; username?: string; password: string; role: string }) {
+  async register(
+    @Body()
+    body: { email: string; username?: string; password: string; role: string; status?: string },
+  ) {
     return this.usersService.register(body);
   }
 

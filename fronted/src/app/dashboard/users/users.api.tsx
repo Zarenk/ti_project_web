@@ -92,16 +92,39 @@ export async function getUserProfileId() {
   }
 }
 
+export interface DashboardUser {
+  id: number;
+  email: string;
+  username: string;
+  role: string;
+  status: string;
+  createdAt: string;
+}
+
+export async function getUsers(): Promise<DashboardUser[]> {
+  const res = await fetch(`${BACKEND_URL}/api/users`, {
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    throw new Error('Error al obtener usuarios');
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
 export async function createUser(
   email: string,
   username: string,
   password: string,
-  role: string
+  role: string,
+  status: string,
 ) {
   const res = await fetch(`${BACKEND_URL}/api/users/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, username, password, role }),
+    body: JSON.stringify({ email, username, password, role, status }),
   });
 
   if (!res.ok) {

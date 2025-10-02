@@ -1,0 +1,25 @@
+import { DataTable } from "./data-table";
+import { columns } from "./columns";
+import { getUsers } from "./users.api";
+
+export const dynamic = "force-dynamic";
+
+export default async function UsersPage() {
+  const users = await getUsers();
+
+  const mappedUsers = users.map((user) => ({
+    ...user,
+    createdAt: user.createdAt ?? "",
+  }));
+
+  return (
+    <section className="py-6">
+      <div className="container mx-auto px-4">
+        <h1 className="text-2xl font-bold mb-6">Usuarios</h1>
+        <div className="overflow-x-auto">
+          <DataTable columns={columns} data={mappedUsers} />
+        </div>
+      </div>
+    </section>
+  );
+}

@@ -68,7 +68,7 @@ export class UsersService {
     return { message: 'Logged out' };
   }
 
-  async register(data: { email: string; username?: string; password: string; role: string }) {
+  async register(data: { email: string; username?: string; password: string; role: string; status?: string }) {
     const username = data.username || data.email.split('@')[0];
 
     const existingEmail = await this.prismaService.user.findUnique({ where: { email: data.email } });
@@ -90,6 +90,7 @@ export class UsersService {
           username,
           password: hashedPassword,
           role: data.role as UserRole,
+          status: data.status ?? 'ACTIVO',
         },
       });
 
@@ -118,6 +119,7 @@ export class UsersService {
       username: data.username,
       password: data.password,
       role: 'CLIENT',
+      status: 'ACTIVO',
     });
 
     try {

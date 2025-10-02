@@ -151,6 +151,7 @@ model User {
   username     String   @unique
   password     String
   role         UserRole @default(CLIENT) // Enum para roles de usuario
+  status       String   @default("ACTIVO")
   client       Client? // Relación opcional con el modelo Client
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

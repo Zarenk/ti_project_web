@@ -61,7 +61,7 @@ export async function handleFormSubmission({
   try {
     const storeId = stores.find((store: any) => store.name === data.store_name)?.id;
     if (!storeId) {
-      toast.error("Debe seleccionar una tienda vÃ¡lida.");
+      toast.error("Debe seleccionar una tienda valida.");
       return;
     }
 
@@ -96,7 +96,7 @@ export async function handleFormSubmission({
     let providerId = providers.find((p: any) => p.name === data.provider_name)?.id;
     if (!providerId) {
       if (!providerIdBoolean) {
-        toast.error("Debe seleccionar un proveedor vÃ¡lido.");
+        toast.error("Debe seleccionar un proveedor valido.");
         return;
       } else {
         providerId = providerIdBoolean;

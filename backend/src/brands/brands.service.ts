@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
@@ -28,7 +28,16 @@ export class BrandsService {
   }
 
   async create(createBrandDto: CreateBrandDto, req: Request) {
-    const name = this.normalizeName(createBrandDto.name);
+    const rawName = createBrandDto.name?.trim();
+    if (!rawName) {
+      throw new BadRequestException('El nombre de la marca es obligatorio');
+    }
+    const name = this.normalizeName(rawName);
+    const existing = await this.prisma.brand.findUnique({ where: { name } });
+    if (existing) {
+      throw new ConflictException('La marca ya existe');
+    }
+
     const brand = await this.prisma.brand.create({
       data: { ...createBrandDto, name },
     });
@@ -81,11 +90,25 @@ export class BrandsService {
 
   async update(id: number, updateBrandDto: UpdateBrandDto, req: Request) {
     const before = await this.findOne(id);
-    const data = updateBrandDto.name
-      ? { ...updateBrandDto, name: this.normalizeName(updateBrandDto.name) }
-      : updateBrandDto;
+
+    let data: UpdateBrandDto;
+    if (updateBrandDto.name !== undefined) {
+      const rawName = updateBrandDto.name.trim();
+      if (!rawName) {
+        throw new BadRequestException('El nombre de la marca es obligatorio');
+      }
+      const name = this.normalizeName(rawName);
+      const existing = await this.prisma.brand.findUnique({ where: { name } });
+      if (existing && existing.id !== id) {
+        throw new ConflictException('La marca ya existe');
+      }
+      data = { ...updateBrandDto, name };
+    } else {
+      data = updateBrandDto;
+    }
+
     const updated = await this.prisma.brand.update({ where: { id }, data });
-    if (updateBrandDto.name && before) {
+    if (data.name && before) {
       await this.prisma.keyword.updateMany({
         where: { brandId: id, name: before.name },
         data: { name: updated.name },
@@ -132,3 +155,15 @@ export class BrandsService {
     return removed;
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
