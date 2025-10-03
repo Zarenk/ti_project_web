@@ -445,7 +445,7 @@ export default function InventoryLabelsPage(): ReactElement {
                   </Badge>
                 </div>
                 <Input
-                  placeholder="Buscar categor�a"
+                  placeholder="Buscar categoria"
                   value={categorySearch}
                   onChange={(event) => setCategorySearch(event.target.value)}
                   className="max-w-sm"

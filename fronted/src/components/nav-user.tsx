@@ -96,7 +96,7 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/dashboard/plan")}>
                 <Sparkles />
                 Mi Plan
               </DropdownMenuItem>
@@ -107,7 +107,7 @@ export function NavUser({
                 <BadgeCheck />
                 Mi Cuenta
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/dashboard/billing")}>
                 <CreditCard />
                 Facturacion
               </DropdownMenuItem>
@@ -127,3 +127,4 @@ export function NavUser({
     </SidebarMenu>
   )
 }
+

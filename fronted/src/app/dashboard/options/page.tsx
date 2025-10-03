@@ -29,6 +29,7 @@ import {
   Download,
   ImageIcon,
   Layout,
+  Database,
   Monitor,
   Moon,
   Navigation,
@@ -62,6 +63,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +79,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { getAuthHeaders } from "@/utils/auth-token";
+import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   TYPOGRAPHY_FONT_OPTIONS,
@@ -101,7 +104,8 @@ type SectionId =
   | "social"
   | "privacy"
   | "maintenance"
-  | "permissions";
+  | "permissions"
+  | "system";
 
 const defaultValues: SettingsFormData = defaultSiteSettings;
 
@@ -120,6 +124,7 @@ const sections: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "privacy", label: "Privacidad", icon: Shield },
   { id: "maintenance", label: "Modo mantenimiento", icon: AlertCircle },
   { id: "permissions", label: "Permisos de usuarios", icon: UserCog },
+  { id: "system", label: "Datos del Sistema", icon: Database },
 ];
 
 const permissionModules: {
@@ -198,6 +203,15 @@ type SimpleSectionProps = {
   errors: Errors;
   control?: FormControl;
 };
+
+type SystemDataSectionProps = {
+  onGenerateBackup: () => Promise<void> | void;
+  onPurgeData: () => Promise<void> | void;
+  isBackupPending: boolean;
+  isPurgeDialogOpen: boolean;
+  onPurgeDialogOpenChange: (open: boolean) => void;
+};
+
 type BrandSectionProps = Pick<SectionProps, "register" | "errors" | "setValue" | "watch">;
 type PermissionsSectionProps = Pick<SectionProps, "watch" | "setValue">;
 const deepEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -214,9 +228,12 @@ export default function SettingsPage() {
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const [confirmExportOpen, setConfirmExportOpen] = useState(false);
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
+  const [isBackupPending, setIsBackupPending] = useState(false);
+  const [isPurgeDialogOpen, setIsPurgeDialogOpen] = useState(false);
   const previewInitializedRef = useRef(false);
   const lastNonSystemModeRef = useRef<"light" | "dark">("light");
   const { resolvedTheme, setTheme } = useTheme();
+  const router = useRouter();
 
   const {
     settings,
@@ -385,6 +402,79 @@ export default function SettingsPage() {
     void handleSubmit(handleSave)();
     setConfirmSaveOpen(false);
   };
+
+  const handleGenerateBackup = useCallback(async () => {
+    setIsBackupPending(true);
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch("/api/system/backups", {
+        method: "POST",
+        headers,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new Error(
+          errorText || "No se pudo generar el respaldo del sistema.",
+        );
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `respaldo-sistema-${new Date().toISOString()}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      toast.success("Respaldo generado correctamente.", {
+        description: "Se descargó un archivo con los datos actuales del sistema.",
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo generar el respaldo del sistema.",
+      );
+    } finally {
+      setIsBackupPending(false);
+    }
+  }, [setIsBackupPending]);
+
+  const handlePurgeData = useCallback(async () => {
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch("/api/system/purge", {
+        method: "POST",
+        headers,
+      });
+
+      const data = (await response
+        .json()
+        .catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message || "No se pudo purgar los datos del sistema.",
+        );
+      }
+
+      toast.success(data?.message || "Datos del sistema purgados correctamente.");
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo purgar los datos del sistema.",
+      );
+    } finally {
+      setIsPurgeDialogOpen(false);
+    }
+  }, [router, setIsPurgeDialogOpen]);
 
   const handleThemeModeChange = useCallback(
     (mode: "light" | "dark" | "system") => {
@@ -640,6 +730,15 @@ export default function SettingsPage() {
                   {activeSection === "permissions" && (
                     <PermissionsSection watch={watch} setValue={setValue} />
                   )}
+                  {activeSection === "system" && (
+                    <SystemDataSection
+                      onGenerateBackup={handleGenerateBackup}
+                      onPurgeData={handlePurgeData}
+                      isBackupPending={isBackupPending}
+                      isPurgeDialogOpen={isPurgeDialogOpen}
+                      onPurgeDialogOpenChange={setIsPurgeDialogOpen}
+                    />
+                  )}
                 </motion.div>
               </AnimatePresence>
             </form>
@@ -750,6 +849,139 @@ export default function SettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function SystemDataSection({
+  onGenerateBackup,
+  onPurgeData,
+  isBackupPending,
+  isPurgeDialogOpen,
+  onPurgeDialogOpenChange,
+}: SystemDataSectionProps) {
+  const [confirmationText, setConfirmationText] = useState("");
+  const [acknowledged, setAcknowledged] = useState(false);
+
+  useEffect(() => {
+    if (!isPurgeDialogOpen) {
+      setConfirmationText("");
+      setAcknowledged(false);
+    }
+  }, [isPurgeDialogOpen]);
+
+  const confirmationPhrase = "PURGAR SISTEMA";
+  const isConfirmationTextValid =
+    confirmationText.trim().toUpperCase() === confirmationPhrase;
+  const canConfirmPurge = isConfirmationTextValid && acknowledged;
+
+  const handleConfirmPurge = () => {
+    if (!canConfirmPurge) {
+      return;
+    }
+    void onPurgeData();
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Download className="h-5 w-5" />
+            Respaldo del sistema
+          </CardTitle>
+          <CardDescription>
+            Genera un archivo descargable con una copia de seguridad de la base de datos
+            actual.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Usa esta opción para resguardar la información antes de ejecutar acciones
+            destructivas o realizar migraciones.
+          </p>
+          <Button
+            type="button"
+            onClick={() => void onGenerateBackup()}
+            disabled={isBackupPending}
+            className="gap-2"
+          >
+            {isBackupPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {isBackupPending ? "Generando respaldo..." : "Generar respaldo"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="border-2 border-destructive/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-destructive">
+            <Database className="h-5 w-5" />
+            Purga total de datos
+          </CardTitle>
+          <CardDescription>
+            Elimina toda la información operativa del sistema y conserva únicamente las
+            cuentas de usuario registradas.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Esta acción es irreversible. Asegúrate de contar con un respaldo reciente y de
+            haber notificado a tu equipo antes de continuar.
+          </p>
+          <AlertDialog open={isPurgeDialogOpen} onOpenChange={onPurgeDialogOpenChange}>
+            <AlertDialogTrigger asChild>
+              <Button type="button" variant="destructive" className="w-full sm:w-auto">
+                Purgar datos del sistema
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>¿Purgar definitivamente los datos?</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-3 text-muted-foreground text-sm">
+                    <p>
+                      Esta operación eliminará catálogos, configuraciones, inventarios y
+                      registros históricos.{" "}
+                      <strong>Solo se preservarán las cuentas de usuario</strong> para permitir el acceso
+                      posterior.
+                    </p>
+                    <div className="space-y-2">
+                      <Label htmlFor="purge-confirmation">Escribe "{confirmationPhrase}" para confirmar.</Label>
+                      <Input
+                        id="purge-confirmation"
+                        value={confirmationText}
+                        onChange={(event) => setConfirmationText(event.target.value)}
+                        placeholder={confirmationPhrase}
+                      />
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="purge-acknowledge"
+                        checked={acknowledged}
+                        onCheckedChange={(checked) => setAcknowledged(checked === true)}
+                      />
+                      <Label htmlFor="purge-acknowledge" className="text-sm font-normal leading-tight">
+                        Entiendo que esta purga no se puede deshacer y que todos los datos serán
+                        eliminados de forma permanente.
+                      </Label>
+                    </div>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction disabled={!canConfirmPurge} onClick={handleConfirmPurge}>
+                  Confirmar purga
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </CardContent>
+      </Card>
     </div>
   );
 }

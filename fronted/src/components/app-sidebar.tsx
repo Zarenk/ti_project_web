@@ -11,6 +11,7 @@ import {
   Frame,
   GalleryVerticalEnd,
   Globe,
+  Home,
   HouseIcon,
   Link,
   Map,
@@ -86,16 +87,6 @@ const data: SidebarData = {
       name: "Tecnologia Informatica",
       logo: GalleryVerticalEnd,
       plan: "Administrador",
-    },
-    {
-      name: "Acme Corp.",
-      logo: AudioWaveform,
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      logo: Command,
-      plan: "Free",
     },
   ],
   navMain: [
@@ -301,6 +292,11 @@ const data: SidebarData = {
   ],
   projects: [
     {
+      name: "Inicio",
+      url: "/dashboard",
+      icon: Home,
+    },
+    {
       name: "Escaner QR",
       url: "/barcode",
       icon: QrCode,
@@ -378,10 +374,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     ]
   }, [roleLabel, settings.company?.name])
 
+  const brandLogo = settings.brand?.logoUrl?.trim()
+
   const profile = {
     name: userName || "",
     email: "",
-    avatar: "/logo_ti.png",
+    avatar: brandLogo && brandLogo.length > 0 ? brandLogo : "/logo_ti.png",
   }
 
   const filteredNav = data.navMain
