@@ -6,8 +6,8 @@
 
   "scripts": {
     "dev": "next dev",
-    "check-logos": "node ../scripts/run-check-logos.js",
-    "build": "npm run check-logos || echo \"skip check-logos\" && next build",
+    "check-logos": "node ./scripts/check-logos.cjs",
+    "build": "(npm run check-logos || echo \"skip check-logos\") && next build",
     "start": "next start -p $PORT",
     "lint": "next lint",
     "test": "vitest run",

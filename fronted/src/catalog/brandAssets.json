@@ -1,0 +1,24 @@
+﻿{
+  "brands": {
+    "acer": "/assets/logos/acer.svg",
+    "apple": "/assets/logos/apple.svg",
+    "dell": "/assets/logos/dell.svg",
+    "hp": "/assets/logos/hp.svg",
+    "asus": "/assets/logos/asus.svg",
+    "lenovo": "/assets/logos/lenovo.svg"
+  },
+  "gpus": {
+    "nvidia": "nvidia",
+    "geforce": "nvidia",
+    "rtx": "nvidia",
+    "gtx": "nvidia",
+    "amd": "amd",
+    "radeon": "amd"
+  },
+  "cpus": {
+    "intel": "intel",
+    "core": "intel",
+    "amd": "amd",
+    "ryzen": "amd"
+  }
+}
