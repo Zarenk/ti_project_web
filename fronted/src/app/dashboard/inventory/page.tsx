@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { columns } from "./columns"; // Importar las columnas definidas
 import { getAllPurchasePrices, getInventory, getInventoryWithCurrency } from "./inventory.api";
 import { DataTable } from "./data-table";
@@ -165,7 +167,12 @@ export default function InventoryPage() {
     <>
       <section className='py-2 sm:py-6'>
           <div className='container mx-auto px-1 sm:px-6 lg:px-8'>
-            <h1 className='px-5 text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6'>Inventario General</h1>
+            <div className='flex flex-col gap-4 px-5 pb-4 sm:flex-row sm:items-center sm:justify-between'>
+              <h1 className='text-2xl font-bold sm:text-3xl lg:text-4xl'>Inventario General</h1>
+              <Button asChild>
+                <Link href="/dashboard/inventory/labels">Generar etiquetas</Link>
+              </Button>
+            </div>
             <div className="px-5 mb-4 flex flex-wrap items-center gap-6">
               <div className="flex items-center gap-2">
                 <Checkbox

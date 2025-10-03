@@ -46,6 +46,7 @@ import { AccReportsModule } from './acc-reports/acc-reports.module';
 import { KeywordsModule } from './keywords/keywords.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { ModulePermissionsGuard } from './common/guards/module-permissions.guard';
+import { SystemMaintenanceModule } from './system-maintenance/system-maintenance.module';
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { ModulePermissionsGuard } from './common/guards/module-permissions.guard
     AccReportsModule,
     KeywordsModule,
     SiteSettingsModule,
+    SystemMaintenanceModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [
