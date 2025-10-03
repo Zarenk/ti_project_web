@@ -11,7 +11,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node dist/src/main.js",
     "seed:web": "ts-node prisma/seed-web-store.ts",
     "migrate:accounting": "npx prisma migrate dev --name accounting_init",
     "seed:accounting": "ts-node prisma/seed/accounting.seed.ts",
