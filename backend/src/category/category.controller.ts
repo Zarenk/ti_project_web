@@ -16,7 +16,7 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator'
 
-@ModulePermission('catalog')
+@ModulePermission(['inventory', 'catalog'])
 @Controller('category')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}

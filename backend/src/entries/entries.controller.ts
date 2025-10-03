@@ -22,7 +22,7 @@ import { diskStorage } from 'multer';
 import path from 'path';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 
-@ModulePermission('purchases')
+@ModulePermission('inventory')
 @Controller('entries')
 export class EntriesController {
   constructor(private readonly entriesService: EntriesService) {}

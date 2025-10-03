@@ -332,6 +332,31 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { settings } = useSiteSettings()
   const checkPermission = useModulePermission()
 
+  const roleLabel = React.useMemo(() => {
+    if (!role) {
+      return "Usuario"
+    }
+
+    const normalized = role.toString().trim().toUpperCase()
+    const roleMap: Record<string, string> = {
+      ADMIN: "Administrador",
+      EMPLOYEE: "Empleado",
+    }
+
+    if (roleMap[normalized]) {
+      return roleMap[normalized]
+    }
+
+    const formatted = normalized
+      .toLowerCase()
+      .split(/[_\s]+/)
+      .filter(Boolean)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(" ")
+
+    return formatted || normalized.charAt(0) + normalized.slice(1).toLowerCase()
+  }, [role])
+
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
   const canAccessAccounting = useRBAC(["admin", "accountant", "auditor"])
 
@@ -347,10 +372,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         ...primaryTeam,
         name: companyName || primaryTeam.name,
+        plan: roleLabel,
       },
       ...data.teams.slice(1),
     ]
-  }, [settings.company?.name])
+  }, [roleLabel, settings.company?.name])
 
   const profile = {
     name: userName || "",
@@ -459,3 +485,4 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     </Sidebar>
   )
 }
+

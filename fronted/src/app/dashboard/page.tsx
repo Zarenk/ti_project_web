@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api"
 import { getMonthlySalesTotal, getRecentSales } from "./sales/sales.api"
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
+import { useModulePermission } from "@/hooks/use-module-permission"
 import { getOrdersCount, getRecentOrders } from "./orders/orders.api"
 import { getAllEntries } from "./entries/entries.api"
 import { formatDistanceToNow } from "date-fns"
@@ -48,6 +49,7 @@ export default function WelcomeDashboard() {
   type ActivityItem = { id: number | string; type: 'order' | 'sale' | 'entry' | 'alert'; description: string; createdAt: string; href: string }
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
 
+  const checkPermission = useModulePermission();
   const router = useRouter()
   const authErrorShown = useRef(false)
   const handleAuthError = async (err: unknown) => {
@@ -76,6 +78,10 @@ useEffect(() => {
           return;
         }
         try {
+          const canInventory = checkPermission('inventory');
+          const canSales = checkPermission('sales');
+          const canOrders = checkPermission('sales');
+
           const [
             inventoryData,
             monthlySalesData,
@@ -85,105 +91,120 @@ useEffect(() => {
             recentSales,
             lowStock,
           ] = await Promise.all([
-            getTotalInventory(),
-            getMonthlySalesTotal(),
-            getOrdersCount('PENDING'),
-            getRecentOrders(10),
-            getAllEntries(),
-            getRecentSales(),
-            getLowStockItems(),
-          ])
-        setTotalInventory(inventoryData)
-        setMonthlySales(monthlySalesData)
-        setPendingOrders(pendingData.count)
-        setLowStockItems(lowStock)
-        const entryItems = entries
-          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 10);
-        const activities: ActivityItem[] = [
-          ...recentOrders.map((o: any) => ({
-            id: o.id,
-            type: 'order',
-            description: `Nueva orden #${o.code}`,
-            createdAt: o.createdAt,
-            href: `/dashboard/orders/${o.id}`,
-          })),
-          ...recentSales.map((s: any) => ({
-            id: s.id,
-            type: 'sale',
-            description: `Venta interna #${s.id}`,
-            createdAt: s.createdAt,
-            href: '/dashboard/sales',
-          })),
-          ...entryItems.map((e: any) => ({
-            id: e.id,
-            type: 'entry',
-            description: `Ingreso de inventario #${e.id}`,
-            createdAt: e.createdAt,
-            href: '/dashboard/entries',
-          })),
-          // Mostrar solo una alerta de stock para no llenar el feed
-          // Alertas de bajo stock: mostrar nuevas y colapsar repetidas
-          ...(() => {
-            const list: ActivityItem[] = []
-            if (!Array.isArray(lowStock) || lowStock.length === 0) return list
-            try {
-              const storageKey = 'dashboard.lowstock.seen'
-              const raw = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null
-              const seen: Record<string, number> = raw ? JSON.parse(raw) : {}
-              const now = Date.now()
-              const ttlMs = 24 * 60 * 60 * 1000 // 24h para no repetir en exceso
-              const newLow = lowStock.filter((i: any) => !seen[String(i.productId)] || (now - seen[String(i.productId)]) > ttlMs)
+            canInventory ? getTotalInventory() : Promise.resolve<any[]>([]),
+            canSales ? getMonthlySalesTotal() : Promise.resolve<{ total: number; growth: number | null } | null>(null),
+            canOrders ? getOrdersCount('PENDING') : Promise.resolve<{ count: number }>({ count: 0 }),
+            canOrders ? getRecentOrders(10) : Promise.resolve<any[]>([]),
+            canInventory ? getAllEntries() : Promise.resolve<any[]>([]),
+            canSales ? getRecentSales() : Promise.resolve<any[]>([]),
+            canInventory ? getLowStockItems() : Promise.resolve<any[]>([]),
+          ]);
 
-              // Incluir hasta 3 nuevas alertas individuales para visibilidad
-              list.push(
-                ...newLow.slice(0, 3).map((i: any) => ({
-                  id: `lowstock-${i.productId}-${now}`,
-                  type: 'alert' as const,
-                  description: `Sin stock: ${i.productName}`,
-                  createdAt: new Date().toISOString(),
-                  href: '/dashboard/inventory',
-                }))
-              )
+          const safeInventory = Array.isArray(inventoryData) ? inventoryData : [];
+          const safePendingCount =
+            pendingData && typeof (pendingData as any).count === 'number'
+              ? Number((pendingData as any).count)
+              : 0;
+          const safeRecentOrders = Array.isArray(recentOrders) ? recentOrders : [];
+          const safeEntries = Array.isArray(entries) ? entries : [];
+          const safeRecentSales = Array.isArray(recentSales) ? recentSales : [];
+          const safeLowStock = Array.isArray(lowStock) ? lowStock : [];
 
-              const remaining = lowStock.length - newLow.length
-              if (newLow.length === 0 && lowStock.length > 0) {
-                // Si no hay nuevas, mantener una sola entrada resumen
-                const first = lowStock[0]
-                list.push({
-                  id: 'lowstock-summary',
-                  type: 'alert',
-                  description: lowStock.length === 1
-                    ? `Sin stock: ${first.productName}`
-                    : `Sin stock: ${first.productName} y ${lowStock.length - 1} más`,
-                  createdAt: new Date().toISOString(),
-                  href: '/dashboard/inventory',
-                })
-              } else if (remaining > 0) {
-                // Hay más productos sin stock además de los nuevos mostrados
-                list.push({
-                  id: 'lowstock-remaining',
-                  type: 'alert',
-                  description: `Otros ${remaining} productos en stock bajo`,
-                  createdAt: new Date().toISOString(),
-                  href: '/dashboard/inventory',
-                })
+          setTotalInventory(safeInventory);
+          setMonthlySales(monthlySalesData);
+          setPendingOrders(safePendingCount);
+          setLowStockItems(safeLowStock);
+
+          const entryItems = safeEntries
+            .slice()
+            .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, 10);
+
+          const activities: ActivityItem[] = [
+            ...safeRecentOrders.map((o: any) => ({
+              id: o.id,
+              type: 'order',
+              description: `Nueva orden #${o.code}`,
+              createdAt: o.createdAt,
+              href: `/dashboard/orders/${o.id}`,
+            })),
+            ...safeRecentSales.map((s: any) => ({
+              id: s.id,
+              type: 'sale',
+              description: `Venta interna #${s.id}`,
+              createdAt: s.createdAt,
+              href: '/dashboard/sales',
+            })),
+            ...entryItems.map((e: any) => ({
+              id: e.id,
+              type: 'entry',
+              description: `Ingreso de inventario #${e.id}`,
+              createdAt: e.createdAt,
+              href: '/dashboard/entries',
+            })),
+            // Mostrar solo una alerta de stock para no llenar el feed
+            // Alertas de bajo stock: mostrar nuevas y colapsar repetidas
+            ...(() => {
+              const list: ActivityItem[] = [];
+              if (safeLowStock.length === 0) return list;
+              try {
+                const storageKey = 'dashboard.lowstock.seen';
+                const raw = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
+                const seen: Record<string, number> = raw ? JSON.parse(raw) : {};
+                const now = Date.now();
+                const ttlMs = 24 * 60 * 60 * 1000; // 24h para no repetir en exceso
+                const newLow = safeLowStock.filter((i: any) => !seen[String(i.productId)] || (now - seen[String(i.productId)]) > ttlMs);
+
+                // Incluir hasta 3 nuevas alertas individuales para visibilidad
+                list.push(
+                  ...newLow.slice(0, 3).map((i: any) => ({
+                    id: `lowstock-${i.productId}-${now}`,
+                    type: 'alert' as const,
+                    description: `Sin stock: ${i.productName}`,
+                    createdAt: new Date().toISOString(),
+                    href: '/dashboard/inventory',
+                  }))
+                );
+
+                const remaining = safeLowStock.length - newLow.length;
+                if (newLow.length === 0 && safeLowStock.length > 0) {
+                  // Si no hay nuevas, mantener una sola entrada resumen
+                  const first = safeLowStock[0];
+                  list.push({
+                    id: 'lowstock-summary',
+                    type: 'alert',
+                    description: safeLowStock.length === 1
+                      ? `Sin stock: ${first.productName}`
+                      : `Sin stock: ${first.productName} y ${safeLowStock.length - 1} más`,
+                    createdAt: new Date().toISOString(),
+                    href: '/dashboard/inventory',
+                  });
+                } else if (remaining > 0) {
+                  // Hay más productos sin stock además de los nuevos mostrados
+                  list.push({
+                    id: 'lowstock-remaining',
+                    type: 'alert',
+                    description: `Otros ${remaining} productos en stock bajo`,
+                    createdAt: new Date().toISOString(),
+                    href: '/dashboard/inventory',
+                  });
+                }
+
+                // Persistir vistos (solo los nuevos que mostramos) con timestamp
+                const updated = { ...seen };
+                newLow.forEach((i: any) => { updated[String(i.productId)] = now; });
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem(storageKey, JSON.stringify(updated));
+                }
+              } catch {
+                // si storage falla, no romper el feed
               }
+              return list;
+            })(),
+          ];
+          activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setRecentActivity(activities.slice(0, 10));
 
-              // Persistir vistos (solo los nuevos que mostramos) con timestamp
-              const updated = { ...seen }
-              newLow.forEach((i: any) => { updated[String(i.productId)] = now })
-              if (typeof window !== 'undefined') {
-                localStorage.setItem(storageKey, JSON.stringify(updated))
-              }
-            } catch {
-              // si storage falla, no romper el feed
-            }
-            return list
-          })(),
-        ];
-        activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setRecentActivity(activities.slice(0, 10));
       } catch (error: unknown) {
         if (!(await handleAuthError(error))) {
           if (error instanceof Error && error.message === 'Unauthorized') {
@@ -448,3 +469,13 @@ useEffect(() => {
     </div>
   )
 }
+
+
+
+
+
+
+
+
+
+

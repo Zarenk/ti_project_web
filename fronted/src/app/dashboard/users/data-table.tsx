@@ -21,8 +21,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DateRange } from "react-day-picker";
+
+import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { useDebounce } from "@/app/hooks/useDebounce";
 import { DataTablePagination } from "@/components/data-table-pagination";
 import type { DashboardUser } from "./users.api";
@@ -47,14 +52,58 @@ export function DataTable<TValue>({ columns, data }: DataTableProps<UserRow, TVa
   const [emailFilter, setEmailFilter] = React.useState("");
   const [roleFilter, setRoleFilter] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("");
+  const [selectedDateRange, setSelectedDateRange] = React.useState<DateRange | undefined>();
+  const [showRecentOnly, setShowRecentOnly] = React.useState(false);
 
   const debouncedUsername = useDebounce(usernameFilter, 400);
   const debouncedEmail = useDebounce(emailFilter, 400);
   const debouncedRole = useDebounce(roleFilter, 400);
   const debouncedStatus = useDebounce(statusFilter, 400);
 
+  const filteredData = React.useMemo(() => {
+    const hasDateRange = Boolean(selectedDateRange?.from && selectedDateRange?.to);
+    const recentThreshold = (() => {
+      if (!showRecentOnly) return null;
+      const now = new Date();
+      const recent = new Date(now);
+      recent.setDate(now.getDate() - 7);
+      return recent;
+    })();
+
+    return data.filter((user) => {
+      if (!showRecentOnly && !hasDateRange) {
+        return true;
+      }
+
+      if (!user.createdAt) {
+        return !showRecentOnly && !hasDateRange;
+      }
+
+      const createdAtDate = new Date(user.createdAt);
+
+      if (Number.isNaN(createdAtDate.getTime())) {
+        return !showRecentOnly && !hasDateRange;
+      }
+
+      if (recentThreshold && createdAtDate < recentThreshold) {
+        return false;
+      }
+
+      if (hasDateRange) {
+        const from = selectedDateRange?.from as Date;
+        const to = selectedDateRange?.to as Date;
+
+        if (createdAtDate < from || createdAtDate > to) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [data, selectedDateRange, showRecentOnly]);
+
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns,
     state: {
       sorting,
@@ -97,9 +146,21 @@ export function DataTable<TValue>({ columns, data }: DataTableProps<UserRow, TVa
   const isFiltered = React.useMemo(
     () =>
       Boolean(
-        debouncedUsername || debouncedEmail || debouncedRole || debouncedStatus,
+        debouncedUsername ||
+          debouncedEmail ||
+          debouncedRole ||
+          debouncedStatus ||
+          showRecentOnly ||
+          (selectedDateRange?.from && selectedDateRange?.to),
       ),
-    [debouncedEmail, debouncedRole, debouncedStatus, debouncedUsername],
+    [
+      debouncedEmail,
+      debouncedRole,
+      debouncedStatus,
+      debouncedUsername,
+      selectedDateRange,
+      showRecentOnly,
+    ],
   );
 
   const handleResetFilters = () => {
@@ -107,8 +168,14 @@ export function DataTable<TValue>({ columns, data }: DataTableProps<UserRow, TVa
     setEmailFilter("");
     setRoleFilter("");
     setStatusFilter("");
+    setSelectedDateRange(undefined);
+    setShowRecentOnly(false);
     table.resetColumnFilters();
   };
+
+  const handleDateSelect = React.useCallback((range: { from: Date; to: Date }) => {
+    setSelectedDateRange({ from: range.from, to: range.to });
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -133,6 +200,24 @@ export function DataTable<TValue>({ columns, data }: DataTableProps<UserRow, TVa
             placeholder="Filtrar por estado"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="recent-users-filter"
+              checked={showRecentOnly}
+              onCheckedChange={(value) => setShowRecentOnly(Boolean(value))}
+            />
+            <Label htmlFor="recent-users-filter" className="text-sm font-medium">
+              Mostrar usuarios recientes (últimos 7 días)
+            </Label>
+          </div>
+          <CalendarDatePicker
+            className="h-9 w-full lg:w-auto"
+            variant="outline"
+            date={selectedDateRange ?? { from: undefined, to: undefined }}
+            onDateSelect={handleDateSelect}
           />
         </div>
         {isFiltered && (

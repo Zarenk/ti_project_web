@@ -27,7 +27,7 @@ import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 
-@ModulePermission('catalog')
+@ModulePermission(['inventory', 'catalog'])
 @Controller('products')
 export class ProductsController {
   constructor(

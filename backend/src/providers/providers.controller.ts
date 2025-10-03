@@ -6,7 +6,7 @@ import { UpdateProviderDto } from './dto/update-provider.dto';
 import { Request } from 'express';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 
-@ModulePermission('purchases')
+@ModulePermission(['inventory', 'purchases'])
 @Controller('providers')
 export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
