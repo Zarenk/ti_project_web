@@ -2,8 +2,11 @@
   "name": "fronted",
   "version": "0.1.0",
   "private": true,
+  "engines": { "node": "20.x" },
+  "packageManager": "npm@10",
   "scripts": {
     "dev": "next dev",
+    "preinstall": "rm -rf node_modules/.cache || true",
     "prebuild": "rm -rf node_modules/.cache || true",
     "check-logos": "node ../scripts/run-check-logos.js",
     "build": "npm run check-logos || echo \"skip check-logos\" && next build",
