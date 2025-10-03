@@ -1,7 +1,5 @@
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
-
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { BACKEND_URL } from "@/lib/utils";
 
 interface InventoryApiEntryDetail {
   series?: { serial: string }[];
