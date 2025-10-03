@@ -2,19 +2,16 @@
   "name": "fronted",
   "version": "0.1.0",
   "private": true,
-
   "engines": { "node": "20.x" },
 
   "scripts": {
     "dev": "next dev",
-    "preinstall": "rm -rf node_modules/.cache || true",
-    "prebuild": "rm -rf node_modules/.cache || true",
     "check-logos": "node ../scripts/run-check-logos.js",
     "build": "npm run check-logos || echo \"skip check-logos\" && next build",
     "start": "next start -p $PORT",
     "lint": "next lint",
     "test": "vitest run",
-    "postinstall": "npm rebuild lightningcss --update-binary || true"
+    "postinstall": "npm rebuild lightningcss --update-binary || true && npm rebuild @next/swc-linux-x64-gnu || true"
   },
 
   "dependencies": {
@@ -102,7 +99,8 @@
   },
 
   "optionalDependencies": {
-    "@next/swc-linux-x64-gnu": "15.2.3"
+    "@next/swc-linux-x64-gnu": "15.2.3",
+    "lightningcss-linux-x64-gnu": "1.26.0"
   },
 
   "overrides": {
