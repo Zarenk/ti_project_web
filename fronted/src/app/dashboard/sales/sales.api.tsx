@@ -477,6 +477,31 @@ export async function getRecentSales(limit = 10) {
   return Array.isArray(data) ? data.slice(0, limit) : []
 }
 
+export async function deleteSale(id: number) {
+  const headers = await getAuthHeaders();
+  if (!('Authorization' in headers)) {
+    throw new Error('No se encontr� un token de autenticaci�n');
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/sales/${id}`, {
+    method: 'DELETE',
+    headers,
+  });
+
+  if (!response.ok) {
+    let message = 'Error al eliminar la venta';
+    try {
+      const errorData = await response.json();
+      if (errorData?.message) {
+        message = errorData.message;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
+  }
+}
+
 export async function getSaleById(id: number | string) {
   const headers = await getAuthHeaders()
   if (!('Authorization' in headers)) {
@@ -505,3 +530,10 @@ export async function getSalesTransactions(from?: string, to?: string) {
   if (!res.ok) throw new Error('Error al obtener las transacciones')
   return res.json()
 }
+
+
+
+
+
+
+

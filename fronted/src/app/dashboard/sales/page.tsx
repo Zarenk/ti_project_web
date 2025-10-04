@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { columns } from "./columns";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createSalesColumns, Sale } from "./columns";
 import { DataTable } from "./data-table";
 import { getSales } from "./sales.api";
 
 export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
 
 export default function Page() {
-  const [sales, setSales] = useState<any[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -28,6 +28,12 @@ export default function Page() {
     };
     fetchData();
   }, []);
+
+  const handleDeleted = useCallback((id: number) => {
+    setSales((prev) => prev.filter((sale) => sale.id !== id));
+  }, []);
+
+  const columns = useMemo(() => createSalesColumns(handleDeleted), [handleDeleted]);
 
   return (
     <>
