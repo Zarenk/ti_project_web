@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma, AuditAction } from '@prisma/client';
+import { Prisma, AuditAction, OrderStatus } from '@prisma/client';
 import { zonedTimeToUtc, utcToZonedTime, format as formatTz } from 'date-fns-tz'
 import { subDays, startOfDay, endOfDay } from 'date-fns'
 import { eachDayOfInterval } from 'date-fns';
@@ -190,6 +190,151 @@ export class SalesService {
     }
 
     return sale;
+  }
+
+  async deleteSale(id: number, actorId?: number) {
+    const { sale, deletedSale } = await this.prisma.$transaction(async (prismaTx) => {
+      const sale = await prismaTx.sales.findUnique({
+        where: { id },
+        include: {
+          user: { select: { id: true, username: true } },
+          store: { select: { id: true, name: true } },
+          client: { select: { id: true, name: true, type: true, typeNumber: true } },
+          salesDetails: {
+            include: {
+              entryDetail: {
+                include: {
+                  product: { select: { id: true, name: true } },
+                },
+              },
+              storeOnInventory: true,
+            },
+          },
+          payments: {
+            include: {
+              paymentMethod: { select: { id: true, name: true } },
+              cashTransaction: {
+                select: {
+                  id: true,
+                  cashRegisterId: true,
+                  amount: true,
+                },
+              },
+            },
+          },
+          shippingGuides: { select: { id: true } },
+          order: { select: { id: true } },
+        },
+      });
+
+      if (!sale) {
+        throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
+      }
+
+      for (const detail of sale.salesDetails) {
+        const inventoryRecord = await prismaTx.storeOnInventory.findUnique({
+          where: { id: detail.storeOnInventoryId },
+        });
+
+        if (!inventoryRecord) {
+          throw new NotFoundException(
+            `No se encontró el inventario para el producto ${detail.entryDetail.product.name} en la tienda asociada.`,
+          );
+        }
+
+        await prismaTx.storeOnInventory.update({
+          where: { id: inventoryRecord.id },
+          data: { stock: { increment: detail.quantity } },
+        });
+
+        await prismaTx.inventoryHistory.create({
+          data: {
+            inventoryId: inventoryRecord.inventoryId,
+            userId: actorId ?? sale.userId,
+            action: 'sale_deleted',
+            description: `Reversión de la venta ${sale.id} en ${sale.store.name}`,
+            stockChange: detail.quantity,
+            previousStock: inventoryRecord.stock,
+            newStock: inventoryRecord.stock + detail.quantity,
+          },
+        });
+
+        if (detail.series && detail.series.length > 0) {
+          await prismaTx.entryDetailSeries.updateMany({
+            where: { serial: { in: detail.series } },
+            data: { status: 'active' },
+          });
+        }
+      }
+
+      for (const payment of sale.payments) {
+        if (payment.cashTransaction) {
+          await prismaTx.cashTransactionPaymentMethod.deleteMany({
+            where: { cashTransactionId: payment.cashTransaction.id },
+          });
+
+          await prismaTx.cashRegister.update({
+            where: { id: payment.cashTransaction.cashRegisterId },
+            data: { currentBalance: { decrement: new Prisma.Decimal(payment.amount) } },
+          });
+
+          await prismaTx.cashTransaction.delete({ where: { id: payment.cashTransaction.id } });
+        }
+      }
+
+      await prismaTx.salePayment.deleteMany({ where: { salesId: sale.id } });
+
+      if (sale.shippingGuides.length > 0) {
+        await prismaTx.shippingGuide.updateMany({
+          where: { ventaId: sale.id },
+          data: { ventaId: null },
+        });
+      }
+
+      if (sale.order) {
+        await prismaTx.orders.update({
+          where: { id: sale.order.id },
+          data: { salesId: null, status: OrderStatus.PENDING },
+        });
+      }
+
+      await prismaTx.invoiceSales.deleteMany({ where: { salesId: sale.id } });
+
+      const deletedSale = await prismaTx.sales.delete({ where: { id: sale.id } });
+
+      return { sale, deletedSale };
+    });
+
+    const beforeData = {
+      id: sale.id,
+      total: sale.total,
+      store: sale.store?.name,
+      client: sale.client?.name,
+      details: sale.salesDetails.map((detail) => ({
+        productId: detail.productId,
+        productName: detail.entryDetail.product.name,
+        quantity: detail.quantity,
+        price: detail.price,
+        series: detail.series ?? [],
+      })),
+      payments: sale.payments.map((payment) => ({
+        id: payment.id,
+        method: payment.paymentMethod?.name,
+        amount: payment.amount,
+        currency: payment.currency,
+      })),
+    };
+
+    await this.activityService.log({
+      actorId: actorId ?? sale.userId,
+      entityType: 'Sale',
+      entityId: sale.id.toString(),
+      action: AuditAction.DELETED,
+      summary: `Venta ${sale.id} eliminada y stock revertido`,
+      diff: { before: beforeData } as any,
+    });
+
+    return deletedSale;
   }
 
   // Método para obtener las series vendidas en una venta específica

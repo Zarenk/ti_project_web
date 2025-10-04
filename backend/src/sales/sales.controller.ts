@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
   Query,
+  Delete,
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
@@ -136,5 +137,11 @@ export class SalesController {
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.salesService.findOne(id);
+  }
+
+  @Delete(':id')
+  async deleteSale(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    const userId = req?.user?.userId;
+    return this.salesService.deleteSale(id, userId);
   }
 }
