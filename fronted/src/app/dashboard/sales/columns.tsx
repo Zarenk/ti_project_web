@@ -82,7 +82,9 @@ export function createSalesColumns(
     {
       accessorKey: "createdAt",
       header: "Fecha",
-      cell: ({ row }) => <span>{format(new Date(row.original.createdAt), "dd/MM/yyyy")}</span>,
+      cell: ({ row }) => (
+        <span>{format(new Date(row.original.createdAt), "dd/MM/yyyy HH:mm")}</span>
+      ),
     },
     {
       accessorKey: "actions",

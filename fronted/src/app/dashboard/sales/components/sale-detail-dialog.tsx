@@ -13,6 +13,36 @@ import {
 } from "@/components/ui/dialog";
 import { Sale } from "../columns";
 
+const parseNumber = (value: unknown): number => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+};
+
+const getDetailTotal = (detail?: NonNullable<Sale["details"]>[number]): number => {
+  if (!detail) {
+    return 0;
+  }
+
+  const directTotal = detail.total ?? detail.subtotal;
+  if (typeof directTotal === "number" && Number.isFinite(directTotal)) {
+    return directTotal;
+  }
+
+  const quantity = parseNumber(detail.quantity);
+  const price = parseNumber(detail.price);
+  const computed = quantity * price;
+
+  return Number.isFinite(computed) ? computed : 0;
+};
+
 export type ViewSaleDetailHandler = (sale: Sale) => void;
 
 export interface SaleDetailDialogProps {
@@ -95,6 +125,8 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
           })
           .filter((value): value is string => Boolean(value)) ?? [];
 
+      const detailTotal = getDetailTotal(detail);
+
       return (
         <tr key={detail.id ?? `${productName}-${index}`} className="border-t">
           <td className="px-4 py-2">
@@ -107,12 +139,20 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
           </td>
           <td className="px-4 py-2">{detail.quantity ?? "—"}</td>
           <td className="px-4 py-2">{formatCurrency(detail.price)}</td>
-          <td className="px-4 py-2">{formatCurrency(detail.total ?? detail.subtotal)}</td>
+          <td className="px-4 py-2">{formatCurrency(detailTotal)}</td>
           <td className="px-4 py-2">{seriesList.length > 0 ? seriesList.join(", ") : "—"}</td>
         </tr>
       );
     });
   }, [sale?.details, currencyFormatter]);
+
+  const detailsTotal = useMemo(() => {
+    if (!sale?.details || sale.details.length === 0) {
+      return 0;
+    }
+
+    return sale.details.reduce((acc, detail) => acc + getDetailTotal(detail), 0);
+  }, [sale?.details]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -175,12 +215,15 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
                         <th className="px-4 py-2 font-medium">Producto</th>
                         <th className="px-4 py-2 font-medium">Cantidad</th>
                         <th className="px-4 py-2 font-medium">Precio</th>
-                        <th className="px-4 py-2 font-medium">Subtotal</th>
+                        <th className="px-4 py-2 font-medium">Total</th>
                         <th className="px-4 py-2 font-medium">Series</th>
                       </tr>
                     </thead>
                     <tbody>{detailRows}</tbody>
                   </table>
+                </div>
+                <div className="flex justify-end rounded-b-md border border-t-0 px-4 py-2 text-sm font-semibold">
+                  <span>Total de la salida: {formatCurrency(detailsTotal)}</span>
                 </div>
               </div>
             )}
