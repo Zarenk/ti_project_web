@@ -298,18 +298,24 @@ export default function SettingsPage() {
   } = useSiteSettings();
 
   const {
-    register,
-    handleSubmit,
-    watch,
-    control,
-    setValue,
-    reset,
-    formState: { errors },
+  register,
+  handleSubmit,
+  watch,
+  control,
+  setValue,
+  reset,
+  formState: { errors },
   } = useForm<SettingsFormData>({
     resolver: zodResolver(siteSettingsSchema),
-    values: settings,
+    defaultValues: persistedSettings, // ← desacoplado del “preview”
     mode: "onBlur",
+    shouldUnregister: false,          // ← conserva valores en campos condicionales
   });
+
+  // Mantén el form alineado SOLO cuando cambie lo persistido (no en cada preview)
+  useEffect(() => {
+    reset(persistedSettings);
+  }, [persistedSettings, reset]);
 
   const watchedValues = useWatch<SettingsFormData>({ control });
   const skipPreviewUpdateRef = useRef(false);
