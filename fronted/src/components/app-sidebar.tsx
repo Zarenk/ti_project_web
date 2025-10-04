@@ -282,6 +282,11 @@ const data: SidebarData = {
           permission: "sales",
         },
         {
+          title: "Ver Ventas Realizadas",
+          url: "/dashboard/sales",
+          permission: "sales",
+        },
+        {
           title: "Ver Historial de Ventas",
           url: "/dashboard/sales/salesdashboard",
           permission: "sales",

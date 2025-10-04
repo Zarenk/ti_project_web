@@ -110,66 +110,60 @@ export function SalesTable({ dateRange }: Props) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            <AnimatePresence>
-              {displayedSales.map((sale) => (
-                <motion.tr
-                  key={sale.id}
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={{ duration: 0.2 }}
-                  className="hover:bg-muted transition cursor-pointer"
-                  onClick={() => setSelectedSale(sale)}
-                >
-                  <TableCell className="font-semibold">{sale.id}</TableCell>
-                  <TableCell className="hidden sm:table-cell truncate">
-                    {sale.source === "WEB" ? "Venta Online" : sale.user}
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell truncate">{sale.store}</TableCell>
-                  <TableCell className="hidden sm:table-cell truncate">{sale.client}</TableCell>
-                  <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                    {sale.invoice ? (
-                      <>
-                        <span className="font-medium block truncate">{sale.invoice.tipoComprobante}</span>
-                        <span className="block">{sale.invoice.serie}-{sale.invoice.nroCorrelativo}</span>
-                      </>
-                    ) : (
-                      <span className="italic">Sin comprobante</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-green-600 font-medium whitespace-nowrap">
-                    S/ {sale.total.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
-                    {new Date(sale.createdAt).toLocaleString("es-PE", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit"
-                    })}
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <div className="flex flex-wrap gap-1 max-w-full">
-                      {sale.products.map((p: any, i: number) => (
-                        <Badge
-                          key={i}
-                          className="flex flex-col items-start gap-0 text-xs font-normal max-w-[160px] whitespace-normal"
-                          variant="secondary"
-                        >
-                          <span className="truncate w-full">{p.name} × {p.quantity}</span>
-                          {Array.isArray(p.series) && p.series.length > 0 && (
-                            <span className="text-[10px] text-muted-foreground">
-                              Serie{p.series.length > 1 ? "s" : ""}: {p.series.join(", ")}
-                            </span>
-                          )}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                </motion.tr>
-              ))}
-            </AnimatePresence>
+            {displayedSales.map((sale) => (
+              <TableRow
+                key={sale.id}
+                className="hover:bg-muted transition cursor-pointer"
+                onClick={() => setSelectedSale(sale)}
+              >
+                <TableCell className="font-semibold">{sale.id}</TableCell>
+                <TableCell className="hidden sm:table-cell truncate">
+                  {sale.source === "WEB" ? "Venta Online" : sale.user}
+                </TableCell>
+                <TableCell className="hidden sm:table-cell truncate">{sale.store}</TableCell>
+                <TableCell className="hidden sm:table-cell truncate">{sale.client}</TableCell>
+                <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                  {sale.invoice ? (
+                    <>
+                      <span className="font-medium block truncate">{sale.invoice.tipoComprobante}</span>
+                      <span className="block">{sale.invoice.serie}-{sale.invoice.nroCorrelativo}</span>
+                    </>
+                  ) : (
+                    <span className="italic">Sin comprobante</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-green-600 font-medium whitespace-nowrap">
+                  S/ {sale.total.toFixed(2)}
+                </TableCell>
+                <TableCell className="text-muted-foreground whitespace-nowrap">
+                  {new Date(sale.createdAt).toLocaleString("es-PE", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <div className="flex flex-wrap gap-1 max-w-full">
+                    {sale.products.map((p: any, i: number) => (
+                      <Badge
+                        key={i}
+                        className="flex flex-col items-start gap-0 text-xs font-normal max-w-[160px] whitespace-normal"
+                        variant="secondary"
+                      >
+                        <span className="truncate w-full">{p.name} - {p.quantity}</span>
+                        {Array.isArray(p.series) && p.series.length > 0 && (
+                          <span className="text-[10px] text-muted-foreground">
+                            Serie{p.series.length > 1 ? "s" : ""}: {p.series.join(", ")}
+                          </span>
+                        )}
+                      </Badge>
+                    ))}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </div>

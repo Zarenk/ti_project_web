@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { motion, AnimatePresence } from "framer-motion";
 import { DateRange } from "react-day-picker";
 import { getTopProducts } from "../sales.api";
 import { Progress } from "@/components/progress";
@@ -61,39 +60,33 @@ export function TopProductsTable({ dateRange }: Props) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          <AnimatePresence>
-            {data.map((p) => {
-              const percent = totalUnits > 0 ? (p.sales / totalUnits) * 100 : 0;
-              return (
-                <motion.tr
-                  key={p.productId}
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={{ duration: 0.2 }}
-                  className="hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors"
-                >
-                  <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex flex-col items-end gap-1">
-                      <span>{p.sales}</span>
-                      <Progress value={percent} className="w-24" />
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">S/ {p.revenue.toFixed(2)}</TableCell>
-                  <TableCell className="text-right whitespace-nowrap">
-                    {new Date(p.lastSale).toLocaleString("es-PE", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </TableCell>
-                </motion.tr>
-              );
-            })}
-          </AnimatePresence>
+          {data.map((p) => {
+            const percent = totalUnits > 0 ? (p.sales / totalUnits) * 100 : 0;
+            return (
+              <TableRow
+                key={p.productId}
+                className="hover:bg-muted/50 border-b transition-colors"
+              >
+                <TableCell className="font-medium">{p.name}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex flex-col items-end gap-1">
+                    <span>{p.sales}</span>
+                    <Progress value={percent} className="w-24" />
+                  </div>
+                </TableCell>
+                <TableCell className="text-right">S/ {p.revenue.toFixed(2)}</TableCell>
+                <TableCell className="text-right whitespace-nowrap">
+                  {new Date(p.lastSale).toLocaleString("es-PE", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
