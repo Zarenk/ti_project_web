@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { z } from 'zod'
-import { JSX, useEffect, useState } from 'react'
+import { JSX, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Barcode, CalendarIcon, Check, ChevronsUpDown, Plus, Save, X } from 'lucide-react'
@@ -192,10 +192,57 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   // Estados para agregar un producto al datatable
   const [selectedProducts, setSelectedProducts] = useState<
     { id: number; name: string; price: number; quantity: number; category_name: string, series?: string[], newSeries?: string }[]
-    >([]);
+  >([]);
   const [currentProduct, setCurrentProduct] = useState<{ id: number; name: string; price: number; categoryId: number; category_name: string; series?: string[] } | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
   const [stock, setStock] = useState<number>(0);
+
+  const totalAmount = useMemo(() => {
+    return selectedProducts.reduce((sum, product) => {
+      const price = typeof product.price === 'number' ? product.price : 0;
+      const qty = typeof product.quantity === 'number' ? product.quantity : 0;
+      return sum + price * qty;
+    }, 0);
+  }, [selectedProducts]);
+
+  const normalizedCurrency = (currency ?? "PEN") as "PEN" | "USD" | "EUR";
+
+  const totalAmountInWords = useMemo(() => {
+    if (selectedProducts.length === 0) {
+      return '';
+    }
+
+    const roundedTotal = Math.round(totalAmount * 100) / 100;
+    const integerPart = Math.floor(roundedTotal);
+    const cents = Math.round((roundedTotal % 1) * 100)
+      .toString()
+      .padStart(2, '0');
+
+    const currencyLabels: Record<string, { singular: string; plural: string }> = {
+      PEN: { singular: 'SOL', plural: 'SOLES' },
+      USD: { singular: 'DÓLAR AMERICANO', plural: 'DÓLARES AMERICANOS' },
+      EUR: { singular: 'EURO', plural: 'EUROS' },
+    };
+
+    const currencyLabel = currencyLabels[normalizedCurrency] ?? {
+      singular: 'MONEDA',
+      plural: 'MONEDAS',
+    };
+
+    const currencyText = integerPart === 1 ? currencyLabel.singular : currencyLabel.plural;
+
+    const literal = numeroALetrasCustom(roundedTotal, normalizedCurrency)
+      .replace('IMPORTE EN LETRAS:', '')
+      .trim();
+
+    const [amountWords] = literal.split(` ${currencyText} CON `);
+
+    if (!amountWords) {
+      return `SON ${literal}`;
+    }
+
+    return `SON ${amountWords} CON ${cents}/100 ${currencyText}`;
+  }, [normalizedCurrency, selectedProducts.length, totalAmount]);
 
   // VARIABLES DE CALENDAR
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
@@ -1275,99 +1322,119 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                             <TableHead className="text-left w-[100px] max-w-[100px] sm:w-[200px] sm:max-w-[200px] truncate whitespace-nowrap overflow-hidden">Nombre</TableHead>
                             <TableHead className="text-left hidden sm:table-cell w-[100px] truncate">Categoria</TableHead>
                             <TableHead className="text-left md:table-cell w-[100px] truncate">Cantidad</TableHead>
-                            <TableHead className="text-left md:table-cell w-[100px] truncate">Precio</TableHead>    
-                            <TableHead className="text-left hidden sm:table-cell w-[100px] truncate">Series</TableHead>                    
+                            <TableHead className="text-left md:table-cell w-[100px] truncate">Precio</TableHead>
+                            <TableHead className="text-left w-[120px] truncate">Total</TableHead>
+                            <TableHead className="text-left hidden sm:table-cell w-[100px] truncate">Series</TableHead>                  
                             <TableHead className="text-left w-[100px] truncate">Acciones</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {selectedProducts.map((product, index) => (
-                            <TableRow
-                            key={product.id}
-                            className="cursor-pointer md:cursor-default"
-                            onClick={() => {
-                              if (window.innerWidth < 768) {
-                                setSelectedProductDetail(product); // solo para móviles
-                              }
-                            }}
-                            >
-                              <TableCell className="font-semibold w-[100px] max-w-[100px] sm:w-[200px] sm:max-w-[200px] truncate whitespace-nowrap overflow-hidden">{product.name}</TableCell>
-                              <TableCell className="hidden sm:table-cell truncate">{product.category_name}</TableCell>
-                              <TableCell className="truncate">
-                                <Input
-                                  type="number"
-                                  value={product.quantity}
-                                  min={1}
-                                  onChange={(e) => {
-                                    const updatedQuantity = parseInt(e.target.value, 10);
-                                    if (updatedQuantity > 0) {
-                                      setSelectedProducts((prev) =>
-                                        prev.map((p, i) =>
-                                          i === index ? { ...p, quantity: updatedQuantity } : p
-                                        )
-                                      );
-                                    }
-                                  }}
-                                  className="w-full"
-                                />
-                              </TableCell>
-                              <TableCell className="truncate">
-                              <Input
-                              type="number"
-                              value={product.price}
-                              min={0}
-                              step="0.01"
-                              onChange={(e) => {
-                                const updatedPrice = parseFloat(e.target.value);
-                                if (updatedPrice >= 0) {
-                                  setSelectedProducts((prev) =>
-                                    prev.map((p, i) =>
-                                      i === index ? { ...p, price: updatedPrice } : p
-                                    )
-                                  );
-                                }
-                              }}
-                              className="w-full"
-                              />
-                              </TableCell>
-                              <TableCell className="hidden md:table-cell text-xs">
-                                <div
-                                  className="cursor-pointer text-blue-500 underline"
-                                  onClick={() => {
-                                    if (product.series && product.series.length > 0) {
-                                      setCurrentSeries(product.series); // Establece las series del producto actual
-                                      setIsSeriesModalOpen(true); // Abre el modal
-                                    } else {
-                                      toast.error("Este producto no tiene series asociadas.");
-                                    }
-                                  }}
+                          {selectedProducts.map((product, index) => {
+                            const rowTotal = Number(product.price ?? 0) * Number(product.quantity ?? 0);
+
+                            return (
+                              <TableRow
+                                key={product.id}
+                                className="cursor-pointer md:cursor-default"
+                                onClick={() => {
+                                  if (window.innerWidth < 768) {
+                                    setSelectedProductDetail(product); // solo para móviles
+                                  }
+                                }}
+                              >
+                                <TableCell className="font-semibold w-[100px] max-w-[100px] sm:w-[200px] sm:max-w-[200px] truncate whitespace-nowrap overflow-hidden">{product.name}</TableCell>
+                                <TableCell className="hidden sm:table-cell truncate">{product.category_name}</TableCell>
+                                <TableCell className="truncate">
+                                  <Input
+                                    type="number"
+                                    value={product.quantity}
+                                    min={1}
+                                    onChange={(e) => {
+                                      const updatedQuantity = parseInt(e.target.value, 10);
+                                      if (updatedQuantity > 0) {
+                                        setSelectedProducts((prev) =>
+                                          prev.map((p, i) =>
+                                            i === index ? { ...p, quantity: updatedQuantity } : p
+                                          )
+                                        );
+                                      }
+                                    }}
+                                    className="w-full"
+                                  />
+                                </TableCell>
+                                <TableCell className="truncate">
+                                  <Input
+                                    type="number"
+                                    value={product.price}
+                                    min={0}
+                                    step="0.01"
+                                    onChange={(e) => {
+                                      const updatedPrice = parseFloat(e.target.value);
+                                      if (updatedPrice >= 0) {
+                                        setSelectedProducts((prev) =>
+                                          prev.map((p, i) =>
+                                            i === index ? { ...p, price: updatedPrice } : p
+                                          )
+                                        );
+                                      }
+                                    }}
+                                    className="w-full"
+                                  />
+                                </TableCell>
+                                <TableCell className="truncate">
+                                  S/ {rowTotal.toFixed(2)}
+                                </TableCell>
+                                <TableCell className="hidden md:table-cell text-xs">
+                                  <div
+                                    className="cursor-pointer text-blue-500 underline"
+                                    onClick={() => {
+                                      if (product.series && product.series.length > 0) {
+                                        setCurrentSeries(product.series); // Establece las series del producto actual
+                                        setIsSeriesModalOpen(true); // Abre el modal
+                                      } else {
+                                        toast.error("Este producto no tiene series asociadas.");
+                                      }
+                                    }}
                                   >
-                                  {product.series && product.series.length > 0
-                                    ? `${product.series.length} series`
-                                    : "Sin series"}
-                                </div>
-                              </TableCell>
-                              <SeriesModal
-                                isOpen={isSeriesModalOpen}
-                                onClose={() => setIsSeriesModalOpen(false)}
-                                series={currentSeries}
-                              />                                 
+                                    {product.series && product.series.length > 0
+                                      ? `${product.series.length} series`
+                                      : "Sin series"}
+                                  </div>
+                                </TableCell>
+                                <SeriesModal
+                                  isOpen={isSeriesModalOpen}
+                                  onClose={() => setIsSeriesModalOpen(false)}
+                                  series={currentSeries}
+                                />
                               <TableCell className="">
-                                <Button
-                                  variant="outline"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    removeProduct(product.id)
-                                  }}
-                                >
-                                <X className="w-4 h-4" color="red"/>
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                                  <Button
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeProduct(product.id)
+                                    }}
+                                  >
+                                  <X className="w-4 h-4" color="red"/>
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
-                      </Table>     
-                    </div>      
+                      </Table>
+                    </div>
+
+                    {selectedProducts.length > 0 && totalAmountInWords && (
+                      <div className="mt-4 w-full rounded-md border border-primary/20 bg-primary/5 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary">
+                          Monto Total: {totalAmountInWords}
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-muted-foreground">
+                          Total: {normalizedCurrency === 'USD' ? '$' : 'S/.'}{' '}
+                          {totalAmount.toFixed(2)}
+                        </p>
+                      </div>
+                    )}   
 
                     {selectedProductDetail && (
                       <ProductDetailModal

@@ -4,7 +4,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getPaymentMethods } from "../sales.api";
 import { X, Banknote, Landmark } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -14,14 +14,8 @@ type SelectedPayment = {
   currency: string;
 };
 
-type TempPayment = SelectedPayment & {
-  uid: string;
-};
-
-type PaymentMethod = {
-  id: number;
-  name: string;
-};
+type TempPayment = SelectedPayment & { uid: string; };
+type PaymentMethod = { id: number; name: string; };
 
 export function PaymentMethodsModal({
   value,
@@ -38,9 +32,10 @@ export function PaymentMethodsModal({
   const [tempPayments, setTempPayments] = useState<TempPayment[]>([]);
   const [open, setOpen] = useState(false);
 
-  // refs para auto-scroll
+  // refs
   const listRef = useRef<HTMLDivElement>(null);
-  const prevLenRef = useRef(0);
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const lastAddedUidRef = useRef<string | null>(null);
 
   const generateUid = () =>
     typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -56,69 +51,55 @@ export function PaymentMethodsModal({
     { id: -6, name: "OTRO MEDIO DE PAGO" },
   ];
 
-  // Abrir forzado desde el padre
+  // Abrir forzado
   useEffect(() => {
     if (forceOpen) setOpen(true);
   }, [forceOpen]);
 
-  // Cargar métodos y unificar por nombre (evitar duplicados)
+  // Cargar métodos y unificar por nombre
   useEffect(() => {
-    async function fetchMethods() {
+    (async () => {
       try {
         const methodsFromBackend = (await getPaymentMethods()) ?? [];
         const combined = [...defaultPaymentMethods, ...methodsFromBackend];
-
-        const uniqueMethodsMap = new Map<string, PaymentMethod>();
-        for (const method of combined) {
-          if (!uniqueMethodsMap.has(method.name)) uniqueMethodsMap.set(method.name, method);
-        }
-        setPaymentMethods(Array.from(uniqueMethodsMap.values()));
+        const unique = Array.from(
+          new Map(combined.map(m => [m.name, m])).values()
+        );
+        setPaymentMethods(unique);
       } catch {
         setPaymentMethods(defaultPaymentMethods);
         toast.error("No se pudieron cargar los métodos de pago. Usando lista local.");
       }
-    }
-    fetchMethods();
+    })();
   }, []);
 
   // Copiar valor existente al abrir
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
     if (isOpen) {
-      setTempPayments(
-        (value ?? []).map((payment) => ({
-          ...payment,
-          uid: generateUid(),
-        })),
-      );
+      setTempPayments((value ?? []).map(p => ({ ...p, uid: generateUid() })));
     }
   };
 
-  // Auto-scroll cuando se agrega un nuevo ítem (evita que el último quede oculto)
+  // Auto-scroll al ítem recién agregado
   useEffect(() => {
-    if (!listRef.current) return;
-    if (tempPayments.length > prevLenRef.current) {
-      requestAnimationFrame(() => {
-        listRef.current?.scrollTo({
-          top: listRef.current.scrollHeight,
-          behavior: "smooth",
-        });
-      });
+    if (!lastAddedUidRef.current) return;
+    const el = itemRefs.current[lastAddedUidRef.current];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } else if (listRef.current) {
+      listRef.current.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
     }
-    prevLenRef.current = tempPayments.length;
+    lastAddedUidRef.current = null;
   }, [tempPayments.length]);
 
   const totalProductos = useMemo(
-    () =>
-      selectedProducts.reduce((sum, product) => {
-        const subtotal = (product.price || 0) * (product.quantity || 0);
-        return sum + subtotal;
-      }, 0),
-    [selectedProducts],
+    () => selectedProducts.reduce((sum, p) => sum + (p.price || 0) * (p.quantity || 0), 0),
+    [selectedProducts]
   );
 
   const handleAddPayment = () => {
-    setTempPayments((prev) => {
+    setTempPayments(prev => {
       if (prev.length >= 3) {
         toast.warning("Solo se pueden agregar hasta 3 métodos de pago.");
         return prev;
@@ -128,30 +109,30 @@ export function PaymentMethodsModal({
         return prev;
       }
 
-      const firstPaymentMethod = paymentMethods[0];
-      const newPayments = [...prev];
+      const first = paymentMethods[0];
+      const uid = generateUid();
+      lastAddedUidRef.current = uid;
 
-      if (newPayments.length === 0) {
-        newPayments.push({
-          uid: generateUid(),
-          paymentMethodId: firstPaymentMethod?.id ?? null,
-          amount: Number(totalProductos.toFixed(2)),
-          currency: "PEN",
-        });
-      } else {
-        newPayments.push({
-          uid: generateUid(),
-          paymentMethodId: firstPaymentMethod?.id ?? null,
-          amount: 0,
-          currency: "PEN",
-        });
-      }
-      return newPayments;
+      const next: TempPayment = prev.length === 0
+        ? {
+            uid,
+            paymentMethodId: first?.id ?? null,
+            amount: Number(totalProductos.toFixed(2)),
+            currency: "PEN",
+          }
+        : {
+            uid,
+            paymentMethodId: first?.id ?? null,
+            amount: 0,
+            currency: "PEN",
+          };
+
+      return [...prev, next];
     });
   };
 
   const handleUpdatePayment = <K extends keyof SelectedPayment>(index: number, field: K, val: SelectedPayment[K]) => {
-    setTempPayments((prev) => {
+    setTempPayments(prev => {
       const clone = [...prev];
       clone[index] = { ...clone[index], [field]: val };
       return clone;
@@ -159,11 +140,15 @@ export function PaymentMethodsModal({
   };
 
   const handleRemovePayment = (index: number) => {
-    setTempPayments((prev) => prev.filter((_, i) => i !== index));
+    setTempPayments(prev => {
+      const uid = prev[index]?.uid;
+      if (uid) delete itemRefs.current[uid];
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleSave = () => {
-    onChange(tempPayments.map(({ uid, ...payment }) => payment));
+    onChange(tempPayments.map(({ uid, ...p }) => p));
     setOpen(false);
     toast.success("Los métodos han sido guardados correctamente");
   };
@@ -194,97 +179,57 @@ export function PaymentMethodsModal({
         <div className="space-y-4">
           <div
             ref={listRef}
-            className="space-y-2 max-h-[55vh] overflow-y-auto pr-2 pb-16 overscroll-contain"
+            className="space-y-2 max-h-[55vh] overflow-y-auto pr-2 pb-16"
           >
-            <AnimatePresence initial={false} mode="popLayout">
-              {tempPayments.map((payment, index) => (
-                <motion.div
-                  key={payment.uid}
-                  layout="position"
-                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="flex flex-col sm:flex-row gap-2 sm:items-center"
-                >
-                  {/* --- SOLO PARA PANTALLAS PEQUEÑAS --- */}
-                  <div className="flex sm:hidden gap-2">
-                    <Select
-                      value={payment.paymentMethodId !== null ? payment.paymentMethodId.toString() : ""}
-                      onValueChange={(value: any) => handleUpdatePayment(index, "paymentMethodId", Number(value))}
-                    >
-                      <SelectTrigger className="w-[160px]">
-                        <SelectValue placeholder="Método" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {paymentMethods.map((method) => (
-                          <SelectItem key={method.id} value={method.id.toString()}>
-                            <div className="flex items-center">
-                              {getIcon(method.name)}
-                              {method.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+            {tempPayments.map((payment, index) => (
+              <motion.div
+                key={payment.uid}
+                ref={(el) => { itemRefs.current[payment.uid] = el; }}
+                layout
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.18 }}
+                className="min-h-[44px] rounded-md"
+              >
+                {/* Layout ÚNICO y responsivo (sin duplicar árbol) */}
+                <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center">
+                  <Select
+                    value={payment.paymentMethodId !== null ? String(payment.paymentMethodId) : ""}
+                    onValueChange={(val: string) => handleUpdatePayment(index, "paymentMethodId", Number(val))}
+                  >
+                    <SelectTrigger className="w-[160px] sm:w-[200px]">
+                      <SelectValue placeholder="Método" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {paymentMethods.map((method) => (
+                        <SelectItem key={method.id} value={String(method.id)}>
+                          <div className="flex items-center">
+                            {getIcon(method.name)}
+                            {method.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                    <input
-                      type="number"
-                      placeholder="Monto"
-                      step="0.01"
-                      min={0.0}
-                      max={99999999.99}
-                      value={payment.amount === 0 ? "" : payment.amount.toString()}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const parsed = parseFloat(val);
-                        handleUpdatePayment(index, "amount", val === "" || isNaN(parsed) ? 0 : parsed);
-                      }}
-                      className="border rounded px-2 py-1 w-[100px]"
-                    />
-                  </div>
+                  <input
+                    type="number"
+                    placeholder="Monto"
+                    step="0.01"
+                    min={0}
+                    max={99999999.99}
+                    value={payment.amount === 0 ? "" : String(payment.amount)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const parsed = parseFloat(val);
+                      handleUpdatePayment(index, "amount", val === "" || Number.isNaN(parsed) ? 0 : parsed);
+                    }}
+                    className="border rounded px-2 py-1 w-[110px]"
+                  />
 
-                  {/* --- SOLO PARA PANTALLAS MEDIANAS EN ADELANTE --- */}
-                  <div className="hidden sm:flex gap-2 items-center">
-                    <Select
-                      value={payment.paymentMethodId !== null ? payment.paymentMethodId.toString() : ""}
-                      onValueChange={(value: any) => handleUpdatePayment(index, "paymentMethodId", Number(value))}
-                    >
-                      <SelectTrigger className="w-[200px]">
-                        <SelectValue placeholder="Método" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {paymentMethods.map((method) => (
-                          <SelectItem key={method.id} value={method.id.toString()}>
-                            <div className="flex items-center">
-                              {getIcon(method.name)}
-                              {method.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <input
-                      type="number"
-                      placeholder="Monto"
-                      step="0.01"
-                      min={0.0}
-                      max={99999999.99}
-                      value={payment.amount === 0 ? "" : payment.amount.toString()}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const parsed = parseFloat(val);
-                        handleUpdatePayment(index, "amount", val === "" || isNaN(parsed) ? 0 : parsed);
-                      }}
-                      className="border rounded px-2 py-1 w-[100px]"
-                    />
-                  </div>
-
-                  {/* Común para todas las pantallas */}
                   <Select
                     value={payment.currency ?? ""}
-                    onValueChange={(value: any) => handleUpdatePayment(index, "currency", value)}
+                    onValueChange={(val: string) => handleUpdatePayment(index, "currency", val)}
                   >
                     <SelectTrigger className="w-[100px]">
                       <SelectValue />
@@ -299,13 +244,14 @@ export function PaymentMethodsModal({
                     variant="ghost"
                     size="icon"
                     onClick={() => handleRemovePayment(index)}
-                    className="text-red-500 hover:text-red-700"
+                    className="text-red-500 hover:text-red-700 ml-auto"
+                    title="Quitar método"
                   >
                     <X className="h-4 w-4" />
                   </Button>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                </div>
+              </motion.div>
+            ))}
           </div>
 
           <Button

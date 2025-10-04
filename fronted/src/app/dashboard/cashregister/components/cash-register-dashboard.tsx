@@ -458,11 +458,14 @@ export default function CashRegisterDashboard() {
       if (cancelled) return;
 
       const flattenedTransactions = responses.flat();
-      const transactionsById = new Map<number, any>();
+      const transactionsById = new Map<string, any>();
 
       flattenedTransactions.forEach((transaction) => {
-        if (transaction && typeof transaction.id === "number" && !transactionsById.has(transaction.id)) {
-          transactionsById.set(transaction.id, transaction);
+        if (!transaction) return;
+
+        const transactionId = String(transaction.id);
+        if (!transactionsById.has(transactionId)) {
+          transactionsById.set(transactionId, transaction);
         }
       });
 

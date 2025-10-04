@@ -19,11 +19,13 @@ import { DataTablePagination } from "@/components/data-table-pagination";
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[]
     data: TData[]
+    onRowClick?: (row: TData) => void
   }
    
   export function DataTable<TData, TValue>({
     columns,
     data,
+    onRowClick,
   }: DataTableProps<TData, TValue>) {
 
     // ESTADO PARA MANEJAR FILTROS DE LA COLUMNA
@@ -123,6 +125,15 @@ return (
                 <TableRow
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
+                    className={onRowClick ? "cursor-pointer transition-colors hover:bg-muted/50" : undefined}
+                    onClick={(event) => {
+                      if (!onRowClick) return
+                      const target = event.target as HTMLElement
+                      if (target.closest('button, a, input, [data-row-click-ignore]')) {
+                        return
+                      }
+                      onRowClick(row.original)
+                    }}
                 >
                     {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
