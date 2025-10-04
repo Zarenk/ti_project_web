@@ -691,6 +691,11 @@ export class InventoryService {
   }
 
   async processExcelData(data: any[], storeId: number, userId: number, providerId: number | null) {
+    
+    const parsedUserId = Number(userId);
+    if (!Number.isInteger(parsedUserId)) {
+      throw new Error('El usuario responsable es obligatorio para importar el Excel');
+    }
     const duplicatedSeriesGlobal: string[] = []
     const duplicatedSeriesLocal: string[] = []
     const seenInExcel = new Set<string>()
