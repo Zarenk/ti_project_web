@@ -728,15 +728,14 @@ export default function SettingsPage() {
 
           <main>
             <form id="settings-form" onSubmit={handleSubmit(handleSave)} className="space-y-6">
-              <AnimatePresence initial={false} mode="sync" presenceAffectsLayout={false}>
+              <AnimatePresence mode="wait" initial={false}>
                 <motion.div
-                  key={activeSection}
-                  layout                 // 👈 mantiene el espacio durante las transiciones
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  transition={{ duration: 0.2 }}
-                >
+                    key={activeSection}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.2 }}
+                  >
                   {activeSection === "company" && (
                     <CompanySection register={register} errors={errors} control={control} />
                   )}
