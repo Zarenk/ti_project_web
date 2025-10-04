@@ -49,7 +49,10 @@ export function ProductForm({
     })
       .min(3, "El nombre del producto debe tener al menos 3 caracteres")
       .max(200, "El nombre del producto no puede tener más de 200 caracteres")
-      .regex(/^[a-zA-Z0-9\s]+$/, "El nombre solo puede contener letras, números y espacios"),
+      .regex(
+        /^[\p{L}0-9\s]+$/u,
+        "El nombre solo puede contener letras, números y espacios",
+      ),
     description: z.string({
     }),
     brand: z.string().optional(),
