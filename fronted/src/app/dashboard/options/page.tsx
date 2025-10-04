@@ -363,7 +363,7 @@ export default function SettingsPage() {
 
     return !deepEqual(previewValues, persistedSettingsForPreview);
   }, [persistedSettingsForPreview, previewValues]);
-  
+
   useEffect(() => {
     if (!previewValues || !currentSettingsForPreview) {
       return;
@@ -722,12 +722,13 @@ export default function SettingsPage() {
 
           <main>
             <form id="settings-form" onSubmit={handleSubmit(handleSave)} className="space-y-6">
-              <AnimatePresence mode="wait">
+              <AnimatePresence initial={false} mode="sync" presenceAffectsLayout={false}>
                 <motion.div
                   key={activeSection}
-                  initial={{ opacity: 0, y: 20 }}
+                  layout                 // 👈 mantiene el espacio durante las transiciones
+                  initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
+                  exit={{ opacity: 0, y: -12 }}
                   transition={{ duration: 0.2 }}
                 >
                   {activeSection === "company" && (

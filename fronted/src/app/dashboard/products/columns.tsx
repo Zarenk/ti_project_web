@@ -23,6 +23,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
+type ProductFeature = {
+  title?: string | null
+  description?: string | null
+  icon?: string | null
+} | null
 
 export type Products = {
     id: string
@@ -42,6 +47,7 @@ export type Products = {
       name: string; // Incluye el nombre de la categoría
     };
     category_name: string; // Incluye el nombre de la categoría
+    features?: ProductFeature[] | null
 }
 
 export const columns: ColumnDef<Products>[] = [
@@ -314,20 +320,51 @@ export const columns: ColumnDef<Products>[] = [
               </AlertDialogHeader>
               <AlertDialogDescription>               
               </AlertDialogDescription>
-                <span className="block space-y-2">
-                  <div><strong>Nombre:</strong> {products.name}</div>
-                  <div><strong>Descripción:</strong> {products.description}</div>
-                  <div><strong>Precio Compra:</strong> S/. {products.price}</div>
-                  <div><strong>Precio Venta:</strong> S/. {products.priceSell}</div>
-                  <div>
-                    <strong>Marca:</strong>{" "}
-                    {typeof products.brand === "string"
-                      ? products.brand
-                      : products.brand?.name || "Sin marca"}
+                <span className="block space-y-3">
+                  <div className="space-y-2">
+                    <div><strong>Nombre:</strong> {products.name}</div>
+                    <div><strong>Descripción:</strong> {products.description}</div>
+                    <div><strong>Precio Compra:</strong> S/. {products.price}</div>
+                    <div><strong>Precio Venta:</strong> S/. {products.priceSell}</div>
+                    <div><strong>Estado:</strong> {products.status}</div>
+                    <div><strong>Fecha de Creación:</strong> {new Date(products.createdAt).toLocaleDateString()}</div>
                   </div>
-                  <div><strong>Estado:</strong> {products.status}</div>
-                  <div><strong>Categoría:</strong> {products.category?.name || "Sin categoría"}</div>
-                  <div><strong>Fecha de Creación:</strong> {new Date(products.createdAt).toLocaleDateString()}</div>
+
+                  <div className="space-y-2">
+                    <h4 className="font-semibold">Información adicional</h4>
+                    <div>
+                      <strong>Marca:</strong>{" "}
+                      {typeof products.brand === "string"
+                        ? products.brand
+                        : products.brand?.name || "Sin marca"}
+                    </div>
+                    <div>
+                      <strong>Categoría:</strong> {products.category?.name || "Sin categoría"}
+                    </div>
+                    {Array.isArray(products.features) && products.features.length > 0 ? (
+                      <div className="space-y-1">
+                        <strong>Características adicionales:</strong>
+                        <ul className="list-disc list-inside space-y-1">
+                          {products.features.map((feature, index) => {
+                            if (!feature) return null
+                            const hasContent = feature.title || feature.description
+                            if (!hasContent) return null
+
+                            return (
+                              <li key={`feature-${index}`}>
+                                <span className="font-medium">{feature.title ?? "Sin título"}</span>
+                                {feature.description ? `: ${feature.description}` : null}
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </div>
+                    ) : (
+                      <div>
+                        <strong>Características adicionales:</strong> No registradas
+                      </div>
+                    )}
+                  </div>
                 </span>
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={handleDialogViewClose}>Cerrar</AlertDialogCancel>

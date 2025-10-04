@@ -47,8 +47,55 @@ interface ProductSelection {
   includeAll: boolean;
 }
 
+const CODE39_PATTERNS: Record<string, string> = {
+  "0": "nnnwwnwnn",
+  "1": "wnnwnnnnw",
+  "2": "nnwwnnnnw",
+  "3": "wnwwnnnnn",
+  "4": "nnnwwnnnw",
+  "5": "wnnwwnnnn",
+  "6": "nnwwwnnnn",
+  "7": "nnnwnnwnw",
+  "8": "wnnwnnwnn",
+  "9": "nnwwnnwnn",
+  A: "wnnnnwnnw",
+  B: "nnwnnwnnw",
+  C: "wnwnnwnnn",
+  D: "nnnnwwnnw",
+  E: "wnnnwwnnn",
+  F: "nnwnwwnnn",
+  G: "nnnnnwwnw",
+  H: "wnnnnwwnn",
+  I: "nnwnnwwnn",
+  J: "nnnnwwwnn",
+  K: "wnnnnnnww",
+  L: "nnwnnnnww",
+  M: "wnwnnnnwn",
+  N: "nnnnwnnww",
+  O: "wnnnwnnwn",
+  P: "nnwnwnnwn",
+  Q: "nnnnnnwww",
+  R: "wnnnnnwwn",
+  S: "nnwnnnwwn",
+  T: "nnnnwnwwn",
+  U: "wwnnnnnnw",
+  V: "nwwnnnnnw",
+  W: "wwwnnnnnn",
+  X: "nwnnwnnnw",
+  Y: "wwnnwnnnn",
+  Z: "nwwnwnnnn",
+  "-": "nwnnnnwnw",
+  ".": "wwnnnnwnn",
+  " ": "nwwnnnwnn",
+  "$": "nwnwnwnnn",
+  "/": "nwnwnnnwn",
+  "+": "nwnnnwnwn",
+  "%": "nnnwnwnwn",
+  "*": "nwnnwnwnn",
+};
+
 function sanitizeForCode39(value: string): string {
-  const allowed = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -.$/+%";
+  const allowed = Object.keys(CODE39_PATTERNS);
   const upper = value.toUpperCase();
   const sanitized = upper
     .split("")
@@ -58,6 +105,77 @@ function sanitizeForCode39(value: string): string {
     .trim();
 
   return sanitized.length ? sanitized : "CODE39";
+}
+
+interface Code39BarSegment {
+  type: "bar" | "space";
+  width: number;
+}
+
+function buildCode39Segments(value: string): Code39BarSegment[] {
+  const sanitized = `*${sanitizeForCode39(value)}*`;
+  const segments: Code39BarSegment[] = [];
+
+  sanitized.split("").forEach((character, index, array) => {
+    const pattern = CODE39_PATTERNS[character];
+    if (!pattern) {
+      return;
+    }
+
+    for (let position = 0; position < pattern.length; position += 1) {
+      const isBar = position % 2 === 0;
+      const width = pattern[position] === "w" ? 3 : 1;
+      segments.push({ type: isBar ? "bar" : "space", width });
+    }
+
+    if (index < array.length - 1) {
+      segments.push({ type: "space", width: 1 });
+    }
+  });
+
+  return segments;
+}
+
+function Code39Barcode({ value }: { value: string }): ReactElement {
+  const moduleWidth = 2;
+  const height = 80;
+  const segments = buildCode39Segments(value);
+  const totalUnits = segments.reduce((total, segment) => total + segment.width, 0);
+  let offset = 0;
+
+  return (
+    <div className="w-full">
+      <svg
+        viewBox={`0 0 ${totalUnits * moduleWidth} ${height}`}
+        width="100%"
+        height={height}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Codigo de barras ${value}`}
+      >
+        {segments.map((segment, index) => {
+          const segmentWidth = segment.width * moduleWidth;
+          const element =
+            segment.type === "bar" ? (
+              <rect
+                key={`bar-${index}`}
+                x={offset}
+                y={0}
+                width={segmentWidth}
+                height={height}
+                fill="currentColor"
+              />
+            ) : null;
+
+          offset += segmentWidth;
+          return element;
+        })}
+      </svg>
+      <p className="mt-1 text-center text-xs font-medium tracking-widest text-muted-foreground">
+        {sanitizeForCode39(value)}
+      </p>
+    </div>
+  );
 }
 
 function buildDisplayCode(product: AggregatedProduct, serial: string | null): string {
@@ -624,7 +742,7 @@ export default function InventoryLabelsPage(): ReactElement {
             )}
 
             {labels.map(({ product, serial, codeValue }) => {
-              const barcodeValue = `*${sanitizeForCode39(codeValue)}*`;
+              const humanReadableCode = sanitizeForCode39(codeValue);
               const qrValue = JSON.stringify({
                 productId: product.id,
                 code: product.code,
@@ -639,11 +757,7 @@ export default function InventoryLabelsPage(): ReactElement {
                   {codeType === "qr" ? (
                     <QRCodeCanvas value={qrValue} size={128} />
                   ) : (
-                    <div className="w-full text-center">
-                      <div className="font-barcode">
-                        {barcodeValue}
-                      </div>
-                    </div>
+                    <Code39Barcode value={humanReadableCode} />
                   )}
                   <div className="text-center space-y-1">
                     <p className="text-sm font-semibold leading-tight">{product.name}</p>
