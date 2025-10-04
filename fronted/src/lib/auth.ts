@@ -58,16 +58,16 @@ export async function getUserDataFromToken(): Promise<CurrentUser | null> {
       headers,
     })
     if (!res.ok) return null
-    const data = (await res.json()) as Partial<CurrentUser> & {
-      username?: string
-      error?: unknown
-    }
+    const data = (await res.json()) as Partial<CurrentUser & { userId?: number; username?: string; error?: unknown }>
+
+    const id = data.id ?? data.userId ?? data.sub
     const name = data.name ?? data.username
-    if (!data.id || !name || !data.role || data.error) {
+    if (!id || !name || !data.role || data.error) {
       return null
     }
+
     return {
-      id: data.id,
+      id,
       name,
       role: data.role,
     }

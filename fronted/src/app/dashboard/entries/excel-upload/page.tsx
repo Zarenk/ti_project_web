@@ -147,11 +147,12 @@ export default function ExcelUploadPage() {
   const handleCommit = async () => {
 
     const userData = await getUserDataFromToken();
-    if (!userData) {
-      toast.error('No se pudo obtener el usuario. Inicia sesión nuevamente.');
-      return;
-    }
+    const responsibleId = Number(userData?.id ?? userData?.userId)
 
+    if (!Number.isInteger(responsibleId)) {
+      toast.error('No se pudo obtener el usuario. Inicia sesión nuevamente.')
+      return
+    }
 
     if (!previewData || !selectedStoreId) return
     if (!selectedProviderId) {
@@ -177,7 +178,7 @@ export default function ExcelUploadPage() {
 
     setIsSaving(true)
     try {
-      const response = await commitImportedExcelData(previewData, selectedStoreId, userData.id,
+      const response = await commitImportedExcelData(previewData, selectedStoreId, responsibleId,
         selectedProviderId)
 
       // Mostrar advertencias si hay series duplicadas
