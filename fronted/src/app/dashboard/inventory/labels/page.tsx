@@ -591,7 +591,7 @@ export default function InventoryLabelsPage(): ReactElement {
               <CardContent className="space-y-4">
                 <RadioGroup
                   value={codeType}
-                  onValueChange={(value) => setCodeType(value as "qr" | "barcode")}
+                  onValueChange={(value:any) => setCodeType(value as "qr" | "barcode")}
                   className="flex flex-wrap gap-6"
                 >
                   <div className="flex items-center gap-2">

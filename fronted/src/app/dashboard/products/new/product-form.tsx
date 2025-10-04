@@ -409,7 +409,7 @@ export function ProductForm({
                         <Select
                             disabled={isProcessing}
                             value={form.watch("categoryId")}                       
-                            onValueChange={(value) => setValue("categoryId", value, { shouldValidate: true })
+                            onValueChange={(value:any) => setValue("categoryId", value, { shouldValidate: true })
                         }
                         >                      
                             <SelectTrigger className="border border-border rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -458,7 +458,7 @@ export function ProductForm({
                             <Select
                               disabled={isProcessing}
                               value={form.watch(`features.${index}.icon` as const)}
-                              onValueChange={(value) =>
+                              onValueChange={(value:any) =>
                                 setValue(`features.${index}.icon` as const, value as IconName)
                               }
                             >
@@ -491,7 +491,7 @@ export function ProductForm({
                             Seleccion un estado
                         </Label>
                         <Select value={form.watch("status")} disabled={isProcessing} // Sincroniza el valor del Select con el formulario
-                        defaultValue={form.getValues("status")} onValueChange={(value) => setValue("status", value as "Activo" | "Inactivo", {shouldValidate: true})}>
+                        defaultValue={form.getValues("status")} onValueChange={(value:any) => setValue("status", value as "Activo" | "Inactivo", {shouldValidate: true})}>
                             <SelectTrigger>
                                 <SelectValue /> {/*placeholder="Estado" */}
                             </SelectTrigger>

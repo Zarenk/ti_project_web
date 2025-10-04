@@ -534,7 +534,7 @@ export default function CashRegisterDashboard() {
         </label>
         <Select
           value={storeId !== null ? String(storeId) : ""}
-          onValueChange={(value) => setStoreId(Number(value))}
+          onValueChange={(value:any) => setStoreId(Number(value))}
         >
           <SelectTrigger id="store-select" className="w-full">
             <SelectValue placeholder="Seleccione una tienda" />

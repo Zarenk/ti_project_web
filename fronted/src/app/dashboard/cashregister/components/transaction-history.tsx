@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-import { format } from "date-fns"
+import { format, isSameDay } from "date-fns"
 import { BACKEND_URL } from "@/lib/utils"
 import { Transaction } from "../types/cash-register"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -172,6 +172,13 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
       CLOSURE: "Cierres",
     };
 
+    const parseTransactionDate = (value: Transaction["timestamp"]) => {
+      if (!value) return null
+
+      const parsedDate = value instanceof Date ? value : new Date(value)
+      return Number.isNaN(parsedDate.getTime()) ? null : parsedDate
+    }
+
     const filteredTransactions = transactions.filter((transaction) => {
       const matchesSearch =
       (transaction.employee ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -187,8 +194,11 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
 
       const matchesType = typeFilter ? transaction.type === typeFilter : true
 
+      const transactionDate = parseTransactionDate(transaction.timestamp)
       const matchesDate =
-      format(new Date(transaction.timestamp), "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
+      !transactionDate ||
+        !selectedDate ||
+        isSameDay(transactionDate, selectedDate)
       
       return matchesSearch && matchesType && matchesDate
     })

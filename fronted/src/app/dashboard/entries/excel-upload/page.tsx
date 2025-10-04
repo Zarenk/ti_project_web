@@ -273,7 +273,7 @@ export default function ExcelUploadPage() {
         <div className="mt-6 space-y-4">
           <div>
             <h2 className="font-semibold mb-1">Selecciona una tienda destino:</h2>
-            <Select onValueChange={(value) => setSelectedStoreId(Number(value))}>
+            <Select onValueChange={(value:any) => setSelectedStoreId(Number(value))}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Tienda destino" />
               </SelectTrigger>
@@ -289,7 +289,7 @@ export default function ExcelUploadPage() {
 
           <div>
             <h2 className="font-semibold mb-1">Selecciona un proveedor:</h2>
-            <Select onValueChange={(value) => setSelectedProviderId(Number(value))}>
+            <Select onValueChange={(value:any) => setSelectedProviderId(Number(value))}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Proveedor" />
               </SelectTrigger>

@@ -962,7 +962,7 @@ function SystemDataSection({
                       <Checkbox
                         id="purge-acknowledge"
                         checked={acknowledged}
-                        onCheckedChange={(checked) => setAcknowledged(checked === true)}
+                        onCheckedChange={(checked:any) => setAcknowledged(checked === true)}
                       />
                       <Label htmlFor="purge-acknowledge" className="text-sm font-normal leading-tight">
                         Entiendo que esta purga no se puede deshacer y que todos los datos serán
@@ -1361,7 +1361,7 @@ function TypographySection({ watch, setValue }: SectionProps) {
           <Label htmlFor="fontFamily">Familia de fuente</Label>
           <Select
             value={fontFamily}
-            onValueChange={(value) =>
+            onValueChange={(value:any) =>
               setValue("typography.fontFamily", value as SettingsFormData["typography"]["fontFamily"], {
                 shouldDirty: true,
               })
@@ -1460,7 +1460,7 @@ function LayoutSection({ watch, setValue }: SectionProps) {
           <Label htmlFor="container">Ancho del contenedor</Label>
           <Select
             value={container}
-            onValueChange={(value) => setValue("layout.container", value as SettingsFormData["layout"]["container"], { shouldDirty: true })}
+            onValueChange={(value:any) => setValue("layout.container", value as SettingsFormData["layout"]["container"], { shouldDirty: true })}
           >
             <SelectTrigger>
               <SelectValue />
@@ -1506,7 +1506,7 @@ function LayoutSection({ watch, setValue }: SectionProps) {
           <Label htmlFor="shadow">Sombras</Label>
           <Select
             value={shadow}
-            onValueChange={(value) => setValue("layout.shadow", value as SettingsFormData["layout"]["shadow"], { shouldDirty: true })}
+            onValueChange={(value:any) => setValue("layout.shadow", value as SettingsFormData["layout"]["shadow"], { shouldDirty: true })}
           >
             <SelectTrigger>
               <SelectValue />
@@ -1524,7 +1524,7 @@ function LayoutSection({ watch, setValue }: SectionProps) {
           <Label htmlFor="buttonStyle">Estilo de botones</Label>
           <Select
             value={buttonStyle}
-            onValueChange={(value) =>
+            onValueChange={(value:any) =>
               setValue("layout.buttonStyle", value as SettingsFormData["layout"]["buttonStyle"], { shouldDirty: true })
             }
           >
@@ -1594,7 +1594,7 @@ function NavbarSection({ watch, setValue }: SectionProps) {
             <Label htmlFor="navStyle">Estilo de navbar</Label>
             <Select
               value={style}
-              onValueChange={(value) => setValue("navbar.style", value as SettingsFormData["navbar"]["style"], { shouldDirty: true })}
+              onValueChange={(value:any) => setValue("navbar.style", value as SettingsFormData["navbar"]["style"], { shouldDirty: true })}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -1611,7 +1611,7 @@ function NavbarSection({ watch, setValue }: SectionProps) {
             <Label htmlFor="navPosition">Posición</Label>
             <Select
               value={position}
-              onValueChange={(value) =>
+              onValueChange={(value:any) =>
                 setValue("navbar.position", value as SettingsFormData["navbar"]["position"], { shouldDirty: true })
               }
             >
@@ -1787,7 +1787,7 @@ function ComponentsSection({ watch, setValue }: SectionProps) {
           <Label htmlFor="cardStyle">Diseño de tarjetas</Label>
           <Select
             value={cardStyle}
-            onValueChange={(value) =>
+            onValueChange={(value:any) =>
               setValue("components.cardStyle", value as SettingsFormData["components"]["cardStyle"], {
                 shouldDirty: true,
               })
@@ -1807,7 +1807,7 @@ function ComponentsSection({ watch, setValue }: SectionProps) {
           <Label htmlFor="chipStyle">Estilo de chips/etiquetas</Label>
           <Select
             value={chipStyle}
-            onValueChange={(value) =>
+            onValueChange={(value:any) =>
               setValue("components.chipStyle", value as SettingsFormData["components"]["chipStyle"], {
                 shouldDirty: true,
               })
@@ -1827,7 +1827,7 @@ function ComponentsSection({ watch, setValue }: SectionProps) {
           <Label htmlFor="tableDensity">Densidad de tablas</Label>
           <Select
             value={tableDensity}
-            onValueChange={(value) =>
+            onValueChange={(value:any) =>
               setValue("components.tableDensity", value as SettingsFormData["components"]["tableDensity"], {
                 shouldDirty: true,
               })
@@ -2142,7 +2142,7 @@ function PermissionsSection({ watch, setValue }: PermissionsSectionProps) {
               <Checkbox
                 id={inputId}
                 checked={currentPermissions[module.key] ?? false}
-                onCheckedChange={(checked) =>
+                onCheckedChange={(checked:any) =>
                   setValue(
                     "permissions",
                     {

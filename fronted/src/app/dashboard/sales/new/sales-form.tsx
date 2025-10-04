@@ -810,7 +810,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                             <Label className="text-sm font-medium py-2">Moneda</Label>
                             <Select
                               value={currency} // Vincula el estado local
-                              onValueChange={(value) => {
+                              onValueChange={(value:any) => {
                                 setCurrency(value); // Actualiza el estado local
                                 form.setValue("tipo_moneda", value, { shouldValidate: true }); // Actualiza el formulario
                                }}

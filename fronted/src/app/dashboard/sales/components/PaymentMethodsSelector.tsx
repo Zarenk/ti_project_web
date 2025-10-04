@@ -178,120 +178,122 @@ export function PaymentMethodsModal({
         <DialogHeader>
           <DialogTitle>Selecciona Métodos de Pago</DialogTitle>
           <DialogDescription>
-             No se olvide guardar los métodos de pago agregados...
+            No se olvide guardar los métodos de pago agregados...
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <AnimatePresence initial={false} mode="sync">
-            {tempPayments.map((payment, index) => (
-              <motion.div
-                key={payment.uid}
-                layout
-                initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                className="flex flex-col sm:flex-row gap-2 sm:items-center"
-              >
-                {/* --- SOLO PARA PANTALLAS PEQUEÑAS --- */}
-              <div className="flex sm:hidden gap-2">
-                <Select
-                  value={payment.paymentMethodId !== null ? payment.paymentMethodId.toString() : ""}
-                  onValueChange={(value) => handleUpdatePayment(index, "paymentMethodId", Number(value))}
+          <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-2">
+            <AnimatePresence initial={false} mode="sync">
+              {tempPayments.map((payment, index) => (
+                <motion.div
+                  key={payment.uid}
+                  layout
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="flex flex-col sm:flex-row gap-2 sm:items-center"
                 >
-                  <SelectTrigger className="w-[160px]">
-                    <SelectValue placeholder="Método" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {paymentMethods.map((method) => (
-                      <SelectItem key={method.id} value={method.id.toString()}>
-                        <div className="flex items-center">
-                          {getIcon(method.name)}
-                          {method.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {/* --- SOLO PARA PANTALLAS PEQUEÑAS --- */}
+                  <div className="flex sm:hidden gap-2">
+                    <Select
+                      value={payment.paymentMethodId !== null ? payment.paymentMethodId.toString() : ""}
+                      onValueChange={(value:any) => handleUpdatePayment(index, "paymentMethodId", Number(value))}
+                    >
+                      <SelectTrigger className="w-[160px]">
+                        <SelectValue placeholder="Método" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {paymentMethods.map((method) => (
+                          <SelectItem key={method.id} value={method.id.toString()}>
+                            <div className="flex items-center">
+                              {getIcon(method.name)}
+                              {method.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
-                <input
-                  type="number"
-                  placeholder="Monto"
-                  step="0.01"
-                  min={0.0}
-                  max={99999999.99}
-                  value={payment.amount === 0 ? "" : payment.amount.toString()}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const parsed = parseFloat(val);
-                    handleUpdatePayment(index, "amount", val === "" || isNaN(parsed) ? 0 : parsed);
-                  }}
-                  className="border rounded px-2 py-1 w-[100px]"
-                />
-              </div>
+                    <input
+                      type="number"
+                      placeholder="Monto"
+                      step="0.01"
+                      min={0.0}
+                      max={99999999.99}
+                      value={payment.amount === 0 ? "" : payment.amount.toString()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const parsed = parseFloat(val);
+                        handleUpdatePayment(index, "amount", val === "" || isNaN(parsed) ? 0 : parsed);
+                      }}
+                      className="border rounded px-2 py-1 w-[100px]"
+                    />
+                    </div>
 
-              {/* --- SOLO PARA PANTALLAS MEDIANAS EN ADELANTE --- */}
-              <div className="hidden sm:flex gap-2 items-center">
-                <Select
-                  value={payment.paymentMethodId !== null ? payment.paymentMethodId.toString() : ""}
-                  onValueChange={(value) => handleUpdatePayment(index, "paymentMethodId", Number(value))}
-                >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Método" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {paymentMethods.map((method) => (
-                      <SelectItem key={method.id} value={method.id.toString()}>
-                        <div className="flex items-center">
-                          {getIcon(method.name)}
-                          {method.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                    {/* --- SOLO PARA PANTALLAS MEDIANAS EN ADELANTE --- */}
+                    <div className="hidden sm:flex gap-2 items-center">
+                      <Select
+                        value={payment.paymentMethodId !== null ? payment.paymentMethodId.toString() : ""}
+                        onValueChange={(value:any) => handleUpdatePayment(index, "paymentMethodId", Number(value))}
+                      >
+                        <SelectTrigger className="w-[200px]">
+                          <SelectValue placeholder="Método" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {paymentMethods.map((method) => (
+                            <SelectItem key={method.id} value={method.id.toString()}>
+                              <div className="flex items-center">
+                                {getIcon(method.name)}
+                                {method.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
-                <input
-                  type="number"
-                  placeholder="Monto"
-                  step="0.01"
-                  min={0.0}
-                  max={99999999.99}
-                  value={payment.amount === 0 ? "" : payment.amount.toString()}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const parsed = parseFloat(val);
-                    handleUpdatePayment(index, "amount", val === "" || isNaN(parsed) ? 0 : parsed);
-                  }}
-                  className="border rounded px-2 py-1 w-[100px]"
-                />
-              </div>
+                      <input
+                        type="number"
+                        placeholder="Monto"
+                        step="0.01"
+                        min={0.0}
+                        max={99999999.99}
+                        value={payment.amount === 0 ? "" : payment.amount.toString()}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const parsed = parseFloat(val);
+                          handleUpdatePayment(index, "amount", val === "" || isNaN(parsed) ? 0 : parsed);
+                        }}
+                        className="border rounded px-2 py-1 w-[100px]"
+                      />
+                      </div>
 
-              {/* Común para todas las pantallas */}
-                <Select
-                  value={payment.currency ?? ""}
-                  onValueChange={(value) => handleUpdatePayment(index, "currency", value)}
-                >
-                  <SelectTrigger className="w-[100px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PEN">PEN</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* Común para todas las pantallas */}
+                  <Select
+                    value={payment.currency ?? ""}
+                    onValueChange={(value:any) => handleUpdatePayment(index, "currency", value)}
+                  >
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PEN">PEN</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                    </SelectContent>
+                  </Select>
 
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleRemovePayment(index)}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </motion.div>
-            ))}
-          </AnimatePresence>
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemovePayment(index)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
           <Button variant="outline" onClick={handleAddPayment} className="mt-2">
             + Agregar Método de Pago
           </Button>
