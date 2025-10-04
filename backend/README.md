@@ -14,6 +14,10 @@ Create a `.env` file in the `backend` directory with the following variable:
 
 ```env
 JWT_SECRET=<your-secret-here>
+# Default admin bootstrap (override to change credentials)
+DEFAULT_ADMIN_EMAIL=jdzare@gmail.com
+DEFAULT_ADMIN_PASSWORD=chuscasas19911991
+DEFAULT_ADMIN_USERNAME=jdzare
 # Allowed origins for CORS, comma separated
 CORS_ORIGIN=http://localhost:3000
 # Public URL used to generate absolute links to uploaded files
@@ -126,7 +130,7 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 
 ## Stay in touch
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
+- Author - [Kamil Mysliwiec](https://twitter.com/kammysliwiec)
 - Website - [https://nestjs.com](https://nestjs.com/)
 - Twitter - [@nestframework](https://twitter.com/nestframework)
 

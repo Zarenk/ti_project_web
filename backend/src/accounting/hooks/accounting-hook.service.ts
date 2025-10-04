@@ -3,7 +3,15 @@ import axios from 'axios';
 
 @Injectable()
 export class AccountingHook {
-  private readonly logger = new Logger(AccountingHook.name);
+  private readonly logger = new Logger(AccountingHook.name);
+
+  private isHookEnabled(): boolean {
+    const flag = process.env.ACCOUNTING_HOOK_ENABLED;
+    if (flag === undefined) {
+      return true;
+    }
+    return flag.toLowerCase() === 'true';
+  }
 
   async postSale(id: number): Promise<void> {
     const payload = {
@@ -74,6 +82,10 @@ export class AccountingHook {
     counterAccount: string;
     description: string;
   }): Promise<void> {
+    if (!this.isHookEnabled()) {
+      this.logger.debug('Accounting hooks disabled; skipping inventory adjustment notification');
+      return;
+    }
     const payload = { ...data, timestamp: new Date().toISOString() };
     const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:3000';
     const url = `${baseUrl}/accounting/hooks/inventory-adjusted`;
