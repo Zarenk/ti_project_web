@@ -728,7 +728,7 @@ export default function SettingsPage() {
 
           <main>
             <form id="settings-form" onSubmit={handleSubmit(handleSave)} className="space-y-6">
-              <AnimatePresence mode="wait" initial={false}>
+              <AnimatePresence mode="sync" initial={false}>
                 <motion.div
                     key={activeSection}
                     initial={{ opacity: 0, y: 12 }}

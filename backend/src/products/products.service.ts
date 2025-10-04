@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
-import { CreateProductDto } from './dto/create-product.dto';
+import { CreateProductDto, ProductFeatureInput } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Prisma, Brand } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -39,10 +39,37 @@ export class ProductsService {
     return 'Activo';
   }
 
+   private sanitizeFeatureInputs(features?: ProductFeatureInput[] | null) {
+    if (!Array.isArray(features)) {
+      return undefined;
+    }
+
+    const sanitized = features
+      .map((feature) => {
+        const title = feature?.title?.trim() ?? '';
+        const icon = feature?.icon?.trim();
+        const description = feature?.description?.trim();
+
+        if (!title) {
+          return null;
+        }
+
+        return {
+          title,
+          ...(icon ? { icon } : {}),
+          ...(description ? { description } : {}),
+        };
+      })
+      .filter((feature): feature is { title: string; icon?: string; description?: string } => feature !== null);
+
+    return sanitized;
+  }
+
   async create(createProductDto: CreateProductDto) {
     const { specification, images, features, brandId, brand, status, ...data } =
       createProductDto as any;
     const normalizedStatus = this.normalizeStatus(status);
+    const normalizedFeatures = this.sanitizeFeatureInputs(features);
     try {
       let brandEntity: Brand | null = null;
       if (!brandId && brand) {
@@ -61,7 +88,10 @@ export class ProductsService {
           brandName: brandEntity ? brandEntity.name : undefined,
           images: images ?? [],
           specification: specification ? { create: specification } : undefined,
-          features: features ? { createMany: { data: features } } : undefined,
+          features:
+            normalizedFeatures && normalizedFeatures.length
+              ? { create: normalizedFeatures }
+              : undefined,
         },
         include: {
           specification: true,
@@ -153,23 +183,15 @@ export class ProductsService {
 
   async findAll() {
     const products = await this.prismaService.product.findMany({
-      select: {
-        id: true,
-        name: true,
-        price: true,
-        priceSell: true,
-        description: true,
+      include: {
+        specification: true,
+        features: true,
         brand: true,
-        status: true,
-        createdAt: true,
-        images: true,
-        categoryId: true,
         category: {
           select: {
             name: true, // 👈 solo si necesitas mostrar el nombre de la categoría
           },
         },
-        specification: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -208,34 +230,57 @@ export class ProductsService {
     const { specification, images, features, brandId, brand, status, ...data } =
       updateProductDto as any;
     const normalizedStatus = status !== undefined ? this.normalizeStatus(status) : undefined;
+    const normalizedFeatures = this.sanitizeFeatureInputs(features);
     try {
       let brandEntity: Brand | null = null;
       if (!brandId && brand) {
         brandEntity = await this.brandsService.findOrCreateByName(brand);
       }
-      const productFound = await this.prismaService.product.update({
-        where: { id: Number(id) },
-        data: {
-          ...data,
-          ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {}),
-          brandId: brandEntity ? brandEntity.id : brandId ?? undefined,
-          brandName: brandEntity ? brandEntity.name : undefined,
-          images: images ?? undefined,
-          specification: specification
-            ? { upsert: { create: specification, update: specification } }
-            : undefined,
-        },
-        include: {
-          specification: true,
-          features: true,
-          brand: { select: { id: true, name: true, logoSvg: true, logoPng: true } },
-        },
+      const productFound = await this.prismaService.$transaction(async (tx) => {
+        const updatedProduct = await tx.product.update({
+          where: { id: Number(id) },
+          data: {
+            ...data,
+            ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {}),
+            brandId: brandEntity ? brandEntity.id : brandId ?? undefined,
+            brandName: brandEntity ? brandEntity.name : undefined,
+            images: images ?? undefined,
+            specification: specification
+              ? { upsert: { create: specification, update: specification } }
+              : undefined,
+          },
+        });
+
+        if (normalizedFeatures !== undefined) {
+          await tx.productFeature.deleteMany({ where: { productId: updatedProduct.id } });
+
+          if (normalizedFeatures.length) {
+            await tx.productFeature.createMany({
+              data: normalizedFeatures.map((feature) => ({
+                productId: updatedProduct.id,
+                title: feature.title,
+                ...(feature.icon ? { icon: feature.icon } : {}),
+                ...(feature.description ? { description: feature.description } : {}),
+              })),
+            });
+          }
+        }
+
+        return tx.product.findUnique({
+          where: { id: updatedProduct.id },
+          include: {
+            specification: true,
+            features: true,
+            brand: { select: { id: true, name: true, logoSvg: true, logoPng: true } },
+            category: { select: { name: true } },
+          },
+        });
       });
 
       if (!productFound) {
         throw new NotFoundException(`Product with id ${id} not found`);
       }
-  
+
       return {
         ...productFound,
         brand: this.mapBrand(productFound.brand),

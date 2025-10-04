@@ -52,6 +52,7 @@ import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
+import { IconName, icons } from "@/lib/icons"
 
 type ProductSpecification = {
   processor?: string | null
@@ -109,13 +110,13 @@ function resolveImageUrl(path: string) {
  
  
 interface DataTableProps<TData extends {id:string, createdAt:Date | string, name:string,
-  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, specification?: ProductSpecification, features?: ProductFeature[] | null, images?: string[] | null}, TValue> {
+  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, category?: { name?: string | null } | null, specification?: ProductSpecification, features?: ProductFeature[] | null, images?: string[] | null}, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
 }
  
 export function DataTable<TData extends {id:string, createdAt:Date | string, name:string,
-  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, specification?: ProductSpecification, features?: ProductFeature[] | null, images?: string[] | null}, TValue>({
+  description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, category?: { name?: string | null } | null, specification?: ProductSpecification, features?: ProductFeature[] | null, images?: string[] | null}, TValue>({
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
@@ -1132,11 +1133,15 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
                   <div className="space-y-2 text-sm">
                     <div><strong>Nombre:</strong> {selectedRowData.name}</div>
                     <div><strong>Descripción:</strong> {selectedRowData.description}</div>
-                    <div><strong>Precio:</strong> S/. {selectedRowData.price}</div>
-                    <div><strong>Precio de Venta:</strong> S/. {selectedRowData.priceSell}</div>
+                    <div><strong>Precio:</strong> S/. {priceFormatter.format(selectedRowData.price)}</div>
+                    <div><strong>Precio de Venta:</strong> S/. {priceFormatter.format(selectedRowData.priceSell)}</div>
                     <div><strong>Estado:</strong> {normalizeProductStatus(selectedRowData.status)}</div>
                     <div><strong>Fecha de Creación:</strong> {new Date(selectedRowData.createdAt).toLocaleDateString()}</div>
-                </div>
+                    <div>
+                      <strong>Categoría:</strong>{" "}
+                      {selectedRowData.category?.name || selectedRowData.category_name || "Sin categoría"}
+                    </div>
+                  </div>
 
                   <div className="border-t pt-4">
                     <h3 className="text-base font-semibold mb-3">Especificaciones</h3>
@@ -1162,6 +1167,55 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
                             </div>
                           ))}
                         </dl>
+                      )
+                    })()}
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <h3 className="text-base font-semibold mb-3">Características adicionales</h3>
+                    {(() => {
+                      const features = Array.isArray(selectedRowData.features)
+                        ? selectedRowData.features.filter(
+                            (feature): feature is NonNullable<ProductFeature> =>
+                              !!feature &&
+                              !!(
+                                (typeof feature.title === "string" && feature.title.trim().length > 0) ||
+                                (typeof feature.description === "string" && feature.description.trim().length > 0)
+                              ),
+                          )
+                        : []
+
+                      if (features.length === 0) {
+                        return (
+                          <p className="text-sm text-muted-foreground">
+                            Características adicionales no disponibles.
+                          </p>
+                        )
+                      }
+
+                      return (
+                        <ul className="space-y-3">
+                          {features.map((feature, index) => {
+                            const iconKey = typeof feature.icon === "string" ? feature.icon : undefined
+                            const IconComponent = iconKey && icons[iconKey as IconName] ? icons[iconKey as IconName] : null
+
+                            return (
+                              <li key={`${feature.title ?? "feature"}-${index}`} className="flex items-start gap-3">
+                                {IconComponent ? (
+                                  <IconComponent className="mt-1 h-5 w-5 text-primary" aria-hidden="true" />
+                                ) : null}
+                                <div>
+                                  <p className="font-medium text-foreground">
+                                    {feature.title?.trim() || `Característica ${index + 1}`}
+                                  </p>
+                                  {feature.description?.trim() ? (
+                                    <p className="text-sm text-muted-foreground">{feature.description.trim()}</p>
+                                  ) : null}
+                                </div>
+                              </li>
+                            )
+                          })}
+                        </ul>
                       )
                     })()}
                   </div>
