@@ -394,64 +394,85 @@ export default function CashRegisterDashboard() {
   }, [storeId]);
 
   useEffect(() => {
-    if (storeId !== null && selectedDate !== null) {
-      async function fetchTransactionsForSelectedDate() {
-        try {
-          
-          const isoDate = selectedDate.toISOString().split("T")[0];
-          getClosuresByStore(storeId!) // ✅ ahora TS sabe que storeId es un number
-            .then((closures) => {
-              const closureOfDay = closures.find((c: any) =>
-                new Date(c.createdAt).toISOString().startsWith(isoDate)
-              );
+  if (storeId === null || selectedDate === null) {
+    return;
+  }
 
-              if (closureOfDay) {
-                setDailyClosureInfo({
-                  openingBalance: Number(closureOfDay.openingBalance),
-                  closingBalance: Number(closureOfDay.closingBalance),
-                });
-              } else {
-                setDailyClosureInfo(null);
-              }
-            })
-            .catch(() => setDailyClosureInfo(null));
+  let isCancelled = false;
 
-          const transactionsFromServer = await getTransactionsByDate(storeId!, isoDate);
+  const fetchTransactionsForSelectedDate = async () => {
+    try {
+      const isoDate = selectedDate.toISOString().split("T")[0];
 
-          if (!Array.isArray(transactionsFromServer)) {
-            console.error("❌ No es un array:", transactionsFromServer);
-            return setTransactions([]);
+      try {
+        const closures = await getClosuresByStore(storeId!);
+        if (!isCancelled) {
+          const closureOfDay = closures.find((c: any) =>
+            new Date(c.createdAt).toISOString().startsWith(isoDate)
+          );
+
+          if (closureOfDay) {
+            setDailyClosureInfo({
+              openingBalance: Number(closureOfDay.openingBalance),
+              closingBalance: Number(closureOfDay.closingBalance),
+            });
+          } else {
+            setDailyClosureInfo(null);
           }
-
-          const validTransactions = transactionsFromServer.map((transaction: any) => ({
-            id: transaction.id,
-            type: transaction.type,
-            internalType: transaction.type,
-            amount: Number(transaction.amount) || 0,
-            timestamp: new Date(transaction.createdAt),
-            employee: transaction.employee || "",
-            description: transaction.description || "",
-            paymentMethods: transaction.paymentMethods || [],
-            createdAt: new Date(transaction.createdAt),
-            userId: transaction.userId,
-            cashRegisterId: transaction.cashRegisterId,
-            voucher: transaction.voucher || null,
-            invoiceUrl: transaction.invoiceUrl ?? null,
-            clientName: transaction.clientName ?? null,
-            clientDocument: transaction.clientDocument ?? null,
-            clientDocumentType: transaction.clientDocumentType ?? null,
-          }));
-  
-          const mergedTransactions = mergeSaleTransactions(validTransactions);
-          setTransactions(mergedTransactions);
-        } catch (error) {
-          console.error("Error al obtener transacciones por fecha:", error);
-          setTransactions([]);
+        }
+      } catch {
+        if (!isCancelled) {
+          setDailyClosureInfo(null);
         }
       }
-  
-      fetchTransactionsForSelectedDate();
-    }
+
+      const transactionsFromServer = await getTransactionsByDate(storeId!, isoDate);
+      if (isCancelled) {
+        return;
+      }
+
+      if (!Array.isArray(transactionsFromServer)) {
+        console.error("❌ No es un array:", transactionsFromServer);
+        setTransactions([]);
+        return;
+      }
+
+      const validTransactions = transactionsFromServer.map((transaction: any) => ({
+        id: transaction.id,
+        type: transaction.type,
+        internalType: transaction.type,
+        amount: Number(transaction.amount) || 0,
+        timestamp: new Date(transaction.createdAt),
+        employee: transaction.employee || "",
+        description: transaction.description || "",
+        paymentMethods: transaction.paymentMethods || [],
+        createdAt: new Date(transaction.createdAt),
+        userId: transaction.userId,
+        cashRegisterId: transaction.cashRegisterId,
+        voucher: transaction.voucher || null,
+        invoiceUrl: transaction.invoiceUrl ?? null,
+        clientName: transaction.clientName ?? null,
+        clientDocument: transaction.clientDocument ?? null,
+        clientDocumentType: transaction.clientDocumentType ?? null,
+      }));
+
+      const mergedTransactions = mergeSaleTransactions(validTransactions);
+      if (!isCancelled) {
+        setTransactions(mergedTransactions);
+      }
+    } catch (error) {
+      if (!isCancelled) {
+        console.error("Error al obtener transacciones por fecha:", error);
+        setTransactions([]);
+        }
+      }
+    };
+
+    fetchTransactionsForSelectedDate();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [storeId, selectedDate]);
 
   useEffect(() => {

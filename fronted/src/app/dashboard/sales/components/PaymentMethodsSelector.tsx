@@ -4,7 +4,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { useEffect, useState } from "react";
 import { getPaymentMethods } from "../sales.api";
 import { X, Banknote, Landmark } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner"; // Asegúrate de importar sonner
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -182,14 +182,15 @@ export function PaymentMethodsModal({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <AnimatePresence>
+          <AnimatePresence initial={false} mode="sync">
             {tempPayments.map((payment, index) => (
               <motion.div
                 key={payment.uid}
-                initial={{ opacity: 0, scale: 0.95, x: -20 }}
-                animate={{ opacity: 1, scale: 1, x: 0 }}
-                exit={{ opacity: 0, scale: 0.95, x: 20 }}
-                transition={{ duration: 0.3, ease: "easeOut" }}
+                layout
+                initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
                 className="flex flex-col sm:flex-row gap-2 sm:items-center"
               >
                 {/* --- SOLO PARA PANTALLAS PEQUEÑAS --- */}
