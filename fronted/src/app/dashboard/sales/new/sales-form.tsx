@@ -640,22 +640,31 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   useEffect(() => {
 
     async function fetchProductsByStore() {
-      if (!selectedStoreId) return; // Si no hay tienda seleccionada, no hacer nada
+      if (!selectedStoreId) return
 
       try {
-        const products = await getProductsByStore(selectedStoreId);
-        // Mapea los datos para adaptarlos al formato esperado
-        const formattedProducts = products.map((item: any) => ({
-          id: item.inventory.product.id,
-          name: item.inventory.product.name,
-          price: item.inventory.product.priceSell,
-          description: item.inventory.product.description,
-          categoryId: item.inventory.product.categoryId,
-          category_name: item.inventory.product.category.name,
-        }));
-        setProducts(formattedProducts); // Actualiza el estado con los productos
+        const products = await getProductsByStore(selectedStoreId)
+        const formattedProducts = products
+          .map((item: any) => {
+            const product = item?.inventory?.product
+            if (!product) return null
+
+            const category = product.category
+            return {
+              id: product.id,
+              name: product.name,
+              price: product.priceSell ?? 0,
+              description: product.description ?? '',
+              categoryId: product.categoryId ?? null,
+              category_name: category?.name ?? 'Sin categoría',
+              stock: item?.stock ?? product.stock ?? 0,
+            }
+          })
+          .filter(Boolean)
+
+        setProducts(formattedProducts)
       } catch (error) {
-        console.error('Error al obtener los productos por tienda:', error);
+        console.error('Error al obtener los productos por tienda:', error)
       }
     }
 

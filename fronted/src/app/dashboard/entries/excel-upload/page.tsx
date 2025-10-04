@@ -147,7 +147,7 @@ export default function ExcelUploadPage() {
   const handleCommit = async () => {
 
     const userData = await getUserDataFromToken();
-    const responsibleId = Number(userData?.id ?? userData?.userId)
+    const responsibleId = Number(userData?.id)
 
     if (!Number.isInteger(responsibleId)) {
       toast.error('No se pudo obtener el usuario. Inicia sesión nuevamente.')

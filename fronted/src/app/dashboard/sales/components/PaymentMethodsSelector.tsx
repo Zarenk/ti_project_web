@@ -5,13 +5,17 @@ import { useEffect, useState } from "react";
 import { getPaymentMethods } from "../sales.api";
 import { X, Banknote, Landmark } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { toast } from "sonner"; // AsegÃºrate de importar sonner
+import { toast } from "sonner"; // Asegúrate de importar sonner
 import { BrandLogo } from "@/components/BrandLogo";
 
 type SelectedPayment = {
   paymentMethodId: number | null;
   amount: number;
   currency: string;
+};
+
+type TempPayment = SelectedPayment & {
+  uid: string;
 };
 
 type PaymentMethod = {
@@ -31,8 +35,13 @@ export function PaymentMethodsModal({
   forceOpen?: boolean; // <-- NUEVO (opcional)
 }) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [tempPayments, setTempPayments] = useState<SelectedPayment[]>([]); // <-- Ahora manejamos pagos temporales
+  const [tempPayments, setTempPayments] = useState<TempPayment[]>([]); // <-- Ahora manejamos pagos temporales
   const [open, setOpen] = useState(false);
+
+  const generateUid = () =>
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
   const defaultPaymentMethods: PaymentMethod[] = [
     { id: -1, name: "EN EFECTIVO" },
@@ -54,7 +63,7 @@ export function PaymentMethodsModal({
     async function fetchMethods() {
       const methodsFromBackend = await getPaymentMethods();
   
-      // Unir los mÃ©todos por nombre ÃšNICO
+      // Unir los métodos por nombre ÚNICO
       const combined = [...defaultPaymentMethods, ...methodsFromBackend];
   
       // Crear un objeto para eliminar duplicados por "name"
@@ -76,41 +85,46 @@ export function PaymentMethodsModal({
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
     if (isOpen) {
-      setTempPayments(value); // Cuando abres, copia lo que habÃ­a
+      setTempPayments(
+        value.map((payment) => ({
+          ...payment,
+          uid: generateUid(),
+        })),
+      ); // Cuando abres, copia lo que había
     }
   };
 
   const handleAddPayment = () => {
     setTempPayments((prev) => {
-
       if (prev.length >= 3) {
-        toast.warning("Solo se pueden agregar hasta 3 mÃ©todos de pago.");
+        toast.warning("Solo se pueden agregar hasta 3 métodos de pago.");
         return prev;
       }
 
       const newPayments = [...prev];
-  
-      const firstPaymentMethod = paymentMethods[0]; // <-- El primer mÃ©todo disponible
-  
+      const firstPaymentMethod = paymentMethods[0]; // <-- El primer método disponible
+
       if (newPayments.length === 0) {
         const total = selectedProducts.reduce((sum, product) => {
           const subtotal = (product.price || 0) * (product.quantity || 0);
           return sum + subtotal;
         }, 0);
-  
+
         newPayments.push({
-          paymentMethodId: firstPaymentMethod ? firstPaymentMethod.id : null, // Asignamos automÃ¡ticamente
+          uid: generateUid(),
+          paymentMethodId: firstPaymentMethod ? firstPaymentMethod.id : null, // Asignamos automáticamente
           amount: Number(total.toFixed(2)),
           currency: "PEN",
         });
       } else {
         newPayments.push({
-          paymentMethodId: firstPaymentMethod ? firstPaymentMethod.id : null, // TambiÃ©n en los siguientes
+          uid: generateUid(),
+          paymentMethodId: firstPaymentMethod ? firstPaymentMethod.id : null, // También en los siguientes
           amount: 0,
           currency: "PEN",
         });
       }
-  
+
       return newPayments;
     });
   };
@@ -121,20 +135,18 @@ export function PaymentMethodsModal({
     value: SelectedPayment[K]
   ) => {
     const updated = [...tempPayments];
-    updated[index][field] = value;
+    updated[index] = { ...updated[index], [field]: value };
     setTempPayments(updated);
   };
 
   const handleRemovePayment = (index: number) => {
-    const updated = [...tempPayments];
-    updated.splice(index, 1);
-    setTempPayments(updated);
+    setTempPayments((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const handleSave = () => {
-    onChange(tempPayments); // Ahora sÃ­ guarda en el componente padre
+    onChange(tempPayments.map(({ uid, ...payment }) => payment)); // Ahora sí guarda en el componente padre
     setOpen(false);
-    toast.success("Los mÃ©todos han sido guardados correctamente"); // Mostrar toast
+    toast.success("Los métodos han sido guardados correctamente"); // Mostrar toast
   };
 
   const getIcon = (name: string) => {
@@ -159,35 +171,35 @@ export function PaymentMethodsModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline" className="bg-blue-600 text-white hover:bg-blue-700">
-          MÃ©todos de Pago
+          Métodos de Pago
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Selecciona MÃ©todos de Pago</DialogTitle>
+          <DialogTitle>Selecciona Métodos de Pago</DialogTitle>
           <DialogDescription>
-             No se olvide guardar los mÃ©todos de pago agregados...
+             No se olvide guardar los métodos de pago agregados...
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <AnimatePresence>
             {tempPayments.map((payment, index) => (
               <motion.div
-                key={index}
+                key={payment.uid}
                 initial={{ opacity: 0, scale: 0.95, x: -20 }}
                 animate={{ opacity: 1, scale: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.95, x: 20 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex flex-col sm:flex-row gap-2 sm:items-center"
               >
-                {/* --- SOLO PARA PANTALLAS PEQUEÃ‘AS --- */}
+                {/* --- SOLO PARA PANTALLAS PEQUEÑAS --- */}
               <div className="flex sm:hidden gap-2">
                 <Select
                   value={payment.paymentMethodId !== null ? payment.paymentMethodId.toString() : ""}
                   onValueChange={(value) => handleUpdatePayment(index, "paymentMethodId", Number(value))}
                 >
                   <SelectTrigger className="w-[160px]">
-                    <SelectValue placeholder="MÃ©todo" />
+                    <SelectValue placeholder="Método" />
                   </SelectTrigger>
                   <SelectContent>
                     {paymentMethods.map((method) => (
@@ -224,7 +236,7 @@ export function PaymentMethodsModal({
                   onValueChange={(value) => handleUpdatePayment(index, "paymentMethodId", Number(value))}
                 >
                   <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="MÃ©todo" />
+                    <SelectValue placeholder="Método" />
                   </SelectTrigger>
                   <SelectContent>
                     {paymentMethods.map((method) => (
@@ -254,7 +266,7 @@ export function PaymentMethodsModal({
                 />
               </div>
 
-              {/* ComÃºn para todas las pantallas */}
+              {/* Común para todas las pantallas */}
                 <Select
                   value={payment.currency ?? ""}
                   onValueChange={(value) => handleUpdatePayment(index, "currency", value)}
@@ -280,11 +292,11 @@ export function PaymentMethodsModal({
             ))}
           </AnimatePresence>
           <Button variant="outline" onClick={handleAddPayment} className="mt-2">
-            + Agregar MÃ©todo de Pago
+            + Agregar Método de Pago
           </Button>
         </div>
         <DialogFooter>
-          <Button onClick={handleSave}>Guardar MÃ©todos</Button>
+          <Button onClick={handleSave}>Guardar Métodos</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
