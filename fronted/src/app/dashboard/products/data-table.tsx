@@ -1194,6 +1194,17 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
                   </div>
                 </div>
                 <AlertDialogFooter>
+                   <AlertDialogAction
+                    onClick={() => {
+                      if (!selectedRowData?.id) {
+                        return
+                      }
+                      setIsModalOpen(false)
+                      router.push(`/dashboard/products/${selectedRowData.id}/edit`)
+                    }}
+                  >
+                    Modificar producto
+                  </AlertDialogAction>
                   <AlertDialogCancel onClick={() => setIsModalOpen(false)}>Cerrar</AlertDialogCancel>
                 </AlertDialogFooter>
               </AlertDialogContent>

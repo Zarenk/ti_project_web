@@ -32,12 +32,23 @@ export function ProductForm({
 }: ProductFormProps) {
 
     //definir el esquema de validacion
+    const imageSchema = z
+      .string()
+      .trim()
+      .refine(
+        (val) =>
+          val.length === 0 ||
+          /^https?:\/\//.test(val) ||
+          val.startsWith('/uploads'),
+        'La imagen debe ser una URL válida, una ruta relativa o puede quedar vacía',
+      )
+
     const productSchema = z.object({
     name: z.string({
       required_error: "Se requiere el nombre del producto",
     })
       .min(3, "El nombre del producto debe tener al menos 3 caracteres")
-      .max(50, "El nombre del producto no puede tener más de 50 caracteres")
+      .max(200, "El nombre del producto no puede tener más de 200 caracteres")
       .regex(/^[a-zA-Z0-9\s]+$/, "El nombre solo puede contener letras, números y espacios"),
     description: z.string({
     }),
@@ -50,14 +61,7 @@ export function ProductForm({
       required_error: "Se requiere el precio de venta del producto",
       }).min(0, "El precio de venta debe ser un número positivo")
       .max(99999999.99, "El precio no puede exceder 99999999.99"),
-    images: z
-      .array(
-        z.string().refine(
-          (val) => /^https?:\/\//.test(val) || val.startsWith('/uploads'),
-          'La imagen debe ser una URL válida o una ruta relativa'
-        )
-      )
-      .optional(),
+    images: z.array(imageSchema).optional(),
     status: z.enum(["Activo", "Inactivo"]).optional(),
     categoryId: z.string().nonempty("Debe seleccionar una categoría"), // Validar categoría
     processor: z.string().optional(),
@@ -227,13 +231,14 @@ export function ProductForm({
         if (refreshRate) spec.refreshRate = refreshRate
         if (connectivity) spec.connectivity = connectivity
 
-        const cleanedImages = productData.images?.filter((img) => img.trim() !== "") ?? []
+        const cleanedImages =
+          productData.images?.map((img) => img.trim()).filter((img) => img.length > 0) ?? []
         const brand = productData.brand?.trim().toUpperCase()
 
         const payload = {
             ...productData,
             brand: brand || undefined,
-            images: cleanedImages.length > 0 ? cleanedImages : undefined,
+            images: cleanedImages,
             categoryId: Number(productData.categoryId),
             specification: Object.keys(spec).length ? spec : undefined,
             features: features && features.length

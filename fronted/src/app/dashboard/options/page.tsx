@@ -53,6 +53,7 @@ import {
   defaultSiteSettings,
   siteSettingsSchema,
   type SiteSettings,
+  type DeepPartial,
 } from "@/context/site-settings-schema";
 import {
   AlertDialog,
@@ -216,6 +217,58 @@ type BrandSectionProps = Pick<SectionProps, "register" | "errors" | "setValue" |
 type PermissionsSectionProps = Pick<SectionProps, "watch" | "setValue">;
 const deepEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
+function cloneSettings<T>(value: T): T {
+  if (typeof structuredClone === "function") {
+    return structuredClone(value);
+  }
+
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+function mergeSettingsDeep<T extends Record<string, unknown>>(
+  target: T,
+  source?: DeepPartial<T> | null,
+): T {
+  const output = cloneSettings(target);
+
+  if (!isPlainObject(source)) {
+    return output;
+  }
+
+  const sourceRecord = source as Record<string, unknown>;
+
+  for (const keyName of Object.keys(sourceRecord)) {
+    const typedKey = keyName as keyof T;
+    const sourceValue = sourceRecord[keyName];
+
+    if (sourceValue === undefined) {
+      continue;
+    }
+
+    const targetValue = output[typedKey];
+
+    if (Array.isArray(sourceValue)) {
+      output[typedKey] = cloneSettings(sourceValue) as unknown as T[keyof T];
+      continue;
+    }
+
+    if (isPlainObject(sourceValue) && isPlainObject(targetValue)) {
+      output[typedKey] = mergeSettingsDeep(
+        targetValue as Record<string, unknown>,
+        sourceValue as DeepPartial<Record<string, unknown>>,
+      ) as unknown as T[keyof T];
+      continue;
+    }
+
+    output[typedKey] = sourceValue as unknown as T[keyof T];
+  }
+
+  return output;
+}
+
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<SectionId>("company");
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -263,13 +316,56 @@ export default function SettingsPage() {
   const previewUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const themeMode = watchedValues?.theme?.mode ?? settings.theme.mode;
 
-  const hasUnsavedChanges = useMemo(
-    () => !deepEqual(settings, persistedSettings),
-    [settings, persistedSettings],
+  const buildPreviewSafeSettings = useCallback(
+    (value: DeepPartial<SettingsFormData> | null | undefined): SettingsFormData | null => {
+      if (!value) {
+        return null;
+      }
+
+      const merged = mergeSettingsDeep(defaultSiteSettings, value);
+
+      const basePermissions =
+        persistedSettings.permissions ?? defaultSiteSettings.permissions;
+
+      const permissions: SettingsFormData["permissions"] = {
+        ...defaultSiteSettings.permissions,
+        ...basePermissions,
+        ...merged.permissions,
+      };
+
+      return {
+        ...merged,
+        permissions,
+      };
+    },
+    [persistedSettings.permissions],
   );
 
+  const previewValues = useMemo(
+    () => buildPreviewSafeSettings(watchedValues),
+    [buildPreviewSafeSettings, watchedValues],
+  );
+
+  const currentSettingsForPreview = useMemo(
+    () => buildPreviewSafeSettings(settings),
+    [buildPreviewSafeSettings, settings],
+  );
+
+  const persistedSettingsForPreview = useMemo(
+    () => buildPreviewSafeSettings(persistedSettings),
+    [buildPreviewSafeSettings, persistedSettings],
+  );
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (!previewValues || !persistedSettingsForPreview) {
+      return false;
+    }
+
+    return !deepEqual(previewValues, persistedSettingsForPreview);
+  }, [persistedSettingsForPreview, previewValues]);
+  
   useEffect(() => {
-    if (!watchedValues) {
+    if (!previewValues || !currentSettingsForPreview) {
       return;
     }
 
@@ -278,7 +374,7 @@ export default function SettingsPage() {
       return;
     }
 
-    if (deepEqual(watchedValues, settings)) {
+    if (deepEqual(previewValues, currentSettingsForPreview)) {
       return;
     }
 
@@ -288,9 +384,9 @@ export default function SettingsPage() {
 
     previewUpdateTimeoutRef.current = setTimeout(() => {
       skipPreviewUpdateRef.current = true;
-      previewSettings(watchedValues);
+      previewSettings(previewValues);
     }, 150);
-  }, [watchedValues, settings, previewSettings]);
+  }, [currentSettingsForPreview, previewValues, previewSettings]);
 
   useEffect(() => {
     return () => {

@@ -83,14 +83,29 @@ export function PaymentMethodsModal({
 
   // Auto-scroll al ítem recién agregado
   useEffect(() => {
-    if (!lastAddedUidRef.current) return;
-    const el = itemRefs.current[lastAddedUidRef.current];
-    if (el) {
+  const uid = lastAddedUidRef.current;
+  if (!uid) return;
+
+  const list = listRef.current;
+  const el = itemRefs.current[uid];
+
+  const run = () => {
+    if (!list || !el) return;
+    // Solo si la lista realmente desborda
+    const hasOverflow = list.scrollHeight > list.clientHeight + 2;
+    if (hasOverflow) {
       el.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    } else if (listRef.current) {
-      listRef.current.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
     }
     lastAddedUidRef.current = null;
+  };
+
+  // Espera un frame para que Framer/DOM asienten el layout del nuevo ítem
+  const id = requestAnimationFrame(() => {
+    // micro-delay por si hay imágenes/logos o Selects montando
+    setTimeout(run, 0);
+  });
+
+  return () => cancelAnimationFrame(id);
   }, [tempPayments.length]);
 
   const totalProductos = useMemo(
@@ -186,7 +201,7 @@ export function PaymentMethodsModal({
                 key={payment.uid}
                 ref={(el) => { itemRefs.current[payment.uid] = el; }}
                 layout
-                initial={{ opacity: 0, y: -6 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18 }}
                 className="min-h-[44px] rounded-md"
