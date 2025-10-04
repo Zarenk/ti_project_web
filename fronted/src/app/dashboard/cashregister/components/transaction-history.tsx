@@ -22,6 +22,15 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
     return value.replace(/[;]+$/g, "").trim()
   }
 
+  // añade estas 2 líneas en la interfaz:
+  interface TransactionHistoryProps {
+    transactions: Transaction[];
+    selectedDate: Date;
+    onDateChange: (date: Date) => void;
+    isFetching?: boolean;   // 👈 nuevo
+    keepPrevious?: boolean; // 👈 nuevo
+  }
+
   const formatSaleDescription = (description?: string | null) => {
     if (!description) return ""
 
@@ -147,7 +156,7 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
     onDateChange: (date: Date) => void
   }
 
-  export default function TransactionHistory({ transactions, selectedDate, onDateChange }: TransactionHistoryProps) {
+  export default function TransactionHistory({ transactions, selectedDate, onDateChange, isFetching = false, keepPrevious = true, }: TransactionHistoryProps) {
     const [searchTerm, setSearchTerm] = useState("")
     const [typeFilter, setTypeFilter] = useState<string | null>(null)
     const [modalTransaction, setModalTransaction] = useState<Transaction | null>(null)
@@ -181,26 +190,19 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
 
     const filteredTransactions = transactions.filter((transaction) => {
       const matchesSearch =
-      (transaction.employee ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (transaction.description ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(transaction.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(transaction.amount).includes(searchTerm) || // 👈 para buscar también por monto si quieres
-      (transaction.voucher ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (transaction.clientName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (transaction.clientDocument ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (transaction.paymentMethods ?? []).some((method) =>
-        method.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+        (transaction.employee ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (transaction.description ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(transaction.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(transaction.amount).includes(searchTerm) ||
+        (transaction.voucher ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (transaction.clientName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (transaction.clientDocument ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (transaction.paymentMethods ?? []).some((method) =>
+          method.toLowerCase().includes(searchTerm.toLowerCase())
+        );
 
       const matchesType = typeFilter ? transaction.type === typeFilter : true
-
-      const transactionDate = parseTransactionDate(transaction.timestamp)
-      const matchesDate =
-      !transactionDate ||
-        !selectedDate ||
-        isSameDay(transactionDate, selectedDate)
-      
-      return matchesSearch && matchesType && matchesDate
+      return matchesSearch && matchesType
     })
 
     const sortedTransactions = [...filteredTransactions].sort((a, b) => {

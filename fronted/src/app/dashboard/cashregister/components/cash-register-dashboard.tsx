@@ -187,8 +187,17 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
   return mergedTransactions.map((entry) => entry.transaction);
 };
 
+// arriba del componente
+const ymdLocal = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+};
+
 export default function CashRegisterDashboard() {
 
+  const [isFetchingTransactions, setIsFetchingTransactions] = useState(false);
   const router = useRouter();
   const [checkingSession, setCheckingSession] = useState(true);
   const [userId, setUserId] = useState<number | null>(null);
@@ -394,23 +403,23 @@ export default function CashRegisterDashboard() {
   }, [storeId]);
 
   useEffect(() => {
-  if (storeId === null || selectedDate === null) {
-    return;
-  }
+  if (storeId === null || !selectedDate) return;
 
-  let isCancelled = false;
+  let cancelled = false;
+  setIsFetchingTransactions(true);
 
-  const fetchTransactionsForSelectedDate = async () => {
+  const load = async () => {
     try {
-      const isoDate = selectedDate.toISOString().split("T")[0];
-
+      const ymd = ymdLocal(selectedDate); // 👈 día local (Lima)
+      
+      // CIERRE DEL DÍA (opcional)
       try {
-        const closures = await getClosuresByStore(storeId!);
-        if (!isCancelled) {
-          const closureOfDay = closures.find((c: any) =>
-            new Date(c.createdAt).toISOString().startsWith(isoDate)
-          );
-
+        const allClosures = await getClosuresByStore(storeId);
+        if (!cancelled) {
+          const closureOfDay = allClosures.find((c: any) => {
+            const createdYmd = ymdLocal(new Date(c.createdAt));
+            return createdYmd === ymd;
+          });
           if (closureOfDay) {
             setDailyClosureInfo({
               openingBalance: Number(closureOfDay.openingBalance),
@@ -421,15 +430,12 @@ export default function CashRegisterDashboard() {
           }
         }
       } catch {
-        if (!isCancelled) {
-          setDailyClosureInfo(null);
-        }
+        if (!cancelled) setDailyClosureInfo(null);
       }
 
-      const transactionsFromServer = await getTransactionsByDate(storeId!, isoDate);
-      if (isCancelled) {
-        return;
-      }
+      // TRANSACCIONES DEL DÍA
+      const transactionsFromServer = await getTransactionsByDate(storeId, ymd);
+      if (cancelled) return;
 
       if (!Array.isArray(transactionsFromServer)) {
         console.error("❌ No es un array:", transactionsFromServer);
@@ -437,41 +443,40 @@ export default function CashRegisterDashboard() {
         return;
       }
 
-      const validTransactions = transactionsFromServer.map((transaction: any) => ({
-        id: transaction.id,
-        type: transaction.type,
-        internalType: transaction.type,
-        amount: Number(transaction.amount) || 0,
-        timestamp: new Date(transaction.createdAt),
-        employee: transaction.employee || "",
-        description: transaction.description || "",
-        paymentMethods: transaction.paymentMethods || [],
-        createdAt: new Date(transaction.createdAt),
-        userId: transaction.userId,
-        cashRegisterId: transaction.cashRegisterId,
-        voucher: transaction.voucher || null,
-        invoiceUrl: transaction.invoiceUrl ?? null,
-        clientName: transaction.clientName ?? null,
-        clientDocument: transaction.clientDocument ?? null,
-        clientDocumentType: transaction.clientDocumentType ?? null,
+      const validTransactions = transactionsFromServer.map((t: any) => ({
+        id: t.id,
+        type: t.type,
+        internalType: t.type,
+        amount: Number(t.amount) || 0,
+        timestamp: new Date(t.createdAt),
+        employee: t.employee || "",
+        description: t.description || "",
+        paymentMethods: t.paymentMethods || [],
+        createdAt: new Date(t.createdAt),
+        userId: t.userId,
+        cashRegisterId: t.cashRegisterId,
+        voucher: t.voucher || null,
+        invoiceUrl: t.invoiceUrl ?? null,
+        clientName: t.clientName ?? null,
+        clientDocument: t.clientDocument ?? null,
+        clientDocumentType: t.clientDocumentType ?? null,
       }));
 
-      const mergedTransactions = mergeSaleTransactions(validTransactions);
-      if (!isCancelled) {
-        setTransactions(mergedTransactions);
-      }
+      const merged = mergeSaleTransactions(validTransactions);
+      if (!cancelled) setTransactions(merged);
     } catch (error) {
-      if (!isCancelled) {
+      if (!cancelled) {
         console.error("Error al obtener transacciones por fecha:", error);
         setTransactions([]);
-        }
       }
-    };
+    } finally {
+      if (!cancelled) setIsFetchingTransactions(false);
+    }
+  };
 
-    fetchTransactionsForSelectedDate();
-
-    return () => {
-      isCancelled = true;
+  load();
+  return () => {
+      cancelled = true;
     };
   }, [storeId, selectedDate]);
 
@@ -760,13 +765,14 @@ export default function CashRegisterDashboard() {
                 transactions={transactions} 
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
+                // 👇 estos dos props solo si estás usando la versión antiflicker del hijo
+                isFetching={isFetchingTransactions}
+                keepPrevious
               />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
     </div>
-
-    
   )
 }
