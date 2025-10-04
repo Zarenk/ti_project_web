@@ -1,11 +1,11 @@
-import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+ï»¿import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { useEffect, useState } from "react";
 import { getPaymentMethods } from "../sales.api";
 import { X, Banknote, Landmark } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { toast } from "sonner"; // Asegúrate de importar sonner
+import { toast } from "sonner"; // AsegÃºrate de importar sonner
 import { BrandLogo } from "@/components/BrandLogo";
 
 type SelectedPayment = {
@@ -63,7 +63,7 @@ export function PaymentMethodsModal({
     async function fetchMethods() {
       const methodsFromBackend = await getPaymentMethods();
   
-      // Unir los métodos por nombre ÚNICO
+      // Unir los mÃ©todos por nombre ÃšNICO
       const combined = [...defaultPaymentMethods, ...methodsFromBackend];
   
       // Crear un objeto para eliminar duplicados por "name"
@@ -90,19 +90,19 @@ export function PaymentMethodsModal({
           ...payment,
           uid: generateUid(),
         })),
-      ); // Cuando abres, copia lo que había
+      ); // Cuando abres, copia lo que habÃ­a
     }
   };
 
   const handleAddPayment = () => {
     setTempPayments((prev) => {
       if (prev.length >= 3) {
-        toast.warning("Solo se pueden agregar hasta 3 métodos de pago.");
+        toast.warning("Solo se pueden agregar hasta 3 mÃ©todos de pago.");
         return prev;
       }
 
       const newPayments = [...prev];
-      const firstPaymentMethod = paymentMethods[0]; // <-- El primer método disponible
+      const firstPaymentMethod = paymentMethods[0]; // <-- El primer mÃ©todo disponible
 
       if (newPayments.length === 0) {
         const total = selectedProducts.reduce((sum, product) => {
@@ -112,14 +112,14 @@ export function PaymentMethodsModal({
 
         newPayments.push({
           uid: generateUid(),
-          paymentMethodId: firstPaymentMethod ? firstPaymentMethod.id : null, // Asignamos automáticamente
+          paymentMethodId: firstPaymentMethod ? firstPaymentMethod.id : null, // Asignamos automÃ¡ticamente
           amount: Number(total.toFixed(2)),
           currency: "PEN",
         });
       } else {
         newPayments.push({
           uid: generateUid(),
-          paymentMethodId: firstPaymentMethod ? firstPaymentMethod.id : null, // También en los siguientes
+          paymentMethodId: firstPaymentMethod ? firstPaymentMethod.id : null, // TambiÃ©n en los siguientes
           amount: 0,
           currency: "PEN",
         });
@@ -144,9 +144,9 @@ export function PaymentMethodsModal({
   };
 
   const handleSave = () => {
-    onChange(tempPayments.map(({ uid, ...payment }) => payment)); // Ahora sí guarda en el componente padre
+    onChange(tempPayments.map(({ uid, ...payment }) => payment)); // Ahora sÃ­ guarda en el componente padre
     setOpen(false);
-    toast.success("Los métodos han sido guardados correctamente"); // Mostrar toast
+    toast.success("Los mÃ©todos han sido guardados correctamente"); // Mostrar toast
   };
 
   const getIcon = (name: string) => {
@@ -171,14 +171,14 @@ export function PaymentMethodsModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline" className="bg-blue-600 text-white hover:bg-blue-700">
-          Métodos de Pago
+          MÃ©todos de Pago
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Selecciona Métodos de Pago</DialogTitle>
+          <DialogTitle>Selecciona MÃ©todos de Pago</DialogTitle>
           <DialogDescription>
-             No se olvide guardar los métodos de pago agregados...
+             No se olvide guardar los mÃ©todos de pago agregados...
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -192,14 +192,14 @@ export function PaymentMethodsModal({
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex flex-col sm:flex-row gap-2 sm:items-center"
               >
-                {/* --- SOLO PARA PANTALLAS PEQUEÑAS --- */}
+                {/* --- SOLO PARA PANTALLAS PEQUEÃ‘AS --- */}
               <div className="flex sm:hidden gap-2">
                 <Select
                   value={payment.paymentMethodId !== null ? payment.paymentMethodId.toString() : ""}
                   onValueChange={(value) => handleUpdatePayment(index, "paymentMethodId", Number(value))}
                 >
                   <SelectTrigger className="w-[160px]">
-                    <SelectValue placeholder="Método" />
+                    <SelectValue placeholder="MÃ©todo" />
                   </SelectTrigger>
                   <SelectContent>
                     {paymentMethods.map((method) => (
@@ -236,7 +236,7 @@ export function PaymentMethodsModal({
                   onValueChange={(value) => handleUpdatePayment(index, "paymentMethodId", Number(value))}
                 >
                   <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Método" />
+                    <SelectValue placeholder="MÃ©todo" />
                   </SelectTrigger>
                   <SelectContent>
                     {paymentMethods.map((method) => (
@@ -266,7 +266,7 @@ export function PaymentMethodsModal({
                 />
               </div>
 
-              {/* Común para todas las pantallas */}
+              {/* ComÃºn para todas las pantallas */}
                 <Select
                   value={payment.currency ?? ""}
                   onValueChange={(value) => handleUpdatePayment(index, "currency", value)}
@@ -292,11 +292,11 @@ export function PaymentMethodsModal({
             ))}
           </AnimatePresence>
           <Button variant="outline" onClick={handleAddPayment} className="mt-2">
-            + Agregar Método de Pago
+            + Agregar MÃ©todo de Pago
           </Button>
         </div>
         <DialogFooter>
-          <Button onClick={handleSave}>Guardar Métodos</Button>
+          <Button onClick={handleSave}>Guardar MÃ©todos</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
