@@ -370,7 +370,7 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
                   </div>
                 </TableHead>
                 {!isMobile && <TableHead>Comprobante</TableHead>}
-                {!isMobile && <TableHead>Cliente</TableHead>}
+                {!isMobile && <TableHead>Encargado</TableHead>}
                 {!isMobile && <TableHead className="cursor-pointer" onClick={() => handleSort("employee")}> 
                   <div className="flex items-center">
                     Encargado
@@ -406,6 +406,9 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
                           </TableCell>
                           <TableCell className="max-w-[100px] truncate whitespace-nowrap overflow-hidden">
                             {new Date(transaction.timestamp).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {(transaction.currency ?? "S/.")} {transaction.amount.toFixed(2)}
                           </TableCell>
                         {!isMobile && <TableCell>{transaction.voucher || "-"}</TableCell>}
                           {!isMobile && (

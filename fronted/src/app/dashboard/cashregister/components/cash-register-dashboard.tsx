@@ -410,8 +410,7 @@ export default function CashRegisterDashboard() {
 
   const load = async () => {
     try {
-      const ymd = ymdLocal(selectedDate); // 👈 día local (Lima)
-      
+      const ymd = ymdLocal(selectedDate); // 👈 día local (Lima)  
       // CIERRE DEL DÍA (opcional)
       try {
         const allClosures = await getClosuresByStore(storeId);
@@ -434,33 +433,59 @@ export default function CashRegisterDashboard() {
       }
 
       // TRANSACCIONES DEL DÍA
-      const transactionsFromServer = await getTransactionsByDate(storeId, ymd);
-      if (cancelled) return;
+      const timezoneOffsetMinutes = selectedDate.getTimezoneOffset();
+      const adjacentDates: Date[] = [];
 
-      if (!Array.isArray(transactionsFromServer)) {
-        console.error("❌ No es un array:", transactionsFromServer);
-        setTransactions([]);
-        return;
+      if (timezoneOffsetMinutes > 0) {
+        adjacentDates.push(new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000));
+      } else if (timezoneOffsetMinutes < 0) {
+        adjacentDates.push(new Date(selectedDate.getTime() - 24 * 60 * 60 * 1000));
       }
 
-      const validTransactions = transactionsFromServer.map((t: any) => ({
-        id: t.id,
-        type: t.type,
-        internalType: t.type,
-        amount: Number(t.amount) || 0,
-        timestamp: new Date(t.createdAt),
-        employee: t.employee || "",
-        description: t.description || "",
-        paymentMethods: t.paymentMethods || [],
-        createdAt: new Date(t.createdAt),
-        userId: t.userId,
-        cashRegisterId: t.cashRegisterId,
-        voucher: t.voucher || null,
-        invoiceUrl: t.invoiceUrl ?? null,
-        clientName: t.clientName ?? null,
-        clientDocument: t.clientDocument ?? null,
-        clientDocumentType: t.clientDocumentType ?? null,
-      }));
+      const fetchDates = [ymd, ...adjacentDates.map((date) => ymdLocal(date))];
+      const responses = await Promise.all(
+        fetchDates.map(async (dateString) => {
+          try {
+            const data = await getTransactionsByDate(storeId, dateString);
+            return Array.isArray(data) ? data : [];
+          } catch (error) {
+            console.error(`Error al obtener transacciones para la fecha ${dateString}:`, error);
+            return [];
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      const flattenedTransactions = responses.flat();
+      const transactionsById = new Map<number, any>();
+
+      flattenedTransactions.forEach((transaction) => {
+        if (transaction && typeof transaction.id === "number" && !transactionsById.has(transaction.id)) {
+          transactionsById.set(transaction.id, transaction);
+        }
+      });
+
+      const validTransactions = Array.from(transactionsById.values())
+        .map((t: any) => ({
+          id: t.id,
+          type: t.type,
+          internalType: t.type,
+          amount: Number(t.amount) || 0,
+          timestamp: new Date(t.createdAt),
+          employee: t.employee || "",
+          description: t.description || "",
+          paymentMethods: t.paymentMethods || [],
+          createdAt: new Date(t.createdAt),
+          userId: t.userId,
+          cashRegisterId: t.cashRegisterId,
+          voucher: t.voucher || null,
+          invoiceUrl: t.invoiceUrl ?? null,
+          clientName: t.clientName ?? null,
+          clientDocument: t.clientDocument ?? null,
+          clientDocumentType: t.clientDocumentType ?? null,
+        }))
+        .filter((transaction) => isSameDay(transaction.timestamp, selectedDate));
 
       const merged = mergeSaleTransactions(validTransactions);
       if (!cancelled) setTransactions(merged);
