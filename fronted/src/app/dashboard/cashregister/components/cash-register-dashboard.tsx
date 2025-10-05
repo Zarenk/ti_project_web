@@ -109,6 +109,7 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
     prefix: string;
     fallbackDescriptions: string[];
     items: Map<string, SaleItem>;
+    originalItems: SaleItem[] | null;
     breakdown: Map<string, number>;
     methodAmounts: Map<string, Set<number>>;
     fingerprints: Set<string>;
@@ -155,6 +156,7 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
         prefix,
         fallbackDescriptions: suffix ? [suffix] : [],
         items: new Map<string, SaleItem>(),
+        originalItems: saleItems.length > 0 ? saleItems.map((item) => ({ ...item })) : null,
         breakdown: new Map<string, number>(),
         methodAmounts: new Map<string, Set<number>>(),
         fingerprints: new Set<string>([duplicateFingerprint]),
@@ -188,6 +190,10 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
     });
     saleEntry.transaction.paymentMethods = Array.from(methodSet);
 
+    if (!saleEntry.originalItems && saleItems.length > 0) {
+      saleEntry.originalItems = saleItems.map((item) => ({ ...item }));
+    }
+
     if (!isDuplicate) {
       saleItems.forEach((item) => {
         const key = `${item.name.toLowerCase()}|${item.unitPrice}`;
@@ -216,7 +222,6 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
   });
 
   const mergedTransactions = [
-  const mergedTransactions = [
     ...nonSaleTransactions,
     ...Array.from(aggregatedSales.values()).map((saleEntry) => {
       const breakdownEntries = Array.from(saleEntry.breakdown.entries());
@@ -227,7 +232,11 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
             .join(" | ")}`
         : "";
 
-      const itemSegments = Array.from(saleEntry.items.values()).map((item) => {
+      const itemsForDisplay = saleEntry.originalItems?.length
+        ? saleEntry.originalItems
+        : Array.from(saleEntry.items.values());
+
+      const itemSegments = itemsForDisplay.map((item) => {
         const quantityStr = Number.isInteger(item.quantity)
           ? item.quantity.toString()
           : item.quantity.toFixed(2);
@@ -257,8 +266,14 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
       }
 
       let totalAmount = 0;
-      if (saleEntry.items.size > 0) {
-        saleEntry.items.forEach((item) => {
+      const itemsForTotal = saleEntry.originalItems?.length
+        ? saleEntry.originalItems
+        : saleEntry.items.size > 0
+        ? Array.from(saleEntry.items.values())
+        : [];
+
+      if (itemsForTotal.length > 0) {
+        itemsForTotal.forEach((item) => {
           totalAmount += item.quantity * item.unitPrice;
         });
       }
