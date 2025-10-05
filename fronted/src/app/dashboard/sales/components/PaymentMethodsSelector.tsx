@@ -163,6 +163,11 @@ export function PaymentMethodsModal({
   };
 
   const handleSave = () => {
+    const hasInvalidAmount = tempPayments.some(payment => !payment.amount || payment.amount <= 0);
+    if (tempPayments.length > 0 && hasInvalidAmount) {
+      toast.error("Debe agregar un monto o eliminar el método de pago.");
+      return;
+    }
     onChange(tempPayments.map(({ uid, ...p }) => p));
     setOpen(false);
     toast.success("Los métodos han sido guardados correctamente");
