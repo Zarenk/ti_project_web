@@ -71,11 +71,54 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
     });
   }, [currency]);
 
+  const paymentFormatterResolver = useMemo(() => {
+    const cache = new Map<string, Intl.NumberFormat>();
+
+    return (code?: string | null) => {
+      const normalized =
+        typeof code === "string" && code.trim().length === 3
+          ? code.trim().toUpperCase()
+          : currency;
+
+      if (!cache.has(normalized)) {
+        cache.set(
+          normalized,
+          new Intl.NumberFormat("es-PE", {
+            style: "currency",
+            currency: normalized,
+            minimumFractionDigits: 2,
+          }),
+        );
+      }
+
+      return cache.get(normalized)!;
+    };
+  }, [currency]);
+
   const formatCurrency = (value?: number | null) => {
     if (typeof value !== "number") {
       return "—";
     }
     return currencyFormatter.format(value);
+  };
+
+  const formatPaymentAmount = (value: unknown, currencyCode?: string | null) => {
+    if (value === null || value === undefined) {
+      return "—";
+    }
+
+    const numericValue =
+      typeof value === "number"
+        ? value
+        : typeof value === "string"
+        ? Number(value)
+        : NaN;
+
+    if (!Number.isFinite(numericValue)) {
+      return "—";
+    }
+
+    return paymentFormatterResolver(currencyCode).format(numericValue);
   };
 
   const formattedDateTime = useMemo(() => {
@@ -231,27 +274,45 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
             {Array.isArray(sale.payments) && sale.payments.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Pagos</h3>
-                <div className="space-y-1">
-                  {sale.payments.map((payment, index) => (
-                    <div
-                      key={payment.id ?? `${payment.paymentMethod?.name ?? "pago"}-${index}`}
-                      className="flex items-center justify-between rounded-md border px-3 py-2"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">
-                          {payment.paymentMethod?.name ?? "Método de pago"}
-                        </p>
-                        {payment.currency && (
-                          <p className="text-xs text-muted-foreground uppercase">
-                            {payment.currency}
-                          </p>
-                        )}
-                      </div>
-                      <p className="text-sm font-semibold">
-                        {formatCurrency(payment.amount ?? undefined)}
-                      </p>
-                    </div>
-                  ))}
+                <div className="overflow-hidden rounded-md border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted">
+                      <tr className="text-left">
+                        <th className="px-4 py-2 font-medium">Método de pago</th>
+                        <th className="px-4 py-2 font-medium">Moneda</th>
+                        <th className="px-4 py-2 font-medium">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sale.payments.map((payment, index) => {
+                        const paymentKey =
+                          payment.id ??
+                          `${payment.paymentMethod?.name ?? "pago"}-${index}`;
+                        const paymentCurrency = payment.currency?.toUpperCase();
+                        const rawMethod =
+                          typeof (payment as { method?: unknown }).method === "string"
+                            ? ((payment as { method?: string }).method ?? undefined)
+                            : undefined;
+                        const paymentMethodName =
+                          payment.paymentMethod?.name ??
+                          (rawMethod && rawMethod.trim().length > 0
+                            ? rawMethod
+                            : "Método de pago");
+
+                        return (
+                          <tr key={paymentKey} className="border-t">
+                            <td className="px-4 py-2">{paymentMethodName}</td>
+                            <td className="px-4 py-2 uppercase">
+                              {paymentCurrency ?? currency}
+                            </td>
+                            <td className="px-4 py-2 font-semibold">
+                              {formatPaymentAmount(payment.amount, paymentCurrency)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}

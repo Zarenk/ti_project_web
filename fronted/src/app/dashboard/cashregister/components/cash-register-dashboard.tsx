@@ -26,6 +26,26 @@ const isSaleTransaction = (description?: string | null) => {
   return description.toLowerCase().includes("venta realizada");
 };
 
+const stripPaymentMethodDetails = (value: string) => {
+  if (!value) {
+    return "";
+  }
+
+  const patterns = [
+    /pago\s+v(?:i|\u00ED)a[^.,;|]*/gi,
+    /pago\s+con[^.,;|]*/gi,
+    /m(?:e|\u00E9)todos?\s+de\s+pago\s*:[^.|;]*/gi,
+    /m(?:e|\u00E9)todo\s+de\s+pago\s*:[^.|;]*/gi,
+  ];
+
+  let sanitized = value;
+  patterns.forEach((pattern) => {
+    sanitized = sanitized.replace(pattern, " ");
+  });
+
+  sanitized = sanitized.replace(/[,;]+/g, " ");
+  return sanitized.replace(/\s+/g, " ").trim();
+};
 const splitSaleDescription = (description: string | null | undefined) => {
   if (!description) {
     return {
@@ -41,18 +61,27 @@ const splitSaleDescription = (description: string | null | undefined) => {
   if (saleMarker !== -1) {
     const prefix = description.slice(0, saleMarker).trim();
     const suffix = description.slice(saleMarker).trim();
+    const sanitizedForKey = stripPaymentMethodDetails(prefix);
 
     return {
       prefix,
       suffix,
-      normalized: prefix.toLowerCase().replace(/\s+/g, " ").trim(),
+      normalized: (sanitizedForKey || prefix)
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim(),
     };
   }
+
+  const sanitizedForKey = stripPaymentMethodDetails(description);
 
   return {
     prefix: description.trim(),
     suffix: "",
-    normalized: description.toLowerCase().replace(/\s+/g, " ").trim(),
+    normalized: (sanitizedForKey || description)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim(),
   };
 };
 
@@ -183,8 +212,9 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
     const methodsFromText = extractPaymentMethodsFromText(prefix || description);
     const currentMethods = hasExplicitMethods ? [...(transaction.paymentMethods ?? [])] : [...methodsFromText];
     const amountValue = Number(transaction.amount);
-    const normalizedPrefix = normalizeWhitespace(prefix);
-    const duplicateFingerprint = `${normalizedPrefix}|${transaction.voucher ?? ""}|${fingerprintItems}`;
+    const prefixForFingerprint = stripPaymentMethodDetails(prefix) || prefix;
+    const normalizedPrefixForFingerprint = normalizeWhitespace(prefixForFingerprint.toLowerCase());
+    const duplicateFingerprint = `${normalizedPrefixForFingerprint}|${transaction.voucher ?? ""}|${fingerprintItems}`;
 
     let saleEntry = aggregatedSales.get(aggregationKey);
     let isDuplicate = false;
@@ -299,7 +329,10 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
 
       const descriptionParts: string[] = [];
       if (saleEntry.prefix) {
-        descriptionParts.push(normalizeWhitespace(saleEntry.prefix));
+        const cleanedPrefix = stripPaymentMethodDetails(saleEntry.prefix);
+        if (cleanedPrefix) {
+          descriptionParts.push(normalizeWhitespace(cleanedPrefix));
+        }
       }
       if (hasBreakdownAmounts && breakdownText) {
         descriptionParts.push(breakdownText);

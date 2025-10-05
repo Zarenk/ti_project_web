@@ -407,7 +407,7 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
                           <TableCell className="max-w-[100px] truncate whitespace-nowrap overflow-hidden">
                             {new Date(transaction.timestamp).toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right font-medium">
+                          <TableCell className="text-center font-medium">
                             {(transaction.currency ?? "S/.")} {transaction.amount.toFixed(2)}
                           </TableCell>
                         {!isMobile && <TableCell>{transaction.voucher || "-"}</TableCell>}
@@ -455,6 +455,14 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
                         {transaction.clientDocument && transaction.clientDocumentType && (
                           <p>
                             <span className="font-medium">Documento:</span> {transaction.clientDocumentType} {transaction.clientDocument}
+                          </p>
+                        )}
+                        <p>
+                          <span className="font-medium">Monto:</span> {(transaction.currency ?? "S/.")} {transaction.amount.toFixed(2)}
+                        </p>
+                        {transaction.paymentMethods && transaction.paymentMethods.length > 0 && (
+                          <p>
+                            <span className="font-medium">Metodos de pago:</span> {transaction.paymentMethods.join(" | ")}
                           </p>
                         )}
                         {formattedDescription && (
