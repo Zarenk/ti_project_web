@@ -13,6 +13,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/src/main.js",
     "seed:web": "ts-node prisma/seed-web-store.ts",
+    "db:seed": "ts-node prisma/seed.ts",
     "migrate:accounting": "npx prisma migrate dev --name accounting_init",
     "seed:accounting": "ts-node prisma/seed/accounting.seed.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
@@ -137,3 +138,4 @@
     "testEnvironment": "node"
   }
 }
+
