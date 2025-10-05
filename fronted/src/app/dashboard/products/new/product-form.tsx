@@ -316,7 +316,7 @@ export function ProductForm({
                         </Label>
                         <Input
                         {...register('name')}
-                        maxLength={50} // Limita a 50 caracteres
+                        maxLength={200} // Limita a 50 caracteres
                         ></Input>
                         {form.formState.errors.name && (
                             <p className="text-red-500 text-sm">{form.formState.errors.name.message}</p>
@@ -331,7 +331,7 @@ export function ProductForm({
                             Descripcion
                         </Label>
                         <Input
-                        maxLength={100} // Limita a 100 caracteres
+                        maxLength={200} // Limita a 100 caracteres
                         {...register('description')}></Input>
                         {form.formState.errors.description && (
                             <p className="text-red-500 text-sm">{form.formState.errors.description.message}</p>
