@@ -93,8 +93,20 @@ export async function uploadPdfToServer({
   return response.json();
 }
 
+export function normalizeOptionValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  const stringValue = typeof value === "string" ? value : String(value);
+
+  return stringValue.trim().toLowerCase();
+}
+
 const socket = io(SOCKET_URL, {
   transports: ["websocket"],
 });
 
 export default socket;
+
+

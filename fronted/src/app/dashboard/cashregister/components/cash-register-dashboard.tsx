@@ -35,26 +35,64 @@ const splitSaleDescription = (description: string | null | undefined) => {
     };
   }
 
-  const saleRegex = /(Venta realizada\.)\s*Pago vía[^,]*,(.*)/i;
-  const match = description.match(saleRegex);
+  const lowerDescription = description.toLowerCase();
+  const saleMarker = lowerDescription.indexOf("venta registrada:");
 
-  if (match) {
-    const prefix = match[1]?.trim() ?? "";
-    const suffix = match[2]?.trim() ?? "";
-    const normalized = [prefix, suffix].filter(Boolean).join(" ").trim();
+  if (saleMarker !== -1) {
+    const prefix = description.slice(0, saleMarker).trim();
+    const suffix = description.slice(saleMarker).trim();
 
     return {
       prefix,
       suffix,
-      normalized,
+      normalized: prefix.toLowerCase().replace(/\s+/g, " ").trim(),
     };
   }
 
   return {
     prefix: description.trim(),
     suffix: "",
-    normalized: description.trim(),
+    normalized: description.toLowerCase().replace(/\s+/g, " ").trim(),
   };
+};
+
+const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
+
+const parseNumber = (value: string) => {
+  const normalized = value.replace(/\s+/g, "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+type SaleItem = {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+};
+
+const extractSaleItems = (description: string) => {
+  const items = new Map<string, SaleItem>();
+  const cleaned = normalizeWhitespace(description);
+  const itemRegex = /([A-Za-z0-9().\- ]+?)(?: -)? *Cantidad: *([0-9.,]+) *,? *Precio *Unitario: *([0-9.,]+)/gi;
+
+  let match: RegExpExecArray | null;
+  while ((match = itemRegex.exec(cleaned)) !== null) {
+    const name = normalizeWhitespace(match[1] ?? "");
+    if (!name) continue;
+
+    const quantity = parseNumber(match[2] ?? "0");
+    const unitPrice = parseNumber(match[3] ?? "0");
+    const key = `${name.toLowerCase()}|${unitPrice}`;
+
+    const existing = items.get(key);
+    if (existing) {
+      existing.quantity += quantity;
+    } else {
+      items.set(key, { name, quantity, unitPrice });
+    }
+  }
+
+  return Array.from(items.values());
 };
 
 const getTimestampKey = (timestamp: Transaction["timestamp"]) => {
@@ -66,60 +104,80 @@ const getTimestampKey = (timestamp: Transaction["timestamp"]) => {
 };
 
 const mergeSaleTransactions = (transactions: Transaction[]) => {
-  const aggregatedSales = new Map<
-    string,
-    {
-      transaction: Transaction;
-      prefix: string;
-      suffix: string;
-      breakdown: Map<string, number>;
-      originalDescription: string;
-      order: number;
-    }
-  >();
+  type SaleAggregation = {
+    transaction: Transaction;
+    prefix: string;
+    fallbackDescriptions: string[];
+    items: Map<string, SaleItem>;
+    breakdown: Map<string, number>;
+    methodAmounts: Map<string, Set<number>>;
+    fingerprints: Set<string>;
+    order: number;
+    amounts: Set<number>;
+  };
 
+  const aggregatedSales = new Map<string, SaleAggregation>();
   const nonSaleTransactions: { transaction: Transaction; order: number }[] = [];
 
   transactions.forEach((transaction, index) => {
     const description = transaction.description ?? "";
-
-    if (!isSaleTransaction(description)) {
-      nonSaleTransactions.push({ transaction, order: index });
-      return;
-    }
-
+    const saleItems = extractSaleItems(description);
+    const fingerprintItems = saleItems
+      .map((item) => `${item.name.toLowerCase()}|${item.unitPrice.toFixed(4)}|${item.quantity.toFixed(4)}`)
+      .sort()
+      .join(";");
     const { prefix, suffix, normalized } = splitSaleDescription(description);
     const keyParts = [
       transaction.type,
       transaction.voucher ?? "",
       normalized,
       getTimestampKey(transaction.timestamp),
+      String(transaction.cashRegisterId ?? ""),
       transaction.clientDocument ?? "",
       transaction.clientName ?? "",
     ];
-
     const aggregationKey = keyParts.join("|");
     const currentMethods = transaction.paymentMethods ? [...transaction.paymentMethods] : [];
+    const amountValue = Number(transaction.amount);
+    const normalizedPrefix = normalizeWhitespace(prefix);
+    const duplicateFingerprint = `${normalizedPrefix}|${transaction.voucher ?? ""}|${fingerprintItems}`;
 
     let saleEntry = aggregatedSales.get(aggregationKey);
+    let isDuplicate = false;
 
     if (!saleEntry) {
       saleEntry = {
         transaction: {
           ...transaction,
-          amount: Number(transaction.amount),
+          amount: amountValue,
           paymentMethods: [...currentMethods],
         },
         prefix,
-        suffix,
+        fallbackDescriptions: suffix ? [suffix] : [],
+        items: new Map<string, SaleItem>(),
         breakdown: new Map<string, number>(),
-        originalDescription: description,
+        methodAmounts: new Map<string, Set<number>>(),
+        fingerprints: new Set<string>([duplicateFingerprint]),
         order: index,
+        amounts: new Set<number>([amountValue]),
       };
-
       aggregatedSales.set(aggregationKey, saleEntry);
     } else {
-      saleEntry.transaction.amount = Number(saleEntry.transaction.amount) + Number(transaction.amount);
+      isDuplicate = saleEntry.fingerprints.has(duplicateFingerprint);
+      if (!isDuplicate) {
+        saleEntry.fingerprints.add(duplicateFingerprint);
+        saleEntry.amounts.add(amountValue);
+        if (suffix) {
+          saleEntry.fallbackDescriptions.push(suffix);
+        }
+      }
+    }
+
+    if (transaction.voucher && !saleEntry.transaction.voucher) {
+      saleEntry.transaction.voucher = transaction.voucher;
+    }
+    if (transaction.invoiceUrl && !saleEntry.transaction.invoiceUrl) {
+      saleEntry.transaction.invoiceUrl = transaction.invoiceUrl;
     }
 
     const methodSet = new Set(saleEntry.transaction.paymentMethods ?? []);
@@ -130,51 +188,86 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
     });
     saleEntry.transaction.paymentMethods = Array.from(methodSet);
 
-    const methodsForBreakdown = currentMethods.length > 0 ? currentMethods : [];
+    if (!isDuplicate) {
+      saleItems.forEach((item) => {
+        const key = `${item.name.toLowerCase()}|${item.unitPrice}`;
+        const existingItem = saleEntry.items.get(key);
+        if (existingItem) {
+          existingItem.quantity += item.quantity;
+        } else {
+          saleEntry.items.set(key, { ...item });
+        }
+      });
 
-    if (methodsForBreakdown.length === 0) {
-      return;
-    }
-
-    if (methodsForBreakdown.length === 1) {
-      const method = methodsForBreakdown[0];
-      if (method) {
-        const previousAmount = saleEntry.breakdown.get(method) ?? 0;
-        saleEntry.breakdown.set(method, previousAmount + Number(transaction.amount));
-      }
-    } else {
+      const methodsForBreakdown = currentMethods.length > 0 ? currentMethods : [];
       methodsForBreakdown.forEach((method) => {
-        if (!method) return;
-        const previousAmount = saleEntry.breakdown.get(method) ?? 0;
-        saleEntry.breakdown.set(method, previousAmount + Number(transaction.amount));
+        if (!method) {
+          return;
+        }
+        const amountSet = saleEntry.methodAmounts.get(method) ?? new Set<number>();
+        if (!amountSet.has(amountValue)) {
+          amountSet.add(amountValue);
+          saleEntry.methodAmounts.set(method, amountSet);
+          const previousAmount = saleEntry.breakdown.get(method) ?? 0;
+          saleEntry.breakdown.set(method, previousAmount + amountValue);
+        }
       });
     }
   });
 
+  const mergedTransactions = [
   const mergedTransactions = [
     ...nonSaleTransactions,
     ...Array.from(aggregatedSales.values()).map((saleEntry) => {
       const breakdownEntries = Array.from(saleEntry.breakdown.entries());
       const shouldIncludeBreakdown = breakdownEntries.length > 1;
       const breakdownText = shouldIncludeBreakdown
-        ? `Métodos de pago: ${breakdownEntries
+        ? `Metodos de pago: ${breakdownEntries
             .map(([method, amount]) => `${method}: S/.${amount.toFixed(2)}`)
             .join(" | ")}`
         : "";
 
-      const finalDescription = shouldIncludeBreakdown
-        ? [
-            saleEntry.prefix.trim(),
-            `${breakdownText}.`,
-            saleEntry.suffix.trim(),
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .replace(/\s+/g, " ")
-            .trim()
-        : saleEntry.originalDescription;
+      const itemSegments = Array.from(saleEntry.items.values()).map((item) => {
+        const quantityStr = Number.isInteger(item.quantity)
+          ? item.quantity.toString()
+          : item.quantity.toFixed(2);
+        return `${item.name} - Cantidad: ${quantityStr}, Precio Unitario: ${item.unitPrice.toFixed(2)}`;
+      });
 
-      saleEntry.transaction.description = finalDescription;
+      const descriptionParts: string[] = [];
+      if (saleEntry.prefix) {
+        descriptionParts.push(normalizeWhitespace(saleEntry.prefix));
+      }
+      if (shouldIncludeBreakdown && breakdownText) {
+        descriptionParts.push(breakdownText);
+      }
+      if (itemSegments.length > 0) {
+        descriptionParts.push(`Venta registrada: ${itemSegments.join(" | ")}`);
+      } else if (saleEntry.fallbackDescriptions.length > 0) {
+        descriptionParts.push(
+          normalizeWhitespace(`Venta registrada: ${saleEntry.fallbackDescriptions[0]}`)
+        );
+      } else if (saleEntry.transaction.description) {
+        descriptionParts.push(normalizeWhitespace(saleEntry.transaction.description));
+      }
+
+      const finalDescription = normalizeWhitespace(descriptionParts.join(" "));
+      if (finalDescription) {
+        saleEntry.transaction.description = finalDescription;
+      }
+
+      let totalAmount = 0;
+      if (saleEntry.items.size > 0) {
+        saleEntry.items.forEach((item) => {
+          totalAmount += item.quantity * item.unitPrice;
+        });
+      }
+      if (totalAmount === 0) {
+        saleEntry.amounts.forEach((amount) => {
+          totalAmount += amount;
+        });
+      }
+      saleEntry.transaction.amount = Number(totalAmount.toFixed(2));
 
       return {
         transaction: saleEntry.transaction,
@@ -186,7 +279,6 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
   mergedTransactions.sort((a, b) => a.order - b.order);
   return mergedTransactions.map((entry) => entry.transaction);
 };
-
 // arriba del componente
 const ymdLocal = (d: Date) => {
   const y = d.getFullYear();
@@ -804,3 +896,7 @@ export default function CashRegisterDashboard() {
     </div>
   )
 }
+
+
+
+

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronsUpDown, Save } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+import { cn, normalizeOptionValue } from "@/lib/utils";
 import { AddProviderDialog } from "../AddProviderDialog";
 
 interface ProviderSectionProps {
@@ -34,6 +34,11 @@ export function ProviderSection({
   setValue,
   register,
 }: ProviderSectionProps) {
+  const normalizedSelectedProvider = normalizeOptionValue(valueProvider)
+  const selectedProviderOption =
+    providers.find((provider) => normalizeOptionValue(provider.name) === normalizedSelectedProvider) ?? null
+  const displayedProviderName = selectedProviderOption?.name ?? valueProvider ?? ""
+
   return (
     <div className="flex-1 flex flex-col border rounded-md p-2">
       <Label htmlFor="provider-combobox" className="text-sm font-medium mb-2">
@@ -49,9 +54,7 @@ export function ProviderSection({
               className="w-[260px] justify-between"
               title="Busca y selecciona el proveedor responsable del ingreso"
             >
-              {valueProvider
-                ? providers.find((provider) => String(provider.name) === valueProvider)?.name
-                : "Selecciona un proveedor..."}
+              {displayedProviderName || "Selecciona un proveedor..."}
               <ChevronsUpDown className="opacity-50" />
             </Button>
           </PopoverTrigger>
@@ -61,35 +64,38 @@ export function ProviderSection({
               <CommandList>
                 <CommandEmpty>No se encontraron proveedores.</CommandEmpty>
                 <CommandGroup>
-                  {providers.map((provider) => (
-                    <CommandItem
-                      key={provider.name}
-                      value={provider.name}
-                      onSelect={(currentValue) => {
-                        if (currentValue === valueProvider) return; // 👈 Si es el mismo proveedor, no hace nada
-                        setValueProvider(currentValue === valueProvider ? "" : currentValue);
-                        const selectedProvider = providers.find(
-                          (provider) => String(provider.name) === currentValue
-                        );
-                        if (selectedProvider) {
-                          setValue("provider_name", selectedProvider.name || "");
-                          setValue("provider_adress", selectedProvider.adress || "");
-                          setValue("provider_documentNumber", selectedProvider.documentNumber || "");
-                        } else {
-                          console.error("Proveedor no encontrado:", currentValue);
-                        }
-                        setOpenProvider(false);
-                      }}
-                    >
-                      {provider.name}
-                      <Save
-                        className={cn(
-                          "ml-auto",
-                          valueProvider === provider.name ? "opacity-100" : "opacity-0"
-                        )}
-                      />
-                    </CommandItem>
-                  ))}
+                  {providers.map((provider) => {
+                    const normalizedProviderName = normalizeOptionValue(provider.name)
+                    const isSelected = normalizedProviderName === normalizedSelectedProvider
+                    const commandValue =
+                      typeof provider.name === "string"
+                        ? provider.name.trim()
+                        : provider.name != null
+                          ? String(provider.name)
+                          : ""
+
+                    return (
+                      <CommandItem
+                        key={provider.id ?? provider.name}
+                        value={commandValue}
+                        onSelect={() => {
+                          if (isSelected) {
+                            setOpenProvider(false)
+                            return
+                          }
+
+                          setValueProvider(provider.name || "")
+                          setValue("provider_name", provider.name || "")
+                          setValue("provider_adress", provider.adress || "")
+                          setValue("provider_documentNumber", provider.documentNumber || "")
+                          setOpenProvider(false)
+                        }}
+                      >
+                        {provider.name}
+                        <Save className={cn("ml-auto", isSelected ? "opacity-100" : "opacity-0")} />
+                      </CommandItem>
+                    )
+                  })}
                 </CommandGroup>
               </CommandList>
             </Command>
@@ -138,3 +144,6 @@ export function ProviderSection({
     </div>
   );
 }
+
+
+

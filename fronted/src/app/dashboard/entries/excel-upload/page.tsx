@@ -10,7 +10,9 @@ import { getProviders } from '@/app/dashboard/providers/providers.api'
 import { getUserDataFromToken } from '@/lib/auth'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/progress'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Loader2 } from 'lucide-react'
 
 type FilaError = {
   campo: string
@@ -32,6 +34,65 @@ function obtenerValorLegible(valor: unknown): string {
   return String(valor)
 }
 
+function obtenerValorOriginal(valor: unknown): string {
+  if (valor === undefined) {
+    return 'undefined'
+  }
+
+  if (valor === null) {
+    return 'null'
+  }
+
+  if (typeof valor === 'string') {
+    if (valor === '') {
+      return '"" (cadena vacia)'
+    }
+
+    return JSON.stringify(valor)
+  }
+
+  if (Array.isArray(valor)) {
+    return JSON.stringify(valor)
+  }
+
+  if (typeof valor === 'number' && Number.isNaN(valor)) {
+    return 'NaN'
+  }
+
+  if (typeof valor === 'object') {
+    try {
+      return JSON.stringify(valor)
+    } catch (error) {
+      return String(valor)
+    }
+  }
+
+  return String(valor)
+}
+
+
+function tieneEspaciosExtremos(valor: unknown): boolean {
+  if (typeof valor !== 'string') {
+    return false
+  }
+
+  return valor.trim() !== valor
+}
+
+function registrarErrorPorEspacios(
+  filaErrores: FilaError[],
+  campo: string,
+  valor: unknown,
+) {
+  if (typeof valor === 'string' && tieneEspaciosExtremos(valor)) {
+    filaErrores.push({
+      campo,
+      mensaje: `El campo ${campo} contiene espacios al inicio o al final.`,
+      valor,
+    })
+  }
+}
+
 function validarFilas(previewData: any[]): Record<number, FilaError[]> {
   const errores: Record<number, FilaError[]> = {}
 
@@ -44,6 +105,8 @@ function validarFilas(previewData: any[]): Record<number, FilaError[]> {
         mensaje: 'El campo nombre es obligatorio.',
         valor: fila.nombre,
       })
+    } else {
+      registrarErrorPorEspacios(filaErrores, 'nombre', fila.nombre)
     }
 
     if (!fila.categoria || typeof fila.categoria !== 'string' || fila.categoria.trim() === '') {
@@ -52,7 +115,11 @@ function validarFilas(previewData: any[]): Record<number, FilaError[]> {
         mensaje: 'El campo categoria es obligatorio.',
         valor: fila.categoria,
       })
+    } else {
+      registrarErrorPorEspacios(filaErrores, 'categoria', fila.categoria)
     }
+
+    registrarErrorPorEspacios(filaErrores, 'descripcion', fila.descripcion)
 
     if (
       fila.precioCompra === undefined ||
@@ -64,6 +131,8 @@ function validarFilas(previewData: any[]): Record<number, FilaError[]> {
         mensaje: 'El valor debe ser numerico.',
         valor: fila.precioCompra,
       })
+    } else {
+      registrarErrorPorEspacios(filaErrores, 'precioCompra', fila.precioCompra)
     }
 
     if (
@@ -76,6 +145,8 @@ function validarFilas(previewData: any[]): Record<number, FilaError[]> {
         mensaje: 'El valor debe ser numerico.',
         valor: fila.stock,
       })
+    } else {
+      registrarErrorPorEspacios(filaErrores, 'stock', fila.stock)
     }
 
     if (
@@ -89,7 +160,19 @@ function validarFilas(previewData: any[]): Record<number, FilaError[]> {
         mensaje: 'El valor debe ser numerico.',
         valor: fila.precioVenta,
       })
+    } else if (
+      fila.precioVenta !== undefined &&
+      fila.precioVenta !== null &&
+      fila.precioVenta !== ''
+    ) {
+      registrarErrorPorEspacios(filaErrores, 'precioVenta', fila.precioVenta)
     }
+
+    registrarErrorPorEspacios(filaErrores, 'serie', fila.serie)
+    registrarErrorPorEspacios(filaErrores, 'codigo', fila.codigo)
+    registrarErrorPorEspacios(filaErrores, 'codigos', fila.codigos)
+    registrarErrorPorEspacios(filaErrores, 'marca', fila.marca)
+    registrarErrorPorEspacios(filaErrores, 'unidad', fila.unidad)
 
     if (filaErrores.length > 0) {
       errores[index] = filaErrores
@@ -183,6 +266,12 @@ export default function ExcelUploadPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
+  const [savingProgress, setSavingProgress] = useState(0)
+
+  const isProcessing = isUploading || isSaving
+  const currentOverlayProgress = isUploading ? uploadProgress : savingProgress
+  const overlayMessage = isUploading ? 'Procesando archivo...' : 'Insertando inventario...'
+
 
   const router = useRouter()
 
@@ -278,6 +367,10 @@ export default function ExcelUploadPage() {
       return
     }
     setIsSaving(true)
+    setSavingProgress(0)
+    const interval = setInterval(() => {
+      setSavingProgress((p) => (p < 90 ? p + 10 : p))
+    }, 200)
     try {
       const response = await commitImportedExcelData(previewData, selectedStoreId, responsibleId,
         selectedProviderId)
@@ -304,7 +397,12 @@ export default function ExcelUploadPage() {
       console.error('Error al guardar datos:', error)
       toast.error('Error al guardar datos')
     } finally {
-      setIsSaving(false)
+      clearInterval(interval)
+      setSavingProgress(100)
+      setTimeout(() => {
+        setIsSaving(false)
+        setSavingProgress(0)
+      }, 500)
     }
   }
 
@@ -319,7 +417,22 @@ export default function ExcelUploadPage() {
   }, [])
 
   return (
-    <div className="max-w-3xl mx-auto py-6">
+    <div className="relative">
+      {isProcessing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="w-full max-w-sm space-y-4 rounded-lg border bg-background p-6 shadow-lg">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <div>
+                <p className="font-medium">{overlayMessage}</p>
+                <p className="text-sm text-muted-foreground">{currentOverlayProgress}% completado</p>
+              </div>
+            </div>
+            <Progress value={currentOverlayProgress} />
+          </div>
+        </div>
+      )}
+      <div className="max-w-3xl mx-auto py-6">
       <div className="flex justify-between items-center mb-6 gap-2">
         <h1 className="text-2xl font-bold">Subir Inventario por Excel</h1>
       </div>
@@ -360,7 +473,7 @@ export default function ExcelUploadPage() {
       </div>
 
       <Input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-      <Button className="mt-4" onClick={handleUpload} disabled={isUploading}>
+      <Button className="mt-4" onClick={handleUpload} disabled={isUploading || isSaving}>
         {isUploading ? 'Procesando...' : 'Procesar Archivo'}
       </Button>
       {isUploading && (
@@ -426,7 +539,7 @@ export default function ExcelUploadPage() {
                           <p key={`${idx}-${error.campo}`}>
                             <span className="font-semibold capitalize">{error.campo}</span>: {error.mensaje}{' '}
                             <span className="text-xs text-muted-foreground">
-                              Valor recibido: {obtenerValorLegible(error.valor)}
+                              Valor recibido: {obtenerValorOriginal(error.valor)}
                             </span>
                           </p>
                         ))}
@@ -548,7 +661,7 @@ export default function ExcelUploadPage() {
                                     <p className="font-semibold capitalize">{error.campo}</p>
                                     <p>{error.mensaje}</p>
                                     <p className="text-xs text-muted-foreground">
-                                      Valor recibido: {obtenerValorLegible(error.valor)}
+                                      Valor recibido: {obtenerValorOriginal(error.valor)}
                                     </p>
                                   </li>
                                 ))}
@@ -589,6 +702,6 @@ export default function ExcelUploadPage() {
         </div>
       )}
     </div>
+  </div>
   )
 }
-
