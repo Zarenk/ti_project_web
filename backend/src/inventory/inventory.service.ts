@@ -27,10 +27,11 @@ export class InventoryService {
   
     // Limpiar claves con espacios
     const cleanedData = rawData.map((row: any) => {
-      const cleanedRow: any = {};
+      const cleanedRow: Record<string, unknown> = {};
       Object.keys(row).forEach((key) => {
-        const cleanKey = key.trim(); // Elimina espacios al inicio/final
-        cleanedRow[cleanKey] = row[key];
+        const cleanKey = key.trim(); // Elimina espacios al inicio/final en el encabezado
+        const value = row[key];
+        cleanedRow[cleanKey] = typeof value === 'string' ? value.trim() : value;
       });
       return cleanedRow;
     });
