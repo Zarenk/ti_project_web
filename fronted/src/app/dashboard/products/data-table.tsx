@@ -1059,10 +1059,10 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
 
       </div>
 
-      <div className="rounded-md border px-2 lg:px-2 py-2 lg:py-2 xl:max-w-[1450px] lg:max-w-[1000px] md:max-w-[850px] sm:max-w-[700px] mx-auto">
+      <div className="w-full max-w-full rounded-md border px-2 lg:px-2 py-2 lg:py-2 xl:max-w-[1450px] lg:max-w-[1000px] md:max-w-[850px] sm:max-w-[700px] mx-auto">
         {/* Contenedor del DataTable con scroll horizontal */}
-        <div className="overflow-x-auto rounded-md border">
-        <Table className="table-auto w-full min-w-[600px]">
+        <div className="w-full max-w-full overflow-x-auto rounded-md border">
+          <Table className="table-auto w-full min-w-[600px]">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>

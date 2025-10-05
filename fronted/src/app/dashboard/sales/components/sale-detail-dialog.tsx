@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo } from "react";
 import { format } from "date-fns";
@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Sale } from "../columns";
 
+type SaleDetail = Sale["details"] extends Array<infer Item> ? Item : never;
+
 const parseNumber = (value: unknown): number => {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -26,7 +28,7 @@ const parseNumber = (value: unknown): number => {
   return 0;
 };
 
-const getDetailTotal = (detail?: NonNullable<Sale["details"]>[number]): number => {
+const getDetailTotal = (detail?: SaleDetail | null): number => {
   if (!detail) {
     return 0;
   }
@@ -271,3 +273,5 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
     </Dialog>
   );
 }
+
+
