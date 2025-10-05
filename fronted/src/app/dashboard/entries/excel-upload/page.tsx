@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRouter } from 'next/navigation'
@@ -9,57 +9,95 @@ import { commitImportedExcelData, getAllStores, importExcelFile } from '@/app/da
 import { getProviders } from '@/app/dashboard/providers/providers.api'
 import { getUserDataFromToken } from '@/lib/auth'
 import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 
-function validarFilas(previewData: any[]): Record<number, string[]> {
-    const errores: Record<number, string[]> = {}
-  
-    previewData.forEach((fila, index) => {
-      const filaErrores: string[] = []
-  
-      if (!fila.nombre || typeof fila.nombre !== 'string' || fila.nombre.trim() === '') {
-        filaErrores.push(`Falta el campo "nombre"`)
-      }
-  
-      if (!fila.categoria || typeof fila.categoria !== 'string' || fila.categoria.trim() === '') {
-        filaErrores.push(`Falta el campo "categoría"`)
-      }
-  
-      // Validación corregida para precioCompra
-      if (
-        fila.precioCompra === undefined ||
-        (typeof fila.precioCompra === 'string' && fila.precioCompra.trim() === '') ||
-        isNaN(Number(fila.precioCompra))
-      ) {
-        filaErrores.push(`"precioCompra" inválido`)
-      }
-  
-      // Validación corregida para stock
-      if (
-        fila.stock === undefined ||
-        (typeof fila.stock === 'string' && fila.stock.trim() === '') ||
-        isNaN(Number(fila.stock))
-      ) {
-        filaErrores.push(`"stock" inválido`)
-      }
-
-      // ✅ Validación opcional de precioVenta (si se proporciona)
-      if (
-        fila.precioVenta !== undefined &&
-        fila.precioVenta !== null &&
-        fila.precioVenta !== '' &&
-        isNaN(Number(fila.precioVenta))
-      ) {
-        filaErrores.push(`"precioVenta" inválido`)
-      }
-  
-      if (filaErrores.length > 0) {
-        errores[index] = filaErrores
-      }
-    })
-  
-    return errores
+type FilaError = {
+  campo: string
+  mensaje: string
+  valor: unknown
 }
 
+
+function obtenerValorLegible(valor: unknown): string {
+  if (valor === undefined || valor === null) {
+    return 'vacio'
+  }
+
+  if (typeof valor === 'string') {
+    const trimmed = valor.trim()
+    return trimmed === '' ? 'vacio' : trimmed
+  }
+
+  return String(valor)
+}
+
+function validarFilas(previewData: any[]): Record<number, FilaError[]> {
+  const errores: Record<number, FilaError[]> = {}
+
+  previewData.forEach((fila, index) => {
+    const filaErrores: FilaError[] = []
+
+    if (!fila.nombre || typeof fila.nombre !== 'string' || fila.nombre.trim() === '') {
+      filaErrores.push({
+        campo: 'nombre',
+        mensaje: 'El campo nombre es obligatorio.',
+        valor: fila.nombre,
+      })
+    }
+
+    if (!fila.categoria || typeof fila.categoria !== 'string' || fila.categoria.trim() === '') {
+      filaErrores.push({
+        campo: 'categoria',
+        mensaje: 'El campo categoria es obligatorio.',
+        valor: fila.categoria,
+      })
+    }
+
+    if (
+      fila.precioCompra === undefined ||
+      (typeof fila.precioCompra === 'string' && fila.precioCompra.trim() === '') ||
+      isNaN(Number(fila.precioCompra))
+    ) {
+      filaErrores.push({
+        campo: 'precioCompra',
+        mensaje: 'El valor debe ser numerico.',
+        valor: fila.precioCompra,
+      })
+    }
+
+    if (
+      fila.stock === undefined ||
+      (typeof fila.stock === 'string' && fila.stock.trim() === '') ||
+      isNaN(Number(fila.stock))
+    ) {
+      filaErrores.push({
+        campo: 'stock',
+        mensaje: 'El valor debe ser numerico.',
+        valor: fila.stock,
+      })
+    }
+
+    if (
+      fila.precioVenta !== undefined &&
+      fila.precioVenta !== null &&
+      fila.precioVenta !== '' &&
+      isNaN(Number(fila.precioVenta))
+    ) {
+      filaErrores.push({
+        campo: 'precioVenta',
+        mensaje: 'El valor debe ser numerico.',
+        valor: fila.precioVenta,
+      })
+    }
+
+    if (filaErrores.length > 0) {
+      errores[index] = filaErrores
+    }
+  })
+
+  return errores
+}
 function encontrarSeriesDuplicadas(data: any[]): string[] {
   const vistas = new Set<string>()
   const duplicadas = new Set<string>()
@@ -94,7 +132,54 @@ export default function ExcelUploadPage() {
   const [selectedProviderId, setSelectedProviderId] = useState<number | null>(null)
   const [erroresValidacion, setErroresValidacion] = useState<string[]>([])
   const [filasConError, setFilasConError] = useState<number[]>([])
-  const erroresMapeados: Record<number, string[]> = validarFilas(previewData || [])
+  const [errorFieldFilter, setErrorFieldFilter] = useState<string>('ALL')
+  const [errorSearchTerm, setErrorSearchTerm] = useState('')
+  const erroresMapeados: Record<number, FilaError[]> = previewData ? validarFilas(previewData) : {}
+  const filaErroresEntries = useMemo(
+    () =>
+      Object.entries(erroresMapeados).map(([rowIndex, errores]) => ({
+        rowIndex: Number(rowIndex),
+        rowNumber: Number(rowIndex) + 2,
+        errores,
+      })),
+    [erroresMapeados],
+  )
+  const availableErrorFields = useMemo(() => {
+    const fieldSet = new Set<string>()
+    filaErroresEntries.forEach(({ errores }) => {
+      errores.forEach((error) => fieldSet.add(error.campo))
+    })
+    return Array.from(fieldSet).sort((a, b) => a.localeCompare(b))
+  }, [filaErroresEntries])
+  const filteredErrorEntries = useMemo(() => {
+    const query = errorSearchTerm.trim().toLowerCase()
+    return filaErroresEntries.filter(({ rowNumber, errores }) => {
+      const matchesField =
+        errorFieldFilter === 'ALL' || errores.some((error) => error.campo === errorFieldFilter)
+      if (!matchesField) {
+        return false
+      }
+      if (!query) {
+        return true
+      }
+      const rowLabel = `fila ${rowNumber}`.toLowerCase()
+      if (rowLabel.includes(query)) {
+        return true
+      }
+      return errores.some((error) => {
+        const valor = obtenerValorLegible(error.valor).toLowerCase()
+        return (
+          error.campo.toLowerCase().includes(query) ||
+          error.mensaje.toLowerCase().includes(query) ||
+          valor.includes(query)
+        )
+      })
+    })
+  }, [filaErroresEntries, errorFieldFilter, errorSearchTerm])
+  const generalErrorMessages = useMemo(
+    () => erroresValidacion.filter((mensaje) => !mensaje.toLowerCase().startsWith('fila ')),
+    [erroresValidacion],
+  )
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
@@ -112,22 +197,35 @@ export default function ExcelUploadPage() {
       const response = await importExcelFile(file)
       const preview = response.preview
 
-      const erroresPorFila = validarFilas(preview)
-      const errores = Object.values(erroresPorFila).flat()
-      const indicesConError = Object.keys(erroresPorFila).map((idx) => parseInt(idx))
-
-      const seriesDuplicadas = encontrarSeriesDuplicadas(preview)
-      if (seriesDuplicadas.length > 0) {
-        errores.push(`Series duplicadas en el archivo: ${seriesDuplicadas.join(', ')}`)
-      }
-
-      setErroresValidacion(errores)
-      setFilasConError(indicesConError)
-
-      if (errores.length > 0) {
+      if (!Array.isArray(preview) || preview.length === 0) {
         setPreviewData(null)
+        toast.error('No se pudo procesar el archivo. Corrige los datos del Excel e intentalo nuevamente.')
         return
       }
+
+      const erroresPorFila = validarFilas(preview)
+      const indicesConError = Object.keys(erroresPorFila).map((idx) => parseInt(idx, 10))
+      const hasRowErrors = Object.keys(erroresPorFila).length > 0
+
+      const seriesDuplicadas = encontrarSeriesDuplicadas(preview)
+      const generalMessages: string[] = []
+
+      if (seriesDuplicadas.length > 0) {
+        generalMessages.push(`Series duplicadas en el archivo: ${seriesDuplicadas.join(', ')}`)
+      }
+
+      setErroresValidacion(generalMessages)
+      setFilasConError(indicesConError)
+      setErrorFieldFilter('ALL')
+      setErrorSearchTerm('')
+
+      if (hasRowErrors || generalMessages.length > 0) {
+        setPreviewData(preview)
+        toast.error('No se pudo procesar el archivo. Corrige los datos del Excel e intentalo nuevamente.')
+        return
+      }
+
+
 
       setPreviewData(preview)
       toast.success('Archivo procesado correctamente')
@@ -161,21 +259,24 @@ export default function ExcelUploadPage() {
     }
 
     const erroresPorFila = validarFilas(previewData)
-    const errores = Object.values(erroresPorFila).flat()
-    const indicesConError = Object.keys(erroresPorFila).map((idx) => parseInt(idx))
+    const indicesConError = Object.keys(erroresPorFila).map((idx) => parseInt(idx, 10))
+    const hasRowErrors = Object.keys(erroresPorFila).length > 0
 
     const seriesDuplicadas = encontrarSeriesDuplicadas(previewData)
+    const generalMessages: string[] = []
+
     if (seriesDuplicadas.length > 0) {
-      errores.push(`Series duplicadas en el archivo: ${seriesDuplicadas.join(', ')}`)
+      generalMessages.push(`Series duplicadas en el archivo: ${seriesDuplicadas.join(', ')}`)
     }
 
-    setErroresValidacion(errores)
+    setErroresValidacion(generalMessages)
     setFilasConError(indicesConError)
+    setErrorFieldFilter('ALL')
+    setErrorSearchTerm('')
 
-    if (errores.length > 0) {
+    if (hasRowErrors || generalMessages.length > 0) {
       return
     }
-
     setIsSaving(true)
     try {
       const response = await commitImportedExcelData(previewData, selectedStoreId, responsibleId,
@@ -304,64 +405,179 @@ export default function ExcelUploadPage() {
           </div>
 
           <div>
-                <h2 className="font-semibold mb-1">Previsualización:</h2>
-                <div className="border rounded p-4 max-h-[400px] overflow-auto space-y-2 text-sm">
-                {previewData.map((item, idx) => (
-                <div
+            <h2 className="font-semibold mb-1">Previsualizacion:</h2>
+            <div className="border rounded p-4 max-h-[400px] overflow-auto space-y-2 text-sm">
+              {previewData.map((item, idx) => {
+                const filaErrores = erroresMapeados[idx] ?? []
+                const camposConError = new Set(filaErrores.map((error) => error.campo))
+                return (
+                  <div
                     key={idx}
                     className={`p-3 rounded border ${
-                    filasConError.includes(idx) ? 'bg-red-400 border-red-600' : 'bg-muted'
+                      filasConError.includes(idx) ? 'bg-red-400 border-red-600' : 'bg-muted'
                     }`}
-                >
-                    {erroresMapeados[idx] && (
-                    <div className="text-sm text-red-700 space-y-1 mb-1">
-                        {erroresMapeados[idx].map((err, i) => (
-                        <p key={i}>⚠️ {err}</p>
+                  >
+                    <p className="text-xs font-medium text-muted-foreground mb-1">
+                      Fila {idx + 2}
+                    </p>
+                    {filaErrores.length > 0 && (
+                      <div className="text-sm text-red-700 space-y-1 mb-2">
+                        {filaErrores.map((error) => (
+                          <p key={`${idx}-${error.campo}`}>
+                            <span className="font-semibold capitalize">{error.campo}</span>: {error.mensaje}{' '}
+                            <span className="text-xs text-muted-foreground">
+                              Valor recibido: {obtenerValorLegible(error.valor)}
+                            </span>
+                          </p>
                         ))}
-                    </div>
+                      </div>
                     )}
                     <p>
-                    <strong>{item['nombre '] || item.nombre}</strong> —{' '}
-                    <span className="italic">{item.categoria}</span>
+                      <strong className={camposConError.has('nombre') ? 'text-red-700 font-semibold' : ''}>
+                        {item['nombre '] || item.nombre || 'Sin nombre'}
+                      </strong>{' '}
+                      <span
+                        className={`italic ${camposConError.has('categoria') ? 'text-red-700 font-semibold' : ''}`}
+                      >
+                        {item.categoria ?? 'Sin categoria'}
+                      </span>
                     </p>
-                    <p>
-                    <span className="font-medium">Stock:</span> {item.stock} —{' '}
-                    <span className="font-medium">Precio Compra:</span>{' '}
-                    {item.precioCompra ?? '—'} —{' '}
-                    <span className="font-medium">Precio Venta:</span>{' '}
-                    {item.precioVenta ?? '—'}
+                    <p className="space-x-1">
+                      <span className={`font-medium ${camposConError.has('stock') ? 'text-red-700' : ''}`}>
+                        Stock:
+                      </span>
+                      <span className={camposConError.has('stock') ? 'text-red-700 font-semibold' : ''}>
+                        {obtenerValorLegible(item.stock)}
+                      </span>
+                      <span className={`font-medium ${camposConError.has('precioCompra') ? 'text-red-700' : ''}`}>
+                        Precio Compra:
+                      </span>
+                      <span className={camposConError.has('precioCompra') ? 'text-red-700 font-semibold' : ''}>
+                        {obtenerValorLegible(item.precioCompra)}
+                      </span>
+                      <span className={`font-medium ${camposConError.has('precioVenta') ? 'text-red-700' : ''}`}>
+                        Precio Venta:
+                      </span>
+                      <span className={camposConError.has('precioVenta') ? 'text-red-700 font-semibold' : ''}>
+                        {obtenerValorLegible(item.precioVenta)}
+                      </span>
                     </p>
                     {item.serie && (
-                    <p>
+                      <p>
                         <span className="font-medium">Series:</span>{' '}
                         {typeof item.serie === 'string'
-                        ? item.serie
-                        : Array.isArray(item.serie)
-                        ? item.serie.join(', ')
-                        : '—'}
-                    </p>
+                          ? item.serie
+                          : Array.isArray(item.serie)
+                          ? item.serie.join(', ')
+                          : 'Sin series'}
+                      </p>
                     )}
-                </div>
-                ))}
-                </div>
-           </div>
-
-           {erroresValidacion.length > 0 && (
-            <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded space-y-2 relative">
-                <button
-                onClick={() => setErroresValidacion([])}
-                className="absolute top-2 right-2 text-red-500 hover:text-red-700 text-sm"
-                >
-                ✕
-                </button>
-                <p className="font-semibold">❌ Se encontraron errores en el archivo:</p>
-                <ul className="list-disc list-inside text-sm">
-                {erroresValidacion.map((error, idx) => (
-                    <li key={idx}>{error}</li>
-                ))}
-                </ul>
+                  </div>
+                )
+              })}
             </div>
-            )}
+          </div>
+
+          {(filteredErrorEntries.length > 0 || generalErrorMessages.length > 0) && (
+            <div className="p-4 bg-red-100/80 border border-red-300 text-red-900 rounded space-y-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-semibold">Se encontraron errores en el archivo</p>
+                  {filaErroresEntries.length > 0 && (
+                    <p className="text-xs text-muted-foreground">Usa los filtros para localizar rapidamente los problemas en tu Excel.</p>
+                  )}
+                </div>
+                {(errorFieldFilter !== 'ALL' || errorSearchTerm) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setErrorFieldFilter('ALL')
+                      setErrorSearchTerm('')
+                    }}
+                  >
+                    Limpiar filtros
+                  </Button>
+                )}
+              </div>
+
+              {filaErroresEntries.length > 0 && (
+                <div className="space-y-3">
+                  <div className="grid gap-2 md:grid-cols-[220px_minmax(0,1fr)]">
+                    <Select value={errorFieldFilter} onValueChange={setErrorFieldFilter}>
+                      <SelectTrigger className="h-9 bg-white text-red-900 border-red-200">
+                        <SelectValue placeholder="Todos los campos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Todos los campos</SelectItem>
+                        {availableErrorFields.map((field) => (
+                          <SelectItem key={field} value={field} className="capitalize">
+                            {field}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={errorSearchTerm}
+                      onChange={(event) => setErrorSearchTerm(event.target.value)}
+                      placeholder="Buscar por fila, campo o valor"
+                      className="h-9 bg-white text-red-900 border-red-200"
+                    />
+                  </div>
+
+                  <div className="rounded-md border border-red-200 bg-white">
+                    {filteredErrorEntries.length > 0 ? (
+                      <Accordion type="multiple" className="divide-y divide-red-100">
+                        {filteredErrorEntries.map(({ rowIndex, rowNumber, errores }) => (
+                          <AccordionItem key={rowIndex} value={`error-row-${rowIndex}`}>
+                            <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                              <div className="flex w-full items-center justify-between gap-3 text-left">
+                                <span className="font-medium text-red-900">Fila {rowNumber}</span>
+                                <Badge variant="secondary" className="bg-red-100 text-red-800">
+                                  {errores.length} {errores.length === 1 ? 'error' : 'errores'}
+                                </Badge>
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="px-4 pb-4">
+                              <ul className="space-y-2 text-sm">
+                                {errores.map((error, idx) => (
+                                  <li
+                                    key={`${rowIndex}-${error.campo}-${idx}`}
+                                    className="rounded-md border border-red-100 bg-red-50 p-3 text-red-900"
+                                  >
+                                    <p className="font-semibold capitalize">{error.campo}</p>
+                                    <p>{error.mensaje}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Valor recibido: {obtenerValorLegible(error.valor)}
+                                    </p>
+                                  </li>
+                                ))}
+                              </ul>
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
+                    ) : (
+                      <div className="p-4 text-sm text-muted-foreground">
+                        No se encontraron errores con los filtros aplicados.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {generalErrorMessages.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-red-900">Validaciones adicionales</p>
+                  <ul className="list-disc list-inside text-sm text-red-900">
+                    {generalErrorMessages.map((error, idx) => (
+                      <li key={`general-${idx}`}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           <Button
             className="w-full bg-green-700 hover:bg-green-800 text-white"
@@ -375,3 +591,4 @@ export default function ExcelUploadPage() {
     </div>
   )
 }
+
