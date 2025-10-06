@@ -661,32 +661,47 @@ export default function CashRegisterDashboard() {
 
     const reportDateLabel = format(selectedDate, "dd/MM/yyyy")
     const reportFileDate = format(selectedDate, "yyyy-MM-dd")
-    const caption = Reporte de Caja -  ()
+    const caption = `Reporte de Caja - ${selectedStoreName} (${reportDateLabel})`
+    const sanitizedCaption = escapeHtml(caption)
+
     const tableHead = REPORT_COLUMNS.map((column) =>
-      <th style="background-color:#f5f5f5;text-align:left;padding:8px;border:1px solid #cccccc;"></th>
+      `<th style="background-color:#f5f5f5;text-align:left;padding:8px;border:1px solid #cccccc;">${escapeHtml(column.header)}</th>`
     ).join("")
+
     const tableBody = reportRows
       .map((row) => {
         const cells = REPORT_COLUMNS.map((column) => {
-          const value = row[column.key] ?? "-"
-          return <td style="padding:6px;border:1px solid #dddddd;vertical-align:top;"></td>
+          const value = (row[column.key] ?? "-") as string
+          return `<td style="padding:6px;border:1px solid #dddddd;vertical-align:top;">${escapeHtml(value)}</td>`
         }).join("")
-        return <tr></tr>
+        return `<tr>${cells}</tr>`
       })
       .join("")
-    const tableHtml =
-      <table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;min-width:720px;"> +
-      <caption style="margin-bottom:8px;font-weight:bold;"></caption> +
-      <thead><tr></tr></thead> +
-      <tbody></tbody></table>
-    const blob = new Blob([\uFEFF], {
+
+    const tableHtml = `
+      <table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;min-width:720px;">
+        <caption style="margin-bottom:8px;font-weight:bold;">${sanitizedCaption}</caption>
+        <thead><tr>${tableHead}</tr></thead>
+        <tbody>${tableBody}</tbody>
+      </table>
+    `.trim()
+
+    const htmlDocument = `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${sanitizedCaption}</title>
+        </head>
+        <body>${tableHtml}</body>
+      </html>
+    `.trim()
+
+    const blob = new Blob(["\uFEFF", htmlDocument], {
       type: "application/vnd.ms-excel;charset=utf-8;",
     })
-    downloadBlob(blob, 
-eporte-caja-.xls)
+    downloadBlob(blob, `reporte-caja-${reportFileDate}.xls`)
     toast.success("Reporte Excel generado correctamente.")
   }
-
   const handleExportPdf = async () => {
     if (isReportEmpty) {
       toast.info("No hay movimientos para exportar.")
@@ -708,7 +723,7 @@ eporte-caja-.xls)
         tableHeaderRow: { backgroundColor: "#f5f5f5", borderBottomWidth: 1, borderBottomColor: "#d4d4d4" },
         tableRowEven: { backgroundColor: "#fafafa" },
         cell: { flex: 1, paddingRight: 6 },
-        cellWide: { flex: 2 },
+        cellWide: { flex: 2, paddingRight: 6 },
         cellAmount: { textAlign: "right" },
         cellHeader: { fontWeight: "bold" },
       })
@@ -718,19 +733,19 @@ eporte-caja-.xls)
           <Page size="A4" style={pdfStyles.page}>
             <View style={pdfStyles.header}>
               <Text style={pdfStyles.title}>Reporte de Caja</Text>
-              <Text style={pdfStyles.subtitle}>{Fecha: }</Text>
-              <Text style={pdfStyles.subtitle}>{Tienda: }</Text>
-              <Text style={pdfStyles.meta}>{Movimientos: }</Text>
+              <Text style={pdfStyles.subtitle}>{`Fecha: ${reportDateLabel}`}</Text>
+              <Text style={pdfStyles.subtitle}>{`Tienda: ${selectedStoreName}`}</Text>
+              <Text style={pdfStyles.meta}>{`Movimientos: ${reportRows.length}`}</Text>
             </View>
             <View style={pdfStyles.table}>
               <View style={[pdfStyles.tableRow, pdfStyles.tableHeaderRow]}>
                 {REPORT_COLUMNS.map((column) => {
-                  const headerStyles = [pdfStyles.cell, pdfStyles.cellHeader]
+                  const headerStyles: any[] = [pdfStyles.cell, pdfStyles.cellHeader]
                   if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
                     headerStyles.push(pdfStyles.cellWide)
                   }
                   if (column.key === "amount") {
-                    headerStyles.push(pdfStyles.cellAmount)
+                    headerStyles.push(pdfStyles.cellAmount);
                   }
                   return (
                     <Text key={column.key} style={headerStyles}>
@@ -741,25 +756,26 @@ eporte-caja-.xls)
               </View>
               {reportRows.map((row, index) => (
                 <View
-                  key={${row.timestamp}--}
+                  key={`${row.timestamp}-${index}`}
                   style={[
-                    pdfStyles.tableRow,
-                    index % 2 === 0 ? pdfStyles.tableRowEven : undefined,
+                    [pdfStyles.tableRow, ...(index % 2 === 0 ? [pdfStyles.tableRowEven] : [])] as any
                   ]}
                 >
                   {REPORT_COLUMNS.map((column) => {
-                    const cellStyles = [pdfStyles.cell]
+                    // ⬇⬇⬇ forzamos el tipo del arreglo
+                    const cellStyles: any[] = [pdfStyles.cell];
                     if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
-                      cellStyles.push(pdfStyles.cellWide)
+                      cellStyles.push(pdfStyles.cellWide);
                     }
                     if (column.key === "amount") {
-                      cellStyles.push(pdfStyles.cellAmount)
+                      cellStyles.push(pdfStyles.cellAmount); // { textAlign: "right" }
                     }
+                    const value = row[column.key] || "-";
                     return (
                       <Text key={column.key} style={cellStyles}>
-                        {row[column.key] || "-"}
+                        {value}
                       </Text>
-                    )
+                    );
                   })}
                 </View>
               ))}
@@ -768,8 +784,7 @@ eporte-caja-.xls)
         </Document>
       )
       const blob = await pdf(documentDefinition).toBlob()
-      downloadBlob(blob, 
-eporte-caja-.pdf)
+      downloadBlob(blob, `reporte-caja-${reportFileDate}.pdf`)
       toast.success("Reporte PDF generado correctamente.")
     } catch (error) {
       console.error("Error generando PDF de caja:", error)
@@ -1198,38 +1213,13 @@ eporte-caja-.pdf)
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
-          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-2">
-            <div>
-              <CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle>
               {isSameDay(selectedDate, new Date()) ? "Saldo Actual" : `Saldo del ${format(selectedDate, "dd/MM/yyyy")}`}
-              </CardTitle>
-              <CardDescription>
-                Dinero disponible en caja {isSameDay(selectedDate, new Date()) ? "hoy" : "según último cierre de ese día"}
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportExcel}
-                disabled={isReportEmpty}
-                className="flex items-center gap-2"
-              >
-                <FileSpreadsheet className="h-4 w-4" />
-                Exportar Excel
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportPdf}
-                disabled={isReportEmpty || isGeneratingPdf}
-                className="flex items-center gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                {isGeneratingPdf ? "Generando..." : "Exportar PDF"}
-              </Button>
-            </div>
+            </CardTitle>
+            <CardDescription>
+              Dinero disponible en caja {isSameDay(selectedDate, new Date()) ? "hoy" : "segun ultimo cierre de ese dia"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
@@ -1357,9 +1347,32 @@ eporte-caja-.pdf)
         </TabsContent>
         <TabsContent value="history">
           <Card>
-            <CardHeader>
-              <CardTitle>Historial de Transacciones</CardTitle>
-              <CardDescription>Ver todas las transacciones de la caja registradora</CardDescription>
+            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+              <div className="space-y-1">
+                <CardTitle>Historial de Transacciones</CardTitle>
+                <CardDescription>Ver todas las transacciones de la caja registradora</CardDescription>
+              </div>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={handleExportExcel}
+                  disabled={isReportEmpty}
+                >
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Exportar Excel
+                </Button>
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={handleExportPdf}
+                  disabled={isReportEmpty || isGeneratingPdf}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  {isGeneratingPdf ? "Generando PDF..." : "Exportar PDF"}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <TransactionHistory 
@@ -1377,5 +1390,4 @@ eporte-caja-.pdf)
     </div>
   )
 }
-
 
