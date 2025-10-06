@@ -20,14 +20,28 @@ type SelectedPayment = {
   amount: number;
 };
 
+type TempPayment = SelectedPayment & { uid: string };
+
 interface PaymentMethodsSelectorProps {
   value: SelectedPayment[];
   onChange: (payments: SelectedPayment[]) => void;
 }
 
+const generateUid = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const arePaymentsEqual = (current: TempPayment[], external: SelectedPayment[]) =>
+  current.length === external.length &&
+  current.every((payment, index) => {
+    const ext = external[index];
+    return ext && payment.method === ext.method && Number(payment.amount) === Number(ext.amount);
+  });
+
 export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelectorProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [tempPayments, setTempPayments] = useState<SelectedPayment[]>([]);
+  const [tempPayments, setTempPayments] = useState<TempPayment[]>([]);
 
   const defaultPaymentMethods: PaymentMethod[] = [
     { id: -1, name: "EN EFECTIVO" },
@@ -55,8 +69,32 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
   }, []);
 
   useEffect(() => {
-    setTempPayments(value);
+    setTempPayments((prev) => {
+      if (arePaymentsEqual(prev, value)) {
+        return prev;
+      }
+      // 🔒 Mantén el uid si el item “equivale” al previo en esa posición
+      return value.map((payment, i) => {
+        const p = prev[i];
+        const same =
+          p &&
+          p.method === payment.method &&
+          Number(p.amount) === Number(payment.amount);
+        return same ? p : { ...payment, uid: generateUid() };
+      });
+    });
   }, [value]);
+
+  const syncAndSetPayments = (updater: (prev: TempPayment[]) => TempPayment[]) => {
+    setTempPayments((prev) => {
+      const next = updater(prev);
+      if (arePaymentsEqual(next, value)) {
+        return prev;
+      }
+      onChange(next.map(({ uid, ...rest }) => rest));
+      return next;
+    });
+  };
 
   const handleAddPayment = () => {
     if (paymentMethods.length === 0) return;
@@ -69,33 +107,55 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     const isFirstPayment = tempPayments.length === 0;
     const formAmount = Number(document.querySelector<HTMLInputElement>('input[name="amount"]')?.value || 0);
   
-    const newPayments = [
-      ...tempPayments,
-      {
-        method: paymentMethods[0].name || "EFECTIVO",
-        amount: isFirstPayment ? formAmount : 0, // 👈 Seteamos el primer monto
-      },
-    ];
-  
-    setTempPayments(newPayments);
-    onChange(newPayments); // 👈 🔥 Esto actualiza inmediatamente en el padre también
+    syncAndSetPayments((prev) => {
+      const usedMethods = new Set(prev.map((payment) => payment.method));
+      const availableMethod = paymentMethods.find((method) => !usedMethods.has(method.name));
+      const selectedMethod = availableMethod ?? paymentMethods[0];
+
+      if (!selectedMethod) {
+        return prev;
+      }
+
+      const newPayments = [
+        ...prev,
+        {
+          uid: generateUid(),
+          method: selectedMethod.name,
+          amount: isFirstPayment ? formAmount : 0, // 👈 Seteamos el primer monto
+        },
+      ];
+
+      return newPayments;
+    });
   };
 
   const handleUpdatePayment = (index: number, field: keyof SelectedPayment, val: any) => {
-    const updated = [...tempPayments];
-    updated[index] = {
-      ...updated[index],
-      [field]: val, // Aseguramos que el campo sea dinámico y válido
-    } as SelectedPayment; // Type assertion para garantizar el tipo
-    setTempPayments(updated);
-    onChange(updated);
+    syncAndSetPayments((prev) => {
+      const updated = [...prev];
+      const current = updated[index];
+      if (!current) return prev;
+
+      const nextValue = field === "amount" ? (val === "" ? 0 : Number(val)) : val;
+
+      if (current[field] === nextValue) {
+        return prev;
+      }
+
+      updated[index] = {
+        ...current,
+        [field]: nextValue,
+      } as TempPayment;
+
+      return updated;
+    });
   };
 
   const handleRemovePayment = (index: number) => {
-    const updated = [...tempPayments];
-    updated.splice(index, 1);
-    setTempPayments(updated);
-    onChange(updated);
+    syncAndSetPayments((prev) => {
+      const updated = [...prev];
+      updated.splice(index, 1);
+      return updated;
+    });
   };
 
   const getIcon = (method: string) => {
@@ -121,7 +181,7 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
       <AnimatePresence>
         {tempPayments.map((payment, index) => (
           <motion.div
-            key={index}
+            key={payment.uid}
             initial={{ opacity: 0, scale: 0.95, x: -20 }}
             animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={{ opacity: 0, scale: 0.95, x: 20 }}

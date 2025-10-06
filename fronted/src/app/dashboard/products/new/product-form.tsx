@@ -164,7 +164,8 @@ export function ProductForm({
     });
 
   const { handleSubmit, register, setValue, clearErrors, control } = form;
-  const categoryId = form.watch('categoryId');
+  const watchedCategoryId = form.watch('categoryId');
+  const categoryId = watchedCategoryId ?? '';
   const {
     fields: imageFields,
     append: appendImage,
@@ -496,7 +497,7 @@ export function ProductForm({
                             {categoryOptions.length > 0 ? (
                               <Select
                                 disabled={isProcessing}
-                                value={categoryId || undefined}
+                                value={categoryId}
                                 onValueChange={(value:any) => {
                                   setValue("categoryId", value, {
                                     shouldValidate: true,

@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Transaction } from "../types/cash-register"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -14,7 +15,7 @@ import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { Plus } from "lucide-react"
+import { Plus, FileSpreadsheet, FileText } from "lucide-react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { format, isSameDay } from "date-fns"; // ya lo tienes en tus imports
@@ -86,6 +87,27 @@ const splitSaleDescription = (description: string | null | undefined) => {
 };
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+};
+
 
 const paymentMethodKeyCandidates = [
   "method",
@@ -249,6 +271,36 @@ const parseNumber = (value: string) => {
   const normalized = value.replace(/\s+/g, "").replace(",", ".");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const TRANSACTION_TYPE_LABELS: Record<string, string> = {
+  INCOME: "Ingresos",
+  EXPENSE: "Retiros",
+  CLOSURE: "Cierre",
+};
+
+const REPORT_COLUMNS: { key: keyof CashReportRow; header: string }[] = [
+  { key: "timestamp", header: "Fecha/Hora" },
+  { key: "type", header: "Tipo" },
+  { key: "amount", header: "Monto" },
+  { key: "paymentMethods", header: "Métodos de Pago" },
+  { key: "employee", header: "Encargado" },
+  { key: "client", header: "Cliente" },
+  { key: "document", header: "Documento" },
+  { key: "notes", header: "Notas" },
+  { key: "voucher", header: "Comprobante" },
+];
+
+type CashReportRow = {
+  timestamp: string;
+  type: string;
+  amount: string;
+  paymentMethods: string;
+  employee: string;
+  client: string;
+  document: string;
+  notes: string;
+  voucher: string;
 };
 
 type SaleItem = {
