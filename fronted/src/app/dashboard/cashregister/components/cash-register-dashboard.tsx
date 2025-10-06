@@ -273,6 +273,49 @@ const parseNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const PAYMENT_SUMMARY_METHODS = ["Tarjeta", "Transferencia", "Yape", "Plin"] as const;
+type PaymentSummaryKey = (typeof PAYMENT_SUMMARY_METHODS)[number];
+
+const PAYMENT_SUMMARY_LABELS: Record<PaymentSummaryKey, string> = {
+  Tarjeta: "Tarjeta",
+  Transferencia: "Transferencia",
+  Yape: "Yape",
+  Plin: "Plin",
+};
+
+const identifyPaymentSummaryMethod = (value: string): PaymentSummaryKey | null => {
+  const normalized = normalizeWhitespace(value).toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (/(tarjeta|visa|master|credito|crédito|debito|débito|amex|american express)/.test(normalized)) {
+    return "Tarjeta";
+  }
+  if (/transfer/.test(normalized)) {
+    return "Transferencia";
+  }
+  if (/yape/.test(normalized)) {
+    return "Yape";
+  }
+  if (/plin/.test(normalized)) {
+    return "Plin";
+  }
+  return null;
+};
+
+const extractAmountFromMethodEntry = (value: string): number | null => {
+  if (!value) {
+    return null;
+  }
+  const matches = value.match(/-?\d+(?:[.,]\d+)?/g);
+  if (!matches || matches.length === 0) {
+    return null;
+  }
+  const candidate = matches[matches.length - 1];
+  const amount = parseNumber(candidate);
+  return Number.isFinite(amount) ? amount : null;
+};
+
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   INCOME: "Ingresos",
   EXPENSE: "Retiros",
@@ -651,6 +694,83 @@ export default function CashRegisterDashboard() {
     })
   }, [transactions])
 
+  const paymentMethodSummary = useMemo(() => {
+    const totals: Record<PaymentSummaryKey, number> = {
+      Tarjeta: 0,
+      Transferencia: 0,
+      Yape: 0,
+      Plin: 0,
+    };
+
+    let resolvedCurrency = "S/.";
+
+    transactions.forEach((transaction) => {
+      if (!transaction || transaction.type !== "INCOME") {
+        return;
+      }
+
+      const transactionCurrency =
+        typeof transaction.currency === "string" && transaction.currency.trim().length > 0
+          ? transaction.currency.trim()
+          : resolvedCurrency;
+
+      if (transactionCurrency) {
+        resolvedCurrency = transactionCurrency;
+      }
+
+      const totalAmount = Number(transaction.amount ?? 0);
+      if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+        return;
+      }
+
+      const methods = Array.isArray(transaction.paymentMethods) ? transaction.paymentMethods : [];
+      if (methods.length === 0) {
+        return;
+      }
+
+      const entries: { key: PaymentSummaryKey; amount: number | null }[] = [];
+
+      methods.forEach((rawValue) => {
+        const methodKey = identifyPaymentSummaryMethod(rawValue);
+        if (!methodKey) {
+          return;
+        }
+        const amountValue = extractAmountFromMethodEntry(rawValue);
+        entries.push({ key: methodKey, amount: amountValue });
+      });
+
+      if (entries.length === 0) {
+        return;
+      }
+
+      let assignedAmount = 0;
+      entries.forEach((entry) => {
+        if (entry.amount !== null) {
+          totals[entry.key] += entry.amount;
+          assignedAmount += entry.amount;
+        }
+      });
+
+      const fallbackEntries = entries.filter((entry) => entry.amount === null);
+      const remaining = Number((totalAmount - assignedAmount).toFixed(2));
+
+      if (remaining > 0 && fallbackEntries.length === 1) {
+        totals[fallbackEntries[0].key] += remaining;
+      }
+    });
+
+    const rows = PAYMENT_SUMMARY_METHODS.map((method) => ({
+      method,
+      label: PAYMENT_SUMMARY_LABELS[method],
+      amount: Number(totals[method].toFixed(2)),
+    }));
+
+    return {
+      currencySymbol: resolvedCurrency || "S/.",
+      rows,
+    };
+  }, [transactions]);
+
   const isReportEmpty = reportRows.length === 0
 
   const handleExportExcel = () => {
@@ -686,13 +806,40 @@ export default function CashRegisterDashboard() {
       </table>
     `.trim()
 
+    const summaryTableRows = paymentMethodSummary.rows
+      .map((row) => {
+        const amountDisplay = `${paymentMethodSummary.currencySymbol} ${row.amount.toFixed(2)}`
+        return `
+          <tr>
+            <td style="padding:6px;border:1px solid #dddddd;">${escapeHtml(row.label)}</td>
+            <td style="padding:6px;border:1px solid #dddddd;text-align:right;">${escapeHtml(amountDisplay)}</td>
+          </tr>
+        `.trim()
+      })
+      .join("")
+
+    const summaryTableHtml = `
+      <table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;min-width:360px;">
+        <caption style="margin:16px 0 8px;font-weight:bold;">Resumen por metodo</caption>
+        <thead>
+          <tr>
+            <th style="background-color:#f5f5f5;text-align:left;padding:8px;border:1px solid #cccccc;">Metodo</th>
+            <th style="background-color:#f5f5f5;text-align:right;padding:8px;border:1px solid #cccccc;">Total</th>
+          </tr>
+        </thead>
+        <tbody>${summaryTableRows}</tbody>
+      </table>
+    `.trim()
+
+    const bodyContent = `${tableHtml}<br/><br/>${summaryTableHtml}`
+
     const htmlDocument = `
       <html>
         <head>
           <meta charset="utf-8" />
           <title>${sanitizedCaption}</title>
         </head>
-        <body>${tableHtml}</body>
+        <body>${bodyContent}</body>
       </html>
     `.trim()
 
@@ -702,6 +849,7 @@ export default function CashRegisterDashboard() {
     downloadBlob(blob, `reporte-caja-${reportFileDate}.xls`)
     toast.success("Reporte Excel generado correctamente.")
   }
+
   const handleExportPdf = async () => {
     if (isReportEmpty) {
       toast.info("No hay movimientos para exportar.")
@@ -726,6 +874,11 @@ export default function CashRegisterDashboard() {
         cellWide: { flex: 2, paddingRight: 6 },
         cellAmount: { textAlign: "right" },
         cellHeader: { fontWeight: "bold" },
+        summarySection: { marginTop: 16 },
+        summaryTitle: { fontSize: 12, marginTop: 12, marginBottom: 6, fontWeight: "bold" },
+        summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
+        summaryLabel: { fontSize: 10 },
+        summaryAmount: { fontSize: 10, fontWeight: "bold" },
       })
 
       const documentDefinition = (
@@ -777,6 +930,17 @@ export default function CashRegisterDashboard() {
                       </Text>
                     );
                   })}
+                </View>
+              ))}
+            </View>
+            <View style={pdfStyles.summarySection}>
+              <Text style={pdfStyles.summaryTitle}>Resumen por metodo</Text>
+              {paymentMethodSummary.rows.map((row) => (
+                <View key={row.method} style={pdfStyles.summaryRow}>
+                  <Text style={pdfStyles.summaryLabel}>{row.label}</Text>
+                  <Text style={pdfStyles.summaryAmount}>
+                    {`${paymentMethodSummary.currencySymbol} ${row.amount.toFixed(2)}`}
+                  </Text>
                 </View>
               ))}
             </View>

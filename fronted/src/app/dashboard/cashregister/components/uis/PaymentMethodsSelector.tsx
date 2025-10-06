@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { X, Banknote, Landmark } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
 import { getPaymentMethods } from "@/app/dashboard/sales/sales.api";
 import { toast } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -27,6 +27,10 @@ interface PaymentMethodsSelectorProps {
   onChange: (payments: SelectedPayment[]) => void;
 }
 
+// Firma para comparar arrays sin uid (método + monto)
+const signatureOf = (arr: readonly { method: string; amount: number }[]) =>
+  JSON.stringify(arr.map(p => [p.method, Number(p.amount)]));
+
 const generateUid = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -42,6 +46,14 @@ const arePaymentsEqual = (current: TempPayment[], external: SelectedPayment[]) =
 export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelectorProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [tempPayments, setTempPayments] = useState<TempPayment[]>([]);
+  const lastEmittedSigRef = useRef<string>(""); // <- NUEVO
+
+  // === EMISIÓN INMEDIATA EN HANDLERS (no en useEffect) ===
+  const emitToParent = useCallback((next: TempPayment[]) => {
+    const payload = next.map(({ uid, ...rest }) => rest);
+    lastEmittedSigRef.current = signatureOf(payload);
+    onChange(payload);
+  }, [onChange]);
 
   const defaultPaymentMethods: PaymentMethod[] = [
     { id: -1, name: "EN EFECTIVO" },
@@ -85,9 +97,15 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     });
   }, [value]);
 
-  // Actualiza el estado local SIN llamar onChange aquí (evita setState en render del padre)
+  // Reemplaza tu syncAndSetPayments para emitir en el mismo tick:
   const syncAndSetPayments = (updater: (prev: TempPayment[]) => TempPayment[]) => {
-    setTempPayments((prev) => updater(prev));
+    setTempPayments(prev => {
+      const next = updater(prev);
+      if (!arePaymentsEqual(next, value)) {
+        emitToParent(next); // <- emite aquí, no en un useEffect aparte
+      }
+      return next;
+    });
   };
 
   // Emite cambios al padre POST-render (evita "Cannot update a component while rendering a different component")
@@ -96,6 +114,21 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
       onChange(tempPayments.map(({ uid, ...rest }) => rest));
     }
   }, [tempPayments, value, onChange]);
+
+  // === SYNC DESDE PROPS, PERO IGNORANDO EL "ECO" QUE ACABAMOS DE ENVIAR ===
+  useEffect(() => {
+    // Si lo que llega del padre es exactamente lo último que emitimos, no resetees el local
+    if (signatureOf(value) === lastEmittedSigRef.current) return;
+
+    setTempPayments(prev => {
+      if (arePaymentsEqual(prev, value)) return prev;
+      return value.map((payment, i) => {
+        const p = prev[i];
+        const same = p && p.method === payment.method && Number(p.amount) === Number(payment.amount);
+        return same ? p : { ...payment, uid: generateUid() };
+      });
+    });
+  }, [value]);
 
   const handleAddPayment = () => {
     if (paymentMethods.length === 0) return;
@@ -179,10 +212,12 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
 
   return (
     <div className="space-y-4">
-      <AnimatePresence>
+      {/* Evita animación inicial de salida/entrada y mejora reordenado */}
+      <AnimatePresence initial={false}>
         {tempPayments.map((payment, index) => (
           <motion.div
             key={payment.uid}
+            layout // <- ayuda a transiciones suaves al agregar/eliminar
             initial={{ opacity: 0, scale: 0.95, x: -20 }}
             animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={{ opacity: 0, scale: 0.95, x: 20 }}
