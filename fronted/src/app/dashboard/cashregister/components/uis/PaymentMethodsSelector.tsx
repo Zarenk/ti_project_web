@@ -27,10 +27,6 @@ interface PaymentMethodsSelectorProps {
   onChange: (payments: SelectedPayment[]) => void;
 }
 
-// Firma para comparar arrays sin uid (método + monto)
-const signatureOf = (arr: readonly { method: string; amount: number }[]) =>
-  JSON.stringify(arr.map(p => [p.method, Number(p.amount)]));
-
 const generateUid = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -46,7 +42,6 @@ const arePaymentsEqual = (current: TempPayment[], external: SelectedPayment[]) =
 export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelectorProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [tempPayments, setTempPayments] = useState<TempPayment[]>([]);
-  const lastEmittedSigRef = useRef<string>("");
 
   const defaultPaymentMethods: PaymentMethod[] = [
     { id: -1, name: "EN EFECTIVO" },

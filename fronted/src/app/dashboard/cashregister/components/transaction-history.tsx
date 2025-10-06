@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { ArrowDown, ArrowUp, Calculator, Search, ChevronDown, ChevronUp, Calendar } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
@@ -17,21 +17,26 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
 
-  const cleanValue = (value?: string | null) => {
-    if (!value) return ""
-    return value.replace(/[;]+$/g, "").trim()
-  }
+const cleanValue = (value?: string | null) => {
+  if (!value) return ""
+  return value.replace(/[;]+$/g, "").trim()
+}
 
-  // añade estas 2 líneas en la interfaz:
-  interface TransactionHistoryProps {
-    transactions: Transaction[];
-    selectedDate: Date;
-    onDateChange: (date: Date) => void;
-    isFetching?: boolean;   // 👈 nuevo
-    keepPrevious?: boolean; // 👈 nuevo
-  }
+// añade estas 2 líneas en la interfaz:
+interface TransactionHistoryProps {
+  transactions: Transaction[];
+  selectedDate: Date;
+  onDateChange: (date: Date) => void;
+  isFetching?: boolean;   // 👈 nuevo
+  keepPrevious?: boolean; // 👈 nuevo
+}
 
-  const formatSaleDescription = (description?: string | null) => {
+type StructuredNoteEntry = {
+  label: string
+  value: string
+}
+
+const formatSaleDescription = (description?: string | null) => {
     if (!description) return ""
 
     const label = "venta registrada:"
@@ -109,7 +114,7 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
     return segments.join(" ").replace(/\s+/g, " ").trim()
   }
 
-  const normalizeInvoiceUrl = (invoiceUrl?: string | null) => {
+const normalizeInvoiceUrl = (invoiceUrl?: string | null) => {
     if (!invoiceUrl) return null
     const trimmed = invoiceUrl.trim()
     if (!trimmed) return null
@@ -119,7 +124,7 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
     return trimmed.startsWith("/") ? `${BACKEND_URL}${trimmed}` : `${BACKEND_URL}/${trimmed}`
   }
 
-  const buildInvoiceUrlFromVoucher = (voucher?: string | null) => {
+const buildInvoiceUrlFromVoucher = (voucher?: string | null) => {
     if (!voucher) return null
     const [rawSerie, rawCorrelativo] = voucher.split("-")
     if (!rawSerie || !rawCorrelativo) return null
@@ -146,9 +151,63 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
     return `${BACKEND_URL}/api/sunat/pdf/${folder}/${fileName}`
   }
 
-  const getInvoiceUrl = (transaction: Transaction) => {
-    return normalizeInvoiceUrl(transaction.invoiceUrl) ?? buildInvoiceUrlFromVoucher(transaction.voucher)
+const getInvoiceUrl = (transaction: Transaction) => {
+  return normalizeInvoiceUrl(transaction.invoiceUrl) ?? buildInvoiceUrlFromVoucher(transaction.voucher)
+}
+
+const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim()
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+const toSentenceCase = (value: string) => {
+  if (!value) return ""
+  const normalized = value.trim()
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+}
+
+const parseStructuredNotes = (rawDescription?: string | null, formattedDescription?: string): StructuredNoteEntry[] => {
+  const source = normalizeWhitespace(formattedDescription ?? rawDescription ?? "")
+  if (!source) return []
+
+  const entries: StructuredNoteEntry[] = []
+  const matchedSegments: string[] = []
+  const keyValueRegex = /([A-Za-zÁÉÍÓÚÜÑ0-9#()\/\s]+):\s*([\s\S]*?)(?=(?:[A-Za-zÁÉÍÓÚÜÑ0-9#()\/\s]+:\s)|$)/gi
+
+  let match: RegExpExecArray | null
+  while ((match = keyValueRegex.exec(source)) !== null) {
+    const rawLabel = normalizeWhitespace(match[1])
+    const rawValue = normalizeWhitespace(match[2])
+
+    if (!rawLabel) continue
+
+    entries.push({
+      label: toSentenceCase(rawLabel),
+      value: rawValue || "-",
+    })
+
+    matchedSegments.push(match[0])
   }
+
+  let remainingText = source
+  matchedSegments.forEach((segment) => {
+    const pattern = new RegExp(escapeRegExp(segment), "gi")
+    remainingText = remainingText.replace(pattern, " ")
+  })
+
+  const extraSentences = remainingText
+    .split(/(?:(?<=\.)|(?<=;))\s+/)
+    .map((sentence) => sentence.replace(/[-\s]+$/g, "").trim())
+    .filter((sentence) => sentence.length > 0)
+
+  extraSentences.forEach((sentence, index) => {
+    entries.push({
+      label: index === 0 && entries.length === 0 ? "Detalle" : `Detalle ${index + 1}`,
+      value: toSentenceCase(sentence),
+    })
+  })
+
+  return entries
+}
 
   interface TransactionHistoryProps {
     transactions: Transaction[]
@@ -289,6 +348,10 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768
     const modalFormattedDescription = modalTransaction ? formatSaleDescription(modalTransaction.description) : ""
     const modalInvoiceUrl = modalTransaction ? getInvoiceUrl(modalTransaction) : null
+    const structuredNotes = useMemo(
+      () => parseStructuredNotes(modalTransaction?.description, modalFormattedDescription),
+      [modalTransaction?.description, modalFormattedDescription],
+    )
 
     return (
       <div className="space-y-4">
@@ -497,7 +560,25 @@ const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
                   <p><strong>Monto:</strong> S/. {modalTransaction.amount.toFixed(2)}</p>
                   <p><strong>Encargado:</strong> {modalTransaction.employee}</p>
                   <p><strong>Métodos de Pago:</strong> {modalTransaction.paymentMethods?.join(", ") || "-"}</p>
-                  <p><strong>Notas:</strong> {modalFormattedDescription || "-"}</p>
+                  <div className="space-y-2">
+                    <p className="font-semibold">Notas</p>
+                    {structuredNotes.length > 0 ? (
+                      <div className="overflow-hidden rounded-md border">
+                        <table className="w-full text-sm">
+                          <tbody>
+                            {structuredNotes.map((entry, index) => (
+                              <tr key={`${entry.label}-${index}`} className="border-b last:border-b-0">
+                                <th className="bg-muted px-3 py-2 text-left font-medium align-top w-36">{entry.label}</th>
+                                <td className="px-3 py-2 text-muted-foreground">{entry.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">No hay notas adicionales.</p>
+                    )}
+                  </div>
                   <p><strong>ID:</strong> {modalTransaction.id}</p>
                   {modalTransaction.voucher && (
                     <p>
