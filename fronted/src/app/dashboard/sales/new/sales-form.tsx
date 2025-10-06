@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Barcode, CalendarIcon, Check, ChevronsUpDown, Plus, Save, X } from 'lucide-react'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { cn, uploadPdfToServer } from '@/lib/utils'
+import { cn, normalizeOptionValue, uploadPdfToServer } from '@/lib/utils'
 import React from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {jwtDecode} from 'jwt-decode';
@@ -262,6 +262,41 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   // Cargar los clientes al montar el componente
   const [openClient, setOpenClient] = React.useState(false)
   const [valueClient, setValueClient] = React.useState("")
+
+  const getCommandValue = (raw: unknown) =>
+    typeof raw === "string" ? raw.trim() : raw != null ? String(raw) : "";
+
+  const normalizedSelectedProductValue = useMemo(() => normalizeOptionValue(value), [value]);
+  const normalizedSelectedStoreValue = useMemo(() => normalizeOptionValue(valueStore), [valueStore]);
+  const normalizedSelectedClientValue = useMemo(() => normalizeOptionValue(valueClient), [valueClient]);
+
+  const selectedProductOption = useMemo(
+    () =>
+      value
+        ? products.find((product) => normalizeOptionValue(product.name) === normalizedSelectedProductValue) ?? null
+        : null,
+    [products, normalizedSelectedProductValue, value],
+  );
+
+  const selectedStoreOption = useMemo(
+    () =>
+      valueStore
+        ? stores.find((store) => normalizeOptionValue(store.name) === normalizedSelectedStoreValue) ?? null
+        : null,
+    [stores, normalizedSelectedStoreValue, valueStore],
+  );
+
+  const selectedClientOption = useMemo(
+    () =>
+      valueClient
+        ? clients.find((client) => normalizeOptionValue(client.name) === normalizedSelectedClientValue) ?? null
+        : null,
+    [clients, normalizedSelectedClientValue, valueClient],
+  );
+
+  const displayedProductName = selectedProductOption?.name ?? value ?? "";
+  const displayedStoreName = selectedStoreOption?.name ?? valueStore ?? "";
+  const displayedClientName = selectedClientOption?.name ?? valueClient ?? ""
 
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
@@ -548,30 +583,30 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   //
 
   // Manejar el cambio en el combobox de Tiendas
-  const handleStoreChange = (storeName: string) => {
-    setValueStore(storeName === valueStore ? "" : storeName);
-    const selectedStore = stores.find((store) => String(store.name) === storeName);
-    
-    if (selectedStore) {
-      // Actualiza los valores de los campos relacionados con la tienda
-      setSelectedStoreId(selectedStore.id); // Actualiza el ID de la tienda seleccionada
-      setValue("store_name", selectedStore.name || "");
-      setValue("store_adress", selectedStore.adress || "");
-    
-      // Limpia los campos relacionados con los productos
-      setSelectedProducts([]); // Limpia la lista de productos seleccionados
-      setCurrentProduct(null); // Limpia el producto actual
-      setQuantity(1); // Restablece la cantidad a 1
-      setStock(0); // Restablece el stock a 0
-      setValueProduct(""); // Limpia el valor del combobox de productos
-      setValue("category_name", ""); // Limpia el input de categoría
-      setValue("price", 0); // Limpia el input de precio
-      setValue("description", ""); // Limpia el input de descripción
-    } else {
-      console.error("Tienda no encontrada:", storeName);
+  const handleStoreChange = (storeIdentifier: string) => {
+    const normalizedIdentifier = normalizeOptionValue(storeIdentifier);
+    const nextStore =
+      stores.find((store) => normalizeOptionValue(store.name) === normalizedIdentifier) ?? null;
+
+    if (!nextStore) {
+      console.error("Tienda no encontrada:", storeIdentifier);
+      return;
     }
-    
-    setOpenStore(false); // Cierra el combobox de tiendas
+
+    setValueStore(nextStore.name || "");
+    setSelectedStoreId(nextStore.id);
+    setValue("store_name", nextStore.name || "");
+    setValue("store_adress", nextStore.adress || "");
+
+    setSelectedProducts([]);
+    setCurrentProduct(null);
+    setQuantity(1);
+    setStock(0);
+    setValueProduct("");
+    setValue("category_name", "");
+    setValue("price", 0);
+    setValue("description", "");
+    setOpenStore(false);
   };
   //
 
@@ -897,9 +932,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   className="w-[260px] justify-between"
                                   disabled={isClientDisabled}
                                 >
-                                  {valueClient
-                                    ? clients.find((client) => String(client.name) === valueClient)?.name
-                                    : "Selecciona un cliente..."}
+                                  {displayedClientName || "Selecciona un cliente..."}
                                   <ChevronsUpDown className="opacity-50" />
                                 </Button>                             
                               </PopoverTrigger>
@@ -912,47 +945,41 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                     <CommandGroup>
                                       {clients
                                         .filter((client) => {
-                                          // Mostrar solo clientes con type "RUC" si el tipo de comprobante es FACTURA
                                           if (valueInvoice === "FACTURA") {
                                             return client.type === "RUC";
                                           }
-                                          // Excluir clientes con type "RUC" si el tipo de comprobante es BOLETA
                                           if (valueInvoice === "BOLETA") {
                                             return client.type !== "RUC";
                                           }
-                                          return true; // Mostrar todos los clientes en otros casos
+                                          return true;
                                         })
-                                        .map((client) => (
-                                        <CommandItem
-                                          key={client.name}
-                                          value={client.name}
-                                          onSelect={(currentValue) => {
-                                            setValueClient(currentValue === valueClient ? "" : currentValue)
-                                            const selectedClient = clients.find(
-                                              (client) => String(client.name) === currentValue
-                                            );
-                                            if (selectedClient) {
-                                              // Actualiza los valores de los campos relacionados
-                                              setValue("client_name", selectedClient.name || "");
-                                              setValue("client_type", selectedClient.type || "");
-                                              setValue("client_typeNumber", selectedClient.typeNumber || "");
-                                              setValueClient(selectedClient.name); // Actualiza el valor del combobox
-                                            } 
-                                            else {
-                                              console.error("Cliente no encontrado:", currentValue);
-                                            }
-                                            setOpenClient(false)
-                                          }}
-                                        >
-                                          {client.name}
-                                          <Check
-                                            className={cn(
-                                              "ml-auto",
-                                              valueClient === client.name ? "opacity-100" : "opacity-0"
-                                            )}
-                                          />
-                                        </CommandItem>
-                                      ))}
+                                        .map((client) => {
+                                          const normalizedClientName = normalizeOptionValue(client.name);
+                                          const isSelected = normalizedClientName === normalizedSelectedClientValue;
+                                          const commandValue = getCommandValue(client.name);
+
+                                          return (
+                                            <CommandItem
+                                              key={client.id ?? client.name}
+                                              value={commandValue}
+                                              onSelect={() => {
+                                                if (isSelected) {
+                                                  setOpenClient(false);
+                                                  return;
+                                                }
+
+                                                setValueClient(client.name || "");
+                                                setValue("client_name", client.name || "");
+                                                setValue("client_type", client.type || "");
+                                                setValue("client_typeNumber", client.typeNumber || "");
+                                                setOpenClient(false);
+                                              }}
+                                            >
+                                              {client.name}
+                                              <Check className={cn("ml-auto", isSelected ? "opacity-100" : "opacity-0")} />
+                                            </CommandItem>
+                                          );
+                                        })}
                                     </CommandGroup>
                                   </CommandList>
                                 </Command>
@@ -1002,9 +1029,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   aria-expanded={openStore}
                                   className="w-[260px] justify-between"
                                 >
-                                  {valueStore
-                                    ? stores.find((store) => String(store.name) === valueStore)?.name
-                                    : "Seleccione una Tienda..."}
+                                  {displayedStoreName || "Seleccione una Tienda..."}
                                   <ChevronsUpDown className="opacity-50" />
                                 </Button>
                               </PopoverTrigger>
@@ -1015,65 +1040,35 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   <CommandList>
                                     <CommandEmpty>No se encontraron tiendas.</CommandEmpty>
                                     <CommandGroup>
-                                      {stores.map((store) => (
-                                        <CommandItem
-                                          key={store.name}
-                                          value={store.name}
-                                          onSelect={(currentValue) => {
+                                      {stores.map((store) => {
+                                        const normalizedStoreName = normalizeOptionValue(store.name);
+                                        const isSelected = normalizedStoreName === normalizedSelectedStoreValue;
+                                        const commandValue = getCommandValue(store.name);
 
-                                            // Si la tienda seleccionada es la misma que la actual, no hacer nada
-                                            if (currentValue === valueStore) {
-                                              console.log("La tienda seleccionada es la misma. No se realiza ninguna acción.");
-                                              return;
-                                            }
+                                        return (
+                                          <CommandItem
+                                            key={store.id ?? store.name}
+                                            value={commandValue}
+                                            onSelect={() => {
+                                              if (isSelected) {
+                                                setOpenStore(false);
+                                                return;
+                                              }
 
-                                            if (selectedProducts.length > 0) {
-                                              // Si hay registros en la tabla, abre el AlertDialog
-                                              setPendingStore(currentValue); // Almacena la tienda seleccionada temporalmente
-                                              setIsStoreChangeDialogOpen(true); // Abre el AlertDialog
-                                              return;
-                                            }
-                                        
-                                            // Si no hay registros, cambia directamente la tienda
-                                            handleStoreChange(currentValue);
+                                              if (selectedProducts.length > 0) {
+                                                setPendingStore(store.name || "");
+                                                setIsStoreChangeDialogOpen(true);
+                                                return;
+                                              }
 
-                                            setValueStore(currentValue === valueStore ? "" : currentValue)
-                                            const selectedStore = stores.find(
-                                              (store) => String(store.name) === currentValue
-                                            );
-                                            // Log para depurar
-                                            console.log("Tienda seleccionada:", selectedStore);
-                                            if (selectedStore) {
-                                              // Actualiza los valores de los campos relacionados
-                                              setSelectedStoreId(selectedStore.id); // Actualiza el ID de la tienda seleccionada
-                                              setValue("store_name", selectedStore.name || "");
-                                              setValue("store_adress", selectedStore.adress || "");
-
-                                              // Limpia los campos relacionados con los productos
-                                              setSelectedProducts([]); // Limpia la lista de productos seleccionados
-                                              setCurrentProduct(null); // Limpia el producto actual
-                                              setQuantity(1); // Restablece la cantidad a 1
-                                              setStock(0); // Restablece el stock a 0
-                                              setValueProduct(""); // Limpia el valor del combobox de productos
-                                              setValue("category_name", ""); // Limpia el input de categoría
-                                              setValue("price", 0); // Limpia el input de precio
-                                              setValue("description", ""); // Limpia el input de descripción
-                                            } 
-                                            else {
-                                              console.error("Tienda no encontrada:", currentValue);
-                                            }
-                                            setOpenStore(false)
-                                          }}
-                                        >
-                                          {store.name}
-                                          <Check
-                                            className={cn(
-                                              "ml-auto",
-                                              valueStore === store.name ? "opacity-100" : "opacity-0"
-                                            )}
-                                          />
-                                        </CommandItem>
-                                      ))}
+                                              handleStoreChange(store.name || "");
+                                            }}
+                                          >
+                                            {store.name}
+                                            <Check className={cn("ml-auto", isSelected ? "opacity-100" : "opacity-0")} />
+                                          </CommandItem>
+                                        );
+                                      })}
                                     </CommandGroup>
                                   </CommandList>
                                 </Command>
@@ -1110,9 +1105,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                               className="w-[200px] sm:w-[300px] justify-between"
                             >
                               <span className="truncate max-w-[80%] block">
-                                {value
-                                  ? products.find((product) => String(product.name) === value)?.name
-                                  : "Selecciona un producto..."}
+                                {displayedProductName || "Selecciona un producto..."}
                               </span>
                               <ChevronsUpDown className="opacity-50" />
                             </Button>
@@ -1124,27 +1117,27 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   <CommandList>
                                     <CommandEmpty>No se encontraron productos.</CommandEmpty>
                                     <CommandGroup>
-                                      {products.map((product) => (
-                                        <CommandItem
-                                          key={product.name}
-                                          value={product.name}
-                                          onSelect={async (currentValue) => {
+                                      {products.map((product) => {
+                                        const normalizedProductName = normalizeOptionValue(product.name);
+                                        const isSelected = normalizedProductName === normalizedSelectedProductValue;
+                                        const commandValue = getCommandValue(product.name);
 
-                                            if (currentValue === value) {
-                                              setOpen(false); // Solo cierra el Popover
-                                              return;
-                                            }
+                                        return (
+                                          <CommandItem
+                                            key={product.id ?? product.name}
+                                            value={commandValue}
+                                            onSelect={async () => {
+                                              if (isSelected) {
+                                                setOpen(false);
+                                                return;
+                                              }
 
-                                            setValueProduct(currentValue === value ? "" : currentValue)
-                                            const selectedProduct = products.find(
-                                              (product) => String(product.name) === currentValue
-                                            );
-                                          
-                                            if (selectedProduct) {
-                                           
-                                              // Calcula el stock restante considerando los productos ya agregados
+                                              setValueProduct(product.name || "");
+
+                                              const selectedProduct = product;
+
                                               const existingProduct = selectedProducts.find(
-                                                (product) => product.id === selectedProduct.id
+                                                (item) => item.id === selectedProduct.id,
                                               );
                                               let simulatedStock = existingProduct
                                                 ? selectedProduct.stock - existingProduct.quantity
@@ -1152,70 +1145,67 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
                                               if (selectedStoreId) {
                                                 try {
-                                                  // Obtén las series del producto desde el backend
-                                                  const series = await getSeriesByProductAndStore(selectedStoreId, selectedProduct.id);
+                                                  const series = await getSeriesByProductAndStore(
+                                                    selectedStoreId,
+                                                    selectedProduct.id,
+                                                  );
 
-                                                  // Actualiza el estado del producto actual con las series
                                                   setCurrentProduct({
                                                     ...selectedProduct,
-                                                    series, // Agrega las series al producto actual
+                                                    series,
                                                   });
-                                                  // Obtiene el stock real desde el backend
-                                                  const realStock = await getStockByProductAndStore(selectedStoreId, selectedProduct.id);
-                                            
-                                                  // Calcula el stock restante simulando las cantidades ya agregadas
+
+                                                  const realStock = await getStockByProductAndStore(
+                                                    selectedStoreId,
+                                                    selectedProduct.id,
+                                                  );
+
                                                   simulatedStock = existingProduct
                                                     ? realStock - existingProduct.quantity
                                                     : realStock;
-                                            
+
                                                   setStock(simulatedStock > 0 ? simulatedStock : 0);
 
                                                   if (selectedProduct.price === 0 || selectedProduct.price === null) {
-                                                    setProductWithZeroPrice({ id: selectedProduct.id, name: selectedProduct.name }); // Almacena el producto con precio 0 o null
-                                                    setIsPriceAlertOpen(true); // Abre el AlertDialog
-                                                    return; // Detiene la ejecución hasta que el usuario ingrese un precio válido
-                                                  }
-
-                                                  } catch (error) {
-                                                    console.error('Error al obtener el stock del producto:', error);
-                                                    setCurrentProduct({
-                                                      ...selectedProduct,
-                                                      series: [], // Si hay un error, establece las series como un array vacío
+                                                    setProductWithZeroPrice({
+                                                      id: selectedProduct.id,
+                                                      name: selectedProduct.name,
                                                     });
-                                                    setStock(0); // Si hay un error, establece el stock en 0
+                                                    setIsPriceAlertOpen(true);
+                                                    return;
                                                   }
+                                                } catch (error) {
+                                                  console.error("Error al obtener el stock del producto:", error);
+                                                  setCurrentProduct({
+                                                    ...selectedProduct,
+                                                    series: [],
+                                                  });
+                                                  setStock(0);
+                                                }
                                               } else {
-                                                  console.warn('No se ha seleccionado una tienda');
-                                                  setCurrentProduct(null);
-                                                  setStock(0); // Si no hay tienda seleccionada, establece el stock en 0
+                                                console.warn("No se ha seleccionado una tienda");
+                                                setCurrentProduct(null);
+                                                setStock(0);
                                               }
 
-                                              // Encuentra el nombre de la categoría correspondiente
                                               const category = categories.find(
-                                                (cat:any) => cat.id === selectedProduct.categoryId
-                                              );   
+                                                (cat: any) => cat.id === selectedProduct.categoryId,
+                                              );
 
-                                              // Actualiza los valores de los inputs relacionados
-                                              setValue("category_name", category?.name || selectedProduct.category_name || "Sin categoría");
+                                              setValue(
+                                                "category_name",
+                                                category?.name || selectedProduct.category_name || "Sin categor??a",
+                                              );
                                               setValue("price", selectedProduct.price || 0);
                                               setValue("description", selectedProduct.description || "");
-                                            } else {
-                                              console.error("Producto no encontrado:", currentValue);
-                                              setStock(0); // Si no se encuentra el producto, establece el stock en 0
-                                            }
-                                          
-                                            setOpen(false); // Cierra el combobox
-                                          }}
-                                        >
-                                          {product.name}
-                                          <Check
-                                            className={cn(
-                                              "ml-auto",
-                                              value === product.name ? "opacity-100" : "opacity-0"
-                                            )}
-                                          />
-                                        </CommandItem>
-                                      ))}
+                                              setOpen(false);
+                                            }}
+                                          >
+                                            {product.name}
+                                            <Check className={cn("ml-auto", isSelected ? "opacity-100" : "opacity-0")} />
+                                          </CommandItem>
+                                        );
+                                      })}
                                     </CommandGroup>
                                   </CommandList>
                                 </Command>

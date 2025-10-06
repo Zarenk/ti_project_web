@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, FormEvent, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,7 @@ import {
 import { BrandLogo } from '@/components/BrandLogo';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const JPEG_MIME_TYPES = new Set(['image/jpeg', 'image/jpg']);
 
@@ -88,6 +89,13 @@ export default function BrandsPage() {
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [editing, setEditing] = useState<Brand | null>(null);
+  const dateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('es-ES', {
+        dateStyle: 'medium',
+      }),
+    [],
+  );
 
   useEffect(() => {
     fetchBrands();
@@ -232,121 +240,231 @@ export default function BrandsPage() {
     return path.startsWith('http') ? path : `${BACKEND_URL}${path}`;
   }
 
+  function getFormattedDate(date?: string) {
+    if (!date) return 'Sin fecha';
+    try {
+      return dateFormatter.format(new Date(date));
+    } catch (error) {
+      return 'Sin fecha';
+    }
+  }
+
   return (
     <section className="py-2 sm:py-6">
-      <div className="container mx-auto px-1 sm:px-6 lg:px-8">
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4">Marcas</h1>
+      <div className="mx-auto w-full max-w-5xl px-3 sm:px-6 lg:px-8">
+        <div className="mb-6 space-y-3">
+          <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Marcas</h1>
 
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="brandSearch">Buscar por nombre</Label>
-            <Input
-              id="brandSearch"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar marca..."
-              className="w-full sm:w-64"
-            />
+          <Card className="border-muted/60 bg-card/70 backdrop-blur-sm">
+            <CardContent className="flex flex-col gap-4 py-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex w-full flex-col gap-2 sm:max-w-xs">
+                <Label htmlFor="brandSearch">Buscar por nombre</Label>
+                <Input
+                  id="brandSearch"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar marca..."
+                  className="w-full"
+                />
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border border-border/80 px-3 py-2">
+                <Checkbox
+                  id="sortNewest"
+                  checked={sortByNewest}
+                  onCheckedChange={(checked) => setSortByNewest(checked === true)}
+                />
+                <Label htmlFor="sortNewest" className="text-sm font-medium leading-tight">
+                  Ordenar por última marca ingresada
+                </Label>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="mb-8 border-muted/60 bg-card/70 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-semibold">{editing ? 'Editar marca' : 'Agregar nueva marca'}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="name">Nombre</Label>
+                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="svg">Logo SVG</Label>
+                <Input
+                  id="svg"
+                  type="file"
+                  accept="image/svg+xml"
+                  onChange={(e) => setSvgFile(e.target.files?.[0] || null)}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="png">Logo PNG/JPEG</Label>
+                <Input
+                  id="png"
+                  type="file"
+                  accept="image/png, image/jpeg"
+                  onChange={(e) => setPngFile(e.target.files?.[0] || null)}
+                />
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                {editing && (
+                  <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+                    Cancelar
+                  </Button>
+                  )}
+                <Button type="submit" className="sm:min-w-[8rem]">
+                  {editing ? 'Actualizar' : 'Guardar'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4">
+          <div className="space-y-3 md:hidden">
+            {brands.map((brand) => (
+              <Card key={brand.id} className="border-muted/60 bg-card/80 shadow-sm">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle className="text-lg font-semibold text-foreground">
+                      {brand.name}
+                    </CardTitle>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {brand.logoSvg && (
+                        <BrandLogo
+                          src={getImageUrl(brand.logoSvg)}
+                          alt={`${brand.name} logo svg`}
+                          className="h-10 w-10 rounded border border-border/60 bg-background object-contain p-1"
+                        />
+                      )}
+                      {brand.logoPng && (
+                        <BrandLogo
+                          src={getImageUrl(brand.logoPng)}
+                          alt={`${brand.name} logo png`}
+                          className="h-10 w-10 rounded border border-border/60 bg-background object-contain p-1"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm">
+                  <div className="flex flex-wrap gap-4 text-muted-foreground">
+                    <div className="flex flex-col">
+                      <span className="text-xs uppercase tracking-wide">Creada</span>
+                      <span className="font-medium text-foreground">
+                        {getFormattedDate(brand.createdAt)}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs uppercase tracking-wide">Actualizada</span>
+                      <span className="font-medium text-foreground">
+                        {getFormattedDate(brand.updatedAt)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" size="sm" onClick={() => handleEdit(brand)}>
+                      Editar
+                    </Button>
+                  {brand.logoPng && !brand.logoSvg && (
+                      <Button type="button" size="sm" variant="secondary" onClick={() => handleConvert(brand.id)}>
+                        PNG a SVG
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleDelete(brand.id)}
+                    >
+                      Eliminar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="sortNewest"
-              checked={sortByNewest}
-              onCheckedChange={(checked) => setSortByNewest(checked === true)}
-            />
-            <Label htmlFor="sortNewest" className="text-sm font-medium">
-              Ordenar por última marca ingresada
-            </Label>
+
+          <div className="hidden overflow-hidden rounded-xl border border-border/70 bg-card/70 shadow-sm md:block">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[200px]">Nombre</TableHead>
+                    <TableHead className="min-w-[120px]">SVG</TableHead>
+                    <TableHead className="min-w-[120px]">PNG</TableHead>
+                    <TableHead className="min-w-[220px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {brands.map((brand) => (
+                    <TableRow key={brand.id}>
+                      <TableCell className="font-medium">{brand.name}</TableCell>
+                      <TableCell>
+                        {brand.logoSvg && (
+                          <BrandLogo
+                            src={getImageUrl(brand.logoSvg)}
+                            alt={`${brand.name} logo svg`}
+                            className="h-10"
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {brand.logoPng && (
+                          <BrandLogo
+                            src={getImageUrl(brand.logoPng)}
+                            alt={`${brand.name} logo png`}
+                            className="h-10"
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell className="space-x-2 text-right">
+                        <Button type="button" size="sm" onClick={() => handleEdit(brand)}>
+                          Editar
+                        </Button>
+                        {brand.logoPng && !brand.logoSvg && (
+                          <Button type="button" size="sm" variant="secondary" onClick={() => handleConvert(brand.id)}>
+                            PNG a SVG
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDelete(brand.id)}
+                        >
+                          Eliminar
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mb-8">
-          <div>
-            <Label htmlFor="name">Nombre</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
-          <div>
-            <Label htmlFor="svg">Logo SVG</Label>
-            <Input id="svg" type="file" accept="image/svg+xml" onChange={(e) => setSvgFile(e.target.files?.[0] || null)} />
-          </div>
-          <div>
-            <Label htmlFor="png">Logo PNG/JPEG</Label>
-            <Input
-              id="png"
-              type="file"
-              accept="image/png, image/jpeg"
-              onChange={(e) => setPngFile(e.target.files?.[0] || null)}
-            />
-          </div>
-          <Button type="submit">{editing ? 'Actualizar' : 'Guardar'}</Button>
-        </form>
-
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>SVG</TableHead>
-              <TableHead>PNG</TableHead>
-              <TableHead>Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {brands.map((brand) => (
-              <TableRow key={brand.id}>
-                <TableCell>{brand.name}</TableCell>
-                <TableCell>
-                  {brand.logoSvg && (
-                    <BrandLogo
-                      src={getImageUrl(brand.logoSvg)}
-                      alt={brand.name}
-                      className="h-8"
-                    />
-                  )}
-                </TableCell>
-                <TableCell>
-                  {brand.logoPng && (
-                    <BrandLogo
-                      src={getImageUrl(brand.logoPng)}
-                      alt={brand.name}
-                      className="h-8"
-                    />
-                  )}
-                </TableCell>
-                <TableCell className="space-x-2">
-                  <Button type="button" onClick={() => handleEdit(brand)}>
-                    Editar
-                  </Button>
-                  {brand.logoPng && !brand.logoSvg && (
-                    <Button type="button" onClick={() => handleConvert(brand.id)}>
-                      PNG a SVG
-                    </Button>
-                  )}
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => handleDelete(brand.id)}
-                  >
-                    Eliminar
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        <div className="flex items-center justify-between mt-4">
-          <div className="space-x-2">
+        <div className="mt-6 flex flex-col gap-4 rounded-xl border border-border/70 bg-card/70 p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center justify-between gap-2 md:justify-start">
             <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
             >
               Anterior
             </Button>
-            <span>
+            <span className="text-sm font-medium text-muted-foreground">
               Página {page} de {Math.ceil(total / pageSize) || 1}
             </span>
             <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() =>
                 setPage((p) =>
                   p < Math.ceil(total / pageSize) ? p + 1 : p,
@@ -357,8 +475,10 @@ export default function BrandsPage() {
               Siguiente
             </Button>
           </div>
-          <div className="flex items-center space-x-2">
-            <Label htmlFor="pageSize">Por página:</Label>
+          <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center">
+            <Label htmlFor="pageSize" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Por página
+            </Label>
             <select
               id="pageSize"
               value={pageSize}
@@ -366,7 +486,7 @@ export default function BrandsPage() {
                 setPageSize(parseInt(e.target.value));
                 setPage(1);
               }}
-              className="border rounded p-1"
+              className="w-full rounded-lg border border-border/70 bg-background px-3 py-2 text-sm text-foreground shadow-sm sm:w-32"
             >
               <option value={5}>5</option>
               <option value={10}>10</option>

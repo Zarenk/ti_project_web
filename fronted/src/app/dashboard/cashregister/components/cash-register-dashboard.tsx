@@ -1,6 +1,7 @@
-"use client"
+﻿"use client"
 
-import { useEffect, useState } from "react"
+import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Transaction } from "../types/cash-register"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -14,7 +15,7 @@ import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { Plus } from "lucide-react"
+import { Plus, FileSpreadsheet, FileText } from "lucide-react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { format, isSameDay } from "date-fns"; // ya lo tienes en tus imports
@@ -26,6 +27,26 @@ const isSaleTransaction = (description?: string | null) => {
   return description.toLowerCase().includes("venta realizada");
 };
 
+const stripPaymentMethodDetails = (value: string) => {
+  if (!value) {
+    return "";
+  }
+
+  const patterns = [
+    /pago\s+v(?:i|\u00ED)a[^.,;|]*/gi,
+    /pago\s+con[^.,;|]*/gi,
+    /m(?:e|\u00E9)todos?\s+de\s+pago\s*:[^.|;]*/gi,
+    /m(?:e|\u00E9)todo\s+de\s+pago\s*:[^.|;]*/gi,
+  ];
+
+  let sanitized = value;
+  patterns.forEach((pattern) => {
+    sanitized = sanitized.replace(pattern, " ");
+  });
+
+  sanitized = sanitized.replace(/[,;]+/g, " ");
+  return sanitized.replace(/\s+/g, " ").trim();
+};
 const splitSaleDescription = (description: string | null | undefined) => {
   if (!description) {
     return {
@@ -35,26 +56,331 @@ const splitSaleDescription = (description: string | null | undefined) => {
     };
   }
 
-  const saleRegex = /(Venta realizada\.)\s*Pago vía[^,]*,(.*)/i;
-  const match = description.match(saleRegex);
+  const lowerDescription = description.toLowerCase();
+  const saleMarker = lowerDescription.indexOf("venta registrada:");
 
-  if (match) {
-    const prefix = match[1]?.trim() ?? "";
-    const suffix = match[2]?.trim() ?? "";
-    const normalized = [prefix, suffix].filter(Boolean).join(" ").trim();
+  if (saleMarker !== -1) {
+    const prefix = description.slice(0, saleMarker).trim();
+    const suffix = description.slice(saleMarker).trim();
+    const sanitizedForKey = stripPaymentMethodDetails(prefix);
 
     return {
       prefix,
       suffix,
-      normalized,
+      normalized: (sanitizedForKey || prefix)
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim(),
     };
   }
+
+  const sanitizedForKey = stripPaymentMethodDetails(description);
 
   return {
     prefix: description.trim(),
     suffix: "",
-    normalized: description.trim(),
+    normalized: (sanitizedForKey || description)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim(),
   };
+};
+
+const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+};
+
+
+const paymentMethodKeyCandidates = [
+  "method",
+  "name",
+  "paymentMethod",
+  "payment_method",
+  "label",
+  "value",
+  "title",
+];
+
+const methodIntroPatterns = [
+  /m[e\u00E9]todos?\s+de\s+pago\s*[:\-]?\s*/gi,
+  /pago\s+v[i\u00ED]a\s*/gi,
+  /pago\s+con\s*/gi,
+  /pagado\s+con\s*/gi,
+  /pagado\s+v[i\u00ED]a\s*/gi,
+];
+
+const splitPaymentMethodCandidates = (value: string) => {
+  if (!value) {
+    return [] as string[];
+  }
+
+  let sanitized = value;
+  methodIntroPatterns.forEach((pattern) => {
+    sanitized = sanitized.replace(pattern, "");
+  });
+
+  const normalizedSeparators = sanitized
+    .replace(/[\u2013\u2014]/g, ",")
+    .replace(/\s+(?:y|e|and)\s+/gi, ",")
+    .replace(/\s*&\s*/g, ",")
+    .replace(/\s*\+\s*/g, ",")
+    .replace(/[\/,|;]+/g, ",");
+
+  return normalizedSeparators
+    .split(",")
+    .map((segment) => segment.replace(/^[\s:-]+/, "").replace(/[\s:-]+$/, ""))
+    .map((segment) => normalizeWhitespace(segment))
+    .filter((segment) => segment.length > 0);
+};
+
+const normalizePaymentMethods = (raw: unknown): string[] => {
+  const results: string[] = [];
+  const seen = new Set<string>();
+
+  const pushCandidate = (candidate: string) => {
+    const cleaned = normalizeWhitespace(candidate)
+      .replace(/^[|]+/, "")
+      .replace(/[|]+$/, "")
+      .trim();
+
+    if (!cleaned) {
+      return;
+    }
+
+    const key = cleaned.toUpperCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      results.push(cleaned);
+    }
+  };
+
+  const processValue = (value: unknown) => {
+    if (value === null || value === undefined) {
+      return;
+    }
+
+    if (typeof value === "string") {
+      const candidates = splitPaymentMethodCandidates(value);
+      if (candidates.length === 0) {
+        pushCandidate(value);
+      } else {
+        candidates.forEach(pushCandidate);
+      }
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(processValue);
+      return;
+    }
+
+    if (typeof value === "object") {
+      const record = value as Record<string, unknown>;
+      let handled = false;
+
+      for (const key of paymentMethodKeyCandidates) {
+        if (typeof record[key] === "string") {
+          processValue(record[key]);
+          handled = true;
+        }
+      }
+
+      if (!handled) {
+        const stringValues = Object.values(record).filter((item) => typeof item === "string");
+        if (stringValues.length > 0) {
+          stringValues.forEach(processValue);
+          handled = true;
+        }
+      }
+
+      if (!handled) {
+        const stringified = String(value);
+        if (stringified && stringified !== "[object Object]") {
+          processValue(stringified);
+        }
+      }
+      return;
+    }
+
+    processValue(String(value));
+  };
+
+  processValue(raw);
+  return results;
+};
+const extractPaymentMethodsFromText = (value?: string | null) => {
+  if (!value) {
+    return [] as string[];
+  }
+
+  const methods = new Set<string>();
+  const normalized = value
+    .replace(/\s+/g, " ")
+    .replace(/\.+/g, ".")
+    .trim();
+
+  const patterns = [
+    /pago\s+v[ií]a\s+([^.;]+)/gi,
+    /m[eé]todo[s]?\s+de\s+pago[:\s]+([^.;]+)/gi,
+  ];
+
+  patterns.forEach((pattern) => {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(normalized)) !== null) {
+      const rawSegment = match[1] ?? "";
+      rawSegment
+        .split(/[,/|]/)
+        .map((segment) => segment.split(/\by\b/i))
+        .flat()
+        .map((segment) => segment.trim())
+        .filter((segment) => segment.length > 1)
+        .forEach((segment) => {
+          const cleaned = segment
+            .replace(/[-]+$/g, "")
+            .replace(/^[\-\s]+/, "")
+            .trim();
+          if (cleaned) {
+            methods.add(cleaned.toUpperCase());
+          }
+        });
+    }
+  });
+
+  return Array.from(methods.values());
+};
+
+const parseNumber = (value: string) => {
+  const normalized = value.replace(/\s+/g, "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const PAYMENT_SUMMARY_METHODS = ["Tarjeta", "Transferencia", "Yape", "Plin"] as const;
+type PaymentSummaryKey = (typeof PAYMENT_SUMMARY_METHODS)[number];
+
+const PAYMENT_SUMMARY_LABELS: Record<PaymentSummaryKey, string> = {
+  Tarjeta: "Tarjeta",
+  Transferencia: "Transferencia",
+  Yape: "Yape",
+  Plin: "Plin",
+};
+
+const identifyPaymentSummaryMethod = (value: string): PaymentSummaryKey | null => {
+  const normalized = normalizeWhitespace(value).toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (/(tarjeta|visa|master|credito|crédito|debito|débito|amex|american express)/.test(normalized)) {
+    return "Tarjeta";
+  }
+  if (/transfer/.test(normalized)) {
+    return "Transferencia";
+  }
+  if (/yape/.test(normalized)) {
+    return "Yape";
+  }
+  if (/plin/.test(normalized)) {
+    return "Plin";
+  }
+  return null;
+};
+
+const extractAmountFromMethodEntry = (value: string): number | null => {
+  if (!value) {
+    return null;
+  }
+  const matches = value.match(/-?\d+(?:[.,]\d+)?/g);
+  if (!matches || matches.length === 0) {
+    return null;
+  }
+  const candidate = matches[matches.length - 1];
+  const amount = parseNumber(candidate);
+  return Number.isFinite(amount) ? amount : null;
+};
+
+
+const isCashPaymentMethod = (value: string) => {
+  const normalized = normalizeWhitespace(value).toLowerCase();
+  return normalized.includes("efectivo");
+};
+
+const TRANSACTION_TYPE_LABELS: Record<string, string> = {
+  INCOME: "Ingresos",
+  EXPENSE: "Retiros",
+  CLOSURE: "Cierre",
+};
+
+const REPORT_COLUMNS: { key: keyof CashReportRow; header: string }[] = [
+  { key: "timestamp", header: "Fecha/Hora" },
+  { key: "type", header: "Tipo" },
+  { key: "amount", header: "Monto" },
+  { key: "paymentMethods", header: "Métodos de Pago" },
+  { key: "employee", header: "Encargado" },
+  { key: "client", header: "Cliente" },
+  { key: "document", header: "Documento" },
+  { key: "notes", header: "Notas" },
+  { key: "voucher", header: "Comprobante" },
+];
+
+type CashReportRow = {
+  timestamp: string;
+  type: string;
+  amount: string;
+  paymentMethods: string;
+  employee: string;
+  client: string;
+  document: string;
+  notes: string;
+  voucher: string;
+};
+
+type SaleItem = {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+};
+
+const extractSaleItems = (description: string) => {
+  const items = new Map<string, SaleItem>();
+  const cleaned = normalizeWhitespace(description);
+  const itemRegex = /([A-Za-z0-9().\- ]+?)(?: -)? *Cantidad: *([0-9.,]+) *,? *Precio *Unitario: *([0-9.,]+)/gi;
+
+  let match: RegExpExecArray | null;
+  while ((match = itemRegex.exec(cleaned)) !== null) {
+    const name = normalizeWhitespace(match[1] ?? "");
+    if (!name) continue;
+
+    const quantity = parseNumber(match[2] ?? "0");
+    const unitPrice = parseNumber(match[3] ?? "0");
+    const key = `${name.toLowerCase()}|${unitPrice}`;
+
+    const existing = items.get(key);
+    if (existing) {
+      existing.quantity += quantity;
+    } else {
+      items.set(key, { name, quantity, unitPrice });
+    }
+  }
+
+  return Array.from(items.values());
 };
 
 const getTimestampKey = (timestamp: Transaction["timestamp"]) => {
@@ -66,115 +392,212 @@ const getTimestampKey = (timestamp: Transaction["timestamp"]) => {
 };
 
 const mergeSaleTransactions = (transactions: Transaction[]) => {
-  const aggregatedSales = new Map<
-    string,
-    {
-      transaction: Transaction;
-      prefix: string;
-      suffix: string;
-      breakdown: Map<string, number>;
-      originalDescription: string;
-      order: number;
-    }
-  >();
+  type SaleAggregation = {
+    transaction: Transaction;
+    prefix: string;
+    fallbackDescriptions: string[];
+    items: Map<string, SaleItem>;
+    originalItems: SaleItem[] | null;
+    breakdown: Map<string, number>;
+    methodAmounts: Map<string, Set<number>>;
+    fingerprints: Set<string>;
+    order: number;
+    amounts: Set<number>;
+  };
 
+  const aggregatedSales = new Map<string, SaleAggregation>();
   const nonSaleTransactions: { transaction: Transaction; order: number }[] = [];
 
   transactions.forEach((transaction, index) => {
     const description = transaction.description ?? "";
-
-    if (!isSaleTransaction(description)) {
-      nonSaleTransactions.push({ transaction, order: index });
-      return;
-    }
-
+    const saleItems = extractSaleItems(description);
+    const fingerprintItems = saleItems
+      .map((item) => `${item.name.toLowerCase()}|${item.unitPrice.toFixed(4)}|${item.quantity.toFixed(4)}`)
+      .sort()
+      .join(";");
     const { prefix, suffix, normalized } = splitSaleDescription(description);
     const keyParts = [
       transaction.type,
       transaction.voucher ?? "",
       normalized,
       getTimestampKey(transaction.timestamp),
+      String(transaction.cashRegisterId ?? ""),
       transaction.clientDocument ?? "",
       transaction.clientName ?? "",
     ];
-
     const aggregationKey = keyParts.join("|");
-    const currentMethods = transaction.paymentMethods ? [...transaction.paymentMethods] : [];
+    const explicitMethods = normalizePaymentMethods(transaction.paymentMethods ?? []);
+    const methodsFromText = extractPaymentMethodsFromText(prefix || description);
+    const combinedMethods = [...explicitMethods];
+    const combinedMethodSet = new Set(combinedMethods.map((method) => method.toUpperCase()));
+    methodsFromText.forEach((method) => {
+      const normalizedMethod = method.toUpperCase();
+      if (!combinedMethodSet.has(normalizedMethod)) {
+        combinedMethodSet.add(normalizedMethod);
+        combinedMethods.push(method);
+      }
+    });
+    const hasExplicitMethods = explicitMethods.length > 0;
+    const currentMethods = combinedMethods.length > 0 ? combinedMethods : [...methodsFromText];
+    const amountValue = Number(transaction.amount);
+    const prefixForFingerprint = stripPaymentMethodDetails(prefix) || prefix;
+    const normalizedPrefixForFingerprint = normalizeWhitespace(prefixForFingerprint.toLowerCase());
+    const duplicateFingerprint = `${normalizedPrefixForFingerprint}|${transaction.voucher ?? ""}|${fingerprintItems}`;
 
     let saleEntry = aggregatedSales.get(aggregationKey);
+    let isDuplicate = false;
 
     if (!saleEntry) {
       saleEntry = {
         transaction: {
           ...transaction,
-          amount: Number(transaction.amount),
+          amount: amountValue,
           paymentMethods: [...currentMethods],
         },
         prefix,
-        suffix,
+        fallbackDescriptions: suffix ? [suffix] : [],
+        items: new Map<string, SaleItem>(),
+        originalItems: saleItems.length > 0 ? saleItems.map((item) => ({ ...item })) : null,
         breakdown: new Map<string, number>(),
-        originalDescription: description,
+        methodAmounts: new Map<string, Set<number>>(),
+        fingerprints: new Set<string>([duplicateFingerprint]),
         order: index,
+        amounts: new Set<number>([amountValue]),
       };
-
       aggregatedSales.set(aggregationKey, saleEntry);
     } else {
-      saleEntry.transaction.amount = Number(saleEntry.transaction.amount) + Number(transaction.amount);
+      isDuplicate = saleEntry.fingerprints.has(duplicateFingerprint);
+      if (!isDuplicate) {
+        saleEntry.fingerprints.add(duplicateFingerprint);
+        if (suffix) {
+          saleEntry.fallbackDescriptions.push(suffix);
+        }
+      }
     }
 
-    const methodSet = new Set(saleEntry.transaction.paymentMethods ?? []);
+    saleEntry.amounts.add(amountValue);
+
+    if (transaction.voucher && !saleEntry.transaction.voucher) {
+      saleEntry.transaction.voucher = transaction.voucher;
+    }
+    if (transaction.invoiceUrl && !saleEntry.transaction.invoiceUrl) {
+      saleEntry.transaction.invoiceUrl = transaction.invoiceUrl;
+    }
+
+    const methodSet = new Set((saleEntry.transaction.paymentMethods ?? []).map((method) => method.toUpperCase()));
+    const aggregatedMethods: string[] = saleEntry.transaction.paymentMethods ?? [];
     currentMethods.forEach((method) => {
       if (method) {
-        methodSet.add(method);
+        const normalizedMethod = method.toUpperCase();
+        if (!methodSet.has(normalizedMethod)) {
+          methodSet.add(normalizedMethod);
+          aggregatedMethods.push(method);
+        }
       }
     });
-    saleEntry.transaction.paymentMethods = Array.from(methodSet);
+    saleEntry.transaction.paymentMethods = aggregatedMethods;
 
-    const methodsForBreakdown = currentMethods.length > 0 ? currentMethods : [];
-
-    if (methodsForBreakdown.length === 0) {
-      return;
+    if (!saleEntry.originalItems && saleItems.length > 0) {
+      saleEntry.originalItems = saleItems.map((item) => ({ ...item }));
     }
 
-    if (methodsForBreakdown.length === 1) {
-      const method = methodsForBreakdown[0];
-      if (method) {
-        const previousAmount = saleEntry.breakdown.get(method) ?? 0;
-        saleEntry.breakdown.set(method, previousAmount + Number(transaction.amount));
-      }
-    } else {
-      methodsForBreakdown.forEach((method) => {
-        if (!method) return;
-        const previousAmount = saleEntry.breakdown.get(method) ?? 0;
-        saleEntry.breakdown.set(method, previousAmount + Number(transaction.amount));
+    if (!isDuplicate) {
+      saleItems.forEach((item) => {
+        const key = `${item.name.toLowerCase()}|${item.unitPrice}`;
+        const existingItem = saleEntry.items.get(key);
+        if (existingItem) {
+          existingItem.quantity += item.quantity;
+        } else {
+          saleEntry.items.set(key, { ...item });
+        }
       });
     }
+    const methodsForBreakdown = hasExplicitMethods ? explicitMethods : [];
+    methodsForBreakdown.forEach((method) => {
+      if (!method) {
+        return;
+      }
+      const amountSet = saleEntry.methodAmounts.get(method) ?? new Set<number>();
+      if (!amountSet.has(amountValue)) {
+        amountSet.add(amountValue);
+        saleEntry.methodAmounts.set(method, amountSet);
+        const previousAmount = saleEntry.breakdown.get(method) ?? 0;
+        saleEntry.breakdown.set(method, previousAmount + amountValue);
+      }
+    });
   });
 
   const mergedTransactions = [
     ...nonSaleTransactions,
     ...Array.from(aggregatedSales.values()).map((saleEntry) => {
       const breakdownEntries = Array.from(saleEntry.breakdown.entries());
-      const shouldIncludeBreakdown = breakdownEntries.length > 1;
-      const breakdownText = shouldIncludeBreakdown
-        ? `Métodos de pago: ${breakdownEntries
-            .map(([method, amount]) => `${method}: S/.${amount.toFixed(2)}`)
-            .join(" | ")}`
+      const hasBreakdownAmounts = breakdownEntries.length > 0;
+      const currencySymbol = (saleEntry.transaction.currency ?? "S/.").trim();
+      const formattedBreakdown = breakdownEntries.map(([method, amount]) => {
+        const amountDisplay = `${currencySymbol} ${amount.toFixed(2)}`.trim();
+        return `${method}: ${amountDisplay}`;
+      });
+      const breakdownText = hasBreakdownAmounts
+        ? `Metodos de pago: ${formattedBreakdown.join(" | ")}`
         : "";
+      const formattedPaymentMethods = hasBreakdownAmounts && formattedBreakdown.length > 0
+        ? formattedBreakdown
+        : saleEntry.transaction.paymentMethods ?? [];
+      saleEntry.transaction.paymentMethods = formattedPaymentMethods;
+      const itemsForDisplay = saleEntry.originalItems?.length
+        ? saleEntry.originalItems
+        : Array.from(saleEntry.items.values());
 
-      const finalDescription = shouldIncludeBreakdown
-        ? [
-            saleEntry.prefix.trim(),
-            `${breakdownText}.`,
-            saleEntry.suffix.trim(),
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .replace(/\s+/g, " ")
-            .trim()
-        : saleEntry.originalDescription;
+      const itemSegments = itemsForDisplay.map((item) => {
+        const quantityStr = Number.isInteger(item.quantity)
+          ? item.quantity.toString()
+          : item.quantity.toFixed(2);
+        return `${item.name} - Cantidad: ${quantityStr}, Precio Unitario: ${item.unitPrice.toFixed(2)}`;
+      });
 
-      saleEntry.transaction.description = finalDescription;
+      const descriptionParts: string[] = [];
+      if (saleEntry.prefix) {
+        const cleanedPrefix = stripPaymentMethodDetails(saleEntry.prefix);
+        if (cleanedPrefix) {
+          descriptionParts.push(normalizeWhitespace(cleanedPrefix));
+        }
+      }
+      if (hasBreakdownAmounts && breakdownText) {
+        descriptionParts.push(breakdownText);
+      }
+      if (itemSegments.length > 0) {
+        descriptionParts.push(`Venta registrada: ${itemSegments.join(" | ")}`);
+      } else if (saleEntry.fallbackDescriptions.length > 0) {
+        descriptionParts.push(
+          normalizeWhitespace(`Venta registrada: ${saleEntry.fallbackDescriptions[0]}`)
+        );
+      } else if (saleEntry.transaction.description) {
+        descriptionParts.push(normalizeWhitespace(saleEntry.transaction.description));
+      }
+
+      const finalDescription = normalizeWhitespace(descriptionParts.join(" "));
+      if (finalDescription) {
+        saleEntry.transaction.description = finalDescription;
+      }
+
+      let totalAmount = 0;
+      const itemsForTotal = saleEntry.originalItems?.length
+        ? saleEntry.originalItems
+        : saleEntry.items.size > 0
+        ? Array.from(saleEntry.items.values())
+        : [];
+
+      if (itemsForTotal.length > 0) {
+        itemsForTotal.forEach((item) => {
+          totalAmount += item.quantity * item.unitPrice;
+        });
+      }
+      if (totalAmount === 0) {
+        saleEntry.amounts.forEach((amount) => {
+          totalAmount += amount;
+        });
+      }
+      saleEntry.transaction.amount = Number(totalAmount.toFixed(2));
 
       return {
         transaction: saleEntry.transaction,
@@ -186,7 +609,6 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
   mergedTransactions.sort((a, b) => a.order - b.order);
   return mergedTransactions.map((entry) => entry.transaction);
 };
-
 // arriba del componente
 const ymdLocal = (d: Date) => {
   const y = d.getFullYear();
@@ -230,7 +652,361 @@ export default function CashRegisterDashboard() {
   const [showOpenCashDialog, setShowOpenCashDialog] = useState(false);
   const [initialAmountToOpen, setInitialAmountToOpen] = useState<number>(0);
   const [selectedDate, setSelectedDate] = useState(() => new Date())
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
 
+  const selectedStoreName = useMemo(() => {
+    if (storeId === null) {
+      return "Sin tienda"
+    }
+    const store = stores.find((item) => item.id === storeId)
+    return store?.name ?? "Sin tienda"
+  }, [storeId, stores])
+
+  const reportRows = useMemo<CashReportRow[]>(() => {
+    return transactions.map((transaction) => {
+      const rawDate = transaction.timestamp
+        ? new Date(transaction.timestamp as any)
+        : transaction.createdAt
+        ? new Date(transaction.createdAt as any)
+        : null
+      const hasValidDate = rawDate instanceof Date && !Number.isNaN(rawDate.getTime())
+      const formattedDate = hasValidDate && rawDate ? format(rawDate, "dd/MM/yyyy HH:mm:ss") : "-"
+      const currencySymbol = (transaction.currency ?? "S/.").trim()
+      const amountDisplay = `${currencySymbol} ${Number(transaction.amount ?? 0).toFixed(2)}`
+      const paymentMethods = transaction.paymentMethods && transaction.paymentMethods.length > 0
+        ? transaction.paymentMethods.join(" | ")
+        : "-"
+
+      const documentParts = [
+        transaction.clientDocumentType ?? "",
+        transaction.clientDocument ?? "",
+      ]
+        .map((value) => (value ?? "").trim())
+        .filter((value) => value.length > 0)
+
+      const notesValue = transaction.description ? normalizeWhitespace(transaction.description) : "-"
+
+      return {
+        timestamp: formattedDate,
+        type: TRANSACTION_TYPE_LABELS[transaction.type] ?? transaction.type ?? "-",
+        amount: amountDisplay,
+        paymentMethods,
+        employee: transaction.employee?.trim() || "-",
+        client: transaction.clientName?.trim() || "Sin cliente",
+        document: documentParts.length > 0 ? documentParts.join(" ") : "-",
+        notes: notesValue,
+        voucher: transaction.voucher ?? "-",
+      }
+    })
+  }, [transactions])
+
+  const paymentMethodSummary = useMemo(() => {
+    const totals: Record<PaymentSummaryKey, number> = {
+      Tarjeta: 0,
+      Transferencia: 0,
+      Yape: 0,
+      Plin: 0,
+    };
+
+    let resolvedCurrency = "S/.";
+
+    transactions.forEach((transaction) => {
+      if (!transaction || transaction.type !== "INCOME") {
+        return;
+      }
+
+      const transactionCurrency =
+        typeof transaction.currency === "string" && transaction.currency.trim().length > 0
+          ? transaction.currency.trim()
+          : resolvedCurrency;
+
+      if (transactionCurrency) {
+        resolvedCurrency = transactionCurrency;
+      }
+
+      const totalAmount = Number(transaction.amount ?? 0);
+      if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+        return;
+      }
+
+      const methods = Array.isArray(transaction.paymentMethods) ? transaction.paymentMethods : [];
+      if (methods.length === 0) {
+        return;
+      }
+
+      const entries: { key: PaymentSummaryKey; amount: number | null }[] = [];
+
+      methods.forEach((rawValue) => {
+        const methodKey = identifyPaymentSummaryMethod(rawValue);
+        if (!methodKey) {
+          return;
+        }
+        const amountValue = extractAmountFromMethodEntry(rawValue);
+        entries.push({ key: methodKey, amount: amountValue });
+      });
+
+      if (entries.length === 0) {
+        return;
+      }
+
+      let assignedAmount = 0;
+      entries.forEach((entry) => {
+        if (entry.amount !== null) {
+          totals[entry.key] += entry.amount;
+          assignedAmount += entry.amount;
+        }
+      });
+
+      const fallbackEntries = entries.filter((entry) => entry.amount === null);
+      const remaining = Number((totalAmount - assignedAmount).toFixed(2));
+
+      if (remaining > 0 && fallbackEntries.length === 1) {
+        totals[fallbackEntries[0].key] += remaining;
+      }
+    });
+
+    const rows = PAYMENT_SUMMARY_METHODS.map((method) => ({
+      method,
+      label: PAYMENT_SUMMARY_LABELS[method],
+      amount: Number(totals[method].toFixed(2)),
+    }));
+
+    return {
+      currencySymbol: resolvedCurrency || "S/.",
+      rows,
+    };
+  }, [transactions]);
+
+  const cashIncomeTotal = useMemo(() => {
+    let total = 0;
+
+    transactions.forEach((transaction) => {
+      if (!transaction || transaction.type !== "INCOME") {
+        return;
+      }
+
+      const methods = Array.isArray(transaction.paymentMethods)
+        ? transaction.paymentMethods
+        : [];
+      if (methods.length === 0) {
+        return;
+      }
+
+      const cashEntries = methods.filter((rawValue) => isCashPaymentMethod(rawValue));
+      if (cashEntries.length === 0) {
+        return;
+      }
+
+      let explicitCash = 0;
+      let hasExplicitAmount = false;
+      cashEntries.forEach((rawValue) => {
+        const amount = extractAmountFromMethodEntry(rawValue);
+        if (amount !== null) {
+          explicitCash += amount;
+          hasExplicitAmount = true;
+        }
+      });
+
+      if (hasExplicitAmount) {
+        total += explicitCash;
+        return;
+      }
+
+      if (cashEntries.length === methods.length) {
+        total += Number(transaction.amount ?? 0);
+      }
+    });
+
+    return Number(total.toFixed(2));
+  }, [transactions]);
+
+  const isReportEmpty = reportRows.length === 0
+
+  const handleExportExcel = () => {
+    if (isReportEmpty) {
+      toast.info("No hay movimientos para exportar.")
+      return
+    }
+
+    const reportDateLabel = format(selectedDate, "dd/MM/yyyy")
+    const reportFileDate = format(selectedDate, "yyyy-MM-dd")
+    const caption = `Reporte de Caja - ${selectedStoreName} (${reportDateLabel})`
+    const sanitizedCaption = escapeHtml(caption)
+
+    const tableHead = REPORT_COLUMNS.map((column) =>
+      `<th style="background-color:#f5f5f5;text-align:left;padding:8px;border:1px solid #cccccc;">${escapeHtml(column.header)}</th>`
+    ).join("")
+
+    const tableBody = reportRows
+      .map((row) => {
+        const cells = REPORT_COLUMNS.map((column) => {
+          const value = (row[column.key] ?? "-") as string
+          return `<td style="padding:6px;border:1px solid #dddddd;vertical-align:top;">${escapeHtml(value)}</td>`
+        }).join("")
+        return `<tr>${cells}</tr>`
+      })
+      .join("")
+
+    const tableHtml = `
+      <table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;min-width:720px;">
+        <caption style="margin-bottom:8px;font-weight:bold;">${sanitizedCaption}</caption>
+        <thead><tr>${tableHead}</tr></thead>
+        <tbody>${tableBody}</tbody>
+      </table>
+    `.trim()
+
+    const summaryTableRows = paymentMethodSummary.rows
+      .map((row) => {
+        const amountDisplay = `${paymentMethodSummary.currencySymbol} ${row.amount.toFixed(2)}`
+        return `
+          <tr>
+            <td style="padding:6px;border:1px solid #dddddd;">${escapeHtml(row.label)}</td>
+            <td style="padding:6px;border:1px solid #dddddd;text-align:right;">${escapeHtml(amountDisplay)}</td>
+          </tr>
+        `.trim()
+      })
+      .join("")
+
+    const summaryTableHtml = `
+      <table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;min-width:360px;">
+        <caption style="margin:16px 0 8px;font-weight:bold;">Resumen por metodo</caption>
+        <thead>
+          <tr>
+            <th style="background-color:#f5f5f5;text-align:left;padding:8px;border:1px solid #cccccc;">Metodo</th>
+            <th style="background-color:#f5f5f5;text-align:right;padding:8px;border:1px solid #cccccc;">Total</th>
+          </tr>
+        </thead>
+        <tbody>${summaryTableRows}</tbody>
+      </table>
+    `.trim()
+
+    const bodyContent = `${tableHtml}<br/><br/>${summaryTableHtml}`
+
+    const htmlDocument = `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${sanitizedCaption}</title>
+        </head>
+        <body>${bodyContent}</body>
+      </html>
+    `.trim()
+
+    const blob = new Blob(["\uFEFF", htmlDocument], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    })
+    downloadBlob(blob, `reporte-caja-${reportFileDate}.xls`)
+    toast.success("Reporte Excel generado correctamente.")
+  }
+
+  const handleExportPdf = async () => {
+    if (isReportEmpty) {
+      toast.info("No hay movimientos para exportar.")
+      return
+    }
+
+    setIsGeneratingPdf(true)
+    try {
+      const reportDateLabel = format(selectedDate, "dd/MM/yyyy")
+      const reportFileDate = format(selectedDate, "yyyy-MM-dd")
+      const pdfStyles = StyleSheet.create({
+        page: { padding: 24, fontSize: 10, fontFamily: "Helvetica" },
+        header: { marginBottom: 12 },
+        title: { fontSize: 18, marginBottom: 4 },
+        subtitle: { fontSize: 11, marginBottom: 2 },
+        meta: { fontSize: 10, marginBottom: 8 },
+        table: { borderWidth: 1, borderColor: "#e5e5e5", borderRadius: 4 },
+        tableRow: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: "#e5e5e5", paddingVertical: 4, paddingHorizontal: 4 },
+        tableHeaderRow: { backgroundColor: "#f5f5f5", borderBottomWidth: 1, borderBottomColor: "#d4d4d4" },
+        tableRowEven: { backgroundColor: "#fafafa" },
+        cell: { flex: 1, paddingRight: 6 },
+        cellWide: { flex: 2, paddingRight: 6 },
+        cellAmount: { textAlign: "right" },
+        cellHeader: { fontWeight: "bold" },
+        summarySection: { marginTop: 16 },
+        summaryTitle: { fontSize: 12, marginTop: 12, marginBottom: 6, fontWeight: "bold" },
+        summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
+        summaryLabel: { fontSize: 10 },
+        summaryAmount: { fontSize: 10, fontWeight: "bold" },
+      })
+
+      const documentDefinition = (
+        <Document>
+          <Page size="A4" style={pdfStyles.page}>
+            <View style={pdfStyles.header}>
+              <Text style={pdfStyles.title}>Reporte de Caja</Text>
+              <Text style={pdfStyles.subtitle}>{`Fecha: ${reportDateLabel}`}</Text>
+              <Text style={pdfStyles.subtitle}>{`Tienda: ${selectedStoreName}`}</Text>
+              <Text style={pdfStyles.meta}>{`Movimientos: ${reportRows.length}`}</Text>
+            </View>
+            <View style={pdfStyles.table}>
+              <View style={[pdfStyles.tableRow, pdfStyles.tableHeaderRow]}>
+                {REPORT_COLUMNS.map((column) => {
+                  const headerStyles: any[] = [pdfStyles.cell, pdfStyles.cellHeader]
+                  if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
+                    headerStyles.push(pdfStyles.cellWide)
+                  }
+                  if (column.key === "amount") {
+                    headerStyles.push(pdfStyles.cellAmount);
+                  }
+                  return (
+                    <Text key={column.key} style={headerStyles}>
+                      {column.header}
+                    </Text>
+                  )
+                })}
+              </View>
+              {reportRows.map((row, index) => (
+                <View
+                  key={`${row.timestamp}-${index}`}
+                  style={[
+                    [pdfStyles.tableRow, ...(index % 2 === 0 ? [pdfStyles.tableRowEven] : [])] as any
+                  ]}
+                >
+                  {REPORT_COLUMNS.map((column) => {
+                    // ⬇⬇⬇ forzamos el tipo del arreglo
+                    const cellStyles: any[] = [pdfStyles.cell];
+                    if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
+                      cellStyles.push(pdfStyles.cellWide);
+                    }
+                    if (column.key === "amount") {
+                      cellStyles.push(pdfStyles.cellAmount); // { textAlign: "right" }
+                    }
+                    const value = row[column.key] || "-";
+                    return (
+                      <Text key={column.key} style={cellStyles}>
+                        {value}
+                      </Text>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+            <View style={pdfStyles.summarySection}>
+              <Text style={pdfStyles.summaryTitle}>Resumen por metodo</Text>
+              {paymentMethodSummary.rows.map((row) => (
+                <View key={row.method} style={pdfStyles.summaryRow}>
+                  <Text style={pdfStyles.summaryLabel}>{row.label}</Text>
+                  <Text style={pdfStyles.summaryAmount}>
+                    {`${paymentMethodSummary.currencySymbol} ${row.amount.toFixed(2)}`}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </Page>
+        </Document>
+      )
+      const blob = await pdf(documentDefinition).toBlob()
+      downloadBlob(blob, `reporte-caja-${reportFileDate}.pdf`)
+      toast.success("Reporte PDF generado correctamente.")
+    } catch (error) {
+      console.error("Error generando PDF de caja:", error)
+      toast.error("No se pudo generar el PDF. Inténtalo de nuevo.")
+    } finally {
+      setIsGeneratingPdf(false)
+    }
+  }
+  // -------------------- FUNCIONES --------------------
   // -------------------- FUNCIONES --------------------
   // Nueva función para recargar balance y transacciones
   const refreshCashData = async () => {
@@ -251,7 +1027,7 @@ export default function CashRegisterDashboard() {
         timestamp: transaction.createdAt || new Date().toISOString(),
         employee: transaction.employee || "",
         description: transaction.description || "",
-        paymentMethods: transaction.paymentMethods || [],
+        paymentMethods: normalizePaymentMethods(transaction.paymentMethods ?? []),
         voucher: transaction.voucher || null,
         invoiceUrl: transaction.invoiceUrl ?? null,
         clientName: transaction.clientName ?? null,
@@ -478,7 +1254,7 @@ export default function CashRegisterDashboard() {
           timestamp: new Date(t.createdAt),
           employee: t.employee || "",
           description: t.description || "",
-          paymentMethods: t.paymentMethods || [],
+          paymentMethods: normalizePaymentMethods(t.paymentMethods ?? []),
           createdAt: new Date(t.createdAt),
           userId: t.userId,
           cashRegisterId: t.cashRegisterId,
@@ -655,7 +1431,7 @@ export default function CashRegisterDashboard() {
               {isSameDay(selectedDate, new Date()) ? "Saldo Actual" : `Saldo del ${format(selectedDate, "dd/MM/yyyy")}`}
             </CardTitle>
             <CardDescription>
-              Dinero disponible en caja {isSameDay(selectedDate, new Date()) ? "hoy" : "según último cierre de ese día"}
+              {isSameDay(selectedDate, new Date()) ? "Dinero de todas las operaciones en caja hoy" : "Dinero de todas las operaciones en caja segun ultimo cierre de ese dia"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -668,6 +1444,11 @@ export default function CashRegisterDashboard() {
                 "Sin cierre ese día"
               )}
             </div>
+            {isSameDay(selectedDate, new Date()) && (
+              <div className="text-sm text-muted-foreground mt-2">
+                Dinero en efectivo disponible hoy: {`${paymentMethodSummary.currencySymbol} ${cashIncomeTotal.toFixed(2)}`}
+              </div>
+            )}
             {dailyClosureInfo && (
               <div className="text-sm text-muted-foreground mt-1">
                 Saldo inicial: S/. {Number(dailyClosureInfo.openingBalance).toFixed(2)}
@@ -777,6 +1558,8 @@ export default function CashRegisterDashboard() {
                 totalExpense={totalExpense} // 👈 tienes que calcularlo
                 onClosureCompleted={refreshCashData}
                 reinitializeCashRegister={reinitializeCashRegister}
+                currencySymbol={paymentMethodSummary.currencySymbol}
+                cashIncomeTotal={cashIncomeTotal}
               />
             )}
             </CardContent>
@@ -784,9 +1567,32 @@ export default function CashRegisterDashboard() {
         </TabsContent>
         <TabsContent value="history">
           <Card>
-            <CardHeader>
-              <CardTitle>Historial de Transacciones</CardTitle>
-              <CardDescription>Ver todas las transacciones de la caja registradora</CardDescription>
+            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+              <div className="space-y-1">
+                <CardTitle>Historial de Transacciones</CardTitle>
+                <CardDescription>Ver todas las transacciones de la caja registradora</CardDescription>
+              </div>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={handleExportExcel}
+                  disabled={isReportEmpty}
+                >
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Exportar Excel
+                </Button>
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={handleExportPdf}
+                  disabled={isReportEmpty || isGeneratingPdf}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  {isGeneratingPdf ? "Generando PDF..." : "Exportar PDF"}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <TransactionHistory 
@@ -804,3 +1610,5 @@ export default function CashRegisterDashboard() {
     </div>
   )
 }
+
+

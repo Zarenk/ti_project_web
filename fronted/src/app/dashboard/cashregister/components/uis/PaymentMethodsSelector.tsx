@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { X, Banknote, Landmark } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
 import { getPaymentMethods } from "@/app/dashboard/sales/sales.api";
 import { toast } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -20,14 +20,40 @@ type SelectedPayment = {
   amount: number;
 };
 
+type TempPayment = SelectedPayment & { uid: string };
+
 interface PaymentMethodsSelectorProps {
   value: SelectedPayment[];
   onChange: (payments: SelectedPayment[]) => void;
 }
 
+// Firma para comparar arrays sin uid (método + monto)
+const signatureOf = (arr: readonly { method: string; amount: number }[]) =>
+  JSON.stringify(arr.map(p => [p.method, Number(p.amount)]));
+
+const generateUid = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const arePaymentsEqual = (current: TempPayment[], external: SelectedPayment[]) =>
+  current.length === external.length &&
+  current.every((payment, index) => {
+    const ext = external[index];
+    return ext && payment.method === ext.method && Number(payment.amount) === Number(ext.amount);
+  });
+
 export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelectorProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [tempPayments, setTempPayments] = useState<SelectedPayment[]>([]);
+  const [tempPayments, setTempPayments] = useState<TempPayment[]>([]);
+  const lastEmittedSigRef = useRef<string>(""); // <- NUEVO
+
+  // === EMISIÓN INMEDIATA EN HANDLERS (no en useEffect) ===
+  const emitToParent = useCallback((next: TempPayment[]) => {
+    const payload = next.map(({ uid, ...rest }) => rest);
+    lastEmittedSigRef.current = signatureOf(payload);
+    onChange(payload);
+  }, [onChange]);
 
   const defaultPaymentMethods: PaymentMethod[] = [
     { id: -1, name: "EN EFECTIVO" },
@@ -54,48 +80,116 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     fetchMethods();
   }, []);
 
+  // Sincroniza desde el padre hacia el estado local preservando uid cuando el item equivale
   useEffect(() => {
-    setTempPayments(value);
+    setTempPayments((prev) => {
+      if (arePaymentsEqual(prev, value)) {
+        return prev;
+      }
+      return value.map((payment, i) => {
+        const p = prev[i];
+        const same =
+          p &&
+          p.method === payment.method &&
+          Number(p.amount) === Number(payment.amount);
+        return same ? p : { ...payment, uid: generateUid() };
+      });
+    });
+  }, [value]);
+
+  // Reemplaza tu syncAndSetPayments para emitir en el mismo tick:
+  const syncAndSetPayments = (updater: (prev: TempPayment[]) => TempPayment[]) => {
+    setTempPayments(prev => {
+      const next = updater(prev);
+      if (!arePaymentsEqual(next, value)) {
+        emitToParent(next); // <- emite aquí, no en un useEffect aparte
+      }
+      return next;
+    });
+  };
+
+  // Emite cambios al padre POST-render (evita "Cannot update a component while rendering a different component")
+  useEffect(() => {
+    if (!arePaymentsEqual(tempPayments, value)) {
+      onChange(tempPayments.map(({ uid, ...rest }) => rest));
+    }
+  }, [tempPayments, value, onChange]);
+
+  // === SYNC DESDE PROPS, PERO IGNORANDO EL "ECO" QUE ACABAMOS DE ENVIAR ===
+  useEffect(() => {
+    // Si lo que llega del padre es exactamente lo último que emitimos, no resetees el local
+    if (signatureOf(value) === lastEmittedSigRef.current) return;
+
+    setTempPayments(prev => {
+      if (arePaymentsEqual(prev, value)) return prev;
+      return value.map((payment, i) => {
+        const p = prev[i];
+        const same = p && p.method === payment.method && Number(p.amount) === Number(payment.amount);
+        return same ? p : { ...payment, uid: generateUid() };
+      });
+    });
   }, [value]);
 
   const handleAddPayment = () => {
     if (paymentMethods.length === 0) return;
-  
+
     if (tempPayments.length >= 3) {
       toast.error("Ya no puedes agregar más de 3 métodos de pago.");
       return;
     }
-  
+
     const isFirstPayment = tempPayments.length === 0;
     const formAmount = Number(document.querySelector<HTMLInputElement>('input[name="amount"]')?.value || 0);
-  
-    const newPayments = [
-      ...tempPayments,
-      {
-        method: paymentMethods[0].name || "EFECTIVO",
-        amount: isFirstPayment ? formAmount : 0, // 👈 Seteamos el primer monto
-      },
-    ];
-  
-    setTempPayments(newPayments);
-    onChange(newPayments); // 👈 🔥 Esto actualiza inmediatamente en el padre también
+
+    syncAndSetPayments((prev) => {
+      const usedMethods = new Set(prev.map((payment) => payment.method));
+      const availableMethod = paymentMethods.find((method) => !usedMethods.has(method.name));
+      const selectedMethod = availableMethod ?? paymentMethods[0];
+
+      if (!selectedMethod) {
+        return prev;
+      }
+
+      const newPayments = [
+        ...prev,
+        {
+          uid: generateUid(),
+          method: selectedMethod.name,
+          amount: isFirstPayment ? formAmount : 0, // Seteamos el primer monto
+        },
+      ];
+
+      return newPayments;
+    });
   };
 
   const handleUpdatePayment = (index: number, field: keyof SelectedPayment, val: any) => {
-    const updated = [...tempPayments];
-    updated[index] = {
-      ...updated[index],
-      [field]: val, // Aseguramos que el campo sea dinámico y válido
-    } as SelectedPayment; // Type assertion para garantizar el tipo
-    setTempPayments(updated);
-    onChange(updated);
+    syncAndSetPayments((prev) => {
+      const updated = [...prev];
+      const current = updated[index];
+      if (!current) return prev;
+
+      const nextValue = field === "amount" ? (val === "" ? 0 : Number(val)) : val;
+
+      if (current[field] === nextValue) {
+        return prev;
+      }
+
+      updated[index] = {
+        ...current,
+        [field]: nextValue,
+      } as TempPayment;
+
+      return updated;
+    });
   };
 
   const handleRemovePayment = (index: number) => {
-    const updated = [...tempPayments];
-    updated.splice(index, 1);
-    setTempPayments(updated);
-    onChange(updated);
+    syncAndSetPayments((prev) => {
+      const updated = [...prev];
+      updated.splice(index, 1);
+      return updated;
+    });
   };
 
   const getIcon = (method: string) => {
@@ -118,10 +212,12 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
 
   return (
     <div className="space-y-4">
-      <AnimatePresence>
+      {/* Evita animación inicial de salida/entrada y mejora reordenado */}
+      <AnimatePresence initial={false}>
         {tempPayments.map((payment, index) => (
           <motion.div
-            key={index}
+            key={payment.uid}
+            layout // <- ayuda a transiciones suaves al agregar/eliminar
             initial={{ opacity: 0, scale: 0.95, x: -20 }}
             animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={{ opacity: 0, scale: 0.95, x: 20 }}
@@ -148,19 +244,19 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
             </Select>
 
             <Input
-                type="number"
-                placeholder="Monto"
-                value={payment.amount ?? 0}
-                step="0.01"
-                min="0"
-                onChange={(e) =>
-                    handleUpdatePayment(
-                    index,
-                    "amount",
-                    e.target.value === "" ? 0 : Number(e.target.value)
-                    )
-                }
-                className="w-[100px]"
+              type="number"
+              placeholder="Monto"
+              value={payment.amount ?? 0}
+              step="0.01"
+              min="0"
+              onChange={(e) =>
+                handleUpdatePayment(
+                  index,
+                  "amount",
+                  e.target.value === "" ? 0 : Number(e.target.value)
+                )
+              }
+              className="w-[100px]"
             />
 
             <Button

@@ -124,20 +124,26 @@ export function PaymentMethodsModal({
         return prev;
       }
 
-      const first = paymentMethods[0];
+      const usedIds = new Set(prev.map(payment => payment.paymentMethodId));
+      const availableMethod = paymentMethods.find(method => !usedIds.has(method.id));
+
+      if (!availableMethod) {
+        toast.info("Ya has seleccionado todos los métodos de pago disponibles.");
+        return prev;
+      }
       const uid = generateUid();
       lastAddedUidRef.current = uid;
 
       const next: TempPayment = prev.length === 0
         ? {
             uid,
-            paymentMethodId: first?.id ?? null,
+            paymentMethodId: availableMethod.id,
             amount: Number(totalProductos.toFixed(2)),
             currency: "PEN",
           }
         : {
             uid,
-            paymentMethodId: first?.id ?? null,
+            paymentMethodId: availableMethod.id,
             amount: 0,
             currency: "PEN",
           };
@@ -148,6 +154,16 @@ export function PaymentMethodsModal({
 
   const handleUpdatePayment = <K extends keyof SelectedPayment>(index: number, field: K, val: SelectedPayment[K]) => {
     setTempPayments(prev => {
+      if (field === "paymentMethodId") {
+        const nextId = val as SelectedPayment["paymentMethodId"];
+        if (
+          nextId !== null &&
+          prev.some((payment, paymentIndex) => paymentIndex !== index && payment.paymentMethodId === nextId)
+        ) {
+          toast.error("Ya seleccionaste este método de pago.");
+          return prev;
+        }
+      }
       const clone = [...prev];
       clone[index] = { ...clone[index], [field]: val };
       return clone;
@@ -163,6 +179,11 @@ export function PaymentMethodsModal({
   };
 
   const handleSave = () => {
+    const hasInvalidAmount = tempPayments.some(payment => !payment.amount || payment.amount <= 0);
+    if (tempPayments.length > 0 && hasInvalidAmount) {
+      toast.error("Debe agregar un monto o eliminar el método de pago.");
+      return;
+    }
     onChange(tempPayments.map(({ uid, ...p }) => p));
     setOpen(false);
     toast.success("Los métodos han sido guardados correctamente");

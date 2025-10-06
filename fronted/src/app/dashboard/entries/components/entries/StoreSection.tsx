@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Save, ChevronsUpDown, Check } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+import { cn, normalizeOptionValue } from "@/lib/utils";
 import { AddStoreDialog } from "../AddStoreDialog"; // ajusta la ruta si lo tienes en otro lado
 
 type StoreSectionProps = {
@@ -39,6 +39,11 @@ export const StoreSection = ({
   setIsProviderComboTouched,
   valueProvider,
 }: StoreSectionProps) => {
+  const normalizedSelectedStore = normalizeOptionValue(valueStore)
+  const selectedStoreOption =
+    stores.find((store) => normalizeOptionValue(store.name) === normalizedSelectedStore) ?? null
+  const displayedStoreName = selectedStoreOption?.name ?? valueStore ?? ""
+
   return (
     <div className="flex-1 flex flex-col border border-gray-600 rounded-md p-2">
       <Label htmlFor="store-combobox" className="text-sm font-medium mb-2">
@@ -54,9 +59,7 @@ export const StoreSection = ({
               className="w-[260px] justify-between"
               title="Selecciona la tienda donde se registrará el ingreso"
             >
-              {valueStore
-                ? stores.find((store) => String(store.name) === valueStore)?.name
-                : "Seleccione una Tienda..."}
+              {displayedStoreName || "Seleccione una Tienda..."}
               <ChevronsUpDown className="opacity-50" />
             </Button>
           </PopoverTrigger>
@@ -66,30 +69,40 @@ export const StoreSection = ({
               <CommandList>
                 <CommandEmpty>No se encontraron tiendas.</CommandEmpty>
                 <CommandGroup>
-                  {stores.map((store) => (
-                    <CommandItem
-                      key={store.name}
-                      value={store.name}
-                      onSelect={(currentValue) => {
-                        if (currentValue === valueStore) return; // 👈 Si es el mismo proveedor, no hace nada
-                        setIsProviderComboTouched(true);
-                        setValueStore(currentValue === valueStore ? "" : currentValue);
-                        const selectedStore = stores.find((store) => String(store.name) === currentValue);
-                        if (selectedStore) {
-                          setValue("store_name", selectedStore.name || "");
-                          setValue("store_adress", selectedStore.adress || "");
-                        } else {
-                          console.error("Tienda no encontrada:", currentValue);
-                        }
-                        setOpenStore(false);
-                      }}
-                    >
-                      {store.name}
-                      <Check
-                        className={cn("ml-auto", valueProvider === store.name ? "opacity-100" : "opacity-0")}
-                      />
-                    </CommandItem>
-                  ))}
+                  {stores.map((store) => {
+                    const normalizedStoreName = normalizeOptionValue(store.name)
+                    const isSelected = normalizedStoreName === normalizedSelectedStore
+                    const commandValue =
+                      typeof store.name === "string"
+                        ? store.name.trim()
+                        : store.name != null
+                          ? String(store.name)
+                          : ""
+
+                    return (
+                      <CommandItem
+                        key={store.id ?? store.name}
+                        value={commandValue}
+                        onSelect={() => {
+                          if (isSelected) {
+                            setOpenStore(false)
+                            return
+                          }
+
+                          setIsProviderComboTouched(true)
+                          setValueStore(store.name || "")
+                          const selectedStoreName = store.name || ""
+                          const selectedStoreAdress = store.adress || ""
+                          setValue("store_name", selectedStoreName)
+                          setValue("store_adress", selectedStoreAdress)
+                          setOpenStore(false)
+                        }}
+                      >
+                        {store.name}
+                        <Check className={cn("ml-auto", isSelected ? "opacity-100" : "opacity-0")} />
+                      </CommandItem>
+                    )
+                  })}
                 </CommandGroup>
               </CommandList>
             </Command>
@@ -126,3 +139,6 @@ export const StoreSection = ({
     </div>
   );
 };
+
+
+

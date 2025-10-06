@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { cn } from '@/lib/utils'
+import { cn, normalizeOptionValue } from '@/lib/utils'
 import AddProductDialog from '../AddProductDialog'
 import { AddSeriesDialog } from '../AddSeriesDialog'
 import {
@@ -72,10 +72,30 @@ export function ProductSelection({
     if (currentProduct?.categoryId) {
       return currentProduct.categoryId
     }
-    const match = categories.find((cat: any) => cat.name === categoryValue)
+
+    const normalizedCategoryValue = normalizeOptionValue(categoryValue)
+    const match = categories.find(
+      (cat: any) => normalizeOptionValue(cat.name) === normalizedCategoryValue,
+    )
+
     return match?.id ?? null
   }, [categories, categoryValue, currentProduct?.categoryId])
 
+  const normalizedSelectedProductValue = useMemo(() => normalizeOptionValue(value), [value])
+
+  const selectedProductOption = useMemo(() => {
+    if (!value) {
+      return null
+    }
+
+    return (
+      products.find(
+        (product: any) => normalizeOptionValue(product.name) === normalizedSelectedProductValue,
+      ) ?? null
+    )
+  }, [products, normalizedSelectedProductValue, value])
+
+  const displayedProductName = selectedProductOption?.name ?? value ?? ''
   const applyCategoryUpdate = async (
     productId: number,
     category: { id: number; name: string },
@@ -207,9 +227,7 @@ export function ProductSelection({
               justify-between truncate text-xs sm:text-sm"
               title="Busca y selecciona el producto que deseas ingresar"
             >
-              {value
-                ? products.find((product: any) => String(product.name) === value)?.name
-                : "Selecciona un producto..."}
+              {displayedProductName || 'Selecciona un producto...'}
               <ChevronsUpDown className="opacity-50" />
             </Button>
           </PopoverTrigger>
@@ -219,49 +237,53 @@ export function ProductSelection({
               <CommandList>
                 <CommandEmpty>No se encontraron productos.</CommandEmpty>
                 <CommandGroup>
-                  {products.map((product: any) => (
-                    <CommandItem
-                      key={product.name}
-                      value={product.name}
-                      onSelect={(currentValue) => {
-                        if (currentValue === value) return; // 👈 Si es el mismo proveedor, no hace nada
-                        setValueProduct(currentValue === value ? "" : currentValue);
-                        const selectedProduct = products.find(
-                          (p: any) => String(p.name) === currentValue
-                        );
-                        if (selectedProduct) {
+                  {products.map((product: any) => {
+                    const normalizedProductName = normalizeOptionValue(product.name)
+                    const isSelected = normalizedProductName === normalizedSelectedProductValue
+                    const commandValue =
+                      typeof product.name === 'string'
+                        ? product.name.trim()
+                        : product.name != null
+                          ? String(product.name)
+                          : ''
+
+                    return (
+                      <CommandItem
+                        key={product.id ?? product.name}
+                        value={commandValue}
+                        onSelect={() => {
+                          if (isSelected) {
+                            setOpen(false)
+                            return
+                          }
+
                           const purchasePrice =
                             currency === 'USD' && tipoCambioActual && tipoCambioActual > 0
-                              ? Number((selectedProduct.price / tipoCambioActual).toFixed(2))
-                              : Number((selectedProduct.price || 0).toFixed(2))
-                          const category = categories.find(
-                            (cat: any) => cat.id === selectedProduct.categoryId
-                          );
+                              ? Number((product.price / tipoCambioActual).toFixed(2))
+                              : Number((product.price || 0).toFixed(2))
+                          const category = categories.find((cat: any) => cat.id === product.categoryId)
+
+                          setValueProduct(product.name || '')
                           setCurrentProduct({
-                            id: selectedProduct.id,
-                            name: selectedProduct.name,
+                            id: product.id,
+                            name: product.name,
                             price: purchasePrice,
-                            priceSell: selectedProduct.priceSell,
-                            categoryId: selectedProduct.categoryId,
-                            category_name: category?.name || selectedProduct.category_name || "Sin categoría",
-                          });
-                          setValue("category_name", category?.name || selectedProduct.category_name || "Sin categoría");
-                          setValue("price", purchasePrice || 0);
-                          setValue("priceSell", selectedProduct.priceSell || 0);
-                          setValue("description", selectedProduct.description || "");
-                        }
-                        setOpen(false);
-                      }}
-                    >
-                      {product.name}
-                      <Check
-                          className={cn(
-                          "ml-auto",
-                          value === product.name ? "opacity-100" : "opacity-0"
-                         )}
-                       />
-                    </CommandItem>
-                  ))}
+                            priceSell: product.priceSell,
+                            categoryId: product.categoryId,
+                            category_name: category?.name || product.category_name || 'Sin categor?a',
+                          })
+                          setValue('category_name', category?.name || product.category_name || 'Sin categor?a')
+                          setValue('price', purchasePrice || 0)
+                          setValue('priceSell', product.priceSell || 0)
+                          setValue('description', product.description || '')
+                          setOpen(false)
+                        }}
+                      >
+                        {product.name}
+                        <Check className={cn('ml-auto', isSelected ? 'opacity-100' : 'opacity-0')} />
+                      </CommandItem>
+                    )
+                  })}
                 </CommandGroup>
               </CommandList>
             </Command>
@@ -474,3 +496,14 @@ export function ProductSelection({
     </div>
   )
 }
+
+
+
+
+
+
+
+
+
+
+

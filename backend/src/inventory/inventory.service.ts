@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -13,6 +13,8 @@ import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 @Injectable()
 export class InventoryService {
   [x: string]: any;
+  private readonly logger = new Logger(InventoryService.name);
+
   constructor(
     private prisma: PrismaService,
     private activityService: ActivityService,
@@ -27,10 +29,11 @@ export class InventoryService {
   
     // Limpiar claves con espacios
     const cleanedData = rawData.map((row: any) => {
-      const cleanedRow: any = {};
+      const cleanedRow: Record<string, unknown> = {};
       Object.keys(row).forEach((key) => {
-        const cleanKey = key.trim(); // Elimina espacios al inicio/final
-        cleanedRow[cleanKey] = row[key];
+        const cleanKey = key.trim(); // Elimina espacios al inicio/final en el encabezado
+        const value = row[key];
+        cleanedRow[cleanKey] = typeof value === 'string' ? value.trim() : value;
       });
       return cleanedRow;
     });
@@ -713,6 +716,10 @@ export class InventoryService {
             },
           })).id
     }
+
+    const defaultExchangeRate = await this.prisma.tipoCambio.findFirst({
+      orderBy: { fecha: 'desc' },
+    })
   
     for (const row of data) {
       const {
@@ -804,12 +811,20 @@ export class InventoryService {
         summary: `Importación de ${parsedStock}x ${product.name} en tienda ${storeId}`,
       })
 
-      await this.accountingHook.postInventoryAdjustment({
-        productId: product.id,
-        adjustment: parsedStock * parsedPrecioCompra,
-        counterAccount: 'inventory-adjustment',
-        description: `Importación de ${parsedStock}x ${product.name} en tienda ${storeId}`,
-      })
+      try {
+        await this.accountingHook.postInventoryAdjustment({
+          productId: product.id,
+          adjustment: parsedStock * parsedPrecioCompra,
+          counterAccount: 'inventory-adjustment',
+          description: `Importación de ${parsedStock}x ${product.name} en tienda ${storeId}`,
+        })
+      } catch (error) {
+        const trace = error instanceof Error ? error.stack : undefined
+        this.logger.error(
+          `No se pudo notificar el ajuste contable del producto ${product.id} durante la importación masiva`,
+          trace,
+        )
+      }
   
       let series: string[] = []
       if (row.serie && typeof row.serie === 'string') {
@@ -825,10 +840,9 @@ export class InventoryService {
           storeId,
           tipoMoneda: 'PEN',
           userId,
-          tipoCambioId: 1,
-          createdAt: new Date(),
           description: 'import_excel',
           providerId,
+          ...(defaultExchangeRate ? { tipoCambioId: defaultExchangeRate.id } : {}),
         },
       })
 
