@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 import { useEffect, useMemo, useState } from "react"
@@ -603,7 +603,182 @@ export default function CashRegisterDashboard() {
   const [showOpenCashDialog, setShowOpenCashDialog] = useState(false);
   const [initialAmountToOpen, setInitialAmountToOpen] = useState<number>(0);
   const [selectedDate, setSelectedDate] = useState(() => new Date())
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
 
+  const selectedStoreName = useMemo(() => {
+    if (storeId === null) {
+      return "Sin tienda"
+    }
+    const store = stores.find((item) => item.id === storeId)
+    return store?.name ?? "Sin tienda"
+  }, [storeId, stores])
+
+  const reportRows = useMemo<CashReportRow[]>(() => {
+    return transactions.map((transaction) => {
+      const rawDate = transaction.timestamp
+        ? new Date(transaction.timestamp as any)
+        : transaction.createdAt
+        ? new Date(transaction.createdAt as any)
+        : null
+      const hasValidDate = rawDate instanceof Date && !Number.isNaN(rawDate.getTime())
+      const formattedDate = hasValidDate && rawDate ? format(rawDate, "dd/MM/yyyy HH:mm:ss") : "-"
+      const currencySymbol = (transaction.currency ?? "S/.").trim()
+      const amountDisplay = `${currencySymbol} ${Number(transaction.amount ?? 0).toFixed(2)}`
+      const paymentMethods = transaction.paymentMethods && transaction.paymentMethods.length > 0
+        ? transaction.paymentMethods.join(" | ")
+        : "-"
+
+      const documentParts = [
+        transaction.clientDocumentType ?? "",
+        transaction.clientDocument ?? "",
+      ]
+        .map((value) => (value ?? "").trim())
+        .filter((value) => value.length > 0)
+
+      const notesValue = transaction.description ? normalizeWhitespace(transaction.description) : "-"
+
+      return {
+        timestamp: formattedDate,
+        type: TRANSACTION_TYPE_LABELS[transaction.type] ?? transaction.type ?? "-",
+        amount: amountDisplay,
+        paymentMethods,
+        employee: transaction.employee?.trim() || "-",
+        client: transaction.clientName?.trim() || "Sin cliente",
+        document: documentParts.length > 0 ? documentParts.join(" ") : "-",
+        notes: notesValue,
+        voucher: transaction.voucher ?? "-",
+      }
+    })
+  }, [transactions])
+
+  const isReportEmpty = reportRows.length === 0
+
+  const handleExportExcel = () => {
+    if (isReportEmpty) {
+      toast.info("No hay movimientos para exportar.")
+      return
+    }
+
+    const reportDateLabel = format(selectedDate, "dd/MM/yyyy")
+    const reportFileDate = format(selectedDate, "yyyy-MM-dd")
+    const caption = Reporte de Caja -  ()
+    const tableHead = REPORT_COLUMNS.map((column) =>
+      <th style="background-color:#f5f5f5;text-align:left;padding:8px;border:1px solid #cccccc;"></th>
+    ).join("")
+    const tableBody = reportRows
+      .map((row) => {
+        const cells = REPORT_COLUMNS.map((column) => {
+          const value = row[column.key] ?? "-"
+          return <td style="padding:6px;border:1px solid #dddddd;vertical-align:top;"></td>
+        }).join("")
+        return <tr></tr>
+      })
+      .join("")
+    const tableHtml =
+      <table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;min-width:720px;"> +
+      <caption style="margin-bottom:8px;font-weight:bold;"></caption> +
+      <thead><tr></tr></thead> +
+      <tbody></tbody></table>
+    const blob = new Blob([\uFEFF], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    })
+    downloadBlob(blob, 
+eporte-caja-.xls)
+    toast.success("Reporte Excel generado correctamente.")
+  }
+
+  const handleExportPdf = async () => {
+    if (isReportEmpty) {
+      toast.info("No hay movimientos para exportar.")
+      return
+    }
+
+    setIsGeneratingPdf(true)
+    try {
+      const reportDateLabel = format(selectedDate, "dd/MM/yyyy")
+      const reportFileDate = format(selectedDate, "yyyy-MM-dd")
+      const pdfStyles = StyleSheet.create({
+        page: { padding: 24, fontSize: 10, fontFamily: "Helvetica" },
+        header: { marginBottom: 12 },
+        title: { fontSize: 18, marginBottom: 4 },
+        subtitle: { fontSize: 11, marginBottom: 2 },
+        meta: { fontSize: 10, marginBottom: 8 },
+        table: { borderWidth: 1, borderColor: "#e5e5e5", borderRadius: 4 },
+        tableRow: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: "#e5e5e5", paddingVertical: 4, paddingHorizontal: 4 },
+        tableHeaderRow: { backgroundColor: "#f5f5f5", borderBottomWidth: 1, borderBottomColor: "#d4d4d4" },
+        tableRowEven: { backgroundColor: "#fafafa" },
+        cell: { flex: 1, paddingRight: 6 },
+        cellWide: { flex: 2 },
+        cellAmount: { textAlign: "right" },
+        cellHeader: { fontWeight: "bold" },
+      })
+
+      const documentDefinition = (
+        <Document>
+          <Page size="A4" style={pdfStyles.page}>
+            <View style={pdfStyles.header}>
+              <Text style={pdfStyles.title}>Reporte de Caja</Text>
+              <Text style={pdfStyles.subtitle}>{Fecha: }</Text>
+              <Text style={pdfStyles.subtitle}>{Tienda: }</Text>
+              <Text style={pdfStyles.meta}>{Movimientos: }</Text>
+            </View>
+            <View style={pdfStyles.table}>
+              <View style={[pdfStyles.tableRow, pdfStyles.tableHeaderRow]}>
+                {REPORT_COLUMNS.map((column) => {
+                  const headerStyles = [pdfStyles.cell, pdfStyles.cellHeader]
+                  if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
+                    headerStyles.push(pdfStyles.cellWide)
+                  }
+                  if (column.key === "amount") {
+                    headerStyles.push(pdfStyles.cellAmount)
+                  }
+                  return (
+                    <Text key={column.key} style={headerStyles}>
+                      {column.header}
+                    </Text>
+                  )
+                })}
+              </View>
+              {reportRows.map((row, index) => (
+                <View
+                  key={${row.timestamp}--}
+                  style={[
+                    pdfStyles.tableRow,
+                    index % 2 === 0 ? pdfStyles.tableRowEven : undefined,
+                  ]}
+                >
+                  {REPORT_COLUMNS.map((column) => {
+                    const cellStyles = [pdfStyles.cell]
+                    if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
+                      cellStyles.push(pdfStyles.cellWide)
+                    }
+                    if (column.key === "amount") {
+                      cellStyles.push(pdfStyles.cellAmount)
+                    }
+                    return (
+                      <Text key={column.key} style={cellStyles}>
+                        {row[column.key] || "-"}
+                      </Text>
+                    )
+                  })}
+                </View>
+              ))}
+            </View>
+          </Page>
+        </Document>
+      )
+      const blob = await pdf(documentDefinition).toBlob()
+      downloadBlob(blob, 
+eporte-caja-.pdf)
+      toast.success("Reporte PDF generado correctamente.")
+    } catch (error) {
+      console.error("Error generando PDF de caja:", error)
+      toast.error("No se pudo generar el PDF. Inténtalo de nuevo.")
+    } finally {
+      setIsGeneratingPdf(false)
+    }
+  }
+  // -------------------- FUNCIONES --------------------
   // -------------------- FUNCIONES --------------------
   // Nueva función para recargar balance y transacciones
   const refreshCashData = async () => {
@@ -1023,13 +1198,38 @@ export default function CashRegisterDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle>
+          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-2">
+            <div>
+              <CardTitle>
               {isSameDay(selectedDate, new Date()) ? "Saldo Actual" : `Saldo del ${format(selectedDate, "dd/MM/yyyy")}`}
-            </CardTitle>
-            <CardDescription>
-              Dinero disponible en caja {isSameDay(selectedDate, new Date()) ? "hoy" : "según último cierre de ese día"}
-            </CardDescription>
+              </CardTitle>
+              <CardDescription>
+                Dinero disponible en caja {isSameDay(selectedDate, new Date()) ? "hoy" : "según último cierre de ese día"}
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportExcel}
+                disabled={isReportEmpty}
+                className="flex items-center gap-2"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Exportar Excel
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportPdf}
+                disabled={isReportEmpty || isGeneratingPdf}
+                className="flex items-center gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                {isGeneratingPdf ? "Generando..." : "Exportar PDF"}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
@@ -1177,3 +1377,5 @@ export default function CashRegisterDashboard() {
     </div>
   )
 }
+
+

@@ -68,12 +68,12 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     fetchMethods();
   }, []);
 
+  // Sincroniza desde el padre hacia el estado local preservando uid cuando el item equivale
   useEffect(() => {
     setTempPayments((prev) => {
       if (arePaymentsEqual(prev, value)) {
         return prev;
       }
-      // 🔒 Mantén el uid si el item “equivale” al previo en esa posición
       return value.map((payment, i) => {
         const p = prev[i];
         const same =
@@ -85,28 +85,29 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     });
   }, [value]);
 
+  // Actualiza el estado local SIN llamar onChange aquí (evita setState en render del padre)
   const syncAndSetPayments = (updater: (prev: TempPayment[]) => TempPayment[]) => {
-    setTempPayments((prev) => {
-      const next = updater(prev);
-      if (arePaymentsEqual(next, value)) {
-        return prev;
-      }
-      onChange(next.map(({ uid, ...rest }) => rest));
-      return next;
-    });
+    setTempPayments((prev) => updater(prev));
   };
+
+  // Emite cambios al padre POST-render (evita "Cannot update a component while rendering a different component")
+  useEffect(() => {
+    if (!arePaymentsEqual(tempPayments, value)) {
+      onChange(tempPayments.map(({ uid, ...rest }) => rest));
+    }
+  }, [tempPayments, value, onChange]);
 
   const handleAddPayment = () => {
     if (paymentMethods.length === 0) return;
-  
+
     if (tempPayments.length >= 3) {
       toast.error("Ya no puedes agregar más de 3 métodos de pago.");
       return;
     }
-  
+
     const isFirstPayment = tempPayments.length === 0;
     const formAmount = Number(document.querySelector<HTMLInputElement>('input[name="amount"]')?.value || 0);
-  
+
     syncAndSetPayments((prev) => {
       const usedMethods = new Set(prev.map((payment) => payment.method));
       const availableMethod = paymentMethods.find((method) => !usedMethods.has(method.name));
@@ -121,7 +122,7 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
         {
           uid: generateUid(),
           method: selectedMethod.name,
-          amount: isFirstPayment ? formAmount : 0, // 👈 Seteamos el primer monto
+          amount: isFirstPayment ? formAmount : 0, // Seteamos el primer monto
         },
       ];
 
@@ -208,19 +209,19 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
             </Select>
 
             <Input
-                type="number"
-                placeholder="Monto"
-                value={payment.amount ?? 0}
-                step="0.01"
-                min="0"
-                onChange={(e) =>
-                    handleUpdatePayment(
-                    index,
-                    "amount",
-                    e.target.value === "" ? 0 : Number(e.target.value)
-                    )
-                }
-                className="w-[100px]"
+              type="number"
+              placeholder="Monto"
+              value={payment.amount ?? 0}
+              step="0.01"
+              min="0"
+              onChange={(e) =>
+                handleUpdatePayment(
+                  index,
+                  "amount",
+                  e.target.value === "" ? 0 : Number(e.target.value)
+                )
+              }
+              className="w-[100px]"
             />
 
             <Button

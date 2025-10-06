@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { getBrands } from "../../brands/brands.api";
 
 export default function ProductsByStorePage() {
   const [stores, setStores] = useState<{ id: number; name: string }[]>([]);
@@ -27,10 +28,13 @@ export default function ProductsByStorePage() {
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [selectedBrand, setSelectedBrand] = useState<number | null>(null);
+  const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const debouncedSearchTerm = useDebounce(searchTerm, 1000); // 👈 Aplica debounce
   const debouncedSelectedStore = useDebounce(selectedStore, 600)
   const debouncedSelectedCategory = useDebounce(selectedCategory, 600)
+  const debouncedSelectedBrand = useDebounce(selectedBrand, 600)
   const [withStockOnly, setWithStockOnly] = useState(false); // ✅ checkbox de stock
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -39,10 +43,15 @@ export default function ProductsByStorePage() {
 
   // Dentro del componente:
   const [open, setOpen] = useState(false)
+  const [brandOpen, setBrandOpen] = useState(false)
   const selectedCategoryName =
     selectedCategory === 0
       ? "Todas las categorías"
       : categories.find((cat) => cat.id === selectedCategory)?.name || "Selecciona una Categoria"
+  const selectedBrandName =
+    selectedBrand === 0
+      ? "Todas las marcas"
+      : brands.find((brand) => brand.id === selectedBrand)?.name || "Selecciona una Marca"
 
   useEffect(() => {
     async function fetchStores() {
@@ -116,6 +125,22 @@ export default function ProductsByStorePage() {
     fetchCategories();
   }, []);
 
+  useEffect(() => {
+    async function fetchBrands() {
+      try {
+        const response = await getBrands(1, 1000);
+        const normalizedBrands = Array.isArray(response?.data)
+          ? response.data.map((brand: any) => ({ id: brand.id, name: brand.name }))
+          : [];
+        setBrands(normalizedBrands);
+      } catch (error) {
+        console.error("Error al obtener las marcas:", error);
+      }
+    }
+
+    fetchBrands();
+  }, []);
+
   // Filtrar productos por término de búsqueda
   useEffect(() => {
     const deduped = Array.from(
@@ -123,17 +148,54 @@ export default function ProductsByStorePage() {
         products.map((item) => [item.inventory.product.id, item])
       ).values()
     );
-    const filtered = deduped.filter((item) =>
-      item.inventory.product.name
-        .toLowerCase()
-        .includes(debouncedSearchTerm.toLowerCase())
-    );
+    const normalizedSearch = debouncedSearchTerm.toLowerCase();
+    const filtered = deduped.filter((item) => {
+      const product = item.inventory.product;
+      const matchesSearch = product.name.toLowerCase().includes(normalizedSearch);
+
+      const matchesBrand = (() => {
+        if (!debouncedSelectedBrand || debouncedSelectedBrand === 0) {
+          return true;
+        }
+
+        const productBrandId =
+          typeof product?.brandId === "number"
+            ? product.brandId
+            : product?.brand?.id;
+
+        if (productBrandId === debouncedSelectedBrand) {
+          return true;
+        }
+
+        const productBrandName = (
+          typeof product?.brand === "string"
+            ? product.brand
+            : product?.brand?.name ?? product?.brandName ?? ""
+        )
+          .toString()
+          .trim()
+          .toLowerCase();
+
+        const selectedBrandLabel =
+          brands.find((brand) => brand.id === debouncedSelectedBrand)?.name
+            ?.trim()
+            .toLowerCase() ?? "";
+
+        return (
+          productBrandName.length > 0 &&
+          selectedBrandLabel.length > 0 &&
+          productBrandName === selectedBrandLabel
+        );
+      })();
+
+      return matchesSearch && matchesBrand;
+    });
     setTotalItems(filtered.length);
   
     const start = (currentPage - 1) * limit;
     const end = start + limit;
     setFilteredProducts(filtered.slice(start, end));
-  }, [debouncedSearchTerm, products, currentPage, limit]);
+  }, [debouncedSearchTerm, products, currentPage, limit, debouncedSelectedBrand, brands]);
 
   return (
     <Card className="p-6 w-full max-w-full sm:max-w-3xl md:max-w-5xl lg:max-w-6xl mx-auto shadow-md">
@@ -180,7 +242,7 @@ export default function ProductsByStorePage() {
         </p>
       </TooltipProvider>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="flex-1 mb-3 sm:mb-0">
           <label className="block mb-1 text-sm font-medium">Selecciona una tienda</label>
           <Select onValueChange={(value) => setSelectedStore(Number(value))}>
@@ -250,6 +312,62 @@ export default function ProductsByStorePage() {
           </PopoverContent>
         </Popover>
       </div>
+
+        <div className="flex-1 mb-3 sm:mb-0">
+          <label className="block mb-1 text-sm font-medium">Selecciona una marca</label>
+          <Popover open={brandOpen} onOpenChange={setBrandOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={brandOpen}
+                className="w-full justify-between h-10"
+              >
+                {selectedBrandName}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-full max-h-60 overflow-y-auto p-0">
+              <Command>
+                <CommandInput placeholder="Buscar marca..." className="h-9" />
+                <CommandEmpty>No se encontró marca.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    key="0"
+                    onSelect={() => {
+                      setSelectedBrand(0)
+                      setCurrentPage(1)
+                      setBrandOpen(false)
+                    }}
+                  >
+                    <Check className={cn("mr-2 h-4 w-4", selectedBrand === 0 ? "opacity-100" : "opacity-0")} />
+                    Todas las marcas
+                  </CommandItem>
+                  {brands
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((brand) => (
+                      <CommandItem
+                        key={brand.id}
+                        onSelect={() => {
+                          setSelectedBrand(brand.id)
+                          setCurrentPage(1)
+                          setBrandOpen(false)
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedBrand === brand.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {brand.name}
+                      </CommandItem>
+                    ))}
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
 
         <div className="flex-1">
           <label className="block mb-1 text-sm font-medium">Filtrar producto</label>
