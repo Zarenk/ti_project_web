@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -46,14 +46,7 @@ const arePaymentsEqual = (current: TempPayment[], external: SelectedPayment[]) =
 export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelectorProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [tempPayments, setTempPayments] = useState<TempPayment[]>([]);
-  const lastEmittedSigRef = useRef<string>(""); // <- NUEVO
-
-  // === EMISIÓN INMEDIATA EN HANDLERS (no en useEffect) ===
-  const emitToParent = useCallback((next: TempPayment[]) => {
-    const payload = next.map(({ uid, ...rest }) => rest);
-    lastEmittedSigRef.current = signatureOf(payload);
-    onChange(payload);
-  }, [onChange]);
+  const lastEmittedSigRef = useRef<string>("");
 
   const defaultPaymentMethods: PaymentMethod[] = [
     { id: -1, name: "EN EFECTIVO" },
@@ -80,30 +73,10 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     fetchMethods();
   }, []);
 
-  // Sincroniza desde el padre hacia el estado local preservando uid cuando el item equivale
-  useEffect(() => {
-    setTempPayments((prev) => {
-      if (arePaymentsEqual(prev, value)) {
-        return prev;
-      }
-      return value.map((payment, i) => {
-        const p = prev[i];
-        const same =
-          p &&
-          p.method === payment.method &&
-          Number(p.amount) === Number(payment.amount);
-        return same ? p : { ...payment, uid: generateUid() };
-      });
-    });
-  }, [value]);
-
-  // Reemplaza tu syncAndSetPayments para emitir en el mismo tick:
+  // Reemplaza tu syncAndSetPayments para encapsular la mutación local
   const syncAndSetPayments = (updater: (prev: TempPayment[]) => TempPayment[]) => {
     setTempPayments(prev => {
       const next = updater(prev);
-      if (!arePaymentsEqual(next, value)) {
-        emitToParent(next); // <- emite aquí, no en un useEffect aparte
-      }
       return next;
     });
   };
@@ -111,7 +84,9 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
   // Emite cambios al padre POST-render (evita "Cannot update a component while rendering a different component")
   useEffect(() => {
     if (!arePaymentsEqual(tempPayments, value)) {
-      onChange(tempPayments.map(({ uid, ...rest }) => rest));
+      const payload = tempPayments.map(({ uid, ...rest }) => rest);
+      lastEmittedSigRef.current = signatureOf(payload);
+      onChange(payload);
     }
   }, [tempPayments, value, onChange]);
 

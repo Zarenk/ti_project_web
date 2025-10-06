@@ -186,8 +186,8 @@ const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
 
 
 return (
-    <div className="gap-2">
-        <div className="flex items-center gap-4 py-4 flex-wrap">
+    <div className="flex w-full max-w-full flex-col gap-4">
+        <div className="flex w-full flex-wrap items-center gap-4 py-4">
           <Input
             placeholder="Filtrar por producto o serie..."
             value={globalFilter}
@@ -266,16 +266,16 @@ return (
             </Button>
           </div>            
         </div>
-        <div className="gap-2">
-            <label className="text-sm text-muted-foreground">
+        <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+            <label>
                 Total de datos: {table.getRowModel().rows.length}
                 </label>
-                <label className="text-sm text-muted-foreground pb-2 sm:pb-0">
+                <label className="pb-2 sm:pb-0">
                 {totalSelectedRows} de{" "}
                 {table.getFilteredRowModel().rows.length} fila(s) seleccionadas.
             </label>
         </div>
-        <div className="rounded-md border">
+        <div className="w-full overflow-hidden rounded-md border">
         <Table>
             <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
