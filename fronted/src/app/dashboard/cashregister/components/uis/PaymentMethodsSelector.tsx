@@ -42,6 +42,7 @@ const arePaymentsEqual = (current: TempPayment[], external: SelectedPayment[]) =
 export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelectorProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [tempPayments, setTempPayments] = useState<TempPayment[]>([]);
+  const externalSyncRef = useRef(false);
 
   const defaultPaymentMethods: PaymentMethod[] = [
     { id: -1, name: "EN EFECTIVO" },
@@ -67,6 +68,48 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     }
     fetchMethods();
   }, []);
+
+  useEffect(() => {
+    setTempPayments((prev) => {
+      if (arePaymentsEqual(prev, value)) {
+        return prev;
+      }
+
+      externalSyncRef.current = true;
+
+      return value.map((payment, index) => {
+        const previous = prev[index];
+        const shouldReuseUid =
+          previous &&
+          previous.method === payment.method &&
+          Number(previous.amount) === Number(payment.amount);
+
+        return {
+          uid: shouldReuseUid ? previous.uid : generateUid(),
+          method: payment.method,
+          amount: Number(payment.amount) || 0,
+        };
+      });
+    });
+  }, [value]);
+
+  useEffect(() => {
+    if (externalSyncRef.current) {
+      externalSyncRef.current = false;
+      return;
+    }
+
+    if (arePaymentsEqual(tempPayments, value)) {
+      return;
+    }
+
+    onChange(
+      tempPayments.map(({ method, amount }) => ({
+        method,
+        amount: Number(amount) || 0,
+      }))
+    );
+  }, [tempPayments, value, onChange]);
 
   // Reemplaza tu syncAndSetPayments para encapsular la mutación local
   const syncAndSetPayments = (updater: (prev: TempPayment[]) => TempPayment[]) => {
