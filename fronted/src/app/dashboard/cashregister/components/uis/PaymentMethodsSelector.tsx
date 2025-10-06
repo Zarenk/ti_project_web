@@ -22,9 +22,19 @@ type SelectedPayment = {
 
 type TempPayment = SelectedPayment & { uid: string };
 
+const DEFAULT_PAYMENT_METHODS: PaymentMethod[] = [
+  { id: -1, name: "EN EFECTIVO" },
+  { id: -2, name: "TRANSFERENCIA" },
+  { id: -3, name: "PAGO CON VISA" },
+  { id: -4, name: "YAPE" },
+  { id: -5, name: "PLIN" },
+  { id: -6, name: "OTRO MEDIO DE PAGO" },
+];
+
 interface PaymentMethodsSelectorProps {
   value: SelectedPayment[];
   onChange: (payments: SelectedPayment[]) => void;
+  initialAmount?: number;
 }
 
 const generateUid = () =>
@@ -39,35 +49,26 @@ const arePaymentsEqual = (current: TempPayment[], external: SelectedPayment[]) =
     return ext && payment.method === ext.method && Number(payment.amount) === Number(ext.amount);
   });
 
-export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelectorProps) {
+export function PaymentMethodsSelector({ value, onChange, initialAmount = 0 }: PaymentMethodsSelectorProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [tempPayments, setTempPayments] = useState<TempPayment[]>([]);
   const externalSyncRef = useRef(false);
 
-  const defaultPaymentMethods: PaymentMethod[] = [
-    { id: -1, name: "EN EFECTIVO" },
-    { id: -2, name: "TRANSFERENCIA" },
-    { id: -3, name: "PAGO CON VISA" },
-    { id: -4, name: "YAPE" },
-    { id: -5, name: "PLIN" },
-    { id: -6, name: "OTRO MEDIO DE PAGO" },
-  ];
-
   useEffect(() => {
-    async function fetchMethods() {
-      const methodsFromBackend = await getPaymentMethods();
-      const combined = [...defaultPaymentMethods, ...methodsFromBackend];
+      async function fetchMethods() {
+        const methodsFromBackend = await getPaymentMethods();
+        const combined = [...DEFAULT_PAYMENT_METHODS, ...methodsFromBackend];
 
-      const uniqueMethodsMap = new Map<string, PaymentMethod>();
-      for (const method of combined) {
-        if (!uniqueMethodsMap.has(method.name)) {
-          uniqueMethodsMap.set(method.name, method);
+  const uniqueMethodsMap = new Map<string, PaymentMethod>();
+        for (const method of combined) {
+          if (!uniqueMethodsMap.has(method.name)) {
+            uniqueMethodsMap.set(method.name, method);
+          }
         }
+        setPaymentMethods(Array.from(uniqueMethodsMap.values()));
       }
-      setPaymentMethods(Array.from(uniqueMethodsMap.values()));
-    }
-    fetchMethods();
-  }, []);
+      fetchMethods();
+    }, []);
 
   useEffect(() => {
     setTempPayments((prev) => {
@@ -128,7 +129,8 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     }
 
     const isFirstPayment = tempPayments.length === 0;
-    const formAmount = Number(document.querySelector<HTMLInputElement>('input[name="amount"]')?.value || 0);
+    const formAmount = Number(initialAmount ?? 0);
+    const normalizedFormAmount = Number.isFinite(formAmount) ? formAmount : 0;
 
     syncAndSetPayments((prev) => {
       const usedMethods = new Set(prev.map((payment) => payment.method));
@@ -144,7 +146,7 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
         {
           uid: generateUid(),
           method: selectedMethod.name,
-          amount: isFirstPayment ? formAmount : 0, // Seteamos el primer monto
+          amount: isFirstPayment ? normalizedFormAmount : 0, // Seteamos el primer monto
         },
       ];
 
@@ -152,13 +154,20 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     });
   };
 
-  const handleUpdatePayment = (index: number, field: keyof SelectedPayment, val: any) => {
+  const handleUpdatePayment = <K extends keyof SelectedPayment>(
+    index: number,
+    field: K,
+    val: SelectedPayment[K],
+  ) => {
     syncAndSetPayments((prev) => {
       const updated = [...prev];
       const current = updated[index];
       if (!current) return prev;
 
-      const nextValue = field === "amount" ? (val === "" ? 0 : Number(val)) : val;
+      const nextValue =
+        field === "amount"
+          ? (typeof val === "number" ? val : Number(val))
+          : val;
 
       if (current[field] === nextValue) {
         return prev;

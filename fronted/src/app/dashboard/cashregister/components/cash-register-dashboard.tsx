@@ -1530,7 +1530,6 @@ export default function CashRegisterDashboard() {
             <CardContent>
             {storeId !== null && userId !== null && activeCashRegisterId !== null && (
               <CashTransferForm
-                onTransfer={() => {}} // opcional si ya no lo necesitas
                 currentBalance={balance}
                 storeId={storeId}
                 refreshData={refreshCashData} // 👈 nuevo
