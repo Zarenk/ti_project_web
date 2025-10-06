@@ -3,15 +3,16 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { createProduct, updateProduct } from '../products.api'
 import { uploadProductImage } from '../products.api'
 import { getBrands } from '../../brands/brands.api'
 import { createCategory } from '../../categories/categories.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
-import { SelectTrigger, SelectValue } from '@radix-ui/react-select'
-import { Select, SelectContent, SelectItem } from '@/components/ui/select'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from '@/components/ui/select'
 import { z } from 'zod'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -164,8 +165,6 @@ export function ProductForm({
     });
 
   const { handleSubmit, register, setValue, clearErrors, control } = form;
-  const watchedCategoryId = form.watch('categoryId');
-  const categoryId = watchedCategoryId ?? '';
   const {
     fields: imageFields,
     append: appendImage,
@@ -250,14 +249,9 @@ export function ProductForm({
       })
       const createdId = createdCategory?.id != null ? String(createdCategory.id) : ''
       if (createdId) {
-        setValue('categoryId', createdId, {
-          shouldValidate: true,
-          shouldDirty: true,
-          shouldTouch: true,
-        })
+        setValue('categoryId', createdId, { shouldValidate: true, shouldDirty: true, shouldTouch: true })
         clearErrors('categoryId')
-        // Ensure validation state reflects the new selection after dialog closes
-        form.trigger('categoryId')
+        await form.trigger('categoryId')
       }
       toast.success('Categoría creada correctamente.')
       setIsCategoryDialogOpen(false)
@@ -370,12 +364,12 @@ export function ProductForm({
     }
   });
 
-    useEffect(() => {
-        console.log("Estado nameError:", nameError);
-        if (product?.categoryId) {
-          setValue('categoryId', String(product.categoryId)); // Setea el valor inicial del categoryId
-        }
-    }, [nameError, product, setValue]);
+  useEffect(() => {
+  if (product?.categoryId != null) {
+    setValue('categoryId', String(product.categoryId), { shouldValidate: true })
+  }
+  // solo cuando cambia el id del producto
+  }, [product?.id, setValue])
 
   return (
     <div className="container mx-auto max-w-lg grid sm:max-w-md md:max-w-lg lg:max-w-xl">
@@ -495,33 +489,37 @@ export function ProductForm({
                         <div className="flex items-start gap-2">
                           <div className="flex-1">
                             {categoryOptions.length > 0 ? (
-                              <Select
-                                disabled={isProcessing}
-                                value={categoryId}
-                                onValueChange={(value:any) => {
-                                  setValue("categoryId", value, {
-                                    shouldValidate: true,
-                                    shouldDirty: true,
-                                    shouldTouch: true,
-                                  })
-                                  clearErrors('categoryId')
-                                }}
-                              >
-                                <SelectTrigger className="w-full border border-border rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                  <SelectValue placeholder="Seleccione una categoría" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-card text-foreground border border-border rounded-lg max-h-60 overflow-y-auto">
-                                  {categoryOptions.map((category: any) => (
-                                    <SelectItem
-                                      key={category.id}
-                                      value={String(category.id)}
-                                      className="px-4 py-2 hover:bg-muted dark:hover:bg-muted/50 cursor-pointer"
+                              <Controller
+                                name="categoryId"
+                                control={control}
+                                render={({ field, fieldState }) => (
+                                  <>
+                                    <Select
+                                      disabled={isProcessing}
+                                      value={field.value ?? ''}                         // ← valor controlado
+                                      onValueChange={(val) => { field.onChange(val); clearErrors('categoryId') }}
                                     >
-                                      {category.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                      <SelectTrigger className="w-full border border-border rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <SelectValue placeholder="Seleccione una categoría" />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-card text-foreground border border-border rounded-lg max-h-60 overflow-y-auto">
+                                        {categoryOptions.map((category: any) => (
+                                          <SelectItem
+                                            key={category.id}
+                                            value={String(category.id)}
+                                            className="px-4 py-2 hover:bg-muted dark:hover:bg-muted/50 cursor-pointer"
+                                          >
+                                            {category.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    {fieldState.error && (
+                                      <p className="text-red-500">{fieldState.error.message}</p>
+                                    )}
+                                  </>
+                                )}
+                              />
                             ) : (
                               <div className="flex h-10 items-center justify-center rounded-md border border-dashed border-border px-4 text-sm text-muted-foreground">
                                 No hay categorías disponibles
