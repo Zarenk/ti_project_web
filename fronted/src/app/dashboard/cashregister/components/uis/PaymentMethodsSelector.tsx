@@ -81,30 +81,6 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     });
   };
 
-  // Emite cambios al padre POST-render (evita "Cannot update a component while rendering a different component")
-  useEffect(() => {
-    if (!arePaymentsEqual(tempPayments, value)) {
-      const payload = tempPayments.map(({ uid, ...rest }) => rest);
-      lastEmittedSigRef.current = signatureOf(payload);
-      onChange(payload);
-    }
-  }, [tempPayments, value, onChange]);
-
-  // === SYNC DESDE PROPS, PERO IGNORANDO EL "ECO" QUE ACABAMOS DE ENVIAR ===
-  useEffect(() => {
-    // Si lo que llega del padre es exactamente lo último que emitimos, no resetees el local
-    if (signatureOf(value) === lastEmittedSigRef.current) return;
-
-    setTempPayments(prev => {
-      if (arePaymentsEqual(prev, value)) return prev;
-      return value.map((payment, i) => {
-        const p = prev[i];
-        const same = p && p.method === payment.method && Number(p.amount) === Number(payment.amount);
-        return same ? p : { ...payment, uid: generateUid() };
-      });
-    });
-  }, [value]);
-
   const handleAddPayment = () => {
     if (paymentMethods.length === 0) return;
 

@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Check, ChevronsUpDown, X } from "lucide-react"
 import { EditSeriesModal } from "../EditSeriesModal"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { MobileProductModal } from "../MobileProductModal"
 import { cn } from "@/lib/utils"
 
@@ -43,33 +43,176 @@ export const SelectedProductsTable = ({
   categories,
 }: Props) => {
 
-  const [activeProduct, setActiveProduct] = useState<Product | null>(null)
+  const [activeProductIndex, setActiveProductIndex] = useState<number | null>(null)
   const [categoryPopoverIndex, setCategoryPopoverIndex] = useState<number | null>(null)
+  const [tableScale, setTableScale] = useState<"compact" | "comfortable" | "spacious">("comfortable")
+
+  const sizeClasses = useMemo(() => {
+    switch (tableScale) {
+      case "compact":
+        return {
+          text: "text-xs",
+          padding: "py-1",
+          header: "text-xs",
+        }
+      case "spacious":
+        return {
+          text: "text-base",
+          padding: "py-3",
+          header: "text-base",
+        }
+      default:
+        return {
+          text: "text-sm",
+          padding: "py-2",
+          header: "text-sm",
+        }
+    }
+  }, [tableScale])
+
+  const handleIncreaseScale = () => {
+    setTableScale((current) => {
+      if (current === "compact") return "comfortable"
+      if (current === "comfortable") return "spacious"
+      return current
+    })
+  }
+
+  const handleDecreaseScale = () => {
+    setTableScale((current) => {
+      if (current === "spacious") return "comfortable"
+      if (current === "comfortable") return "compact"
+      return current
+    })
+  }
+
+  const activeProduct = activeProductIndex !== null ? selectedProducts[activeProductIndex] ?? null : null
 
   return (
     <div className='border px-2 overflow-x-auto max-w-full'>
-      <Table className="table-fixed w-full">
+      <div className="hidden sm:flex items-center justify-end gap-2 py-2">
+        <span className="text-sm text-muted-foreground">Tamaño de encabezado</span>
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={handleDecreaseScale}
+            disabled={tableScale === "compact"}
+            aria-label="Disminuir tamaño de encabezado"
+          >
+            A-
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={handleIncreaseScale}
+            disabled={tableScale === "spacious"}
+            aria-label="Aumentar tamaño de encabezado"
+          >
+            A+
+          </Button>
+        </div>
+      </div>
+      <Table className={cn("table-fixed w-full", sizeClasses.text)}>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-left w-[100px] sm:w-[300px] max-w-[400px] truncate">Nombre</TableHead>
-            <TableHead className="text-left max-w-[150px] truncate hidden sm:table-cell">Categoria</TableHead>
-            <TableHead className="text-left max-w-[150px] truncate">Cantidad</TableHead>
-            <TableHead className="text-left max-w-[150px] truncate">Precio Compra</TableHead>
-            <TableHead className="text-left max-w-[150px] truncate">Precio Compra Total</TableHead>
-            <TableHead className="text-left max-w-[150px] truncate hidden sm:table-cell">Precio Venta</TableHead>
-            <TableHead className="text-left max-w-[150px] truncate hidden sm:table-cell">Series</TableHead>
-            <TableHead className="text-left max-w-[150px] truncate">Acciones</TableHead>
+            <TableHead
+              className={cn(
+                "text-left w-[100px] sm:w-[300px] max-w-[400px] truncate",
+                sizeClasses.header,
+                sizeClasses.padding,
+              )}
+            >
+              Nombre
+            </TableHead>
+            <TableHead
+              className={cn(
+                "text-left max-w-[150px] truncate hidden sm:table-cell",
+                sizeClasses.header,
+                sizeClasses.padding,
+              )}
+            >
+              Categoria
+            </TableHead>
+            <TableHead
+              className={cn(
+                "text-left max-w-[150px] truncate",
+                sizeClasses.header,
+                sizeClasses.padding,
+              )}
+            >
+              Cantidad
+            </TableHead>
+            <TableHead
+              className={cn(
+                "text-left max-w-[150px] truncate",
+                sizeClasses.header,
+                sizeClasses.padding,
+              )}
+            >
+              Precio Compra
+            </TableHead>
+            <TableHead
+              className={cn(
+                "text-left max-w-[150px] truncate",
+                sizeClasses.header,
+                sizeClasses.padding,
+              )}
+            >
+              Precio Compra Total
+            </TableHead>
+            <TableHead
+              className={cn(
+                "text-left max-w-[150px] truncate hidden sm:table-cell",
+                sizeClasses.header,
+                sizeClasses.padding,
+              )}
+            >
+              Precio Venta
+            </TableHead>
+            <TableHead
+              className={cn(
+                "text-left max-w-[150px] truncate hidden sm:table-cell",
+                sizeClasses.header,
+                sizeClasses.padding,
+              )}
+            >
+              Series
+            </TableHead>
+            <TableHead
+              className={cn(
+                "text-left max-w-[150px] truncate",
+                sizeClasses.header,
+                sizeClasses.padding,
+              )}
+            >
+              Acciones
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {selectedProducts.map((product, index) => (
-            <TableRow 
+            <TableRow
               key={product.id}
-              onClick={() => window.innerWidth < 640 && setActiveProduct(product)} // abre el modal
-              className="cursor-pointer sm:cursor-default"
+              onClick={() => window.innerWidth < 640 && setActiveProductIndex(index)} // abre el modal
+              className={cn("cursor-pointer sm:cursor-default", sizeClasses.padding)}
             >
-              <TableCell className="w-[100px] sm:w-[300px] max-w-[400px] truncate overflow-hidden whitespace-nowrap">{product.name}</TableCell>
-              <TableCell className="max-w-[150px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell">
+              <TableCell
+                className={cn(
+                  "w-[100px] sm:w-[300px] max-w-[400px] truncate overflow-hidden whitespace-nowrap",
+                  sizeClasses.text,
+                  sizeClasses.padding,
+                )}
+              >
+                {product.name}
+              </TableCell>
+              <TableCell
+                className={cn(
+                  "max-w-[150px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell",
+                  sizeClasses.text,
+                  sizeClasses.padding,
+                )}
+              >
                 <Popover
                   open={categoryPopoverIndex === index}
                   onOpenChange={(open) => setCategoryPopoverIndex(open ? index : null)}
@@ -141,7 +284,13 @@ export const SelectedProductsTable = ({
                   </PopoverContent>
                 </Popover>
               </TableCell>
-              <TableCell className="max-w-[100px] truncate overflow-hidden whitespace-nowrap">
+              <TableCell
+                className={cn(
+                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap",
+                  sizeClasses.text,
+                  sizeClasses.padding,
+                )}
+              >
                 <Input
                   type="number"
                   value={product.quantity}
@@ -160,7 +309,13 @@ export const SelectedProductsTable = ({
                   title="Cantidad de unidades para este producto"
                 />
               </TableCell>
-              <TableCell className="max-w-[100px] truncate overflow-hidden whitespace-nowrap">
+              <TableCell
+                className={cn(
+                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap",
+                  sizeClasses.text,
+                  sizeClasses.padding,
+                )}
+              >
                 <Input
                   type="number"
                   value={product.price}
@@ -180,10 +335,22 @@ export const SelectedProductsTable = ({
                   title="Precio de compra unitario editable"
                 />
               </TableCell>
-              <TableCell className="max-w-[120px] truncate overflow-hidden whitespace-nowrap">
+              <TableCell
+                className={cn(
+                  "max-w-[120px] truncate overflow-hidden whitespace-nowrap",
+                  sizeClasses.text,
+                  sizeClasses.padding,
+                )}
+              >
                 {(Number(product.quantity) * Number(product.price || 0)).toFixed(2)}
               </TableCell>
-              <TableCell className="max-w-[100px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell">
+              <TableCell
+                className={cn(
+                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell",
+                  sizeClasses.text,
+                  sizeClasses.padding,
+                )}
+              >
                 <Input
                   type="number"
                   value={product.priceSell ?? ""}
@@ -203,7 +370,13 @@ export const SelectedProductsTable = ({
                   title="Precio de venta sugerido para este producto"
                 />
               </TableCell>
-              <TableCell className="text-xs max-w-[250px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell">
+              <TableCell
+                className={cn(
+                  "text-xs max-w-[250px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell",
+                  sizeClasses.text,
+                  sizeClasses.padding,
+                )}
+              >
                 <div
                   className="cursor-pointer text-blue-500 underline"
                   onClick={() => setOpenSeriesModal(index)}
@@ -232,7 +405,13 @@ export const SelectedProductsTable = ({
                   getAllSeriesFromDataTable={getAllSeriesFromDataTable}
                 />
               )}
-              <TableCell className="max-w-[100px] truncate overflow-hidden whitespace-nowrap">
+              <TableCell
+                className={cn(
+                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap",
+                  sizeClasses.text,
+                  sizeClasses.padding,
+                )}
+              >
                 <Button
                   variant="outline"
                   onClick={(e) => {
@@ -249,7 +428,27 @@ export const SelectedProductsTable = ({
         </TableBody>
       </Table>
 
-      <MobileProductModal product={activeProduct} onClose={() => setActiveProduct(null)} />
+      <MobileProductModal
+        product={activeProduct}
+        categories={categories}
+        onClose={() => setActiveProductIndex(null)}
+        onUpdate={(updates) => {
+          if (activeProductIndex === null) return
+          setSelectedProducts((prev) =>
+            prev.map((p, i) => (i === activeProductIndex ? { ...p, ...updates } : p)),
+          )
+        }}
+        onRemove={() => {
+          if (activeProductIndex === null) return
+          removeProduct(selectedProducts[activeProductIndex].id)
+          setActiveProductIndex(null)
+        }}
+        onManageSeries={() => {
+          if (activeProductIndex === null) return
+          setOpenSeriesModal(activeProductIndex)
+          setActiveProductIndex(null)
+        }}
+      />
     </div>
   )
 }
