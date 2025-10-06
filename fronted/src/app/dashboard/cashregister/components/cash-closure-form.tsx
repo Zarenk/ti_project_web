@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
@@ -31,6 +31,8 @@ interface CashClosureFormProps {
   openingBalance: number
   totalIncome: number
   totalExpense: number
+  currencySymbol: string
+  cashIncomeTotal: number
   onClosureCompleted: () => void
   reinitializeCashRegister: () => Promise<string | null>;
 }
@@ -43,6 +45,8 @@ export default function CashClosureForm({
   openingBalance,
   totalIncome,
   totalExpense,
+  currencySymbol,
+  cashIncomeTotal,
   onClosureCompleted,
   reinitializeCashRegister,
 }: CashClosureFormProps) {
@@ -51,6 +55,8 @@ export default function CashClosureForm({
   const [discrepancy, setDiscrepancy] = useState<number | null>(null)
   const [userData, setUserData] = useState<any | null>(null)
   const [showOpenNewCashDialog, setShowOpenNewCashDialog] = useState(false);
+  const [newInitialBalanceInput, setNewInitialBalanceInput] = useState("0");
+  const displayCurrency = currencySymbol.trim() || "S/.";
 
   useEffect(() => {
     getUserDataFromToken().then(setUserData)
@@ -79,6 +85,14 @@ export default function CashClosureForm({
   }
 
   const onSubmit = async (values: FormValues) => {
+    const expectedCash = Number(cashIncomeTotal.toFixed(2))
+    const countedCash = Number(values.countedAmount.toFixed(2))
+    const difference = countedCash - expectedCash
+    if (Math.abs(difference) > 0.009) {
+      toast.error("El monto contabilizado debe coincidir con el saldo esperado en efectivo para completar el cierre.")
+      setDiscrepancy(difference)
+      return
+    }
     setIsSubmitting(true)
 
     try {
@@ -99,6 +113,7 @@ export default function CashClosureForm({
       await createCashClosure(payload)
 
       setLastCountedAmount(values.countedAmount); // 👈 Guarda el último contado
+      setNewInitialBalanceInput(values.countedAmount.toFixed(2))
       toast.success("Cierre de caja registrado correctamente.")
       setShowOpenNewCashDialog(true); // 👈 Mostrar el AlertDialog
       onClosureCompleted()
@@ -127,8 +142,13 @@ export default function CashClosureForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="bg-muted p-4 rounded-lg mb-6">
-          <div className="font-medium">Saldo esperado en caja</div>
-          <div className="text-2xl font-bold">S/. {currentBalance.toFixed(2)}</div>
+          <div className="font-medium flex flex-wrap items-baseline gap-2">
+            <span>Saldo esperado de todas las operaciones</span>
+            <span className="text-2xl font-bold">{`${displayCurrency} ${currentBalance.toFixed(2)}`}</span>
+          </div>
+          <div className="text-sm text-muted-foreground mt-1">
+            Saldo esperado en caja dinero en efectivo: {`${displayCurrency} ${cashIncomeTotal.toFixed(2)}`}
+          </div>
           <div className="text-sm text-muted-foreground mt-1">Basado en todas las transacciones registradas.</div>
         </div>
 
@@ -224,29 +244,57 @@ export default function CashClosureForm({
       <AlertDialog open={showOpenNewCashDialog} onOpenChange={setShowOpenNewCashDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Deseas abrir una nueva caja?</AlertDialogTitle>
+            <AlertDialogTitle>Deseas abrir una nueva caja?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se creará una nueva caja para esta tienda con el saldo final anterior.
+              Se creara una nueva caja para esta tienda con el saldo final anterior.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="mt-4 space-y-2">
+            <FormLabel className="text-sm font-medium">Saldo Inicial</FormLabel>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={newInitialBalanceInput}
+              onChange={(event) => {
+                const value = event.target.value
+                if (value === "" || /^\d*(?:\.\d{0,2})?$/.test(value)) {
+                  setNewInitialBalanceInput(value)
+                }
+              }}
+              placeholder="0.00"
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={async () => {
+                const trimmedValue = newInitialBalanceInput.trim()
+                if (trimmedValue.length === 0) {
+                  toast.error("Ingresa un saldo inicial valido para la nueva caja.")
+                  return
+                }
+
+                const parsedInitial = Number(trimmedValue)
+                if (!Number.isFinite(parsedInitial) || parsedInitial < 0) {
+                  toast.error("El saldo inicial debe ser un numero mayor o igual a cero.")
+                  return
+                }
+
                 try {
                   await createCashRegister({
-                    storeId, // 👈 asegúrate de pasar storeId como prop
-                    initialBalance: lastCountedAmount, // 👈 necesitas guardar countedAmount
+                    storeId,
+                    initialBalance: Number(parsedInitial.toFixed(2)),
                     name: `Caja Principal - Tienda ${storeId} - ${Date.now()}`,
                   });
                   toast.success("Nueva caja creada exitosamente.");
-                  const userName = await reinitializeCashRegister(); // 👈 ejecuta
+                  const userName = await reinitializeCashRegister();
                   if (userName) {
-                    form.setValue("employee", userName); // 👈 setea empleado automáticamente
+                    form.setValue("employee", userName);
                   }
                   onClosureCompleted();
                 } catch (error:any) {
-                  console.error("❌ Error en createCashRegister:", error.response?.data || error.message);
+                  console.error("Error en createCashRegister:", error.response?.data || error.message);
                   console.error("Error creando nueva caja:", error);
                   toast.error("Error al crear la nueva caja.");
                 } finally {

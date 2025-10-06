@@ -316,6 +316,12 @@ const extractAmountFromMethodEntry = (value: string): number | null => {
   return Number.isFinite(amount) ? amount : null;
 };
 
+
+const isCashPaymentMethod = (value: string) => {
+  const normalized = normalizeWhitespace(value).toLowerCase();
+  return normalized.includes("efectivo");
+};
+
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   INCOME: "Ingresos",
   EXPENSE: "Retiros",
@@ -769,6 +775,49 @@ export default function CashRegisterDashboard() {
       currencySymbol: resolvedCurrency || "S/.",
       rows,
     };
+  }, [transactions]);
+
+  const cashIncomeTotal = useMemo(() => {
+    let total = 0;
+
+    transactions.forEach((transaction) => {
+      if (!transaction || transaction.type !== "INCOME") {
+        return;
+      }
+
+      const methods = Array.isArray(transaction.paymentMethods)
+        ? transaction.paymentMethods
+        : [];
+      if (methods.length === 0) {
+        return;
+      }
+
+      const cashEntries = methods.filter((rawValue) => isCashPaymentMethod(rawValue));
+      if (cashEntries.length === 0) {
+        return;
+      }
+
+      let explicitCash = 0;
+      let hasExplicitAmount = false;
+      cashEntries.forEach((rawValue) => {
+        const amount = extractAmountFromMethodEntry(rawValue);
+        if (amount !== null) {
+          explicitCash += amount;
+          hasExplicitAmount = true;
+        }
+      });
+
+      if (hasExplicitAmount) {
+        total += explicitCash;
+        return;
+      }
+
+      if (cashEntries.length === methods.length) {
+        total += Number(transaction.amount ?? 0);
+      }
+    });
+
+    return Number(total.toFixed(2));
   }, [transactions]);
 
   const isReportEmpty = reportRows.length === 0
@@ -1382,7 +1431,7 @@ export default function CashRegisterDashboard() {
               {isSameDay(selectedDate, new Date()) ? "Saldo Actual" : `Saldo del ${format(selectedDate, "dd/MM/yyyy")}`}
             </CardTitle>
             <CardDescription>
-              Dinero disponible en caja {isSameDay(selectedDate, new Date()) ? "hoy" : "segun ultimo cierre de ese dia"}
+              {isSameDay(selectedDate, new Date()) ? "Dinero de todas las operaciones en caja hoy" : "Dinero de todas las operaciones en caja segun ultimo cierre de ese dia"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1395,6 +1444,11 @@ export default function CashRegisterDashboard() {
                 "Sin cierre ese día"
               )}
             </div>
+            {isSameDay(selectedDate, new Date()) && (
+              <div className="text-sm text-muted-foreground mt-2">
+                Dinero en efectivo disponible hoy: {`${paymentMethodSummary.currencySymbol} ${cashIncomeTotal.toFixed(2)}`}
+              </div>
+            )}
             {dailyClosureInfo && (
               <div className="text-sm text-muted-foreground mt-1">
                 Saldo inicial: S/. {Number(dailyClosureInfo.openingBalance).toFixed(2)}
@@ -1504,6 +1558,8 @@ export default function CashRegisterDashboard() {
                 totalExpense={totalExpense} // 👈 tienes que calcularlo
                 onClosureCompleted={refreshCashData}
                 reinitializeCashRegister={reinitializeCashRegister}
+                currencySymbol={paymentMethodSummary.currencySymbol}
+                cashIncomeTotal={cashIncomeTotal}
               />
             )}
             </CardContent>
@@ -1554,4 +1610,5 @@ export default function CashRegisterDashboard() {
     </div>
   )
 }
+
 
