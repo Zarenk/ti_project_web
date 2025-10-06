@@ -87,6 +87,123 @@ const splitSaleDescription = (description: string | null | undefined) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
 
+const paymentMethodKeyCandidates = [
+  "method",
+  "name",
+  "paymentMethod",
+  "payment_method",
+  "label",
+  "value",
+  "title",
+];
+
+const methodIntroPatterns = [
+  /m[e\u00E9]todos?\s+de\s+pago\s*[:\-]?\s*/gi,
+  /pago\s+v[i\u00ED]a\s*/gi,
+  /pago\s+con\s*/gi,
+  /pagado\s+con\s*/gi,
+  /pagado\s+v[i\u00ED]a\s*/gi,
+];
+
+const splitPaymentMethodCandidates = (value: string) => {
+  if (!value) {
+    return [] as string[];
+  }
+
+  let sanitized = value;
+  methodIntroPatterns.forEach((pattern) => {
+    sanitized = sanitized.replace(pattern, "");
+  });
+
+  const normalizedSeparators = sanitized
+    .replace(/[\u2013\u2014]/g, ",")
+    .replace(/\s+(?:y|e|and)\s+/gi, ",")
+    .replace(/\s*&\s*/g, ",")
+    .replace(/\s*\+\s*/g, ",")
+    .replace(/[\/,|;]+/g, ",");
+
+  return normalizedSeparators
+    .split(",")
+    .map((segment) => segment.replace(/^[\s:-]+/, "").replace(/[\s:-]+$/, ""))
+    .map((segment) => normalizeWhitespace(segment))
+    .filter((segment) => segment.length > 0);
+};
+
+const normalizePaymentMethods = (raw: unknown): string[] => {
+  const results: string[] = [];
+  const seen = new Set<string>();
+
+  const pushCandidate = (candidate: string) => {
+    const cleaned = normalizeWhitespace(candidate)
+      .replace(/^[|]+/, "")
+      .replace(/[|]+$/, "")
+      .trim();
+
+    if (!cleaned) {
+      return;
+    }
+
+    const key = cleaned.toUpperCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      results.push(cleaned);
+    }
+  };
+
+  const processValue = (value: unknown) => {
+    if (value === null || value === undefined) {
+      return;
+    }
+
+    if (typeof value === "string") {
+      const candidates = splitPaymentMethodCandidates(value);
+      if (candidates.length === 0) {
+        pushCandidate(value);
+      } else {
+        candidates.forEach(pushCandidate);
+      }
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(processValue);
+      return;
+    }
+
+    if (typeof value === "object") {
+      const record = value as Record<string, unknown>;
+      let handled = false;
+
+      for (const key of paymentMethodKeyCandidates) {
+        if (typeof record[key] === "string") {
+          processValue(record[key]);
+          handled = true;
+        }
+      }
+
+      if (!handled) {
+        const stringValues = Object.values(record).filter((item) => typeof item === "string");
+        if (stringValues.length > 0) {
+          stringValues.forEach(processValue);
+          handled = true;
+        }
+      }
+
+      if (!handled) {
+        const stringified = String(value);
+        if (stringified && stringified !== "[object Object]") {
+          processValue(stringified);
+        }
+      }
+      return;
+    }
+
+    processValue(String(value));
+  };
+
+  processValue(raw);
+  return results;
+};
 const extractPaymentMethodsFromText = (value?: string | null) => {
   if (!value) {
     return [] as string[];
@@ -208,9 +325,19 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
       transaction.clientName ?? "",
     ];
     const aggregationKey = keyParts.join("|");
-    const hasExplicitMethods = Array.isArray(transaction.paymentMethods) && transaction.paymentMethods.length > 0;
+    const explicitMethods = normalizePaymentMethods(transaction.paymentMethods ?? []);
     const methodsFromText = extractPaymentMethodsFromText(prefix || description);
-    const currentMethods = hasExplicitMethods ? [...(transaction.paymentMethods ?? [])] : [...methodsFromText];
+    const combinedMethods = [...explicitMethods];
+    const combinedMethodSet = new Set(combinedMethods.map((method) => method.toUpperCase()));
+    methodsFromText.forEach((method) => {
+      const normalizedMethod = method.toUpperCase();
+      if (!combinedMethodSet.has(normalizedMethod)) {
+        combinedMethodSet.add(normalizedMethod);
+        combinedMethods.push(method);
+      }
+    });
+    const hasExplicitMethods = explicitMethods.length > 0;
+    const currentMethods = combinedMethods.length > 0 ? combinedMethods : [...methodsFromText];
     const amountValue = Number(transaction.amount);
     const prefixForFingerprint = stripPaymentMethodDetails(prefix) || prefix;
     const normalizedPrefixForFingerprint = normalizeWhitespace(prefixForFingerprint.toLowerCase());
@@ -283,7 +410,7 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
         }
       });
 
-      const methodsForBreakdown = hasExplicitMethods ? currentMethods : [];
+      const methodsForBreakdown = hasExplicitMethods ? explicitMethods : [];
       methodsForBreakdown.forEach((method) => {
         if (!method) {
           return;
@@ -445,7 +572,7 @@ export default function CashRegisterDashboard() {
         timestamp: transaction.createdAt || new Date().toISOString(),
         employee: transaction.employee || "",
         description: transaction.description || "",
-        paymentMethods: transaction.paymentMethods || [],
+        paymentMethods: normalizePaymentMethods(transaction.paymentMethods ?? []),
         voucher: transaction.voucher || null,
         invoiceUrl: transaction.invoiceUrl ?? null,
         clientName: transaction.clientName ?? null,
@@ -672,7 +799,7 @@ export default function CashRegisterDashboard() {
           timestamp: new Date(t.createdAt),
           employee: t.employee || "",
           description: t.description || "",
-          paymentMethods: t.paymentMethods || [],
+          paymentMethods: normalizePaymentMethods(t.paymentMethods ?? []),
           createdAt: new Date(t.createdAt),
           userId: t.userId,
           cashRegisterId: t.cashRegisterId,

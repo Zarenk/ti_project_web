@@ -7,6 +7,7 @@ import { useForm, useFieldArray } from 'react-hook-form'
 import { createProduct, updateProduct } from '../products.api'
 import { uploadProductImage } from '../products.api'
 import { getBrands } from '../../brands/brands.api'
+import { createCategory } from '../../categories/categories.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { SelectTrigger, SelectValue } from '@radix-ui/react-select'
@@ -16,6 +17,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { IconName, icons } from '@/lib/icons'
 import { Loader2 } from 'lucide-react'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 
 interface ProductFormProps {
   product: any
@@ -181,6 +191,12 @@ export function ProductForm({
       : routeProductId;
 
   const [brands, setBrands] = useState<any[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<any[]>(categories ?? []);
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryDescription, setNewCategoryDescription] = useState('');
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   // Estado para manejar el error del nombre si se repite
   const [nameError, setNameError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -190,12 +206,58 @@ export function ProductForm({
   }, [defaultValues, form])
 
   useEffect(() => {
+    setCategoryOptions(categories ?? [])
+  }, [categories])
+
+  useEffect(() => {
     getBrands(1, 1000)
       .then((res) =>
         setBrands(res.data.map((b: any) => ({ ...b, name: b.name.toUpperCase() }))),
       )
       .catch(() => {});
   }, []);
+
+  const handleCreateCategory = async () => {
+    const trimmedName = newCategoryName.trim()
+    const trimmedDescription = newCategoryDescription.trim()
+
+    if (trimmedName.length === 0) {
+      setCategoryError('Ingrese el nombre de la categoría')
+      return
+    }
+
+    setIsCreatingCategory(true)
+    setCategoryError(null)
+
+    try {
+      const createdCategory = await createCategory({
+        name: trimmedName,
+        description: trimmedDescription.length > 0 ? trimmedDescription : undefined,
+        status: 'Activo',
+        image: undefined,
+      })
+
+      setCategoryOptions((prev) => [...prev, createdCategory])
+      const createdId = createdCategory?.id != null ? String(createdCategory.id) : ''
+      if (createdId) {
+        setValue('categoryId', createdId, { shouldValidate: true })
+      }
+      toast.success('Categoría creada correctamente.')
+      setIsCategoryDialogOpen(false)
+      setNewCategoryName('')
+      setNewCategoryDescription('')
+      setCategoryError(null)
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Error al crear la categoría'
+      if (error?.response?.status === 409 || message.includes('ya existe')) {
+        setCategoryError(message)
+      } else {
+        toast.error(message)
+      }
+    } finally {
+      setIsCreatingCategory(false)
+    }
+  }
 
   const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
@@ -412,34 +474,110 @@ export function ProductForm({
                     
                     <div className="flex flex-col">
                         {/* CATEGORIA */}
-                        <Label className='py-3'>Categoría</Label>  
-                        {categories.length > 0 ? (                  
-                        <Select
-                            disabled={isProcessing}
-                            value={form.watch("categoryId")}                       
-                            onValueChange={(value:any) => setValue("categoryId", value, { shouldValidate: true })
-                        }
-                        >                      
-                            <SelectTrigger className="border border-border rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <SelectValue placeholder="Seleccione una categoría">
-                                    {categories.find((category: any) => String(category.id) === form.watch("categoryId"))?.name || "Seleccione una categoria"}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent className="bg-card text-foreground border border-border rounded-lg max-h-60 overflow-y-auto">
-                            {categories.map((category: any) => (
-                                <SelectItem 
-                                key={category.id} 
-                                value={String(category.id)}
-                                className="px-4 py-2 hover:bg-muted dark:hover:bg-muted/50 cursor-pointer"
+                        <Label className='py-3'>Categoría</Label>
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1">
+                            {categoryOptions.length > 0 ? (
+                              <Select
+                                disabled={isProcessing}
+                                value={form.watch("categoryId")}
+                                onValueChange={(value:any) => setValue("categoryId", value, { shouldValidate: true })}
+                              >
+                                <SelectTrigger className="w-full border border-border rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                  <SelectValue placeholder="Seleccione una categoría">
+                                    {categoryOptions.find((category: any) => String(category.id) === form.watch("categoryId"))?.name || "Seleccione una categoria"}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent className="bg-card text-foreground border border-border rounded-lg max-h-60 overflow-y-auto">
+                                  {categoryOptions.map((category: any) => (
+                                    <SelectItem
+                                      key={category.id}
+                                      value={String(category.id)}
+                                      className="px-4 py-2 hover:bg-muted dark:hover:bg-muted/50 cursor-pointer"
+                                    >
+                                      {category.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="flex h-10 items-center justify-center rounded-md border border-dashed border-border px-4 text-sm text-muted-foreground">
+                                No hay categorías disponibles
+                              </div>
+                            )}
+                          </div>
+                          <Dialog
+                            open={isCategoryDialogOpen}
+                            onOpenChange={(open) => {
+                              setIsCategoryDialogOpen(open)
+                              if (!open) {
+                                setNewCategoryName('')
+                                setNewCategoryDescription('')
+                                setCategoryError(null)
+                              }
+                            }}
+                          >
+                            <DialogTrigger asChild>
+                              <Button type="button" size="sm" variant="outline" className="whitespace-nowrap">
+                                Nueva
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Nueva categoría</DialogTitle>
+                              </DialogHeader>
+                              <div className="flex flex-col gap-3">
+                                <div className="flex flex-col gap-1">
+                                  <Label htmlFor="new-category-name">Nombre</Label>
+                                  <Input
+                                    id="new-category-name"
+                                    value={newCategoryName}
+                                    onChange={(event) => setNewCategoryName(event.target.value)}
+                                    placeholder="Nombre de la categoría"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <Label htmlFor="new-category-description">Descripción (opcional)</Label>
+                                  <Input
+                                    id="new-category-description"
+                                    value={newCategoryDescription}
+                                    onChange={(event) => setNewCategoryDescription(event.target.value)}
+                                    placeholder="Descripción de la categoría"
+                                  />
+                                </div>
+                                {categoryError && (
+                                  <p className="text-sm text-red-500">{categoryError}</p>
+                                )}
+                              </div>
+                              <DialogFooter>
+                                <DialogClose asChild>
+                                  <Button type="button" variant="outline" disabled={isCreatingCategory}>
+                                    Cancelar
+                                  </Button>
+                                </DialogClose>
+                                <Button
+                                  type="button"
+                                  onClick={handleCreateCategory}
+                                  disabled={isCreatingCategory}
                                 >
-                                {category.name}
-                                </SelectItem>
-                            ))}
-                            </SelectContent>
-                        </Select>
-                        ) : (
-                            <p className="text-red-500 text-sm">No hay categorías disponibles. Por favor, cree una.</p>
-                          )}
+                                {isCreatingCategory ? (
+                                    <span className="flex items-center gap-2">
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      Guardando
+                                    </span>
+                                  ) : (
+                                    'Crear'
+                                  )}
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+                        {categoryOptions.length === 0 && (
+                          <p className="pt-2 text-sm text-muted-foreground">
+                            Crea una categoría para continuar.
+                          </p>
+                        )}
                         {form.formState.errors.categoryId && (
                             <p className="text-red-500">
                             {form.formState.errors.categoryId.message}

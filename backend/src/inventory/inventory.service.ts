@@ -716,6 +716,10 @@ export class InventoryService {
             },
           })).id
     }
+
+    const defaultExchangeRate = await this.prisma.tipoCambio.findFirst({
+      orderBy: { fecha: 'desc' },
+    })
   
     for (const row of data) {
       const {
@@ -836,10 +840,9 @@ export class InventoryService {
           storeId,
           tipoMoneda: 'PEN',
           userId,
-          tipoCambioId: 1,
-          createdAt: new Date(),
           description: 'import_excel',
           providerId,
+          ...(defaultExchangeRate ? { tipoCambioId: defaultExchangeRate.id } : {}),
         },
       })
 
