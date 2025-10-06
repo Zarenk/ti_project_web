@@ -163,7 +163,8 @@ export function ProductForm({
     defaultValues,
     });
 
-  const { handleSubmit, register, setValue, control } = form;
+  const { handleSubmit, register, setValue, clearErrors, control } = form;
+  const categoryId = form.watch('categoryId');
   const {
     fields: imageFields,
     append: appendImage,
@@ -237,10 +238,25 @@ export function ProductForm({
         image: undefined,
       })
 
-      setCategoryOptions((prev) => [...prev, createdCategory])
+      setCategoryOptions((prev) => {
+        const exists = prev.some((category: any) => category.id === createdCategory.id)
+        if (exists) {
+          return prev.map((category: any) =>
+            category.id === createdCategory.id ? createdCategory : category,
+          )
+        }
+        return [...prev, createdCategory]
+      })
       const createdId = createdCategory?.id != null ? String(createdCategory.id) : ''
       if (createdId) {
-        setValue('categoryId', createdId, { shouldValidate: true })
+        setValue('categoryId', createdId, {
+          shouldValidate: true,
+          shouldDirty: true,
+          shouldTouch: true,
+        })
+        clearErrors('categoryId')
+        // Ensure validation state reflects the new selection after dialog closes
+        form.trigger('categoryId')
       }
       toast.success('Categoría creada correctamente.')
       setIsCategoryDialogOpen(false)
@@ -480,13 +496,18 @@ export function ProductForm({
                             {categoryOptions.length > 0 ? (
                               <Select
                                 disabled={isProcessing}
-                                value={form.watch("categoryId")}
-                                onValueChange={(value:any) => setValue("categoryId", value, { shouldValidate: true })}
+                                value={categoryId || undefined}
+                                onValueChange={(value:any) => {
+                                  setValue("categoryId", value, {
+                                    shouldValidate: true,
+                                    shouldDirty: true,
+                                    shouldTouch: true,
+                                  })
+                                  clearErrors('categoryId')
+                                }}
                               >
                                 <SelectTrigger className="w-full border border-border rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                  <SelectValue placeholder="Seleccione una categoría">
-                                    {categoryOptions.find((category: any) => String(category.id) === form.watch("categoryId"))?.name || "Seleccione una categoria"}
-                                  </SelectValue>
+                                  <SelectValue placeholder="Seleccione una categoría" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-card text-foreground border border-border rounded-lg max-h-60 overflow-y-auto">
                                   {categoryOptions.map((category: any) => (

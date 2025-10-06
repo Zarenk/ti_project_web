@@ -368,12 +368,13 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
       isDuplicate = saleEntry.fingerprints.has(duplicateFingerprint);
       if (!isDuplicate) {
         saleEntry.fingerprints.add(duplicateFingerprint);
-        saleEntry.amounts.add(amountValue);
         if (suffix) {
           saleEntry.fallbackDescriptions.push(suffix);
         }
       }
     }
+
+    saleEntry.amounts.add(amountValue);
 
     if (transaction.voucher && !saleEntry.transaction.voucher) {
       saleEntry.transaction.voucher = transaction.voucher;
@@ -409,21 +410,20 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
           saleEntry.items.set(key, { ...item });
         }
       });
-
-      const methodsForBreakdown = hasExplicitMethods ? explicitMethods : [];
-      methodsForBreakdown.forEach((method) => {
-        if (!method) {
-          return;
-        }
-        const amountSet = saleEntry.methodAmounts.get(method) ?? new Set<number>();
-        if (!amountSet.has(amountValue)) {
-          amountSet.add(amountValue);
-          saleEntry.methodAmounts.set(method, amountSet);
-          const previousAmount = saleEntry.breakdown.get(method) ?? 0;
-          saleEntry.breakdown.set(method, previousAmount + amountValue);
-        }
-      });
     }
+    const methodsForBreakdown = hasExplicitMethods ? explicitMethods : [];
+    methodsForBreakdown.forEach((method) => {
+      if (!method) {
+        return;
+      }
+      const amountSet = saleEntry.methodAmounts.get(method) ?? new Set<number>();
+      if (!amountSet.has(amountValue)) {
+        amountSet.add(amountValue);
+        saleEntry.methodAmounts.set(method, amountSet);
+        const previousAmount = saleEntry.breakdown.get(method) ?? 0;
+        saleEntry.breakdown.set(method, previousAmount + amountValue);
+      }
+    });
   });
 
   const mergedTransactions = [
@@ -1125,7 +1125,3 @@ export default function CashRegisterDashboard() {
     </div>
   )
 }
-
-
-
-
