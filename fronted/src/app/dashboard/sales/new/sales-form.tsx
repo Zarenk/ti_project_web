@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { JSX, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Barcode, CalendarIcon, Check, ChevronsUpDown, Plus, Save, X } from 'lucide-react'
+import { Barcode, CalendarIcon, Check, ChevronsUpDown, Loader2, Plus, Save, X } from 'lucide-react'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { cn, normalizeOptionValue, uploadPdfToServer } from '@/lib/utils'
 import React from 'react'
@@ -153,6 +153,9 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   // Estado para manejar el combobox de series
   const [availableSeries, setAvailableSeries] = useState<string[]>([]); // Series disponibles
   const [selectedSeries, setSelectedSeries] = useState<string[]>([]); // Series seleccionadas en el modal
+
+  // Estado para controlar la superposición de carga al registrar la venta
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Estado para controlar el diálogo de confirmación del boton REGISTRAR VENTA
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -336,6 +339,8 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
         setForceOpenPaymentModal(true); // 👈 fuerza la apertura del modal
         return;
       }
+
+    setIsSubmitting(true);
 
     try{
         // Validar que la tienda exista
@@ -550,14 +555,17 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
         }
 
         router.push("/dashboard/sales");
-        router.refresh();        
+        router.refresh();
     }
     catch(error: any){
       console.error("Error al registrar la venta o enviar la factura:", error);
       const message = error instanceof Error ? error.message : "Ocurrió un error al guardar la venta.";
-      toast.error(message);     
-    }        
-  })      
+      toast.error(message);
+    }
+    finally {
+      setIsSubmitting(false);
+    }
+  })    
   //
 
   // Manejar el cambio en el combobox de tipoComprobante
@@ -790,8 +798,20 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
   return (
     <div className="container mx-auto w-full max-w-4xl grid sm:max-w-md md:max-w-lg lg:max-w-4xl">
-      <form className='flex flex-col gap-2' onSubmit={onSubmit}>
-                    
+      {isSubmitting && (
+        <div
+          aria-live="assertive"
+          aria-busy="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+        >
+          <div className="flex flex-col items-center gap-3 rounded-lg bg-card px-6 py-4 text-card-foreground shadow-lg">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm font-semibold uppercase tracking-[0.35em]">Cargando...</p>
+          </div>
+        </div>
+      )}
+      <form className='relative flex flex-col gap-2' onSubmit={onSubmit}>
+        <fieldset disabled={isSubmitting} className="contents">                  
                   <div className="flex flex-wrap gap-4">
                     <div className="flex-1 flex-col border rounded-md p-2">                       
                         <Label className="text-sm font-medium mb-2">Tipo de Comprobante</Label>
@@ -1588,7 +1608,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                     >
                         Volver
                     </Button>
-                    
+        </fieldset>       
         </form>
     </div>
   )

@@ -36,6 +36,136 @@ type StructuredNoteEntry = {
   value: string
 }
 
+type SaleDetailItem = {
+  name: string
+  quantity: number
+  unitPrice: number
+  total: number
+}
+
+const SALE_DESCRIPTION_MARKER = "venta registrada:"
+
+const parseLocaleNumber = (value: string) => {
+  const sanitized = value.replace(/[^0-9,.-]/g, "").trim()
+  if (!sanitized) return 0
+
+  const hasComma = sanitized.includes(",")
+  const hasDot = sanitized.includes(".")
+
+  let normalized = sanitized
+  if (hasComma && hasDot) {
+    normalized =
+      sanitized.lastIndexOf(",") > sanitized.lastIndexOf(".")
+        ? sanitized.replace(/\./g, "").replace(",", ".")
+        : sanitized.replace(/,/g, "")
+  } else if (hasComma) {
+    normalized = sanitized.replace(/\./g, "").replace(",", ".")
+  }
+
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+const removePaymentMethodSegments = (value: string) => {
+  if (!value) return ""
+
+  return normalizeWhitespace(
+    value
+      .replace(/m[eé]todos?\s+de\s+pago\s*:[^|]+/gi, " ")
+      .replace(/pagado\s+con[^|]+/gi, " ")
+      .replace(/pago\s+con[^|]+/gi, " ")
+  )
+}
+
+const parseSaleItemsFromDescription = (description?: string | null) => {
+  if (!description) {
+    return { items: [] as SaleDetailItem[], notes: "" }
+  }
+
+  const normalizedDescription = normalizeWhitespace(description)
+  if (!normalizedDescription) {
+    return { items: [] as SaleDetailItem[], notes: "" }
+  }
+
+  const lowerDescription = normalizedDescription.toLowerCase()
+  const markerIndex = lowerDescription.indexOf(SALE_DESCRIPTION_MARKER)
+
+  if (markerIndex === -1) {
+    return { items: [] as SaleDetailItem[], notes: normalizedDescription }
+  }
+
+  const prefix = normalizedDescription.slice(0, markerIndex).trim()
+  const saleSegment = normalizedDescription
+    .slice(markerIndex + SALE_DESCRIPTION_MARKER.length)
+    .trim()
+
+  const matches = Array.from(
+    saleSegment.matchAll(/([^|]+?)\s*(?:[-–—])?\s*Cantidad:\s*([0-9.,]+)\s*,\s*Precio\s*Unitario:\s*([0-9.,]+)/gi),
+  )
+
+  const items = matches
+    .map((match) => {
+      const rawName = match[1] ?? ""
+      const quantity = parseLocaleNumber(match[2] ?? "0")
+      const unitPrice = parseLocaleNumber(match[3] ?? "0")
+      const cleanedName = normalizeWhitespace(
+        rawName.replace(/^[\-|]+/, "").replace(/[\-|]+$/, ""),
+      )
+
+      if (!cleanedName) {
+        return null
+      }
+
+      return {
+        name: toSentenceCase(cleanedName),
+        quantity,
+        unitPrice,
+        total: quantity * unitPrice,
+      }
+    })
+    .filter((item): item is SaleDetailItem => item !== null)
+
+  let remainderSegment = saleSegment
+  matches.forEach((match) => {
+    remainderSegment = remainderSegment.replace(match[0], " ")
+  })
+  remainderSegment = remainderSegment.replace(/[|]+/g, " ")
+
+  const cleanedPrefix = removePaymentMethodSegments(prefix)
+  const cleanedRemainder = removePaymentMethodSegments(remainderSegment)
+
+  const combinedNotes = [cleanedPrefix, cleanedRemainder]
+    .map((segment) => normalizeWhitespace(segment))
+    .filter((segment) => segment.length > 0)
+    .join(". ")
+
+  return {
+    items,
+    notes: combinedNotes,
+  }
+}
+
+const formatCurrency = (amount: number, currencySymbol: string) =>
+  `${currencySymbol} ${amount.toFixed(2)}`
+
+const splitPaymentMethodEntry = (entry: string) => {
+  const colonIndex = entry.indexOf(":")
+  if (colonIndex === -1) {
+    return {
+      label: toSentenceCase(normalizeWhitespace(entry)),
+      amountText: null as string | null,
+    }
+  }
+
+  const label = normalizeWhitespace(entry.slice(0, colonIndex))
+  const amountText = normalizeWhitespace(entry.slice(colonIndex + 1))
+
+  return {
+    label: toSentenceCase(label),
+    amountText: amountText.length > 0 ? amountText : null,
+  }
+}
+
 const formatSaleDescription = (description?: string | null) => {
     if (!description) return ""
 
@@ -633,60 +763,213 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                           )}
                         </TableRow>
                       </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs space-y-1 text-left">
-                        <p>
-                          <span className="font-medium">Encargado:</span> {transaction.employee || "-"}
-                        </p>
-                        {transaction.clientName && (
-                          <p>
-                            <span className="font-medium">Cliente:</span> {transaction.clientName}
-                          </p>
-                        )}
-                        {transaction.clientDocument && transaction.clientDocumentType && (
-                          <p>
-                            <span className="font-medium">Documento:</span> {transaction.clientDocumentType} {transaction.clientDocument}
-                          </p>
-                        )}
-                        <p>
-                          <span className="font-medium">Monto:</span> {currencySymbol} {transaction.amount.toFixed(2)}
-                        </p>
-                        {transaction.paymentMethods && transaction.paymentMethods.length > 0 && (
-                          <p>
-                            <span className="font-medium">Metodos de pago:</span> {transaction.paymentMethods.join(" | ")}
-                          </p>
-                        )}
-                        {(transaction.internalType ?? transaction.type) === "CLOSURE" && (
-                          <div className="space-y-1">
-                            {transaction.openingBalance !== null && transaction.openingBalance !== undefined && (
-                              <p>
-                                <span className="font-medium">Saldo inicial:</span> {currencySymbol}{" "}
-                                {Number(transaction.openingBalance).toFixed(2)}
-                              </p>
-                            )}
-                            {transaction.closingBalance !== null && transaction.closingBalance !== undefined && (
-                              <p>
-                                <span className="font-medium">Efectivo contado:</span> {currencySymbol}{" "}
-                                {Number(transaction.closingBalance).toFixed(2)}
-                              </p>
-                            )}
-                            {closureDetails && (
-                              <>
-                                <p>
-                                  <span className="font-medium">Operaciones hasta cierre:</span> {closureDetails.operationsCount}
+                      <TooltipContent
+                        side="top"
+                        className="w-[340px] space-y-4 rounded-lg border bg-background p-4 text-left shadow-lg sm:w-[380px]"
+                      >
+                        {(() => {
+                          const isClosure = (transaction.internalType ?? transaction.type) === "CLOSURE"
+                          const documentParts = [
+                            transaction.clientDocumentType ?? "",
+                            transaction.clientDocument ?? "",
+                          ]
+                            .map((value) => (value ?? "").trim())
+                            .filter((value) => value.length > 0)
+
+                          const { items: saleItems, notes: saleNotes } = parseSaleItemsFromDescription(
+                            transaction.description,
+                          )
+                          const paymentMethods = Array.isArray(transaction.paymentMethods)
+                            ? transaction.paymentMethods
+                            : []
+                          const paymentEntries = paymentMethods.map(splitPaymentMethodEntry)
+                          const itemsTotal = saleItems.reduce((sum, item) => sum + item.total, 0)
+                          const fallbackNotes = [
+                            saleNotes,
+                            transaction.notes ?? "",
+                            formattedDescription ?? "",
+                          ]
+                            .map((value) => (value ?? "").trim())
+                            .filter((value, index, array) => value.length > 0 && array.indexOf(value) === index)
+                          const notesContent = fallbackNotes.join("\n")
+
+                          return (
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Resumen de la operación
                                 </p>
-                                <p>
-                                  <span className="font-medium">Total movimientos:</span> {currencySymbol}{" "}
-                                  {closureDetails.totalAmount.toFixed(2)}
-                                </p>
-                              </>
-                            )}
-                          </div>
-                        )}
-                        {formattedDescription && (
-                          <p>
-                            <span className="font-medium">Notas:</span> {formattedDescription}
-                          </p>
-                        )}                      
+                              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm leading-5">
+                                  <dt className="text-muted-foreground">Tipo</dt>
+                                  <dd className="font-medium text-foreground">
+                                    {typeLabels[transaction.type] ?? transaction.type}
+                                  </dd>
+                                  <dt className="text-muted-foreground">Fecha y hora</dt>
+                                  <dd className="font-medium text-foreground">
+                                    {new Date(transaction.timestamp).toLocaleString()}
+                                  </dd>
+                                  <dt className="text-muted-foreground">Encargado</dt>
+                                  <dd className="font-medium text-foreground">{transaction.employee || "-"}</dd>
+                                  {(transaction.clientName || documentParts.length > 0) && (
+                                    <>
+                                      <dt className="text-muted-foreground">Cliente</dt>
+                                      <dd className="font-medium text-foreground">
+                                        {transaction.clientName || "Sin cliente"}
+                                        {documentParts.length > 0 ? ` (${documentParts.join(" ")})` : ""}
+                                      </dd>
+                                    </>
+                                  )}
+                                  <dt className="text-muted-foreground">Monto</dt>
+                                  <dd className="font-semibold text-foreground">
+                                    {formatCurrency(transaction.amount, currencySymbol)}
+                                  </dd>
+                                  {transaction.voucher && (
+                                    <>
+                                      <dt className="text-muted-foreground">Comprobante</dt>
+                                      <dd className="font-medium text-foreground">{transaction.voucher}</dd>
+                                    </>
+                                  )}
+                                </dl>
+                              </div>
+
+                              {paymentEntries.length > 0 && (
+                                <div className="space-y-2">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Métodos de pago
+                                  </p>
+                                  <div className="space-y-1">
+                                    {paymentEntries.map((entry, index) => (
+                                      <div
+                                        key={`${entry.label}-${index}`}
+                                        className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm"
+                                      >
+                                        <span className="font-medium text-foreground">{entry.label}</span>
+                                        {entry.amountText && (
+                                          <span className="text-muted-foreground">{entry.amountText}</span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {!isClosure && saleItems.length > 0 && (
+                                <div className="space-y-2">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Detalle de productos
+                                  </p>
+                                  <div className="overflow-hidden rounded-md border">
+                                    <table className="w-full text-xs">
+                                      <thead className="bg-muted/60 text-muted-foreground">
+                                        <tr>
+                                          <th className="px-3 py-2 text-left font-medium">Producto</th>
+                                          <th className="px-3 py-2 text-center font-medium">Cantidad</th>
+                                          <th className="px-3 py-2 text-center font-medium">Precio unit.</th>
+                                          <th className="px-3 py-2 text-right font-medium">Importe</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {saleItems.map((item, index) => (
+                                          <tr key={`${item.name}-${index}`} className="border-t">
+                                            <td className="px-3 py-2 font-medium text-foreground">{item.name}</td>
+                                            <td className="px-3 py-2 text-center text-muted-foreground">
+                                              {item.quantity % 1 === 0 ? item.quantity : item.quantity.toFixed(2)}
+                                            </td>
+                                            <td className="px-3 py-2 text-center text-muted-foreground">
+                                              {formatCurrency(item.unitPrice, currencySymbol)}
+                                            </td>
+                                            <td className="px-3 py-2 text-right font-medium text-foreground">
+                                              {formatCurrency(item.total, currencySymbol)}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                  <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm font-semibold">
+                                    <span>Total productos</span>
+                                    <span>{formatCurrency(itemsTotal, currencySymbol)}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                    <span>Total operación</span>
+                                    <span className="font-semibold text-foreground">
+                                      {formatCurrency(transaction.amount, currencySymbol)}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {isClosure && (
+                                <div className="space-y-2">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Detalle del cierre
+                                  </p>
+                                  <div className="space-y-1 text-sm">
+                                    {transaction.openingBalance !== null && transaction.openingBalance !== undefined && (
+                                      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                                        <span className="text-muted-foreground">Saldo inicial</span>
+                                        <span className="font-medium text-foreground">
+                                          {formatCurrency(Number(transaction.openingBalance), currencySymbol)}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {transaction.closingBalance !== null && transaction.closingBalance !== undefined && (
+                                      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                                        <span className="text-muted-foreground">Efectivo contado</span>
+                                        <span className="font-medium text-foreground">
+                                          {formatCurrency(Number(transaction.closingBalance), currencySymbol)}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {closureDetails && (
+                                      <div className="space-y-1">
+                                        <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                                          <span className="text-muted-foreground">Operaciones hasta el cierre</span>
+                                          <span className="font-medium text-foreground">
+                                            {closureDetails.operationsCount}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                                          <span className="text-muted-foreground">Total movimientos</span>
+                                          <span className="font-medium text-foreground">
+                                            {formatCurrency(closureDetails.totalAmount, currencySymbol)}
+                                          </span>
+                                        </div>
+                                        {closureDetails.paymentBreakdown.length > 0 && (
+                                          <div className="rounded-md border">
+                                            <table className="w-full text-xs">
+                                              <tbody>
+                                                {closureDetails.paymentBreakdown.map((entry) => (
+                                                  <tr key={entry.method} className="border-t">
+                                                    <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
+                                                    <td className="px-3 py-2 text-right font-medium text-foreground">
+                                                      {formatCurrency(entry.amount, currencySymbol)}
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {notesContent && (
+                                <div className="space-y-2">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Notas y observaciones
+                                  </p>
+                                  <div className="whitespace-pre-line rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                                    {notesContent}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}                   
                       </TooltipContent>
                     </Tooltip>
                   )
