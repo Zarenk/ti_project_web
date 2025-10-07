@@ -555,7 +555,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                   </div>
                 </TableHead>
                 {!isMobile && <TableHead>Comprobante</TableHead>}
-                {!isMobile && <TableHead>Encargado</TableHead>}
+                {!isMobile && <TableHead>Cliente</TableHead>}
                 {!isMobile && <TableHead className="cursor-pointer" onClick={() => handleSort("employee")}> 
                   <div className="flex items-center">
                     Encargado
