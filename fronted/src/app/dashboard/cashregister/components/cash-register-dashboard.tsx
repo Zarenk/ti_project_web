@@ -906,6 +906,28 @@ export default function CashRegisterDashboard() {
     return Number(expectedCash.toFixed(2));
   }, [transactions, transactionsSinceLastClosure, isToday, initialBalance]);
 
+  const openingBalanceForDisplay = useMemo(() => {
+    if (isSameDay(selectedDate, new Date())) {
+      if (hasCashRegister) {
+        return Number(initialBalance ?? 0);
+      }
+
+      if (dailyClosureInfo) {
+        return Number(dailyClosureInfo.openingBalance ?? 0);
+      }
+
+      return null;
+    }
+
+    if (dailyClosureInfo) {
+      return Number(dailyClosureInfo.openingBalance ?? 0);
+    }
+
+    return null;
+  }, [selectedDate, hasCashRegister, initialBalance, dailyClosureInfo]);
+
+  const closureFormOpeningBalance = Number(initialBalance ?? 0);
+
   const isReportEmpty = reportRows.length === 0
 
   const handleExportExcel = () => {
@@ -1442,9 +1464,6 @@ export default function CashRegisterDashboard() {
     }
   }, [storeId]);
 
-  // Calcula el openingBalance
-  const openingBalance = transactions.length > 0 ? transactions[0].amount : 0;
-
   const financialTransactions = transactions.filter(
     (t) => t.internalType === "INCOME" || t.internalType === "EXPENSE"
   );
@@ -1572,9 +1591,9 @@ export default function CashRegisterDashboard() {
                 Dinero en efectivo disponible hoy: {`${paymentMethodSummary.currencySymbol} ${cashIncomeTotal.toFixed(2)}`}
               </div>
             )}
-            {dailyClosureInfo && (
+            {openingBalanceForDisplay !== null && (
               <div className="text-sm text-muted-foreground mt-1">
-                Saldo inicial: S/. {Number(dailyClosureInfo.openingBalance).toFixed(2)}
+                Saldo inicial: S/. {Number(openingBalanceForDisplay).toFixed(2)}
               </div>
             )}
           </CardContent>
@@ -1675,7 +1694,7 @@ export default function CashRegisterDashboard() {
                 cashRegisterId={activeCashRegisterId} // 👈 id de la tienda/caja (nunca será null porque ya haces validación arriba)
                 userId={userId} // 👈 tienes que obtener el userId del localStorage o sesión
                 currentBalance={balance}
-                openingBalance={openingBalance} // 👈 tienes que calcularlo
+                openingBalance={closureFormOpeningBalance} // 👈 tienes que calcularlo
                 totalIncome={totalIncome} // 👈 tienes que calcularlo
                 totalExpense={totalExpense} // 👈 tienes que calcularlo
                 onClosureCompleted={refreshCashData}
