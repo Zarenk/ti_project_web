@@ -384,19 +384,6 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
       onDateChange(new Date()) // 👈 esto reinicia el filtro a hoy
     }
 
-    const isMobile = typeof window !== "undefined" && window.innerWidth < 768
-    const modalFormattedDescription = modalTransaction ? formatSaleDescription(modalTransaction.description) : ""
-    const modalInvoiceUrl = modalTransaction ? getInvoiceUrl(modalTransaction) : null
-    const modalCurrency = modalTransaction ? (modalTransaction.currency ?? "S/.").trim() || "S/." : "S/."
-    const modalClosureDetails =
-      modalTransaction && (modalTransaction.internalType ?? modalTransaction.type) === "CLOSURE"
-        ? closureDetailsMap.get(modalTransaction.id)
-        : undefined
-    const structuredNotes = useMemo(
-      () => parseStructuredNotes(modalTransaction?.description, modalFormattedDescription),
-      [modalTransaction?.description, modalFormattedDescription],
-    )
-
     const closureDetailsMap = useMemo(() => {
       const details = new Map<string, ClosureMetrics>()
       const sortedTransactions = [...transactions].sort((a, b) => {
@@ -474,6 +461,19 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
 
       return details
     }, [transactions])
+
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768
+    const modalFormattedDescription = modalTransaction ? formatSaleDescription(modalTransaction.description) : ""
+    const modalInvoiceUrl = modalTransaction ? getInvoiceUrl(modalTransaction) : null
+    const modalCurrency = modalTransaction ? (modalTransaction.currency ?? "S/.").trim() || "S/." : "S/."
+    const modalClosureDetails =
+      modalTransaction && (modalTransaction.internalType ?? modalTransaction.type) === "CLOSURE"
+        ? closureDetailsMap.get(modalTransaction.id)
+        : undefined
+    const structuredNotes = useMemo(
+      () => parseStructuredNotes(modalTransaction?.description, modalFormattedDescription),
+      [modalTransaction?.description, modalFormattedDescription],
+    )
 
     return (
       <div className="space-y-4">
