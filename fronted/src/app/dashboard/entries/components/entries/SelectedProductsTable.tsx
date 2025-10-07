@@ -72,56 +72,56 @@ export const SelectedProductsTable = ({
       {
         key: "name",
         label: "Nombre",
-        minWidth: 220,
-        defaultWidth: 300,
+        minWidth: 180,
+        defaultWidth: 220,
       },
       {
         key: "category",
         label: "Categoria",
-        minWidth: 160,
-        defaultWidth: 200,
+        minWidth: 120,
+        defaultWidth: 160,
         headerClassName: "hidden sm:table-cell",
         cellClassName: "hidden sm:table-cell",
       },
       {
         key: "quantity",
         label: "Cantidad",
-        minWidth: 130,
-        defaultWidth: 150,
+        minWidth: 110,
+        defaultWidth: 130,
       },
       {
         key: "price",
         label: "Precio Compra",
-        minWidth: 160,
-        defaultWidth: 180,
+        minWidth: 140,
+        defaultWidth: 160,
       },
       {
         key: "total",
         label: "Precio Compra Total",
-        minWidth: 180,
-        defaultWidth: 200,
+        minWidth: 150,
+        defaultWidth: 180,
       },
       {
         key: "priceSell",
         label: "Precio Venta",
-        minWidth: 160,
-        defaultWidth: 180,
+        minWidth: 140,
+        defaultWidth: 160,
         headerClassName: "hidden sm:table-cell",
         cellClassName: "hidden sm:table-cell",
       },
       {
         key: "series",
         label: "Series",
-        minWidth: 200,
-        defaultWidth: 240,
+        minWidth: 160,
+        defaultWidth: 200,
         headerClassName: "hidden sm:table-cell",
         cellClassName: "hidden sm:table-cell",
       },
       {
         key: "actions",
         label: "Acciones",
-        minWidth: 140,
-        defaultWidth: 160,
+        minWidth: 120,
+        defaultWidth: 140,
         sortable: false,
       },
     ],
@@ -271,14 +271,15 @@ export const SelectedProductsTable = ({
   const activeProduct = activeProductIndex !== null ? selectedProducts[activeProductIndex] ?? null : null
 
   return (
-    <div className="w-full max-w-full overflow-hidden rounded-md border bg-background">
-      <div className="w-full overflow-x-auto px-2">
-        <Table className="w-full min-w-max text-sm">
-          <TableHeader>
-            <TableRow>
-              {columnConfigs.map((column) => (
-                <TableHead
-                  key={column.key}
+    <section className="w-full space-y-2">
+      <div className="max-w-full overflow-hidden rounded-md border bg-background shadow-sm">
+        <div className="relative max-h-[60vh] overflow-x-auto overflow-y-auto px-2">
+          <Table className="w-full min-w-[680px] text-sm">
+            <TableHeader>
+              <TableRow className="sticky top-0 z-20 bg-background">
+                {columnConfigs.map((column) => (
+                  <TableHead
+                    key={column.key}
                   className={cn(
                     "relative select-none px-2 py-2 text-left align-middle font-semibold",
                     column.headerClassName,
@@ -517,6 +518,7 @@ export const SelectedProductsTable = ({
           ))}
         </TableBody>
       </Table>
+        </div>
       </div>
 
       <MobileProductModal
@@ -540,6 +542,6 @@ export const SelectedProductsTable = ({
           setActiveProductIndex(null)
         }}
       />
-    </div>
+    </section>
   )
 }
