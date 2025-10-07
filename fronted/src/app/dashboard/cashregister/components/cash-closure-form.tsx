@@ -57,7 +57,6 @@ export default function CashClosureForm({
   const [showOpenNewCashDialog, setShowOpenNewCashDialog] = useState(false);
   const [newCashInitialBalance, setNewCashInitialBalance] = useState<string>("");
   const [newCashInitialBalanceError, setNewCashInitialBalanceError] = useState<string | null>(null);
-  const [newInitialBalanceInput, setNewInitialBalanceInput] = useState("0");
   const displayCurrency = currencySymbol.trim() || "S/.";
 
   useEffect(() => {
@@ -127,10 +126,8 @@ export default function CashClosureForm({
 
       setNewCashInitialBalance(values.countedAmount.toFixed(2));
       setNewCashInitialBalanceError(null);
-      setNewInitialBalanceInput(values.countedAmount.toFixed(2))
       toast.success("Cierre de caja registrado correctamente.")
       setShowOpenNewCashDialog(true); // 👈 Mostrar el AlertDialog
-      onClosureCompleted()
 
       form.reset()
       setDiscrepancy(null)
