@@ -1,4 +1,4 @@
-﻿"use client"
+﻿﻿"use client"
 
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 import { useEffect, useMemo, useState } from "react"
@@ -1732,5 +1732,3 @@ export default function CashRegisterDashboard() {
     </div>
   )
 }
-
-
