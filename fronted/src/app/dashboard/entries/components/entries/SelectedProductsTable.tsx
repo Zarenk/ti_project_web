@@ -100,7 +100,7 @@ export const SelectedProductsTable = ({
 
         return direction === "asc"
           ? String(valueA).localeCompare(String(valueB), undefined, { sensitivity: "base" })
-          : String(valueB).localeCompare(String(valueA), undefined, { sensitivity: "base" })
+          : String(valueB).localeCompare(String(a), undefined, { sensitivity: "base" })
       })
 
       return sorted
@@ -127,7 +127,8 @@ export const SelectedProductsTable = ({
       <Table className={cn("table-fixed w-full text-sm")}>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-left w-[100px] sm:w-[300px] max-w-[400px] truncate py-2">
+            {/* Nombre: Compacto, pero siempre visible. Con truncate es clave. */}
+            <TableHead className="text-left w-[110px] sm:w-[150px] md:w-[200px] lg:w-[250px] truncate py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("name")}
@@ -137,57 +138,63 @@ export const SelectedProductsTable = ({
                 {renderSortIcon("name")}
               </button>
             </TableHead>
-            <TableHead className="text-left max-w-[150px] truncate hidden sm:table-cell py-2">
+            {/* Categoria: Oculta en XS, aparece en SM, con ancho reducido. */}
+            <TableHead className="text-left w-[90px] sm:w-[110px] truncate hidden sm:table-cell py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("category_name")}
                 className="flex items-center gap-1"
               >
-                Categoria
+                Cat.
                 {renderSortIcon("category_name")}
               </button>
             </TableHead>
-            <TableHead className="text-left max-w-[150px] truncate py-2">
+            {/* Cantidad: AMPLIFICADO, visible siempre. Ancho un poco más generoso. */}
+            <TableHead className="text-left w-[90px] sm:w-[100px] md:w-[110px] py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("quantity")}
                 className="flex items-center gap-1"
               >
-                Cantidad
+                Cant.
                 {renderSortIcon("quantity")}
               </button>
             </TableHead>
-            <TableHead className="text-left max-w-[150px] truncate py-2">
+            {/* Precio Compra: AMPLIFICADO, visible siempre. Ancho un poco más generoso. */}
+            <TableHead className="text-left w-[100px] sm:w-[110px] md:w-[120px] py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("price")}
                 className="flex items-center gap-1"
               >
-                Precio Compra
+                P. Compra
                 {renderSortIcon("price")}
               </button>
             </TableHead>
-            <TableHead className="text-left max-w-[150px] truncate py-2">
+            {/* Precio Compra Total: Visible siempre, ancho para mostrar 2 decimales. */}
+            <TableHead className="text-left w-[100px] sm:w-[110px] md:w-[120px] py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("totalPurchase")}
                 className="flex items-center gap-1"
               >
-                Precio Compra Total
+                Total C.
                 {renderSortIcon("totalPurchase")}
               </button>
             </TableHead>
-            <TableHead className="text-left max-w-[150px] truncate hidden sm:table-cell py-2">
+            {/* Precio Venta: Ahora oculto en SM, aparece en MD. Texto del encabezado más corto. */}
+            <TableHead className="text-left w-[90px] md:w-[100px] hidden md:table-cell py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("priceSell")}
                 className="flex items-center gap-1"
               >
-                Precio Venta
+                P. Venta
                 {renderSortIcon("priceSell")}
               </button>
             </TableHead>
-            <TableHead className="text-left max-w-[150px] truncate hidden sm:table-cell py-2">
+            {/* Series: Ahora oculto en MD, aparece en LG. Ancho reducido. */}
+            <TableHead className="text-left w-[90px] lg:w-[100px] truncate hidden lg:table-cell py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("series")}
@@ -197,7 +204,8 @@ export const SelectedProductsTable = ({
                 {renderSortIcon("series")}
               </button>
             </TableHead>
-            <TableHead className="text-left max-w-[150px] truncate py-2">Acciones</TableHead>
+            {/* Acciones: Ancho fijo y mínimo */}
+            <TableHead className="text-left w-[60px] py-2">Acc.</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -209,14 +217,14 @@ export const SelectedProductsTable = ({
             >
               <TableCell
                 className={cn(
-                  "w-[100px] sm:w-[300px] max-w-[400px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
+                  "w-[110px] sm:w-[150px] md:w-[200px] lg:w-[250px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
                 )}
               >
                 {product.name}
               </TableCell>
               <TableCell
                 className={cn(
-                  "max-w-[150px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell text-sm py-2"
+                  "w-[90px] sm:w-[110px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell text-sm py-2"
                 )}
               >
                 <Popover
@@ -292,7 +300,7 @@ export const SelectedProductsTable = ({
               </TableCell>
               <TableCell
                 className={cn(
-                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
+                  "w-[90px] sm:w-[100px] md:w-[110px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
                 )}
               >
                 <Input
@@ -315,7 +323,7 @@ export const SelectedProductsTable = ({
               </TableCell>
               <TableCell
                 className={cn(
-                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
+                  "w-[100px] sm:w-[110px] md:w-[120px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
                 )}
               >
                 <Input
@@ -339,14 +347,14 @@ export const SelectedProductsTable = ({
               </TableCell>
               <TableCell
                 className={cn(
-                  "max-w-[120px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
+                  "w-[100px] sm:w-[110px] md:w-[120px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
                 )}
               >
                 {(Number(product.quantity) * Number(product.price || 0)).toFixed(2)}
               </TableCell>
               <TableCell
                 className={cn(
-                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell text-sm py-2"
+                  "w-[90px] md:w-[100px] truncate overflow-hidden whitespace-nowrap hidden md:table-cell text-sm py-2"
                 )}
               >
                 <Input
@@ -370,7 +378,7 @@ export const SelectedProductsTable = ({
               </TableCell>
               <TableCell
                 className={cn(
-                  "text-xs sm:text-sm max-w-[250px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell py-2"
+                  "w-[90px] lg:w-[100px] truncate overflow-hidden whitespace-nowrap hidden lg:table-cell",
                 )}
               >
                 <div
@@ -403,7 +411,7 @@ export const SelectedProductsTable = ({
               )}
               <TableCell
                 className={cn(
-                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
+                  "w-[60px] truncate overflow-hidden whitespace-nowrap",
                 )}
               >
                 <Button
