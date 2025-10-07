@@ -226,6 +226,14 @@ const normalizePaymentMethods = (raw: unknown): string[] => {
   processValue(raw);
   return results;
 };
+
+const sortClosuresByDateDesc = <T extends { createdAt?: string | Date }>(values: T[]): T[] =>
+  [...values].sort((a, b) => {
+    const aTime = new Date(a?.createdAt ?? 0).getTime();
+    const bTime = new Date(b?.createdAt ?? 0).getTime();
+    return bTime - aTime;
+  });
+
 const extractPaymentMethodsFromText = (value?: string | null) => {
   if (!value) {
     return [] as string[];
@@ -653,6 +661,7 @@ export default function CashRegisterDashboard() {
   const [initialAmountToOpen, setInitialAmountToOpen] = useState<number>(0);
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+  const isToday = isSameDay(selectedDate, new Date());
 
   const selectedStoreName = useMemo(() => {
     if (storeId === null) {
@@ -777,10 +786,79 @@ export default function CashRegisterDashboard() {
     };
   }, [transactions]);
 
+  const latestClosureTimestamp = useMemo(() => {
+    if (closures.length === 0) {
+      return null;
+    }
+
+    return closures.reduce<Date | null>((latest, closure) => {
+      if (!closure || !closure.createdAt) {
+        return latest;
+      }
+
+      const createdAt = new Date(closure.createdAt);
+      if (Number.isNaN(createdAt.getTime()) || !isSameDay(createdAt, selectedDate)) {
+        return latest;
+      }
+
+      if (!latest || createdAt > latest) {
+        return createdAt;
+      }
+
+      return latest;
+    }, null);
+  }, [closures, selectedDate]);
+
+  const transactionsSinceLastClosure = useMemo(() => {
+    if (!latestClosureTimestamp) {
+      return transactions;
+    }
+
+    const closureTime = latestClosureTimestamp.getTime();
+
+    return transactions.filter((transaction) => {
+      const candidate = (() => {
+        const { timestamp, createdAt } = transaction as { timestamp?: unknown; createdAt?: unknown };
+
+        if (timestamp instanceof Date) {
+          return timestamp;
+        }
+
+        if (typeof timestamp === "string" || typeof timestamp === "number") {
+          const parsed = new Date(timestamp);
+          if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+          }
+        }
+
+        if (createdAt instanceof Date) {
+          return createdAt;
+        }
+
+        if (typeof createdAt === "string" || typeof createdAt === "number") {
+          const parsed = new Date(createdAt);
+          if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+          }
+        }
+
+        return null;
+      })();
+
+      if (!candidate) {
+        return true;
+      }
+
+      return candidate.getTime() > closureTime;
+    });
+  }, [transactions, latestClosureTimestamp]);
+
   const cashIncomeTotal = useMemo(() => {
     let total = 0;
 
-    transactions.forEach((transaction) => {
+    const baseTransactions = isToday ? transactionsSinceLastClosure : transactions;
+
+    baseTransactions.forEach((transaction) => {
       if (!transaction || transaction.type !== "INCOME") {
         return;
       }
@@ -818,7 +896,7 @@ export default function CashRegisterDashboard() {
     });
 
     return Number(total.toFixed(2));
-  }, [transactions]);
+  }, [transactions, transactionsSinceLastClosure, isToday]);
 
   const isReportEmpty = reportRows.length === 0
 
@@ -1096,8 +1174,6 @@ export default function CashRegisterDashboard() {
     setShowOpenCashDialog(true); // abre el diálogo
   };
 
-  const isToday = isSameDay(selectedDate, new Date());
-
   const [dailyClosureInfo, setDailyClosureInfo] = useState<{
     openingBalance: number;
     closingBalance: number;
@@ -1151,11 +1227,14 @@ export default function CashRegisterDashboard() {
       });
 
       getClosuresByStore(storeId)
-      .then(setClosures)
-      .catch((err) => {
-        console.error("Error al obtener cierres:", err);
-        setClosures([]);
-      });
+      .then((data) => {
+          const sorted = Array.isArray(data) ? sortClosuresByDateDesc(data) : [];
+          setClosures(sorted);
+        })
+        .catch((err) => {
+          console.error("Error al obtener cierres:", err);
+          setClosures([]);
+        });
       
       async function fetchBalance(storeId: number) {
         try {
@@ -1191,10 +1270,24 @@ export default function CashRegisterDashboard() {
       try {
         const allClosures = await getClosuresByStore(storeId);
         if (!cancelled) {
-          const closureOfDay = allClosures.find((c: any) => {
-            const createdYmd = ymdLocal(new Date(c.createdAt));
-            return createdYmd === ymd;
-          });
+          const closuresList = Array.isArray(allClosures) ? allClosures : [];
+          const closureOfDay = closuresList.reduce((latest: any | null, closure: any) => {
+            if (!closure || !closure.createdAt) {
+              return latest;
+            }
+
+            const createdAt = new Date(closure.createdAt);
+            if (!isSameDay(createdAt, selectedDate)) {
+              return latest;
+            }
+
+            if (!latest || !latest.createdAt) {
+              return closure;
+            }
+
+            const latestDate = new Date(latest.createdAt);
+            return createdAt > latestDate ? closure : latest;
+          }, null);
           if (closureOfDay) {
             setDailyClosureInfo({
               openingBalance: Number(closureOfDay.openingBalance),
