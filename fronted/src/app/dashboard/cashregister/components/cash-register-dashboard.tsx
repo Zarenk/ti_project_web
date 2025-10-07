@@ -657,6 +657,10 @@ export default function CashRegisterDashboard() {
   const [totalExpense, setTotalExpense] = useState(0);
   const [activeCashRegisterId, setActiveCashRegisterId] = useState<number | null>(null);
   const [closures, setClosures] = useState<any[]>([]);
+  const [dailyClosureInfo, setDailyClosureInfo] = useState<{
+    openingBalance: number;
+    closingBalance: number;
+  } | null>(null);
   const [showOpenCashDialog, setShowOpenCashDialog] = useState(false);
   const [initialAmountToOpen, setInitialAmountToOpen] = useState<number>(0);
   const [selectedDate, setSelectedDate] = useState(() => new Date())
@@ -1224,11 +1228,6 @@ export default function CashRegisterDashboard() {
     setInitialAmountToOpen(lastClosureAmount); // pre-fill with last closure or 0
     setShowOpenCashDialog(true); // abre el diálogo
   };
-
-  const [dailyClosureInfo, setDailyClosureInfo] = useState<{
-    openingBalance: number;
-    closingBalance: number;
-  } | null>(null);
 
   useEffect(() => {
     if (!selectedDate || !Array.isArray(closures) || closures.length === 0) {
