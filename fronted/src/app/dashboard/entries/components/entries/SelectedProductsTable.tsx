@@ -271,45 +271,46 @@ export const SelectedProductsTable = ({
   const activeProduct = activeProductIndex !== null ? selectedProducts[activeProductIndex] ?? null : null
 
   return (
-    <div className='border px-2 overflow-x-auto max-w-full'>
-      <Table className="w-full min-w-max text-sm">
-        <TableHeader>
-          <TableRow>
-            {columnConfigs.map((column) => (
-              <TableHead
-                key={column.key}
-                className={cn(
-                  "relative select-none px-2 py-2 text-left align-middle font-semibold",
-                  column.headerClassName,
-                  column.sortable !== false && "cursor-pointer",
-                )}
-                style={{
-                  width: columnWidths[column.key],
-                  minWidth: column.minWidth,
-                }}
-                onClick={() => column.sortable !== false && handleSort(column.key)}
-              >
-                <div className="flex items-center gap-2">
-                  <span>{column.label}</span>
-                  {column.sortable !== false && (
-                    <span>{getSortIndicator(column.key)}</span>
+    <div className="w-full max-w-full overflow-hidden rounded-md border bg-background">
+      <div className="w-full overflow-x-auto px-2">
+        <Table className="w-full min-w-max text-sm">
+          <TableHeader>
+            <TableRow>
+              {columnConfigs.map((column) => (
+                <TableHead
+                  key={column.key}
+                  className={cn(
+                    "relative select-none px-2 py-2 text-left align-middle font-semibold",
+                    column.headerClassName,
+                    column.sortable !== false && "cursor-pointer",
                   )}
-                </div>
-                <span
-                  className="absolute right-0 top-1/2 h-6 w-1 -translate-y-1/2 cursor-col-resize bg-transparent"
-                  onMouseDown={(event) => startResizing(event, column)}
-                />
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedProducts.map(({ product, originalIndex }) => (
-            <TableRow
-              key={product.id}
-              onClick={() => window.innerWidth < 640 && setActiveProductIndex(originalIndex)} // abre el modal
-              className={cn("cursor-pointer sm:cursor-default")}
-            >
+                style={{
+                    width: columnWidths[column.key],
+                    minWidth: column.minWidth,
+                  }}
+                  onClick={() => column.sortable !== false && handleSort(column.key)}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>{column.label}</span>
+                    {column.sortable !== false && (
+                      <span>{getSortIndicator(column.key)}</span>
+                    )}
+                  </div>
+                  <span
+                    className="absolute right-0 top-1/2 h-6 w-1 -translate-y-1/2 cursor-col-resize bg-transparent"
+                    onMouseDown={(event) => startResizing(event, column)}
+                  />
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedProducts.map(({ product, originalIndex }) => (
+              <TableRow
+                key={product.id}
+                onClick={() => window.innerWidth < 640 && setActiveProductIndex(originalIndex)} // abre el modal
+                className={cn("cursor-pointer sm:cursor-default")}
+              >
               <TableCell
                 className={cn("px-2 py-2 align-middle")}
                 style={{ width: columnWidths.name, minWidth: configByKey.name.minWidth }}
@@ -516,6 +517,7 @@ export const SelectedProductsTable = ({
           ))}
         </TableBody>
       </Table>
+      </div>
 
       <MobileProductModal
         product={activeProduct}
