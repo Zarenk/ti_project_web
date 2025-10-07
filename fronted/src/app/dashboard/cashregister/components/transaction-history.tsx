@@ -886,11 +886,11 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                       </tbody>
                                     </table>
                                   </div>
-                                  <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm font-semibold">
+                                  <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm font-semibold text-muted-foreground">
                                     <span>Total productos</span>
                                     <span>{formatCurrency(itemsTotal, currencySymbol)}</span>
                                   </div>
-                                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                  <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm font-semibold text-muted-foreground">
                                     <span>Total operación</span>
                                     <span className="font-semibold text-foreground">
                                       {formatCurrency(transaction.amount, currencySymbol)}

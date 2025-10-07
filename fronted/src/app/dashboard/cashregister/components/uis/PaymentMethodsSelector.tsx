@@ -216,7 +216,7 @@ export function PaymentMethodsSelector({ value, onChange, initialAmount = 0 }: P
           <motion.div
             key={payment.uid}
             layout // <- ayuda a transiciones suaves al agregar/eliminar
-            initial={{ opacity: 0, scale: 0.95, x: -20 }}
+            initial={false}
             animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={{ opacity: 0, scale: 0.95, x: 20 }}
             transition={{ duration: 0.3 }}
