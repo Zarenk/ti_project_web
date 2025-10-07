@@ -165,6 +165,43 @@ const toSentenceCase = (value: string) => {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1)
 }
 
+type ClosureMetrics = {
+  operationsCount: number
+  totalAmount: number
+  paymentBreakdown: { method: string; amount: number }[]
+}
+
+const parseAmountFromMethodEntry = (value: string): number | null => {
+  if (!value) return null
+
+  const matches = value.match(/-?\d+(?:[.,]\d+)?/g)
+  if (!matches || matches.length === 0) {
+    return null
+  }
+
+  const rawCandidate = matches[matches.length - 1]?.replace(/[^0-9,.-]/g, "") ?? ""
+  if (!rawCandidate) {
+    return null
+  }
+
+  const hasComma = rawCandidate.includes(",")
+  const hasDot = rawCandidate.includes(".")
+
+  let normalized = rawCandidate
+  if (hasComma && hasDot) {
+    if (rawCandidate.lastIndexOf(",") > rawCandidate.lastIndexOf(".")) {
+      normalized = rawCandidate.replace(/\./g, "").replace(",", ".")
+    } else {
+      normalized = rawCandidate.replace(/,/g, "")
+    }
+  } else if (hasComma) {
+    normalized = rawCandidate.replace(/\./g, "").replace(",", ".")
+  }
+
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 const parseStructuredNotes = (rawDescription?: string | null, formattedDescription?: string): StructuredNoteEntry[] => {
   const source = normalizeWhitespace(formattedDescription ?? rawDescription ?? "")
   if (!source) return []
@@ -209,13 +246,22 @@ const parseStructuredNotes = (rawDescription?: string | null, formattedDescripti
   return entries
 }
 
-  interface TransactionHistoryProps {
-    transactions: Transaction[]
-    selectedDate: Date
-    onDateChange: (date: Date) => void
+const getTransactionDate = (value: Transaction["timestamp"]) => {
+  if (!value) return null
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value
   }
 
-  export default function TransactionHistory({ transactions, selectedDate, onDateChange, isFetching = false, keepPrevious = true, }: TransactionHistoryProps) {
+  if (typeof value === "string" || typeof value === "number") {
+    const parsedDate = new Date(value)
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate
+  }
+
+return null
+}
+
+export default function TransactionHistory({ transactions, selectedDate, onDateChange, isFetching = false, keepPrevious = true, }: TransactionHistoryProps) {
     const [searchTerm, setSearchTerm] = useState("")
     const [typeFilter, setTypeFilter] = useState<string | null>(null)
     const [modalTransaction, setModalTransaction] = useState<Transaction | null>(null)
@@ -239,13 +285,6 @@ const parseStructuredNotes = (rawDescription?: string | null, formattedDescripti
       EXPENSE: "Retiros",
       CLOSURE: "Cierres",
     };
-
-    const parseTransactionDate = (value: Transaction["timestamp"]) => {
-      if (!value) return null
-
-      const parsedDate = value instanceof Date ? value : new Date(value)
-      return Number.isNaN(parsedDate.getTime()) ? null : parsedDate
-    }
 
     const filteredTransactions = transactions.filter((transaction) => {
       const matchesSearch =
@@ -348,10 +387,93 @@ const parseStructuredNotes = (rawDescription?: string | null, formattedDescripti
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768
     const modalFormattedDescription = modalTransaction ? formatSaleDescription(modalTransaction.description) : ""
     const modalInvoiceUrl = modalTransaction ? getInvoiceUrl(modalTransaction) : null
+    const modalCurrency = modalTransaction ? (modalTransaction.currency ?? "S/.").trim() || "S/." : "S/."
+    const modalClosureDetails =
+      modalTransaction && (modalTransaction.internalType ?? modalTransaction.type) === "CLOSURE"
+        ? closureDetailsMap.get(modalTransaction.id)
+        : undefined
     const structuredNotes = useMemo(
       () => parseStructuredNotes(modalTransaction?.description, modalFormattedDescription),
       [modalTransaction?.description, modalFormattedDescription],
     )
+
+    const closureDetailsMap = useMemo(() => {
+      const details = new Map<string, ClosureMetrics>()
+      const sortedTransactions = [...transactions].sort((a, b) => {
+        const aTime = getTransactionDate(a.timestamp)?.getTime() ?? 0
+        const bTime = getTransactionDate(b.timestamp)?.getTime() ?? 0
+        return aTime - bTime
+      })
+
+      let operationsCount = 0
+      let totalAmount = 0
+      let paymentAggregates = new Map<string, number>()
+
+      const snapshotPaymentAggregates = () =>
+        Array.from(paymentAggregates.entries())
+          .map(([method, amount]) => ({
+            method,
+            amount: Number(amount.toFixed(2)),
+          }))
+          .sort((a, b) => a.method.localeCompare(b.method, "es", { sensitivity: "base" }))
+
+      const addToAggregates = (method: string, amount: number) => {
+        const normalizedMethod = toSentenceCase(normalizeWhitespace(method || "Sin método"))
+        const current = paymentAggregates.get(normalizedMethod) ?? 0
+        paymentAggregates.set(normalizedMethod, current + amount)
+      }
+
+      sortedTransactions.forEach((transaction) => {
+        const entryType = transaction.internalType ?? transaction.type
+
+        if (entryType === "CLOSURE") {
+          details.set(transaction.id, {
+            operationsCount,
+            totalAmount: Number(totalAmount.toFixed(2)),
+            paymentBreakdown: snapshotPaymentAggregates(),
+          })
+
+          operationsCount = 0
+          totalAmount = 0
+          paymentAggregates = new Map<string, number>()
+          return
+        }
+
+        if (entryType !== "INCOME" && entryType !== "EXPENSE") {
+          return
+        }
+
+        operationsCount += 1
+        const rawAmount = Number(transaction.amount ?? 0)
+        const signedAmount = entryType === "EXPENSE" ? -rawAmount : rawAmount
+        totalAmount += signedAmount
+
+        const methods = Array.isArray(transaction.paymentMethods) && transaction.paymentMethods.length > 0
+          ? transaction.paymentMethods
+          : ["Sin método"]
+
+        const parsedEntries = methods.map((method) => ({
+          method,
+          amount: parseAmountFromMethodEntry(method),
+        }))
+        const hasExplicitAmounts = parsedEntries.some((item) => item.amount !== null)
+
+        if (hasExplicitAmounts) {
+          parsedEntries.forEach(({ method, amount }) => {
+            if (amount === null) return
+            const signed = entryType === "EXPENSE" ? -amount : amount
+            addToAggregates(method, signed)
+          })
+        } else if (methods.length === 1) {
+          addToAggregates(methods[0], signedAmount)
+        } else if (methods.length > 1) {
+          const splitAmount = signedAmount / methods.length
+          methods.forEach((method) => addToAggregates(method, splitAmount))
+        }
+      })
+
+      return details
+    }, [transactions])
 
     return (
       <div className="space-y-4">
@@ -453,6 +575,11 @@ const parseStructuredNotes = (rawDescription?: string | null, formattedDescripti
               {sortedTransactions.length > 0 ? (
                 sortedTransactions.map((transaction) => {
                   const formattedDescription = formatSaleDescription(transaction.description)
+                  const currencySymbol = (transaction.currency ?? "S/.").trim() || "S/."
+                  const closureDetails =
+                    (transaction.internalType ?? transaction.type) === "CLOSURE"
+                      ? closureDetailsMap.get(transaction.id)
+                      : undefined
 
                   return (
                     <Tooltip key={transaction.id}>
@@ -471,7 +598,7 @@ const parseStructuredNotes = (rawDescription?: string | null, formattedDescripti
                             {new Date(transaction.timestamp).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-center font-medium">
-                            {(transaction.currency ?? "S/.")} {transaction.amount.toFixed(2)}
+                            {currencySymbol} {transaction.amount.toFixed(2)}
                           </TableCell>
                         {!isMobile && <TableCell>{transaction.voucher || "-"}</TableCell>}
                           {!isMobile && (
@@ -521,18 +648,45 @@ const parseStructuredNotes = (rawDescription?: string | null, formattedDescripti
                           </p>
                         )}
                         <p>
-                          <span className="font-medium">Monto:</span> {(transaction.currency ?? "S/.")} {transaction.amount.toFixed(2)}
+                          <span className="font-medium">Monto:</span> {currencySymbol} {transaction.amount.toFixed(2)}
                         </p>
                         {transaction.paymentMethods && transaction.paymentMethods.length > 0 && (
                           <p>
                             <span className="font-medium">Metodos de pago:</span> {transaction.paymentMethods.join(" | ")}
                           </p>
                         )}
+                        {(transaction.internalType ?? transaction.type) === "CLOSURE" && (
+                          <div className="space-y-1">
+                            {transaction.openingBalance !== null && transaction.openingBalance !== undefined && (
+                              <p>
+                                <span className="font-medium">Saldo inicial:</span> {currencySymbol}{" "}
+                                {Number(transaction.openingBalance).toFixed(2)}
+                              </p>
+                            )}
+                            {transaction.closingBalance !== null && transaction.closingBalance !== undefined && (
+                              <p>
+                                <span className="font-medium">Efectivo contado:</span> {currencySymbol}{" "}
+                                {Number(transaction.closingBalance).toFixed(2)}
+                              </p>
+                            )}
+                            {closureDetails && (
+                              <>
+                                <p>
+                                  <span className="font-medium">Operaciones hasta cierre:</span> {closureDetails.operationsCount}
+                                </p>
+                                <p>
+                                  <span className="font-medium">Total movimientos:</span> {currencySymbol}{" "}
+                                  {closureDetails.totalAmount.toFixed(2)}
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        )}
                         {formattedDescription && (
                           <p>
                             <span className="font-medium">Notas:</span> {formattedDescription}
                           </p>
-                        )}
+                        )}                      
                       </TooltipContent>
                     </Tooltip>
                   )
@@ -554,71 +708,177 @@ const parseStructuredNotes = (rawDescription?: string | null, formattedDescripti
                 <DialogTitle>Detalle de Transacción</DialogTitle>
               </DialogHeader>
               {modalTransaction && (
-                <div className="space-y-2 text-sm">
-                  <p><strong>Tipo:</strong> {typeLabels[modalTransaction.type]}</p>
-                  <p><strong>Fecha/Hora:</strong> {new Date(modalTransaction.timestamp).toLocaleString()}</p>
-                  <p><strong>Monto:</strong> S/. {modalTransaction.amount.toFixed(2)}</p>
-                  <p><strong>Encargado:</strong> {modalTransaction.employee}</p>
-                  <p><strong>Métodos de Pago:</strong> {modalTransaction.paymentMethods?.join(", ") || "-"}</p>
-                  <div className="space-y-2">
-                    <p className="font-semibold">Notas</p>
-                    {structuredNotes.length > 0 ? (
-                      <div className="overflow-hidden rounded-md border">
-                        <table className="w-full text-sm">
-                          <tbody>
-                            {structuredNotes.map((entry, index) => (
-                              <tr key={`${entry.label}-${index}`} className="border-b last:border-b-0">
-                                <th className="bg-muted px-3 py-2 text-left font-medium align-top w-36">{entry.label}</th>
-                                <td className="px-3 py-2 text-muted-foreground">{entry.value}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground">No hay notas adicionales.</p>
+                <div className="space-y-4 text-sm">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <p><strong>Tipo:</strong> {typeLabels[modalTransaction.type] ?? modalTransaction.type}</p>
+                    <p><strong>Fecha/Hora:</strong> {new Date(modalTransaction.timestamp).toLocaleString()}</p>
+                    <p><strong>Monto:</strong> {modalCurrency} {modalTransaction.amount.toFixed(2)}</p>
+                    <p><strong>Encargado:</strong> {modalTransaction.employee || "-"}</p>
+                    <p>
+                      <strong>Métodos de Pago:</strong> {modalTransaction.paymentMethods?.length
+                        ? modalTransaction.paymentMethods.join(", ")
+                        : "-"}
+                    </p>
+                    <p><strong>ID:</strong> {modalTransaction.id}</p>
+                    {(modalTransaction.cashRegisterName || modalTransaction.cashRegisterId) && (
+                      <p>
+                        <strong>Caja:</strong> {modalTransaction.cashRegisterName ?? "Caja"}
+                        {modalTransaction.cashRegisterId ? ` (#${modalTransaction.cashRegisterId})` : ""}
+                      </p>
+                    )}
+                    {modalTransaction.clientName && (
+                      <p><strong>Cliente:</strong> {modalTransaction.clientName}</p>
+                    )}
+                    {modalTransaction.clientDocument && modalTransaction.clientDocumentType && (
+                      <p>
+                        <strong>Documento:</strong> {modalTransaction.clientDocumentType} {modalTransaction.clientDocument}
+                      </p>
+                    )}
+                    {modalTransaction.status && (
+                      <p><strong>Estado:</strong> {modalTransaction.status}</p>
+                    )}
+                    {modalTransaction.expectedAmount !== undefined && (
+                      <p>
+                        <strong>Monto esperado:</strong> {modalCurrency} {Number(modalTransaction.expectedAmount).toFixed(2)}
+                      </p>
+                    )}
+                    {modalTransaction.discrepancy !== undefined && (
+                      <p>
+                        <strong>Diferencia:</strong> {modalCurrency} {Number(modalTransaction.discrepancy).toFixed(2)}
+                      </p>
+                    )}
+                    {modalTransaction.voucher && (
+                      <p>
+                        <strong>Comprobante:</strong>{" "}
+                        {modalInvoiceUrl ? (
+                          <a
+                            href={modalInvoiceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 underline"
+                          >
+                            {modalTransaction.voucher}
+                          </a>
+                        ) : (
+                          modalTransaction.voucher
+                        )}
+                      </p>
                     )}
                   </div>
-                  <p><strong>ID:</strong> {modalTransaction.id}</p>
-                  {modalTransaction.voucher && (
-                    <p>
-                      <strong>Comprobante:</strong>{" "}
-                      {modalInvoiceUrl ? (
-                        <a
-                          href={modalInvoiceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 underline"
-                        >
-                          {modalTransaction.voucher}
-                        </a>
-                      ) : (
-                        modalTransaction.voucher
+                  {modalClosureDetails && (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="font-semibold">Detalle del cierre</p>
+                        <div className="overflow-hidden rounded-md border">
+                          <table className="w-full text-sm">
+                            <tbody>
+                              {[
+                                {
+                                  label: "Detalle",
+                                  value: formatSaleDescription(modalTransaction.description) || modalTransaction.description || "Cierre de caja",
+                                },
+                                {
+                                  label: "Saldo inicial",
+                                  value:
+                                    modalTransaction.openingBalance !== null && modalTransaction.openingBalance !== undefined
+                                      ? `${modalCurrency} ${Number(modalTransaction.openingBalance).toFixed(2)}`
+                                      : "-",
+                                },
+                                {
+                                  label: "Ingresos acumulados",
+                                  value:
+                                    modalTransaction.totalIncome !== null && modalTransaction.totalIncome !== undefined
+                                      ? `${modalCurrency} ${Number(modalTransaction.totalIncome).toFixed(2)}`
+                                      : "-",
+                                },
+                                {
+                                  label: "Retiros acumulados",
+                                  value:
+                                    modalTransaction.totalExpense !== null && modalTransaction.totalExpense !== undefined
+                                      ? `${modalCurrency} ${Number(modalTransaction.totalExpense).toFixed(2)}`
+                                      : "-",
+                                },
+                                {
+                                  label: "Operaciones registradas",
+                                  value: String(modalClosureDetails.operationsCount),
+                                },
+                                {
+                                  label: "Total de movimientos",
+                                  value: `${modalCurrency} ${modalClosureDetails.totalAmount.toFixed(2)}`,
+                                },
+                                {
+                                  label: "Efectivo contabilizado",
+                                  value:
+                                    modalTransaction.closingBalance !== null && modalTransaction.closingBalance !== undefined
+                                      ? `${modalCurrency} ${Number(modalTransaction.closingBalance).toFixed(2)}`
+                                      : `${modalCurrency} ${modalTransaction.amount.toFixed(2)}`,
+                                },
+                              ].map((row) => (
+                                <tr key={row.label} className="border-b last:border-b-0">
+                                  <th className="bg-muted px-3 py-2 text-left font-medium align-top w-48">{row.label}</th>
+                                  <td className="px-3 py-2 text-muted-foreground">{row.value}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {modalClosureDetails.paymentBreakdown.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="font-semibold">Totales por método de pago</p>
+                          <div className="overflow-hidden rounded-md border">
+                            <table className="w-full text-sm">
+                              <tbody>
+                                {modalClosureDetails.paymentBreakdown.map((entry) => (
+                                  <tr key={entry.method} className="border-b last:border-b-0">
+                                    <th className="bg-muted px-3 py-2 text-left font-medium align-top w-48">{entry.method}</th>
+                                    <td className="px-3 py-2 text-muted-foreground">
+                                      {modalCurrency} {entry.amount.toFixed(2)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
                       )}
-                    </p>
+                    </div>
                   )}
-                  {modalTransaction.clientName && (
-                    <p><strong>Cliente:</strong> {modalTransaction.clientName}</p>
-                  )}
-                  {modalTransaction.clientDocument && modalTransaction.clientDocumentType && (
-                    <p>
-                      <strong>Documento:</strong> {modalTransaction.clientDocumentType} {modalTransaction.clientDocument}
-                    </p>
-                  )}
-                  {modalTransaction.status && (
-                    <p><strong>Estado:</strong> {modalTransaction.status}</p>
-                  )}
-                  {(modalTransaction.cashRegisterName || modalTransaction.cashRegisterId !== undefined) && (
-                    <p>
-                      <strong>Caja:</strong> {modalTransaction.cashRegisterName ?? 'Caja'}{modalTransaction.cashRegisterId !== undefined ? ` (#${modalTransaction.cashRegisterId})` : ''}
-                    </p>
-                  )}
-                  {(modalTransaction.expectedAmount !== undefined) && (
-                    <p><strong>Monto esperado:</strong> {(modalTransaction.currency ?? 'S/.')} {Number(modalTransaction.expectedAmount).toFixed(2)}</p>
-                  )}
-                  {(modalTransaction.discrepancy !== undefined) && (
-                    <p><strong>Diferencia:</strong> {(modalTransaction.currency ?? 'S/.')} {Number(modalTransaction.discrepancy).toFixed(2)}</p>
-                  )}
+                  <div className="space-y-2">
+                    <p className="font-semibold">Notas</p>
+                    {(() => {
+                      const extraNotes: StructuredNoteEntry[] = []
+                      const trimmedNote = modalTransaction.notes?.trim()
+                      if (trimmedNote) {
+                        const alreadyIncluded = structuredNotes.some((entry) => entry.value === trimmedNote)
+                        if (!alreadyIncluded) {
+                          extraNotes.push({
+                            label: structuredNotes.length > 0 ? "Observaciones" : "Notas",
+                            value: trimmedNote,
+                          })
+                        }
+                      }
+                      const combined = [...structuredNotes, ...extraNotes]
+                      if (combined.length === 0) {
+                        return <p className="text-muted-foreground">No hay notas adicionales.</p>
+                      }
+                      return (
+                        <div className="overflow-hidden rounded-md border">
+                          <table className="w-full text-sm">
+                            <tbody>
+                              {combined.map((entry, index) => (
+                                <tr key={`${entry.label}-${index}`} className="border-b last:border-b-0">
+                                  <th className="bg-muted px-3 py-2 text-left font-medium align-top w-36">{entry.label}</th>
+                                  <td className="px-3 py-2 text-muted-foreground">{entry.value}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </div>
               )}
             </DialogContent>

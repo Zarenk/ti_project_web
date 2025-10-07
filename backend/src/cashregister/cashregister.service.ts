@@ -97,6 +97,7 @@
         },
         include: {
           user: true,
+          cashRegister: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -130,6 +131,7 @@
       const formattedClosures = closures.map((closure) => ({
         id: `closure-${closure.id}`,
         cashRegisterId: closure.cashRegisterId,
+        cashRegisterName: closure.cashRegister?.name ?? null,
         type: "CLOSURE",
         amount: Number(closure.closingBalance),
         createdAt: closure.createdAt,
@@ -138,6 +140,12 @@
         employee: closure.user?.username || "Sistema",
         description: closure.notes || "Cierre de caja",
         paymentMethods: [],
+        openingBalance: Number(closure.openingBalance),
+        closingBalance: Number(closure.closingBalance),
+        totalIncome: Number(closure.totalIncome),
+        totalExpense: Number(closure.totalExpense),
+        notes: closure.notes ?? null,
+        currency: "S/.",
       }));
     
       const allRecords = [...formattedTransactions, ...formattedClosures].sort(

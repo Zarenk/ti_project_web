@@ -617,6 +617,69 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
   mergedTransactions.sort((a, b) => a.order - b.order);
   return mergedTransactions.map((entry) => entry.transaction);
 };
+
+const toValidDate = (value: unknown): Date => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return new Date();
+};
+
+const toNullableNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const adaptTransaction = (transaction: any): Transaction => {
+  const timestamp = toValidDate(transaction?.timestamp ?? transaction?.createdAt);
+  const createdAt = toValidDate(transaction?.createdAt ?? transaction?.timestamp);
+  const normalizedMethods = normalizePaymentMethods(transaction?.paymentMethods ?? []);
+  const currencyCandidates = [transaction?.currency, transaction?.currencySymbol];
+  const currencySymbol = currencyCandidates.find(
+    (candidate) => typeof candidate === "string" && candidate.trim().length > 0,
+  );
+
+  const resolvedCurrency = (currencySymbol ?? "S/.").trim() || "S/.";
+
+  return {
+    id: String(transaction?.id),
+    cashRegisterId: toNullableNumber(transaction?.cashRegisterId ?? transaction?.cashRegister?.id),
+    cashRegisterName: transaction?.cashRegisterName ?? transaction?.cashRegister?.name ?? undefined,
+    type: transaction?.type ?? transaction?.internalType ?? "UNKNOWN",
+    amount: Number(transaction?.amount) || 0,
+    createdAt,
+    timestamp,
+    userId: toNullableNumber(transaction?.userId ?? transaction?.user?.id),
+    employee: transaction?.employee || "",
+    description: transaction?.description || "",
+    paymentMethods: normalizedMethods,
+    currency: resolvedCurrency,
+    clientName: transaction?.clientName ?? null,
+    clientDocument: transaction?.clientDocument ?? null,
+    clientDocumentType: transaction?.clientDocumentType ?? null,
+    voucher: transaction?.voucher ?? null,
+    invoiceUrl: transaction?.invoiceUrl ?? null,
+    internalType: transaction?.type ?? transaction?.internalType ?? "UNKNOWN",
+    notes: transaction?.notes ?? undefined,
+    openingBalance: toNullableNumber(transaction?.openingBalance),
+    closingBalance: toNullableNumber(transaction?.closingBalance ?? transaction?.amount),
+    totalIncome: toNullableNumber(transaction?.totalIncome),
+    totalExpense: toNullableNumber(transaction?.totalExpense),
+  } as Transaction;
+};
+
 // arriba del componente
 const ymdLocal = (d: Date) => {
   const y = d.getFullYear();
@@ -1143,26 +1206,7 @@ export default function CashRegisterDashboard() {
       }
 
       const safeTransactions = Array.isArray(newTransactions) ? newTransactions : [];
-
-      const validTransactions = safeTransactions.map((transaction: any) => ({
-        id: transaction.id,
-        type: transaction.type, // ⚡ deja el original
-        internalType: transaction.type, // ⚡ crea uno nuevo para cálculos
-        amount: Number(transaction.amount) || 0,
-        timestamp: transaction.createdAt || new Date().toISOString(),
-        employee: transaction.employee || "",
-        description: transaction.description || "",
-        paymentMethods: normalizePaymentMethods(transaction.paymentMethods ?? []),
-        voucher: transaction.voucher || null,
-        invoiceUrl: transaction.invoiceUrl ?? null,
-        clientName: transaction.clientName ?? null,
-        clientDocument: transaction.clientDocument ?? null,
-        clientDocumentType: transaction.clientDocumentType ?? null,
-        cashRegisterId: transaction.cashRegisterId ?? null,
-        createdAt: transaction.createdAt ?? new Date().toISOString(),
-        userId: transaction.userId ?? null,
-      }));
-
+      const validTransactions = safeTransactions.map((transaction: any) => adaptTransaction(transaction));
       const mergedTransactions = mergeSaleTransactions(validTransactions);
 
       const income = mergedTransactions
@@ -1390,24 +1434,7 @@ export default function CashRegisterDashboard() {
       });
 
       const validTransactions = Array.from(transactionsById.values())
-        .map((t: any) => ({
-          id: t.id,
-          type: t.type,
-          internalType: t.type,
-          amount: Number(t.amount) || 0,
-          timestamp: new Date(t.createdAt),
-          employee: t.employee || "",
-          description: t.description || "",
-          paymentMethods: normalizePaymentMethods(t.paymentMethods ?? []),
-          createdAt: new Date(t.createdAt),
-          userId: t.userId,
-          cashRegisterId: t.cashRegisterId,
-          voucher: t.voucher || null,
-          invoiceUrl: t.invoiceUrl ?? null,
-          clientName: t.clientName ?? null,
-          clientDocument: t.clientDocument ?? null,
-          clientDocumentType: t.clientDocumentType ?? null,
-        }))
+        .map((t: any) => adaptTransaction(t))
         .filter((transaction) => isSameDay(transaction.timestamp, selectedDate));
 
       const merged = mergeSaleTransactions(validTransactions);
