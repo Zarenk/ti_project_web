@@ -57,7 +57,6 @@ export default function CashClosureForm({
   const [showOpenNewCashDialog, setShowOpenNewCashDialog] = useState(false);
   const [newCashInitialBalance, setNewCashInitialBalance] = useState<string>("");
   const [newCashInitialBalanceError, setNewCashInitialBalanceError] = useState<string | null>(null);
-  const [newInitialBalanceInput, setNewInitialBalanceInput] = useState("0");
   const displayCurrency = currencySymbol.trim() || "S/.";
 
   useEffect(() => {
@@ -82,12 +81,13 @@ export default function CashClosureForm({
   }, [userData?.name])
 
   const validateCountedAmountMatchesExpected = (countedAmount: number) => {
-    const calculatedDiscrepancy = parseFloat((countedAmount - currentBalance).toFixed(2));
+    const expectedCash = Number(cashIncomeTotal.toFixed(2));
+    const calculatedDiscrepancy = parseFloat((countedAmount - expectedCash).toFixed(2));
     setDiscrepancy(calculatedDiscrepancy);
 
     if (Math.abs(calculatedDiscrepancy) > 0.009) {
       toast.error(
-        `El monto contabilizado (S/. ${countedAmount.toFixed(2)}) debe coincidir con el saldo esperado (S/. ${currentBalance.toFixed(2)}) para cerrar la caja.`
+        `El monto contabilizado (S/. ${countedAmount.toFixed(2)}) debe coincidir con el saldo esperado (S/. ${expectedCash.toFixed(2)}) para cerrar la caja.`
       );
       return false;
     }
@@ -126,10 +126,8 @@ export default function CashClosureForm({
 
       setNewCashInitialBalance(values.countedAmount.toFixed(2));
       setNewCashInitialBalanceError(null);
-      setNewInitialBalanceInput(values.countedAmount.toFixed(2))
       toast.success("Cierre de caja registrado correctamente.")
       setShowOpenNewCashDialog(true); // 👈 Mostrar el AlertDialog
-      onClosureCompleted()
 
       form.reset()
       setDiscrepancy(null)
@@ -187,7 +185,8 @@ export default function CashClosureForm({
         
                     // Calcula discrepancy automáticamente al escribir
                     if (!isNaN(numericValue)) {
-                      setDiscrepancy(numericValue - currentBalance);
+                      const expectedCash = Number(cashIncomeTotal.toFixed(2));
+                      setDiscrepancy(parseFloat((numericValue - expectedCash).toFixed(2)));
                     } else {
                       setDiscrepancy(null); // Si el input se borra o es inválido
                     }

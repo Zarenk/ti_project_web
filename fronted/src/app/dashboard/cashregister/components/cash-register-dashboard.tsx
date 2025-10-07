@@ -1,4 +1,4 @@
-﻿"use client"
+﻿﻿"use client"
 
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 import { useEffect, useMemo, useState } from "react"
@@ -226,6 +226,14 @@ const normalizePaymentMethods = (raw: unknown): string[] => {
   processValue(raw);
   return results;
 };
+
+const sortClosuresByDateDesc = <T extends { createdAt?: string | Date }>(values: T[]): T[] =>
+  [...values].sort((a, b) => {
+    const aTime = new Date(a?.createdAt ?? 0).getTime();
+    const bTime = new Date(b?.createdAt ?? 0).getTime();
+    return bTime - aTime;
+  });
+
 const extractPaymentMethodsFromText = (value?: string | null) => {
   if (!value) {
     return [] as string[];
@@ -609,6 +617,69 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
   mergedTransactions.sort((a, b) => a.order - b.order);
   return mergedTransactions.map((entry) => entry.transaction);
 };
+
+const toValidDate = (value: unknown): Date => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return new Date();
+};
+
+const toNullableNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const adaptTransaction = (transaction: any): Transaction => {
+  const timestamp = toValidDate(transaction?.timestamp ?? transaction?.createdAt);
+  const createdAt = toValidDate(transaction?.createdAt ?? transaction?.timestamp);
+  const normalizedMethods = normalizePaymentMethods(transaction?.paymentMethods ?? []);
+  const currencyCandidates = [transaction?.currency, transaction?.currencySymbol];
+  const currencySymbol = currencyCandidates.find(
+    (candidate) => typeof candidate === "string" && candidate.trim().length > 0,
+  );
+
+  const resolvedCurrency = (currencySymbol ?? "S/.").trim() || "S/.";
+
+  return {
+    id: String(transaction?.id),
+    cashRegisterId: toNullableNumber(transaction?.cashRegisterId ?? transaction?.cashRegister?.id),
+    cashRegisterName: transaction?.cashRegisterName ?? transaction?.cashRegister?.name ?? undefined,
+    type: transaction?.type ?? transaction?.internalType ?? "UNKNOWN",
+    amount: Number(transaction?.amount) || 0,
+    createdAt,
+    timestamp,
+    userId: toNullableNumber(transaction?.userId ?? transaction?.user?.id),
+    employee: transaction?.employee || "",
+    description: transaction?.description || "",
+    paymentMethods: normalizedMethods,
+    currency: resolvedCurrency,
+    clientName: transaction?.clientName ?? null,
+    clientDocument: transaction?.clientDocument ?? null,
+    clientDocumentType: transaction?.clientDocumentType ?? null,
+    voucher: transaction?.voucher ?? null,
+    invoiceUrl: transaction?.invoiceUrl ?? null,
+    internalType: transaction?.type ?? transaction?.internalType ?? "UNKNOWN",
+    notes: transaction?.notes ?? undefined,
+    openingBalance: toNullableNumber(transaction?.openingBalance),
+    closingBalance: toNullableNumber(transaction?.closingBalance ?? transaction?.amount),
+    totalIncome: toNullableNumber(transaction?.totalIncome),
+    totalExpense: toNullableNumber(transaction?.totalExpense),
+  } as Transaction;
+};
+
 // arriba del componente
 const ymdLocal = (d: Date) => {
   const y = d.getFullYear();
@@ -649,10 +720,15 @@ export default function CashRegisterDashboard() {
   const [totalExpense, setTotalExpense] = useState(0);
   const [activeCashRegisterId, setActiveCashRegisterId] = useState<number | null>(null);
   const [closures, setClosures] = useState<any[]>([]);
+  const [dailyClosureInfo, setDailyClosureInfo] = useState<{
+    openingBalance: number;
+    closingBalance: number;
+  } | null>(null);
   const [showOpenCashDialog, setShowOpenCashDialog] = useState(false);
   const [initialAmountToOpen, setInitialAmountToOpen] = useState<number>(0);
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+  const isToday = isSameDay(selectedDate, new Date());
 
   const selectedStoreName = useMemo(() => {
     if (storeId === null) {
@@ -777,11 +853,80 @@ export default function CashRegisterDashboard() {
     };
   }, [transactions]);
 
-  const cashIncomeTotal = useMemo(() => {
-    let total = 0;
+  const latestClosureTimestamp = useMemo(() => {
+    if (closures.length === 0) {
+      return null;
+    }
 
-    transactions.forEach((transaction) => {
-      if (!transaction || transaction.type !== "INCOME") {
+    return closures.reduce<Date | null>((latest, closure) => {
+      if (!closure || !closure.createdAt) {
+        return latest;
+      }
+
+      const createdAt = new Date(closure.createdAt);
+      if (Number.isNaN(createdAt.getTime()) || !isSameDay(createdAt, selectedDate)) {
+        return latest;
+      }
+
+      if (!latest || createdAt > latest) {
+        return createdAt;
+      }
+
+      return latest;
+    }, null);
+  }, [closures, selectedDate]);
+
+  const transactionsSinceLastClosure = useMemo(() => {
+    if (!latestClosureTimestamp) {
+      return transactions;
+    }
+
+    const closureTime = latestClosureTimestamp.getTime();
+
+    return transactions.filter((transaction) => {
+      const candidate = (() => {
+        const { timestamp, createdAt } = transaction as { timestamp?: unknown; createdAt?: unknown };
+
+        if (timestamp instanceof Date) {
+          return timestamp;
+        }
+
+        if (typeof timestamp === "string" || typeof timestamp === "number") {
+          const parsed = new Date(timestamp);
+          if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+          }
+        }
+
+        if (createdAt instanceof Date) {
+          return createdAt;
+        }
+
+        if (typeof createdAt === "string" || typeof createdAt === "number") {
+          const parsed = new Date(createdAt);
+          if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+          }
+        }
+
+        return null;
+      })();
+
+      if (!candidate) {
+        return true;
+      }
+
+      return candidate.getTime() > closureTime;
+    });
+  }, [transactions, latestClosureTimestamp]);
+
+  const cashIncomeTotal = useMemo(() => {
+    const baseTransactions = isToday ? transactionsSinceLastClosure : transactions;
+    let incomeTotal = 0;
+    let expenseTotal = 0;
+
+    baseTransactions.forEach((transaction) => {
+      if (!transaction || (transaction.type !== "INCOME" && transaction.type !== "EXPENSE")) {
         return;
       }
 
@@ -797,28 +942,58 @@ export default function CashRegisterDashboard() {
         return;
       }
 
-      let explicitCash = 0;
+      let explicitAmount = 0;
       let hasExplicitAmount = false;
       cashEntries.forEach((rawValue) => {
         const amount = extractAmountFromMethodEntry(rawValue);
         if (amount !== null) {
-          explicitCash += amount;
+          explicitAmount += amount;
           hasExplicitAmount = true;
         }
       });
 
-      if (hasExplicitAmount) {
-        total += explicitCash;
-        return;
-      }
+      const resolvedAmount = hasExplicitAmount
+        ? explicitAmount
+        : cashEntries.length === methods.length
+          ? Number(transaction.amount ?? 0)
+          : 0;
 
-      if (cashEntries.length === methods.length) {
-        total += Number(transaction.amount ?? 0);
+      if (transaction.type === "INCOME") {
+        incomeTotal += resolvedAmount;
+      } else if (transaction.type === "EXPENSE") {
+        expenseTotal += resolvedAmount;
       }
     });
 
-    return Number(total.toFixed(2));
-  }, [transactions]);
+    const roundedIncome = Number(incomeTotal.toFixed(2));
+    const roundedExpense = Number(expenseTotal.toFixed(2));
+    const openingBalance = Number(initialBalance ?? 0);
+    const expectedCash = openingBalance + roundedIncome - roundedExpense;
+
+    return Number(expectedCash.toFixed(2));
+  }, [transactions, transactionsSinceLastClosure, isToday, initialBalance]);
+
+  const openingBalanceForDisplay = useMemo(() => {
+    if (isSameDay(selectedDate, new Date())) {
+      if (hasCashRegister) {
+        return Number(initialBalance ?? 0);
+      }
+
+      if (dailyClosureInfo) {
+        return Number(dailyClosureInfo.openingBalance ?? 0);
+      }
+
+      return null;
+    }
+
+    if (dailyClosureInfo) {
+      return Number(dailyClosureInfo.openingBalance ?? 0);
+    }
+
+    return null;
+  }, [selectedDate, hasCashRegister, initialBalance, dailyClosureInfo]);
+
+  const closureFormOpeningBalance = Number(initialBalance ?? 0);
 
   const isReportEmpty = reportRows.length === 0
 
@@ -1007,34 +1182,31 @@ export default function CashRegisterDashboard() {
     }
   }
   // -------------------- FUNCIONES --------------------
-  // -------------------- FUNCIONES --------------------
   // Nueva función para recargar balance y transacciones
   const refreshCashData = async () => {
     if (storeId === null) return;
 
     try {
-      const [newBalance, newTransactions] = await Promise.all([
-        getCashRegisterBalance(storeId),
-        getTodayTransactions(storeId)
+      const [activeRegister, newTransactions, closuresResponse] = await Promise.all([
+        getActiveCashRegister(storeId),
+        getTodayTransactions(storeId),
+        getClosuresByStore(storeId),
       ]);
 
-      setBalance(Number(newBalance));
-      const validTransactions = newTransactions.map((transaction: any) => ({
-        id: transaction.id,
-        type: transaction.type, // ⚡ deja el original
-        internalType: transaction.type, // ⚡ crea uno nuevo para cálculos
-        amount: Number(transaction.amount) || 0,
-        timestamp: transaction.createdAt || new Date().toISOString(),
-        employee: transaction.employee || "",
-        description: transaction.description || "",
-        paymentMethods: normalizePaymentMethods(transaction.paymentMethods ?? []),
-        voucher: transaction.voucher || null,
-        invoiceUrl: transaction.invoiceUrl ?? null,
-        clientName: transaction.clientName ?? null,
-        clientDocument: transaction.clientDocument ?? null,
-        clientDocumentType: transaction.clientDocumentType ?? null,
-      }));
+      if (activeRegister) {
+        setActiveCashRegisterId(activeRegister.id);
+        setBalance(Number(activeRegister.currentBalance));
+        setInitialBalance(Number(activeRegister.initialBalance));
+        setHasCashRegister(true);
+      } else {
+        setActiveCashRegisterId(null);
+        setBalance(0);
+        setInitialBalance(0);
+        setHasCashRegister(false);
+      }
 
+      const safeTransactions = Array.isArray(newTransactions) ? newTransactions : [];
+      const validTransactions = safeTransactions.map((transaction: any) => adaptTransaction(transaction));
       const mergedTransactions = mergeSaleTransactions(validTransactions);
 
       const income = mergedTransactions
@@ -1048,6 +1220,11 @@ export default function CashRegisterDashboard() {
       setTransactions(mergedTransactions);
       setTotalIncome(income);
       setTotalExpense(expense);
+
+      const sortedClosures = Array.isArray(closuresResponse)
+        ? sortClosuresByDateDesc(closuresResponse)
+        : [];
+      setClosures(sortedClosures);
 
       console.log("✅ Recalculado totalIncome:", income);
       console.log("✅ Recalculado totalExpense:", expense);
@@ -1096,12 +1273,40 @@ export default function CashRegisterDashboard() {
     setShowOpenCashDialog(true); // abre el diálogo
   };
 
-  const isToday = isSameDay(selectedDate, new Date());
+  useEffect(() => {
+    if (!selectedDate || !Array.isArray(closures) || closures.length === 0) {
+      setDailyClosureInfo(null);
+      return;
+    }
 
-  const [dailyClosureInfo, setDailyClosureInfo] = useState<{
-    openingBalance: number;
-    closingBalance: number;
-  } | null>(null);
+    const closureOfDay = closures.reduce((latest: any | null, closure: any) => {
+      if (!closure || !closure.createdAt) {
+        return latest;
+      }
+
+      const createdAt = new Date(closure.createdAt);
+      if (!isSameDay(createdAt, selectedDate)) {
+        return latest;
+      }
+
+      if (!latest || !latest.createdAt) {
+        return closure;
+      }
+
+      const latestDate = new Date(latest.createdAt);
+      return createdAt > latestDate ? closure : latest;
+    }, null);
+
+    if (!closureOfDay) {
+      setDailyClosureInfo(null);
+      return;
+    }
+
+    setDailyClosureInfo({
+      openingBalance: Number(closureOfDay.openingBalance ?? 0),
+      closingBalance: Number(closureOfDay.closingBalance ?? 0),
+    });
+  }, [closures, selectedDate]);
 
    // -------------------- USE EFFECTS --------------------
 
@@ -1151,11 +1356,14 @@ export default function CashRegisterDashboard() {
       });
 
       getClosuresByStore(storeId)
-      .then(setClosures)
-      .catch((err) => {
-        console.error("Error al obtener cierres:", err);
-        setClosures([]);
-      });
+      .then((data) => {
+          const sorted = Array.isArray(data) ? sortClosuresByDateDesc(data) : [];
+          setClosures(sorted);
+        })
+        .catch((err) => {
+          console.error("Error al obtener cierres:", err);
+          setClosures([]);
+        });
       
       async function fetchBalance(storeId: number) {
         try {
@@ -1187,26 +1395,6 @@ export default function CashRegisterDashboard() {
   const load = async () => {
     try {
       const ymd = ymdLocal(selectedDate); // 👈 día local (Lima)  
-      // CIERRE DEL DÍA (opcional)
-      try {
-        const allClosures = await getClosuresByStore(storeId);
-        if (!cancelled) {
-          const closureOfDay = allClosures.find((c: any) => {
-            const createdYmd = ymdLocal(new Date(c.createdAt));
-            return createdYmd === ymd;
-          });
-          if (closureOfDay) {
-            setDailyClosureInfo({
-              openingBalance: Number(closureOfDay.openingBalance),
-              closingBalance: Number(closureOfDay.closingBalance),
-            });
-          } else {
-            setDailyClosureInfo(null);
-          }
-        }
-      } catch {
-        if (!cancelled) setDailyClosureInfo(null);
-      }
 
       // TRANSACCIONES DEL DÍA
       const timezoneOffsetMinutes = selectedDate.getTimezoneOffset();
@@ -1246,24 +1434,7 @@ export default function CashRegisterDashboard() {
       });
 
       const validTransactions = Array.from(transactionsById.values())
-        .map((t: any) => ({
-          id: t.id,
-          type: t.type,
-          internalType: t.type,
-          amount: Number(t.amount) || 0,
-          timestamp: new Date(t.createdAt),
-          employee: t.employee || "",
-          description: t.description || "",
-          paymentMethods: normalizePaymentMethods(t.paymentMethods ?? []),
-          createdAt: new Date(t.createdAt),
-          userId: t.userId,
-          cashRegisterId: t.cashRegisterId,
-          voucher: t.voucher || null,
-          invoiceUrl: t.invoiceUrl ?? null,
-          clientName: t.clientName ?? null,
-          clientDocument: t.clientDocument ?? null,
-          clientDocumentType: t.clientDocumentType ?? null,
-        }))
+        .map((t: any) => adaptTransaction(t))
         .filter((transaction) => isSameDay(transaction.timestamp, selectedDate));
 
       const merged = mergeSaleTransactions(validTransactions);
@@ -1318,9 +1489,6 @@ export default function CashRegisterDashboard() {
         .catch(() => setActiveCashRegisterId(null));
     }
   }, [storeId]);
-
-  // Calcula el openingBalance
-  const openingBalance = transactions.length > 0 ? transactions[0].amount : 0;
 
   const financialTransactions = transactions.filter(
     (t) => t.internalType === "INCOME" || t.internalType === "EXPENSE"
@@ -1449,9 +1617,9 @@ export default function CashRegisterDashboard() {
                 Dinero en efectivo disponible hoy: {`${paymentMethodSummary.currencySymbol} ${cashIncomeTotal.toFixed(2)}`}
               </div>
             )}
-            {dailyClosureInfo && (
+            {openingBalanceForDisplay !== null && (
               <div className="text-sm text-muted-foreground mt-1">
-                Saldo inicial: S/. {Number(dailyClosureInfo.openingBalance).toFixed(2)}
+                Saldo inicial: S/. {Number(openingBalanceForDisplay).toFixed(2)}
               </div>
             )}
           </CardContent>
@@ -1530,7 +1698,6 @@ export default function CashRegisterDashboard() {
             <CardContent>
             {storeId !== null && userId !== null && activeCashRegisterId !== null && (
               <CashTransferForm
-                onTransfer={() => {}} // opcional si ya no lo necesitas
                 currentBalance={balance}
                 storeId={storeId}
                 refreshData={refreshCashData} // 👈 nuevo
@@ -1553,7 +1720,7 @@ export default function CashRegisterDashboard() {
                 cashRegisterId={activeCashRegisterId} // 👈 id de la tienda/caja (nunca será null porque ya haces validación arriba)
                 userId={userId} // 👈 tienes que obtener el userId del localStorage o sesión
                 currentBalance={balance}
-                openingBalance={openingBalance} // 👈 tienes que calcularlo
+                openingBalance={closureFormOpeningBalance} // 👈 tienes que calcularlo
                 totalIncome={totalIncome} // 👈 tienes que calcularlo
                 totalExpense={totalExpense} // 👈 tienes que calcularlo
                 onClosureCompleted={refreshCashData}
@@ -1610,5 +1777,3 @@ export default function CashRegisterDashboard() {
     </div>
   )
 }
-
-

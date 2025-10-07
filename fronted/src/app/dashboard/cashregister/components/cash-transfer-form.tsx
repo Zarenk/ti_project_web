@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Transaction } from "../types/cash-register"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { createIndependentTransaction, getActiveCashRegister } from "../cashregister.api"; // 👈 Importar nueva función
 import { getUserDataFromToken } from "@/lib/auth";
@@ -17,6 +16,10 @@ import { getUserProfileId } from "../../users/users.api"
 import { PaymentMethodsSelector } from "./uis/PaymentMethodsSelector"
 import { toast } from "sonner"
 
+const paymentMethodSchema = z.object({
+  method: z.string(),
+  amount: z.number(),
+});
 
 const formSchema = z.object({
   type: z.enum(["deposit", "withdrawal"]),
@@ -25,22 +28,21 @@ const formSchema = z.object({
   clientName: z.string().optional(),
   clientDocument: z.string().optional(),
   notes: z.string().optional(),
+  paymentMethods: z.array(paymentMethodSchema).default([]),
 });
 
 type FormValues = z.infer<typeof formSchema>
 
 interface CashTransferFormProps {
-  onTransfer?: (transaction: Transaction) => void
   currentBalance: number
   storeId: number | null; // Agregar storeId como prop
   refreshData: () => void
 }
 
-export default function CashTransferForm({ onTransfer, currentBalance, storeId, refreshData }: CashTransferFormProps) {
+export default function CashTransferForm({ currentBalance, storeId, refreshData }: CashTransferFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [employeeName, setEmployeeName] = useState('');
   const [cashRegisterId, setCashRegisterId] = useState<number | null>(null);
-  const [paymentMethods, setPaymentMethods] = useState<{ method: string; amount: number }[]>([]);
   const [userId, setUserId] = useState<number | null>(null);
 
   const form = useForm<FormValues>({
@@ -52,8 +54,11 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
       clientName: "",
       clientDocument: "",
       notes: "",
+      paymentMethods: [],
     },
   })
+
+  const amountValue = form.watch("amount")
 
   useEffect(() => {
     async function fetchUserProfile() {
@@ -97,6 +102,7 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
 
   const onSubmit = async (values: FormValues) => {
 
+    const paymentMethods = form.getValues("paymentMethods") ?? [];
     setIsSubmitting(true);
 
     // Verificar que el monto sea mayor a 0
@@ -171,21 +177,23 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
       await createIndependentTransaction(payload);
       toast.success("Transacción registrada exitosamente!");
   
+      const currentType = form.getValues("type");
       form.reset({
-        type: form.getValues("type"),
+        type: currentType,
         amount: 0,
         employee: "",
         clientName: "",
         clientDocument: "",
         notes: "",
+        paymentMethods: [],
       });
 
       refreshData(); // 👈
 
-      setPaymentMethods([]); // 🔥 Limpiamos también los métodos de pago
-
-    } catch (error: any) {
-      console.error("Error al registrar la transacción:", error.message || error);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Ocurrió un error inesperado al registrar la transacción.";
+      console.error("Error al registrar la transacción:", message);
     }
   
     setIsSubmitting(false);
@@ -249,7 +257,7 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
 
           <FormField
             name="employee"
-            render={({ field }) => (
+            render={() => (
               <FormItem>
                 <FormLabel>Encargado</FormLabel>
                 <FormControl>
@@ -290,13 +298,15 @@ export default function CashTransferForm({ onTransfer, currentBalance, storeId, 
           />
 
           <FormField
+            control={form.control}
             name="paymentMethods"
-            render={() => (
+            render={({ field }) => (
               <FormItem>
                 <FormLabel>Métodos de Pago</FormLabel>
                 <PaymentMethodsSelector
-                  value={paymentMethods}
-                  onChange={(updated) => setPaymentMethods(updated)}
+                  value={field.value ?? []}
+                  onChange={(updated) => field.onChange(updated)}
+                  initialAmount={amountValue}
                 />
               </FormItem>
             )}

@@ -123,7 +123,10 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [loadingStores, setLoadingStores] = useState(true);
 
   // MODAL DE PRODUCTOS
-  const [categoriess, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [categoriesState, setCategories] = useState<{ id: number; name: string }[]>(categories ?? []);
+  useEffect(() => {
+    setCategories(categories ?? []);
+  }, [categories]);
   const [isDialogOpenProduct, setIsDialogOpenProduct] = useState(false);
   // Estado adicional para manejar el checkbox
   const [isNewCategoryBoolean, setIsNewCategoryBoolean] = useState(false);
@@ -527,7 +530,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
         selectedProducts,
         isNewInvoiceBoolean,
         validateSeriesBeforeSubmit,
-        categories,
+        categories: categoriesState,
         pdfFile,
         pdfGuiaFile,
         router,
@@ -571,7 +574,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       }
     } else {
       // Encuentra el nombre de la categoría correspondiente
-      const category = categories.find(
+      const category = categoriesState.find(
         (cat: any) => cat.id === currentProduct.categoryId
       );
       categoryName = category?.name || "Sin categoría";
@@ -886,7 +889,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       value={value}
                       setValueProduct={setValueProduct}
                       products={products}
-                      categories={categories}
+                      categories={categoriesState}
                       setProducts={setProducts}
                       setCategories={setCategories}
                       currentProduct={currentProduct}
@@ -918,7 +921,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setOpenSeriesModal={setOpenSeriesModal}
                       getAllSeriesFromDataTable={getAllSeriesFromDataTable}
                       removeProduct={removeProduct}
-                      categories={categories}
+                      categories={categoriesState}
                     />
 
                     {selectedProducts.length > 0 && (

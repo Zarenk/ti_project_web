@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -22,14 +22,20 @@ type SelectedPayment = {
 
 type TempPayment = SelectedPayment & { uid: string };
 
+const DEFAULT_PAYMENT_METHODS: PaymentMethod[] = [
+  { id: -1, name: "EN EFECTIVO" },
+  { id: -2, name: "TRANSFERENCIA" },
+  { id: -3, name: "PAGO CON VISA" },
+  { id: -4, name: "YAPE" },
+  { id: -5, name: "PLIN" },
+  { id: -6, name: "OTRO MEDIO DE PAGO" },
+];
+
 interface PaymentMethodsSelectorProps {
   value: SelectedPayment[];
   onChange: (payments: SelectedPayment[]) => void;
+  initialAmount?: number;
 }
-
-// Firma para comparar arrays sin uid (método + monto)
-const signatureOf = (arr: readonly { method: string; amount: number }[]) =>
-  JSON.stringify(arr.map(p => [p.method, Number(p.amount)]));
 
 const generateUid = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -43,92 +49,76 @@ const arePaymentsEqual = (current: TempPayment[], external: SelectedPayment[]) =
     return ext && payment.method === ext.method && Number(payment.amount) === Number(ext.amount);
   });
 
-export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelectorProps) {
+export function PaymentMethodsSelector({ value, onChange, initialAmount = 0 }: PaymentMethodsSelectorProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [tempPayments, setTempPayments] = useState<TempPayment[]>([]);
-  const lastEmittedSigRef = useRef<string>(""); // <- NUEVO
-
-  // === EMISIÓN INMEDIATA EN HANDLERS (no en useEffect) ===
-  const emitToParent = useCallback((next: TempPayment[]) => {
-    const payload = next.map(({ uid, ...rest }) => rest);
-    lastEmittedSigRef.current = signatureOf(payload);
-    onChange(payload);
-  }, [onChange]);
-
-  const defaultPaymentMethods: PaymentMethod[] = [
-    { id: -1, name: "EN EFECTIVO" },
-    { id: -2, name: "TRANSFERENCIA" },
-    { id: -3, name: "PAGO CON VISA" },
-    { id: -4, name: "YAPE" },
-    { id: -5, name: "PLIN" },
-    { id: -6, name: "OTRO MEDIO DE PAGO" },
-  ];
+  const externalSyncRef = useRef(false);
 
   useEffect(() => {
-    async function fetchMethods() {
-      const methodsFromBackend = await getPaymentMethods();
-      const combined = [...defaultPaymentMethods, ...methodsFromBackend];
+      async function fetchMethods() {
+        const methodsFromBackend = await getPaymentMethods();
+        const combined = [...DEFAULT_PAYMENT_METHODS, ...methodsFromBackend];
 
-      const uniqueMethodsMap = new Map<string, PaymentMethod>();
-      for (const method of combined) {
-        if (!uniqueMethodsMap.has(method.name)) {
-          uniqueMethodsMap.set(method.name, method);
+  const uniqueMethodsMap = new Map<string, PaymentMethod>();
+        for (const method of combined) {
+          if (!uniqueMethodsMap.has(method.name)) {
+            uniqueMethodsMap.set(method.name, method);
+          }
         }
+        setPaymentMethods(Array.from(uniqueMethodsMap.values()));
       }
-      setPaymentMethods(Array.from(uniqueMethodsMap.values()));
-    }
-    fetchMethods();
-  }, []);
+      fetchMethods();
+    }, []);
 
-  // Sincroniza desde el padre hacia el estado local preservando uid cuando el item equivale
   useEffect(() => {
     setTempPayments((prev) => {
       if (arePaymentsEqual(prev, value)) {
         return prev;
       }
-      return value.map((payment, i) => {
-        const p = prev[i];
-        const same =
-          p &&
-          p.method === payment.method &&
-          Number(p.amount) === Number(payment.amount);
-        return same ? p : { ...payment, uid: generateUid() };
+
+      externalSyncRef.current = true;
+
+      return value.map((payment, index) => {
+        const previous = prev[index];
+        const shouldReuseUid =
+          previous &&
+          previous.method === payment.method &&
+          Number(previous.amount) === Number(payment.amount);
+
+        return {
+          uid: shouldReuseUid ? previous.uid : generateUid(),
+          method: payment.method,
+          amount: Number(payment.amount) || 0,
+        };
       });
     });
   }, [value]);
 
-  // Reemplaza tu syncAndSetPayments para emitir en el mismo tick:
+  useEffect(() => {
+    if (externalSyncRef.current) {
+      externalSyncRef.current = false;
+      return;
+    }
+
+    if (arePaymentsEqual(tempPayments, value)) {
+      return;
+    }
+
+    onChange(
+      tempPayments.map(({ method, amount }) => ({
+        method,
+        amount: Number(amount) || 0,
+      }))
+    );
+  }, [tempPayments, value, onChange]);
+
+  // Reemplaza tu syncAndSetPayments para encapsular la mutación local
   const syncAndSetPayments = (updater: (prev: TempPayment[]) => TempPayment[]) => {
     setTempPayments(prev => {
       const next = updater(prev);
-      if (!arePaymentsEqual(next, value)) {
-        emitToParent(next); // <- emite aquí, no en un useEffect aparte
-      }
       return next;
     });
   };
-
-  // Emite cambios al padre POST-render (evita "Cannot update a component while rendering a different component")
-  useEffect(() => {
-    if (!arePaymentsEqual(tempPayments, value)) {
-      onChange(tempPayments.map(({ uid, ...rest }) => rest));
-    }
-  }, [tempPayments, value, onChange]);
-
-  // === SYNC DESDE PROPS, PERO IGNORANDO EL "ECO" QUE ACABAMOS DE ENVIAR ===
-  useEffect(() => {
-    // Si lo que llega del padre es exactamente lo último que emitimos, no resetees el local
-    if (signatureOf(value) === lastEmittedSigRef.current) return;
-
-    setTempPayments(prev => {
-      if (arePaymentsEqual(prev, value)) return prev;
-      return value.map((payment, i) => {
-        const p = prev[i];
-        const same = p && p.method === payment.method && Number(p.amount) === Number(payment.amount);
-        return same ? p : { ...payment, uid: generateUid() };
-      });
-    });
-  }, [value]);
 
   const handleAddPayment = () => {
     if (paymentMethods.length === 0) return;
@@ -139,7 +129,8 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     }
 
     const isFirstPayment = tempPayments.length === 0;
-    const formAmount = Number(document.querySelector<HTMLInputElement>('input[name="amount"]')?.value || 0);
+    const formAmount = Number(initialAmount ?? 0);
+    const normalizedFormAmount = Number.isFinite(formAmount) ? formAmount : 0;
 
     syncAndSetPayments((prev) => {
       const usedMethods = new Set(prev.map((payment) => payment.method));
@@ -155,7 +146,7 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
         {
           uid: generateUid(),
           method: selectedMethod.name,
-          amount: isFirstPayment ? formAmount : 0, // Seteamos el primer monto
+          amount: isFirstPayment ? normalizedFormAmount : 0, // Seteamos el primer monto
         },
       ];
 
@@ -163,13 +154,20 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
     });
   };
 
-  const handleUpdatePayment = (index: number, field: keyof SelectedPayment, val: any) => {
+  const handleUpdatePayment = <K extends keyof SelectedPayment>(
+    index: number,
+    field: K,
+    val: SelectedPayment[K],
+  ) => {
     syncAndSetPayments((prev) => {
       const updated = [...prev];
       const current = updated[index];
       if (!current) return prev;
 
-      const nextValue = field === "amount" ? (val === "" ? 0 : Number(val)) : val;
+      const nextValue =
+        field === "amount"
+          ? (typeof val === "number" ? val : Number(val))
+          : val;
 
       if (current[field] === nextValue) {
         return prev;
@@ -218,7 +216,7 @@ export function PaymentMethodsSelector({ value, onChange }: PaymentMethodsSelect
           <motion.div
             key={payment.uid}
             layout // <- ayuda a transiciones suaves al agregar/eliminar
-            initial={{ opacity: 0, scale: 0.95, x: -20 }}
+            initial={false}
             animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={{ opacity: 0, scale: 0.95, x: 20 }}
             transition={{ duration: 0.3 }}
