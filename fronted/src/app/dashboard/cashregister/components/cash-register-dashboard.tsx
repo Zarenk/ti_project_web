@@ -854,12 +854,12 @@ export default function CashRegisterDashboard() {
   }, [transactions, latestClosureTimestamp]);
 
   const cashIncomeTotal = useMemo(() => {
-    let total = 0;
-
     const baseTransactions = isToday ? transactionsSinceLastClosure : transactions;
+    let incomeTotal = 0;
+    let expenseTotal = 0;
 
     baseTransactions.forEach((transaction) => {
-      if (!transaction || transaction.type !== "INCOME") {
+      if (!transaction || (transaction.type !== "INCOME" && transaction.type !== "EXPENSE")) {
         return;
       }
 
@@ -875,28 +875,36 @@ export default function CashRegisterDashboard() {
         return;
       }
 
-      let explicitCash = 0;
+      let explicitAmount = 0;
       let hasExplicitAmount = false;
       cashEntries.forEach((rawValue) => {
         const amount = extractAmountFromMethodEntry(rawValue);
         if (amount !== null) {
-          explicitCash += amount;
+          explicitAmount += amount;
           hasExplicitAmount = true;
         }
       });
 
-      if (hasExplicitAmount) {
-        total += explicitCash;
-        return;
-      }
+      const resolvedAmount = hasExplicitAmount
+        ? explicitAmount
+        : cashEntries.length === methods.length
+          ? Number(transaction.amount ?? 0)
+          : 0;
 
-      if (cashEntries.length === methods.length) {
-        total += Number(transaction.amount ?? 0);
+      if (transaction.type === "INCOME") {
+        incomeTotal += resolvedAmount;
+      } else if (transaction.type === "EXPENSE") {
+        expenseTotal += resolvedAmount;
       }
     });
 
-    return Number(total.toFixed(2));
-  }, [transactions, transactionsSinceLastClosure, isToday]);
+    const roundedIncome = Number(incomeTotal.toFixed(2));
+    const roundedExpense = Number(expenseTotal.toFixed(2));
+    const openingBalance = Number(initialBalance ?? 0);
+    const expectedCash = openingBalance + roundedIncome - roundedExpense;
+
+    return Number(expectedCash.toFixed(2));
+  }, [transactions, transactionsSinceLastClosure, isToday, initialBalance]);
 
   const isReportEmpty = reportRows.length === 0
 
@@ -1085,19 +1093,32 @@ export default function CashRegisterDashboard() {
     }
   }
   // -------------------- FUNCIONES --------------------
-  // -------------------- FUNCIONES --------------------
   // Nueva función para recargar balance y transacciones
   const refreshCashData = async () => {
     if (storeId === null) return;
 
     try {
-      const [newBalance, newTransactions] = await Promise.all([
-        getCashRegisterBalance(storeId),
-        getTodayTransactions(storeId)
+      const [activeRegister, newTransactions, closuresResponse] = await Promise.all([
+        getActiveCashRegister(storeId),
+        getTodayTransactions(storeId),
+        getClosuresByStore(storeId),
       ]);
 
-      setBalance(Number(newBalance));
-      const validTransactions = newTransactions.map((transaction: any) => ({
+      if (activeRegister) {
+        setActiveCashRegisterId(activeRegister.id);
+        setBalance(Number(activeRegister.currentBalance));
+        setInitialBalance(Number(activeRegister.initialBalance));
+        setHasCashRegister(true);
+      } else {
+        setActiveCashRegisterId(null);
+        setBalance(0);
+        setInitialBalance(0);
+        setHasCashRegister(false);
+      }
+
+      const safeTransactions = Array.isArray(newTransactions) ? newTransactions : [];
+
+      const validTransactions = safeTransactions.map((transaction: any) => ({
         id: transaction.id,
         type: transaction.type, // ⚡ deja el original
         internalType: transaction.type, // ⚡ crea uno nuevo para cálculos
@@ -1111,6 +1132,9 @@ export default function CashRegisterDashboard() {
         clientName: transaction.clientName ?? null,
         clientDocument: transaction.clientDocument ?? null,
         clientDocumentType: transaction.clientDocumentType ?? null,
+        cashRegisterId: transaction.cashRegisterId ?? null,
+        createdAt: transaction.createdAt ?? new Date().toISOString(),
+        userId: transaction.userId ?? null,
       }));
 
       const mergedTransactions = mergeSaleTransactions(validTransactions);
@@ -1126,6 +1150,11 @@ export default function CashRegisterDashboard() {
       setTransactions(mergedTransactions);
       setTotalIncome(income);
       setTotalExpense(expense);
+
+      const sortedClosures = Array.isArray(closuresResponse)
+        ? sortClosuresByDateDesc(closuresResponse)
+        : [];
+      setClosures(sortedClosures);
 
       console.log("✅ Recalculado totalIncome:", income);
       console.log("✅ Recalculado totalExpense:", expense);
@@ -1178,6 +1207,41 @@ export default function CashRegisterDashboard() {
     openingBalance: number;
     closingBalance: number;
   } | null>(null);
+
+  useEffect(() => {
+    if (!selectedDate || !Array.isArray(closures) || closures.length === 0) {
+      setDailyClosureInfo(null);
+      return;
+    }
+
+    const closureOfDay = closures.reduce((latest: any | null, closure: any) => {
+      if (!closure || !closure.createdAt) {
+        return latest;
+      }
+
+      const createdAt = new Date(closure.createdAt);
+      if (!isSameDay(createdAt, selectedDate)) {
+        return latest;
+      }
+
+      if (!latest || !latest.createdAt) {
+        return closure;
+      }
+
+      const latestDate = new Date(latest.createdAt);
+      return createdAt > latestDate ? closure : latest;
+    }, null);
+
+    if (!closureOfDay) {
+      setDailyClosureInfo(null);
+      return;
+    }
+
+    setDailyClosureInfo({
+      openingBalance: Number(closureOfDay.openingBalance ?? 0),
+      closingBalance: Number(closureOfDay.closingBalance ?? 0),
+    });
+  }, [closures, selectedDate]);
 
    // -------------------- USE EFFECTS --------------------
 
@@ -1266,40 +1330,6 @@ export default function CashRegisterDashboard() {
   const load = async () => {
     try {
       const ymd = ymdLocal(selectedDate); // 👈 día local (Lima)  
-      // CIERRE DEL DÍA (opcional)
-      try {
-        const allClosures = await getClosuresByStore(storeId);
-        if (!cancelled) {
-          const closuresList = Array.isArray(allClosures) ? allClosures : [];
-          const closureOfDay = closuresList.reduce((latest: any | null, closure: any) => {
-            if (!closure || !closure.createdAt) {
-              return latest;
-            }
-
-            const createdAt = new Date(closure.createdAt);
-            if (!isSameDay(createdAt, selectedDate)) {
-              return latest;
-            }
-
-            if (!latest || !latest.createdAt) {
-              return closure;
-            }
-
-            const latestDate = new Date(latest.createdAt);
-            return createdAt > latestDate ? closure : latest;
-          }, null);
-          if (closureOfDay) {
-            setDailyClosureInfo({
-              openingBalance: Number(closureOfDay.openingBalance),
-              closingBalance: Number(closureOfDay.closingBalance),
-            });
-          } else {
-            setDailyClosureInfo(null);
-          }
-        }
-      } catch {
-        if (!cancelled) setDailyClosureInfo(null);
-      }
 
       // TRANSACCIONES DEL DÍA
       const timezoneOffsetMinutes = selectedDate.getTimezoneOffset();
