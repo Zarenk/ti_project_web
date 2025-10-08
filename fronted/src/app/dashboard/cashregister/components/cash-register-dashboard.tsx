@@ -334,6 +334,24 @@ const extractAmountFromMethodEntry = (value: string): number | null => {
   return Number.isFinite(amount) ? amount : null;
 };
 
+const resolveSignedAmount = (rawAmount: number, entryType?: string | null) => {
+  if (!Number.isFinite(rawAmount)) {
+    return 0;
+  }
+
+  if ((entryType ?? "").toUpperCase() === "EXPENSE") {
+    return rawAmount < 0 ? rawAmount : -rawAmount;
+  }
+
+  return rawAmount;
+};
+
+const formatSignedCurrency = (amount: number, currencySymbol: string) => {
+  const resolvedCurrency = (currencySymbol ?? "S/.").trim() || "S/.";
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const formatted = `${resolvedCurrency} ${Math.abs(safeAmount).toFixed(2)}`;
+  return safeAmount < 0 ? `- ${formatted}` : formatted;
+};
 
 const isCashPaymentMethod = (value: string) => {
   const normalized = normalizeWhitespace(value).toLowerCase();
@@ -762,7 +780,9 @@ export default function CashRegisterDashboard() {
       const hasValidDate = rawDate instanceof Date && !Number.isNaN(rawDate.getTime())
       const formattedDate = hasValidDate && rawDate ? format(rawDate, "dd/MM/yyyy HH:mm:ss") : "-"
       const currencySymbol = (transaction.currency ?? "S/.").trim()
-      const amountDisplay = `${currencySymbol} ${Number(transaction.amount ?? 0).toFixed(2)}`
+      const entryType = transaction.internalType ?? transaction.type
+      const signedAmount = resolveSignedAmount(Number(transaction.amount ?? 0), entryType)
+      const amountDisplay = formatSignedCurrency(signedAmount, currencySymbol)
       const paymentMethods = transaction.paymentMethods && transaction.paymentMethods.length > 0
         ? transaction.paymentMethods.join(" | ")
         : "-"
@@ -813,7 +833,12 @@ export default function CashRegisterDashboard() {
     let resolvedCurrency = "S/.";
 
     transactions.forEach((transaction) => {
-      if (!transaction || transaction.type !== "INCOME") {
+      if (!transaction) {
+        return;
+      }
+
+      const entryType = transaction.internalType ?? transaction.type;
+      if (entryType !== "INCOME" && entryType !== "EXPENSE") {
         return;
       }
 
@@ -827,9 +852,11 @@ export default function CashRegisterDashboard() {
       }
 
       const totalAmount = Number(transaction.amount ?? 0);
-      if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+      if (!Number.isFinite(totalAmount) || totalAmount === 0) {
         return;
       }
+
+      const signedTotalAmount = resolveSignedAmount(totalAmount, entryType);
 
       const methods = Array.isArray(transaction.paymentMethods) ? transaction.paymentMethods : [];
       if (methods.length === 0) {
@@ -852,17 +879,32 @@ export default function CashRegisterDashboard() {
       }
 
       let assignedAmount = 0;
-      entries.forEach((entry) => {
-        if (entry.amount !== null) {
-          totals[entry.key] += entry.amount;
-          assignedAmount += entry.amount;
+      const applySignedAmount = (value: number): number => {
+        if (!Number.isFinite(value)) {
+          return 0;
         }
+        if (value === 0) {
+          return 0;
+        }
+        if (value < 0) {
+          return value;
+        }
+        return signedTotalAmount < 0 ? -value : value;
+      };
+
+      entries.forEach((entry) => {
+        if (entry.amount === null) {
+          return;
+        }
+        const normalizedAmount = applySignedAmount(entry.amount);
+        totals[entry.key] += normalizedAmount;
+        assignedAmount += normalizedAmount;
       });
 
       const fallbackEntries = entries.filter((entry) => entry.amount === null);
-      const remaining = Number((totalAmount - assignedAmount).toFixed(2));
+      const remaining = Number((signedTotalAmount - assignedAmount).toFixed(2));
 
-      if (remaining > 0 && fallbackEntries.length === 1) {
+      if (remaining !== 0 && fallbackEntries.length === 1) {
         totals[fallbackEntries[0].key] += remaining;
       }
     });
@@ -1061,7 +1103,7 @@ export default function CashRegisterDashboard() {
 
     const summaryTableRows = paymentMethodSummary.rows
       .map((row) => {
-        const amountDisplay = `${paymentMethodSummary.currencySymbol} ${row.amount.toFixed(2)}`
+        const amountDisplay = formatSignedCurrency(row.amount, paymentMethodSummary.currencySymbol)
         return `
           <tr>
             <td style="padding:6px;border:1px solid #dddddd;">${escapeHtml(row.label)}</td>
@@ -1071,7 +1113,10 @@ export default function CashRegisterDashboard() {
       })
       .join("")
 
-    const summaryTotalDisplay = `${paymentMethodSummary.currencySymbol} ${paymentMethodSummary.total.toFixed(2)}`
+    const summaryTotalDisplay = formatSignedCurrency(
+      paymentMethodSummary.total,
+      paymentMethodSummary.currencySymbol,
+    )
     const summaryTotalRow = `
       <tr>
         <td style="padding:6px;border:1px solid #dddddd;font-weight:bold;">Total</td>
@@ -1203,14 +1248,14 @@ export default function CashRegisterDashboard() {
                 <View key={row.method} style={pdfStyles.summaryRow}>
                   <Text style={pdfStyles.summaryLabel}>{row.label}</Text>
                   <Text style={pdfStyles.summaryAmount}>
-                    {`${paymentMethodSummary.currencySymbol} ${row.amount.toFixed(2)}`}
+                    {formatSignedCurrency(row.amount, paymentMethodSummary.currencySymbol)}
                   </Text>
                 </View>
               ))}
               <View style={pdfStyles.summaryTotalRow}>
                 <Text style={pdfStyles.summaryTotalLabel}>Total</Text>
                 <Text style={pdfStyles.summaryTotalAmount}>
-                  {`${paymentMethodSummary.currencySymbol} ${paymentMethodSummary.total.toFixed(2)}`}
+                  {formatSignedCurrency(paymentMethodSummary.total, paymentMethodSummary.currencySymbol)}
                 </Text>
               </View>
             </View>
