@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getStores } from "../../stores/stores.api";
@@ -54,6 +54,74 @@ export default function ProductsByStorePage() {
       ? "Todas las marcas"
       : brands.find((brand) => brand.id === selectedBrand)?.name || "Selecciona una Marca"
 
+  const filtersQuery = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (debouncedSelectedCategory && debouncedSelectedCategory !== 0) {
+      params.append("categoryId", debouncedSelectedCategory.toString());
+    }
+
+    if (debouncedSelectedBrand && debouncedSelectedBrand !== 0) {
+      params.append("brandId", debouncedSelectedBrand.toString());
+    }
+
+    const normalizedSearch = debouncedSearchTerm.trim();
+    if (normalizedSearch.length > 0) {
+      params.append("search", normalizedSearch);
+    }
+
+    if (withStockOnly) {
+      params.append("withStockOnly", "true");
+    }
+
+    return params.toString();
+  }, [debouncedSelectedBrand, debouncedSearchTerm, debouncedSelectedCategory, withStockOnly]);
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      selectedStore !== null ||
+      (selectedCategory !== null && selectedCategory !== 0) ||
+      (selectedBrand !== null && selectedBrand !== 0) ||
+      searchTerm.trim().length > 0 ||
+      withStockOnly
+    );
+  }, [selectedBrand, searchTerm, selectedCategory, selectedStore, withStockOnly]);
+
+  const handleExport = useCallback(() => {
+    if (selectedStore === null || isExporting) {
+      return;
+    }
+
+    toast.info("Generando archivo Excel...");
+    setIsExporting(true);
+
+    setTimeout(() => {
+      exportInventoryExcel({
+        storeId: selectedStore,
+        categoryId: selectedCategory ?? undefined,
+        brandId: selectedBrand ?? undefined,
+        search: searchTerm.trim(),
+        withStockOnly,
+      });
+      setIsExporting(false);
+    }, 800);
+  }, [isExporting, searchTerm, selectedBrand, selectedCategory, selectedStore, withStockOnly]);
+
+  const handleClearFilters = useCallback(() => {
+    setSelectedStore(null);
+    setSelectedCategory(null);
+    setSelectedBrand(null);
+    setSearchTerm("");
+    setWithStockOnly(false);
+    setCurrentPage(1);
+    setProducts([]);
+    setFilteredProducts([]);
+    setTotalItems(0);
+    setTotalInventoryValue(0);
+    setOpen(false);
+    setBrandOpen(false);
+  }, []);
+
   useEffect(() => {
     async function fetchStores() {
       try {
@@ -70,24 +138,24 @@ export default function ProductsByStorePage() {
     if (debouncedSelectedStore !== null) {
       async function fetchProducts() {
         try {
-          const queryParams = new URLSearchParams();
-          if (debouncedSelectedCategory && debouncedSelectedCategory !== 0) {
-            queryParams.append("categoryId", debouncedSelectedCategory.toString());
-          }
-           
           const data = withStockOnly
-            ? await getProductsByStore(debouncedSelectedStore ?? 0, queryParams.toString())
-            : await getAllProductsByStore(debouncedSelectedStore ?? 0, queryParams.toString());
+            ? await getProductsByStore(debouncedSelectedStore ?? 0, filtersQuery)
+            : await getAllProductsByStore(debouncedSelectedStore ?? 0, filtersQuery);
   
           setProducts(data);
         } catch (error) {
           console.error("Error al obtener los productos:", error);
         }
       }
-  
       fetchProducts();
+      } else {
+      setProducts([]);
     }
-  }, [debouncedSelectedStore, debouncedSelectedCategory, withStockOnly]);
+  }, [debouncedSelectedStore, filtersQuery, withStockOnly]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtersQuery, debouncedSelectedStore]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -96,13 +164,8 @@ export default function ProductsByStorePage() {
   
       if (isShortcut) {
         event.preventDefault();
-        if (selectedStore && !isExporting) {
-          toast.info("Generando archivo Excel...");
-          setIsExporting(true);
-          setTimeout(() => {
-            exportInventoryExcel(selectedStore, selectedCategory ?? undefined);
-            setIsExporting(false);
-          }, 800);
+        if (selectedStore !== null && !isExporting) {
+          handleExport();
         }
       }
     };
@@ -111,7 +174,7 @@ export default function ProductsByStorePage() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedStore, selectedCategory, isExporting]);
+  }, [handleExport, isExporting, selectedStore]);
 
   useEffect(() => {
     async function fetchCategories() {
@@ -210,51 +273,57 @@ export default function ProductsByStorePage() {
     <Card className="p-6 w-full max-w-full sm:max-w-3xl md:max-w-5xl lg:max-w-6xl mx-auto shadow-md">
       <h1 className="text-2xl font-semibold mb-6">📦 Productos por Tienda</h1>
 
-      <TooltipProvider delayDuration={500}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              onClick={() => {
-                if (selectedStore) {
-                  toast.info("Generando archivo Excel...");
-                  setIsExporting(true);
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <TooltipProvider delayDuration={500}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleExport}
+                  disabled={selectedStore === null || isExporting}
+                  style={{ touchAction: 'manipulation' }}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {isExporting ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generando...
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4" />
+                      Exportar a Excel
+                    </div>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                Descargar inventario en Excel
+              </TooltipContent>
+            </Tooltip>
+            <p className="hidden sm:block text-xs text-muted-foreground">
+              Atajo: <kbd className="bg-muted px-1 py-0.5 rounded border text-[11px]">Ctrl</kbd> + <kbd className="bg-muted px-1 py-0.5 rounded border text-[11px]">E</kbd>
+            </p>
+          </div>
+        </TooltipProvider>
 
-                  setTimeout(() => {
-                    exportInventoryExcel(selectedStore, selectedCategory ?? undefined);
-                    setIsExporting(false);
-                  }, 800);
-                }
-              }}
-              disabled={!selectedStore || isExporting}
-              style={{ touchAction: 'manipulation' }}
-              className="bg-green-600 hover:bg-green-700 text-white ml-auto"
-            >
-              {isExporting ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Generando...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <FileSpreadsheet className="h-4 w-4" />
-                  Exportar a Excel
-                </div>
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            Descargar inventario en Excel
-          </TooltipContent>
-        </Tooltip>
-        <p className="hidden sm:block text-xs text-muted-foreground mt-1 ml-auto">
-          Atajo: <kbd className="bg-muted px-1 py-0.5 rounded border text-[11px]">Ctrl</kbd> + <kbd className="bg-muted px-1 py-0.5 rounded border text-[11px]">E</kbd>
-        </p>
-      </TooltipProvider>
+        <Button
+          variant="outline"
+          onClick={handleClearFilters}
+          disabled={!hasActiveFilters}
+          className="w-full sm:w-auto"
+        >
+          Limpiar filtros
+        </Button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="flex-1 mb-3 sm:mb-0">
           <label className="block mb-1 text-sm font-medium">Selecciona una tienda</label>
-          <Select onValueChange={(value) => setSelectedStore(Number(value))}>
+          <Select
+            value={selectedStore !== null ? selectedStore.toString() : undefined}
+            onValueChange={(value) => setSelectedStore(Number(value))}
+          >
             <SelectTrigger className="w-full h-10 text-sm border-gray-300 shadow-sm">
               <SelectValue placeholder="Selecciona una tienda" />
             </SelectTrigger>

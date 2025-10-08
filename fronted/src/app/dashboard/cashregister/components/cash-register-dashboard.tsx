@@ -234,6 +234,88 @@ const sortClosuresByDateDesc = <T extends { createdAt?: string | Date }>(values:
     return bTime - aTime;
   });
 
+const normalizeClosureId = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    if (value.startsWith("closure-")) {
+      return value;
+    }
+    return value.length > 0 ? `closure-${value}` : null;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return `closure-${value}`;
+  }
+
+  return null;
+};
+
+const resolveLatestClosureOverride = (
+  activeRegister: { initialBalance?: unknown } | null,
+  closuresList: any[],
+): { amount: number | null; transactionId: string | null } => {
+  if (!activeRegister || !Array.isArray(closuresList) || closuresList.length === 0) {
+    return { amount: null, transactionId: null };
+  }
+
+  const parsedInitial = Number(activeRegister.initialBalance);
+  if (!Number.isFinite(parsedInitial)) {
+    return { amount: null, transactionId: null };
+  }
+
+  const normalizedAmount = Number(parsedInitial.toFixed(2));
+  const latestClosureId = normalizeClosureId(closuresList[0]?.id);
+
+  if (!latestClosureId) {
+    return { amount: null, transactionId: null };
+  }
+
+  return { amount: normalizedAmount, transactionId: latestClosureId };
+};
+
+const withLatestClosureOverride = <T extends { id?: any; openingBalance?: any }>(
+  closuresList: T[],
+  overrideAmount: number | null,
+): T[] => {
+  if (overrideAmount === null) {
+    return closuresList;
+  }
+
+  return closuresList.map((closure, index) => {
+    if (index === 0) {
+      return {
+        ...closure,
+        openingBalance: overrideAmount,
+      };
+    }
+    return closure;
+  });
+};
+
+const withClosureTransactionOverride = (
+  transactions: Transaction[],
+  overrideAmount: number | null,
+  targetClosureId: string | null,
+): Transaction[] => {
+  if (overrideAmount === null || !targetClosureId) {
+    return transactions;
+  }
+
+  return transactions.map((transaction) => {
+    const entryType = transaction.internalType ?? transaction.type;
+    if (entryType === "CLOSURE" && transaction.id === targetClosureId) {
+      return {
+        ...transaction,
+        openingBalance: overrideAmount,
+      };
+    }
+    return transaction;
+  });
+};
+
 const extractPaymentMethodsFromText = (value?: string | null) => {
   if (!value) {
     return [] as string[];
@@ -1300,22 +1382,32 @@ export default function CashRegisterDashboard() {
       const validTransactions = safeTransactions.map((transaction: any) => adaptTransaction(transaction));
       const mergedTransactions = mergeSaleTransactions(validTransactions);
 
-      const income = mergedTransactions
+      const sortedClosuresRaw = Array.isArray(closuresResponse)
+        ? sortClosuresByDateDesc(closuresResponse)
+        : [];
+      const { amount: latestClosureOverride, transactionId: latestClosureTransactionId } =
+        resolveLatestClosureOverride(activeRegister, sortedClosuresRaw);
+      const closuresWithOverride = withLatestClosureOverride(sortedClosuresRaw, latestClosureOverride);
+
+      const transactionsWithOverride = withClosureTransactionOverride(
+        mergedTransactions,
+        latestClosureOverride,
+        latestClosureTransactionId,
+      );
+
+      const income = transactionsWithOverride
         .filter((t: any) => t.internalType === "INCOME")
         .reduce((sum: any, t: any) => sum + t.amount, 0);
 
-      const expense = mergedTransactions
+      const expense = transactionsWithOverride
         .filter((t: any) => t.internalType === "EXPENSE")
         .reduce((sum: any, t: any) => sum + t.amount, 0);
 
-      setTransactions(mergedTransactions);
+      setTransactions(transactionsWithOverride);
       setTotalIncome(income);
       setTotalExpense(expense);
 
-      const sortedClosures = Array.isArray(closuresResponse)
-        ? sortClosuresByDateDesc(closuresResponse)
-        : [];
-      setClosures(sortedClosures);
+      setClosures(closuresWithOverride);
 
       console.log("✅ Recalculado totalIncome:", income);
       console.log("✅ Recalculado totalExpense:", expense);
@@ -1423,58 +1515,85 @@ export default function CashRegisterDashboard() {
 
   // Obtener el balance de la caja activa al cambiar la tienda seleccionada
   useEffect(() => {
-    if (storeId !== null) {
+    if (storeId === null) {
+      return;
+    }
 
-      getActiveCashRegister(storeId)
-      .then((res) => {
-        if (res) {
-          setActiveCashRegisterId(res.id);
-          setBalance(Number(res.currentBalance));
-          setInitialBalance(Number(res.initialBalance)); // ✅ Aquí lo guardas
+    let cancelled = false;
+
+    const loadData = async () => {
+      try {
+        const [activeRegister, closuresData] = await Promise.all([
+          getActiveCashRegister(storeId).catch(() => null),
+          getClosuresByStore(storeId).catch((err) => {
+            console.error("Error al obtener cierres:", err);
+            return [] as any[];
+          }),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        if (activeRegister) {
+          setActiveCashRegisterId(activeRegister.id);
+          setBalance(Number(activeRegister.currentBalance));
+          setInitialBalance(Number(activeRegister.initialBalance));
           setHasCashRegister(true);
         } else {
           setActiveCashRegisterId(null);
           setBalance(0);
-          setInitialBalance(0); // ✅ También lo limpias si no hay caja
+          setInitialBalance(0);
           setHasCashRegister(false);
         }
-      })
-      .catch(() => {
-        setActiveCashRegisterId(null);
-        setBalance(0);
-        setInitialBalance(0); // ✅ También lo limpias si no hay caja
-        setHasCashRegister(false);
-      });
+        
+        const sortedClosures = Array.isArray(closuresData)
+          ? sortClosuresByDateDesc(closuresData)
+          : [];
+        const { amount: latestClosureOverride } = resolveLatestClosureOverride(
+          activeRegister,
+          sortedClosures,
+        );
+        const closuresWithOverride = withLatestClosureOverride(sortedClosures, latestClosureOverride);
 
-      getClosuresByStore(storeId)
-      .then((data) => {
-          const sorted = Array.isArray(data) ? sortClosuresByDateDesc(data) : [];
-          setClosures(sorted);
-        })
-        .catch((err) => {
-          console.error("Error al obtener cierres:", err);
+        setClosures(closuresWithOverride);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error al obtener datos de caja:", error);
+          setActiveCashRegisterId(null);
+          setBalance(0);
+          setInitialBalance(0);
+          setHasCashRegister(false);
           setClosures([]);
-        });
-      
-      async function fetchBalance(storeId: number) {
-        try {
-          const currentBalance = await getCashRegisterBalance(storeId);
-          if (currentBalance === null) {
-            setBalance(0);
-            setHasCashRegister(false); // Marcar que no hay caja
-          } else {
-            setBalance(Number(currentBalance));
-            setHasCashRegister(true);  // Hay caja
-          }
-        } catch (error) {
+        }
+      }
+
+      try {
+        const currentBalance = await getCashRegisterBalance(storeId);
+        if (cancelled) {
+          return;
+        }
+
+        if (currentBalance === null) {
+          setBalance(0);
+          setHasCashRegister(false);
+        } else {
+          setBalance(Number(currentBalance));
+          setHasCashRegister(true);
+        }
+      } catch (error) {
+        if (!cancelled) {
           console.error("Error real al obtener el balance:", error);
           setBalance(0);
           setHasCashRegister(false);
         }
       }
+    };  
+    loadData();
 
-      fetchBalance(storeId);
-    }
+    return () => {
+      cancelled = true;
+    };
   }, [storeId]);
 
   useEffect(() => {
