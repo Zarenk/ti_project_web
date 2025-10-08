@@ -849,6 +849,12 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                             .filter((value, index, array) => value.length > 0 && array.indexOf(value) === index)
                           const notesContent = fallbackNotes.join("\n")
 
+                          const totalOperationsAmount =
+                            closureDetails?.paymentBreakdown?.reduce(
+                              (sum, entry) => sum + entry.amount,
+                              0,
+                            ) ?? 0
+
                           return (
                             <div className="space-y-4">
                               <div className="space-y-2">
@@ -977,6 +983,14 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                         <span className="text-muted-foreground">Saldo inicial</span>
                                         <span className="font-medium text-foreground">
                                           {formatCurrency(Number(transaction.openingBalance), currencySymbol)}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {closureDetails && closureDetails.paymentBreakdown.length > 0 && (
+                                      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                                        <span className="text-muted-foreground">Todas las operaciones</span>
+                                        <span className="font-medium text-foreground">
+                                          {formatCurrency(totalOperationsAmount, currencySymbol)}
                                         </span>
                                       </div>
                                     )}

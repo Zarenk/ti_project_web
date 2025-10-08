@@ -41,6 +41,7 @@ export default function ProductsByStorePage() {
   const [totalItems, setTotalItems] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
   const [totalInventoryValue, setTotalInventoryValue] = useState(0);
+  const [filteredInventoryValue, setFilteredInventoryValue] = useState(0);
 
   // Dentro del componente:
   const [open, setOpen] = useState(false)
@@ -118,6 +119,7 @@ export default function ProductsByStorePage() {
     setFilteredProducts([]);
     setTotalItems(0);
     setTotalInventoryValue(0);
+    setFilteredInventoryValue(0);
     setOpen(false);
     setBrandOpen(false);
   }, []);
@@ -261,7 +263,15 @@ export default function ProductsByStorePage() {
       return acc + purchasePrice * stockQuantity;
     }, 0);
 
+    const filteredTotalValue = filtered.reduce((acc, item) => {
+      const purchasePrice = Number(item?.inventory?.product?.price ?? 0);
+      const stockQuantity = Number(item?.stock ?? 0);
+
+      return acc + purchasePrice * stockQuantity;
+    }, 0);
+
     setTotalInventoryValue(totalValue);
+    setFilteredInventoryValue(filteredTotalValue);
     setTotalItems(filtered.length);
   
     const start = (currentPage - 1) * limit;
@@ -472,14 +482,25 @@ export default function ProductsByStorePage() {
         </div>
       </div>
 
-      <div className="mb-6">
-        <div className="max-w-md rounded-lg border border-green-200 bg-gradient-to-r from-green-50 via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row">
+        <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 
+        via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 
+          dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
           <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real del inventario</p>
           <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
             {formatCurrency(totalInventoryValue, "PEN")}
           </p>
           <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
             Sumatoria de precio de compra por stock de cada producto en la tienda seleccionada.
+          </p>
+        </div>
+        <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
+          <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real según filtros activos</p>
+          <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
+            {formatCurrency(filteredInventoryValue, "PEN")}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
+            Actualizado automáticamente al filtrar por categoría, marca, tienda, producto o stock.
           </p>
         </div>
       </div>
