@@ -849,11 +849,17 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                             .filter((value, index, array) => value.length > 0 && array.indexOf(value) === index)
                           const notesContent = fallbackNotes.join("\n")
 
+                          const openingBalanceAmount =
+                            transaction.openingBalance !== null &&
+                            transaction.openingBalance !== undefined
+                              ? Number(transaction.openingBalance) || 0
+                              : null
+
                           const totalOperationsAmount =
-                            closureDetails?.paymentBreakdown?.reduce(
+                            (closureDetails?.paymentBreakdown?.reduce(
                               (sum, entry) => sum + entry.amount,
                               0,
-                            ) ?? 0
+                            ) ?? 0) + (openingBalanceAmount ?? 0)
 
                           return (
                             <div className="space-y-4">
@@ -978,15 +984,16 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                     Detalle del cierre
                                   </p>
                                   <div className="space-y-1 text-sm">
-                                    {transaction.openingBalance !== null && transaction.openingBalance !== undefined && (
+                                    {openingBalanceAmount !== null && (
                                       <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
                                         <span className="text-muted-foreground">Saldo inicial</span>
                                         <span className="font-medium text-foreground">
-                                          {formatCurrency(Number(transaction.openingBalance), currencySymbol)}
+                                          {formatCurrency(openingBalanceAmount, currencySymbol)}
                                         </span>
                                       </div>
                                     )}
-                                    {closureDetails && closureDetails.paymentBreakdown.length > 0 && (
+                                    {closureDetails &&
+                                      (closureDetails.paymentBreakdown.length > 0 || openingBalanceAmount !== null) && (
                                       <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
                                         <span className="text-muted-foreground">Todas las operaciones</span>
                                         <span className="font-medium text-foreground">

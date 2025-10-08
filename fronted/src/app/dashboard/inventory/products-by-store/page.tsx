@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getStores } from "../../stores/stores.api";
-import { exportInventoryExcel, getAllProductsByStore, getProductsByStore } from "../inventory.api";
+import { exportInventoryExcel, getAllProductsByStore, getInventory, getProductsByStore } from "../inventory.api";
 import { Card } from "@/components/ui/card";
 import { format } from "date-fns-tz";
 import { getCategories } from "../../categories/categories.api";
@@ -40,7 +40,7 @@ export default function ProductsByStorePage() {
   const [limit, setLimit] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
-  const [totalInventoryValue, setTotalInventoryValue] = useState(0);
+  const [globalInventoryValue, setGlobalInventoryValue] = useState(0);
   const [filteredInventoryValue, setFilteredInventoryValue] = useState(0);
 
   // Dentro del componente:
@@ -118,10 +118,41 @@ export default function ProductsByStorePage() {
     setProducts([]);
     setFilteredProducts([]);
     setTotalItems(0);
-    setTotalInventoryValue(0);
     setFilteredInventoryValue(0);
     setOpen(false);
     setBrandOpen(false);
+  }, []);
+
+  useEffect(() => {
+    async function fetchGlobalInventoryValue() {
+      try {
+        const data = await getInventory();
+
+        if (!Array.isArray(data)) {
+          setGlobalInventoryValue(0);
+          return;
+        }
+
+        const totalValue = data.reduce((acc, item) => {
+          const purchasePrice = Number(item?.product?.price ?? 0);
+
+          const totalStock = Array.isArray(item?.storeOnInventory)
+            ? item.storeOnInventory.reduce(
+                (sum, store) => sum + Number(store?.stock ?? 0),
+                0,
+              )
+            : 0;
+
+          return acc + purchasePrice * totalStock;
+        }, 0);
+
+        setGlobalInventoryValue(totalValue);
+      } catch (error) {
+        console.error("Error al obtener el valor total del inventario:", error);
+      }
+    }
+
+    fetchGlobalInventoryValue();
   }, []);
 
   useEffect(() => {
@@ -256,12 +287,6 @@ export default function ProductsByStorePage() {
 
       return matchesSearch && matchesBrand;
     });
-    const totalValue = deduped.reduce((acc, item) => {
-      const purchasePrice = Number(item?.inventory?.product?.price ?? 0);
-      const stockQuantity = Number(item?.stock ?? 0);
-
-      return acc + purchasePrice * stockQuantity;
-    }, 0);
 
     const filteredTotalValue = filtered.reduce((acc, item) => {
       const purchasePrice = Number(item?.inventory?.product?.price ?? 0);
@@ -270,7 +295,6 @@ export default function ProductsByStorePage() {
       return acc + purchasePrice * stockQuantity;
     }, 0);
 
-    setTotalInventoryValue(totalValue);
     setFilteredInventoryValue(filteredTotalValue);
     setTotalItems(filtered.length);
   
@@ -488,10 +512,10 @@ export default function ProductsByStorePage() {
           dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
           <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real del inventario</p>
           <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
-            {formatCurrency(totalInventoryValue, "PEN")}
+            {formatCurrency(globalInventoryValue, "PEN")}
           </p>
           <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
-            Sumatoria de precio de compra por stock de cada producto en la tienda seleccionada.
+            Sumatoria del precio de compra por stock de todos los productos en todas las tiendas.
           </p>
         </div>
         <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
