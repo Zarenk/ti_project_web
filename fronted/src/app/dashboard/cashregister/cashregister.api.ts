@@ -162,15 +162,51 @@ export async function getActiveCashRegister(storeId: number): Promise<{ id: numb
 }
 
 // cashregister.api.ts
-export async function createCashClosure(payload: any) {
+export interface CashClosureSummary {
+  id: number;
+  cashRegisterId: number;
+  userId: number;
+  openingBalance: number;
+  closingBalance: number;
+  totalIncome: number;
+  totalExpense: number;
+  notes?: string | null;
+  createdAt: string;
+  storeId?: number;
+}
+
+export interface CashRegisterSummary {
+  id: number;
+  name: string;
+  description?: string | null;
+  storeId: number;
+  initialBalance: number;
+  currentBalance: number;
+  status: string;
+  createdAt: string;
+}
+
+export interface CreateCashClosureResponse {
+  closure: CashClosureSummary;
+  closedCashRegister: CashRegisterSummary | null;
+  nextCashRegister: CashRegisterSummary | null;
+  requestedNextInitialBalance?: number;
+}
+
+export async function createCashClosure(payload: any): Promise<CreateCashClosureResponse> {
   const cleanPayload = {
     ...payload,
+    storeId: Number(payload.storeId),
     cashRegisterId: Number(payload.cashRegisterId),
     userId: Number(payload.userId),
     openingBalance: Number(payload.openingBalance),
     closingBalance: Number(payload.closingBalance),
     totalIncome: Number(payload.totalIncome),
     totalExpense: Number(payload.totalExpense),
+    nextInitialBalance:
+      payload.nextInitialBalance !== undefined && payload.nextInitialBalance !== null
+        ? Number(payload.nextInitialBalance)
+        : undefined,
   };
 
   const response = await fetch(`${BACKEND_URL}/api/cashregister/closure`, {
@@ -190,7 +226,58 @@ export async function createCashClosure(payload: any) {
     throw new Error(errorMessage);
   }
 
-  return await response.json();
+  const raw = await response.json();
+
+  const parseDecimal = (value: unknown): number => {
+    if (typeof value === "number") return value;
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
+
+  const normalizeCashRegister = (value: any): CashRegisterSummary | null => {
+    if (!value) return null;
+    return {
+      id: Number(value.id),
+      name: value.name,
+      description: value.description ?? null,
+      storeId: Number(value.storeId),
+      initialBalance: parseDecimal(value.initialBalance),
+      currentBalance: parseDecimal(value.currentBalance),
+      status: value.status,
+      createdAt: value.createdAt,
+    };
+  };
+
+  const closure = raw?.closure ?? null;
+  const normalizedClosure: CashClosureSummary = {
+    id: Number(closure?.id ?? 0),
+    cashRegisterId: Number(closure?.cashRegisterId ?? payload.cashRegisterId ?? 0),
+    userId: Number(closure?.userId ?? payload.userId ?? 0),
+    openingBalance: parseDecimal(closure?.openingBalance ?? payload.openingBalance ?? 0),
+    closingBalance: parseDecimal(closure?.closingBalance ?? payload.closingBalance ?? 0),
+    totalIncome: parseDecimal(closure?.totalIncome ?? payload.totalIncome ?? 0),
+    totalExpense: parseDecimal(closure?.totalExpense ?? payload.totalExpense ?? 0),
+    notes: closure?.notes ?? payload.notes ?? null,
+    createdAt: closure?.createdAt ?? new Date().toISOString(),
+    storeId: Number(closure?.storeId ?? payload.storeId ?? 0) || undefined,
+  };
+
+  const requestedNextInitialBalance =
+    typeof raw?.requestedNextInitialBalance === "number"
+      ? raw.requestedNextInitialBalance
+      : payload.nextInitialBalance !== undefined
+      ? Number(payload.nextInitialBalance)
+      : undefined;
+
+  return {
+    closure: normalizedClosure,
+    closedCashRegister: normalizeCashRegister(raw?.closedCashRegister),
+    nextCashRegister: normalizeCashRegister(raw?.nextCashRegister),
+    requestedNextInitialBalance,
+  };
 }
 
 export async function getClosuresByStore(storeId: number) {
