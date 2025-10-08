@@ -26,8 +26,8 @@ export function UploadSection({
   const router = useRouter();
 
   return (
-    <div className="flex-1 flex-col border rounded-md p-2">                   
-      <div className="flex justify-between gap-1 mb-2">
+    <div className="flex-1 flex-col border rounded-md p-2">
+      <div className="flex justify-start sm:justify-between gap-1 mb-2">
         <Button
           className="sm:w-auto ml-0 bg-green-700 hover:bg-green-800 text-white text-xs"
           type="button"
