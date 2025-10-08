@@ -482,36 +482,6 @@ export function ProductSelection({
           </div>
         </>
       )}
-      <div className="flex justify-between gap-1">
-        <div className="flex flex-col flex-grow">
-          <Label className="text-sm font-medium py-2">Cantidad</Label>
-          <Input
-            type="text"
-            placeholder="Cantidad"
-            value={quantity.toString()}
-            maxLength={10}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
-                setQuantity(Number(value));
-              }
-            }}
-            onBlur={() => {
-              const numericValue = parseFloat(String(quantity));
-              setQuantity(!isNaN(numericValue) ? numericValue : 1);
-            }}
-            title="Indica cuántas unidades ingresarás al inventario"
-          />
-        </div>
-        <div className="flex flex-col flex-grow">
-          <Label className="text-sm font-medium py-2">Precio Total Unitario</Label>
-          <Input
-            value={totalPurchasePrice}
-            readOnly
-            title="Resultado del precio de compra multiplicado por la cantidad"
-          />
-        </div>
-      </div>
     </div>
   )
 }
