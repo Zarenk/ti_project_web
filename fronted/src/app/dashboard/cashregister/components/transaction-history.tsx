@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ArrowDown, ArrowUp, Calculator, Search, ChevronDown, ChevronUp, Calendar } from "lucide-react"
+import { ArrowDown, ArrowUp, Calculator, Search, ChevronDown, ChevronUp, Calendar, X } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -12,7 +12,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { format, isSameDay } from "date-fns"
 import { BACKEND_URL } from "@/lib/utils"
 import { Transaction } from "../types/cash-register"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
@@ -986,9 +986,15 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
 
           {/* Modal solo en móviles */}
           <Dialog open={!!modalTransaction} onOpenChange={() => setModalTransaction(null)}>
-            <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl lg:max-w-4xl">
-              <DialogHeader className="sticky top-0 z-10 bg-background pb-4">
-                <DialogTitle>Detalle de Transacción</DialogTitle>
+            <DialogContent
+              className="max-h-[85vh] overflow-y-auto sm:max-w-3xl lg:max-w-4xl"
+            >
+              <DialogHeader className="pb-4">
+                <div className="flex items-start justify-between gap-4">
+                  <DialogTitle className="text-base font-semibold sm:text-lg">
+                    Detalle de Transacción
+                  </DialogTitle>
+                </div>
               </DialogHeader>
               {modalTransaction && (
                 <div className="space-y-4 text-sm sm:text-base">

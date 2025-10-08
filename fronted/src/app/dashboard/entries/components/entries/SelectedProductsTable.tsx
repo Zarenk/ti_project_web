@@ -150,7 +150,7 @@ export const SelectedProductsTable = ({
               </button>
             </TableHead>
             {/* Cantidad: AMPLIFICADO, visible siempre. Ancho un poco más generoso. */}
-            <TableHead className="text-left max-sm:w-[18%] sm:w-[100px] md:w-[110px] py-2">
+            <TableHead className="text-left max-sm:w-[16%] sm:w-[85px] md:w-[95px] py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("quantity")}
@@ -161,7 +161,7 @@ export const SelectedProductsTable = ({
               </button>
             </TableHead>
             {/* Precio Compra: AMPLIFICADO, visible siempre. Ancho un poco más generoso. */}
-            <TableHead className="text-left max-sm:w-[18%] sm:w-[110px] md:w-[120px] py-2">
+            <TableHead className="text-left max-sm:w-[16%] sm:w-[90px] md:w-[100px] py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("price")}
@@ -172,7 +172,7 @@ export const SelectedProductsTable = ({
               </button>
             </TableHead>
             {/* Precio Compra Total: Visible siempre, ancho para mostrar 2 decimales. */}
-            <TableHead className="text-left max-sm:w-[19%] sm:w-[110px] md:w-[120px] py-2">
+            <TableHead className="text-left max-sm:w-[17%] sm:w-[95px] md:w-[105px] py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("totalPurchase")}
@@ -205,7 +205,7 @@ export const SelectedProductsTable = ({
               </button>
             </TableHead>
             {/* Acciones: Ancho fijo y mínimo */}
-            <TableHead className="text-left w-[50px] sm:w-[60px] py-1.5 sm:py-2">Acc.</TableHead>
+            <TableHead className="text-left w-[40px] sm:w-[50px] py-1.5 sm:py-2">Acc.</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -300,7 +300,7 @@ export const SelectedProductsTable = ({
               </TableCell>
               <TableCell
                 className={cn(
-                  "max-sm:w-[18%] sm:w-[100px] md:w-[110px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
+                  "max-sm:w-[16%] sm:w-[85px] md:w-[95px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
                 )}
               >
                 <Input
@@ -323,7 +323,7 @@ export const SelectedProductsTable = ({
               </TableCell>
               <TableCell
                 className={cn(
-                  "max-sm:w-[18%] sm:w-[110px] md:w-[120px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
+                  "max-sm:w-[16%] sm:w-[90px] md:w-[100px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
                 )}
               >
                 <Input
@@ -347,14 +347,14 @@ export const SelectedProductsTable = ({
               </TableCell>
               <TableCell
                 className={cn(
-                  "w-[90px] sm:w-[110px] md:w-[120px] truncate overflow-hidden whitespace-nowrap text-xs sm:text-sm py-1.5 sm:py-2"
+                  "w-[80px] sm:w-[95px] md:w-[105px] truncate overflow-hidden whitespace-nowrap text-xs sm:text-sm py-1.5 sm:py-2"
                 )}
               >
                 {(Number(product.quantity) * Number(product.price || 0)).toFixed(2)}
               </TableCell>
               <TableCell
                 className={cn(
-                  "max-sm:w-[19%] sm:w-[110px] md:w-[120px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
+                  "max-sm:w-[17%] sm:w-[95px] md:w-[105px] truncate overflow-hidden whitespace-nowrap text-sm py-2"
                 )}
               >
                 <Input
@@ -411,7 +411,7 @@ export const SelectedProductsTable = ({
               )}
               <TableCell
                 className={cn(
-                  "w-[50px] sm:w-[60px] truncate overflow-hidden whitespace-nowrap py-1.5 sm:py-2",
+                  "w-[40px] sm:w-[50px] truncate overflow-hidden whitespace-nowrap py-1.5 sm:py-2",
                 )}
               >
                 <Button
@@ -421,7 +421,7 @@ export const SelectedProductsTable = ({
                     removeProduct(product.id);
                   }}
                   title="Elimina este producto del ingreso"
-                  className="h-8 sm:h-9 px-2"
+                  className="h-8 sm:h-9 px-1.5"
                 >
                   <X className="w-4 h-4" color="red" />
                 </Button>
