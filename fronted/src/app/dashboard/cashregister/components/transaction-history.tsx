@@ -148,6 +148,29 @@ const parseSaleItemsFromDescription = (description?: string | null) => {
 const formatCurrency = (amount: number, currencySymbol: string) =>
   `${currencySymbol} ${amount.toFixed(2)}`
 
+const formatAmountWithSign = (
+  amount: number,
+  type: string | null | undefined,
+  currencySymbol: string,
+) => {
+  const normalizedAmount = Number.isFinite(amount) ? Math.abs(amount) : 0
+  const formatted = formatCurrency(normalizedAmount, currencySymbol)
+  return type === "EXPENSE" ? `- ${formatted}` : formatted
+}
+
+const formatPaymentAmountText = (amountText: string, isExpense: boolean) => {
+  const trimmed = amountText.trim()
+  if (!trimmed) {
+    return amountText
+  }
+
+  if (!isExpense || trimmed.startsWith("-")) {
+    return trimmed
+  }
+
+  return `- ${trimmed}`
+}
+
 const splitPaymentMethodEntry = (entry: string) => {
   const colonIndex = entry.indexOf(":")
   if (colonIndex === -1) {
@@ -706,6 +729,18 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                 sortedTransactions.map((transaction) => {
                   const formattedDescription = formatSaleDescription(transaction.description)
                   const currencySymbol = (transaction.currency ?? "S/.").trim() || "S/."
+                  const effectiveType = transaction.internalType ?? transaction.type
+                  const signedAmount = formatAmountWithSign(
+                    transaction.amount,
+                    effectiveType,
+                    currencySymbol,
+                  )
+                  const paymentEntriesForDisplay = Array.isArray(transaction.paymentMethods)
+                    ? transaction.paymentMethods.map((method) => ({
+                        ...splitPaymentMethodEntry(method),
+                        raw: method,
+                      }))
+                    : []
                   const closureDetails =
                     (transaction.internalType ?? transaction.type) === "CLOSURE"
                       ? closureDetailsMap.get(transaction.id)
@@ -728,7 +763,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                             {new Date(transaction.timestamp).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-center font-medium">
-                            {currencySymbol} {transaction.amount.toFixed(2)}
+                            {signedAmount}
                           </TableCell>
                         {!isMobile && <TableCell>{transaction.voucher || "-"}</TableCell>}
                           {!isMobile && (
@@ -741,16 +776,33 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                           {!isMobile && <TableCell>{transaction.employee}</TableCell>}
                           {!isMobile && (
                             <TableCell className="flex flex-wrap gap-1">
-                              {transaction.paymentMethods && transaction.paymentMethods.length > 0 ? (
-                                transaction.paymentMethods.map((method, index) => (
-                                  <Badge
-                                    key={index}
-                                    variant="outline"
-                                    className={getBadgeColor(method)}
-                                  >
-                                    {method}
-                                  </Badge>
-                                ))
+                              {paymentEntriesForDisplay.length > 0 ? (
+                                paymentEntriesForDisplay.map((entry, index) => {
+                                  const label = entry.label || entry.raw
+                                  const amountText = entry.amountText
+                                    ? formatPaymentAmountText(
+                                        entry.amountText,
+                                        effectiveType === "EXPENSE",
+                                      )
+                                    : null
+
+                                  return (
+                                    <Badge
+                                      key={`${entry.raw}-${index}`}
+                                      variant="outline"
+                                      className={getBadgeColor(label || entry.raw)}
+                                    >
+                                      {amountText ? (
+                                        <>
+                                          <span>{label}</span>
+                                          <span className="ml-1 font-semibold">{amountText}</span>
+                                        </>
+                                      ) : (
+                                        <span>{label}</span>
+                                      )}
+                                    </Badge>
+                                  )
+                                })
                               ) : (
                                 "-"
                               )}
@@ -768,7 +820,8 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                         className="w-[340px] space-y-4 rounded-lg border bg-background p-4 text-left shadow-lg sm:w-[380px]"
                       >
                         {(() => {
-                          const isClosure = (transaction.internalType ?? transaction.type) === "CLOSURE"
+                          const effectiveType = transaction.internalType ?? transaction.type
+                          const isClosure = effectiveType === "CLOSURE"
                           const documentParts = [
                             transaction.clientDocumentType ?? "",
                             transaction.clientDocument ?? "",
@@ -782,7 +835,10 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                           const paymentMethods = Array.isArray(transaction.paymentMethods)
                             ? transaction.paymentMethods
                             : []
-                          const paymentEntries = paymentMethods.map(splitPaymentMethodEntry)
+                          const paymentEntries = paymentMethods.map((method) => ({
+                            ...splitPaymentMethodEntry(method),
+                            raw: method,
+                          }))
                           const itemsTotal = saleItems.reduce((sum, item) => sum + item.total, 0)
                           const fallbackNotes = [
                             saleNotes,
@@ -821,7 +877,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                   )}
                                   <dt className="text-muted-foreground">Monto</dt>
                                   <dd className="font-semibold text-foreground">
-                                    {formatCurrency(transaction.amount, currencySymbol)}
+                                    {formatAmountWithSign(transaction.amount, effectiveType, currencySymbol)}
                                   </dd>
                                   {transaction.voucher && (
                                     <>
@@ -838,17 +894,28 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                     Métodos de pago
                                   </p>
                                   <div className="space-y-1">
-                                    {paymentEntries.map((entry, index) => (
-                                      <div
-                                        key={`${entry.label}-${index}`}
-                                        className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm"
-                                      >
-                                        <span className="font-medium text-foreground">{entry.label}</span>
-                                        {entry.amountText && (
-                                          <span className="text-muted-foreground">{entry.amountText}</span>
-                                        )}
-                                      </div>
-                                    ))}
+                                    {paymentEntries.map((entry, index) => {
+                                      const amountText = entry.amountText
+                                        ? formatPaymentAmountText(
+                                            entry.amountText,
+                                            effectiveType === "EXPENSE",
+                                          )
+                                        : null
+
+                                      return (
+                                        <div
+                                          key={`${entry.label}-${index}`}
+                                          className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm"
+                                        >
+                                          <span className="font-medium text-foreground">
+                                            {entry.label || entry.raw}
+                                          </span>
+                                          {amountText && (
+                                            <span className="text-muted-foreground">{amountText}</span>
+                                          )}
+                                        </div>
+                                      )
+                                    })}
                                   </div>
                                 </div>
                               )}
@@ -893,7 +960,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                   <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm font-semibold text-muted-foreground">
                                     <span>Total operación</span>
                                     <span className="font-semibold text-foreground">
-                                      {formatCurrency(transaction.amount, currencySymbol)}
+                                      {formatAmountWithSign(transaction.amount, effectiveType, currencySymbol)}
                                     </span>
                                   </div>
                                 </div>
@@ -998,62 +1065,108 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
               </DialogHeader>
               {modalTransaction && (
                 <div className="space-y-4 text-sm sm:text-base">
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <p><strong>Tipo:</strong> {typeLabels[modalTransaction.type] ?? modalTransaction.type}</p>
-                    <p><strong>Fecha/Hora:</strong> {new Date(modalTransaction.timestamp).toLocaleString()}</p>
-                    <p><strong>Monto:</strong> {modalCurrency} {modalTransaction.amount.toFixed(2)}</p>
-                    <p><strong>Encargado:</strong> {modalTransaction.employee || "-"}</p>
-                    <p>
-                      <strong>Métodos de Pago:</strong> {modalTransaction.paymentMethods?.length
-                        ? modalTransaction.paymentMethods.join(", ")
-                        : "-"}
-                    </p>
-                    <p><strong>ID:</strong> {modalTransaction.id}</p>
-                    {(modalTransaction.cashRegisterName || modalTransaction.cashRegisterId) && (
-                      <p>
-                        <strong>Caja:</strong> {modalTransaction.cashRegisterName ?? "Caja"}
-                        {modalTransaction.cashRegisterId ? ` (#${modalTransaction.cashRegisterId})` : ""}
-                      </p>
-                    )}
-                    {modalTransaction.clientName && (
-                      <p><strong>Cliente:</strong> {modalTransaction.clientName}</p>
-                    )}
-                    {modalTransaction.clientDocument && modalTransaction.clientDocumentType && (
-                      <p>
-                        <strong>Documento:</strong> {modalTransaction.clientDocumentType} {modalTransaction.clientDocument}
-                      </p>
-                    )}
-                    {modalTransaction.status && (
-                      <p><strong>Estado:</strong> {modalTransaction.status}</p>
-                    )}
-                    {modalTransaction.expectedAmount !== undefined && (
-                      <p>
-                        <strong>Monto esperado:</strong> {modalCurrency} {Number(modalTransaction.expectedAmount).toFixed(2)}
-                      </p>
-                    )}
-                    {modalTransaction.discrepancy !== undefined && (
-                      <p>
-                        <strong>Diferencia:</strong> {modalCurrency} {Number(modalTransaction.discrepancy).toFixed(2)}
-                      </p>
-                    )}
-                    {modalTransaction.voucher && (
-                      <p>
-                        <strong>Comprobante:</strong>{" "}
-                        {modalInvoiceUrl ? (
-                          <a
-                            href={modalInvoiceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 underline"
-                          >
-                            {modalTransaction.voucher}
-                          </a>
-                        ) : (
-                          modalTransaction.voucher
+                  {(() => {
+                    const modalEffectiveType = modalTransaction.internalType ?? modalTransaction.type
+                    const paymentEntries = Array.isArray(modalTransaction.paymentMethods)
+                      ? modalTransaction.paymentMethods.map((method) => ({
+                          ...splitPaymentMethodEntry(method),
+                          raw: method,
+                        }))
+                      : []
+                    const formattedPaymentMethods = paymentEntries.length > 0
+                      ? paymentEntries
+                          .map((entry) => {
+                            if (!entry.amountText) {
+                              return entry.label || entry.raw
+                            }
+
+                            const amountText = formatPaymentAmountText(
+                              entry.amountText,
+                              modalEffectiveType === "EXPENSE",
+                            )
+
+                            return `${entry.label || entry.raw}: ${amountText}`
+                          })
+                          .join(", ")
+                      : "-"
+
+                    const formattedAmount = formatAmountWithSign(
+                      modalTransaction.amount,
+                      modalEffectiveType,
+                      modalCurrency,
+                    )
+
+                    return (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <p><strong>Tipo:</strong> {typeLabels[modalTransaction.type] ?? modalTransaction.type}</p>
+                        <p><strong>Fecha/Hora:</strong> {new Date(modalTransaction.timestamp).toLocaleString()}</p>
+                        <p><strong>Monto:</strong> {formattedAmount}</p>
+                        <p><strong>Encargado:</strong> {modalTransaction.employee || "-"}</p>
+                        <p>
+                          <strong>Métodos de Pago:</strong> {formattedPaymentMethods}
+                        </p>
+                        <p><strong>ID:</strong> {modalTransaction.id}</p>
+                        {(modalTransaction.cashRegisterName || modalTransaction.cashRegisterId) && (
+                          <p>
+                            <strong>Caja:</strong> {modalTransaction.cashRegisterName ?? "Caja"}
+                            {modalTransaction.cashRegisterId ? ` (#${modalTransaction.cashRegisterId})` : ""}
+                          </p>
                         )}
-                      </p>
-                    )}
-                  </div>
+                      {modalTransaction.clientName && (
+                          <p><strong>Cliente:</strong> {modalTransaction.clientName}</p>
+                        )}
+                        {modalTransaction.clientDocument && modalTransaction.clientDocumentType && (
+                          <p>
+                            <strong>Documento:</strong> {modalTransaction.clientDocumentType} {modalTransaction.clientDocument}
+                          </p>
+                        )}
+                        {modalTransaction.status && (
+                          <p><strong>Estado:</strong> {modalTransaction.status}</p>
+                        )}
+                        {modalTransaction.expectedAmount !== undefined && (
+                          <p>
+                            <strong>Monto esperado:</strong> {modalCurrency} {Number(modalTransaction.expectedAmount).toFixed(2)}
+                          </p>
+                        )}
+                        {modalTransaction.discrepancy !== undefined && (
+                          <p>
+                            <strong>Diferencia:</strong> {modalCurrency} {Number(modalTransaction.discrepancy).toFixed(2)}
+                          </p>
+                        )}
+                        {modalTransaction.voucher && (
+                          <p>
+                            <strong>Comprobante:</strong> {modalTransaction.voucher}
+                          </p>
+                        )}
+                        {modalTransaction.invoiceUrl && (
+                          <p>
+                            <strong>Enlace del comprobante:</strong>{" "}
+                            <a
+                              href={modalTransaction.invoiceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline"
+                            >
+                              Ver comprobante
+                            </a>
+                          </p>
+                        )}
+                        {modalInvoiceUrl && (
+                          <p>
+                            <strong>PDF Sunat:</strong>{" "}
+                            <a
+                              href={modalInvoiceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline"
+                            >
+                              Descargar comprobante
+                            </a>
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })()}
                   {modalClosureDetails && (
                     <div className="space-y-3">
                       <div>

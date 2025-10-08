@@ -1,4 +1,4 @@
-import { Barcode, Check, ChevronsUpDown, Plus, Save } from 'lucide-react'
+import { Barcode, Check, ChevronsUpDown, Plus, Save, ChevronDown } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -57,6 +57,7 @@ export function ProductSelection({
     return (price * numericQuantity).toFixed(2)
   }, [currentProduct, quantity, purchasePrice])
 
+  const [isCollapsed, setIsCollapsed] = useState(false)
   const [isCategoryPopoverOpen, setIsCategoryPopoverOpen] = useState(false)
 
   const [pendingCategory, setPendingCategory] = useState<{ id: number; name: string } | null>(null)
@@ -213,10 +214,30 @@ export function ProductSelection({
 
   return (
     <div className="flex-1 flex-col border border-gray-600 rounded-md p-2">
-      <Label htmlFor="product-combobox" className="text-sm font-medium mb-2">
-        Ingrese un producto:
-      </Label>
-      <div className="flex flex-wrap gap-1">
+      <div className="mb-2 flex items-center justify-between">
+        <Label htmlFor="product-combobox" className="text-sm font-medium">
+          Ingrese un producto:
+        </Label>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsCollapsed((prev) => !prev)}
+          aria-label={`${isCollapsed ? 'Expandir' : 'Contraer'} panel de producto`}
+          aria-expanded={!isCollapsed}
+          title={isCollapsed ? 'Mostrar panel' : 'Ocultar panel'}
+        >
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 transition-transform',
+              isCollapsed ? '-rotate-90' : 'rotate-0'
+            )}
+          />
+        </Button>
+      </div>
+      {!isCollapsed && (
+        <>
+          <div className="flex flex-wrap gap-1">
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
           <Button
@@ -430,39 +451,37 @@ export function ProductSelection({
         title="Descripción del producto proveniente del catálogo"
       />
       <div className="flex justify-between gap-1">
-        <div className="flex flex-col flex-grow">
-          <Label className="text-sm font-medium py-2">Precio de Compra</Label>
-          <Input
-            {...register("price", { valueAsNumber: true })}
-            readOnly
-            step="0.01"
-            min={0}
-            title="Precio de compra unitario del producto"
-          />
-        </div>
-        <div className="flex flex-col flex-grow">
-          <Label className="text-sm font-medium py-2">Precio de Venta</Label>
-          <Input
-            {...register("priceSell", { valueAsNumber: true })}
-            step="0.01"
-            min={0}
-            maxLength={13} // 10 dígitos + 1 punto decimal + 2 decimales
-            onChange={(e) => {
-              const value = e.target.value;
-              // Validar que el valor sea un número con hasta 10 dígitos y 2 decimales
-              if (/^\d{0,10}(\.\d{0,2})?$/.test(value)) {
-                setValue("priceSell", value); // Actualizar el valor en el formulario
-              }
-            }}
-            onBlur={(e) => {
-              const value = parseFloat(e.target.value);
-              // Asegurarse de que el valor sea un número válido o establecerlo en 0
-              setValue("priceSell", !isNaN(value) ? value.toFixed(2) : "0.00");
-            }}
-            title="Define el precio de venta sugerido para el producto"
-          />
-        </div>
-      </div>
+            <div className="flex flex-col flex-grow">
+              <Label className="text-sm font-medium py-2">Cantidad</Label>
+              <Input
+                type="text"
+                placeholder="Cantidad"
+                value={quantity.toString()}
+                maxLength={10}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
+                    setQuantity(Number(value));
+                  }
+                }}
+                onBlur={() => {
+                  const numericValue = parseFloat(String(quantity));
+                  setQuantity(!isNaN(numericValue) ? numericValue : 1);
+                }}
+                title="Indica cuántas unidades ingresarás al inventario"
+              />
+            </div>
+            <div className="flex flex-col flex-grow">
+              <Label className="text-sm font-medium py-2">Precio Total Unitario</Label>
+              <Input
+                value={totalPurchasePrice}
+                readOnly
+                title="Resultado del precio de compra multiplicado por la cantidad"
+              />
+            </div>
+          </div>
+        </>
+      )}
       <div className="flex justify-between gap-1">
         <div className="flex flex-col flex-grow">
           <Label className="text-sm font-medium py-2">Cantidad</Label>
