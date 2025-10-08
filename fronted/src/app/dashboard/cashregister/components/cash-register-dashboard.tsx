@@ -281,20 +281,30 @@ const parseNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const PAYMENT_SUMMARY_METHODS = ["Tarjeta", "Transferencia", "Yape", "Plin"] as const;
+const PAYMENT_SUMMARY_METHODS = [
+  "Efectivo",
+  "Yape",
+  "Plin",
+  "Tarjeta",
+  "Transferencia",
+] as const;
 type PaymentSummaryKey = (typeof PAYMENT_SUMMARY_METHODS)[number];
 
 const PAYMENT_SUMMARY_LABELS: Record<PaymentSummaryKey, string> = {
-  Tarjeta: "Tarjeta",
-  Transferencia: "Transferencia",
+  Efectivo: "EN EFECTIVO",
   Yape: "Yape",
   Plin: "Plin",
+  Tarjeta: "Tarjeta",
+  Transferencia: "Transferencia",
 };
 
 const identifyPaymentSummaryMethod = (value: string): PaymentSummaryKey | null => {
   const normalized = normalizeWhitespace(value).toLowerCase();
   if (!normalized) {
     return null;
+  }
+  if (isCashPaymentMethod(normalized)) {
+    return "Efectivo";
   }
   if (/(tarjeta|visa|master|credito|crédito|debito|débito|amex|american express)/.test(normalized)) {
     return "Tarjeta";
@@ -340,6 +350,8 @@ const REPORT_COLUMNS: { key: keyof CashReportRow; header: string }[] = [
   { key: "timestamp", header: "Fecha/Hora" },
   { key: "type", header: "Tipo" },
   { key: "amount", header: "Monto" },
+  { key: "openingBalance", header: "Saldo Inicial" },
+  { key: "cashAvailable", header: "Efectivo Disponible" },
   { key: "paymentMethods", header: "Métodos de Pago" },
   { key: "employee", header: "Encargado" },
   { key: "client", header: "Cliente" },
@@ -352,6 +364,8 @@ type CashReportRow = {
   timestamp: string;
   type: string;
   amount: string;
+  openingBalance: string;
+  cashAvailable: string;
   paymentMethods: string;
   employee: string;
   client: string;
@@ -752,6 +766,15 @@ export default function CashRegisterDashboard() {
       const paymentMethods = transaction.paymentMethods && transaction.paymentMethods.length > 0
         ? transaction.paymentMethods.join(" | ")
         : "-"
+      
+      const isClosure = transaction.type === "CLOSURE"
+      const openingBalanceDisplay = isClosure && transaction.openingBalance !== null && transaction.openingBalance !== undefined
+        ? `${currencySymbol} ${Number(transaction.openingBalance ?? 0).toFixed(2)}`
+        : "-"
+      const cashAvailableBase = transaction.closingBalance ?? transaction.totalIncome ?? transaction.amount ?? 0
+      const cashAvailableDisplay = isClosure
+        ? `${currencySymbol} ${Number(cashAvailableBase).toFixed(2)}`
+        : "-"
 
       const documentParts = [
         transaction.clientDocumentType ?? "",
@@ -766,6 +789,8 @@ export default function CashRegisterDashboard() {
         timestamp: formattedDate,
         type: TRANSACTION_TYPE_LABELS[transaction.type] ?? transaction.type ?? "-",
         amount: amountDisplay,
+        openingBalance: openingBalanceDisplay,
+        cashAvailable: cashAvailableDisplay,
         paymentMethods,
         employee: transaction.employee?.trim() || "-",
         client: transaction.clientName?.trim() || "Sin cliente",
@@ -778,10 +803,11 @@ export default function CashRegisterDashboard() {
 
   const paymentMethodSummary = useMemo(() => {
     const totals: Record<PaymentSummaryKey, number> = {
-      Tarjeta: 0,
-      Transferencia: 0,
+      Efectivo: 0,
       Yape: 0,
       Plin: 0,
+      Tarjeta: 0,
+      Transferencia: 0,
     };
 
     let resolvedCurrency = "S/.";
@@ -847,9 +873,12 @@ export default function CashRegisterDashboard() {
       amount: Number(totals[method].toFixed(2)),
     }));
 
+    const totalAmount = rows.reduce((acc, row) => acc + row.amount, 0);
+
     return {
       currencySymbol: resolvedCurrency || "S/.",
       rows,
+      total: Number(totalAmount.toFixed(2)),
     };
   }, [transactions]);
 
@@ -1042,6 +1071,14 @@ export default function CashRegisterDashboard() {
       })
       .join("")
 
+    const summaryTotalDisplay = `${paymentMethodSummary.currencySymbol} ${paymentMethodSummary.total.toFixed(2)}`
+    const summaryTotalRow = `
+      <tr>
+        <td style="padding:6px;border:1px solid #dddddd;font-weight:bold;">Total</td>
+        <td style="padding:6px;border:1px solid #dddddd;text-align:right;font-weight:bold;">${escapeHtml(summaryTotalDisplay)}</td>
+      </tr>
+    `.trim()
+
     const summaryTableHtml = `
       <table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;min-width:360px;">
         <caption style="margin:16px 0 8px;font-weight:bold;">Resumen por metodo</caption>
@@ -1051,7 +1088,7 @@ export default function CashRegisterDashboard() {
             <th style="background-color:#f5f5f5;text-align:right;padding:8px;border:1px solid #cccccc;">Total</th>
           </tr>
         </thead>
-        <tbody>${summaryTableRows}</tbody>
+        <tbody>${summaryTableRows}${summaryTotalRow}</tbody>
       </table>
     `.trim()
 
@@ -1103,6 +1140,9 @@ export default function CashRegisterDashboard() {
         summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
         summaryLabel: { fontSize: 10 },
         summaryAmount: { fontSize: 10, fontWeight: "bold" },
+        summaryTotalRow: { marginTop: 6, paddingTop: 4, borderTopWidth: 0.5, borderTopColor: "#d4d4d4", flexDirection: "row", justifyContent: "space-between" },
+        summaryTotalLabel: { fontSize: 10, fontWeight: "bold" },
+        summaryTotalAmount: { fontSize: 10, fontWeight: "bold" },
       })
 
       const documentDefinition = (
@@ -1121,7 +1161,7 @@ export default function CashRegisterDashboard() {
                   if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
                     headerStyles.push(pdfStyles.cellWide)
                   }
-                  if (column.key === "amount") {
+                  if (["amount", "openingBalance", "cashAvailable"].includes(column.key)) {
                     headerStyles.push(pdfStyles.cellAmount);
                   }
                   return (
@@ -1144,7 +1184,7 @@ export default function CashRegisterDashboard() {
                     if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
                       cellStyles.push(pdfStyles.cellWide);
                     }
-                    if (column.key === "amount") {
+                    if (["amount", "openingBalance", "cashAvailable"].includes(column.key)) {
                       cellStyles.push(pdfStyles.cellAmount); // { textAlign: "right" }
                     }
                     const value = row[column.key] || "-";
@@ -1167,6 +1207,12 @@ export default function CashRegisterDashboard() {
                   </Text>
                 </View>
               ))}
+              <View style={pdfStyles.summaryTotalRow}>
+                <Text style={pdfStyles.summaryTotalLabel}>Total</Text>
+                <Text style={pdfStyles.summaryTotalAmount}>
+                  {`${paymentMethodSummary.currencySymbol} ${paymentMethodSummary.total.toFixed(2)}`}
+                </Text>
+              </View>
             </View>
           </Page>
         </Document>
