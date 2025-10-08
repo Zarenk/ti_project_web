@@ -986,12 +986,12 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
 
           {/* Modal solo en móviles */}
           <Dialog open={!!modalTransaction} onOpenChange={() => setModalTransaction(null)}>
-            <DialogContent>
-              <DialogHeader>
+            <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl lg:max-w-4xl">
+              <DialogHeader className="sticky top-0 z-10 bg-background pb-4">
                 <DialogTitle>Detalle de Transacción</DialogTitle>
               </DialogHeader>
               {modalTransaction && (
-                <div className="space-y-4 text-sm">
+                <div className="space-y-4 text-sm sm:text-base">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <p><strong>Tipo:</strong> {typeLabels[modalTransaction.type] ?? modalTransaction.type}</p>
                     <p><strong>Fecha/Hora:</strong> {new Date(modalTransaction.timestamp).toLocaleString()}</p>
