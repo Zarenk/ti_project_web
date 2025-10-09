@@ -140,6 +140,52 @@ export function SaleDetailDialog({
     }
   }, [sale?.createdAt]);
 
+  const uniquePayments = useMemo(() => {
+    if (!Array.isArray(sale?.payments) || sale.payments.length === 0) {
+      return [] as NonNullable<Sale["payments"]>;
+    }
+
+    const seen = new Set<string>();
+    const result: NonNullable<Sale["payments"]> = [];
+
+    for (const payment of sale.payments) {
+      if (!payment) {
+        continue;
+      }
+
+      const rawMethod =
+        typeof (payment as { method?: unknown }).method === "string"
+          ? ((payment as { method?: string }).method ?? undefined)
+          : undefined;
+      const normalizedMethod =
+        payment.paymentMethod?.name ??
+        (rawMethod && rawMethod.trim().length > 0 ? rawMethod : undefined);
+
+      const normalizedAmount =
+        typeof payment.amount === "number"
+          ? payment.amount.toFixed(2)
+          : typeof payment.amount === "string"
+          ? payment.amount
+          : "";
+
+      const key =
+        payment.id !== undefined && payment.id !== null
+          ? `id:${payment.id}`
+          : [normalizedMethod ?? "", payment.currency ?? "", normalizedAmount].join(
+              "|",
+            );
+
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      result.push(payment);
+    }
+
+    return result;
+  }, [sale?.payments]);
+
   const detailRows = useMemo(() => {
     if (!sale?.details || sale.details.length === 0) {
       return null;
@@ -285,7 +331,7 @@ export function SaleDetailDialog({
               </div>
             )}
 
-            {Array.isArray(sale.payments) && sale.payments.length > 0 && (
+            {uniquePayments.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Pagos</h3>
                 <div className="overflow-hidden rounded-md border">
@@ -298,7 +344,7 @@ export function SaleDetailDialog({
                       </tr>
                     </thead>
                     <tbody>
-                      {sale.payments.map((payment, index) => {
+                      {uniquePayments.map((payment, index) => {
                         const paymentKey =
                           payment.id ??
                           `${payment.paymentMethod?.name ?? "pago"}-${index}`;

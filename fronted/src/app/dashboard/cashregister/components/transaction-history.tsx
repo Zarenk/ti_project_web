@@ -656,10 +656,53 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
       modalTransaction && (modalTransaction.internalType ?? modalTransaction.type) === "CLOSURE"
         ? closureDetailsMap.get(modalTransaction.id)
         : undefined
-    const structuredNotes = useMemo(
-      () => parseStructuredNotes(modalTransaction?.description, modalFormattedDescription),
-      [modalTransaction?.description, modalFormattedDescription],
+    const modalSaleDetails = useMemo(
+      () => parseSaleItemsFromDescription(modalTransaction?.description),
+      [modalTransaction?.description],
     )
+
+    const structuredNotes = useMemo(() => {
+      const baseEntries = parseStructuredNotes(
+        modalTransaction?.description,
+        modalFormattedDescription,
+      )
+
+      const effectiveType = modalTransaction?.internalType ?? modalTransaction?.type
+      const saleNotes =
+        effectiveType === "INCOME" ? modalSaleDetails.notes?.trim() ?? "" : ""
+
+      if (!saleNotes) {
+        return baseEntries
+      }
+
+      const normalizedSaleNote = normalizeWhitespace(collapseRepeatedPhrase(saleNotes))
+      if (!normalizedSaleNote) {
+        return baseEntries
+      }
+
+      const alreadyIncluded = baseEntries.some(
+        (entry) => entry.value.toLowerCase() === normalizedSaleNote.toLowerCase(),
+      )
+
+      if (alreadyIncluded) {
+        return baseEntries
+      }
+
+      const label = baseEntries.length > 0 ? "Notas adicionales" : "Notas"
+      return [
+        ...baseEntries,
+        {
+          label,
+          value: normalizedSaleNote,
+        },
+      ]
+    }, [
+      modalFormattedDescription,
+      modalSaleDetails.notes,
+      modalTransaction?.description,
+      modalTransaction?.internalType,
+      modalTransaction?.type,
+    ])
 
     return (
       <div className="space-y-4">
@@ -1168,6 +1211,30 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                       modalCurrency,
                     )
 
+                    const saleDetails =
+                      modalEffectiveType === "INCOME"
+                        ? modalSaleDetails
+                        : { items: [] as SaleDetailItem[], notes: "" }
+                    const saleItems = saleDetails.items
+                    const saleItemsTotal = saleItems.reduce(
+                      (sum, item) => sum + item.total,
+                      0,
+                    )
+                    const saleNotes =
+                      modalEffectiveType === "INCOME"
+                        ? normalizeWhitespace(saleDetails.notes)
+                        : ""
+
+                    const paymentEntriesForModal = paymentEntries.map((entry) => ({
+                      label: entry.label || entry.raw,
+                      amountText: entry.amountText
+                        ? formatPaymentAmountText(
+                            entry.amountText,
+                            modalEffectiveType === "EXPENSE",
+                          )
+                        : null,
+                    }))
+
                     return (
                       <div className="grid gap-2 sm:grid-cols-2">
                         <p><strong>Tipo:</strong> {typeLabels[modalTransaction.type] ?? modalTransaction.type}</p>
@@ -1235,6 +1302,94 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                               Descargar comprobante
                             </a>
                           </p>
+                        )}
+                        {modalEffectiveType === "INCOME" && (
+                          <div className="sm:col-span-2 mt-2 space-y-3">
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Detalle de productos
+                              </p>
+                              {saleItems.length > 0 ? (
+                                <div className="overflow-x-auto rounded-md border">
+                                  <table className="w-full text-sm">
+                                    <thead className="bg-muted/40">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left font-medium">Producto</th>
+                                        <th className="px-3 py-2 text-center font-medium">Cantidad</th>
+                                        <th className="px-3 py-2 text-right font-medium">Precio unitario</th>
+                                        <th className="px-3 py-2 text-right font-medium">Total</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {saleItems.map((item, index) => (
+                                        <tr key={`${item.name}-${index}`} className="border-t">
+                                          <td className="px-3 py-2 align-middle text-muted-foreground">
+                                            {item.name}
+                                          </td>
+                                          <td className="px-3 py-2 text-center align-middle text-muted-foreground">
+                                            {item.quantity}
+                                          </td>
+                                          <td className="px-3 py-2 text-right align-middle text-muted-foreground">
+                                            {formatCurrency(item.unitPrice, modalCurrency)}
+                                          </td>
+                                          <td className="px-3 py-2 text-right align-middle font-semibold">
+                                            {formatCurrency(item.total, modalCurrency)}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr className="border-t bg-muted/30">
+                                        <th
+                                          colSpan={3}
+                                          className="px-3 py-2 text-right font-semibold"
+                                        >
+                                          Total productos
+                                        </th>
+                                        <td className="px-3 py-2 text-right font-semibold">
+                                          {formatCurrency(saleItemsTotal, modalCurrency)}
+                                        </td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">
+                                  No se encontraron productos asociados a esta venta.
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Métodos de pago utilizados
+                              </p>
+                              {paymentEntriesForModal.length > 0 ? (
+                                <div className="overflow-hidden rounded-md border">
+                                  <table className="w-full text-sm">
+                                    <tbody>
+                                      {paymentEntriesForModal.map((entry, index) => (
+                                        <tr key={`${entry.label}-${index}`} className="border-b last:border-b-0">
+                                          <th className="w-1/2 bg-muted px-3 py-2 text-left font-medium align-top">
+                                            {entry.label}
+                                          </th>
+                                          <td className="px-3 py-2 text-right text-muted-foreground">
+                                            {entry.amountText ?? "-"}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">Sin métodos de pago registrados.</p>
+                              )}
+                            </div>
+
+                            {saleNotes && (
+                              <p className="text-sm text-muted-foreground">{saleNotes}</p>
+                            )}
+                          </div>
                         )}
                       </div>
                     )
