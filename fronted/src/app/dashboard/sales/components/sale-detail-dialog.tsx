@@ -157,12 +157,13 @@ export function SaleDetailDialog({
         methodName: string;
         currency?: string;
         amount: number;
+        identifiers: Set<string>;
       }
     >();
 
-    for (const payment of sale.payments) {
+    sale.payments.forEach((payment) => {
       if (!payment) {
-        continue;
+        return;
       }
 
       const rawMethod =
@@ -183,24 +184,99 @@ export function SaleDetailDialog({
 
       const amount = parseNumber(payment.amount);
 
+      const identifiers = new Set<string>();
+
+      if (
+        typeof (payment as { transactionId?: unknown }).transactionId === "string" &&
+        (payment as { transactionId?: string }).transactionId!.trim().length > 0
+      ) {
+        identifiers.add(
+          `tx:${(payment as { transactionId?: string }).transactionId!.trim()}`,
+        );
+      }
+
+      if (
+        typeof (payment as { cashTransactionId?: unknown }).cashTransactionId ===
+          "number" ||
+        typeof (payment as { cashTransactionId?: unknown }).cashTransactionId ===
+          "string"
+      ) {
+        identifiers.add(
+          `cash:${String(
+            (payment as { cashTransactionId?: string | number }).cashTransactionId!,
+          )}`,
+        );
+      }
+
+      if (
+        typeof (payment as { referenceNote?: unknown }).referenceNote === "string" &&
+        (payment as { referenceNote?: string }).referenceNote!.trim().length > 0
+      ) {
+        identifiers.add(
+          `ref:${(payment as { referenceNote?: string }).referenceNote!.trim()}`,
+        );
+      }
+
+      if (
+        typeof (payment as { id?: unknown }).id === "number" ||
+        typeof (payment as { id?: unknown }).id === "string"
+      ) {
+        identifiers.add(`id:${String((payment as { id?: string | number }).id)}`);
+      }
+
       const key = `${methodName}|${normalizedCurrency ?? currency}`;
 
-      if (!entries.has(key)) {
+      const existing = entries.get(key);
+
+      if (
+        existing &&
+        Array.from(identifiers).some((identifier) => existing.identifiers.has(identifier))
+      ) {
+        return;
+      }
+
+      if (!existing) {
         entries.set(key, {
           key,
           methodName,
           currency: normalizedCurrency,
           amount,
+          identifiers,
         });
-        continue;
+        return;
       }
 
-      const existing = entries.get(key)!;
       existing.amount += amount;
+      identifiers.forEach((identifier) => existing.identifiers.add(identifier));
+    });
+
+    const aggregatedEntries = Array.from(entries.values());
+    const aggregatedTotal = aggregatedEntries.reduce(
+      (acc, entry) => acc + entry.amount,
+      0,
+    );
+
+    const expectedTotal = parseNumber(sale?.total);
+    const shouldNormalize =
+      typeof expectedTotal === "number" &&
+      expectedTotal > 0 &&
+      aggregatedTotal > 0;
+
+    if (shouldNormalize) {
+      const ratio = aggregatedTotal / expectedTotal;
+      const roundedRatio = Math.round(ratio);
+      const EPSILON = 1e-6;
+
+      if (roundedRatio > 1 && Math.abs(ratio - roundedRatio) <= EPSILON) {
+        return aggregatedEntries.map(({ identifiers, ...entry }) => ({
+          ...entry,
+          amount: entry.amount / roundedRatio,
+        }));
+      }
     }
 
-    return Array.from(entries.values());
-  }, [sale?.payments, currency]);
+    return aggregatedEntries.map(({ identifiers, ...entry }) => entry);
+  }, [sale?.payments, currency, sale?.total]);
 
   const detailRows = useMemo(() => {
     if (!sale?.details || sale.details.length === 0) {

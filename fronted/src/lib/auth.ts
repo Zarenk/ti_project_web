@@ -1,5 +1,6 @@
 import { jwtDecode } from 'jwt-decode'
 import type { JwtPayload } from 'jsonwebtoken'
+import { refreshAuthToken } from '@/utils/auth-refresh'
 import { getAuthToken } from '@/utils/auth-token'
 
 export interface CurrentUser {
@@ -11,6 +12,7 @@ export interface CurrentUser {
   name: string
   role?: string
 }
+
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const { cookies } = await import('next/headers')
@@ -37,13 +39,25 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   }
 }
 
-function isExpired(token: string): boolean {
+function getTokenExpirationTimestamp(token: string): number | null {
   try {
     const decoded: { exp?: number } = jwtDecode(token)
-    return !decoded.exp || decoded.exp * 1000 < Date.now()
+    return typeof decoded.exp === 'number' ? decoded.exp * 1000 : null
   } catch {
-    return true
+    return null
   }
+}
+
+function isExpired(token: string): boolean {
+  const expiresAt = getTokenExpirationTimestamp(token)
+  return !expiresAt || expiresAt < Date.now()
+}
+
+export async function getAuthTokenExpirationDate(): Promise<Date | null> {
+  const token = await getAuthToken()
+  if (!token) return null
+  const expiresAt = getTokenExpirationTimestamp(token)
+  return expiresAt ? new Date(expiresAt) : null
 }
 
 export async function getUserDataFromToken(): Promise<CurrentUser | null> {
@@ -125,3 +139,5 @@ export async function getLastAccessFromToken(): Promise<Date | null> {
     return null
   }
 }
+
+export { refreshAuthToken }

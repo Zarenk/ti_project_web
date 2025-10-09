@@ -310,6 +310,24 @@ const getInvoiceUrl = (transaction: Transaction) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim()
 
+const sanitizeIncomeNoteValue = (value?: string | null) => {
+  if (!value) {
+    return ""
+  }
+
+  const withoutRedundantPhrase = value.replace(
+    /venta realizada\.?(?:\s*\|\s*en\s+efectivo:\s*(?:s\/.?|\$)\s*[0-9.,]+)?/gi,
+    " ",
+  )
+
+  const segments = withoutRedundantPhrase
+    .split("|")
+    .map((segment) => normalizeWhitespace(segment))
+    .filter((segment) => segment.length > 0)
+
+  return segments.join(" | ")
+}
+
 const collapseRepeatedPhrase = (value: string) => {
   const normalized = normalizeWhitespace(value ?? "")
   if (!normalized) {
@@ -669,28 +687,47 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
 
       const effectiveType = modalTransaction?.internalType ?? modalTransaction?.type
       const saleNotes =
-        effectiveType === "INCOME" ? modalSaleDetails.notes?.trim() ?? "" : ""
+        effectiveType === "INCOME"
+          ? sanitizeIncomeNoteValue(modalSaleDetails.notes)
+          : ""
+
+      const processedBaseEntries =
+        effectiveType === "INCOME"
+          ? baseEntries
+              .map((entry) => {
+                const sanitizedValue = sanitizeIncomeNoteValue(entry.value)
+                if (!sanitizedValue) {
+                  return null
+                }
+
+                return {
+                  ...entry,
+                  value: sanitizedValue,
+                }
+              })
+              .filter((entry): entry is StructuredNoteEntry => entry !== null)
+          : baseEntries
 
       if (!saleNotes) {
-        return baseEntries
+        return processedBaseEntries
       }
 
       const normalizedSaleNote = normalizeWhitespace(collapseRepeatedPhrase(saleNotes))
       if (!normalizedSaleNote) {
-        return baseEntries
+        return processedBaseEntries
       }
 
-      const alreadyIncluded = baseEntries.some(
+      const alreadyIncluded = processedBaseEntries.some(
         (entry) => entry.value.toLowerCase() === normalizedSaleNote.toLowerCase(),
       )
 
       if (alreadyIncluded) {
-        return baseEntries
+        return processedBaseEntries
       }
 
-      const label = baseEntries.length > 0 ? "Notas adicionales" : "Notas"
+      const label = processedBaseEntries.length > 0 ? "Notas adicionales" : "Notas"
       return [
-        ...baseEntries,
+        ...processedBaseEntries,
         {
           label,
           value: normalizedSaleNote,
@@ -905,9 +942,10 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                             .map((value) => (value ?? "").trim())
                             .filter((value) => value.length > 0)
 
-                          const { items: saleItems, notes: saleNotes } = parseSaleItemsFromDescription(
-                            transaction.description,
-                          )
+                          const {
+                            items: saleItems,
+                            notes: rawSaleNotes,
+                          } = parseSaleItemsFromDescription(transaction.description)
                           const paymentMethods = Array.isArray(transaction.paymentMethods)
                             ? transaction.paymentMethods
                             : []
@@ -915,10 +953,19 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                             ...splitPaymentMethodEntry(method),
                             raw: method,
                           }))
+                          const saleNotes =
+                            effectiveType === "INCOME"
+                              ? sanitizeIncomeNoteValue(rawSaleNotes)
+                              : rawSaleNotes ?? ""
+                          const baseTransactionNotes = transaction.notes ?? ""
+                          const transactionNotes =
+                            effectiveType === "INCOME"
+                              ? sanitizeIncomeNoteValue(baseTransactionNotes)
+                              : baseTransactionNotes
                           const itemsTotal = saleItems.reduce((sum, item) => sum + item.total, 0)
                           const rawNoteCandidates = isClosure
-                            ? [transaction.notes ?? "", saleNotes, formattedDescription ?? ""]
-                            : [saleNotes, transaction.notes ?? "", formattedDescription ?? ""]
+                            ? [transactionNotes, saleNotes, formattedDescription ?? ""]
+                            : [saleNotes, transactionNotes, formattedDescription ?? ""]
 
                           const notesContent = rawNoteCandidates
                             .map((value) => collapseRepeatedPhrase(value ?? ""))
@@ -1222,7 +1269,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                     )
                     const saleNotes =
                       modalEffectiveType === "INCOME"
-                        ? normalizeWhitespace(saleDetails.notes)
+                        ? sanitizeIncomeNoteValue(saleDetails.notes)
                         : ""
 
                     const paymentEntriesForModal = paymentEntries.map((entry) => ({

@@ -102,11 +102,34 @@ const normalizeApiSale = (sale: any): Sale => {
             : undefined;
         const resolvedMethodName =
           payment.paymentMethod?.name ?? rawMethod ?? undefined;
+        const normalizedId =
+          typeof payment.id === "number" || typeof payment.id === "string"
+            ? payment.id
+            : undefined;
+        const normalizedTransactionId =
+          typeof payment.transactionId === "string" && payment.transactionId.trim().length > 0
+            ? payment.transactionId.trim()
+            : undefined;
+        const normalizedReferenceNote =
+          typeof payment.referenceNote === "string" && payment.referenceNote.trim().length > 0
+            ? payment.referenceNote.trim()
+            : undefined;
+        const normalizedCashTransactionId =
+          typeof payment.cashTransactionId === "number" ||
+          typeof payment.cashTransactionId === "string"
+            ? payment.cashTransactionId
+            : typeof payment.cashTransaction?.id === "number" ||
+                typeof payment.cashTransaction?.id === "string"
+            ? payment.cashTransaction.id
+            : undefined;
 
         return {
-          id: payment.id,
+          id: normalizedId,
           amount: amount ?? undefined,
           currency,
+          transactionId: normalizedTransactionId,
+          referenceNote: normalizedReferenceNote,
+          cashTransactionId: normalizedCashTransactionId,
           paymentMethod: resolvedMethodName
             ? { name: resolvedMethodName }
             : payment.paymentMethod ?? null,

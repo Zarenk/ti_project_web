@@ -1,3 +1,4 @@
+import { refreshAuthToken } from "@/utils/auth-refresh"
 import { getAuthHeaders } from "@/utils/auth-token"
 
 export class UnauthenticatedError extends Error {
@@ -21,28 +22,6 @@ function resolveUrl(input: RequestInfo | URL): RequestInfo | URL {
   return input
 }
 
-async function refreshToken(): Promise<boolean> {
-  const base = process.env.NEXT_PUBLIC_BACKEND_URL || ''
-  try {
-    const res = await fetch(`${base}/api/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    })
-    if (res.status === 404) return false
-    try {
-      const data = await res.json()
-      if (data?.access_token && typeof window !== 'undefined') {
-        localStorage.setItem('token', data.access_token)
-      }
-    } catch {
-      // ignore body parse errors
-    }
-    return true
-  } catch {
-    return false
-  }
-}
-
 export async function authFetch(
   input: RequestInfo | URL,
   init: RequestInit = {}
@@ -58,7 +37,7 @@ export async function authFetch(
   let res = await fetch(url, { ...init, headers })
   if (res.status !== 401) return res
 
-  const refreshed = await refreshToken()
+  const refreshed = await refreshAuthToken()
   if (!refreshed) {
     throw new UnauthenticatedError()
   }
