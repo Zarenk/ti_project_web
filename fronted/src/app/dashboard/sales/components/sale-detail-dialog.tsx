@@ -180,9 +180,9 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
               )}
             </div>
           </td>
-          <td className="px-4 py-2">{detail.quantity ?? "—"}</td>
-          <td className="px-4 py-2">{formatCurrency(detail.price)}</td>
-          <td className="px-4 py-2">{formatCurrency(detailTotal)}</td>
+          <td className="px-4 py-2 whitespace-nowrap">{detail.quantity ?? "—"}</td>
+          <td className="px-4 py-2 whitespace-nowrap">{formatCurrency(detail.price)}</td>
+          <td className="px-4 py-2 whitespace-nowrap">{formatCurrency(detailTotal)}</td>
           <td className="px-4 py-2">{seriesList.length > 0 ? seriesList.join(", ") : "—"}</td>
         </tr>
       );
@@ -252,14 +252,14 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
             {Array.isArray(detailRows) && detailRows.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Productos vendidos</h3>
-                <div className="overflow-hidden rounded-md border">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto rounded-md border md:overflow-hidden">
+                  <table className="w-full min-w-[600px] text-sm">
                     <thead className="bg-muted">
                       <tr className="text-left">
                         <th className="px-4 py-2 font-medium">Producto</th>
-                        <th className="px-4 py-2 font-medium">Cantidad</th>
-                        <th className="px-4 py-2 font-medium">Precio</th>
-                        <th className="px-4 py-2 font-medium">Total</th>
+                        <th className="px-4 py-2 font-medium whitespace-nowrap">Cantidad</th>
+                        <th className="px-4 py-2 font-medium whitespace-nowrap">Precio</th>
+                        <th className="px-4 py-2 font-medium whitespace-nowrap">Total</th>
                         <th className="px-4 py-2 font-medium">Series</th>
                       </tr>
                     </thead>
