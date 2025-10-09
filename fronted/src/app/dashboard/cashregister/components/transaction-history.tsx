@@ -401,9 +401,11 @@ const parseStructuredNotes = (rawDescription?: string | null, formattedDescripti
 
     if (!rawLabel) continue
 
+    const collapsedValue = rawValue ? collapseRepeatedPhrase(rawValue) : "-"
+
     entries.push({
       label: toSentenceCase(rawLabel),
-      value: rawValue || "-",
+      value: collapsedValue || "-",
     })
 
     matchedSegments.push(match[0])
@@ -423,7 +425,7 @@ const parseStructuredNotes = (rawDescription?: string | null, formattedDescripti
   extraSentences.forEach((sentence, index) => {
     entries.push({
       label: index === 0 && entries.length === 0 ? "Detalle" : `Detalle ${index + 1}`,
-      value: toSentenceCase(sentence),
+      value: collapseRepeatedPhrase(toSentenceCase(sentence)),
     })
   })
 
@@ -1247,7 +1249,12 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                               {[
                                 {
                                   label: "Detalle",
-                                  value: formatSaleDescription(modalTransaction.description) || modalTransaction.description || "Cierre de caja",
+                                  value:
+                                    collapseRepeatedPhrase(
+                                      formatSaleDescription(modalTransaction.description) ||
+                                        modalTransaction.description ||
+                                        "Cierre de caja",
+                                    ) || "Cierre de caja",
                                 },
                                 {
                                   label: "Saldo inicial apertura nueva caja",
@@ -1330,12 +1337,18 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                       const extraNotes: StructuredNoteEntry[] = []
                       const trimmedNote = modalTransaction.notes?.trim()
                       if (trimmedNote) {
-                        const alreadyIncluded = structuredNotes.some((entry) => entry.value === trimmedNote)
-                        if (!alreadyIncluded) {
-                          extraNotes.push({
-                            label: structuredNotes.length > 0 ? "Observaciones" : "Notas",
-                            value: trimmedNote,
-                          })
+                        const collapsedNote = collapseRepeatedPhrase(trimmedNote)
+                        const normalizedNote = normalizeWhitespace(collapsedNote)
+                        if (normalizedNote) {
+                          const alreadyIncluded = structuredNotes.some(
+                            (entry) => entry.value.toLowerCase() === normalizedNote.toLowerCase(),
+                          )
+                          if (!alreadyIncluded) {
+                            extraNotes.push({
+                              label: structuredNotes.length > 0 ? "Observaciones" : "Notas",
+                              value: normalizedNote,
+                            })
+                          }
                         }
                       }
                       const combined = [...structuredNotes, ...extraNotes]

@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
 import { Sale } from "../columns";
 
 const parseNumber = (value: unknown): number => {
@@ -49,9 +50,15 @@ export interface SaleDetailDialogProps {
   sale: Sale | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  loading?: boolean;
 }
 
-export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogProps) {
+export function SaleDetailDialog({
+  sale,
+  open,
+  onOpenChange,
+  loading = false,
+}: SaleDetailDialogProps) {
   const currency = useMemo(() => {
     if (!sale) {
       return "PEN";
@@ -212,6 +219,12 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
         </DialogHeader>
 
         <div className="min-h-0 overflow-y-auto pr-1 sm:pr-2">
+          {loading && (
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-dashed bg-muted/60 p-3 text-xs text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Actualizando información de la venta...</span>
+            </div>
+          )}
           {sale ? (
             <div className="space-y-6 text-sm">
               <div className="grid gap-3 sm:grid-cols-2">
@@ -318,6 +331,10 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
               </div>
             )}
           </div>
+          ) : loading ? (
+            <p className="text-sm text-muted-foreground">
+              Cargando información detallada de la venta...
+            </p>
           ) : (
             <p className="text-sm text-muted-foreground">
               Selecciona una venta para ver sus detalles completos.
