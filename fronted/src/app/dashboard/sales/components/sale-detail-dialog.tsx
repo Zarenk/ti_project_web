@@ -199,8 +199,8 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
+      <DialogContent className="max-h-[90vh] gap-4 overflow-hidden p-4 sm:max-w-3xl sm:p-6 sm:gap-6 grid-rows-[auto_minmax(0,1fr)_auto]">
+        <DialogHeader className="shrink-0">
           <DialogTitle>
             {sale ? `Detalle de la venta #${sale.id}` : "Detalle de la venta"}
           </DialogTitle>
@@ -211,14 +211,15 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
           </DialogDescription>
         </DialogHeader>
 
-        {sale ? (
-          <div className="space-y-6 text-sm">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Cliente</p>
-                <p className="text-base font-semibold">{sale.client?.name ?? "—"}</p>
-              </div>
-              <div>
+        <div className="min-h-0 overflow-y-auto pr-1 sm:pr-2">
+          {sale ? (
+            <div className="space-y-6 text-sm">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Cliente</p>
+                  <p className="text-base font-semibold">{sale.client?.name ?? "—"}</p>
+                </div>
+                <div>
                 <p className="text-xs font-medium text-muted-foreground">Usuario</p>
                 <p className="text-base font-semibold">{sale.user?.username ?? "—"}</p>
               </div>
@@ -317,13 +318,14 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
               </div>
             )}
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Selecciona una venta para ver sus detalles completos.
-          </p>
-        )}
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Selecciona una venta para ver sus detalles completos.
+            </p>
+          )}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cerrar
           </Button>
