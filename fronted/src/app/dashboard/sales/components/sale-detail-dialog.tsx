@@ -140,13 +140,25 @@ export function SaleDetailDialog({
     }
   }, [sale?.createdAt]);
 
-  const uniquePayments = useMemo(() => {
+  const aggregatedPayments = useMemo(() => {
     if (!Array.isArray(sale?.payments) || sale.payments.length === 0) {
-      return [] as NonNullable<Sale["payments"]>;
+      return [] as Array<{
+        key: string;
+        methodName: string;
+        currency?: string;
+        amount: number;
+      }>;
     }
 
-    const seen = new Set<string>();
-    const result: NonNullable<Sale["payments"]> = [];
+    const entries = new Map<
+      string,
+      {
+        key: string;
+        methodName: string;
+        currency?: string;
+        amount: number;
+      }
+    >();
 
     for (const payment of sale.payments) {
       if (!payment) {
@@ -157,34 +169,38 @@ export function SaleDetailDialog({
         typeof (payment as { method?: unknown }).method === "string"
           ? ((payment as { method?: string }).method ?? undefined)
           : undefined;
-      const normalizedMethod =
+
+      const methodName =
         payment.paymentMethod?.name ??
-        (rawMethod && rawMethod.trim().length > 0 ? rawMethod : undefined);
+        (rawMethod && rawMethod.trim().length > 0
+          ? rawMethod
+          : "Método de pago");
 
-      const normalizedAmount =
-        typeof payment.amount === "number"
-          ? payment.amount.toFixed(2)
-          : typeof payment.amount === "string"
-          ? payment.amount
-          : "";
+      const normalizedCurrency =
+        typeof payment.currency === "string" && payment.currency.trim().length > 0
+          ? payment.currency.trim().toUpperCase()
+          : undefined;
 
-      const key =
-        payment.id !== undefined && payment.id !== null
-          ? `id:${payment.id}`
-          : [normalizedMethod ?? "", payment.currency ?? "", normalizedAmount].join(
-              "|",
-            );
+      const amount = parseNumber(payment.amount);
 
-      if (seen.has(key)) {
+      const key = `${methodName}|${normalizedCurrency ?? currency}`;
+
+      if (!entries.has(key)) {
+        entries.set(key, {
+          key,
+          methodName,
+          currency: normalizedCurrency,
+          amount,
+        });
         continue;
       }
 
-      seen.add(key);
-      result.push(payment);
+      const existing = entries.get(key)!;
+      existing.amount += amount;
     }
 
-    return result;
-  }, [sale?.payments]);
+    return Array.from(entries.values());
+  }, [sale?.payments, currency]);
 
   const detailRows = useMemo(() => {
     if (!sale?.details || sale.details.length === 0) {
@@ -331,7 +347,7 @@ export function SaleDetailDialog({
               </div>
             )}
 
-            {uniquePayments.length > 0 && (
+            {aggregatedPayments.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Pagos</h3>
                 <div className="overflow-hidden rounded-md border">
@@ -344,24 +360,11 @@ export function SaleDetailDialog({
                       </tr>
                     </thead>
                     <tbody>
-                      {uniquePayments.map((payment, index) => {
-                        const paymentKey =
-                          payment.id ??
-                          `${payment.paymentMethod?.name ?? "pago"}-${index}`;
+                      {aggregatedPayments.map((payment) => {
                         const paymentCurrency = payment.currency?.toUpperCase();
-                        const rawMethod =
-                          typeof (payment as { method?: unknown }).method === "string"
-                            ? ((payment as { method?: string }).method ?? undefined)
-                            : undefined;
-                        const paymentMethodName =
-                          payment.paymentMethod?.name ??
-                          (rawMethod && rawMethod.trim().length > 0
-                            ? rawMethod
-                            : "Método de pago");
-
                         return (
-                          <tr key={paymentKey} className="border-t">
-                            <td className="px-4 py-2">{paymentMethodName}</td>
+                          <tr key={payment.key} className="border-t">
+                            <td className="px-4 py-2">{payment.methodName}</td>
                             <td className="px-4 py-2 uppercase">
                               {paymentCurrency ?? currency}
                             </td>
