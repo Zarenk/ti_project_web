@@ -665,6 +665,21 @@ export class InventoryService {
             },
           },
         },
+        salesDetails: {
+          orderBy: {
+            sale: {
+              createdAt: 'desc',
+            },
+          },
+          take: 1,
+          select: {
+            sale: {
+              select: {
+                createdAt: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -685,6 +700,21 @@ export class InventoryService {
             product: {
               include: {
                 category: true,
+              },
+            },
+          },
+        },
+        salesDetails: {
+          orderBy: {
+            sale: {
+              createdAt: 'desc',
+            },
+          },
+          take: 1,
+          select: {
+            sale: {
+              select: {
+                createdAt: true,
               },
             },
           },

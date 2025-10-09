@@ -276,7 +276,7 @@ const resolveLatestClosureOverride = (
   return { amount: normalizedAmount, transactionId: latestClosureId };
 };
 
-const withLatestClosureOverride = <T extends { id?: any; openingBalance?: any }>(
+const withLatestClosureOverride = <T extends Record<string, any>>(
   closuresList: T[],
   overrideAmount: number | null,
 ): T[] => {
@@ -288,7 +288,7 @@ const withLatestClosureOverride = <T extends { id?: any; openingBalance?: any }>
     if (index === 0) {
       return {
         ...closure,
-        openingBalance: overrideAmount,
+        nextOpeningBalance: overrideAmount,
       };
     }
     return closure;
@@ -309,7 +309,7 @@ const withClosureTransactionOverride = (
     if (entryType === "CLOSURE" && transaction.id === targetClosureId) {
       return {
         ...transaction,
-        openingBalance: overrideAmount,
+        nextOpeningBalance: overrideAmount,
       };
     }
     return transaction;
@@ -791,6 +791,9 @@ const adaptTransaction = (transaction: any): Transaction => {
     closingBalance: toNullableNumber(transaction?.closingBalance ?? transaction?.amount),
     totalIncome: toNullableNumber(transaction?.totalIncome),
     totalExpense: toNullableNumber(transaction?.totalExpense),
+    nextOpeningBalance: toNullableNumber(
+      (transaction as any)?.nextOpeningBalance ?? (transaction as any)?.nextInitialBalance ?? null,
+    ),
   } as Transaction;
 };
 
@@ -1546,7 +1549,7 @@ export default function CashRegisterDashboard() {
           setInitialBalance(0);
           setHasCashRegister(false);
         }
-        
+
         const sortedClosures = Array.isArray(closuresData)
           ? sortClosuresByDateDesc(closuresData)
           : [];

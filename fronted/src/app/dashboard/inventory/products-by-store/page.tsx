@@ -539,6 +539,7 @@ export default function ProductsByStorePage() {
               <TableHead className="text-xs">Precio de Venta</TableHead>
               <TableHead className="text-xs">Stock</TableHead>
               <TableHead className="text-xs">Fecha de Ingreso</TableHead>
+              <TableHead className="text-xs">Última salida</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -553,6 +554,21 @@ export default function ProductsByStorePage() {
                 <TableCell className="text-sm">{item.stock}</TableCell>
                 <TableCell className="text-sm">
                   {format(new Date(item.inventory.product.createdAt), "dd/MM/yyyy")}
+                </TableCell>
+                <TableCell className="text-sm">
+                  {(() => {
+                    const lastSaleAt = item?.salesDetails?.[0]?.sale?.createdAt;
+                    if (!lastSaleAt) {
+                      return "Sin ventas";
+                    }
+
+                    const parsedDate = new Date(lastSaleAt);
+                    if (Number.isNaN(parsedDate.getTime())) {
+                      return "Sin ventas";
+                    }
+
+                    return format(parsedDate, "dd/MM/yyyy HH:mm");
+                  })()}
                 </TableCell>
               </TableRow>
             ))}

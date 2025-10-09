@@ -310,6 +310,37 @@ const getInvoiceUrl = (transaction: Transaction) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim()
 
+const collapseRepeatedPhrase = (value: string) => {
+  const normalized = normalizeWhitespace(value ?? "")
+  if (!normalized) {
+    return ""
+  }
+
+  const parts = normalized.split(" ")
+  const length = parts.length
+
+  for (let size = 1; size <= Math.floor(length / 2); size++) {
+    if (length % size !== 0) continue
+
+    const segment = parts.slice(0, size).join(" ")
+    let matches = true
+
+    for (let index = size; index < length; index += size) {
+      const chunk = parts.slice(index, index + size).join(" ")
+      if (chunk !== segment) {
+        matches = false
+        break
+      }
+    }
+
+    if (matches) {
+      return segment
+    }
+  }
+
+  return normalized
+}
+
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 
 const toSentenceCase = (value: string) => {
@@ -840,26 +871,36 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                             raw: method,
                           }))
                           const itemsTotal = saleItems.reduce((sum, item) => sum + item.total, 0)
-                          const fallbackNotes = [
-                            saleNotes,
-                            transaction.notes ?? "",
-                            formattedDescription ?? "",
-                          ]
-                            .map((value) => (value ?? "").trim())
-                            .filter((value, index, array) => value.length > 0 && array.indexOf(value) === index)
-                          const notesContent = fallbackNotes.join("\n")
+                          const rawNoteCandidates = isClosure
+                            ? [transaction.notes ?? "", saleNotes, formattedDescription ?? ""]
+                            : [saleNotes, transaction.notes ?? "", formattedDescription ?? ""]
 
-                          const openingBalanceAmount =
-                            transaction.openingBalance !== null &&
-                            transaction.openingBalance !== undefined
+                          const notesContent = rawNoteCandidates
+                            .map((value) => collapseRepeatedPhrase(value ?? ""))
+                            .map((value) => normalizeWhitespace(value))
+                            .filter((value) => value.length > 0)
+                            .filter(
+                              (value, index, array) =>
+                                array.findIndex((candidate) => candidate.toLowerCase() === value.toLowerCase()) === index,
+                            )
+                            .join("\n")
+
+                          const closedOpeningBalanceAmount =
+                            transaction.openingBalance !== null && transaction.openingBalance !== undefined
                               ? Number(transaction.openingBalance) || 0
                               : null
+                          
+                          const nextOpeningBalanceAmount =
+                            transaction.nextOpeningBalance !== null &&
+                            transaction.nextOpeningBalance !== undefined
+                              ? Number(transaction.nextOpeningBalance) || 0
+                              : null    
 
                           const totalOperationsAmount =
                             (closureDetails?.paymentBreakdown?.reduce(
                               (sum, entry) => sum + entry.amount,
                               0,
-                            ) ?? 0) + (openingBalanceAmount ?? 0)
+                            ) ?? 0) + (closedOpeningBalanceAmount ?? 0)
 
                           return (
                             <div className="space-y-4">
@@ -984,16 +1025,24 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                     Detalle del cierre
                                   </p>
                                   <div className="space-y-1 text-sm">
-                                    {openingBalanceAmount !== null && (
+                                    {nextOpeningBalanceAmount !== null && (
                                       <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
-                                        <span className="text-muted-foreground">Saldo inicial</span>
+                                        <span className="text-muted-foreground">Saldo inicial apertura nueva caja</span>
                                         <span className="font-medium text-foreground">
-                                          {formatCurrency(openingBalanceAmount, currencySymbol)}
+                                          {formatCurrency(nextOpeningBalanceAmount, currencySymbol)}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {closedOpeningBalanceAmount !== null && (
+                                      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                                        <span className="text-muted-foreground">Saldo Inicial con el que la caja cerrada inició</span>
+                                        <span className="font-medium text-foreground">
+                                          {formatCurrency(closedOpeningBalanceAmount, currencySymbol)}
                                         </span>
                                       </div>
                                     )}
                                     {closureDetails &&
-                                      (closureDetails.paymentBreakdown.length > 0 || openingBalanceAmount !== null) && (
+                                      (closureDetails.paymentBreakdown.length > 0 || closedOpeningBalanceAmount !== null) && (
                                       <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
                                         <span className="text-muted-foreground">Todas las operaciones</span>
                                         <span className="font-medium text-foreground">
@@ -1201,7 +1250,14 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                   value: formatSaleDescription(modalTransaction.description) || modalTransaction.description || "Cierre de caja",
                                 },
                                 {
-                                  label: "Saldo inicial",
+                                  label: "Saldo inicial apertura nueva caja",
+                                  value:
+                                    modalTransaction.nextOpeningBalance !== null && modalTransaction.nextOpeningBalance !== undefined
+                                      ? `${modalCurrency} ${Number(modalTransaction.nextOpeningBalance).toFixed(2)}`
+                                      : "-",
+                                },
+                                {
+                                  label: "Saldo Inicial con el que la caja cerrada inició",
                                   value:
                                     modalTransaction.openingBalance !== null && modalTransaction.openingBalance !== undefined
                                       ? `${modalCurrency} ${Number(modalTransaction.openingBalance).toFixed(2)}`
