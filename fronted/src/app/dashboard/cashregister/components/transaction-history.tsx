@@ -1044,7 +1044,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                     {closureDetails &&
                                       (closureDetails.paymentBreakdown.length > 0 || closedOpeningBalanceAmount !== null) && (
                                       <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
-                                        <span className="text-muted-foreground">Todas las operaciones</span>
+                                        <span className="text-muted-foreground">Todas las operaciones(Inluido Saldo Inicial)</span>
                                         <span className="font-medium text-foreground">
                                           {formatCurrency(totalOperationsAmount, currencySymbol)}
                                         </span>
