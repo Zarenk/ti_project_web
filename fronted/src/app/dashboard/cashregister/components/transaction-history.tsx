@@ -596,7 +596,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
       onDateChange(new Date()) // 👈 esto reinicia el filtro a hoy
     }
 
-    const closureDetailsMap = useMemo(() => {
+    const { closureDetailsMap, activePeriodMetrics } = useMemo(() => {
       const details = new Map<string, ClosureMetrics>()
       const sortedTransactions = [...transactions].sort((a, b) => {
         const aTime = getTransactionDate(a.timestamp)?.getTime() ?? 0
@@ -671,46 +671,123 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
         }
       })
 
-      return details
+      return {
+        closureDetailsMap: details,
+        activePeriodMetrics: {
+          operationsCount,
+          totalAmount: Number(totalAmount.toFixed(2)),
+          paymentBreakdown: snapshotPaymentAggregates(),
+        } as ClosureMetrics,
+      }
     }, [transactions])
 
-    const latestClosureSummary = useMemo(() => {
-      const closureTransactions = transactions
+    const closureSummaries = useMemo(() => {
+      return transactions
         .filter((transaction) => (transaction.internalType ?? transaction.type) === "CLOSURE")
-        .map((transaction) => ({
-          transaction,
-          timestamp: getTransactionDate(transaction.timestamp)?.getTime() ?? 0,
-        }))
-        .filter((entry) => entry.timestamp > 0)
-        .sort((a, b) => b.timestamp - a.timestamp)
+        .map((transaction) => {
+          const details = closureDetailsMap.get(transaction.id)
+          if (!details) {
+            return null
+          }
 
-      for (const { transaction } of closureTransactions) {
-        const details = closureDetailsMap.get(transaction.id)
-        if (!details) {
-          continue
-        }
+          const timestamp =
+            getTransactionDate(transaction.timestamp) ?? transaction.createdAt ?? new Date()
 
-        const totalByPaymentMethods = roundToTwo(
-          details.paymentBreakdown.reduce((sum, entry) => sum + entry.amount, 0),
-        )
+          const totalByPaymentMethods = roundToTwo(
+            details.paymentBreakdown.reduce((sum, entry) => sum + entry.amount, 0),
+          )
 
-        const cashTotal = roundToTwo(
-          details.paymentBreakdown
-            .filter((entry) => entry.method && isCashPaymentMethod(entry.method))
-            .reduce((sum, entry) => sum + entry.amount, 0),
-        )
+          const cashTotal = roundToTwo(
+            details.paymentBreakdown
+              .filter((entry) => entry.method && isCashPaymentMethod(entry.method))
+              .reduce((sum, entry) => sum + entry.amount, 0),
+          )
 
-        const currencySymbol = (transaction.currency ?? "S/.").trim() || "S/."
+          const currencySymbol = (transaction.currency ?? "S/.").trim() || "S/."
+          const noteCandidates = [transaction.notes, transaction.description]
+            .map((value) => normalizeWhitespace(value ?? ""))
+            .filter((value) => value.length > 0)
+          const uniqueNotes = noteCandidates.filter(
+            (value, index, array) =>
+              array.findIndex((candidate) => candidate.toLowerCase() === value.toLowerCase()) === index,
+          )
+          const cleanedNotes = uniqueNotes
+            .filter((value) => value.toLowerCase() !== "cierre de caja")
+            .join(". ")
 
-        return {
-          currencySymbol,
-          totalByPaymentMethods,
-          cashTotal,
-        }
+          return {
+            id: transaction.id,
+            timestamp,
+            operationsCount: details.operationsCount,
+            paymentBreakdown: details.paymentBreakdown,
+            totalByPaymentMethods,
+            cashTotal,
+            currencySymbol,
+            employee: transaction.employee || "Sistema",
+            closingBalance:
+              transaction.closingBalance !== null && transaction.closingBalance !== undefined
+                ? Number(transaction.closingBalance)
+                : null,
+            openingBalance:
+              transaction.openingBalance !== null && transaction.openingBalance !== undefined
+                ? Number(transaction.openingBalance)
+                : null,
+            notes: cleanedNotes.length > 0 ? cleanedNotes : null,
+          }
+        })
+        .filter((entry): entry is {
+          id: string
+          timestamp: Date
+          operationsCount: number
+          paymentBreakdown: { method: string; amount: number }[]
+          totalByPaymentMethods: number
+          cashTotal: number
+          currencySymbol: string
+          employee: string
+          closingBalance: number | null
+          openingBalance: number | null
+          notes: string | null
+        } => entry !== null)
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+    }, [closureDetailsMap, transactions])
+
+    const latestClosureSummary = closureSummaries[0] ?? null
+
+    const activeOperationsSummary = useMemo(() => {
+      if (!activePeriodMetrics) {
+        return null
       }
 
-      return null
-    }, [closureDetailsMap, transactions])
+      const currencyCandidate =
+        latestClosureSummary?.currencySymbol ??
+        (transactions.find((transaction) => transaction.currency)?.currency ?? "S/.")
+
+      const currencySymbol = (currencyCandidate ?? "S/.").trim() || "S/."
+
+      const totalByPaymentMethods = roundToTwo(
+        activePeriodMetrics.paymentBreakdown.reduce((sum, entry) => sum + entry.amount, 0),
+      )
+
+      const cashTotal = roundToTwo(
+        activePeriodMetrics.paymentBreakdown
+          .filter((entry) => entry.method && isCashPaymentMethod(entry.method))
+          .reduce((sum, entry) => sum + entry.amount, 0),
+      )
+
+      return {
+        ...activePeriodMetrics,
+        currencySymbol,
+        totalByPaymentMethods,
+        cashTotal,
+      }
+    }, [activePeriodMetrics, latestClosureSummary, transactions])
+
+    const hasActiveOperations = Boolean(
+      activeOperationsSummary &&
+        (activeOperationsSummary.operationsCount > 0 ||
+          Math.abs(activeOperationsSummary.totalByPaymentMethods) > 0 ||
+          activeOperationsSummary.paymentBreakdown.length > 0),
+    )
 
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768
     const modalFormattedDescription = modalTransaction ? formatSaleDescription(modalTransaction.description) : ""
@@ -1259,23 +1336,144 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
             </TableBody>
           </Table>
 
-          {latestClosureSummary && (
-            <div className="border-t px-4 py-3 text-sm text-muted-foreground sm:px-6">
-              <p>
-                Total de operaciones hasta el cierre (todos los métodos):{" "}
-                <span className="font-semibold text-foreground">
-                  {formatCurrency(
-                    latestClosureSummary.totalByPaymentMethods,
-                    latestClosureSummary.currencySymbol,
-                  )}
-                </span>
-              </p>
-              <p className="mt-1">
-                Total de operaciones en efectivo:{" "}
-                <span className="font-semibold text-foreground">
-                  {formatCurrency(latestClosureSummary.cashTotal, latestClosureSummary.currencySymbol)}
-                </span>
-              </p>
+          {(hasActiveOperations || closureSummaries.length > 0) && (
+            <div className="border-t px-4 py-4 text-sm sm:px-6">
+              <div className="space-y-4">
+                {hasActiveOperations && activeOperationsSummary && (
+                  <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm font-semibold text-foreground">
+                        Operaciones desde el último cierre
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        Caja abierta actualmente
+                      </span>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                        <span className="text-muted-foreground">Operaciones registradas</span>
+                        <span className="font-medium text-foreground">
+                          {activeOperationsSummary.operationsCount}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                        <span className="text-muted-foreground">Total de operaciones (todos los métodos)</span>
+                        <span className="font-semibold text-foreground">
+                          {formatCurrency(
+                            activeOperationsSummary.totalByPaymentMethods,
+                            activeOperationsSummary.currencySymbol,
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                        <span className="text-muted-foreground">Total de operaciones en efectivo</span>
+                        <span className="font-semibold text-foreground">
+                          {formatCurrency(
+                            activeOperationsSummary.cashTotal,
+                            activeOperationsSummary.currencySymbol,
+                          )}
+                        </span>
+                      </div>
+                      {activeOperationsSummary.paymentBreakdown.length > 0 && (
+                        <div className="rounded-md border bg-background/80">
+                          <table className="w-full text-xs">
+                            <tbody>
+                              {activeOperationsSummary.paymentBreakdown.map((entry) => (
+                                <tr key={entry.method} className="border-t">
+                                  <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
+                                  <td className="px-3 py-2 text-right font-medium text-foreground">
+                                    {formatCurrency(entry.amount, activeOperationsSummary.currencySymbol)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {closureSummaries.length > 0 && (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Resumen de cierres</p>
+                      <p className="text-xs text-muted-foreground">
+                        Cada cierre muestra el acumulado de movimientos antes del conteo de efectivo.
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      {closureSummaries.map((summary) => (
+                        <div key={summary.id} className="rounded-md border bg-muted/20 p-4">
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <span className="text-sm font-semibold text-foreground">
+                              Cierre de caja · {format(summary.timestamp, "dd/MM/yyyy HH:mm:ss")}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              Responsable: {summary.employee}
+                            </span>
+                          </div>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                              <span className="text-muted-foreground">Operaciones registradas</span>
+                              <span className="font-medium text-foreground">{summary.operationsCount}</span>
+                            </div>
+                            <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                              <span className="text-muted-foreground">Total de operaciones (todos los métodos)</span>
+                              <span className="font-semibold text-foreground">
+                                {formatCurrency(summary.totalByPaymentMethods, summary.currencySymbol)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                              <span className="text-muted-foreground">Total de operaciones en efectivo</span>
+                              <span className="font-semibold text-foreground">
+                                {formatCurrency(summary.cashTotal, summary.currencySymbol)}
+                              </span>
+                            </div>
+                            {summary.closingBalance !== null && (
+                              <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                <span className="text-muted-foreground">Efectivo contado en cierre</span>
+                                <span className="font-semibold text-foreground">
+                                  {formatCurrency(Number(summary.closingBalance), summary.currencySymbol)}
+                                </span>
+                              </div>
+                            )}
+                            {summary.openingBalance !== null && (
+                              <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                <span className="text-muted-foreground">Saldo inicial del turno</span>
+                                <span className="font-medium text-foreground">
+                                  {formatCurrency(Number(summary.openingBalance), summary.currencySymbol)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          {summary.paymentBreakdown.length > 0 && (
+                            <div className="mt-3 rounded-md border bg-background/80">
+                              <table className="w-full text-xs">
+                                <tbody>
+                                  {summary.paymentBreakdown.map((entry) => (
+                                    <tr key={entry.method} className="border-t">
+                                      <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
+                                      <td className="px-3 py-2 text-right font-medium text-foreground">
+                                        {formatCurrency(entry.amount, summary.currencySymbol)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                          {summary.notes && (
+                            <p className="mt-3 whitespace-pre-line text-xs text-muted-foreground">
+                              {summary.notes}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
