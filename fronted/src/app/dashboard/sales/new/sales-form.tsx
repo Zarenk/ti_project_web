@@ -164,8 +164,8 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   const [isPriceAlertOpen, setIsPriceAlertOpen] = useState(false); // Controla la apertura del AlertDialog
   const [productWithZeroPrice, setProductWithZeroPrice] = useState<{ id: number; name: string } | null>(null); // Almacena el producto con precio 0
   
-  // Estado para manejar el AlertDialog de la tabla productos pantalla chicas
-  const [selectedProductDetail, setSelectedProductDetail] = useState<typeof selectedProducts[0] | null>(null);
+  // Estado para manejar el modal de detalle de producto en pantallas pequeñas
+  const [activeProductIndex, setActiveProductIndex] = useState<number | null>(null);
 
   // COMBOBOX DE PRODUCTOS
   const [open, setOpen] = React.useState(false)
@@ -1325,17 +1325,17 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                   </div>
 
                     {/* Datatable para mostrar los productos seleccionados */}
-                    <div className='border px-2 overflow-x-auto w-full'>
-                      <Table className="w-full text-sm">
+                    <div className="border px-1 sm:px-2 overflow-x-auto max-w-full">
+                      <Table className="w-full min-w-[360px] sm:min-w-[640px] text-xs sm:text-sm table-fixed">
                         <TableHeader className="bg-muted/50">
                           <TableRow>
-                            <TableHead className="text-left w-[100px] max-w-[100px] sm:w-[200px] sm:max-w-[200px] truncate whitespace-nowrap overflow-hidden">Nombre</TableHead>
-                            <TableHead className="text-left hidden sm:table-cell w-[100px] truncate">Categoria</TableHead>
-                            <TableHead className="text-left md:table-cell w-[100px] truncate">Cantidad</TableHead>
-                            <TableHead className="text-left md:table-cell w-[100px] truncate">Precio</TableHead>
-                            <TableHead className="text-left w-[120px] truncate">Total</TableHead>
-                            <TableHead className="text-left hidden sm:table-cell w-[100px] truncate">Series</TableHead>                  
-                            <TableHead className="text-left w-[100px] truncate">Acciones</TableHead>
+                            <TableHead className="text-left w-[140px] truncate py-1.5 sm:py-2">Nombre</TableHead>
+                            <TableHead className="text-left hidden sm:table-cell w-[140px] truncate py-1.5 sm:py-2">Categoria</TableHead>
+                            <TableHead className="text-left w-[80px] truncate py-1.5 sm:py-2">Cantidad</TableHead>
+                            <TableHead className="text-left w-[90px] truncate py-1.5 sm:py-2">Precio</TableHead>
+                            <TableHead className="text-left w-[100px] truncate py-1.5 sm:py-2">Total</TableHead>
+                            <TableHead className="text-left hidden md:table-cell w-[120px] truncate py-1.5 sm:py-2">Series</TableHead>
+                            <TableHead className="text-left w-[60px] truncate py-1.5 sm:py-2">Acciones</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1345,53 +1345,69 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                             return (
                               <TableRow
                                 key={product.id}
-                                className="cursor-pointer md:cursor-default"
+                                className="cursor-pointer sm:cursor-default"
                                 onClick={() => {
-                                  if (window.innerWidth < 768) {
-                                    setSelectedProductDetail(product); // solo para móviles
+                                  if (window.innerWidth < 640) {
+                                    setActiveProductIndex(index);
                                   }
                                 }}
                               >
-                                <TableCell className="font-semibold w-[100px] max-w-[100px] sm:w-[200px] sm:max-w-[200px] truncate whitespace-nowrap overflow-hidden">{product.name}</TableCell>
-                                <TableCell className="hidden sm:table-cell truncate">{product.category_name}</TableCell>
-                                <TableCell className="truncate">
-                                  <Input
-                                    type="number"
-                                    value={product.quantity}
-                                    min={1}
-                                    onChange={(e) => {
-                                      const updatedQuantity = parseInt(e.target.value, 10);
-                                      if (updatedQuantity > 0) {
-                                        setSelectedProducts((prev) =>
-                                          prev.map((p, i) =>
-                                            i === index ? { ...p, quantity: updatedQuantity } : p
-                                          )
-                                        );
-                                      }
-                                    }}
-                                    className="w-full"
-                                  />
+                                <TableCell className="font-semibold w-[140px] truncate whitespace-nowrap overflow-hidden text-[11px] sm:text-xs">
+                                  {product.name}
                                 </TableCell>
-                                <TableCell className="truncate">
-                                  <Input
-                                    type="number"
-                                    value={product.price}
-                                    min={0}
-                                    step="0.01"
-                                    onChange={(e) => {
-                                      const updatedPrice = parseFloat(e.target.value);
-                                      if (updatedPrice >= 0) {
-                                        setSelectedProducts((prev) =>
-                                          prev.map((p, i) =>
-                                            i === index ? { ...p, price: updatedPrice } : p
-                                          )
-                                        );
-                                      }
-                                    }}
-                                    className="w-full"
-                                  />
+                                <TableCell className="hidden sm:table-cell truncate text-xs">
+                                  {product.category_name}
                                 </TableCell>
-                                <TableCell className="truncate">
+                                <TableCell className="w-[80px] py-1.5 align-top">
+                                  <div className="hidden sm:block">
+                                    <Input
+                                      type="number"
+                                      value={product.quantity}
+                                      min={1}
+                                      onChange={(e) => {
+                                        const updatedQuantity = parseInt(e.target.value, 10);
+                                        if (updatedQuantity > 0) {
+                                          setSelectedProducts((prev) =>
+                                            prev.map((p, i) =>
+                                              i === index ? { ...p, quantity: updatedQuantity } : p
+                                            )
+                                          );
+                                        }
+                                      }}
+                                      className="h-8 sm:h-9 w-full text-xs sm:text-sm"
+                                    />
+                                  </div>
+                                  <div className="sm:hidden text-[11px] font-medium leading-tight">
+                                    {product.quantity}
+                                    <p className="text-[10px] text-muted-foreground">Toca para editar</p>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="w-[90px] py-1.5 align-top">
+                                  <div className="hidden sm:block">
+                                    <Input
+                                      type="number"
+                                      value={product.price}
+                                      min={0}
+                                      step="0.01"
+                                      onChange={(e) => {
+                                        const updatedPrice = parseFloat(e.target.value);
+                                        if (updatedPrice >= 0) {
+                                          setSelectedProducts((prev) =>
+                                            prev.map((p, i) =>
+                                              i === index ? { ...p, price: updatedPrice } : p
+                                            )
+                                          );
+                                        }
+                                      }}
+                                      className="h-8 sm:h-9 w-full text-xs sm:text-sm"
+                                    />
+                                  </div>
+                                  <div className="sm:hidden text-[11px] font-medium leading-tight">
+                                    S/. {Number(product.price ?? 0).toFixed(2)}
+                                    <p className="text-[10px] text-muted-foreground">Toca para editar</p>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="w-[100px] truncate text-[11px] sm:text-xs">
                                   S/ {rowTotal.toFixed(2)}
                                 </TableCell>
                                 <TableCell className="hidden md:table-cell text-xs">
@@ -1411,20 +1427,16 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                       : "Sin series"}
                                   </div>
                                 </TableCell>
-                                <SeriesModal
-                                  isOpen={isSeriesModalOpen}
-                                  onClose={() => setIsSeriesModalOpen(false)}
-                                  series={currentSeries}
-                                />
-                              <TableCell className="">
+                                <TableCell className="w-[60px] py-1.5">
                                   <Button
                                     variant="outline"
+                                    className="h-8 sm:h-9 px-1"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      removeProduct(product.id)
+                                      removeProduct(product.id);
                                     }}
                                   >
-                                  <X className="w-4 h-4" color="red"/>
+                                    <X className="w-4 h-4" color="red" />
                                   </Button>
                                 </TableCell>
                               </TableRow>
@@ -1433,6 +1445,12 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                         </TableBody>
                       </Table>
                     </div>
+
+                    <SeriesModal
+                      isOpen={isSeriesModalOpen}
+                      onClose={() => setIsSeriesModalOpen(false)}
+                      series={currentSeries}
+                    />
 
                     {selectedProducts.length > 0 && totalAmountInWords && (
                       <div className="mt-4 w-full rounded-md border border-primary/20 bg-primary/5 px-4 py-3">
@@ -1446,12 +1464,40 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                       </div>
                     )}   
 
-                    {selectedProductDetail && (
-                      <ProductDetailModal
-                        product={selectedProductDetail}
-                        onClose={() => setSelectedProductDetail(null)}
-                      />
-                    )}                    
+                    <ProductDetailModal
+                      product={
+                        activeProductIndex !== null
+                          ? selectedProducts[activeProductIndex] ?? null
+                          : null
+                      }
+                      onClose={() => setActiveProductIndex(null)}
+                      onUpdate={({ quantity, price }) => {
+                        if (activeProductIndex === null) return
+                        setSelectedProducts((prev) =>
+                          prev.map((product, productIndex) =>
+                            productIndex === activeProductIndex
+                              ? { ...product, quantity, price }
+                              : product
+                          )
+                        )
+                      }}
+                      onRemove={() => {
+                        if (activeProductIndex === null) return
+                        removeProduct(selectedProducts[activeProductIndex].id)
+                        setActiveProductIndex(null)
+                      }}
+                      onManageSeries={() => {
+                        if (activeProductIndex === null) return
+                        const product = selectedProducts[activeProductIndex]
+                        if (product.series && product.series.length > 0) {
+                          setCurrentSeries(product.series)
+                          setIsSeriesModalOpen(true)
+                          setActiveProductIndex(null)
+                        } else {
+                          toast.error("Este producto no tiene series asociadas.")
+                        }
+                      }}
+                    />                   
 
                     <Button className='mt-4' type="button"
                     onClick={() => setIsDialogOpen(true)}>

@@ -148,6 +148,14 @@ const parseSaleItemsFromDescription = (description?: string | null) => {
 const formatCurrency = (amount: number, currencySymbol: string) =>
   `${currencySymbol} ${amount.toFixed(2)}`
 
+const roundToTwo = (value: number) => Number(value.toFixed(2))
+
+const removeDiacritics = (value: string) =>
+  value.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+
+const isCashPaymentMethod = (method: string) =>
+  removeDiacritics(method).toLowerCase().includes("efectivo")
+
 const formatAmountWithSign = (
   amount: number,
   type: string | null | undefined,
@@ -665,6 +673,44 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
 
       return details
     }, [transactions])
+
+    const latestClosureSummary = useMemo(() => {
+      const closureTransactions = transactions
+        .filter((transaction) => (transaction.internalType ?? transaction.type) === "CLOSURE")
+        .map((transaction) => ({
+          transaction,
+          timestamp: getTransactionDate(transaction.timestamp)?.getTime() ?? 0,
+        }))
+        .filter((entry) => entry.timestamp > 0)
+        .sort((a, b) => b.timestamp - a.timestamp)
+
+      for (const { transaction } of closureTransactions) {
+        const details = closureDetailsMap.get(transaction.id)
+        if (!details) {
+          continue
+        }
+
+        const totalByPaymentMethods = roundToTwo(
+          details.paymentBreakdown.reduce((sum, entry) => sum + entry.amount, 0),
+        )
+
+        const cashTotal = roundToTwo(
+          details.paymentBreakdown
+            .filter((entry) => entry.method && isCashPaymentMethod(entry.method))
+            .reduce((sum, entry) => sum + entry.amount, 0),
+        )
+
+        const currencySymbol = (transaction.currency ?? "S/.").trim() || "S/."
+
+        return {
+          currencySymbol,
+          totalByPaymentMethods,
+          cashTotal,
+        }
+      }
+
+      return null
+    }, [closureDetailsMap, transactions])
 
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768
     const modalFormattedDescription = modalTransaction ? formatSaleDescription(modalTransaction.description) : ""
@@ -1212,6 +1258,26 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
               )}
             </TableBody>
           </Table>
+
+          {latestClosureSummary && (
+            <div className="border-t px-4 py-3 text-sm text-muted-foreground sm:px-6">
+              <p>
+                Total de operaciones hasta el cierre (todos los métodos):{" "}
+                <span className="font-semibold text-foreground">
+                  {formatCurrency(
+                    latestClosureSummary.totalByPaymentMethods,
+                    latestClosureSummary.currencySymbol,
+                  )}
+                </span>
+              </p>
+              <p className="mt-1">
+                Total de operaciones en efectivo:{" "}
+                <span className="font-semibold text-foreground">
+                  {formatCurrency(latestClosureSummary.cashTotal, latestClosureSummary.currencySymbol)}
+                </span>
+              </p>
+            </div>
+          )}
 
           {/* Modal solo en móviles */}
           <Dialog open={!!modalTransaction} onOpenChange={() => setModalTransaction(null)}>
