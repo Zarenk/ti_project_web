@@ -88,6 +88,19 @@ const splitSaleDescription = (description: string | null | undefined) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
 
+const sanitizeClosureNotes = (value: string) => {
+  if (!value) {
+    return "";
+  }
+
+  const collapsed = value.replace(
+    /(cierre de caja)(?:(?:\s|[|,.;:-])+cierre de caja)+/gi,
+    (_, firstOccurrence: string) => firstOccurrence,
+  );
+
+  return normalizeWhitespace(collapsed);
+};
+
 const escapeHtml = (value: string) =>
   value
     .replace(/&/g, '&amp;')
@@ -433,6 +446,46 @@ const formatSignedCurrency = (amount: number, currencySymbol: string) => {
   const safeAmount = Number.isFinite(amount) ? amount : 0;
   const formatted = `${resolvedCurrency} ${Math.abs(safeAmount).toFixed(2)}`;
   return safeAmount < 0 ? `- ${formatted}` : formatted;
+};
+
+const formatPaymentMethodsForReport = (
+  methods: string[] | null | undefined,
+  entryType?: string | null,
+) => {
+  if (!methods || methods.length === 0) {
+    return "-";
+  }
+
+  const isExpense = (entryType ?? "").toUpperCase() === "EXPENSE";
+
+  const formattedEntries = methods
+    .map((rawValue) => {
+      const normalized = normalizeWhitespace(rawValue ?? "");
+      if (!normalized) {
+        return null;
+      }
+
+      const colonIndex = normalized.indexOf(":");
+      if (colonIndex === -1) {
+        if (!isExpense || normalized.startsWith("-")) {
+          return normalized;
+        }
+        return `- ${normalized}`;
+      }
+
+      const label = normalizeWhitespace(normalized.slice(0, colonIndex));
+      const amountText = normalizeWhitespace(normalized.slice(colonIndex + 1));
+
+      if (!amountText) {
+        return label;
+      }
+
+      const resolvedAmount = isExpense && !amountText.startsWith("-") ? `- ${amountText}` : amountText;
+      return `${label}: ${resolvedAmount}`;
+    })
+    .filter((entry): entry is string => Boolean(entry));
+
+  return formattedEntries.length > 0 ? formattedEntries.join(" | ") : "-";
 };
 
 const isCashPaymentMethod = (value: string) => {
@@ -868,11 +921,10 @@ export default function CashRegisterDashboard() {
       const entryType = transaction.internalType ?? transaction.type
       const signedAmount = resolveSignedAmount(Number(transaction.amount ?? 0), entryType)
       const amountDisplay = formatSignedCurrency(signedAmount, currencySymbol)
-      const paymentMethods = transaction.paymentMethods && transaction.paymentMethods.length > 0
-        ? transaction.paymentMethods.join(" | ")
-        : "-"
-      
-      const isClosure = transaction.type === "CLOSURE"
+      const paymentMethodsDisplay = formatPaymentMethodsForReport(transaction.paymentMethods, entryType)
+
+      const normalizedEntryType = (entryType ?? "").toUpperCase()
+      const isClosure = normalizedEntryType === "CLOSURE"
       const openingBalanceDisplay = isClosure && transaction.openingBalance !== null && transaction.openingBalance !== undefined
         ? `${currencySymbol} ${Number(transaction.openingBalance ?? 0).toFixed(2)}`
         : "-"
@@ -888,7 +940,20 @@ export default function CashRegisterDashboard() {
         .map((value) => (value ?? "").trim())
         .filter((value) => value.length > 0)
 
-      const notesValue = transaction.description ? normalizeWhitespace(transaction.description) : "-"
+      const rawNotes = typeof transaction.description === "string" ? transaction.description : ""
+      const notesValue = (() => {
+        if (!rawNotes) {
+          return "-"
+        }
+
+        if (isClosure) {
+          const sanitized = sanitizeClosureNotes(rawNotes)
+          return sanitized.length > 0 ? sanitized : "-"
+        }
+
+        const normalized = normalizeWhitespace(rawNotes)
+        return normalized.length > 0 ? normalized : "-"
+      })()
 
       return {
         timestamp: formattedDate,
@@ -896,7 +961,7 @@ export default function CashRegisterDashboard() {
         amount: amountDisplay,
         openingBalance: openingBalanceDisplay,
         cashAvailable: cashAvailableDisplay,
-        paymentMethods,
+        paymentMethods: paymentMethodsDisplay,
         employee: transaction.employee?.trim() || "-",
         client: transaction.clientName?.trim() || "Sin cliente",
         document: documentParts.length > 0 ? documentParts.join(" ") : "-",
@@ -1832,7 +1897,7 @@ export default function CashRegisterDashboard() {
             )}
             {openingBalanceForDisplay !== null && (
               <div className="text-sm text-muted-foreground mt-1">
-                Saldo inicial: S/. {Number(openingBalanceForDisplay).toFixed(2)}
+                Saldo inicial(En Efectivo): S/. {Number(openingBalanceForDisplay).toFixed(2)}
               </div>
             )}
           </CardContent>
