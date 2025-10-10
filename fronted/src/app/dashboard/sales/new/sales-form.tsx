@@ -1331,7 +1331,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                           <TableRow>
                             <TableHead className="text-left w-[140px] truncate py-1.5 sm:py-2">Nombre</TableHead>
                             <TableHead className="text-left hidden sm:table-cell w-[140px] truncate py-1.5 sm:py-2">Categoria</TableHead>
-                            <TableHead className="text-left w-[80px] truncate py-1.5 sm:py-2">Cantidad</TableHead>
+                            <TableHead className="text-left w-[80px] truncate py-1.5 sm:py-2">Cantidad</TableHead>  
                             <TableHead className="text-left w-[90px] truncate py-1.5 sm:py-2">Precio</TableHead>
                             <TableHead className="text-left w-[100px] truncate py-1.5 sm:py-2">Total</TableHead>
                             <TableHead className="text-left hidden md:table-cell w-[120px] truncate py-1.5 sm:py-2">Series</TableHead>
@@ -1352,13 +1352,13 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   }
                                 }}
                               >
-                                <TableCell className="font-semibold w-[140px] truncate whitespace-nowrap overflow-hidden text-[11px] sm:text-xs">
+                                <TableCell className="font-semibold w-[110px] sm:w-[140px] truncate whitespace-nowrap overflow-hidden text-[11px] sm:text-xs">
                                   {product.name}
                                 </TableCell>
                                 <TableCell className="hidden sm:table-cell truncate text-xs">
                                   {product.category_name}
                                 </TableCell>
-                                <TableCell className="w-[80px] py-1.5 align-top">
+                                <TableCell className="w-[60px] sm:w-[80px] py-1.5 align-top">
                                   <div className="hidden sm:block">
                                     <Input
                                       type="number"
@@ -1382,7 +1382,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                     <p className="text-[10px] text-muted-foreground">Toca para editar</p>
                                   </div>
                                 </TableCell>
-                                <TableCell className="w-[90px] py-1.5 align-top">
+                                <TableCell className="w-[70px] sm:w-[90px] py-1.5 align-top">
                                   <div className="hidden sm:block">
                                     <Input
                                       type="number"
@@ -1407,7 +1407,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                     <p className="text-[10px] text-muted-foreground">Toca para editar</p>
                                   </div>
                                 </TableCell>
-                                <TableCell className="w-[100px] truncate text-[11px] sm:text-xs">
+                                <TableCell className="w-[80px] sm:w-[100px] truncate text-[11px] sm:text-xs">
                                   S/ {rowTotal.toFixed(2)}
                                 </TableCell>
                                 <TableCell className="hidden md:table-cell text-xs">
@@ -1427,7 +1427,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                       : "Sin series"}
                                   </div>
                                 </TableCell>
-                                <TableCell className="w-[60px] py-1.5">
+                                <TableCell className="w-[48px] sm:w-[60px] py-1.5">
                                   <Button
                                     variant="outline"
                                     className="h-8 sm:h-9 px-1"
