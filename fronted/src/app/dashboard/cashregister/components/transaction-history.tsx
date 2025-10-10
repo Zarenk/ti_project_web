@@ -1269,7 +1269,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                     )
                     const saleNotes =
                       modalEffectiveType === "INCOME"
-                        ? sanitizeIncomeNoteValue(saleDetails.notes)
+                        ? normalizeWhitespace(saleDetails.notes)
                         : ""
 
                     const paymentEntriesForModal = paymentEntries.map((entry) => ({
@@ -1533,45 +1533,48 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                       )}
                     </div>
                   )}
-                  <div className="space-y-2">
-                    <p className="font-semibold">Notas</p>
-                    {(() => {
-                      const extraNotes: StructuredNoteEntry[] = []
-                      const trimmedNote = modalTransaction.notes?.trim()
-                      if (trimmedNote) {
-                        const collapsedNote = collapseRepeatedPhrase(trimmedNote)
-                        const normalizedNote = normalizeWhitespace(collapsedNote)
-                        if (normalizedNote) {
-                          const alreadyIncluded = structuredNotes.some(
-                            (entry) => entry.value.toLowerCase() === normalizedNote.toLowerCase(),
-                          )
-                          if (!alreadyIncluded) {
-                            extraNotes.push({
-                              label: structuredNotes.length > 0 ? "Observaciones" : "Notas",
-                              value: normalizedNote,
-                            })
+                  {/* La sección de notas permanece montada pero oculta visualmente para evitar mostrarla en el modal. */}
+                  <div className="hidden" aria-hidden>
+                    <div className="space-y-2">
+                      <p className="font-semibold">Notas</p>
+                      {(() => {
+                        const extraNotes: StructuredNoteEntry[] = []
+                        const trimmedNote = modalTransaction?.notes?.trim()
+                        if (trimmedNote) {
+                          const collapsedNote = collapseRepeatedPhrase(trimmedNote)
+                          const normalizedNote = normalizeWhitespace(collapsedNote)
+                          if (normalizedNote) {
+                            const alreadyIncluded = structuredNotes.some(
+                              (entry) => entry.value.toLowerCase() === normalizedNote.toLowerCase(),
+                            )
+                            if (!alreadyIncluded) {
+                              extraNotes.push({
+                                label: structuredNotes.length > 0 ? "Observaciones" : "Notas",
+                                value: normalizedNote,
+                              })
+                            }
                           }
                         }
-                      }
                       const combined = [...structuredNotes, ...extraNotes]
-                      if (combined.length === 0) {
-                        return <p className="text-muted-foreground">No hay notas adicionales.</p>
-                      }
-                      return (
-                        <div className="overflow-hidden rounded-md border">
-                          <table className="w-full text-sm">
-                            <tbody>
-                              {combined.map((entry, index) => (
-                                <tr key={`${entry.label}-${index}`} className="border-b last:border-b-0">
-                                  <th className="bg-muted px-3 py-2 text-left font-medium align-top w-36">{entry.label}</th>
-                                  <td className="px-3 py-2 text-muted-foreground">{entry.value}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )
-                    })()}
+                        if (combined.length === 0) {
+                          return <p className="text-muted-foreground">No hay notas adicionales.</p>
+                        }
+                        return (
+                          <div className="overflow-hidden rounded-md border">
+                            <table className="w-full text-sm">
+                              <tbody>
+                                {combined.map((entry, index) => (
+                                  <tr key={`${entry.label}-${index}`} className="border-b last:border-b-0">
+                                    <th className="bg-muted px-3 py-2 text-left font-medium align-top w-36">{entry.label}</th>
+                                    <td className="px-3 py-2 text-muted-foreground">{entry.value}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )
+                      })()}
+                    </div>
                   </div>
                 </div>
               )}
