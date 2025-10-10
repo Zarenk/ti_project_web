@@ -1325,7 +1325,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                   </div>
 
                     {/* Datatable para mostrar los productos seleccionados */}
-                    <div className="border px-1 sm:px-2 overflow-x-auto max-w-full">
+                    <div className="border px-1 sm:px-2 overflow-x-auto max-w-full max-h-[280px] overflow-y-auto sm:max-h-none sm:overflow-y-visible">
                       <Table className="w-full min-w-[360px] sm:min-w-[640px] text-xs sm:text-sm table-fixed">
                         <TableHeader className="bg-muted/50">
                           <TableRow>
