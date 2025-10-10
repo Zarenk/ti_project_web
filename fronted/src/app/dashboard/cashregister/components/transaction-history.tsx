@@ -835,6 +835,10 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
               transaction.openingBalance !== null && transaction.openingBalance !== undefined
                 ? Number(transaction.openingBalance)
                 : null,
+            nextOpeningBalance:
+              transaction.nextOpeningBalance !== null && transaction.nextOpeningBalance !== undefined
+                ? Number(transaction.nextOpeningBalance)
+                : null,
             notes: cleanedNotes.length > 0 ? cleanedNotes : null,
           }
         })
@@ -850,6 +854,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
           employee: string
           closingBalance: number | null
           openingBalance: number | null
+          nextOpeningBalance: number | null
           notes: string | null
         } => entry !== null)
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
@@ -1550,9 +1555,16 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                               {summary.openingBalance !== null && (
                                 <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
                                   <span className="text-muted-foreground">Saldo inicial del turno</span>
-                                  <span className="font-medium text-foreground">
-                                    {formatCurrency(Number(summary.openingBalance), summary.currencySymbol)}
-                                  </span>
+                                  <div className="flex flex-col items-end gap-1 text-right sm:flex-row sm:items-center sm:gap-3">
+                                    <span className="font-medium text-foreground">
+                                      {formatCurrency(Number(summary.openingBalance), summary.currencySymbol)}
+                                    </span>
+                                    {summary.nextOpeningBalance !== null && (
+                                      <span className="text-xs text-muted-foreground sm:text-sm sm:text-foreground">
+                                        Nueva caja: {formatCurrency(Number(summary.nextOpeningBalance), summary.currencySymbol)}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </div>
