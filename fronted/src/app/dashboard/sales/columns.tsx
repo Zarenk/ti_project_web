@@ -29,9 +29,12 @@ export type Sale = {
   tipoComprobante?: string;
   tipoMoneda?: string;
   payments?: {
-    id?: number;
+    id?: number | string;
     amount?: number;
     currency?: string;
+    transactionId?: string | null;
+    referenceNote?: string | null;
+    cashTransactionId?: number | string | null;
     paymentMethod?: { name?: string } | null;
   }[];
   details?: {

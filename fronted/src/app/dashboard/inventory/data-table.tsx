@@ -192,10 +192,10 @@ return (
             placeholder="Filtrar por producto o serie..."
             value={globalFilter}
             onChange={(event) => setGlobalFilter(event.target.value)}
-            className="max-w-sm"
+            className="w-full sm:max-w-sm"
           />
 
-          <div className="w-[250px]">
+          <div className="w-full sm:w-[250px]">
             <Select
               value={selectedCategory}
               onValueChange={(value) => setSelectedCategory(value)}
@@ -219,7 +219,7 @@ return (
             </Select>
           </div>
 
-          <div className="w-[250px]">
+          <div className="w-full sm:w-[250px]">
             <Select
               value={selectedStore}
               onValueChange={(value) => setSelectedStore(value)}
@@ -242,23 +242,23 @@ return (
               </SelectContent>
             </Select>
           </div>
-          <div className="flex justify-between items-center">
+          <div className="flex w-full justify-between sm:w-auto sm:items-center">
             <Button
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="w-full bg-red-600 text-white hover:bg-red-700 sm:w-auto"
               onClick={() => setIsOutOfStockDialogOpen(true)}
             >
               Ver Productos Sin Stock
               <BookOpenIcon className="h-6 w-6" />
-            </Button>           
+            </Button>  
             {/* Otros componentes de la pÃ¡gina */}
             <OutOfStockDialog
               isOpen={isOutOfStockDialogOpen}
               onClose={() => setIsOutOfStockDialogOpen(false)}
             />
           </div>
-          <div className="flex justify-between items-center">
+          <div className="flex w-full justify-between sm:w-auto sm:items-center">
             <Button
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            className="w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto"
             onClick={() => router.push("/dashboard/inventory/products-by-store")}
             >
               Ver Productos por Tienda

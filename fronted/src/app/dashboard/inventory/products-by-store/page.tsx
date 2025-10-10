@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getStores } from "../../stores/stores.api";
-import { exportInventoryExcel, getAllProductsByStore, getProductsByStore } from "../inventory.api";
+import { exportInventoryExcel, getAllProductsByStore, getInventory, getProductsByStore } from "../inventory.api";
 import { Card } from "@/components/ui/card";
 import { format } from "date-fns-tz";
 import { getCategories } from "../../categories/categories.api";
@@ -40,7 +40,8 @@ export default function ProductsByStorePage() {
   const [limit, setLimit] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
-  const [totalInventoryValue, setTotalInventoryValue] = useState(0);
+  const [globalInventoryValue, setGlobalInventoryValue] = useState(0);
+  const [filteredInventoryValue, setFilteredInventoryValue] = useState(0);
 
   // Dentro del componente:
   const [open, setOpen] = useState(false)
@@ -53,6 +54,106 @@ export default function ProductsByStorePage() {
     selectedBrand === 0
       ? "Todas las marcas"
       : brands.find((brand) => brand.id === selectedBrand)?.name || "Selecciona una Marca"
+
+  const filtersQuery = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (debouncedSelectedCategory && debouncedSelectedCategory !== 0) {
+      params.append("categoryId", debouncedSelectedCategory.toString());
+    }
+
+    if (debouncedSelectedBrand && debouncedSelectedBrand !== 0) {
+      params.append("brandId", debouncedSelectedBrand.toString());
+    }
+
+    const normalizedSearch = debouncedSearchTerm.trim();
+    if (normalizedSearch.length > 0) {
+      params.append("search", normalizedSearch);
+    }
+
+    if (withStockOnly) {
+      params.append("withStockOnly", "true");
+    }
+
+    return params.toString();
+  }, [debouncedSelectedBrand, debouncedSearchTerm, debouncedSelectedCategory, withStockOnly]);
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      selectedStore !== null ||
+      (selectedCategory !== null && selectedCategory !== 0) ||
+      (selectedBrand !== null && selectedBrand !== 0) ||
+      searchTerm.trim().length > 0 ||
+      withStockOnly
+    );
+  }, [selectedBrand, searchTerm, selectedCategory, selectedStore, withStockOnly]);
+
+  const handleExport = useCallback(() => {
+    if (selectedStore === null || isExporting) {
+      return;
+    }
+
+    toast.info("Generando archivo Excel...");
+    setIsExporting(true);
+
+    setTimeout(() => {
+      exportInventoryExcel({
+        storeId: selectedStore,
+        categoryId: selectedCategory ?? undefined,
+        brandId: selectedBrand ?? undefined,
+        search: searchTerm.trim(),
+        withStockOnly,
+      });
+      setIsExporting(false);
+    }, 800);
+  }, [isExporting, searchTerm, selectedBrand, selectedCategory, selectedStore, withStockOnly]);
+
+  const handleClearFilters = useCallback(() => {
+    setSelectedStore(null);
+    setSelectedCategory(null);
+    setSelectedBrand(null);
+    setSearchTerm("");
+    setWithStockOnly(false);
+    setCurrentPage(1);
+    setProducts([]);
+    setFilteredProducts([]);
+    setTotalItems(0);
+    setFilteredInventoryValue(0);
+    setOpen(false);
+    setBrandOpen(false);
+  }, []);
+
+  useEffect(() => {
+    async function fetchGlobalInventoryValue() {
+      try {
+        const data = await getInventory();
+
+        if (!Array.isArray(data)) {
+          setGlobalInventoryValue(0);
+          return;
+        }
+
+        const totalValue = data.reduce((acc, item) => {
+          const purchasePrice = Number(item?.product?.price ?? 0);
+
+          const totalStock = Array.isArray(item?.storeOnInventory)
+            ? item.storeOnInventory.reduce(
+                (sum, store) => sum + Number(store?.stock ?? 0),
+                0,
+              )
+            : 0;
+
+          return acc + purchasePrice * totalStock;
+        }, 0);
+
+        setGlobalInventoryValue(totalValue);
+      } catch (error) {
+        console.error("Error al obtener el valor total del inventario:", error);
+      }
+    }
+
+    fetchGlobalInventoryValue();
+  }, []);
 
   useEffect(() => {
     async function fetchStores() {
@@ -70,24 +171,24 @@ export default function ProductsByStorePage() {
     if (debouncedSelectedStore !== null) {
       async function fetchProducts() {
         try {
-          const queryParams = new URLSearchParams();
-          if (debouncedSelectedCategory && debouncedSelectedCategory !== 0) {
-            queryParams.append("categoryId", debouncedSelectedCategory.toString());
-          }
-           
           const data = withStockOnly
-            ? await getProductsByStore(debouncedSelectedStore ?? 0, queryParams.toString())
-            : await getAllProductsByStore(debouncedSelectedStore ?? 0, queryParams.toString());
+            ? await getProductsByStore(debouncedSelectedStore ?? 0, filtersQuery)
+            : await getAllProductsByStore(debouncedSelectedStore ?? 0, filtersQuery);
   
           setProducts(data);
         } catch (error) {
           console.error("Error al obtener los productos:", error);
         }
       }
-  
       fetchProducts();
+      } else {
+      setProducts([]);
     }
-  }, [debouncedSelectedStore, debouncedSelectedCategory, withStockOnly]);
+  }, [debouncedSelectedStore, filtersQuery, withStockOnly]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtersQuery, debouncedSelectedStore]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -96,13 +197,8 @@ export default function ProductsByStorePage() {
   
       if (isShortcut) {
         event.preventDefault();
-        if (selectedStore && !isExporting) {
-          toast.info("Generando archivo Excel...");
-          setIsExporting(true);
-          setTimeout(() => {
-            exportInventoryExcel(selectedStore, selectedCategory ?? undefined);
-            setIsExporting(false);
-          }, 800);
+        if (selectedStore !== null && !isExporting) {
+          handleExport();
         }
       }
     };
@@ -111,7 +207,7 @@ export default function ProductsByStorePage() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedStore, selectedCategory, isExporting]);
+  }, [handleExport, isExporting, selectedStore]);
 
   useEffect(() => {
     async function fetchCategories() {
@@ -191,14 +287,15 @@ export default function ProductsByStorePage() {
 
       return matchesSearch && matchesBrand;
     });
-    const totalValue = deduped.reduce((acc, item) => {
+
+    const filteredTotalValue = filtered.reduce((acc, item) => {
       const purchasePrice = Number(item?.inventory?.product?.price ?? 0);
       const stockQuantity = Number(item?.stock ?? 0);
 
       return acc + purchasePrice * stockQuantity;
     }, 0);
 
-    setTotalInventoryValue(totalValue);
+    setFilteredInventoryValue(filteredTotalValue);
     setTotalItems(filtered.length);
   
     const start = (currentPage - 1) * limit;
@@ -210,51 +307,57 @@ export default function ProductsByStorePage() {
     <Card className="p-6 w-full max-w-full sm:max-w-3xl md:max-w-5xl lg:max-w-6xl mx-auto shadow-md">
       <h1 className="text-2xl font-semibold mb-6">📦 Productos por Tienda</h1>
 
-      <TooltipProvider delayDuration={500}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              onClick={() => {
-                if (selectedStore) {
-                  toast.info("Generando archivo Excel...");
-                  setIsExporting(true);
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <TooltipProvider delayDuration={500}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleExport}
+                  disabled={selectedStore === null || isExporting}
+                  style={{ touchAction: 'manipulation' }}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {isExporting ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generando...
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4" />
+                      Exportar a Excel
+                    </div>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                Descargar inventario en Excel
+              </TooltipContent>
+            </Tooltip>
+            <p className="hidden sm:block text-xs text-muted-foreground">
+              Atajo: <kbd className="bg-muted px-1 py-0.5 rounded border text-[11px]">Ctrl</kbd> + <kbd className="bg-muted px-1 py-0.5 rounded border text-[11px]">E</kbd>
+            </p>
+          </div>
+        </TooltipProvider>
 
-                  setTimeout(() => {
-                    exportInventoryExcel(selectedStore, selectedCategory ?? undefined);
-                    setIsExporting(false);
-                  }, 800);
-                }
-              }}
-              disabled={!selectedStore || isExporting}
-              style={{ touchAction: 'manipulation' }}
-              className="bg-green-600 hover:bg-green-700 text-white ml-auto"
-            >
-              {isExporting ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Generando...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <FileSpreadsheet className="h-4 w-4" />
-                  Exportar a Excel
-                </div>
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            Descargar inventario en Excel
-          </TooltipContent>
-        </Tooltip>
-        <p className="hidden sm:block text-xs text-muted-foreground mt-1 ml-auto">
-          Atajo: <kbd className="bg-muted px-1 py-0.5 rounded border text-[11px]">Ctrl</kbd> + <kbd className="bg-muted px-1 py-0.5 rounded border text-[11px]">E</kbd>
-        </p>
-      </TooltipProvider>
+        <Button
+          variant="outline"
+          onClick={handleClearFilters}
+          disabled={!hasActiveFilters}
+          className="w-full sm:w-auto"
+        >
+          Limpiar filtros
+        </Button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="flex-1 mb-3 sm:mb-0">
           <label className="block mb-1 text-sm font-medium">Selecciona una tienda</label>
-          <Select onValueChange={(value) => setSelectedStore(Number(value))}>
+          <Select
+            value={selectedStore !== null ? selectedStore.toString() : undefined}
+            onValueChange={(value) => setSelectedStore(Number(value))}
+          >
             <SelectTrigger className="w-full h-10 text-sm border-gray-300 shadow-sm">
               <SelectValue placeholder="Selecciona una tienda" />
             </SelectTrigger>
@@ -403,14 +506,25 @@ export default function ProductsByStorePage() {
         </div>
       </div>
 
-      <div className="mb-6">
-        <div className="max-w-md rounded-lg border border-green-200 bg-gradient-to-r from-green-50 via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row">
+        <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 
+        via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 
+          dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
           <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real del inventario</p>
           <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
-            {formatCurrency(totalInventoryValue, "PEN")}
+            {formatCurrency(globalInventoryValue, "PEN")}
           </p>
           <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
-            Sumatoria de precio de compra por stock de cada producto en la tienda seleccionada.
+            Sumatoria del precio de compra por stock de todos los productos en todas las tiendas.
+          </p>
+        </div>
+        <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
+          <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real según filtros activos</p>
+          <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
+            {formatCurrency(filteredInventoryValue, "PEN")}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
+            Actualizado automáticamente al filtrar por categoría, marca, tienda, producto o stock.
           </p>
         </div>
       </div>
@@ -425,6 +539,7 @@ export default function ProductsByStorePage() {
               <TableHead className="text-xs">Precio de Venta</TableHead>
               <TableHead className="text-xs">Stock</TableHead>
               <TableHead className="text-xs">Fecha de Ingreso</TableHead>
+              <TableHead className="text-xs">Última salida</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -439,6 +554,21 @@ export default function ProductsByStorePage() {
                 <TableCell className="text-sm">{item.stock}</TableCell>
                 <TableCell className="text-sm">
                   {format(new Date(item.inventory.product.createdAt), "dd/MM/yyyy")}
+                </TableCell>
+                <TableCell className="text-sm">
+                  {(() => {
+                    const lastSaleAt = item?.salesDetails?.[0]?.sale?.createdAt;
+                    if (!lastSaleAt) {
+                      return "Sin ventas";
+                    }
+
+                    const parsedDate = new Date(lastSaleAt);
+                    if (Number.isNaN(parsedDate.getTime())) {
+                      return "Sin ventas";
+                    }
+
+                    return format(parsedDate, "dd/MM/yyyy HH:mm");
+                  })()}
                 </TableCell>
               </TableRow>
             ))}

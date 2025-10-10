@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Check, ChevronsUpDown, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronsUpDown, X } from "lucide-react"
 import { EditSeriesModal } from "../EditSeriesModal"
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { MobileProductModal } from "../MobileProductModal"
 import { cn } from "@/lib/utils"
 
@@ -33,6 +33,20 @@ interface Props {
   categories: { id: number; name: string }[]
 }
 
+type SortKey =
+  | "name"
+  | "category_name"
+  | "quantity"
+  | "price"
+  | "priceSell"
+  | "totalPurchase"
+  | "series"
+
+interface SortConfig {
+  key: SortKey
+  direction: "asc" | "desc"
+}
+
 export const SelectedProductsTable = ({
   selectedProducts,
   setSelectedProducts,
@@ -45,149 +59,153 @@ export const SelectedProductsTable = ({
 
   const [activeProductIndex, setActiveProductIndex] = useState<number | null>(null)
   const [categoryPopoverIndex, setCategoryPopoverIndex] = useState<number | null>(null)
-  const [tableScale, setTableScale] = useState<"compact" | "comfortable" | "spacious">("comfortable")
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null)
 
-  const sizeClasses = useMemo(() => {
-    switch (tableScale) {
-      case "compact":
-        return {
-          text: "text-xs",
-          padding: "py-1",
-          header: "text-xs",
-        }
-      case "spacious":
-        return {
-          text: "text-base",
-          padding: "py-3",
-          header: "text-base",
-        }
+  const getComparableValue = (product: Product, key: SortKey): string | number => {
+    switch (key) {
+      case "name":
+        return product.name
+      case "category_name":
+        return product.category_name || ""
+      case "quantity":
+        return product.quantity
+      case "price":
+        return product.price
+      case "priceSell":
+        return product.priceSell ?? 0
+      case "series":
+        return product.series?.length ?? 0
+      case "totalPurchase":
+        return Number(product.quantity) * Number(product.price || 0)
       default:
-        return {
-          text: "text-sm",
-          padding: "py-2",
-          header: "text-sm",
-        }
+        return ""
     }
-  }, [tableScale])
-
-  const handleIncreaseScale = () => {
-    setTableScale((current) => {
-      if (current === "compact") return "comfortable"
-      if (current === "comfortable") return "spacious"
-      return current
-    })
   }
 
-  const handleDecreaseScale = () => {
-    setTableScale((current) => {
-      if (current === "spacious") return "comfortable"
-      if (current === "comfortable") return "compact"
-      return current
+  const sortProducts = (key: SortKey) => {
+    const direction: "asc" | "desc" =
+      sortConfig?.key === key && sortConfig.direction === "asc" ? "desc" : "asc"
+
+    setActiveProductIndex(null)
+    setOpenSeriesModal(null)
+
+    setSelectedProducts((prev) => {
+      const sorted = [...prev].sort((a, b) => {
+        const valueA = getComparableValue(a, key)
+        const valueB = getComparableValue(b, key)
+
+        if (typeof valueA === "number" && typeof valueB === "number") {
+          return direction === "asc" ? valueA - valueB : valueB - valueA
+        }
+
+        return direction === "asc"
+          ? String(valueA).localeCompare(String(valueB), undefined, { sensitivity: "base" })
+          : String(valueB).localeCompare(String(a), undefined, { sensitivity: "base" })
+      })
+
+      return sorted
     })
+    setSortConfig({ key, direction })
+  }
+
+  const renderSortIcon = (key: SortKey) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="h-4 w-4" />
+    }
+
+    return sortConfig.direction === "asc" ? (
+      <ArrowUp className="h-4 w-4" />
+    ) : (
+      <ArrowDown className="h-4 w-4" />
+    )
   }
 
   const activeProduct = activeProductIndex !== null ? selectedProducts[activeProductIndex] ?? null : null
 
   return (
-    <div className='border px-2 overflow-x-auto max-w-full'>
-      <div className="hidden sm:flex items-center justify-end gap-2 py-2">
-        <span className="text-sm text-muted-foreground">Tamaño de encabezado</span>
-        <div className="flex items-center gap-1">
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={handleDecreaseScale}
-            disabled={tableScale === "compact"}
-            aria-label="Disminuir tamaño de encabezado"
-          >
-            A-
-          </Button>
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={handleIncreaseScale}
-            disabled={tableScale === "spacious"}
-            aria-label="Aumentar tamaño de encabezado"
-          >
-            A+
-          </Button>
-        </div>
-      </div>
-      <Table className={cn("table-fixed w-full", sizeClasses.text)}>
+    <div className='border px-1 sm:px-2 overflow-x-auto max-w-full'>
+      <Table className={cn("w-full min-w-[340px] sm:min-w-[640px] text-[11px] sm:text-xs table-fixed")}>
         <TableHeader>
           <TableRow>
-            <TableHead
-              className={cn(
-                "text-left w-[100px] sm:w-[300px] max-w-[400px] truncate",
-                sizeClasses.header,
-                sizeClasses.padding,
-              )}
-            >
-              Nombre
+            {/* Nombre: Compacto, pero siempre visible. Con truncate es clave. */}
+            <TableHead className="text-left w-[120px] truncate py-1.5 sm:py-2">
+              <button
+                type="button"
+                onClick={() => sortProducts("name")}
+                className="flex items-center gap-1"
+              >
+                Nombre
+                {renderSortIcon("name")}
+              </button>
             </TableHead>
-            <TableHead
-              className={cn(
-                "text-left max-w-[150px] truncate hidden sm:table-cell",
-                sizeClasses.header,
-                sizeClasses.padding,
-              )}
-            >
-              Categoria
+            {/* Categoria: Oculta en XS, aparece en SM, con ancho reducido. */}
+            <TableHead className="text-left w-[70px] sm:w-[110px] truncate hidden sm:table-cell py-1.5 sm:py-2">
+              <button
+                type="button"
+                onClick={() => sortProducts("category_name")}
+                className="flex items-center gap-1"
+              >
+                Cat.
+                {renderSortIcon("category_name")}
+              </button>
             </TableHead>
-            <TableHead
-              className={cn(
-                "text-left max-w-[150px] truncate",
-                sizeClasses.header,
-                sizeClasses.padding,
-              )}
-            >
-              Cantidad
+            {/* Cantidad: AMPLIFICADO, visible siempre. Ancho un poco más generoso. */}
+            <TableHead className="text-left w-[70px] py-1.5 sm:py-2">
+              <button
+                type="button"
+                onClick={() => sortProducts("quantity")}
+                className="flex items-center gap-1"
+              >
+                Cant.
+                {renderSortIcon("quantity")}
+              </button>
             </TableHead>
-            <TableHead
-              className={cn(
-                "text-left max-w-[150px] truncate",
-                sizeClasses.header,
-                sizeClasses.padding,
-              )}
-            >
-              Precio Compra
+            {/* Precio Compra: AMPLIFICADO, visible siempre. Ancho un poco más generoso. */}
+            <TableHead className="text-left w-[85px] py-1.5 sm:py-2">
+              <button
+                type="button"
+                onClick={() => sortProducts("price")}
+                className="flex items-center gap-1"
+              >
+                P. Compra
+                {renderSortIcon("price")}
+              </button>
             </TableHead>
-            <TableHead
-              className={cn(
-                "text-left max-w-[150px] truncate",
-                sizeClasses.header,
-                sizeClasses.padding,
-              )}
-            >
-              Precio Compra Total
+            {/* Precio Compra Total: Visible siempre, ancho para mostrar 2 decimales. */}
+            <TableHead className="text-left w-[90px] py-1.5 sm:py-2 hidden md:table-cell">
+              <button
+                type="button"
+                onClick={() => sortProducts("totalPurchase")}
+                className="flex items-center gap-1"
+              >
+                Total C.
+                {renderSortIcon("totalPurchase")}
+              </button>
             </TableHead>
-            <TableHead
-              className={cn(
-                "text-left max-w-[150px] truncate hidden sm:table-cell",
-                sizeClasses.header,
-                sizeClasses.padding,
-              )}
-            >
-              Precio Venta
+            {/* Precio Venta: Ahora oculto en SM, aparece en MD. Texto del encabezado más corto. */}
+            <TableHead className="text-left w-[80px] md:w-[100px] hidden md:table-cell py-1.5 sm:py-2">
+              <button
+                type="button"
+                onClick={() => sortProducts("priceSell")}
+                className="flex items-center gap-1"
+              >
+                P. Venta
+                {renderSortIcon("priceSell")}
+              </button>
             </TableHead>
-            <TableHead
-              className={cn(
-                "text-left max-w-[150px] truncate hidden sm:table-cell",
-                sizeClasses.header,
-                sizeClasses.padding,
-              )}
-            >
-              Series
+            {/* Series: Ahora oculto en MD, aparece en LG. Ancho reducido. */}
+            <TableHead className="text-left w-[80px] lg:w-[100px] truncate hidden lg:table-cell py-1.5 sm:py-2">
+              <button
+                type="button"
+                onClick={() => sortProducts("series")}
+                className="flex items-center gap-1"
+              >
+                Series
+                {renderSortIcon("series")}
+              </button>
             </TableHead>
-            <TableHead
-              className={cn(
-                "text-left max-w-[150px] truncate",
-                sizeClasses.header,
-                sizeClasses.padding,
-              )}
-            >
-              Acciones
-            </TableHead>
+            {/* Acciones: Ancho fijo y mínimo */}
+            <TableHead className="text-left w-[36px] py-1.5 sm:py-2">Acc.</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -195,22 +213,14 @@ export const SelectedProductsTable = ({
             <TableRow
               key={product.id}
               onClick={() => window.innerWidth < 640 && setActiveProductIndex(index)} // abre el modal
-              className={cn("cursor-pointer sm:cursor-default", sizeClasses.padding)}
+              className="cursor-pointer sm:cursor-default"
             >
-              <TableCell
-                className={cn(
-                  "w-[100px] sm:w-[300px] max-w-[400px] truncate overflow-hidden whitespace-nowrap",
-                  sizeClasses.text,
-                  sizeClasses.padding,
-                )}
-              >
+              <TableCell className={cn("w-[120px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2")}>
                 {product.name}
               </TableCell>
               <TableCell
                 className={cn(
-                  "max-w-[150px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell",
-                  sizeClasses.text,
-                  sizeClasses.padding,
+                  "w-[70px] sm:w-[110px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell text-xs sm:text-sm py-1.5 sm:py-2"
                 )}
               >
                 <Popover
@@ -220,16 +230,16 @@ export const SelectedProductsTable = ({
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
-                      className="w-full justify-between"
+                      className="w-full justify-between px-2 py-1 h-auto text-xs sm:text-sm"
                       title="Cambia la categoría para este producto específico"
                     >
                       {product.category_name || "Sin categoría"}
                       <ChevronsUpDown className="opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[200px] p-0">
+                  <PopoverContent className="w-[200px] p-0 text-xs sm:text-sm">
                     <Command>
-                      <CommandInput placeholder="Buscar categoría..." />
+                      <CommandInput placeholder="Buscar categoría..." className="text-xs sm:text-sm" />
                       <CommandList>
                         <CommandEmpty>No se encontraron categorías.</CommandEmpty>
                         <CommandGroup>
@@ -284,13 +294,7 @@ export const SelectedProductsTable = ({
                   </PopoverContent>
                 </Popover>
               </TableCell>
-              <TableCell
-                className={cn(
-                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap",
-                  sizeClasses.text,
-                  sizeClasses.padding,
-                )}
-              >
+              <TableCell className={cn("w-[64px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2")}>
                 <Input
                   type="number"
                   value={product.quantity}
@@ -305,17 +309,11 @@ export const SelectedProductsTable = ({
                       )
                     }
                   }}
-                  className="w-full"
+                  className="w-full h-8 sm:h-9 text-[11px] sm:text-xs"
                   title="Cantidad de unidades para este producto"
                 />
               </TableCell>
-              <TableCell
-                className={cn(
-                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap",
-                  sizeClasses.text,
-                  sizeClasses.padding,
-                )}
-              >
+              <TableCell className={cn("w-[85px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2")}>
                 <Input
                   type="number"
                   value={product.price}
@@ -331,24 +329,16 @@ export const SelectedProductsTable = ({
                       )
                     }
                   }}
-                  className="w-full"
+                  className="w-full h-8 sm:h-9 text-[11px] sm:text-xs"
                   title="Precio de compra unitario editable"
                 />
               </TableCell>
-              <TableCell
-                className={cn(
-                  "max-w-[120px] truncate overflow-hidden whitespace-nowrap",
-                  sizeClasses.text,
-                  sizeClasses.padding,
-                )}
-              >
+              <TableCell className={cn("w-[90px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2 hidden md:table-cell")}>
                 {(Number(product.quantity) * Number(product.price || 0)).toFixed(2)}
               </TableCell>
               <TableCell
                 className={cn(
-                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell",
-                  sizeClasses.text,
-                  sizeClasses.padding,
+                  "max-sm:w-[17%] sm:w-[95px] md:w-[105px] truncate overflow-hidden whitespace-nowrap text-sm py-2 hidden md:table-cell"
                 )}
               >
                 <Input
@@ -366,15 +356,13 @@ export const SelectedProductsTable = ({
                       )
                     }
                   }}
-                  className="w-full"
+                  className="w-full h-8 sm:h-9 text-xs sm:text-sm"
                   title="Precio de venta sugerido para este producto"
                 />
               </TableCell>
               <TableCell
                 className={cn(
-                  "text-xs max-w-[250px] truncate overflow-hidden whitespace-nowrap hidden sm:table-cell",
-                  sizeClasses.text,
-                  sizeClasses.padding,
+                  "w-[80px] lg:w-[100px] truncate overflow-hidden whitespace-nowrap hidden lg:table-cell text-xs sm:text-sm",
                 )}
               >
                 <div
@@ -405,13 +393,7 @@ export const SelectedProductsTable = ({
                   getAllSeriesFromDataTable={getAllSeriesFromDataTable}
                 />
               )}
-              <TableCell
-                className={cn(
-                  "max-w-[100px] truncate overflow-hidden whitespace-nowrap",
-                  sizeClasses.text,
-                  sizeClasses.padding,
-                )}
-              >
+              <TableCell className={cn("w-[32px] truncate overflow-hidden whitespace-nowrap py-1.5 sm:py-2")}>
                 <Button
                   variant="outline"
                   onClick={(e) => {
@@ -419,6 +401,7 @@ export const SelectedProductsTable = ({
                     removeProduct(product.id);
                   }}
                   title="Elimina este producto del ingreso"
+                  className="h-8 sm:h-9 px-1"
                 >
                   <X className="w-4 h-4" color="red" />
                 </Button>

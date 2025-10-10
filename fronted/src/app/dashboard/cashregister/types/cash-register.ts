@@ -26,4 +26,5 @@ export interface Transaction {
     closingBalance?: number | null;
     totalIncome?: number | null;
     totalExpense?: number | null;
+    nextOpeningBalance?: number | null;
   }

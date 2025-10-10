@@ -1,9 +1,10 @@
-  import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-  import { PrismaService } from 'src/prisma/prisma.service';
-  import { CreateCashTransactionDto } from './dto/create-cashtransactions.dto';
-  import { CreateCashClosureDto } from './dto/create-cashclosure.dto';
-  import { CreateCashRegisterDto } from './dto/create-cashregister.dto';
-  import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { CreateCashTransactionDto } from './dto/create-cashtransactions.dto';
+import { CreateCashClosureDto } from './dto/create-cashclosure.dto';
+import { CreateCashRegisterDto } from './dto/create-cashregister.dto';
+import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
 
   @Injectable()
   export class CashregisterService {
@@ -340,13 +341,6 @@
 
     async createClosure(data: CreateCashClosureDto) {
       return this.prisma.$transaction(async (prisma) => {
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const endOfDay = new Date();
-        endOfDay.setHours(23, 59, 59, 999);
-
-        // Verificar que exista la caja activa
         const cashRegister = await prisma.cashRegister.findFirst({
           where: {
             id: data.cashRegisterId,
@@ -362,38 +356,32 @@
           throw new BadRequestException('La caja ya ha sido cerrada.');
         }
 
-        // 🔍 Validar si ya hubo un cierre hoy para esta tienda
-        const existingClosure = await prisma.cashClosure.findFirst({
-          where: {
-            cashRegister: {
-              storeId: cashRegister.storeId,
-            },
-            createdAt: {
-              gte: today,
-              lte: endOfDay,
-            },
-          },
-        });
-
-        if (existingClosure) {
+        if (cashRegister.storeId !== data.storeId) {
           throw new BadRequestException(
-            "Ya se realizó un cierre de caja hoy para esta tienda. Solo se permite un cierre por día."
+            'La caja seleccionada no pertenece a la tienda indicada para el cierre.',
           );
         }
 
-        console.log("datos cashregister", cashRegister)
-        console.log("Cierre de caja:", data);
+        console.log('datos cashregister', cashRegister);
+        console.log('Cierre de caja:', data);
 
-        // Marcar la caja como cerrada
-        await prisma.cashRegister.update({
+        const closedCashRegister = await prisma.cashRegister.update({
           where: { id: data.cashRegisterId },
           data: { 
-            status: 'CLOSED', 
+            status: 'CLOSED',
             currentBalance: data.closingBalance,
           },
         });
 
-        // Crear cierre de caja
+        const requestedNextInitialBalance =
+          typeof data.nextInitialBalance === 'number'
+            ? Number(data.nextInitialBalance)
+            : Number(data.closingBalance);
+
+        if (requestedNextInitialBalance < 0) {
+          throw new BadRequestException('El saldo inicial de la siguiente caja no puede ser negativo.');
+        }
+
         const closure = await prisma.cashClosure.create({
           data: {
             cashRegisterId: data.cashRegisterId,
@@ -406,8 +394,71 @@
           },
         });
 
-        return closure;
+        const nextCashRegisterName = await this.generateNextCashRegisterName(
+          prisma,
+          cashRegister.name,
+        );
+
+        const nextCashRegister = await prisma.cashRegister.create({
+          data: {
+            name: nextCashRegisterName,
+            description: cashRegister.description,
+            storeId: cashRegister.storeId,
+            initialBalance: requestedNextInitialBalance,
+            currentBalance: requestedNextInitialBalance,
+            status: 'ACTIVE',
+          },
+        });
+
+        return {
+          closure: {
+            ...closure,
+            openingBalance: Number(closure.openingBalance),
+            closingBalance: Number(closure.closingBalance),
+            totalIncome: Number(closure.totalIncome),
+            totalExpense: Number(closure.totalExpense),
+          },
+          closedCashRegister: {
+            ...closedCashRegister,
+            initialBalance: Number(closedCashRegister.initialBalance),
+            currentBalance: Number(closedCashRegister.currentBalance),
+          },
+          nextCashRegister: {
+            ...nextCashRegister,
+            initialBalance: Number(nextCashRegister.initialBalance),
+            currentBalance: Number(nextCashRegister.currentBalance),
+          },
+          requestedNextInitialBalance,
+        };
       });
+    }
+
+    private async generateNextCashRegisterName(
+      prisma: Prisma.TransactionClient,
+      baseName: string,
+    ): Promise<string> {
+      const normalizedBase = baseName
+        .replace(/\s+-\s+Turno\s+.+$/i, '')
+        .trim() || baseName.trim() || 'Caja';
+
+      const now = new Date();
+      const pad = (value: number) => value.toString().padStart(2, '0');
+      const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
+      let attempt = 0;
+      let candidate = `${normalizedBase} - Turno ${timestamp}`;
+
+      // Garantiza nombres únicos en caso de cierres simultáneos
+      while (
+        await prisma.cashRegister.findUnique({
+          where: { name: candidate },
+        })
+      ) {
+        attempt += 1;
+        candidate = `${normalizedBase} - Turno ${timestamp}-${attempt}`;
+      }
+
+      return candidate;
     }
 
     async getClosuresByStore(storeId: number) {

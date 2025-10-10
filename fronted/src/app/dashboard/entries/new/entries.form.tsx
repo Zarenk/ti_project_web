@@ -833,7 +833,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-1 sm:px-2 lg:px-8">
+    <div className="mx-auto w-full max-w-5xl px-2 sm:px-4 lg:px-8">
       <form className='relative flex flex-col gap-2' onSubmit={onSubmit}>
         <fieldset disabled={isSubmitting} className='flex flex-col gap-2'>
                   <div className="flex flex-col sm:flex-row flex-wrap gap-2">

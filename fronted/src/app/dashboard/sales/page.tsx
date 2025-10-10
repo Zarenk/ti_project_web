@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createSalesColumns, Sale } from "./columns";
 import { DataTable } from "./data-table";
-import { getSales } from "./sales.api";
+import { getSaleById, getSales } from "./sales.api";
 import { SaleDetailDialog } from "./components/sale-detail-dialog";
 import { Button } from "@/components/ui/button";
 import { FileSpreadsheet, Loader2 } from "lucide-react";
@@ -11,125 +11,166 @@ import { toast } from "sonner";
 
 export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
 
+const parseNumberValue = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+};
+
+const normalizeSaleDetail = (
+  detail: any,
+): NonNullable<Sale["details"]>[number] => {
+  const productFromEntry = detail.entryDetail?.product;
+  const productFromInventory = detail.storeOnInventory?.inventory?.product;
+  const product = productFromEntry || productFromInventory || detail.product || null;
+
+  const resolvedName =
+    detail.productName ??
+    detail.product_name ??
+    product?.name ??
+    product?.productName ??
+    product?.nombre ??
+    undefined;
+
+  const resolvedSku =
+    detail.productSku ??
+    detail.product_sku ??
+    product?.sku ??
+    product?.code ??
+    product?.codigo ??
+    undefined;
+
+  const seriesList = Array.isArray(detail.series)
+    ? detail.series
+    : Array.isArray(detail.soldSeries)
+    ? detail.soldSeries.map((item: any) =>
+        typeof item === "string"
+          ? item
+          : item?.number ?? item?.serie ?? item?.code ?? null,
+      )
+    : [];
+
+  const normalizedPrice = parseNumberValue(detail.price) ?? 0;
+  const normalizedSubtotal = parseNumberValue(detail.subtotal);
+  const normalizedTotal = parseNumberValue(detail.total);
+  const normalizedQuantity = parseNumberValue(detail.quantity);
+
+  return {
+    id: detail.id,
+    quantity: normalizedQuantity ?? undefined,
+    price: normalizedPrice,
+    subtotal: normalizedSubtotal,
+    total: normalizedTotal,
+    product: product
+      ? {
+          name: product.name ?? product.productName ?? product.nombre,
+          sku: product.sku ?? product.code ?? product.codigo,
+        }
+      : null,
+    productName: resolvedName,
+    product_name: resolvedName,
+    productSku: resolvedSku,
+    product_sku: resolvedSku,
+    series: seriesList.filter((value:any): value is string | { number?: string } => Boolean(value)),
+  };
+};
+
+const normalizeApiSale = (sale: any): Sale => {
+  const details = Array.isArray(sale.salesDetails)
+    ? sale.salesDetails.map(normalizeSaleDetail)
+    : Array.isArray(sale.details)
+    ? sale.details.map(normalizeSaleDetail)
+    : [];
+
+  const payments = Array.isArray(sale.payments)
+    ? sale.payments.map((payment: any) => {
+        const amount = parseNumberValue(payment.amount);
+        const currency =
+          typeof payment.currency === "string" && payment.currency.trim().length > 0
+            ? payment.currency
+            : sale.tipoMoneda ?? sale.tipo_moneda ?? undefined;
+        const rawMethod =
+          typeof payment.method === "string" && payment.method.trim().length > 0
+            ? payment.method.trim()
+            : undefined;
+        const resolvedMethodName =
+          payment.paymentMethod?.name ?? rawMethod ?? undefined;
+        const normalizedId =
+          typeof payment.id === "number" || typeof payment.id === "string"
+            ? payment.id
+            : undefined;
+        const normalizedTransactionId =
+          typeof payment.transactionId === "string" && payment.transactionId.trim().length > 0
+            ? payment.transactionId.trim()
+            : undefined;
+        const normalizedReferenceNote =
+          typeof payment.referenceNote === "string" && payment.referenceNote.trim().length > 0
+            ? payment.referenceNote.trim()
+            : undefined;
+        const normalizedCashTransactionId =
+          typeof payment.cashTransactionId === "number" ||
+          typeof payment.cashTransactionId === "string"
+            ? payment.cashTransactionId
+            : typeof payment.cashTransaction?.id === "number" ||
+                typeof payment.cashTransaction?.id === "string"
+            ? payment.cashTransaction.id
+            : undefined;
+
+        return {
+          id: normalizedId,
+          amount: amount ?? undefined,
+          currency,
+          transactionId: normalizedTransactionId,
+          referenceNote: normalizedReferenceNote,
+          cashTransactionId: normalizedCashTransactionId,
+          paymentMethod: resolvedMethodName
+            ? { name: resolvedMethodName }
+            : payment.paymentMethod ?? null,
+        };
+      })
+    : [];
+
+  const total = parseNumberValue(sale.total);
+
+  return {
+    id: sale.id,
+    user: { username: sale.user?.username ?? sale.user?.name ?? "—" },
+    store: { name: sale.store?.name ?? sale.storeName ?? "—" },
+    client: { name: sale.client?.name ?? sale.clientName ?? "—" },
+    total: total ?? 0,
+    description: sale.description ?? sale.descripcion ?? undefined,
+    createdAt: sale.createdAt ?? sale.created_at ?? new Date().toISOString(),
+    tipoComprobante: sale.tipoComprobante ?? sale.tipo_comprobante ?? undefined,
+    tipoMoneda: sale.tipoMoneda ?? sale.tipo_moneda ?? undefined,
+    payments,
+    details,
+  };
+};
+
 export default function Page() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isExportingSummary, setIsExportingSummary] = useState(false);
   const [isExportingDetailed, setIsExportingDetailed] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await getSales();  
+        const data = await getSales();
         const mapped: Sale[] = data
-          .map((sale: any) => {
-            const details = Array.isArray(sale.salesDetails)
-              ? sale.salesDetails.map((detail: any) => {
-                  const productFromEntry = detail.entryDetail?.product;
-                  const productFromInventory = detail.storeOnInventory?.inventory?.product;
-                  const product = productFromEntry || productFromInventory || detail.product || null;
-
-                  const resolvedName =
-                    detail.productName ??
-                    detail.product_name ??
-                    product?.name ??
-                    product?.productName ??
-                    product?.nombre ??
-                    undefined;
-
-                  const resolvedSku =
-                    detail.productSku ??
-                    detail.product_sku ??
-                    product?.sku ??
-                    product?.code ??
-                    product?.codigo ??
-                    undefined;
-
-                  const seriesList = Array.isArray(detail.series)
-                    ? detail.series
-                    : Array.isArray(detail.soldSeries)
-                    ? detail.soldSeries.map((item: any) =>
-                        typeof item === "string"
-                          ? item
-                          : item?.number ?? item?.serie ?? item?.code ?? null,
-                      )
-                    : [];
-
-                  return {
-                    id: detail.id,
-                    quantity: detail.quantity,
-                    price: typeof detail.price === "number" ? detail.price : Number(detail.price ?? 0),
-                    subtotal:
-                      typeof detail.subtotal === "number"
-                        ? detail.subtotal
-                        : detail.subtotal !== undefined
-                        ? Number(detail.subtotal)
-                        : undefined,
-                    total:
-                      typeof detail.total === "number"
-                        ? detail.total
-                        : detail.total !== undefined
-                        ? Number(detail.total)
-                        : undefined,
-                    product: product
-                      ? {
-                          name: product.name ?? product.productName ?? product.nombre,
-                          sku: product.sku ?? product.code ?? product.codigo,
-                        }
-                      : null,
-                    productName: resolvedName,
-                    product_name: resolvedName,
-                    productSku: resolvedSku,
-                    product_sku: resolvedSku,
-                    series: seriesList.filter((value: string | null | undefined) => Boolean(value)) as (
-                      | string
-                      | { number?: string }
-                    )[],
-                  };
-                })
-              : sale.details ?? [];
-
-            const payments = Array.isArray(sale.payments)
-              ? sale.payments.map((payment: any) => ({
-                  id: payment.id,
-                  amount:
-                    typeof payment.amount === "number"
-                      ? payment.amount
-                      : payment.amount !== undefined
-                      ? Number(payment.amount)
-                      : undefined,
-                  currency: payment.currency ?? sale.tipoMoneda ?? undefined,
-                  paymentMethod: payment.paymentMethod ??
-                    (payment.method ? { name: payment.method } : null),
-                }))
-              : [];
-
-            const normalizedSale: Sale = {
-              id: sale.id,
-              user: { username: sale.user?.username ?? sale.user?.name ?? "—" },
-              store: { name: sale.store?.name ?? sale.storeName ?? "—" },
-              client: { name: sale.client?.name ?? sale.clientName ?? "—" },
-              total:
-                typeof sale.total === "number"
-                  ? sale.total
-                  : Number.isFinite(Number(sale.total))
-                  ? Number(sale.total)
-                  : 0,
-              description: sale.description ?? sale.descripcion ?? undefined,
-              createdAt: sale.createdAt ?? sale.created_at ?? new Date().toISOString(),
-              tipoComprobante: sale.tipoComprobante ?? sale.tipo_comprobante ?? undefined,
-              tipoMoneda: sale.tipoMoneda ?? sale.tipo_moneda ?? undefined,
-              payments,
-              details,
-            };
-
-            return normalizedSale;
-          })
+          .map(normalizeApiSale)
           .sort(
-            (a: any, b: any) =>
-              new Date(b.createdAt).getTime() -
-              new Date(a.createdAt).getTime()
+            (a: Sale, b: Sale) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
           );
         setSales(mapped);
       } catch (error) {
@@ -143,15 +184,34 @@ export default function Page() {
     setSales((prev) => prev.filter((sale) => sale.id !== id));
   }, []);
 
-   const handleViewDetail = useCallback((sale: Sale) => {
-    setSelectedSale(sale);
-    setIsDetailOpen(true);
-  }, []);
+  const handleViewDetail = useCallback(
+    async (sale: Sale) => {
+      setSelectedSale(sale);
+      setIsDetailOpen(true);
+      setIsDetailLoading(true);
+
+      try {
+        const detailedSale = await getSaleById(sale.id);
+        const normalizedSale = normalizeApiSale(detailedSale);
+        setSelectedSale(normalizedSale);
+        setSales((prev) =>
+          prev.map((item) => (item.id === normalizedSale.id ? normalizedSale : item)),
+        );
+      } catch (error) {
+        console.error("Error al obtener el detalle de la venta:", error);
+        toast.error("No se pudo obtener el detalle actualizado de la venta.");
+      } finally {
+        setIsDetailLoading(false);
+      }
+    },
+    [],
+  );
 
   const handleDetailVisibility = useCallback((open: boolean) => {
     setIsDetailOpen(open);
     if (!open) {
       setSelectedSale(null);
+      setIsDetailLoading(false);
     }
   }, []);
 
@@ -771,9 +831,10 @@ export default function Page() {
       </section>
 
       <SaleDetailDialog
-        sale={selectedSale}
-        open={isDetailOpen}
-        onOpenChange={handleDetailVisibility}
+          sale={selectedSale}
+          open={isDetailOpen}
+          onOpenChange={handleDetailVisibility}
+          loading={isDetailLoading}
       />
     </>
   );

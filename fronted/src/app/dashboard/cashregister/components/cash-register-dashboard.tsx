@@ -88,6 +88,19 @@ const splitSaleDescription = (description: string | null | undefined) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
 
+const sanitizeClosureNotes = (value: string) => {
+  if (!value) {
+    return "";
+  }
+
+  const collapsed = value.replace(
+    /(cierre de caja)(?:(?:\s|[|,.;:-])+cierre de caja)+/gi,
+    (_, firstOccurrence: string) => firstOccurrence,
+  );
+
+  return normalizeWhitespace(collapsed);
+};
+
 const escapeHtml = (value: string) =>
   value
     .replace(/&/g, '&amp;')
@@ -234,6 +247,88 @@ const sortClosuresByDateDesc = <T extends { createdAt?: string | Date }>(values:
     return bTime - aTime;
   });
 
+const normalizeClosureId = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    if (value.startsWith("closure-")) {
+      return value;
+    }
+    return value.length > 0 ? `closure-${value}` : null;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return `closure-${value}`;
+  }
+
+  return null;
+};
+
+const resolveLatestClosureOverride = (
+  activeRegister: { initialBalance?: unknown } | null,
+  closuresList: any[],
+): { amount: number | null; transactionId: string | null } => {
+  if (!activeRegister || !Array.isArray(closuresList) || closuresList.length === 0) {
+    return { amount: null, transactionId: null };
+  }
+
+  const parsedInitial = Number(activeRegister.initialBalance);
+  if (!Number.isFinite(parsedInitial)) {
+    return { amount: null, transactionId: null };
+  }
+
+  const normalizedAmount = Number(parsedInitial.toFixed(2));
+  const latestClosureId = normalizeClosureId(closuresList[0]?.id);
+
+  if (!latestClosureId) {
+    return { amount: null, transactionId: null };
+  }
+
+  return { amount: normalizedAmount, transactionId: latestClosureId };
+};
+
+const withLatestClosureOverride = <T extends Record<string, any>>(
+  closuresList: T[],
+  overrideAmount: number | null,
+): T[] => {
+  if (overrideAmount === null) {
+    return closuresList;
+  }
+
+  return closuresList.map((closure, index) => {
+    if (index === 0) {
+      return {
+        ...closure,
+        nextOpeningBalance: overrideAmount,
+      };
+    }
+    return closure;
+  });
+};
+
+const withClosureTransactionOverride = (
+  transactions: Transaction[],
+  overrideAmount: number | null,
+  targetClosureId: string | null,
+): Transaction[] => {
+  if (overrideAmount === null || !targetClosureId) {
+    return transactions;
+  }
+
+  return transactions.map((transaction) => {
+    const entryType = transaction.internalType ?? transaction.type;
+    if (entryType === "CLOSURE" && transaction.id === targetClosureId) {
+      return {
+        ...transaction,
+        nextOpeningBalance: overrideAmount,
+      };
+    }
+    return transaction;
+  });
+};
+
 const extractPaymentMethodsFromText = (value?: string | null) => {
   if (!value) {
     return [] as string[];
@@ -281,20 +376,30 @@ const parseNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const PAYMENT_SUMMARY_METHODS = ["Tarjeta", "Transferencia", "Yape", "Plin"] as const;
+const PAYMENT_SUMMARY_METHODS = [
+  "Efectivo",
+  "Yape",
+  "Plin",
+  "Tarjeta",
+  "Transferencia",
+] as const;
 type PaymentSummaryKey = (typeof PAYMENT_SUMMARY_METHODS)[number];
 
 const PAYMENT_SUMMARY_LABELS: Record<PaymentSummaryKey, string> = {
-  Tarjeta: "Tarjeta",
-  Transferencia: "Transferencia",
+  Efectivo: "EN EFECTIVO",
   Yape: "Yape",
   Plin: "Plin",
+  Tarjeta: "Tarjeta",
+  Transferencia: "Transferencia",
 };
 
 const identifyPaymentSummaryMethod = (value: string): PaymentSummaryKey | null => {
   const normalized = normalizeWhitespace(value).toLowerCase();
   if (!normalized) {
     return null;
+  }
+  if (isCashPaymentMethod(normalized)) {
+    return "Efectivo";
   }
   if (/(tarjeta|visa|master|credito|crédito|debito|débito|amex|american express)/.test(normalized)) {
     return "Tarjeta";
@@ -324,6 +429,64 @@ const extractAmountFromMethodEntry = (value: string): number | null => {
   return Number.isFinite(amount) ? amount : null;
 };
 
+const resolveSignedAmount = (rawAmount: number, entryType?: string | null) => {
+  if (!Number.isFinite(rawAmount)) {
+    return 0;
+  }
+
+  if ((entryType ?? "").toUpperCase() === "EXPENSE") {
+    return rawAmount < 0 ? rawAmount : -rawAmount;
+  }
+
+  return rawAmount;
+};
+
+const formatSignedCurrency = (amount: number, currencySymbol: string) => {
+  const resolvedCurrency = (currencySymbol ?? "S/.").trim() || "S/.";
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const formatted = `${resolvedCurrency} ${Math.abs(safeAmount).toFixed(2)}`;
+  return safeAmount < 0 ? `- ${formatted}` : formatted;
+};
+
+const formatPaymentMethodsForReport = (
+  methods: string[] | null | undefined,
+  entryType?: string | null,
+) => {
+  if (!methods || methods.length === 0) {
+    return "-";
+  }
+
+  const isExpense = (entryType ?? "").toUpperCase() === "EXPENSE";
+
+  const formattedEntries = methods
+    .map((rawValue) => {
+      const normalized = normalizeWhitespace(rawValue ?? "");
+      if (!normalized) {
+        return null;
+      }
+
+      const colonIndex = normalized.indexOf(":");
+      if (colonIndex === -1) {
+        if (!isExpense || normalized.startsWith("-")) {
+          return normalized;
+        }
+        return `- ${normalized}`;
+      }
+
+      const label = normalizeWhitespace(normalized.slice(0, colonIndex));
+      const amountText = normalizeWhitespace(normalized.slice(colonIndex + 1));
+
+      if (!amountText) {
+        return label;
+      }
+
+      const resolvedAmount = isExpense && !amountText.startsWith("-") ? `- ${amountText}` : amountText;
+      return `${label}: ${resolvedAmount}`;
+    })
+    .filter((entry): entry is string => Boolean(entry));
+
+  return formattedEntries.length > 0 ? formattedEntries.join(" | ") : "-";
+};
 
 const isCashPaymentMethod = (value: string) => {
   const normalized = normalizeWhitespace(value).toLowerCase();
@@ -340,6 +503,8 @@ const REPORT_COLUMNS: { key: keyof CashReportRow; header: string }[] = [
   { key: "timestamp", header: "Fecha/Hora" },
   { key: "type", header: "Tipo" },
   { key: "amount", header: "Monto" },
+  { key: "openingBalance", header: "Saldo Inicial" },
+  { key: "cashAvailable", header: "Efectivo Disponible" },
   { key: "paymentMethods", header: "Métodos de Pago" },
   { key: "employee", header: "Encargado" },
   { key: "client", header: "Cliente" },
@@ -352,6 +517,8 @@ type CashReportRow = {
   timestamp: string;
   type: string;
   amount: string;
+  openingBalance: string;
+  cashAvailable: string;
   paymentMethods: string;
   employee: string;
   client: string;
@@ -677,6 +844,9 @@ const adaptTransaction = (transaction: any): Transaction => {
     closingBalance: toNullableNumber(transaction?.closingBalance ?? transaction?.amount),
     totalIncome: toNullableNumber(transaction?.totalIncome),
     totalExpense: toNullableNumber(transaction?.totalExpense),
+    nextOpeningBalance: toNullableNumber(
+      (transaction as any)?.nextOpeningBalance ?? (transaction as any)?.nextInitialBalance ?? null,
+    ),
   } as Transaction;
 };
 
@@ -748,9 +918,19 @@ export default function CashRegisterDashboard() {
       const hasValidDate = rawDate instanceof Date && !Number.isNaN(rawDate.getTime())
       const formattedDate = hasValidDate && rawDate ? format(rawDate, "dd/MM/yyyy HH:mm:ss") : "-"
       const currencySymbol = (transaction.currency ?? "S/.").trim()
-      const amountDisplay = `${currencySymbol} ${Number(transaction.amount ?? 0).toFixed(2)}`
-      const paymentMethods = transaction.paymentMethods && transaction.paymentMethods.length > 0
-        ? transaction.paymentMethods.join(" | ")
+      const entryType = transaction.internalType ?? transaction.type
+      const signedAmount = resolveSignedAmount(Number(transaction.amount ?? 0), entryType)
+      const amountDisplay = formatSignedCurrency(signedAmount, currencySymbol)
+      const paymentMethodsDisplay = formatPaymentMethodsForReport(transaction.paymentMethods, entryType)
+
+      const normalizedEntryType = (entryType ?? "").toUpperCase()
+      const isClosure = normalizedEntryType === "CLOSURE"
+      const openingBalanceDisplay = isClosure && transaction.openingBalance !== null && transaction.openingBalance !== undefined
+        ? `${currencySymbol} ${Number(transaction.openingBalance ?? 0).toFixed(2)}`
+        : "-"
+      const cashAvailableBase = transaction.closingBalance ?? transaction.totalIncome ?? transaction.amount ?? 0
+      const cashAvailableDisplay = isClosure
+        ? `${currencySymbol} ${Number(cashAvailableBase).toFixed(2)}`
         : "-"
 
       const documentParts = [
@@ -760,13 +940,28 @@ export default function CashRegisterDashboard() {
         .map((value) => (value ?? "").trim())
         .filter((value) => value.length > 0)
 
-      const notesValue = transaction.description ? normalizeWhitespace(transaction.description) : "-"
+      const rawNotes = typeof transaction.description === "string" ? transaction.description : ""
+      const notesValue = (() => {
+        if (!rawNotes) {
+          return "-"
+        }
+
+        if (isClosure) {
+          const sanitized = sanitizeClosureNotes(rawNotes)
+          return sanitized.length > 0 ? sanitized : "-"
+        }
+
+        const normalized = normalizeWhitespace(rawNotes)
+        return normalized.length > 0 ? normalized : "-"
+      })()
 
       return {
         timestamp: formattedDate,
         type: TRANSACTION_TYPE_LABELS[transaction.type] ?? transaction.type ?? "-",
         amount: amountDisplay,
-        paymentMethods,
+        openingBalance: openingBalanceDisplay,
+        cashAvailable: cashAvailableDisplay,
+        paymentMethods: paymentMethodsDisplay,
         employee: transaction.employee?.trim() || "-",
         client: transaction.clientName?.trim() || "Sin cliente",
         document: documentParts.length > 0 ? documentParts.join(" ") : "-",
@@ -778,16 +973,22 @@ export default function CashRegisterDashboard() {
 
   const paymentMethodSummary = useMemo(() => {
     const totals: Record<PaymentSummaryKey, number> = {
-      Tarjeta: 0,
-      Transferencia: 0,
+      Efectivo: 0,
       Yape: 0,
       Plin: 0,
+      Tarjeta: 0,
+      Transferencia: 0,
     };
 
     let resolvedCurrency = "S/.";
 
     transactions.forEach((transaction) => {
-      if (!transaction || transaction.type !== "INCOME") {
+      if (!transaction) {
+        return;
+      }
+
+      const entryType = transaction.internalType ?? transaction.type;
+      if (entryType !== "INCOME" && entryType !== "EXPENSE") {
         return;
       }
 
@@ -801,9 +1002,11 @@ export default function CashRegisterDashboard() {
       }
 
       const totalAmount = Number(transaction.amount ?? 0);
-      if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+      if (!Number.isFinite(totalAmount) || totalAmount === 0) {
         return;
       }
+
+      const signedTotalAmount = resolveSignedAmount(totalAmount, entryType);
 
       const methods = Array.isArray(transaction.paymentMethods) ? transaction.paymentMethods : [];
       if (methods.length === 0) {
@@ -826,17 +1029,32 @@ export default function CashRegisterDashboard() {
       }
 
       let assignedAmount = 0;
-      entries.forEach((entry) => {
-        if (entry.amount !== null) {
-          totals[entry.key] += entry.amount;
-          assignedAmount += entry.amount;
+      const applySignedAmount = (value: number): number => {
+        if (!Number.isFinite(value)) {
+          return 0;
         }
+        if (value === 0) {
+          return 0;
+        }
+        if (value < 0) {
+          return value;
+        }
+        return signedTotalAmount < 0 ? -value : value;
+      };
+
+      entries.forEach((entry) => {
+        if (entry.amount === null) {
+          return;
+        }
+        const normalizedAmount = applySignedAmount(entry.amount);
+        totals[entry.key] += normalizedAmount;
+        assignedAmount += normalizedAmount;
       });
 
       const fallbackEntries = entries.filter((entry) => entry.amount === null);
-      const remaining = Number((totalAmount - assignedAmount).toFixed(2));
+      const remaining = Number((signedTotalAmount - assignedAmount).toFixed(2));
 
-      if (remaining > 0 && fallbackEntries.length === 1) {
+      if (remaining !== 0 && fallbackEntries.length === 1) {
         totals[fallbackEntries[0].key] += remaining;
       }
     });
@@ -847,9 +1065,12 @@ export default function CashRegisterDashboard() {
       amount: Number(totals[method].toFixed(2)),
     }));
 
+    const totalAmount = rows.reduce((acc, row) => acc + row.amount, 0);
+
     return {
       currencySymbol: resolvedCurrency || "S/.",
       rows,
+      total: Number(totalAmount.toFixed(2)),
     };
   }, [transactions]);
 
@@ -1032,7 +1253,7 @@ export default function CashRegisterDashboard() {
 
     const summaryTableRows = paymentMethodSummary.rows
       .map((row) => {
-        const amountDisplay = `${paymentMethodSummary.currencySymbol} ${row.amount.toFixed(2)}`
+        const amountDisplay = formatSignedCurrency(row.amount, paymentMethodSummary.currencySymbol)
         return `
           <tr>
             <td style="padding:6px;border:1px solid #dddddd;">${escapeHtml(row.label)}</td>
@@ -1041,6 +1262,17 @@ export default function CashRegisterDashboard() {
         `.trim()
       })
       .join("")
+
+    const summaryTotalDisplay = formatSignedCurrency(
+      paymentMethodSummary.total,
+      paymentMethodSummary.currencySymbol,
+    )
+    const summaryTotalRow = `
+      <tr>
+        <td style="padding:6px;border:1px solid #dddddd;font-weight:bold;">Total</td>
+        <td style="padding:6px;border:1px solid #dddddd;text-align:right;font-weight:bold;">${escapeHtml(summaryTotalDisplay)}</td>
+      </tr>
+    `.trim()
 
     const summaryTableHtml = `
       <table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;min-width:360px;">
@@ -1051,7 +1283,7 @@ export default function CashRegisterDashboard() {
             <th style="background-color:#f5f5f5;text-align:right;padding:8px;border:1px solid #cccccc;">Total</th>
           </tr>
         </thead>
-        <tbody>${summaryTableRows}</tbody>
+        <tbody>${summaryTableRows}${summaryTotalRow}</tbody>
       </table>
     `.trim()
 
@@ -1103,6 +1335,9 @@ export default function CashRegisterDashboard() {
         summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
         summaryLabel: { fontSize: 10 },
         summaryAmount: { fontSize: 10, fontWeight: "bold" },
+        summaryTotalRow: { marginTop: 6, paddingTop: 4, borderTopWidth: 0.5, borderTopColor: "#d4d4d4", flexDirection: "row", justifyContent: "space-between" },
+        summaryTotalLabel: { fontSize: 10, fontWeight: "bold" },
+        summaryTotalAmount: { fontSize: 10, fontWeight: "bold" },
       })
 
       const documentDefinition = (
@@ -1121,7 +1356,7 @@ export default function CashRegisterDashboard() {
                   if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
                     headerStyles.push(pdfStyles.cellWide)
                   }
-                  if (column.key === "amount") {
+                  if (["amount", "openingBalance", "cashAvailable"].includes(column.key)) {
                     headerStyles.push(pdfStyles.cellAmount);
                   }
                   return (
@@ -1144,7 +1379,7 @@ export default function CashRegisterDashboard() {
                     if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
                       cellStyles.push(pdfStyles.cellWide);
                     }
-                    if (column.key === "amount") {
+                    if (["amount", "openingBalance", "cashAvailable"].includes(column.key)) {
                       cellStyles.push(pdfStyles.cellAmount); // { textAlign: "right" }
                     }
                     const value = row[column.key] || "-";
@@ -1163,10 +1398,16 @@ export default function CashRegisterDashboard() {
                 <View key={row.method} style={pdfStyles.summaryRow}>
                   <Text style={pdfStyles.summaryLabel}>{row.label}</Text>
                   <Text style={pdfStyles.summaryAmount}>
-                    {`${paymentMethodSummary.currencySymbol} ${row.amount.toFixed(2)}`}
+                    {formatSignedCurrency(row.amount, paymentMethodSummary.currencySymbol)}
                   </Text>
                 </View>
               ))}
+              <View style={pdfStyles.summaryTotalRow}>
+                <Text style={pdfStyles.summaryTotalLabel}>Total</Text>
+                <Text style={pdfStyles.summaryTotalAmount}>
+                  {formatSignedCurrency(paymentMethodSummary.total, paymentMethodSummary.currencySymbol)}
+                </Text>
+              </View>
             </View>
           </Page>
         </Document>
@@ -1209,22 +1450,32 @@ export default function CashRegisterDashboard() {
       const validTransactions = safeTransactions.map((transaction: any) => adaptTransaction(transaction));
       const mergedTransactions = mergeSaleTransactions(validTransactions);
 
-      const income = mergedTransactions
+      const sortedClosuresRaw = Array.isArray(closuresResponse)
+        ? sortClosuresByDateDesc(closuresResponse)
+        : [];
+      const { amount: latestClosureOverride, transactionId: latestClosureTransactionId } =
+        resolveLatestClosureOverride(activeRegister, sortedClosuresRaw);
+      const closuresWithOverride = withLatestClosureOverride(sortedClosuresRaw, latestClosureOverride);
+
+      const transactionsWithOverride = withClosureTransactionOverride(
+        mergedTransactions,
+        latestClosureOverride,
+        latestClosureTransactionId,
+      );
+
+      const income = transactionsWithOverride
         .filter((t: any) => t.internalType === "INCOME")
         .reduce((sum: any, t: any) => sum + t.amount, 0);
 
-      const expense = mergedTransactions
+      const expense = transactionsWithOverride
         .filter((t: any) => t.internalType === "EXPENSE")
         .reduce((sum: any, t: any) => sum + t.amount, 0);
 
-      setTransactions(mergedTransactions);
+      setTransactions(transactionsWithOverride);
       setTotalIncome(income);
       setTotalExpense(expense);
 
-      const sortedClosures = Array.isArray(closuresResponse)
-        ? sortClosuresByDateDesc(closuresResponse)
-        : [];
-      setClosures(sortedClosures);
+      setClosures(closuresWithOverride);
 
       console.log("✅ Recalculado totalIncome:", income);
       console.log("✅ Recalculado totalExpense:", expense);
@@ -1332,58 +1583,85 @@ export default function CashRegisterDashboard() {
 
   // Obtener el balance de la caja activa al cambiar la tienda seleccionada
   useEffect(() => {
-    if (storeId !== null) {
+    if (storeId === null) {
+      return;
+    }
 
-      getActiveCashRegister(storeId)
-      .then((res) => {
-        if (res) {
-          setActiveCashRegisterId(res.id);
-          setBalance(Number(res.currentBalance));
-          setInitialBalance(Number(res.initialBalance)); // ✅ Aquí lo guardas
+    let cancelled = false;
+
+    const loadData = async () => {
+      try {
+        const [activeRegister, closuresData] = await Promise.all([
+          getActiveCashRegister(storeId).catch(() => null),
+          getClosuresByStore(storeId).catch((err) => {
+            console.error("Error al obtener cierres:", err);
+            return [] as any[];
+          }),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        if (activeRegister) {
+          setActiveCashRegisterId(activeRegister.id);
+          setBalance(Number(activeRegister.currentBalance));
+          setInitialBalance(Number(activeRegister.initialBalance));
           setHasCashRegister(true);
         } else {
           setActiveCashRegisterId(null);
           setBalance(0);
-          setInitialBalance(0); // ✅ También lo limpias si no hay caja
+          setInitialBalance(0);
           setHasCashRegister(false);
         }
-      })
-      .catch(() => {
-        setActiveCashRegisterId(null);
-        setBalance(0);
-        setInitialBalance(0); // ✅ También lo limpias si no hay caja
-        setHasCashRegister(false);
-      });
 
-      getClosuresByStore(storeId)
-      .then((data) => {
-          const sorted = Array.isArray(data) ? sortClosuresByDateDesc(data) : [];
-          setClosures(sorted);
-        })
-        .catch((err) => {
-          console.error("Error al obtener cierres:", err);
+        const sortedClosures = Array.isArray(closuresData)
+          ? sortClosuresByDateDesc(closuresData)
+          : [];
+        const { amount: latestClosureOverride } = resolveLatestClosureOverride(
+          activeRegister,
+          sortedClosures,
+        );
+        const closuresWithOverride = withLatestClosureOverride(sortedClosures, latestClosureOverride);
+
+        setClosures(closuresWithOverride);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error al obtener datos de caja:", error);
+          setActiveCashRegisterId(null);
+          setBalance(0);
+          setInitialBalance(0);
+          setHasCashRegister(false);
           setClosures([]);
-        });
-      
-      async function fetchBalance(storeId: number) {
-        try {
-          const currentBalance = await getCashRegisterBalance(storeId);
-          if (currentBalance === null) {
-            setBalance(0);
-            setHasCashRegister(false); // Marcar que no hay caja
-          } else {
-            setBalance(Number(currentBalance));
-            setHasCashRegister(true);  // Hay caja
-          }
-        } catch (error) {
+        }
+      }
+
+      try {
+        const currentBalance = await getCashRegisterBalance(storeId);
+        if (cancelled) {
+          return;
+        }
+
+        if (currentBalance === null) {
+          setBalance(0);
+          setHasCashRegister(false);
+        } else {
+          setBalance(Number(currentBalance));
+          setHasCashRegister(true);
+        }
+      } catch (error) {
+        if (!cancelled) {
           console.error("Error real al obtener el balance:", error);
           setBalance(0);
           setHasCashRegister(false);
         }
       }
+    };  
+    loadData();
 
-      fetchBalance(storeId);
-    }
+    return () => {
+      cancelled = true;
+    };
   }, [storeId]);
 
   useEffect(() => {
@@ -1619,7 +1897,7 @@ export default function CashRegisterDashboard() {
             )}
             {openingBalanceForDisplay !== null && (
               <div className="text-sm text-muted-foreground mt-1">
-                Saldo inicial: S/. {Number(openingBalanceForDisplay).toFixed(2)}
+                Saldo inicial(En Efectivo): S/. {Number(openingBalanceForDisplay).toFixed(2)}
               </div>
             )}
           </CardContent>

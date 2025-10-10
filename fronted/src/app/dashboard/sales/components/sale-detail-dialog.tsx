@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
 import { Sale } from "../columns";
 
 const parseNumber = (value: unknown): number => {
@@ -49,9 +50,15 @@ export interface SaleDetailDialogProps {
   sale: Sale | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  loading?: boolean;
 }
 
-export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogProps) {
+export function SaleDetailDialog({
+  sale,
+  open,
+  onOpenChange,
+  loading = false,
+}: SaleDetailDialogProps) {
   const currency = useMemo(() => {
     if (!sale) {
       return "PEN";
@@ -133,6 +140,144 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
     }
   }, [sale?.createdAt]);
 
+  const aggregatedPayments = useMemo(() => {
+    if (!Array.isArray(sale?.payments) || sale.payments.length === 0) {
+      return [] as Array<{
+        key: string;
+        methodName: string;
+        currency?: string;
+        amount: number;
+      }>;
+    }
+
+    const entries = new Map<
+      string,
+      {
+        key: string;
+        methodName: string;
+        currency?: string;
+        amount: number;
+        identifiers: Set<string>;
+      }
+    >();
+
+    sale.payments.forEach((payment) => {
+      if (!payment) {
+        return;
+      }
+
+      const rawMethod =
+        typeof (payment as { method?: unknown }).method === "string"
+          ? ((payment as { method?: string }).method ?? undefined)
+          : undefined;
+
+      const methodName =
+        payment.paymentMethod?.name ??
+        (rawMethod && rawMethod.trim().length > 0
+          ? rawMethod
+          : "Método de pago");
+
+      const normalizedCurrency =
+        typeof payment.currency === "string" && payment.currency.trim().length > 0
+          ? payment.currency.trim().toUpperCase()
+          : undefined;
+
+      const amount = parseNumber(payment.amount);
+
+      const identifiers = new Set<string>();
+
+      if (
+        typeof (payment as { transactionId?: unknown }).transactionId === "string" &&
+        (payment as { transactionId?: string }).transactionId!.trim().length > 0
+      ) {
+        identifiers.add(
+          `tx:${(payment as { transactionId?: string }).transactionId!.trim()}`,
+        );
+      }
+
+      if (
+        typeof (payment as { cashTransactionId?: unknown }).cashTransactionId ===
+          "number" ||
+        typeof (payment as { cashTransactionId?: unknown }).cashTransactionId ===
+          "string"
+      ) {
+        identifiers.add(
+          `cash:${String(
+            (payment as { cashTransactionId?: string | number }).cashTransactionId!,
+          )}`,
+        );
+      }
+
+      if (
+        typeof (payment as { referenceNote?: unknown }).referenceNote === "string" &&
+        (payment as { referenceNote?: string }).referenceNote!.trim().length > 0
+      ) {
+        identifiers.add(
+          `ref:${(payment as { referenceNote?: string }).referenceNote!.trim()}`,
+        );
+      }
+
+      if (
+        typeof (payment as { id?: unknown }).id === "number" ||
+        typeof (payment as { id?: unknown }).id === "string"
+      ) {
+        identifiers.add(`id:${String((payment as { id?: string | number }).id)}`);
+      }
+
+      const key = `${methodName}|${normalizedCurrency ?? currency}`;
+
+      const existing = entries.get(key);
+
+      if (
+        existing &&
+        Array.from(identifiers).some((identifier) => existing.identifiers.has(identifier))
+      ) {
+        return;
+      }
+
+      if (!existing) {
+        entries.set(key, {
+          key,
+          methodName,
+          currency: normalizedCurrency,
+          amount,
+          identifiers,
+        });
+        return;
+      }
+
+      existing.amount += amount;
+      identifiers.forEach((identifier) => existing.identifiers.add(identifier));
+    });
+
+    const aggregatedEntries = Array.from(entries.values());
+    const aggregatedTotal = aggregatedEntries.reduce(
+      (acc, entry) => acc + entry.amount,
+      0,
+    );
+
+    const expectedTotal = parseNumber(sale?.total);
+    const shouldNormalize =
+      typeof expectedTotal === "number" &&
+      expectedTotal > 0 &&
+      aggregatedTotal > 0;
+
+    if (shouldNormalize) {
+      const ratio = aggregatedTotal / expectedTotal;
+      const roundedRatio = Math.round(ratio);
+      const EPSILON = 1e-6;
+
+      if (roundedRatio > 1 && Math.abs(ratio - roundedRatio) <= EPSILON) {
+        return aggregatedEntries.map(({ identifiers, ...entry }) => ({
+          ...entry,
+          amount: entry.amount / roundedRatio,
+        }));
+      }
+    }
+
+    return aggregatedEntries.map(({ identifiers, ...entry }) => entry);
+  }, [sale?.payments, currency, sale?.total]);
+
   const detailRows = useMemo(() => {
     if (!sale?.details || sale.details.length === 0) {
       return null;
@@ -180,9 +325,9 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
               )}
             </div>
           </td>
-          <td className="px-4 py-2">{detail.quantity ?? "—"}</td>
-          <td className="px-4 py-2">{formatCurrency(detail.price)}</td>
-          <td className="px-4 py-2">{formatCurrency(detailTotal)}</td>
+          <td className="px-4 py-2 whitespace-nowrap">{detail.quantity ?? "—"}</td>
+          <td className="px-4 py-2 whitespace-nowrap">{formatCurrency(detail.price)}</td>
+          <td className="px-4 py-2 whitespace-nowrap">{formatCurrency(detailTotal)}</td>
           <td className="px-4 py-2">{seriesList.length > 0 ? seriesList.join(", ") : "—"}</td>
         </tr>
       );
@@ -199,8 +344,8 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
+      <DialogContent className="max-h-[90vh] gap-4 overflow-hidden p-4 sm:max-w-3xl sm:p-6 sm:gap-6 grid-rows-[auto_minmax(0,1fr)_auto]">
+        <DialogHeader className="shrink-0">
           <DialogTitle>
             {sale ? `Detalle de la venta #${sale.id}` : "Detalle de la venta"}
           </DialogTitle>
@@ -211,14 +356,21 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
           </DialogDescription>
         </DialogHeader>
 
-        {sale ? (
-          <div className="space-y-6 text-sm">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Cliente</p>
-                <p className="text-base font-semibold">{sale.client?.name ?? "—"}</p>
-              </div>
-              <div>
+        <div className="min-h-0 overflow-y-auto pr-1 sm:pr-2">
+          {loading && (
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-dashed bg-muted/60 p-3 text-xs text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Actualizando información de la venta...</span>
+            </div>
+          )}
+          {sale ? (
+            <div className="space-y-6 text-sm">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Cliente</p>
+                  <p className="text-base font-semibold">{sale.client?.name ?? "—"}</p>
+                </div>
+                <div>
                 <p className="text-xs font-medium text-muted-foreground">Usuario</p>
                 <p className="text-base font-semibold">{sale.user?.username ?? "—"}</p>
               </div>
@@ -251,14 +403,14 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
             {Array.isArray(detailRows) && detailRows.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Productos vendidos</h3>
-                <div className="overflow-hidden rounded-md border">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto rounded-md border md:overflow-hidden">
+                  <table className="w-full min-w-[600px] text-sm">
                     <thead className="bg-muted">
                       <tr className="text-left">
                         <th className="px-4 py-2 font-medium">Producto</th>
-                        <th className="px-4 py-2 font-medium">Cantidad</th>
-                        <th className="px-4 py-2 font-medium">Precio</th>
-                        <th className="px-4 py-2 font-medium">Total</th>
+                        <th className="px-4 py-2 font-medium whitespace-nowrap">Cantidad</th>
+                        <th className="px-4 py-2 font-medium whitespace-nowrap">Precio</th>
+                        <th className="px-4 py-2 font-medium whitespace-nowrap">Total</th>
                         <th className="px-4 py-2 font-medium">Series</th>
                       </tr>
                     </thead>
@@ -271,7 +423,7 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
               </div>
             )}
 
-            {Array.isArray(sale.payments) && sale.payments.length > 0 && (
+            {aggregatedPayments.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Pagos</h3>
                 <div className="overflow-hidden rounded-md border">
@@ -284,24 +436,11 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
                       </tr>
                     </thead>
                     <tbody>
-                      {sale.payments.map((payment, index) => {
-                        const paymentKey =
-                          payment.id ??
-                          `${payment.paymentMethod?.name ?? "pago"}-${index}`;
+                      {aggregatedPayments.map((payment) => {
                         const paymentCurrency = payment.currency?.toUpperCase();
-                        const rawMethod =
-                          typeof (payment as { method?: unknown }).method === "string"
-                            ? ((payment as { method?: string }).method ?? undefined)
-                            : undefined;
-                        const paymentMethodName =
-                          payment.paymentMethod?.name ??
-                          (rawMethod && rawMethod.trim().length > 0
-                            ? rawMethod
-                            : "Método de pago");
-
                         return (
-                          <tr key={paymentKey} className="border-t">
-                            <td className="px-4 py-2">{paymentMethodName}</td>
+                          <tr key={payment.key} className="border-t">
+                            <td className="px-4 py-2">{payment.methodName}</td>
                             <td className="px-4 py-2 uppercase">
                               {paymentCurrency ?? currency}
                             </td>
@@ -317,13 +456,18 @@ export function SaleDetailDialog({ sale, open, onOpenChange }: SaleDetailDialogP
               </div>
             )}
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Selecciona una venta para ver sus detalles completos.
-          </p>
-        )}
+          ) : loading ? (
+            <p className="text-sm text-muted-foreground">
+              Cargando información detallada de la venta...
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Selecciona una venta para ver sus detalles completos.
+            </p>
+          )}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cerrar
           </Button>

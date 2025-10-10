@@ -11,7 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Textarea } from "@/components/ui/textarea"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "sonner"
-import { createCashClosure, createCashRegister } from "../cashregister.api"
+import { createCashClosure } from "../cashregister.api"
 import { getUserDataFromToken } from "@/lib/auth"; // o "@/utils/auth" donde lo tengas
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 
@@ -64,6 +64,8 @@ export default function CashClosureForm({
   }, [])
   
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingNextInitialBalance, setPendingNextInitialBalance] = useState<string>("");
+  const [nextInitialBalanceError, setNextInitialBalanceError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -95,7 +97,10 @@ export default function CashClosureForm({
     return true;
   };
 
-  const onSubmit = async (values: FormValues) => {
+  const submitClosure = async (
+    values: FormValues,
+    options?: { nextInitialBalance?: number }
+  ) => {
     const expectedCash = Number(cashIncomeTotal.toFixed(2))
     const countedCash = Number(values.countedAmount.toFixed(2))
     const difference = countedCash - expectedCash
@@ -111,7 +116,15 @@ export default function CashClosureForm({
         return;
       }
 
+      const nextInitialBalanceOverride = options?.nextInitialBalance
+
+      const normalizedNextInitialBalance =
+        typeof nextInitialBalanceOverride === "number" && !Number.isNaN(nextInitialBalanceOverride)
+          ? Number(nextInitialBalanceOverride.toFixed(2))
+          : countedCash;
+
       const payload = {
+        storeId: Number(storeId),
         cashRegisterId,
         userId: Number(userId),
         openingBalance: Number(openingBalance),
@@ -119,29 +132,46 @@ export default function CashClosureForm({
         totalIncome: Number(totalIncome),
         totalExpense: Number(totalExpense),
         notes: values.notes || "",
+        nextInitialBalance: normalizedNextInitialBalance,
       }
 
       console.log("Payload a enviar:", payload); // 👈 verifica esto
-      await createCashClosure(payload)
+      const response = await createCashClosure(payload)
 
-      setNewCashInitialBalance(values.countedAmount.toFixed(2));
-      setNewCashInitialBalanceError(null);
-      toast.success("Cierre de caja registrado correctamente.")
-      setShowOpenNewCashDialog(true); // 👈 Mostrar el AlertDialog
+      const nextCashRegisterName = response?.nextCashRegister?.name
+        ? ` Nueva caja abierta automáticamente: ${response.nextCashRegister.name}.`
+        : ""
 
-      form.reset()
+      const requestedInitialBalance =
+        typeof response?.requestedNextInitialBalance === "number"
+          ? response.requestedNextInitialBalance
+          : normalizedNextInitialBalance;
+
+      toast.success(
+        `Cierre de caja registrado correctamente.${nextCashRegisterName} Saldo inicial de la siguiente caja: ${displayCurrency} ${requestedInitialBalance.toFixed(2)}.`
+      )
+
+      const userName = await reinitializeCashRegister()
+      if (userName) {
+        form.setValue("employee", userName)
+      }
+
+      onClosureCompleted()
+
+      form.reset({
+        countedAmount: 0,
+        employee: form.getValues("employee"),
+        notes: "",
+      })
       setDiscrepancy(null)
     } catch (error: any) {
       const message = error?.message;
     
-      if (
-        typeof message === "string" &&
-        message.includes("Ya se realizó un cierre de caja hoy")
-      ) {
-        toast.error("Ya se cerró la caja hoy. Solo se permite un cierre por día.");
-      } else {
-        toast.error("Error al realizar el cierre de caja.");
-      }
+      const fallbackMessage = typeof message === "string" && message.length > 0
+        ? message
+        : "Error al realizar el cierre de caja."
+
+      toast.error(fallbackMessage)
     
       console.error("Error al registrar el cierre de caja:", error);
     } finally {
@@ -149,9 +179,54 @@ export default function CashClosureForm({
     }
   }
 
+  const handleRequestClosure = () => {
+    const rawValue = form.getValues("countedAmount")
+    const numericValue = typeof rawValue === "number" ? rawValue : parseFloat(rawValue || "")
+
+    if (isNaN(numericValue)) {
+      toast.error("Debes ingresar un monto contabilizado válido antes de cerrar la caja.")
+      return
+    }
+
+    if (!validateCountedAmountMatchesExpected(numericValue)) {
+      return
+    }
+
+    setPendingNextInitialBalance(numericValue.toFixed(2))
+    setNextInitialBalanceError(null)
+    setShowConfirmDialog(true)
+  }
+
+  const handleConfirmClosure = () => {
+    const trimmed = pendingNextInitialBalance.trim();
+    const parsed = trimmed === "" ? NaN : parseFloat(trimmed);
+
+    if (trimmed === "" || Number.isNaN(parsed)) {
+      setNextInitialBalanceError("Debes ingresar un saldo inicial válido para la siguiente caja.");
+      return;
+    }
+
+    if (parsed < 0) {
+      setNextInitialBalanceError("El saldo inicial no puede ser negativo.");
+      return;
+    }
+
+    setNextInitialBalanceError(null);
+    setShowConfirmDialog(false);
+    setPendingNextInitialBalance("")
+
+    form.handleSubmit((values) => submitClosure(values, { nextInitialBalance: parsed }))();
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          handleRequestClosure()
+        }}
+        className="space-y-6"
+      >
         <div className="bg-muted p-4 rounded-lg mb-6">
           <div className="font-medium flex flex-wrap items-baseline gap-2">
             <span>Saldo esperado de todas las operaciones</span>
@@ -244,21 +319,7 @@ export default function CashClosureForm({
 
         <Button
           type="button"
-          onClick={() => {
-            const rawValue = form.getValues("countedAmount")
-            const numericValue = typeof rawValue === "number" ? rawValue : parseFloat(rawValue || "")
-
-            if (isNaN(numericValue)) {
-              toast.error("Debes ingresar un monto contabilizado válido antes de cerrar la caja.")
-              return
-            }
-
-            if (!validateCountedAmountMatchesExpected(numericValue)) {
-              return
-            }
-
-            setShowConfirmDialog(true)
-          }}
+          onClick={handleRequestClosure}
           disabled={isSubmitting}
           className="w-full"
         >
@@ -268,108 +329,55 @@ export default function CashClosureForm({
       </form>
 
       <AlertDialog
-        open={showOpenNewCashDialog}
+        open={showConfirmDialog}
         onOpenChange={(open) => {
-          setShowOpenNewCashDialog(open)
+          setShowConfirmDialog(open)
           if (!open) {
-            setNewCashInitialBalanceError(null)
+            setPendingNextInitialBalance("")
+            setNextInitialBalanceError(null)
           }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deseas abrir una nueva caja?</AlertDialogTitle>
+            <AlertDialogTitle>¿Confirmar cierre de caja?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se creara una nueva caja para esta tienda con el saldo final anterior.
+              Esta acción registrará el cierre y abrirá automáticamente la siguiente caja. Puedes ajustar el saldo inicial que
+              tendrá la nueva caja.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-2">
-            <FormLabel>Saldo Inicial (S/.)</FormLabel>
+            <FormLabel>Saldo inicial de la siguiente caja ({displayCurrency})</FormLabel>
             <Input
               type="number"
               inputMode="decimal"
               min="0"
               step="0.01"
-              value={newCashInitialBalance}
+              value={pendingNextInitialBalance}
               onChange={(event) => {
                 const value = event.target.value
                 if (value === "" || /^\d*(\.\d{0,2})?$/.test(value)) {
-                  setNewCashInitialBalance(value)
-                  setNewCashInitialBalanceError(null)
+                  setPendingNextInitialBalance(value)
+                  setNextInitialBalanceError(null)
                 }
               }}
               placeholder="0.00"
             />
-            {newCashInitialBalanceError && (
-              <p className="text-sm text-destructive">{newCashInitialBalanceError}</p>
+            {nextInitialBalanceError && (
+              <p className="text-sm text-destructive">{nextInitialBalanceError}</p>
             )}
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel
               onClick={() => {
-                setNewCashInitialBalance("")
-                setNewCashInitialBalanceError(null)
+                setShowConfirmDialog(false)
               }}
             >
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={async () => {
-                const parsedInitialBalance = parseFloat(newCashInitialBalance)
-
-                if (newCashInitialBalance === "" || isNaN(parsedInitialBalance)) {
-                  setNewCashInitialBalanceError("Debes ingresar un saldo inicial válido.")
-                  return
-                }
-
-                if (parsedInitialBalance < 0) {
-                  setNewCashInitialBalanceError("El saldo inicial no puede ser negativo.")
-                  return
-                }
-
-                try {
-                  await createCashRegister({
-                    storeId,
-                    initialBalance: parsedInitialBalance,
-                    name: `Caja Principal - Tienda ${storeId} - ${Date.now()}`,
-                  });
-                  toast.success("Nueva caja creada exitosamente.");
-                  const userName = await reinitializeCashRegister();
-                  if (userName) {
-                    form.setValue("employee", userName);
-                  }
-                  onClosureCompleted();
-                  setShowOpenNewCashDialog(false);
-                  setNewCashInitialBalance("");
-                } catch (error:any) {
-                  console.error("Error en createCashRegister:", error.response?.data || error.message);
-                  console.error("Error creando nueva caja:", error);
-                  toast.error("Error al crear la nueva caja.");
-                }
-              }}
-              disabled={newCashInitialBalance === ""}
-            >
-              Crear Caja
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Confirmar cierre de caja?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción registrará el cierre y no podrá deshacerse. ¿Estás seguro de que deseas continuar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setShowConfirmDialog(false);
-                form.handleSubmit(onSubmit)(); // Ejecuta el submit
-              }}
+              onClick={handleConfirmClosure}
+              disabled={isSubmitting}
             >
               Confirmar
             </AlertDialogAction>

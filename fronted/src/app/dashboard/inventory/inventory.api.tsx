@@ -364,9 +364,41 @@ export async function commitImportedExcelData(previewData: any[], storeId: numbe
   return await response.json()
 }
 
-export function exportInventoryExcel(storeId: number, categoryId?: number) {
-  const params = categoryId && categoryId !== 0 ? `?categoryId=${categoryId}` : '';
-  const url = `${BACKEND_URL}/api/inventory/export/${storeId}${params}`;
+interface ExportInventoryExcelOptions {
+  storeId: number;
+  categoryId?: number | null;
+  brandId?: number | null;
+  search?: string;
+  withStockOnly?: boolean;
+}
+
+export function exportInventoryExcel({  
+  storeId,
+  categoryId,
+  brandId,
+  search,
+  withStockOnly,
+}: ExportInventoryExcelOptions) {
+  const params = new URLSearchParams();
+
+  if (categoryId && categoryId !== 0) {
+    params.append('categoryId', categoryId.toString());
+  }
+
+  if (brandId && brandId !== 0) {
+    params.append('brandId', brandId.toString());
+  }
+
+  if (search && search.trim().length > 0) {
+    params.append('search', search.trim());
+  }
+
+  if (withStockOnly) {
+    params.append('withStockOnly', 'true');
+  }
+
+  const queryString = params.toString();
+  const url = `${BACKEND_URL}/api/inventory/export/${storeId}${queryString ? `?${queryString}` : ''}`;
 
   // Abre directamente en nueva pestaña para que el navegador descargue el archivo
   window.open(url, '_blank');

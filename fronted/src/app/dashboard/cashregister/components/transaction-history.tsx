@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ArrowDown, ArrowUp, Calculator, Search, ChevronDown, ChevronUp, Calendar } from "lucide-react"
+import { ArrowDown, ArrowUp, Calculator, Search, ChevronDown, ChevronUp, Calendar, X } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -12,7 +12,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { format, isSameDay } from "date-fns"
 import { BACKEND_URL } from "@/lib/utils"
 import { Transaction } from "../types/cash-register"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
@@ -147,6 +147,29 @@ const parseSaleItemsFromDescription = (description?: string | null) => {
 
 const formatCurrency = (amount: number, currencySymbol: string) =>
   `${currencySymbol} ${amount.toFixed(2)}`
+
+const formatAmountWithSign = (
+  amount: number,
+  type: string | null | undefined,
+  currencySymbol: string,
+) => {
+  const normalizedAmount = Number.isFinite(amount) ? Math.abs(amount) : 0
+  const formatted = formatCurrency(normalizedAmount, currencySymbol)
+  return type === "EXPENSE" ? `- ${formatted}` : formatted
+}
+
+const formatPaymentAmountText = (amountText: string, isExpense: boolean) => {
+  const trimmed = amountText.trim()
+  if (!trimmed) {
+    return amountText
+  }
+
+  if (!isExpense || trimmed.startsWith("-")) {
+    return trimmed
+  }
+
+  return `- ${trimmed}`
+}
 
 const splitPaymentMethodEntry = (entry: string) => {
   const colonIndex = entry.indexOf(":")
@@ -287,6 +310,55 @@ const getInvoiceUrl = (transaction: Transaction) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim()
 
+const sanitizeIncomeNoteValue = (value?: string | null) => {
+  if (!value) {
+    return ""
+  }
+
+  const withoutRedundantPhrase = value.replace(
+    /venta realizada\.?(?:\s*\|\s*en\s+efectivo:\s*(?:s\/.?|\$)\s*[0-9.,]+)?/gi,
+    " ",
+  )
+
+  const segments = withoutRedundantPhrase
+    .split("|")
+    .map((segment) => normalizeWhitespace(segment))
+    .filter((segment) => segment.length > 0)
+
+  return segments.join(" | ")
+}
+
+const collapseRepeatedPhrase = (value: string) => {
+  const normalized = normalizeWhitespace(value ?? "")
+  if (!normalized) {
+    return ""
+  }
+
+  const parts = normalized.split(" ")
+  const length = parts.length
+
+  for (let size = 1; size <= Math.floor(length / 2); size++) {
+    if (length % size !== 0) continue
+
+    const segment = parts.slice(0, size).join(" ")
+    let matches = true
+
+    for (let index = size; index < length; index += size) {
+      const chunk = parts.slice(index, index + size).join(" ")
+      if (chunk !== segment) {
+        matches = false
+        break
+      }
+    }
+
+    if (matches) {
+      return segment
+    }
+  }
+
+  return normalized
+}
+
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 
 const toSentenceCase = (value: string) => {
@@ -347,9 +419,11 @@ const parseStructuredNotes = (rawDescription?: string | null, formattedDescripti
 
     if (!rawLabel) continue
 
+    const collapsedValue = rawValue ? collapseRepeatedPhrase(rawValue) : "-"
+
     entries.push({
       label: toSentenceCase(rawLabel),
-      value: rawValue || "-",
+      value: collapsedValue || "-",
     })
 
     matchedSegments.push(match[0])
@@ -369,7 +443,7 @@ const parseStructuredNotes = (rawDescription?: string | null, formattedDescripti
   extraSentences.forEach((sentence, index) => {
     entries.push({
       label: index === 0 && entries.length === 0 ? "Detalle" : `Detalle ${index + 1}`,
-      value: toSentenceCase(sentence),
+      value: collapseRepeatedPhrase(toSentenceCase(sentence)),
     })
   })
 
@@ -600,10 +674,72 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
       modalTransaction && (modalTransaction.internalType ?? modalTransaction.type) === "CLOSURE"
         ? closureDetailsMap.get(modalTransaction.id)
         : undefined
-    const structuredNotes = useMemo(
-      () => parseStructuredNotes(modalTransaction?.description, modalFormattedDescription),
-      [modalTransaction?.description, modalFormattedDescription],
+    const modalSaleDetails = useMemo(
+      () => parseSaleItemsFromDescription(modalTransaction?.description),
+      [modalTransaction?.description],
     )
+
+    const structuredNotes = useMemo(() => {
+      const baseEntries = parseStructuredNotes(
+        modalTransaction?.description,
+        modalFormattedDescription,
+      )
+
+      const effectiveType = modalTransaction?.internalType ?? modalTransaction?.type
+      const saleNotes =
+        effectiveType === "INCOME"
+          ? sanitizeIncomeNoteValue(modalSaleDetails.notes)
+          : ""
+
+      const processedBaseEntries =
+        effectiveType === "INCOME"
+          ? baseEntries
+              .map((entry) => {
+                const sanitizedValue = sanitizeIncomeNoteValue(entry.value)
+                if (!sanitizedValue) {
+                  return null
+                }
+
+                return {
+                  ...entry,
+                  value: sanitizedValue,
+                }
+              })
+              .filter((entry): entry is StructuredNoteEntry => entry !== null)
+          : baseEntries
+
+      if (!saleNotes) {
+        return processedBaseEntries
+      }
+
+      const normalizedSaleNote = normalizeWhitespace(collapseRepeatedPhrase(saleNotes))
+      if (!normalizedSaleNote) {
+        return processedBaseEntries
+      }
+
+      const alreadyIncluded = processedBaseEntries.some(
+        (entry) => entry.value.toLowerCase() === normalizedSaleNote.toLowerCase(),
+      )
+
+      if (alreadyIncluded) {
+        return processedBaseEntries
+      }
+
+      const label = processedBaseEntries.length > 0 ? "Notas adicionales" : "Notas"
+      return [
+        ...processedBaseEntries,
+        {
+          label,
+          value: normalizedSaleNote,
+        },
+      ]
+    }, [
+      modalFormattedDescription,
+      modalSaleDetails.notes,
+      modalTransaction?.description,
+      modalTransaction?.internalType,
+      modalTransaction?.type,
+    ])
 
     return (
       <div className="space-y-4">
@@ -706,6 +842,18 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                 sortedTransactions.map((transaction) => {
                   const formattedDescription = formatSaleDescription(transaction.description)
                   const currencySymbol = (transaction.currency ?? "S/.").trim() || "S/."
+                  const effectiveType = transaction.internalType ?? transaction.type
+                  const signedAmount = formatAmountWithSign(
+                    transaction.amount,
+                    effectiveType,
+                    currencySymbol,
+                  )
+                  const paymentEntriesForDisplay = Array.isArray(transaction.paymentMethods)
+                    ? transaction.paymentMethods.map((method) => ({
+                        ...splitPaymentMethodEntry(method),
+                        raw: method,
+                      }))
+                    : []
                   const closureDetails =
                     (transaction.internalType ?? transaction.type) === "CLOSURE"
                       ? closureDetailsMap.get(transaction.id)
@@ -728,7 +876,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                             {new Date(transaction.timestamp).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-center font-medium">
-                            {currencySymbol} {transaction.amount.toFixed(2)}
+                            {signedAmount}
                           </TableCell>
                         {!isMobile && <TableCell>{transaction.voucher || "-"}</TableCell>}
                           {!isMobile && (
@@ -741,16 +889,33 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                           {!isMobile && <TableCell>{transaction.employee}</TableCell>}
                           {!isMobile && (
                             <TableCell className="flex flex-wrap gap-1">
-                              {transaction.paymentMethods && transaction.paymentMethods.length > 0 ? (
-                                transaction.paymentMethods.map((method, index) => (
-                                  <Badge
-                                    key={index}
-                                    variant="outline"
-                                    className={getBadgeColor(method)}
-                                  >
-                                    {method}
-                                  </Badge>
-                                ))
+                              {paymentEntriesForDisplay.length > 0 ? (
+                                paymentEntriesForDisplay.map((entry, index) => {
+                                  const label = entry.label || entry.raw
+                                  const amountText = entry.amountText
+                                    ? formatPaymentAmountText(
+                                        entry.amountText,
+                                        effectiveType === "EXPENSE",
+                                      )
+                                    : null
+
+                                  return (
+                                    <Badge
+                                      key={`${entry.raw}-${index}`}
+                                      variant="outline"
+                                      className={getBadgeColor(label || entry.raw)}
+                                    >
+                                      {amountText ? (
+                                        <>
+                                          <span>{label}</span>
+                                          <span className="ml-1 font-semibold">{amountText}</span>
+                                        </>
+                                      ) : (
+                                        <span>{label}</span>
+                                      )}
+                                    </Badge>
+                                  )
+                                })
                               ) : (
                                 "-"
                               )}
@@ -768,7 +933,8 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                         className="w-[340px] space-y-4 rounded-lg border bg-background p-4 text-left shadow-lg sm:w-[380px]"
                       >
                         {(() => {
-                          const isClosure = (transaction.internalType ?? transaction.type) === "CLOSURE"
+                          const effectiveType = transaction.internalType ?? transaction.type
+                          const isClosure = effectiveType === "CLOSURE"
                           const documentParts = [
                             transaction.clientDocumentType ?? "",
                             transaction.clientDocument ?? "",
@@ -776,22 +942,57 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                             .map((value) => (value ?? "").trim())
                             .filter((value) => value.length > 0)
 
-                          const { items: saleItems, notes: saleNotes } = parseSaleItemsFromDescription(
-                            transaction.description,
-                          )
+                          const {
+                            items: saleItems,
+                            notes: rawSaleNotes,
+                          } = parseSaleItemsFromDescription(transaction.description)
                           const paymentMethods = Array.isArray(transaction.paymentMethods)
                             ? transaction.paymentMethods
                             : []
-                          const paymentEntries = paymentMethods.map(splitPaymentMethodEntry)
+                          const paymentEntries = paymentMethods.map((method) => ({
+                            ...splitPaymentMethodEntry(method),
+                            raw: method,
+                          }))
+                          const saleNotes =
+                            effectiveType === "INCOME"
+                              ? sanitizeIncomeNoteValue(rawSaleNotes)
+                              : rawSaleNotes ?? ""
+                          const baseTransactionNotes = transaction.notes ?? ""
+                          const transactionNotes =
+                            effectiveType === "INCOME"
+                              ? sanitizeIncomeNoteValue(baseTransactionNotes)
+                              : baseTransactionNotes
                           const itemsTotal = saleItems.reduce((sum, item) => sum + item.total, 0)
-                          const fallbackNotes = [
-                            saleNotes,
-                            transaction.notes ?? "",
-                            formattedDescription ?? "",
-                          ]
-                            .map((value) => (value ?? "").trim())
-                            .filter((value, index, array) => value.length > 0 && array.indexOf(value) === index)
-                          const notesContent = fallbackNotes.join("\n")
+                          const rawNoteCandidates = isClosure
+                            ? [transactionNotes, saleNotes, formattedDescription ?? ""]
+                            : [saleNotes, transactionNotes, formattedDescription ?? ""]
+
+                          const notesContent = rawNoteCandidates
+                            .map((value) => collapseRepeatedPhrase(value ?? ""))
+                            .map((value) => normalizeWhitespace(value))
+                            .filter((value) => value.length > 0)
+                            .filter(
+                              (value, index, array) =>
+                                array.findIndex((candidate) => candidate.toLowerCase() === value.toLowerCase()) === index,
+                            )
+                            .join("\n")
+
+                          const closedOpeningBalanceAmount =
+                            transaction.openingBalance !== null && transaction.openingBalance !== undefined
+                              ? Number(transaction.openingBalance) || 0
+                              : null
+                          
+                          const nextOpeningBalanceAmount =
+                            transaction.nextOpeningBalance !== null &&
+                            transaction.nextOpeningBalance !== undefined
+                              ? Number(transaction.nextOpeningBalance) || 0
+                              : null    
+
+                          const totalOperationsAmount =
+                            (closureDetails?.paymentBreakdown?.reduce(
+                              (sum, entry) => sum + entry.amount,
+                              0,
+                            ) ?? 0) + (closedOpeningBalanceAmount ?? 0)
 
                           return (
                             <div className="space-y-4">
@@ -821,7 +1022,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                   )}
                                   <dt className="text-muted-foreground">Monto</dt>
                                   <dd className="font-semibold text-foreground">
-                                    {formatCurrency(transaction.amount, currencySymbol)}
+                                    {formatAmountWithSign(transaction.amount, effectiveType, currencySymbol)}
                                   </dd>
                                   {transaction.voucher && (
                                     <>
@@ -838,17 +1039,28 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                     Métodos de pago
                                   </p>
                                   <div className="space-y-1">
-                                    {paymentEntries.map((entry, index) => (
-                                      <div
-                                        key={`${entry.label}-${index}`}
-                                        className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm"
-                                      >
-                                        <span className="font-medium text-foreground">{entry.label}</span>
-                                        {entry.amountText && (
-                                          <span className="text-muted-foreground">{entry.amountText}</span>
-                                        )}
-                                      </div>
-                                    ))}
+                                    {paymentEntries.map((entry, index) => {
+                                      const amountText = entry.amountText
+                                        ? formatPaymentAmountText(
+                                            entry.amountText,
+                                            effectiveType === "EXPENSE",
+                                          )
+                                        : null
+
+                                      return (
+                                        <div
+                                          key={`${entry.label}-${index}`}
+                                          className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm"
+                                        >
+                                          <span className="font-medium text-foreground">
+                                            {entry.label || entry.raw}
+                                          </span>
+                                          {amountText && (
+                                            <span className="text-muted-foreground">{amountText}</span>
+                                          )}
+                                        </div>
+                                      )
+                                    })}
                                   </div>
                                 </div>
                               )}
@@ -893,7 +1105,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                   <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm font-semibold text-muted-foreground">
                                     <span>Total operación</span>
                                     <span className="font-semibold text-foreground">
-                                      {formatCurrency(transaction.amount, currencySymbol)}
+                                      {formatAmountWithSign(transaction.amount, effectiveType, currencySymbol)}
                                     </span>
                                   </div>
                                 </div>
@@ -905,11 +1117,28 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                     Detalle del cierre
                                   </p>
                                   <div className="space-y-1 text-sm">
-                                    {transaction.openingBalance !== null && transaction.openingBalance !== undefined && (
+                                    {nextOpeningBalanceAmount !== null && (
                                       <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
-                                        <span className="text-muted-foreground">Saldo inicial</span>
+                                        <span className="text-muted-foreground">Saldo inicial apertura nueva caja</span>
                                         <span className="font-medium text-foreground">
-                                          {formatCurrency(Number(transaction.openingBalance), currencySymbol)}
+                                          {formatCurrency(nextOpeningBalanceAmount, currencySymbol)}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {closedOpeningBalanceAmount !== null && (
+                                      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                                        <span className="text-muted-foreground">Saldo Inicial con el que la caja cerrada inició</span>
+                                        <span className="font-medium text-foreground">
+                                          {formatCurrency(closedOpeningBalanceAmount, currencySymbol)}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {closureDetails &&
+                                      (closureDetails.paymentBreakdown.length > 0 || closedOpeningBalanceAmount !== null) && (
+                                      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                                        <span className="text-muted-foreground">Todas las operaciones(Incluido Saldo Inicial)</span>
+                                        <span className="font-medium text-foreground">
+                                          {formatCurrency(totalOperationsAmount, currencySymbol)}
                                         </span>
                                       </div>
                                     )}
@@ -986,68 +1215,232 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
 
           {/* Modal solo en móviles */}
           <Dialog open={!!modalTransaction} onOpenChange={() => setModalTransaction(null)}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Detalle de Transacción</DialogTitle>
+            <DialogContent
+              className="max-h-[85vh] overflow-y-auto sm:max-w-3xl lg:max-w-4xl"
+            >
+              <DialogHeader className="pb-4">
+                <div className="flex items-start justify-between gap-4">
+                  <DialogTitle className="text-base font-semibold sm:text-lg">
+                    Detalle de Transacción
+                  </DialogTitle>
+                </div>
               </DialogHeader>
               {modalTransaction && (
-                <div className="space-y-4 text-sm">
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <p><strong>Tipo:</strong> {typeLabels[modalTransaction.type] ?? modalTransaction.type}</p>
-                    <p><strong>Fecha/Hora:</strong> {new Date(modalTransaction.timestamp).toLocaleString()}</p>
-                    <p><strong>Monto:</strong> {modalCurrency} {modalTransaction.amount.toFixed(2)}</p>
-                    <p><strong>Encargado:</strong> {modalTransaction.employee || "-"}</p>
-                    <p>
-                      <strong>Métodos de Pago:</strong> {modalTransaction.paymentMethods?.length
-                        ? modalTransaction.paymentMethods.join(", ")
-                        : "-"}
-                    </p>
-                    <p><strong>ID:</strong> {modalTransaction.id}</p>
-                    {(modalTransaction.cashRegisterName || modalTransaction.cashRegisterId) && (
-                      <p>
-                        <strong>Caja:</strong> {modalTransaction.cashRegisterName ?? "Caja"}
-                        {modalTransaction.cashRegisterId ? ` (#${modalTransaction.cashRegisterId})` : ""}
-                      </p>
-                    )}
-                    {modalTransaction.clientName && (
-                      <p><strong>Cliente:</strong> {modalTransaction.clientName}</p>
-                    )}
-                    {modalTransaction.clientDocument && modalTransaction.clientDocumentType && (
-                      <p>
-                        <strong>Documento:</strong> {modalTransaction.clientDocumentType} {modalTransaction.clientDocument}
-                      </p>
-                    )}
-                    {modalTransaction.status && (
-                      <p><strong>Estado:</strong> {modalTransaction.status}</p>
-                    )}
-                    {modalTransaction.expectedAmount !== undefined && (
-                      <p>
-                        <strong>Monto esperado:</strong> {modalCurrency} {Number(modalTransaction.expectedAmount).toFixed(2)}
-                      </p>
-                    )}
-                    {modalTransaction.discrepancy !== undefined && (
-                      <p>
-                        <strong>Diferencia:</strong> {modalCurrency} {Number(modalTransaction.discrepancy).toFixed(2)}
-                      </p>
-                    )}
-                    {modalTransaction.voucher && (
-                      <p>
-                        <strong>Comprobante:</strong>{" "}
-                        {modalInvoiceUrl ? (
-                          <a
-                            href={modalInvoiceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 underline"
-                          >
-                            {modalTransaction.voucher}
-                          </a>
-                        ) : (
-                          modalTransaction.voucher
+                <div className="space-y-4 text-sm sm:text-base">
+                  {(() => {
+                    const modalEffectiveType = modalTransaction.internalType ?? modalTransaction.type
+                    const paymentEntries = Array.isArray(modalTransaction.paymentMethods)
+                      ? modalTransaction.paymentMethods.map((method) => ({
+                          ...splitPaymentMethodEntry(method),
+                          raw: method,
+                        }))
+                      : []
+                    const formattedPaymentMethods = paymentEntries.length > 0
+                      ? paymentEntries
+                          .map((entry) => {
+                            if (!entry.amountText) {
+                              return entry.label || entry.raw
+                            }
+
+                            const amountText = formatPaymentAmountText(
+                              entry.amountText,
+                              modalEffectiveType === "EXPENSE",
+                            )
+
+                            return `${entry.label || entry.raw}: ${amountText}`
+                          })
+                          .join(", ")
+                      : "-"
+
+                    const formattedAmount = formatAmountWithSign(
+                      modalTransaction.amount,
+                      modalEffectiveType,
+                      modalCurrency,
+                    )
+
+                    const saleDetails =
+                      modalEffectiveType === "INCOME"
+                        ? modalSaleDetails
+                        : { items: [] as SaleDetailItem[], notes: "" }
+                    const saleItems = saleDetails.items
+                    const saleItemsTotal = saleItems.reduce(
+                      (sum, item) => sum + item.total,
+                      0,
+                    )
+                    const saleNotes =
+                      modalEffectiveType === "INCOME"
+                        ? normalizeWhitespace(saleDetails.notes)
+                        : ""
+
+                    const paymentEntriesForModal = paymentEntries.map((entry) => ({
+                      label: entry.label || entry.raw,
+                      amountText: entry.amountText
+                        ? formatPaymentAmountText(
+                            entry.amountText,
+                            modalEffectiveType === "EXPENSE",
+                          )
+                        : null,
+                    }))
+
+                    return (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <p><strong>Tipo:</strong> {typeLabels[modalTransaction.type] ?? modalTransaction.type}</p>
+                        <p><strong>Fecha/Hora:</strong> {new Date(modalTransaction.timestamp).toLocaleString()}</p>
+                        <p><strong>Monto:</strong> {formattedAmount}</p>
+                        <p><strong>Encargado:</strong> {modalTransaction.employee || "-"}</p>
+                        <p>
+                          <strong>Métodos de Pago:</strong> {formattedPaymentMethods}
+                        </p>
+                        <p><strong>ID:</strong> {modalTransaction.id}</p>
+                        {(modalTransaction.cashRegisterName || modalTransaction.cashRegisterId) && (
+                          <p>
+                            <strong>Caja:</strong> {modalTransaction.cashRegisterName ?? "Caja"}
+                            {modalTransaction.cashRegisterId ? ` (#${modalTransaction.cashRegisterId})` : ""}
+                          </p>
                         )}
-                      </p>
-                    )}
-                  </div>
+                      {modalTransaction.clientName && (
+                          <p><strong>Cliente:</strong> {modalTransaction.clientName}</p>
+                        )}
+                        {modalTransaction.clientDocument && modalTransaction.clientDocumentType && (
+                          <p>
+                            <strong>Documento:</strong> {modalTransaction.clientDocumentType} {modalTransaction.clientDocument}
+                          </p>
+                        )}
+                        {modalTransaction.status && (
+                          <p><strong>Estado:</strong> {modalTransaction.status}</p>
+                        )}
+                        {modalTransaction.expectedAmount !== undefined && (
+                          <p>
+                            <strong>Monto esperado:</strong> {modalCurrency} {Number(modalTransaction.expectedAmount).toFixed(2)}
+                          </p>
+                        )}
+                        {modalTransaction.discrepancy !== undefined && (
+                          <p>
+                            <strong>Diferencia:</strong> {modalCurrency} {Number(modalTransaction.discrepancy).toFixed(2)}
+                          </p>
+                        )}
+                        {modalTransaction.voucher && (
+                          <p>
+                            <strong>Comprobante:</strong> {modalTransaction.voucher}
+                          </p>
+                        )}
+                        {modalTransaction.invoiceUrl && (
+                          <p>
+                            <strong>Enlace del comprobante:</strong>{" "}
+                            <a
+                              href={modalTransaction.invoiceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline"
+                            >
+                              Ver comprobante
+                            </a>
+                          </p>
+                        )}
+                        {modalInvoiceUrl && (
+                          <p>
+                            <strong>PDF Sunat:</strong>{" "}
+                            <a
+                              href={modalInvoiceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline"
+                            >
+                              Descargar comprobante
+                            </a>
+                          </p>
+                        )}
+                        {modalEffectiveType === "INCOME" && (
+                          <div className="sm:col-span-2 mt-2 space-y-3">
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Detalle de productos
+                              </p>
+                              {saleItems.length > 0 ? (
+                                <div className="overflow-x-auto rounded-md border">
+                                  <table className="w-full text-sm">
+                                    <thead className="bg-muted/40">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left font-medium">Producto</th>
+                                        <th className="px-3 py-2 text-center font-medium">Cantidad</th>
+                                        <th className="px-3 py-2 text-right font-medium">Precio unitario</th>
+                                        <th className="px-3 py-2 text-right font-medium">Total</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {saleItems.map((item, index) => (
+                                        <tr key={`${item.name}-${index}`} className="border-t">
+                                          <td className="px-3 py-2 align-middle text-muted-foreground">
+                                            {item.name}
+                                          </td>
+                                          <td className="px-3 py-2 text-center align-middle text-muted-foreground">
+                                            {item.quantity}
+                                          </td>
+                                          <td className="px-3 py-2 text-right align-middle text-muted-foreground">
+                                            {formatCurrency(item.unitPrice, modalCurrency)}
+                                          </td>
+                                          <td className="px-3 py-2 text-right align-middle font-semibold">
+                                            {formatCurrency(item.total, modalCurrency)}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr className="border-t bg-muted/30">
+                                        <th
+                                          colSpan={3}
+                                          className="px-3 py-2 text-right font-semibold"
+                                        >
+                                          Total productos
+                                        </th>
+                                        <td className="px-3 py-2 text-right font-semibold">
+                                          {formatCurrency(saleItemsTotal, modalCurrency)}
+                                        </td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">
+                                  No se encontraron productos asociados a esta venta.
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Métodos de pago utilizados
+                              </p>
+                              {paymentEntriesForModal.length > 0 ? (
+                                <div className="overflow-hidden rounded-md border">
+                                  <table className="w-full text-sm">
+                                    <tbody>
+                                      {paymentEntriesForModal.map((entry, index) => (
+                                        <tr key={`${entry.label}-${index}`} className="border-b last:border-b-0">
+                                          <th className="w-1/2 bg-muted px-3 py-2 text-left font-medium align-top">
+                                            {entry.label}
+                                          </th>
+                                          <td className="px-3 py-2 text-right text-muted-foreground">
+                                            {entry.amountText ?? "-"}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">Sin métodos de pago registrados.</p>
+                              )}
+                            </div>
+
+                            {saleNotes && (
+                              <p className="text-sm text-muted-foreground">{saleNotes}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                   {modalClosureDetails && (
                     <div className="space-y-3">
                       <div>
@@ -1058,10 +1451,22 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                               {[
                                 {
                                   label: "Detalle",
-                                  value: formatSaleDescription(modalTransaction.description) || modalTransaction.description || "Cierre de caja",
+                                  value:
+                                    collapseRepeatedPhrase(
+                                      formatSaleDescription(modalTransaction.description) ||
+                                        modalTransaction.description ||
+                                        "Cierre de caja",
+                                    ) || "Cierre de caja",
                                 },
                                 {
-                                  label: "Saldo inicial",
+                                  label: "Saldo inicial apertura nueva caja",
+                                  value:
+                                    modalTransaction.nextOpeningBalance !== null && modalTransaction.nextOpeningBalance !== undefined
+                                      ? `${modalCurrency} ${Number(modalTransaction.nextOpeningBalance).toFixed(2)}`
+                                      : "-",
+                                },
+                                {
+                                  label: "Saldo Inicial con el que la caja cerrada inició",
                                   value:
                                     modalTransaction.openingBalance !== null && modalTransaction.openingBalance !== undefined
                                       ? `${modalCurrency} ${Number(modalTransaction.openingBalance).toFixed(2)}`
@@ -1128,39 +1533,48 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                       )}
                     </div>
                   )}
-                  <div className="space-y-2">
-                    <p className="font-semibold">Notas</p>
-                    {(() => {
-                      const extraNotes: StructuredNoteEntry[] = []
-                      const trimmedNote = modalTransaction.notes?.trim()
-                      if (trimmedNote) {
-                        const alreadyIncluded = structuredNotes.some((entry) => entry.value === trimmedNote)
-                        if (!alreadyIncluded) {
-                          extraNotes.push({
-                            label: structuredNotes.length > 0 ? "Observaciones" : "Notas",
-                            value: trimmedNote,
-                          })
+                  {/* La sección de notas permanece montada pero oculta visualmente para evitar mostrarla en el modal. */}
+                  <div className="hidden" aria-hidden>
+                    <div className="space-y-2">
+                      <p className="font-semibold">Notas</p>
+                      {(() => {
+                        const extraNotes: StructuredNoteEntry[] = []
+                        const trimmedNote = modalTransaction?.notes?.trim()
+                        if (trimmedNote) {
+                          const collapsedNote = collapseRepeatedPhrase(trimmedNote)
+                          const normalizedNote = normalizeWhitespace(collapsedNote)
+                          if (normalizedNote) {
+                            const alreadyIncluded = structuredNotes.some(
+                              (entry) => entry.value.toLowerCase() === normalizedNote.toLowerCase(),
+                            )
+                            if (!alreadyIncluded) {
+                              extraNotes.push({
+                                label: structuredNotes.length > 0 ? "Observaciones" : "Notas",
+                                value: normalizedNote,
+                              })
+                            }
+                          }
                         }
-                      }
                       const combined = [...structuredNotes, ...extraNotes]
-                      if (combined.length === 0) {
-                        return <p className="text-muted-foreground">No hay notas adicionales.</p>
-                      }
-                      return (
-                        <div className="overflow-hidden rounded-md border">
-                          <table className="w-full text-sm">
-                            <tbody>
-                              {combined.map((entry, index) => (
-                                <tr key={`${entry.label}-${index}`} className="border-b last:border-b-0">
-                                  <th className="bg-muted px-3 py-2 text-left font-medium align-top w-36">{entry.label}</th>
-                                  <td className="px-3 py-2 text-muted-foreground">{entry.value}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )
-                    })()}
+                        if (combined.length === 0) {
+                          return <p className="text-muted-foreground">No hay notas adicionales.</p>
+                        }
+                        return (
+                          <div className="overflow-hidden rounded-md border">
+                            <table className="w-full text-sm">
+                              <tbody>
+                                {combined.map((entry, index) => (
+                                  <tr key={`${entry.label}-${index}`} className="border-b last:border-b-0">
+                                    <th className="bg-muted px-3 py-2 text-left font-medium align-top w-36">{entry.label}</th>
+                                    <td className="px-3 py-2 text-muted-foreground">{entry.value}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )
+                      })()}
+                    </div>
                   </div>
                 </div>
               )}
