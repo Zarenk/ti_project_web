@@ -1326,16 +1326,16 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
                     {/* Datatable para mostrar los productos seleccionados */}
                     <div className="border px-1 sm:px-2 overflow-x-auto max-w-full max-h-[280px] overflow-y-auto sm:max-h-none sm:overflow-y-visible">
-                      <Table className="w-full min-w-[320px] sm:min-w-[620px] text-xs sm:text-sm table-fixed">
+                      <Table className="w-full min-w-[280px] sm:min-w-[620px] text-xs sm:text-sm table-fixed">
                         <TableHeader className="bg-muted/50">
                           <TableRow>
-                            <TableHead className="text-left w-[120px] truncate py-1.5 sm:py-2">Nombre</TableHead>
+                            <TableHead className="text-left w-[104px] truncate py-1.5 sm:py-2">Nombre</TableHead>
                             <TableHead className="text-left hidden sm:table-cell w-[140px] truncate py-1.5 sm:py-2">Categoria</TableHead>
-                            <TableHead className="text-left w-[64px] truncate py-1.5 sm:py-2">Cant.</TableHead>
-                            <TableHead className="text-left w-[72px] truncate py-1.5 sm:py-2">Prec.</TableHead>
-                            <TableHead className="text-left w-[88px] truncate py-1.5 sm:py-2">Total</TableHead>
+                            <TableHead className="text-left w-[56px] truncate py-1.5 sm:py-2">Cant.</TableHead>
+                            <TableHead className="text-left w-[64px] truncate py-1.5 sm:py-2">Prec.</TableHead>
+                            <TableHead className="text-left w-[76px] truncate py-1.5 sm:py-2">Total</TableHead>
                             <TableHead className="text-left hidden md:table-cell w-[120px] truncate py-1.5 sm:py-2">Series</TableHead>
-                            <TableHead className="text-left w-[60px] truncate py-1.5 sm:py-2">Acciones</TableHead>
+                            <TableHead className="text-left w-[52px] truncate py-1.5 sm:py-2">Acciones</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1352,13 +1352,13 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   }
                                 }}
                               >
-                                <TableCell className="font-semibold w-[100px] sm:w-[140px] truncate whitespace-nowrap overflow-hidden text-[11px] sm:text-xs">
+                                <TableCell className="font-semibold w-[92px] sm:w-[140px] truncate whitespace-nowrap overflow-hidden text-[11px] sm:text-xs">
                                   {product.name}
                                 </TableCell>
                                 <TableCell className="hidden sm:table-cell truncate text-xs">
                                   {product.category_name}
                                 </TableCell>
-                                <TableCell className="w-[56px] sm:w-[80px] py-1.5 align-top">
+                                <TableCell className="w-[52px] sm:w-[80px] py-1.5 align-top">
                                   <div className="hidden sm:block">
                                     <Input
                                       type="number"
@@ -1382,7 +1382,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                     <p className="text-[10px] text-muted-foreground">Toca para editar</p>
                                   </div>
                                 </TableCell>
-                                <TableCell className="w-[64px] sm:w-[90px] py-1.5 align-top">
+                                <TableCell className="w-[60px] sm:w-[90px] py-1.5 align-top">
                                   <div className="hidden sm:block">
                                     <Input
                                       type="number"
@@ -1404,10 +1404,9 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   </div>
                                   <div className="sm:hidden text-[11px] font-medium leading-tight">
                                     S/. {Number(product.price ?? 0).toFixed(2)}
-                                    <p className="text-[10px] text-muted-foreground">Toca para editar</p>
                                   </div>
                                 </TableCell>
-                                <TableCell className="w-[80px] sm:w-[100px] truncate text-[11px] sm:text-xs">
+                                <TableCell className="w-[72px] sm:w-[100px] truncate text-[11px] sm:text-xs">
                                   S/ {rowTotal.toFixed(2)}
                                 </TableCell>
                                 <TableCell className="hidden md:table-cell text-xs">
@@ -1427,7 +1426,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                       : "Sin series"}
                                   </div>
                                 </TableCell>
-                                <TableCell className="w-[48px] sm:w-[60px] py-1.5">
+                                <TableCell className="w-[44px] sm:w-[60px] py-1.5">
                                   <Button
                                     variant="outline"
                                     className="h-8 sm:h-9 px-1"

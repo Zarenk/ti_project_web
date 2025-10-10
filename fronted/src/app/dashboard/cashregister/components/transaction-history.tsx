@@ -43,6 +43,26 @@ type SaleDetailItem = {
   total: number
 }
 
+type ClosureOperationDetail = {
+    id: string
+    timestamp: Date | null
+  employee: string
+  amount: number
+  type: "INCOME" | "EXPENSE"
+  currencySymbol: string
+  description: string
+  clientName: string | null
+  clientDocument: string | null
+  voucher: string | null
+  saleItems: SaleDetailItem[]
+  notes: string | null
+  paymentMethods: Array<{
+    label: string
+    amountText: string | null
+    raw: string
+  }>
+}
+
 const SALE_DESCRIPTION_MARKER = "venta registrada:"
 
 const parseLocaleNumber = (value: string) => {
@@ -379,6 +399,7 @@ type ClosureMetrics = {
   operationsCount: number
   totalAmount: number
   paymentBreakdown: { method: string; amount: number }[]
+  operations: ClosureOperationDetail[]
 }
 
 const parseAmountFromMethodEntry = (value: string): number | null => {
@@ -607,6 +628,82 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
       let operationsCount = 0
       let totalAmount = 0
       let paymentAggregates = new Map<string, number>()
+      let operations: Transaction[] = []
+
+      const mapOperationsToDetails = (source: Transaction[]): ClosureOperationDetail[] => {
+        return source
+          .map((operation) => {
+            const effectiveType =
+              (operation.internalType ?? operation.type) === "EXPENSE" ? "EXPENSE" : "INCOME"
+            const saleDetails = parseSaleItemsFromDescription(operation.description)
+            const rawSaleNotes =
+              effectiveType === "INCOME"
+                ? sanitizeIncomeNoteValue(saleDetails.notes)
+                : saleDetails.notes ?? ""
+            const rawTransactionNotes =
+              effectiveType === "INCOME"
+                ? sanitizeIncomeNoteValue(operation.notes ?? "")
+                : operation.notes ?? ""
+
+            const noteCandidates = [rawSaleNotes, rawTransactionNotes]
+              .map((value) => collapseRepeatedPhrase(normalizeWhitespace(value ?? "")))
+              .filter((value) => value.length > 0)
+              .filter(
+                (value, index, array) =>
+                  array.findIndex((candidate) => candidate.toLowerCase() === value.toLowerCase()) === index,
+              )
+
+            const description = normalizeWhitespace(
+              formatSaleDescription(operation.description) || operation.description || "",
+            )
+
+            const paymentEntries = Array.isArray(operation.paymentMethods)
+              ? operation.paymentMethods.map((method) => ({
+                  ...splitPaymentMethodEntry(method),
+                  raw: method,
+                }))
+              : []
+
+            const clientDocumentParts = [operation.clientDocumentType, operation.clientDocument]
+              .map((part) => (part ? normalizeWhitespace(String(part)) : ""))
+              .filter((part) => part.length > 0)
+
+            return {
+              id: operation.id,
+              timestamp: getTransactionDate(operation.timestamp) ?? operation.createdAt ?? null,
+              employee: operation.employee || "Sistema",
+              amount: Number(operation.amount ?? 0) || 0,
+              type: effectiveType,
+              currencySymbol: (operation.currency ?? "S/.").trim() || "S/.",
+              description: description || paymentEntries.map((entry) => entry.label || entry.raw).join(", ") ||
+                `Operación ${operation.id}`,
+              clientName: operation.clientName ?? null,
+              clientDocument: clientDocumentParts.length > 0 ? clientDocumentParts.join(" ") : null,
+              voucher: operation.voucher ?? null,
+              saleItems: saleDetails.items,
+              notes: noteCandidates.length > 0 ? noteCandidates.join("\n") : null,
+              paymentMethods: paymentEntries,
+            } as ClosureOperationDetail
+          })
+          .sort((a, b) => {
+            const aTime = a.timestamp?.getTime()
+            const bTime = b.timestamp?.getTime()
+
+            if (typeof aTime === "number" && typeof bTime === "number") {
+              return aTime - bTime
+            }
+
+            if (typeof aTime === "number") {
+              return 1
+            }
+
+            if (typeof bTime === "number") {
+              return -1
+            }
+
+            return 0
+          })
+      }
 
       const snapshotPaymentAggregates = () =>
         Array.from(paymentAggregates.entries())
@@ -630,11 +727,13 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
             operationsCount,
             totalAmount: Number(totalAmount.toFixed(2)),
             paymentBreakdown: snapshotPaymentAggregates(),
+            operations: mapOperationsToDetails(operations),
           })
 
           operationsCount = 0
           totalAmount = 0
           paymentAggregates = new Map<string, number>()
+          operations = []
           return
         }
 
@@ -646,6 +745,8 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
         const rawAmount = Number(transaction.amount ?? 0)
         const signedAmount = entryType === "EXPENSE" ? -rawAmount : rawAmount
         totalAmount += signedAmount
+
+        operations.push(transaction)
 
         const methods = Array.isArray(transaction.paymentMethods) && transaction.paymentMethods.length > 0
           ? transaction.paymentMethods
@@ -677,6 +778,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
           operationsCount,
           totalAmount: Number(totalAmount.toFixed(2)),
           paymentBreakdown: snapshotPaymentAggregates(),
+          operations: mapOperationsToDetails(operations),
         } as ClosureMetrics,
       }
     }, [transactions])
@@ -720,6 +822,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
             timestamp,
             operationsCount: details.operationsCount,
             paymentBreakdown: details.paymentBreakdown,
+            operations: details.operations,
             totalByPaymentMethods,
             cashTotal,
             currencySymbol,
@@ -740,6 +843,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
           timestamp: Date
           operationsCount: number
           paymentBreakdown: { method: string; amount: number }[]
+          operations: ClosureOperationDetail[]
           totalByPaymentMethods: number
           cashTotal: number
           currencySymbol: string
@@ -1403,73 +1507,180 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                       </p>
                     </div>
                     <div className="space-y-3">
-                      {closureSummaries.map((summary) => (
-                        <div key={summary.id} className="rounded-md border bg-muted/20 p-4">
-                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                            <span className="text-sm font-semibold text-foreground">
-                              Cierre de caja · {format(summary.timestamp, "dd/MM/yyyy HH:mm:ss")}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              Responsable: {summary.employee}
-                            </span>
-                          </div>
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                            <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                              <span className="text-muted-foreground">Operaciones registradas</span>
-                              <span className="font-medium text-foreground">{summary.operationsCount}</span>
-                            </div>
-                            <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                              <span className="text-muted-foreground">Total de operaciones (todos los métodos)</span>
-                              <span className="font-semibold text-foreground">
-                                {formatCurrency(summary.totalByPaymentMethods, summary.currencySymbol)}
+                      {closureSummaries.map((summary) => {
+                        const operationsWithItems = summary.operations.filter(
+                          (operation) => operation.saleItems.length > 0,
+                        )
+
+                        return (
+                          <div key={summary.id} className="rounded-md border bg-muted/20 p-4">
+                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                              <span className="text-sm font-semibold text-foreground">
+                                Cierre de caja · {format(summary.timestamp, "dd/MM/yyyy HH:mm:ss")}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                Responsable: {summary.employee}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                              <span className="text-muted-foreground">Total de operaciones en efectivo</span>
-                              <span className="font-semibold text-foreground">
-                                {formatCurrency(summary.cashTotal, summary.currencySymbol)}
-                              </span>
-                            </div>
-                            {summary.closingBalance !== null && (
+                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
                               <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                                <span className="text-muted-foreground">Efectivo contado en cierre</span>
+                                <span className="text-muted-foreground">Operaciones registradas</span>
+                                <span className="font-medium text-foreground">{summary.operationsCount}</span>
+                              </div>
+                              <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                <span className="text-muted-foreground">Total de operaciones (todos los métodos)</span>
                                 <span className="font-semibold text-foreground">
-                                  {formatCurrency(Number(summary.closingBalance), summary.currencySymbol)}
+                                  {formatCurrency(summary.totalByPaymentMethods, summary.currencySymbol)}
                                 </span>
+                              </div>
+                              <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                <span className="text-muted-foreground">Total de operaciones en efectivo</span>
+                                <span className="font-semibold text-foreground">
+                                  {formatCurrency(summary.cashTotal, summary.currencySymbol)}
+                                </span>
+                              </div>
+                              {summary.closingBalance !== null && (
+                                <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                  <span className="text-muted-foreground">Efectivo contado en cierre</span>
+                                  <span className="font-semibold text-foreground">
+                                    {formatCurrency(Number(summary.closingBalance), summary.currencySymbol)}
+                                  </span>
+                                </div>
+                              )}
+                              {summary.openingBalance !== null && (
+                                <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                  <span className="text-muted-foreground">Saldo inicial del turno</span>
+                                  <span className="font-medium text-foreground">
+                                    {formatCurrency(Number(summary.openingBalance), summary.currencySymbol)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            {summary.paymentBreakdown.length > 0 && (
+                              <div className="mt-3 rounded-md border bg-background/80">
+                                <table className="w-full text-xs">
+                                  <tbody>
+                                    {summary.paymentBreakdown.map((entry) => (
+                                      <tr key={entry.method} className="border-t">
+                                        <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
+                                        <td className="px-3 py-2 text-right font-medium text-foreground">
+                                          {formatCurrency(entry.amount, summary.currencySymbol)}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
                               </div>
                             )}
-                            {summary.openingBalance !== null && (
-                              <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                                <span className="text-muted-foreground">Saldo inicial del turno</span>
-                                <span className="font-medium text-foreground">
-                                  {formatCurrency(Number(summary.openingBalance), summary.currencySymbol)}
-                                </span>
+                          {operationsWithItems.length > 0 && (
+                              <div className="mt-4 space-y-3">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Operaciones con detalle de productos
+                                </p>
+                                <div className="space-y-3">
+                                  {operationsWithItems.map((operation) => (
+                                    <div
+                                      key={operation.id}
+                                      className="rounded-md border bg-background px-3 py-3 shadow-sm"
+                                    >
+                                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                        <div className="space-y-1">
+                                          <p className="text-sm font-medium text-foreground">
+                                            {operation.description}
+                                          </p>
+                                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                            {operation.timestamp && (
+                                              <span>{format(operation.timestamp, "dd/MM/yyyy HH:mm")}</span>
+                                            )}
+                                            <span>#{operation.id}</span>
+                                            <span>{operation.employee}</span>
+                                          </div>
+                                          {(operation.clientName || operation.clientDocument) && (
+                                            <p className="text-xs text-muted-foreground">
+                                              Cliente: {operation.clientName ?? "Sin cliente"}
+                                              {operation.clientDocument
+                                                ? ` (${operation.clientDocument})`
+                                                : ""}
+                                            </p>
+                                          )}
+                                          {operation.voucher && (
+                                            <p className="text-xs text-muted-foreground">
+                                              Comprobante: {operation.voucher}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <span className="text-sm font-semibold text-foreground">
+                                          {formatAmountWithSign(
+                                            operation.amount,
+                                            operation.type,
+                                            operation.currencySymbol,
+                                          )}
+                                        </span>
+                                      </div>
+                                      {operation.paymentMethods.length > 0 && (
+                                        <div className="mt-2 space-y-1">
+                                          {operation.paymentMethods.map((method, index) => {
+                                            const amountText = method.amountText
+                                              ? formatPaymentAmountText(
+                                                  method.amountText,
+                                                  operation.type === "EXPENSE",
+                                                )
+                                              : null
+
+                                            return (
+                                              <div
+                                                key={`${operation.id}-method-${index}`}
+                                                className="flex items-center justify-between rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs"
+                                              >
+                                                <span className="font-medium text-foreground">
+                                                  {method.label || method.raw}
+                                                </span>
+                                                {amountText && (
+                                                  <span className="text-muted-foreground">{amountText}</span>
+                                                )}
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      )}
+                                      <div className="mt-3 overflow-hidden rounded-md border bg-muted/20">
+                                        <table className="w-full text-xs">
+                                          <tbody>
+                                            {operation.saleItems.map((item, index) => (
+                                              <tr
+                                                key={`${operation.id}-item-${index}`}
+                                                className={index !== 0 ? "border-t" : undefined}
+                                              >
+                                                <td className="px-3 py-1.5 text-left text-foreground">
+                                                  <span className="font-medium">{item.quantity}×</span>{" "}
+                                                  {item.name}
+                                                </td>
+                                                <td className="px-3 py-1.5 text-right text-muted-foreground">
+                                                  {formatCurrency(item.total, operation.currencySymbol)}
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                      {operation.notes && (
+                                        <p className="mt-2 whitespace-pre-line text-xs text-muted-foreground">
+                                          {operation.notes}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
+                            )}
+                            {summary.notes && (
+                              <p className="mt-3 whitespace-pre-line text-xs text-muted-foreground">
+                                {summary.notes}
+                              </p>
                             )}
                           </div>
-                          {summary.paymentBreakdown.length > 0 && (
-                            <div className="mt-3 rounded-md border bg-background/80">
-                              <table className="w-full text-xs">
-                                <tbody>
-                                  {summary.paymentBreakdown.map((entry) => (
-                                    <tr key={entry.method} className="border-t">
-                                      <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
-                                      <td className="px-3 py-2 text-right font-medium text-foreground">
-                                        {formatCurrency(entry.amount, summary.currencySymbol)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                          {summary.notes && (
-                            <p className="mt-3 whitespace-pre-line text-xs text-muted-foreground">
-                              {summary.notes}
-                            </p>
-                          )}
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )}
