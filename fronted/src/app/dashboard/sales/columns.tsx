@@ -22,7 +22,12 @@ export type Sale = {
   id: number;
   user: { username: string };
   store: { name: string };
-  client: { name: string };
+  client: {
+    name: string;
+    documentNumber?: string;
+    dni?: string;
+    ruc?: string;
+  };
   total: number;
   description?: string;
   createdAt: string;

@@ -496,6 +496,7 @@ return null
 
 export default function TransactionHistory({ transactions, selectedDate, onDateChange, isFetching = false, keepPrevious = true, }: TransactionHistoryProps) {
     const [searchTerm, setSearchTerm] = useState("")
+    const [showClosureSummary, setShowClosureSummary] = useState(false)
     const [typeFilter, setTypeFilter] = useState<string | null>(null)
     const [modalTransaction, setModalTransaction] = useState<Transaction | null>(null)
     const [sortConfig, setSortConfig] = useState<{

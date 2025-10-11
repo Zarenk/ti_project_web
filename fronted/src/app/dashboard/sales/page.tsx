@@ -6,6 +6,16 @@ import { DataTable } from "./data-table";
 import { getSaleById, getSales } from "./sales.api";
 import { SaleDetailDialog } from "./components/sale-detail-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CalendarDatePicker } from "@/components/calendar-date-picker";
+import { DateRange } from "react-day-picker";
 import { FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,6 +31,18 @@ const parseNumberValue = (value: unknown): number | undefined => {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
 
+  return undefined;
+};
+
+const normalizeOptionalString = (value: unknown): string | undefined => {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : undefined;
+  }
   return undefined;
 };
 
@@ -139,11 +161,95 @@ const normalizeApiSale = (sale: any): Sale => {
 
   const total = parseNumberValue(sale.total);
 
+  const clientDocumentCandidate =
+    sale.client?.documentNumber ??
+    sale.client?.document_number ??
+    sale.client?.document ??
+    sale.client?.numeroDocumento ??
+    sale.client?.numero_documento ??
+    sale.client?.identificationNumber ??
+    sale.client?.identification_number ??
+    sale.client?.identityNumber ??
+    sale.client?.identity_number ??
+    sale.clientDocumentNumber ??
+    sale.client_document_number ??
+    sale.clientDocument ??
+    sale.client_document ??
+    sale.clientIdentification ??
+    sale.client_identification ??
+    sale.clientNumber ??
+    sale.client_number ??
+    sale.clientDocumentId ??
+    sale.client_document_id ??
+    sale.clientTaxId ??
+    sale.client_tax_id ??
+    sale.client?.taxId ??
+    sale.client?.tax_id ??
+    sale.clientDocNumber ??
+    sale.client_doc_number ??
+    sale.client?.docNumber ??
+    sale.client?.doc_number ??
+    sale.client?.nroDocumento ??
+    sale.client?.nro_documento ??
+    sale.client?.numDocumento ??
+    sale.client?.num_documento ??
+    sale.clientNumDocumento ??
+    sale.client_num_documento ??
+    sale.client?.numeroIdentificacion ??
+    sale.client?.numero_identificacion ??
+    sale.client?.numeroId ??
+    sale.client?.numero_id ??
+    sale.clientNumeroId ??
+    sale.client_numero_id ??
+    sale.clientDocumentValue ??
+    sale.client_document_value ??
+    undefined;
+
+  const clientDniCandidate =
+    sale.client?.dni ??
+    sale.client?.dniNumber ??
+    sale.client?.documentDni ??
+    sale.client?.document_dni ??
+    sale.client?.numeroDni ??
+    sale.client?.numero_dni ??
+    sale.client?.numDni ??
+    sale.client?.num_dni ??
+    sale.clientDni ??
+    sale.client_dni ??
+    sale.clientNumDni ??
+    sale.client_num_dni ??
+    sale.clientDniNumber ??
+    sale.client_dni_number ??
+    undefined;
+
+  const clientRucCandidate =
+    sale.client?.ruc ??
+    sale.client?.documentRuc ??
+    sale.client?.document_ruc ??
+    sale.client?.numeroRuc ??
+    sale.client?.numero_ruc ??
+    sale.clientRuc ??
+    sale.client_ruc ??
+    sale.clientNumRuc ??
+    sale.client_num_ruc ??
+    sale.clientRucNumber ??
+    sale.client_ruc_number ??
+    undefined;
+
+  const normalizedClientDocument = normalizeOptionalString(clientDocumentCandidate);
+  const normalizedClientDni = normalizeOptionalString(clientDniCandidate);
+  const normalizedClientRuc = normalizeOptionalString(clientRucCandidate);
+
   return {
     id: sale.id,
     user: { username: sale.user?.username ?? sale.user?.name ?? "—" },
     store: { name: sale.store?.name ?? sale.storeName ?? "—" },
-    client: { name: sale.client?.name ?? sale.clientName ?? "—" },
+    client: {
+      name: sale.client?.name ?? sale.clientName ?? "—",
+      documentNumber: normalizedClientDocument,
+      dni: normalizedClientDni,
+      ruc: normalizedClientRuc,
+    },
     total: total ?? 0,
     description: sale.description ?? sale.descripcion ?? undefined,
     createdAt: sale.createdAt ?? sale.created_at ?? new Date().toISOString(),
@@ -161,6 +267,12 @@ export default function Page() {
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isExportingSummary, setIsExportingSummary] = useState(false);
   const [isExportingDetailed, setIsExportingDetailed] = useState(false);
+  const [storeQuery, setStoreQuery] = useState("");
+  const [clientQuery, setClientQuery] = useState("");
+  const [minTotal, setMinTotal] = useState("");
+  const [maxTotal, setMaxTotal] = useState("");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("ALL");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -220,11 +332,152 @@ export default function Page() {
     [handleDeleted, handleViewDetail],
   );
 
+  const paymentMethodOptions = useMemo(() => {
+    const methods = new Set<string>();
+    sales.forEach((sale) => {
+      (sale.payments ?? []).forEach((payment) => {
+        const methodName = payment.paymentMethod?.name;
+        if (typeof methodName === "string") {
+          const normalized = methodName.trim();
+          if (normalized.length > 0) {
+            methods.add(normalized);
+          }
+        }
+      });
+    });
+    return Array.from(methods).sort((a, b) =>
+      a.localeCompare(b, "es", { sensitivity: "base" }),
+    );
+  }, [sales]);
+
+  const filteredSales = useMemo((): Sale[] => {
+    if (!sales.length) return [];
+
+    const normalizedStore = storeQuery.trim().toLowerCase();
+    const normalizedClient = clientQuery.trim().toLowerCase();
+    const parsedMin = Number.parseFloat(minTotal.replace(/,/g, "."));
+    const parsedMax = Number.parseFloat(maxTotal.replace(/,/g, "."));
+    const hasMin = !Number.isNaN(parsedMin);
+    const hasMax = !Number.isNaN(parsedMax);
+    const hasPaymentFilter = selectedPaymentMethod !== "ALL";
+    const normalizedPayment = selectedPaymentMethod.toLowerCase();
+
+    const fromDate = dateRange?.from ? new Date(dateRange.from) : undefined;
+    const toDate = dateRange?.to ? new Date(dateRange.to) : undefined;
+
+    if (fromDate) {
+      fromDate.setHours(0, 0, 0, 0);
+    }
+    if (toDate) {
+      toDate.setHours(23, 59, 59, 999);
+    }
+
+    return sales.filter((sale) => {
+      if (normalizedStore) {
+        const storeName = (sale.store?.name ?? "").toLowerCase();
+        if (!storeName.includes(normalizedStore)) {
+          return false;
+        }
+      }
+
+      if (normalizedClient) {
+        const candidateValues = [
+          sale.client?.name,
+          sale.client?.documentNumber,
+          sale.client?.dni,
+          sale.client?.ruc,
+        ]
+          .filter(
+            (value): value is string =>
+              typeof value === "string" && value.trim().length > 0,
+          )
+          .map((value) => value.toLowerCase());
+
+        if (!candidateValues.some((value) => value.includes(normalizedClient))) {
+          return false;
+        }
+      }
+
+      const totalValue = Number(sale.total);
+      if (hasMin && (!Number.isFinite(totalValue) || totalValue < parsedMin)) {
+        return false;
+      }
+      if (hasMax && (!Number.isFinite(totalValue) || totalValue > parsedMax)) {
+        return false;
+      }
+
+      if (hasPaymentFilter) {
+        const hasMethod = (sale.payments ?? []).some((payment) => {
+          const methodName = payment.paymentMethod?.name;
+          return (
+            typeof methodName === "string" &&
+            methodName.trim().toLowerCase() === normalizedPayment
+          );
+        });
+        if (!hasMethod) {
+          return false;
+        }
+      }
+
+      if (fromDate || toDate) {
+        const saleDate = new Date(sale.createdAt);
+        if (Number.isNaN(saleDate.getTime())) {
+          return false;
+        }
+        if (fromDate && saleDate < fromDate) {
+          return false;
+        }
+        if (toDate && saleDate > toDate) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [sales, storeQuery, clientQuery, minTotal, maxTotal, selectedPaymentMethod, dateRange]);
+
   const totalSalesAmount = useMemo(
     () =>
-      sales.reduce((acc, sale) => acc + (Number.isFinite(Number(sale.total)) ? Number(sale.total) : 0), 0),
+      sales.reduce(
+        (acc, sale) =>
+          acc + (Number.isFinite(Number(sale.total)) ? Number(sale.total) : 0),
+        0,
+      ),
     [sales],
   );
+
+  const filteredTotalSalesAmount = useMemo(
+    () =>
+      filteredSales.reduce(
+        (acc, sale) =>
+          acc + (Number.isFinite(Number(sale.total)) ? Number(sale.total) : 0),
+        0,
+      ),
+    [filteredSales],
+  );
+
+  const isFiltered = useMemo(
+    () =>
+      Boolean(
+        storeQuery.trim() ||
+          clientQuery.trim() ||
+          minTotal.trim() ||
+          maxTotal.trim() ||
+          selectedPaymentMethod !== "ALL" ||
+          dateRange?.from ||
+          dateRange?.to,
+      ),
+    [storeQuery, clientQuery, minTotal, maxTotal, selectedPaymentMethod, dateRange],
+  );
+
+  const handleResetFilters = useCallback(() => {
+    setStoreQuery("");
+    setClientQuery("");
+    setMinTotal("");
+    setMaxTotal("");
+    setSelectedPaymentMethod("ALL");
+    setDateRange(undefined);
+  }, []);
 
   const escapeHtml = useCallback((value: string | number | null | undefined) => {
     if (value === null || value === undefined) return "";
@@ -741,14 +994,15 @@ export default function Page() {
   }, []);
 
   const handleExportSummary = useCallback(() => {
-    if (!sales.length) {
+    const dataset = isFiltered ? filteredSales : sales;
+    if (!dataset.length) {
       toast.warning("No hay ventas para exportar");
       return;
     }
 
     setIsExportingSummary(true);
     try {
-      const workbookContent = buildSummaryWorkbook(sales);
+      const workbookContent = buildSummaryWorkbook(dataset);
       const dateStamp = new Date().toISOString().split("T")[0];
       downloadWorkbook(workbookContent, `reporte_ventas_resumen_${dateStamp}.xls`);
       toast.success("Reporte de ventas (resumen) generado correctamente.");
@@ -758,17 +1012,18 @@ export default function Page() {
     } finally {
       setIsExportingSummary(false);
     }
-  }, [buildSummaryWorkbook, downloadWorkbook, sales]);
+  }, [buildSummaryWorkbook, downloadWorkbook, filteredSales, isFiltered, sales]);
 
   const handleExportDetailed = useCallback(() => {
-    if (!sales.length) {
+    const dataset = isFiltered ? filteredSales : sales;
+    if (!dataset.length) {
       toast.warning("No hay ventas para exportar");
       return;
     }
 
     setIsExportingDetailed(true);
     try {
-      const workbookContent = buildDetailedWorkbook(sales);
+      const workbookContent = buildDetailedWorkbook(dataset);
       const dateStamp = new Date().toISOString().split("T")[0];
       downloadWorkbook(workbookContent, `reporte_ventas_detallado_${dateStamp}.xls`);
       toast.success("Reporte detallado de ventas generado correctamente.");
@@ -778,7 +1033,7 @@ export default function Page() {
     } finally {
       setIsExportingDetailed(false);
     }
-  }, [buildDetailedWorkbook, downloadWorkbook, sales]);
+  }, [buildDetailedWorkbook, downloadWorkbook, filteredSales, isFiltered, sales]);
 
   return (
     <>
@@ -788,8 +1043,18 @@ export default function Page() {
             Historial de Ventas
           </h1>
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between px-5 mb-4">
-            <div className="text-sm text-muted-foreground">
-              Total acumulado: {formatCurrency(totalSalesAmount)}
+            <div className="space-y-1 text-sm text-muted-foreground">
+              <p>
+                Total acumulado:{" "}
+                <span className="font-semibold text-foreground">
+                  {formatCurrency(filteredTotalSalesAmount)}
+                </span>
+              </p>
+              {isFiltered && (
+                <p className="text-xs text-muted-foreground">
+                  Total general sin filtros: {formatCurrency(totalSalesAmount)}
+                </p>
+              )}
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
               <Button
@@ -824,8 +1089,117 @@ export default function Page() {
               </Button>
             </div>
           </div>
+          <div className="px-5">
+            <div className="space-y-4 rounded-2xl border bg-card p-4 shadow-sm">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Tienda
+                  </p>
+                  <Input
+                    type="search"
+                    value={storeQuery}
+                    onChange={(event) => setStoreQuery(event.target.value)}
+                    placeholder="Buscar por tienda"
+                    className="h-10"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Cliente
+                  </p>
+                  <Input
+                    type="search"
+                    value={clientQuery}
+                    onChange={(event) => setClientQuery(event.target.value)}
+                    placeholder="Nombre o documento"
+                    className="h-10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Monto total (S/)
+                  </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <Input
+                      value={minTotal}
+                      onChange={(event) => setMinTotal(event.target.value)}
+                      placeholder="Mínimo"
+                      className="h-10"
+                      inputMode="decimal"
+                    />
+                    <Input
+                      value={maxTotal}
+                      onChange={(event) => setMaxTotal(event.target.value)}
+                      placeholder="Máximo"
+                      className="h-10"
+                      inputMode="decimal"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Método de pago
+                  </p>
+                  <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
+                    <SelectTrigger className="h-10 w-full">
+                      <SelectValue placeholder="Todos los métodos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Todos los métodos</SelectItem>
+                      {paymentMethodOptions.map((method) => (
+                        <SelectItem key={method} value={method}>
+                          {method}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 sm:col-span-2 lg:col-span-1 xl:col-span-2 2xl:col-span-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Rango de fechas
+                  </p>
+                  <CalendarDatePicker
+                    className="h-10 w-full justify-between"
+                    variant="outline"
+                    date={dateRange ?? { from: undefined, to: undefined }}
+                    onDateSelect={({ from, to }) => setDateRange({ from, to })}
+                    closeOnSelect
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Mostrando {" "}
+                  <span className="font-semibold text-foreground">{filteredSales.length}</span>{" "}
+                  de {sales.length} venta{sales.length === 1 ? "" : "s"}
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm font-medium text-foreground">
+                    Total filtrado:{" "}
+                    <span className="text-primary">
+                      {formatCurrency(filteredTotalSalesAmount)}
+                    </span>
+                  </span>
+                  {isFiltered && (
+                    <Button
+                      variant="ghost"
+                      onClick={handleResetFilters}
+                      className="h-9 px-3"
+                    >
+                      Limpiar filtros
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
           <div className="overflow-x-auto">
-            <DataTable columns={columns} data={sales} onRowClick={handleViewDetail} />
+            <DataTable
+              columns={columns}
+              data={filteredSales}
+              onRowClick={handleViewDetail}
+            />
           </div>
         </div>
       </section>

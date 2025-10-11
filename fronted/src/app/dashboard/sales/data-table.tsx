@@ -1,164 +1,105 @@
 "use client";
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input"
 import {
-    ColumnDef,
-    ColumnFiltersState,
-    flexRender,
-    getCoreRowModel,
-    getFilteredRowModel,
-    getPaginationRowModel,
-    useReactTable,
-  } from "@tanstack/react-table"
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
 import React from "react";
 import { DataTablePagination } from "@/components/data-table-pagination";
 
-
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[]
-    data: TData[]
-    onRowClick?: (row: TData) => void
-  }
-   
-  export function DataTable<TData, TValue>({
-    columns,
+    data: TData[];
+    onRowClick?: (row: TData) => void;
+}
+
+export function DataTable<TData, TValue>({
+  columns,
+  data,
+  onRowClick,
+}: DataTableProps<TData, TValue>) {
+  const table = useReactTable({
     data,
-    onRowClick,
-  }: DataTableProps<TData, TValue>) {
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
 
-    // ESTADO PARA MANEJAR FILTROS DE LA COLUMNA
-    const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-
-    // ESTADO PARA MANEJAR LOS MODALS
-    const [isModalOpen, setIsModalOpen] = React.useState(false); // Estado del modal
-    const [selectedProduct, setSelectedProduct] = React.useState<TData | null>(null); // Producto seleccionado
-    const [isTransferModalOpen, setIsTransferModalOpen] = React.useState(false);
- 
-    // ESTADOS DE LA TABLA
-    const table = useReactTable({
-        data,
-        columns,
-        onColumnFiltersChange: setColumnFilters,
-        getFilteredRowModel: getFilteredRowModel(),
-        getCoreRowModel: getCoreRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
-        state: {
-            columnFilters,
-        },
-      })
-
-    // CONTADOR DE FILAS SELECCIONADAS PARA DATOS GLOBALES DEL DATATABLE
-    const [globalRowSelection, setGlobalRowSelection] = React.useState({});
-    const [rowSelection, setRowSelection] = React.useState({})
-
-    React.useEffect(() => {
-        setGlobalRowSelection((prev) => {
-          const updatedSelection = { ...prev } as Record<string, boolean>;;
-      
-          // Agregar las nuevas selecciones
-          Object.keys(rowSelection).forEach((key) => {
-            if ((rowSelection as Record<string, any>)[key]) {
-              updatedSelection[key] = true;
-            }
-          });
-      
-          // Eliminar las filas deseleccionadas
-          Object.keys(prev).forEach((key) => {
-            if (!(rowSelection as Record<string, any>)[key]) {
-              delete updatedSelection[key];
-            }
-          });
-      
-          return updatedSelection;
-        });
-      }, [rowSelection]);
-
-    const totalSelectedRows = 0//bject.keys(globalRowSelection).length;
-    //
+React.useEffect(() => {
+    table.setPageIndex(0);
+  }, [data, table]);
 
 return (
-    <div className="gap-2">
-        <div className="flex items-center py-4">
-            <Input
-            placeholder="Filtrar por tienda..."
-            value={(table.getColumn("store_name")?.getFilterValue() as string) ?? ""}
-            onChange={(event) =>
-                table.getColumn("store_name")?.setFilterValue(event.target.value)
-            }
-            className="max-w-sm"
-            />
-        </div>
-        <div className="gap-2">
-            <label className="text-sm text-muted-foreground">
-                Total de datos: {table.getRowModel().rows.length}
-                </label>
-                <label className="text-sm text-muted-foreground pb-2 sm:pb-0">
-                {totalSelectedRows} de{" "}
-                {table.getFilteredRowModel().rows.length} fila(s) seleccionadas.
-            </label>
-        </div>
-        <div className="rounded-md border">
+    <div className="space-y-4">
+      <div className="rounded-xl border bg-card/50">
         <Table>
-            <TableHeader>
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                    return (
-                    <TableHead key={header.id}>
-                        {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                            )}
-                    </TableHead>
-                    )
-                })}
-                </TableRow>
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
+                  </TableHead>
+                ))}
+              </TableRow>
             ))}
-            </TableHeader>
-            <TableBody>
+          </TableHeader>
+          <TableBody>
             {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() && "selected"}
-                    className={onRowClick ? "cursor-pointer transition-colors hover:bg-muted/50" : undefined}
-                    onClick={(event) => {
-                      if (!onRowClick) return
-                      const target = event.target as HTMLElement
-                      if (target.closest('button, a, input, [data-row-click-ignore]')) {
-                        return
-                      }
-                      onRowClick(row.original)
-                    }}
+              table.getRowModel().rows.map((row) => (
+              <TableRow
+                  key={row.id}
+                  className={
+                    onRowClick
+                      ? "cursor-pointer transition-colors hover:bg-muted/50"
+                      : undefined
+                  }
+                  onClick={(event) => {
+                    if (!onRowClick) return;
+                    const target = event.target as HTMLElement;
+                    if (target.closest("button, a, input, [data-row-click-ignore]")) {
+                      return;
+                    }
+                    onRowClick(row.original);
+                  }}
                 >
-                    {row.getVisibleCells().map((cell) => (
+                  {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
-                    ))}
-                    <TableCell>
-                  </TableCell>
-                </TableRow>
-                ))
+                  ))}
+              </TableRow>
+              ))
             ) : (
-                <TableRow>
+              <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                    No results.
+                  No hay resultados.
                 </TableCell>
-                </TableRow>
+              </TableRow>
             )}
             </TableBody>
         </Table>
-        </div>
+      </div>
 
-        <div className="py-4">
-              <DataTablePagination table={table} />
-        </div>
-
+      <div className="py-2">
+        <DataTablePagination table={table} />
+      </div>
     </div>
   );
 }
