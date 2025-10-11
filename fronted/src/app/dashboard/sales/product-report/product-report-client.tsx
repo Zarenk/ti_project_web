@@ -102,10 +102,10 @@ type ProductReportClientProps = {
   products: ProductOption[];
 };
 
-const defaultDateRange: DateRange = {
+const getDefaultDateRange = () => ({
   from: subDays(new Date(), 90),
   to: new Date(),
-};
+});
 
 function formatDateLabel(isoDate: string | null) {
   if (!isoDate) return "Sin ventas registradas";
@@ -126,7 +126,7 @@ function formatLastPurchase(iso: string) {
 
 export default function ProductReportClient({ products }: ProductReportClientProps) {
   const [selectedProduct, setSelectedProduct] = useState<{ id: number; name: string; price: number } | null>(null);
-  const [dateRange, setDateRange] = useState<DateRange>(defaultDateRange);
+  const [dateRange, setDateRange] = useState<DateRange>(() => getDefaultDateRange());
   const [report, setReport] = useState<ProductSalesReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -218,6 +218,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                       setSelectedProduct(null);
                       setReport(null);
                       setError(null);
+                      setDateRange(getDefaultDateRange());
                     }}
                   >
                     Limpiar
@@ -244,9 +245,14 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                 </p>
               )}
             </div>
-            <div className="space-y-2">
-              <span className="text-sm font-medium text-muted-foreground">Rango de fechas</span>
-              <DatePickerWithRange date={dateRange} setDate={setDateRange} />
+            <div className="space-y-2 md:space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">Rango de fechas</span>
+                <span aria-hidden className="hidden h-9 md:block" />
+              </div>
+              <div className="md:mt-0.5">
+                <DatePickerWithRange date={dateRange} setDate={setDateRange} />
+              </div>
               <p className="text-xs text-muted-foreground">
                 El análisis incluirá todas las ventas registradas para el producto en el intervalo seleccionado.
               </p>

@@ -115,7 +115,7 @@ export default function ProductCombobox({ products, selectedId, selectedLabel, o
                         variant={chipPresentation.variant}
                         className={cn("text-xs", stockBadgeClass(p.stock))}
                       >
-                        Stock: {p.stock ?? '-'}
+                        Stock: {typeof p.stock === "number" ? p.stock : "-"}
                       </Badge>
                     </div>
                     {p.categoryName ? (

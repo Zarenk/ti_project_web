@@ -164,6 +164,131 @@ const splitPaymentMethodCandidates = (value: string) => {
     .filter((segment) => segment.length > 0);
 };
 
+const paymentAmountKeyCandidates = [
+  "amount",
+  "total",
+  "value",
+  "paid",
+  "balance",
+  "monto",
+];
+
+const paymentCurrencyKeyCandidates = ["currency", "currencySymbol", "symbol", "moneda"];
+
+const extractNumericAmount = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const matches = value.match(/-?\\d+(?:[.,]\\d+)?/g);
+    if (!matches || matches.length === 0) {
+      return null;
+    }
+
+    const candidate = matches[matches.length - 1]?.replace(/[^0-9,.-]/g, "") ?? "";
+    if (!candidate) {
+      return null;
+    }
+
+    const hasComma = candidate.includes(",");
+    const hasDot = candidate.includes(".");
+
+    let normalized = candidate;
+    if (hasComma && hasDot) {
+      if (candidate.lastIndexOf(",") > candidate.lastIndexOf(".")) {
+        normalized = candidate.replace(/\\./g, "").replace(/,/g, ".");
+      } else {
+        normalized = candidate.replace(/,/g, "");
+      }
+    } else if (hasComma) {
+      normalized = candidate.replace(/\\./g, "").replace(/,/g, ".");
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+const resolveCurrencySymbol = (record: Record<string, unknown>, fallback: string): string => {
+  for (const key of paymentCurrencyKeyCandidates) {
+    const candidate = record[key];
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return fallback;
+};
+
+const formatPaymentMethodLabel = (value: string) => normalizeWhitespace(value);
+
+const formatPaymentMethodsWithAmounts = (
+  raw: unknown,
+  fallbackCurrency: string,
+): string[] => {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  const results: string[] = [];
+
+  raw.forEach((entry) => {
+    if (typeof entry === "string") {
+      const trimmed = normalizeWhitespace(entry);
+      if (trimmed) {
+        results.push(trimmed);
+      }
+      return;
+    }
+
+    if (entry && typeof entry === "object") {
+      const record = entry as Record<string, unknown>;
+
+      const methodCandidate = paymentMethodKeyCandidates
+        .map((key) => record[key])
+        .find(
+          (value): value is string =>
+            typeof value === "string" && normalizeWhitespace(value).length > 0,
+        );
+
+      if (methodCandidate) {
+        const label = formatPaymentMethodLabel(methodCandidate);
+
+        let amount: number | null = null;
+        for (const key of paymentAmountKeyCandidates) {
+          amount = extractNumericAmount(record[key]);
+          if (amount !== null) {
+            break;
+          }
+        }
+
+        if (amount !== null) {
+          const currency = resolveCurrencySymbol(record, fallbackCurrency);
+          const formattedAmount = `${currency} ${Math.abs(amount).toFixed(2)}`;
+          results.push(`${label}: ${formattedAmount}`);
+          return;
+        }
+
+        results.push(label);
+        return;
+      }
+
+      const stringValues = Object.values(record).filter(
+        (value): value is string => typeof value === "string" && normalizeWhitespace(value).length > 0,
+      );
+
+      if (stringValues.length > 0) {
+        results.push(normalizeWhitespace(stringValues[0]));
+      }
+    }
+  });
+
+  return results;
+};
+
 const normalizePaymentMethods = (raw: unknown): string[] => {
   const results: string[] = [];
   const seen = new Set<string>();
@@ -812,13 +937,19 @@ const toNullableNumber = (value: unknown): number | null => {
 const adaptTransaction = (transaction: any): Transaction => {
   const timestamp = toValidDate(transaction?.timestamp ?? transaction?.createdAt);
   const createdAt = toValidDate(transaction?.createdAt ?? transaction?.timestamp);
-  const normalizedMethods = normalizePaymentMethods(transaction?.paymentMethods ?? []);
   const currencyCandidates = [transaction?.currency, transaction?.currencySymbol];
   const currencySymbol = currencyCandidates.find(
     (candidate) => typeof candidate === "string" && candidate.trim().length > 0,
   );
 
   const resolvedCurrency = (currencySymbol ?? "S/.").trim() || "S/.";
+  const formattedPaymentMethods = formatPaymentMethodsWithAmounts(
+    transaction?.paymentMethods ?? [],
+    resolvedCurrency,
+  );
+  const normalizedMethods = normalizePaymentMethods(
+    formattedPaymentMethods.length > 0 ? formattedPaymentMethods : transaction?.paymentMethods ?? [],
+  );
 
   return {
     id: String(transaction?.id),
