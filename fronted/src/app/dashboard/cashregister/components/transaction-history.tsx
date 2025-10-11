@@ -1449,60 +1449,73 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
           {(hasActiveOperations || closureSummaries.length > 0) && (
             <div className="border-t px-4 py-4 text-sm sm:px-6">
               <div className="space-y-4">
-                {hasActiveOperations && activeOperationsSummary && (
-                  <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm font-semibold text-foreground">
-                        Operaciones desde el último cierre
-                      </p>
-                      <span className="text-xs text-muted-foreground">
-                        Caja abierta actualmente
-                      </span>
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                        <span className="text-muted-foreground">Operaciones registradas</span>
-                        <span className="font-medium text-foreground">
-                          {activeOperationsSummary.operationsCount}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                        <span className="text-muted-foreground">Total de operaciones (todos los métodos)</span>
-                        <span className="font-semibold text-foreground">
-                          {formatCurrency(
-                            activeOperationsSummary.totalByPaymentMethods,
-                            activeOperationsSummary.currencySymbol,
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                        <span className="text-muted-foreground">Total de operaciones en efectivo</span>
-                        <span className="font-semibold text-foreground">
-                          {formatCurrency(
-                            activeOperationsSummary.cashTotal,
-                            activeOperationsSummary.currencySymbol,
-                          )}
-                        </span>
-                      </div>
-                      {activeOperationsSummary.paymentBreakdown.length > 0 && (
-                        <div className="rounded-md border bg-background/80">
-                          <table className="w-full text-xs">
-                            <tbody>
-                              {activeOperationsSummary.paymentBreakdown.map((entry) => (
-                                <tr key={entry.method} className="border-t">
-                                  <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
-                                  <td className="px-3 py-2 text-right font-medium text-foreground">
-                                    {formatCurrency(entry.amount, activeOperationsSummary.currencySymbol)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() => setShowClosureSummary((prev) => !prev)}
+                  >
+                    {showClosureSummary ? "Ocultar resumen de cierres" : "Ver resumen de cierres"}
+                  </Button>
+                </div>
+                {showClosureSummary && (
+                  <div className="space-y-4">
+                    {hasActiveOperations && activeOperationsSummary && (
+                      <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-sm font-semibold text-foreground">
+                            Operaciones desde el último cierre
+                          </p>
+                          <span className="text-xs text-muted-foreground">
+                            Caja abierta actualmente
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  </div>
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                            <span className="text-muted-foreground">Operaciones registradas</span>
+                            <span className="font-medium text-foreground">
+                              {activeOperationsSummary.operationsCount}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                            <span className="text-muted-foreground">Total de operaciones (todos los métodos)</span>
+                            <span className="font-semibold text-foreground">
+                              {formatCurrency(
+                                activeOperationsSummary.totalByPaymentMethods,
+                                activeOperationsSummary.currencySymbol,
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                            <span className="text-muted-foreground">Total de operaciones en efectivo</span>
+                            <span className="font-semibold text-foreground">
+                              {formatCurrency(
+                                activeOperationsSummary.cashTotal,
+                                activeOperationsSummary.currencySymbol,
+                              )}
+                            </span>
+                          </div>
+                          {activeOperationsSummary.paymentBreakdown.length > 0 && (
+                            <div className="rounded-md border bg-background/80">
+                              <table className="w-full text-xs">
+                                <tbody>
+                                  {activeOperationsSummary.paymentBreakdown.map((entry) => (
+                                    <tr key={entry.method} className="border-t">
+                                      <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
+                                      <td className="px-3 py-2 text-right font-medium text-foreground">
+                                        {formatCurrency(entry.amount, activeOperationsSummary.currencySymbol)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div> 
+                      </div>
                 )}
+                
 
                 {closureSummaries.length > 0 && (
                   <div className="space-y-3">
@@ -1694,8 +1707,10 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                             )}
                           </div>
                         )
-                      })}
-                    </div>
+                      })}      
+                    </div>           
+                  </div>
+                  )}
                   </div>
                 )}
               </div>
