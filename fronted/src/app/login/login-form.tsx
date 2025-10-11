@@ -84,6 +84,7 @@ export default function LoginForm() {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+  const [showRecovery, setShowRecovery] = useState(false);
   const router = useRouter();
   const { refreshUser } = useAuth();
 
@@ -404,42 +405,52 @@ export default function LoginForm() {
         {loading ? 'Procesando...' : 'Iniciar con Google'}
         
       </Button>
-      <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
-        <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+      {!showRecovery ? (
+        <button
+          type="button"
+          onClick={() => setShowRecovery(true)}
+          className="text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+        >
           ¿Olvidaste tu contraseña?
-        </h2>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-          Ingresa tu correo electrónico y te enviaremos los pasos necesarios para recuperar el acceso. Revisa tu
-          bandeja de entrada y sigue las instrucciones para restablecer tu contraseña.
-        </p>
-        <form onSubmit={handleRecoverySubmit} className="mt-3 flex flex-col gap-3">
-          <div>
-            <Label htmlFor="recovery-email" className="text-sm font-medium">
-              Correo electrónico de recuperación
-            </Label>
-            <Input
-              id="recovery-email"
-              type="email"
-              value={recoveryEmail}
-              onChange={(event) => setRecoveryEmail(event.target.value)}
-              placeholder="correo@ejemplo.com"
-              required
-              disabled={recoveryLoading}
-            />
-          </div>
-          {recoveryStatus && (
-            <p
-              role={recoveryStatus.type === 'error' ? 'alert' : 'status'}
-              className={`text-sm ${recoveryStatus.type === 'error' ? 'text-red-600' : 'text-emerald-600'}`}
-            >
-              {recoveryStatus.message}
-            </p>
-          )}
-          <Button type="submit" variant="secondary" disabled={recoveryLoading} aria-disabled={recoveryLoading}>
-            {recoveryLoading ? 'Enviando instrucciones...' : 'Recuperar contraseña'}
-          </Button>
-        </form>
-      </section>
+        </button>
+      ) : (
+        <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+            ¿Olvidaste tu contraseña?
+          </h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            Ingresa tu correo electrónico y te enviaremos los pasos necesarios para recuperar el acceso. Revisa tu
+            bandeja de entrada y sigue las instrucciones para restablecer tu contraseña.
+          </p>
+          <form onSubmit={handleRecoverySubmit} className="mt-3 flex flex-col gap-3">
+            <div>
+              <Label htmlFor="recovery-email" className="text-sm font-medium">
+                Correo electrónico de recuperación
+              </Label>
+              <Input
+                id="recovery-email"
+                type="email"
+                value={recoveryEmail}
+                onChange={(event) => setRecoveryEmail(event.target.value)}
+                placeholder="correo@ejemplo.com"
+                required
+                disabled={recoveryLoading}
+              />
+            </div>
+            {recoveryStatus && (
+              <p
+                role={recoveryStatus.type === 'error' ? 'alert' : 'status'}
+                className={`text-sm ${recoveryStatus.type === 'error' ? 'text-red-600' : 'text-emerald-600'}`}
+              >
+                {recoveryStatus.message}
+              </p>
+            )}
+            <Button type="submit" variant="secondary" disabled={recoveryLoading} aria-disabled={recoveryLoading}>
+              {recoveryLoading ? 'Enviando instrucciones...' : 'Recuperar contraseña'}
+            </Button>
+          </form>
+        </section>
+      )}
     </div>
  
   );
