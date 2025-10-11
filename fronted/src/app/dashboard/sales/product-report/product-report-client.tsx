@@ -245,10 +245,10 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                 </p>
               )}
             </div>
-            <div className="space-y-2 md:space-y-3">
+            <div className="space-y-2 md:space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-muted-foreground">Rango de fechas</span>
-                <span aria-hidden className="hidden h-9 md:block" />
+                <span aria-hidden className="hidden md:block" />
               </div>
               <div className="md:mt-0.5">
                 <DatePickerWithRange date={dateRange} setDate={setDateRange} />
