@@ -488,75 +488,6 @@ const formatPaymentMethodsForReport = (
   return formattedEntries.length > 0 ? formattedEntries.join(" | ") : "-";
 };
 
-const parseAmountFromMethodValue = (value: string): number | null => {
-  if (!value) {
-    return null;
-  }
-
-  const matches = value.match(/-?\d+(?:[.,]\d+)?/g);
-  if (!matches || matches.length === 0) {
-    return null;
-  }
-
-  const rawCandidate = matches[matches.length - 1]?.replace(/[^0-9,.-]/g, '') ?? '';
-  if (!rawCandidate) {
-    return null;
-  }
-
-  const hasComma = rawCandidate.includes(',');
-  const hasDot = rawCandidate.includes('.');
-
-  let normalized = rawCandidate;
-  if (hasComma && hasDot) {
-    if (rawCandidate.lastIndexOf(',') > rawCandidate.lastIndexOf('.')) {
-      normalized = rawCandidate.replace(/\./g, '').replace(',', '.');
-    } else {
-      normalized = rawCandidate.replace(/,/g, '');
-    }
-  } else if (hasComma) {
-    normalized = rawCandidate.replace(/\./g, '').replace(',', '.');
-  }
-
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-
-  return Math.abs(parsed);
-};
-
-const extractMethodLabelAndAmount = (value: string) => {
-  const normalized = normalizeWhitespace(value ?? '');
-  if (!normalized) {
-    return { label: '', amount: null };
-  }
-
-  const colonIndex = normalized.indexOf(':');
-  let label = colonIndex === -1
-    ? normalized
-    : normalizeWhitespace(normalized.slice(0, colonIndex));
-
-  const amountSource = colonIndex === -1
-    ? normalized
-    : normalized.slice(colonIndex + 1);
-
-  let amount = parseAmountFromMethodValue(amountSource);
-
-  if (colonIndex === -1 && amount !== null) {
-    const labelWithoutAmount = normalizeWhitespace(
-      label
-        .replace(/-?\d+(?:[.,]\d+)?/g, '')
-        .replace(/(?:S\/\.|\$)/gi, '')
-        .replace(/[\s:|]+$/g, ''),
-    );
-    if (labelWithoutAmount) {
-      label = labelWithoutAmount;
-    }
-  }
-
-  return { label: label || normalized, amount };
-};
-
 const isCashPaymentMethod = (value: string) => {
   const normalized = normalizeWhitespace(value).toLowerCase();
   return normalized.includes("efectivo");
@@ -643,8 +574,7 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
     items: Map<string, SaleItem>;
     originalItems: SaleItem[] | null;
     breakdown: Map<string, number>;
-    methodAmounts: Map<string, Set<string>>;
-    methodLabels: Map<string, string>;
+    methodAmounts: Map<string, Set<number>>;
     fingerprints: Set<string>;
     order: number;
     amounts: Set<number>;
@@ -704,8 +634,7 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
         items: new Map<string, SaleItem>(),
         originalItems: saleItems.length > 0 ? saleItems.map((item) => ({ ...item })) : null,
         breakdown: new Map<string, number>(),
-        methodAmounts: new Map<string, Set<string>>(),
-        methodLabels: new Map<string, string>(),
+        methodAmounts: new Map<string, Set<number>>(),
         fingerprints: new Set<string>([duplicateFingerprint]),
         order: index,
         amounts: new Set<number>([amountValue]),
@@ -758,79 +687,18 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
         }
       });
     }
-    const parseMethodEntries = (values: string[]) =>
-      values
-        .map((raw) => {
-          const normalized = normalizeWhitespace(raw ?? '');
-          if (!normalized) {
-            return null;
-          }
-          const { label, amount } = extractMethodLabelAndAmount(normalized);
-          return {
-            raw: normalized,
-            label,
-            amount,
-          };
-        })
-        .filter((entry): entry is { raw: string; label: string; amount: number | null } => Boolean(entry));
-
-    const parsedExplicitMethods = parseMethodEntries(explicitMethods);
-    const parsedMethodsFromText = parseMethodEntries(methodsFromText);
-    const parsedCombinedMethods = parseMethodEntries(currentMethods);
-
-    let breakdownEntries = parsedExplicitMethods;
-    const explicitHasAmounts = parsedExplicitMethods.some((entry) => entry.amount !== null);
-    const textHasAmounts = parsedMethodsFromText.some((entry) => entry.amount !== null);
-
-    if (!explicitHasAmounts && textHasAmounts) {
-      breakdownEntries = parsedMethodsFromText;
-    }
-
-    if (breakdownEntries.length === 0) {
-      breakdownEntries = parsedCombinedMethods;
-    }
-
-    const positiveAmountValue = Math.abs(amountValue);
-    const knownAmountTotal = breakdownEntries.reduce(
-      (sum, entry) => (entry.amount !== null ? sum + entry.amount : sum),
-      0,
-    );
-
-    const entriesWithoutAmount = breakdownEntries.filter((entry) => entry.amount === null);
-    const fallbackAmount = entriesWithoutAmount.length > 0
-      ? Math.max(positiveAmountValue - knownAmountTotal, 0) / entriesWithoutAmount.length
-      : 0;
-
-    breakdownEntries.forEach((entry) => {
-      const label = normalizeWhitespace(entry.label ?? '');
-      if (!label) {
+    const methodsForBreakdown = hasExplicitMethods ? explicitMethods : [];
+    methodsForBreakdown.forEach((method) => {
+      if (!method) {
         return;
       }
-
-      const effectiveAmount = entry.amount !== null && Number.isFinite(entry.amount)
-        ? entry.amount
-        : fallbackAmount;
-
-      if (!Number.isFinite(effectiveAmount) || effectiveAmount <= 0) {
-        return;
+      const amountSet = saleEntry.methodAmounts.get(method) ?? new Set<number>();
+      if (!amountSet.has(amountValue)) {
+        amountSet.add(amountValue);
+        saleEntry.methodAmounts.set(method, amountSet);
+        const previousAmount = saleEntry.breakdown.get(method) ?? 0;
+        saleEntry.breakdown.set(method, previousAmount + amountValue);
       }
-      const labelKey = label.toUpperCase();
-      const canonicalLabel = saleEntry.methodLabels.get(labelKey) ?? label;
-      if (!saleEntry.methodLabels.has(labelKey)) {
-        saleEntry.methodLabels.set(labelKey, canonicalLabel);
-      }
-
-      const amountSet = saleEntry.methodAmounts.get(labelKey) ?? new Set<string>();
-      const amountKey = effectiveAmount.toFixed(2);
-      if (amountSet.has(amountKey)) {
-        return;
-      }
-
-      amountSet.add(amountKey);
-      saleEntry.methodAmounts.set(labelKey, amountSet);
-
-      const previousAmount = saleEntry.breakdown.get(canonicalLabel) ?? 0;
-      saleEntry.breakdown.set(canonicalLabel, previousAmount + effectiveAmount);
     });
   });
 

@@ -6,6 +6,8 @@
 
 generator client {
   provider = "prisma-client-js"
+  engineType = "library" // <— NO "wasm"
+  // binaryTargets = ["windows"]   // opcional; si no lo necesitas, quítalo
 }
 
 datasource db {
@@ -601,7 +603,6 @@ model CashTransactionPaymentMethod {
   id                Int @id @default(autoincrement())
   cashTransactionId Int
   paymentMethodId   Int // Hacer que el campo sea opcional
-  amount            Decimal @default(0)
 
   cashTransaction CashTransaction @relation(fields: [cashTransactionId], references: [id])
   paymentMethod   PaymentMethod   @relation(fields: [paymentMethodId], references: [id]) // Relación opcional
