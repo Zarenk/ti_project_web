@@ -106,6 +106,7 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
       });
     
       const formattedTransactions = transactions.map((tx) => {
+        
         const linkedClient = tx.salePayments[0]?.sale?.client;
         return {
           id: tx.id.toString(),
