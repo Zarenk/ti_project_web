@@ -883,6 +883,7 @@ export default function CashRegisterDashboard() {
   const [balance, setBalance] = useState(0)
   const [initialBalance, setInitialBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactionsForBalance, setTransactionsForBalance] = useState<Transaction[]>([])
   const [storeId, setStoreId] = useState<number | null>(null); // Estado para la tienda seleccionada
   const [stores, setStores] = useState<{ id: number; name: string }[]>([]); // Lista de tiendas
   const [hasCashRegister, setHasCashRegister] = useState(true); // 👈 Estado nuevo
@@ -1098,13 +1099,15 @@ export default function CashRegisterDashboard() {
   }, [closures, selectedDate]);
 
   const transactionsSinceLastClosure = useMemo(() => {
+    const sourceTransactions = transactionsForBalance;
+
     if (!latestClosureTimestamp) {
-      return transactions;
+      return sourceTransactions;
     }
 
     const closureTime = latestClosureTimestamp.getTime();
 
-    return transactions.filter((transaction) => {
+    return sourceTransactions.filter((transaction) => {
       const candidate = (() => {
         const { timestamp, createdAt } = transaction as { timestamp?: unknown; createdAt?: unknown };
 
@@ -1139,7 +1142,7 @@ export default function CashRegisterDashboard() {
 
       return candidate.getTime() > closureTime;
     });
-  }, [transactions, latestClosureTimestamp]);
+  }, [transactionsForBalance, latestClosureTimestamp]);
 
   const cashIncomeTotal = useMemo(() => {
     const baseTransactions = isToday ? transactionsSinceLastClosure : transactions;
@@ -1668,70 +1671,107 @@ export default function CashRegisterDashboard() {
   if (storeId === null || !selectedDate) return;
 
   let cancelled = false;
-  setIsFetchingTransactions(true);
+    setIsFetchingTransactions(true);
 
-  const load = async () => {
+  const load = async (): Promise<void> => {
     try {
-      const ymd = ymdLocal(selectedDate); // 👈 día local (Lima)  
+      const datesToFetch = new Set<string>();
 
-      // TRANSACCIONES DEL DÍA
-      const timezoneOffsetMinutes = selectedDate.getTimezoneOffset();
-      const adjacentDates: Date[] = [];
+        const collectDateStrings = (date: Date) => {
+          const baseString = ymdLocal(date);
+          datesToFetch.add(baseString);
 
-      if (timezoneOffsetMinutes > 0) {
-        adjacentDates.push(new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000));
-      } else if (timezoneOffsetMinutes < 0) {
-        adjacentDates.push(new Date(selectedDate.getTime() - 24 * 60 * 60 * 1000));
-      }
-
-      const fetchDates = [ymd, ...adjacentDates.map((date) => ymdLocal(date))];
-      const responses = await Promise.all(
-        fetchDates.map(async (dateString) => {
-          try {
-            const data = await getTransactionsByDate(storeId, dateString);
-            return Array.isArray(data) ? data : [];
-          } catch (error) {
-            console.error(`Error al obtener transacciones para la fecha ${dateString}:`, error);
-            return [];
+          const timezoneOffsetMinutes = date.getTimezoneOffset();
+          if (timezoneOffsetMinutes > 0) {
+            const nextDate = new Date(date);
+            nextDate.setDate(nextDate.getDate() + 1);
+            datesToFetch.add(ymdLocal(nextDate));
+          } else if (timezoneOffsetMinutes < 0) {
+            const prevDate = new Date(date);
+            prevDate.setDate(prevDate.getDate() - 1);
+            datesToFetch.add(ymdLocal(prevDate));
           }
-        })
-      );
+        }; 
 
-      if (cancelled) return;
+        collectDateStrings(selectedDate);
 
-      const flattenedTransactions = responses.flat();
-      const transactionsById = new Map<string, any>();
+        if (isToday && latestClosureTimestamp) {
+          const startDate = new Date(latestClosureTimestamp);
+          startDate.setHours(0, 0, 0, 0);
 
-      flattenedTransactions.forEach((transaction) => {
-        if (!transaction) return;
+      const endDate = new Date(selectedDate);
+          endDate.setHours(0, 0, 0, 0);
+
+          if (startDate <= endDate) {
+            for (
+              let cursor = new Date(startDate);
+              cursor <= endDate;
+              cursor.setDate(cursor.getDate() + 1)
+            ) {
+              collectDateStrings(cursor);
+            }
+          }
+        }
+
+        const fetchDates = Array.from(datesToFetch);
+        const responses = await Promise.all(
+          fetchDates.map(async (dateString) => {
+            try {
+              const data = await getTransactionsByDate(storeId, dateString);
+              return Array.isArray(data) ? data : [];
+            } catch (error) {
+              console.error(`Error al obtener transacciones para la fecha ${dateString}:`, error);
+              return [];
+            }
+          }),
+        );
+
+        if (cancelled) return;
+
+        const flattenedTransactions = responses.flat();
+        const transactionsById = new Map<string, any>();
+
+        flattenedTransactions.forEach((transaction) => {
+          if (!transaction) return;
 
         const transactionId = String(transaction.id);
-        if (!transactionsById.has(transactionId)) {
-          transactionsById.set(transactionId, transaction);
+          if (!transactionsById.has(transactionId)) {
+            transactionsById.set(transactionId, transaction);
+          }
+        });
+
+        const adaptedTransactions = Array.from(transactionsById.values()).map((t: any) =>
+          adaptTransaction(t),
+        );
+
+        const merged = mergeSaleTransactions(adaptedTransactions);
+
+        if (!cancelled) {
+          setTransactionsForBalance(merged);
+
+          const filteredBySelectedDate = merged.filter((transaction) =>
+            isSameDay(transaction.timestamp, selectedDate),
+          );
+
+          setTransactions(filteredBySelectedDate);
         }
-      });
-
-      const validTransactions = Array.from(transactionsById.values())
-        .map((t: any) => adaptTransaction(t))
-        .filter((transaction) => isSameDay(transaction.timestamp, selectedDate));
-
-      const merged = mergeSaleTransactions(validTransactions);
-      if (!cancelled) setTransactions(merged);
-    } catch (error) {
-      if (!cancelled) {
-        console.error("Error al obtener transacciones por fecha:", error);
-        setTransactions([]);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error al obtener transacciones por fecha:", error);
+          setTransactions([]);
+          setTransactionsForBalance([]);
+        }
+      } finally {
+        if (!cancelled) setIsFetchingTransactions(false);
       }
-    } finally {
-      if (!cancelled) setIsFetchingTransactions(false);
-    }
-  };
+    };
 
-  load();
-  return () => {
+    load();
+    return () => {
       cancelled = true;
     };
-  }, [storeId, selectedDate]);
+  }, [storeId, selectedDate, isToday, latestClosureTimestamp]);
+
 
   useEffect(() => {
     // Solo considera transacciones válidas (evita CLOSURE)
