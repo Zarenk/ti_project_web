@@ -1449,252 +1449,267 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
           {(hasActiveOperations || closureSummaries.length > 0) && (
             <div className="border-t px-4 py-4 text-sm sm:px-6">
               <div className="space-y-4">
-                {hasActiveOperations && activeOperationsSummary && (
-                  <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm font-semibold text-foreground">
-                        Operaciones desde el último cierre
-                      </p>
-                      <span className="text-xs text-muted-foreground">
-                        Caja abierta actualmente
-                      </span>
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                        <span className="text-muted-foreground">Operaciones registradas</span>
-                        <span className="font-medium text-foreground">
-                          {activeOperationsSummary.operationsCount}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                        <span className="text-muted-foreground">Total de operaciones (todos los métodos)</span>
-                        <span className="font-semibold text-foreground">
-                          {formatCurrency(
-                            activeOperationsSummary.totalByPaymentMethods,
-                            activeOperationsSummary.currencySymbol,
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                        <span className="text-muted-foreground">Total de operaciones en efectivo</span>
-                        <span className="font-semibold text-foreground">
-                          {formatCurrency(
-                            activeOperationsSummary.cashTotal,
-                            activeOperationsSummary.currencySymbol,
-                          )}
-                        </span>
-                      </div>
-                      {activeOperationsSummary.paymentBreakdown.length > 0 && (
-                        <div className="rounded-md border bg-background/80">
-                          <table className="w-full text-xs">
-                            <tbody>
-                              {activeOperationsSummary.paymentBreakdown.map((entry) => (
-                                <tr key={entry.method} className="border-t">
-                                  <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
-                                  <td className="px-3 py-2 text-right font-medium text-foreground">
-                                    {formatCurrency(entry.amount, activeOperationsSummary.currencySymbol)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() => setShowClosureSummary((prev) => !prev)}
+                  >
+                    {showClosureSummary ? "Ocultar resumen de cierres" : "Ver resumen de cierres"}
+                  </Button>
+                </div>
+                {showClosureSummary && (
+                  <div className="space-y-4">
+                    {hasActiveOperations && activeOperationsSummary && (
+                      <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-sm font-semibold text-foreground">
+                            Operaciones desde el último cierre
+                          </p>
+                          <span className="text-xs text-muted-foreground">
+                            Caja abierta actualmente
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {closureSummaries.length > 0 && (
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">Resumen de cierres</p>
-                      <p className="text-xs text-muted-foreground">
-                        Cada cierre muestra el acumulado de movimientos antes del conteo de efectivo.
-                      </p>
-                    </div>
-                    <div className="space-y-3">
-                      {closureSummaries.map((summary) => {
-                        const operationsWithItems = summary.operations.filter(
-                          (operation) => operation.saleItems.length > 0,
-                        )
-
-                        return (
-                          <div key={summary.id} className="rounded-md border bg-muted/20 p-4">
-                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                              <span className="text-sm font-semibold text-foreground">
-                                Cierre de caja · {format(summary.timestamp, "dd/MM/yyyy HH:mm:ss")}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                Responsable: {summary.employee}
-                              </span>
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                            <span className="text-muted-foreground">Operaciones registradas</span>
+                            <span className="font-medium text-foreground">
+                              {activeOperationsSummary.operationsCount}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                            <span className="text-muted-foreground">Total de operaciones (todos los métodos)</span>
+                            <span className="font-semibold text-foreground">
+                              {formatCurrency(
+                                activeOperationsSummary.totalByPaymentMethods,
+                                activeOperationsSummary.currencySymbol,
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                            <span className="text-muted-foreground">Total de operaciones en efectivo</span>
+                            <span className="font-semibold text-foreground">
+                              {formatCurrency(
+                                activeOperationsSummary.cashTotal,
+                                activeOperationsSummary.currencySymbol,
+                              )}
+                            </span>
+                          </div>
+                          {activeOperationsSummary.paymentBreakdown.length > 0 && (
+                            <div className="rounded-md border bg-background/80">
+                              <table className="w-full text-xs">
+                                <tbody>
+                                  {activeOperationsSummary.paymentBreakdown.map((entry) => (
+                                    <tr key={entry.method} className="border-t">
+                                      <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
+                                      <td className="px-3 py-2 text-right font-medium text-foreground">
+                                        {formatCurrency(entry.amount, activeOperationsSummary.currencySymbol)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
                             </div>
-                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                              <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                                <span className="text-muted-foreground">Operaciones registradas</span>
-                                <span className="font-medium text-foreground">{summary.operationsCount}</span>
-                              </div>
-                              <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                                <span className="text-muted-foreground">Total de operaciones (todos los métodos)</span>
-                                <span className="font-semibold text-foreground">
-                                  {formatCurrency(summary.totalByPaymentMethods, summary.currencySymbol)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                                <span className="text-muted-foreground">Total de operaciones en efectivo</span>
-                                <span className="font-semibold text-foreground">
-                                  {formatCurrency(summary.cashTotal, summary.currencySymbol)}
-                                </span>
-                              </div>
-                              {summary.closingBalance !== null && (
-                                <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                                  <span className="text-muted-foreground">Efectivo contado en cierre</span>
-                                  <span className="font-semibold text-foreground">
-                                    {formatCurrency(Number(summary.closingBalance), summary.currencySymbol)}
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {closureSummaries.length > 0 && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Resumen de cierres</p>
+                          <p className="text-xs text-muted-foreground">
+                            Cada cierre muestra el acumulado de movimientos antes del conteo de efectivo.
+                          </p>
+                        </div>
+                        <div className="space-y-3">
+                          {closureSummaries.map((summary) => {
+                            const operationsWithItems = summary.operations.filter(
+                              (operation) => operation.saleItems.length > 0,
+                            )
+
+                            return (
+                              <div key={summary.id} className="rounded-md border bg-muted/20 p-4">
+                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                  <span className="text-sm font-semibold text-foreground">
+                                    Cierre de caja · {format(summary.timestamp, "dd/MM/yyyy HH:mm:ss")}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    Responsable: {summary.employee}
                                   </span>
                                 </div>
-                              )}
-                              {summary.openingBalance !== null && (
-                                <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                                  <span className="text-muted-foreground">Saldo inicial del turno</span>
-                                  <div className="flex flex-col items-end gap-1 text-right sm:flex-row sm:items-center sm:gap-3">
-                                    <span className="font-medium text-foreground">
-                                      {formatCurrency(Number(summary.openingBalance), summary.currencySymbol)}
-                                    </span>
-                                    {summary.nextOpeningBalance !== null && (
-                                      <span className="text-xs text-muted-foreground sm:text-sm sm:text-foreground">
-                                        Nueva caja: {formatCurrency(Number(summary.nextOpeningBalance), summary.currencySymbol)}
-                                      </span>
-                                    )}
+                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                  <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                    <span className="text-muted-foreground">Operaciones registradas</span>
+                                    <span className="font-medium text-foreground">{summary.operationsCount}</span>
                                   </div>
-                                </div>
-                              )}
-                            </div>
-                            {summary.paymentBreakdown.length > 0 && (
-                              <div className="mt-3 rounded-md border bg-background/80">
-                                <table className="w-full text-xs">
-                                  <tbody>
-                                    {summary.paymentBreakdown.map((entry) => (
-                                      <tr key={entry.method} className="border-t">
-                                        <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
-                                        <td className="px-3 py-2 text-right font-medium text-foreground">
-                                          {formatCurrency(entry.amount, summary.currencySymbol)}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          {operationsWithItems.length > 0 && (
-                              <div className="mt-4 space-y-3">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                  Operaciones con detalle de productos
-                                </p>
-                                <div className="space-y-3">
-                                  {operationsWithItems.map((operation) => (
-                                    <div
-                                      key={operation.id}
-                                      className="rounded-md border bg-background px-3 py-3 shadow-sm"
-                                    >
-                                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                        <div className="space-y-1">
-                                          <p className="text-sm font-medium text-foreground">
-                                            {operation.description}
-                                          </p>
-                                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                                            {operation.timestamp && (
-                                              <span>{format(operation.timestamp, "dd/MM/yyyy HH:mm")}</span>
-                                            )}
-                                            <span>#{operation.id}</span>
-                                            <span>{operation.employee}</span>
-                                          </div>
-                                          {(operation.clientName || operation.clientDocument) && (
-                                            <p className="text-xs text-muted-foreground">
-                                              Cliente: {operation.clientName ?? "Sin cliente"}
-                                              {operation.clientDocument
-                                                ? ` (${operation.clientDocument})`
-                                                : ""}
-                                            </p>
-                                          )}
-                                          {operation.voucher && (
-                                            <p className="text-xs text-muted-foreground">
-                                              Comprobante: {operation.voucher}
-                                            </p>
-                                          )}
-                                        </div>
-                                        <span className="text-sm font-semibold text-foreground">
-                                          {formatAmountWithSign(
-                                            operation.amount,
-                                            operation.type,
-                                            operation.currencySymbol,
-                                          )}
-                                        </span>
-                                      </div>
-                                      {operation.paymentMethods.length > 0 && (
-                                        <div className="mt-2 space-y-1">
-                                          {operation.paymentMethods.map((method, index) => {
-                                            const amountText = method.amountText
-                                              ? formatPaymentAmountText(
-                                                  method.amountText,
-                                                  operation.type === "EXPENSE",
-                                                )
-                                              : null
-
-                                            return (
-                                              <div
-                                                key={`${operation.id}-method-${index}`}
-                                                className="flex items-center justify-between rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs"
-                                              >
-                                                <span className="font-medium text-foreground">
-                                                  {method.label || method.raw}
-                                                </span>
-                                                {amountText && (
-                                                  <span className="text-muted-foreground">{amountText}</span>
-                                                )}
-                                              </div>
-                                            )
-                                          })}
-                                        </div>
-                                      )}
-                                      <div className="mt-3 overflow-hidden rounded-md border bg-muted/20">
-                                        <table className="w-full text-xs">
-                                          <tbody>
-                                            {operation.saleItems.map((item, index) => (
-                                              <tr
-                                                key={`${operation.id}-item-${index}`}
-                                                className={index !== 0 ? "border-t" : undefined}
-                                              >
-                                                <td className="px-3 py-1.5 text-left text-foreground">
-                                                  <span className="font-medium">{item.quantity}×</span>{" "}
-                                                  {item.name}
-                                                </td>
-                                                <td className="px-3 py-1.5 text-right text-muted-foreground">
-                                                  {formatCurrency(item.total, operation.currencySymbol)}
-                                                </td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                      {operation.notes && (
-                                        <p className="mt-2 whitespace-pre-line text-xs text-muted-foreground">
-                                          {operation.notes}
-                                        </p>
-                                      )}
+                                  <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                    <span className="text-muted-foreground">Total de operaciones (todos los métodos)</span>
+                                    <span className="font-semibold text-foreground">
+                                      {formatCurrency(summary.totalByPaymentMethods, summary.currencySymbol)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                    <span className="text-muted-foreground">Total de operaciones en efectivo</span>
+                                    <span className="font-semibold text-foreground">
+                                      {formatCurrency(summary.cashTotal, summary.currencySymbol)}
+                                    </span>
+                                  </div>
+                                  {summary.closingBalance !== null && (
+                                    <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                      <span className="text-muted-foreground">Efectivo contado en cierre</span>
+                                      <span className="font-semibold text-foreground">
+                                        {formatCurrency(Number(summary.closingBalance), summary.currencySymbol)}
+                                      </span>
                                     </div>
-                                  ))}
+                                  )}
+                                  {summary.openingBalance !== null && (
+                                    <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                      <span className="text-muted-foreground">Saldo inicial del turno</span>
+                                      <span className="font-medium text-foreground">
+                                        {formatCurrency(Number(summary.openingBalance), summary.currencySymbol)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {summary.nextOpeningBalance !== null && (
+                                    <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                                      <span className="text-muted-foreground">Nuevo saldo de caja</span>
+                                      <span className="font-semibold text-foreground">
+                                        {formatCurrency(Number(summary.nextOpeningBalance), summary.currencySymbol)}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
+                                {summary.paymentBreakdown.length > 0 && (
+                                  <div className="mt-3 rounded-md border bg-background/80">
+                                    <table className="w-full text-xs">
+                                      <tbody>
+                                        {summary.paymentBreakdown.map((entry) => (
+                                          <tr key={entry.method} className="border-t">
+                                            <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
+                                            <td className="px-3 py-2 text-right font-medium text-foreground">
+                                              {formatCurrency(entry.amount, summary.currencySymbol)}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              {operationsWithItems.length > 0 && (
+                                  <div className="mt-4 space-y-3">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                      Operaciones con detalle de productos
+                                    </p>
+                                    <div className="space-y-3">
+                                      {operationsWithItems.map((operation) => (
+                                        <div
+                                          key={operation.id}
+                                          className="rounded-md border bg-background px-3 py-3 shadow-sm"
+                                        >
+                                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                            <div className="space-y-1">
+                                              <p className="text-sm font-medium text-foreground">
+                                                {operation.description}
+                                              </p>
+                                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                                {operation.timestamp && (
+                                                  <span>{format(operation.timestamp, "dd/MM/yyyy HH:mm")}</span>
+                                                )}
+                                                <span>#{operation.id}</span>
+                                                <span>{operation.employee}</span>
+                                              </div>
+                                              {(operation.clientName || operation.clientDocument) && (
+                                                <p className="text-xs text-muted-foreground">
+                                                  Cliente: {operation.clientName ?? "Sin cliente"}
+                                                  {operation.clientDocument
+                                                    ? ` (${operation.clientDocument})`
+                                                    : ""}
+                                                </p>
+                                              )}
+                                              {operation.voucher && (
+                                                <p className="text-xs text-muted-foreground">
+                                                  Comprobante: {operation.voucher}
+                                                </p>
+                                              )}
+                                            </div>
+                                            <span className="text-sm font-semibold text-foreground">
+                                              {formatAmountWithSign(
+                                                operation.amount,
+                                                operation.type,
+                                                operation.currencySymbol,
+                                              )}
+                                            </span>
+                                          </div>
+                                          {operation.paymentMethods.length > 0 && (
+                                            <div className="mt-2 space-y-1">
+                                              {operation.paymentMethods.map((method, index) => {
+                                                const amountText = method.amountText
+                                                  ? formatPaymentAmountText(
+                                                      method.amountText,
+                                                      operation.type === "EXPENSE",
+                                                    )
+                                                  : null
+
+                                                return (
+                                                  <div
+                                                    key={`${operation.id}-method-${index}`}
+                                                    className="flex items-center justify-between rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs"
+                                                  >
+                                                    <span className="font-medium text-foreground">
+                                                      {method.label || method.raw}
+                                                    </span>
+                                                    {amountText && (
+                                                      <span className="text-muted-foreground">{amountText}</span>
+                                                    )}
+                                                  </div>
+                                                )
+                                              })}
+                                            </div>
+                                          )}
+                                          <div className="mt-3 overflow-hidden rounded-md border bg-muted/20">
+                                            <table className="w-full text-xs">
+                                              <tbody>
+                                                {operation.saleItems.map((item, index) => (
+                                                  <tr
+                                                    key={`${operation.id}-item-${index}`}
+                                                    className={index !== 0 ? "border-t" : undefined}
+                                                  >
+                                                    <td className="px-3 py-1.5 text-left text-foreground">
+                                                      <span className="font-medium">{item.quantity}×</span>{" "}
+                                                      {item.name}
+                                                    </td>
+                                                    <td className="px-3 py-1.5 text-right text-muted-foreground">
+                                                      {formatCurrency(item.total, operation.currencySymbol)}
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                          {operation.notes && (
+                                            <p className="mt-2 whitespace-pre-line text-xs text-muted-foreground">
+                                              {operation.notes}
+                                            </p>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {summary.notes && (
+                                  <p className="mt-3 whitespace-pre-line text-xs text-muted-foreground">
+                                    {summary.notes}
+                                  </p>
+                                )}
                               </div>
-                            )}
-                            {summary.notes && (
-                              <p className="mt-3 whitespace-pre-line text-xs text-muted-foreground">
-                                {summary.notes}
-                              </p>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
