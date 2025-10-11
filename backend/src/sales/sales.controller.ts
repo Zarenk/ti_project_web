@@ -112,6 +112,15 @@ export class SalesController {
     return this.salesService.getTopClients(10, from, to);
   }
 
+  @Get('product-report/:productId')
+  getProductReport(
+    @Param('productId', ParseIntPipe) productId: number,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.salesService.getProductSalesReport(productId, from, to);
+  }
+
   @Get('transactions')
   getSalesTransactions(
     @Query('from') from?: string,

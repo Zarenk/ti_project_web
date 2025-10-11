@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/select";
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import { DateRange } from "react-day-picker";
-import { FileSpreadsheet, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
@@ -1086,6 +1087,13 @@ export default function Page() {
                     <FileSpreadsheet className="h-4 w-4" /> Exportar ventas (detalle)
                   </span>
                 )}
+              </Button>
+              <Button asChild className="bg-purple-600 hover:bg-purple-700 text-white">
+                <Link href="/dashboard/sales/product-report" prefetch={false}>
+                  <span className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" /> Reporte de productos
+                  </span>
+                </Link>
               </Button>
             </div>
           </div>

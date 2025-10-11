@@ -451,6 +451,46 @@ export async function getTopClients(params: { from?: string; to?: string }) {
   return res.json();
 }
 
+export async function getProductSalesReport(
+  productId: number,
+  params: { from?: string; to?: string } = {},
+) {
+  const headers = await getAuthHeaders();
+  if (!('Authorization' in headers)) {
+    throw new Error('No se encontró un token de autenticación');
+  }
+
+  const searchParams = new URLSearchParams();
+  if (params.from) {
+    searchParams.set('from', params.from);
+  }
+  if (params.to) {
+    searchParams.set('to', params.to);
+  }
+
+  const query = searchParams.toString();
+  const endpoint = `${BACKEND_URL}/api/sales/product-report/${productId}${
+    query ? `?${query}` : ''
+  }`;
+
+  const res = await fetch(endpoint, { headers });
+
+  if (!res.ok) {
+    let message = 'Error al obtener el reporte de producto';
+    try {
+      const errorData = await res.json();
+      if (errorData?.message) {
+        message = errorData.message;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
+  }
+
+  return res.json();
+}
+
 export async function getRecentSalesByRange(from: string, to: string) {
   const headers = await getAuthHeaders()
   if (!('Authorization' in headers)) {

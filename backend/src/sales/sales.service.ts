@@ -548,6 +548,242 @@ export class SalesService {
     });
   }
 
+  async getProductSalesReport(productId: number, from?: string, to?: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: {
+        id: true,
+        name: true,
+        barcode: true,
+        price: true,
+        priceSell: true,
+      },
+    });
+
+    if (!product) {
+      throw new NotFoundException(`No se encontró el producto con ID ${productId}.`);
+    }
+
+    const timeZone = 'America/Lima';
+    const createdAtFilter: Prisma.DateTimeFilter = {};
+
+    if (from) {
+      createdAtFilter.gte = zonedTimeToUtc(startOfDay(new Date(from)), timeZone);
+    }
+
+    if (to) {
+      createdAtFilter.lte = zonedTimeToUtc(endOfDay(new Date(to)), timeZone);
+    }
+
+    const where: Prisma.SalesDetailWhereInput = {
+      productId,
+    };
+
+    if (Object.keys(createdAtFilter).length > 0) {
+      where.sale = { createdAt: createdAtFilter };
+    }
+
+    const details = await this.prisma.salesDetail.findMany({
+      where,
+      include: {
+        sale: {
+          select: {
+            id: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+              },
+            },
+            client: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { sale: { createdAt: 'asc' } },
+    });
+
+    let totalUnits = 0;
+    let totalRevenue = 0;
+    let latestSaleDate: Date | null = null;
+    let highestPrice: number | null = null;
+    let lowestPrice: number | null = null;
+
+    const uniqueSalesIds = new Set<number>();
+    const sellerStats = new Map<
+      number,
+      {
+        userId: number;
+        username: string;
+        totalUnits: number;
+        totalRevenue: number;
+        saleIds: Set<number>;
+      }
+    >();
+    const clientStats = new Map<
+      number,
+      {
+        clientId: number;
+        name: string;
+        totalUnits: number;
+        totalRevenue: number;
+        saleIds: Set<number>;
+        lastPurchase: Date;
+      }
+    >();
+    const timeline = new Map<string, { quantity: number; revenue: number }>();
+
+    for (const detail of details) {
+      const sale = detail.sale;
+      if (!sale) continue;
+
+      const quantity = detail.quantity ?? 0;
+      const price = detail.price ?? 0;
+      const revenue = quantity * price;
+
+      totalUnits += quantity;
+      totalRevenue += revenue;
+      uniqueSalesIds.add(sale.id);
+
+      if (typeof price === 'number') {
+        highestPrice = highestPrice === null ? price : Math.max(highestPrice, price);
+        lowestPrice = lowestPrice === null ? price : Math.min(lowestPrice, price);
+      }
+
+      const saleDate = sale.createdAt;
+      if (!latestSaleDate || saleDate > latestSaleDate) {
+        latestSaleDate = saleDate;
+      }
+
+      const zonedDate = utcToZonedTime(saleDate, timeZone);
+      const dateKey = formatTz(zonedDate, 'yyyy-MM-dd', { timeZone });
+      const timelineEntry = timeline.get(dateKey) ?? { quantity: 0, revenue: 0 };
+      timelineEntry.quantity += quantity;
+      timelineEntry.revenue += revenue;
+      timeline.set(dateKey, timelineEntry);
+
+      if (sale.user) {
+        const username =
+          sale.user.username ??
+          sale.user.email ??
+          `Usuario ${sale.user.id}`;
+        const current =
+          sellerStats.get(sale.user.id) ??
+          {
+            userId: sale.user.id,
+            username,
+            totalUnits: 0,
+            totalRevenue: 0,
+            saleIds: new Set<number>(),
+          };
+        current.totalUnits += quantity;
+        current.totalRevenue += revenue;
+        current.saleIds.add(sale.id);
+        sellerStats.set(sale.user.id, current);
+      }
+
+      if (sale.client) {
+        const current =
+          clientStats.get(sale.client.id) ??
+          {
+            clientId: sale.client.id,
+            name: sale.client.name ?? `Cliente ${sale.client.id}`,
+            totalUnits: 0,
+            totalRevenue: 0,
+            saleIds: new Set<number>(),
+            lastPurchase: saleDate,
+          };
+        current.totalUnits += quantity;
+        current.totalRevenue += revenue;
+        current.saleIds.add(sale.id);
+        if (saleDate > current.lastPurchase) {
+          current.lastPurchase = saleDate;
+        }
+        clientStats.set(sale.client.id, current);
+      }
+    }
+
+    const sellers = Array.from(sellerStats.values()).map((item) => ({
+      userId: item.userId,
+      username: item.username,
+      totalUnits: item.totalUnits,
+      totalRevenue: item.totalRevenue,
+      salesCount: item.saleIds.size,
+    }));
+
+    sellers.sort((a, b) => b.totalUnits - a.totalUnits);
+    const topSeller = sellers.length > 0 ? sellers[0] : null;
+
+    const topClients = Array.from(clientStats.values())
+      .map((item) => ({
+        clientId: item.clientId,
+        name: item.name,
+        totalUnits: item.totalUnits,
+        totalRevenue: item.totalRevenue,
+        salesCount: item.saleIds.size,
+        lastPurchase: item.lastPurchase.toISOString(),
+      }))
+      .sort((a, b) => b.totalUnits - a.totalUnits)
+      .slice(0, 10);
+
+    const timelineSeries = Array.from(timeline.entries())
+      .map(([date, stats]) => ({
+        date,
+        quantity: stats.quantity,
+        revenue: stats.revenue,
+      }))
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+    const inventory = await this.prisma.storeOnInventory.findMany({
+      where: { inventory: { productId } },
+      select: {
+        stock: true,
+        storeId: true,
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const stockByStore = inventory.map((item) => ({
+      storeId: item.storeId,
+      storeName: item.store?.name ?? `Tienda ${item.storeId}`,
+      stock: item.stock ?? 0,
+    }));
+
+    const totalStock = stockByStore.reduce((sum, record) => sum + (record.stock ?? 0), 0);
+
+    return {
+      product,
+      metrics: {
+        totalUnitsSold: totalUnits,
+        totalRevenue,
+        totalOrders: uniqueSalesIds.size,
+        averageUnitPrice: totalUnits > 0 ? totalRevenue / totalUnits : 0,
+        highestPrice,
+        lowestPrice,
+        lastSaleDate: latestSaleDate ? latestSaleDate.toISOString() : null,
+        currency: 'PEN',
+      },
+      topSeller,
+      topClients,
+      stock: {
+        total: totalStock,
+        byStore: stockByStore,
+      },
+      timeline: timelineSeries,
+    };
+  }
+
   async getMonthlySalesCount() {
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
