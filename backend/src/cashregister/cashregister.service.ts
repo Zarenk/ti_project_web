@@ -107,6 +107,47 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
     
       const formattedTransactions = transactions.map((tx) => {
         const linkedClient = tx.salePayments[0]?.sale?.client;
+
+        const resolveCurrencySymbol = () => {
+          const candidate = tx.salePayments[0]?.currency;
+          if (typeof candidate === 'string' && candidate.trim().length > 0) {
+            const normalized = candidate.trim();
+            if (normalized.toUpperCase() === 'PEN') {
+              return "S/.";
+            }
+            return normalized;
+          }
+          return "S/.";
+        };
+
+        const currencySymbol = resolveCurrencySymbol();
+
+        const formattedPaymentMethods = tx.paymentMethods
+          .map((pm) => {
+            const methodName = pm.paymentMethod?.name ?? '';
+            const rawAmount = pm.amount !== null && pm.amount !== undefined
+              ? Number(pm.amount)
+              : null;
+
+            if (!methodName) {
+              return null;
+            }
+
+            if (rawAmount !== null && Number.isFinite(rawAmount) && rawAmount > 0) {
+              return `${methodName}: ${currencySymbol} ${rawAmount.toFixed(2)}`;
+            }
+
+            return methodName;
+          })
+          .filter((value): value is string => Boolean(value && value.trim().length > 0));
+
+        const fallbackPaymentMethods = tx.paymentMethods
+          .map((pm) => pm.paymentMethod?.name)
+          .filter((value): value is string => Boolean(value && value.trim().length > 0));
+
+        const paymentMethodsForResponse =
+          formattedPaymentMethods.length > 0 ? formattedPaymentMethods : fallbackPaymentMethods;
+
         return {
           id: tx.id.toString(),
           cashRegisterId: tx.cashRegisterId,
@@ -117,8 +158,8 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
           userId: tx.userId,
           employee: tx.user?.username || "Sistema",
           description: tx.description,
-          paymentMethods:
-            tx.paymentMethods.map((pm) => pm.paymentMethod?.name).filter(Boolean) || [],
+          paymentMethods: paymentMethodsForResponse,
+          currency: currencySymbol,
           voucher: tx.salePayments[0]?.sale?.invoices[0]
             ? `${tx.salePayments[0].sale.invoices[0].serie}-${tx.salePayments[0].sale.invoices[0].nroCorrelativo}`
             : null,
@@ -251,11 +292,28 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
       if (cashRegister.status !== 'ACTIVE') {
         throw new BadRequestException('No se puede registrar una transacción en una caja cerrada.');
       }
+
+      const totalPaymentMethodsAmount = paymentMethods.reduce((sum, method) => {
+        const parsed = Number(method.amount);
+        return sum + (Number.isFinite(parsed) ? parsed : 0);
+      }, 0);
+
+      const normalizedTransactionAmount = Number(amount);
+      const hasPaymentMethods = paymentMethods.length > 0;
+
+      if (
+        hasPaymentMethods &&
+        Math.abs(totalPaymentMethodsAmount - normalizedTransactionAmount) > 0.005
+      ) {
+        throw new BadRequestException(
+          'La suma de los métodos de pago debe coincidir con el monto de la transacción.',
+        );
+      }
     
       // Calcular nuevo balance
       const newBalance = type === 'INCOME'
-        ? Number(cashRegister.currentBalance) + Number(amount)
-        : Number(cashRegister.currentBalance) - Number(amount);
+        ? Number(cashRegister.currentBalance) + normalizedTransactionAmount
+        : Number(cashRegister.currentBalance) - normalizedTransactionAmount;
     
       if (newBalance < 0) {
         throw new BadRequestException('El saldo de la caja no puede ser negativo.');
@@ -300,6 +358,7 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
           data: {
             cashTransactionId: transaction.id,
             paymentMethodId: paymentMethodRecord.id, // ← Ahora seguro que existe
+            amount: new Prisma.Decimal(Number(method.amount)),
           },
         });
       }

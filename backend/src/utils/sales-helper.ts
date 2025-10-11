@@ -231,7 +231,11 @@ export async function executeSale(prisma: PrismaService, params: {
         });
 
         await prismaTx.cashTransactionPaymentMethod.create({
-          data: { cashTransactionId: transaction.id, paymentMethodId: paymentMethod.id },
+          data: {
+            cashTransactionId: transaction.id,
+            paymentMethodId: paymentMethod.id,
+            amount: new Prisma.Decimal(payment.amount),
+          },
         });
 
         await prismaTx.salePayment.create({
