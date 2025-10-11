@@ -1098,6 +1098,9 @@ export default function CashRegisterDashboard() {
     }, null);
   }, [closures, selectedDate]);
 
+  // Mantiene una lista completa de transacciones (ingresos/retiros) que se
+  // cargaron desde el último cierre para calcular el efectivo esperado aún si
+  // la operación sucedió antes de la medianoche del día seleccionado.
   const transactionsSinceLastClosure = useMemo(() => {
     const sourceTransactions = transactionsForBalance;
 
@@ -1183,9 +1186,9 @@ export default function CashRegisterDashboard() {
           : 0;
 
       if (transaction.type === "INCOME") {
-        incomeTotal += resolvedAmount;
+        incomeTotal += Math.abs(resolvedAmount);
       } else if (transaction.type === "EXPENSE") {
-        expenseTotal += resolvedAmount;
+        expenseTotal += Math.abs(resolvedAmount);
       }
     });
 
@@ -1713,6 +1716,9 @@ export default function CashRegisterDashboard() {
           }
         }
 
+        // Almacenar todas las fechas garantiza incluir retiros realizados
+        // inmediatamente después del cierre anterior aunque pertenezcan al
+        // día calendario previo, evitando que se omitan en el saldo esperado.
         const fetchDates = Array.from(datesToFetch);
         const responses = await Promise.all(
           fetchDates.map(async (dateString) => {
@@ -1771,7 +1777,6 @@ export default function CashRegisterDashboard() {
       cancelled = true;
     };
   }, [storeId, selectedDate, isToday, latestClosureTimestamp]);
-
 
   useEffect(() => {
     // Solo considera transacciones válidas (evita CLOSURE)
