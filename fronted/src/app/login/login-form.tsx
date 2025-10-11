@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { loginUser } from '../dashboard/users/users.api';
 import { Input } from '@/components/ui/input';
@@ -15,20 +15,169 @@ import { getUserDataFromToken } from '@/lib/auth';
 import { getAuthToken } from '@/utils/auth-token';
 import { jwtDecode } from 'jwt-decode';
 
+type AttemptState = {
+  count: number;
+  lockUntil?: number;
+  forcedReset?: boolean;
+  lastAttemptAt?: number;
+};
+
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+const getAttemptsStorageKey = (email: string) => `loginAttempts:${email}`;
+
+const readAttemptState = (email: string): AttemptState | null => {
+  if (typeof window === 'undefined' || !email) {
+    return null;
+  }
+  try {
+    const storedValue = window.localStorage.getItem(getAttemptsStorageKey(email));
+    if (!storedValue) return null;
+    const parsed = JSON.parse(storedValue) as AttemptState;
+    if (parsed && typeof parsed.count === 'number') {
+      return parsed;
+    }
+  } catch (error) {
+    console.error('Error al leer el estado de intentos:', error);
+  }
+  return null;
+};
+
+const persistAttemptState = (email: string, state: AttemptState | null) => {
+  if (typeof window === 'undefined' || !email) {
+    return;
+  }
+  const key = getAttemptsStorageKey(email);
+  if (!state || state.count <= 0) {
+    window.localStorage.removeItem(key);
+    return;
+  }
+  window.localStorage.setItem(key, JSON.stringify(state));
+};
+
+const formatRemainingTime = (milliseconds: number) => {
+  if (milliseconds <= 0) return '0 segundos';
+  const totalSeconds = Math.ceil(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes.toString().padStart(2, '0')}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+  }
+  return `${seconds}s`;
+};
+
 export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [attemptState, setAttemptState] = useState<AttemptState | null>(null);
+  const [lockRemaining, setLockRemaining] = useState<number | null>(null);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryStatus, setRecoveryStatus] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const router = useRouter();
   const { refreshUser } = useAuth();
+
+  const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
+
+  useEffect(() => {
+    if (!normalizedEmail) {
+      setAttemptState(null);
+      setLockRemaining(null);
+      return;
+    }
+    const storedState = readAttemptState(normalizedEmail);
+    setAttemptState(storedState);
+  }, [normalizedEmail]);
+
+  useEffect(() => {
+    if (!normalizedEmail) {
+      return;
+    }
+    setRecoveryEmail((prev) => (prev ? prev : normalizedEmail));
+  }, [normalizedEmail]);
+
+  useEffect(() => {
+    if (!attemptState?.lockUntil || !normalizedEmail) {
+      setLockRemaining(null);
+      return;
+    }
+
+    const updateRemaining = () => {
+      const remaining = attemptState.lockUntil! - Date.now();
+      if (remaining <= 0) {
+        setLockRemaining(0);
+        setAttemptState((prev) => {
+          if (!prev?.lockUntil) {
+            return prev;
+          }
+          const updated = { ...prev, lockUntil: undefined };
+          persistAttemptState(normalizedEmail, updated);
+          return updated;
+        });
+      } else {
+        setLockRemaining(remaining);
+      }
+    };
+
+    updateRemaining();
+    const interval = window.setInterval(updateRemaining, 1000);
+    return () => window.clearInterval(interval);
+  }, [attemptState?.lockUntil, normalizedEmail]);
+
+  const isForcedReset = Boolean(attemptState?.forcedReset);
+  const isLocked = Boolean(attemptState?.lockUntil && (lockRemaining ?? 0) > 0);
+  const isLoginDisabled = loading || isLocked || isForcedReset;
+
+  const lockMessage = useMemo(() => {
+    if (!attemptState) return null;
+    if (attemptState.forcedReset) {
+      return 'Por seguridad hemos restablecido tu acceso. Comunícate con soporte para generar una nueva cuenta.';
+    }
+    if (attemptState.lockUntil && (lockRemaining ?? 0) > 0) {
+      return `Tu acceso está bloqueado temporalmente por ${formatRemainingTime(lockRemaining ?? 0)}.`;
+    }
+    if (attemptState.count >= 3) {
+      return 'Has alcanzado el límite de intentos. El próximo error generará un bloqueo temporal.';
+    }
+    return null;
+  }, [attemptState, lockRemaining]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
+    if (!normalizedEmail) {
+      toast.error('Debes ingresar un correo electrónico válido.');
+      return;
+    }
+    if (!password.trim()) {
+      toast.error('Debes ingresar tu contraseña.');
+      return;
+    }
+
+    if (attemptState?.forcedReset) {
+      toast.error('Tu cuenta fue bloqueada. Solicita soporte para recuperar el acceso.');
+      return;
+    }
+
+    const now = Date.now();
+    if (attemptState?.lockUntil && now < attemptState.lockUntil) {
+      toast.error(`Debes esperar ${formatRemainingTime(attemptState.lockUntil - now)} antes de intentar nuevamente.`);
+      return;
+    }
     setLoading(true);
 
     try {
-      await loginUser(email, password);
+      await loginUser(normalizedEmail, password);
       await refreshUser();
       toast.success('Inicio de sesion exitoso');
 
@@ -71,13 +220,50 @@ export default function LoginForm() {
         router.replace('/users');
         setLoading(false);
       }
+      setAttemptState(null);
+      persistAttemptState(normalizedEmail, null);
     } catch (error: any) {
-      toast.error(error.message || 'Error al iniciar sesion');
+      const nextCount = (attemptState?.count ?? 0) + 1;
+      const nextState: AttemptState = {
+        count: nextCount,
+        lastAttemptAt: Date.now(),
+        lockUntil: attemptState?.lockUntil,
+        forcedReset: attemptState?.forcedReset,
+      };
+
+      let feedbackMessage = error?.message || 'Error al iniciar sesion';
+
+      if (nextCount === 4) {
+        nextState.lockUntil = Date.now() + TEN_MINUTES_MS;
+        feedbackMessage =
+          'Has superado el número de intentos permitidos. Tu cuenta quedará bloqueada durante 10 minutos.';
+      } else if (nextCount === 5) {
+        nextState.lockUntil = Date.now() + ONE_HOUR_MS;
+        feedbackMessage =
+          'Has excedido nuevamente el límite de intentos. Tu cuenta se bloquea durante 1 hora.';
+      } else if (nextCount >= 6) {
+        nextState.forcedReset = true;
+        nextState.lockUntil = undefined;
+        feedbackMessage =
+          'Se ha restablecido tu acceso por seguridad. Contacta al soporte para generar una nueva cuenta.';
+        setRecoveryEmail(normalizedEmail);
+      } else {
+        const remainingAttempts = Math.max(0, 3 - nextCount);
+        if (remainingAttempts > 0) {
+          feedbackMessage = `${feedbackMessage}. Te quedan ${remainingAttempts} intentos antes de un bloqueo temporal.`;
+        } else {
+          feedbackMessage =
+            'Has alcanzado el límite de intentos. El próximo fallo bloqueará tu cuenta durante 10 minutos.';
+        }
+      }
+
+      setAttemptState(nextState);
+      persistAttemptState(normalizedEmail, nextState);
+      toast.error(feedbackMessage);
     }
     setLoading(false);
   };
   
-
   const handleGoogle = async () => {
     if (loading) return;
     if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
@@ -91,8 +277,50 @@ export default function LoginForm() {
     }
   };
 
+  const handleRecoverySubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (recoveryLoading) return;
+    const trimmedEmail = recoveryEmail.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      setRecoveryStatus({ type: 'error', message: 'Ingresa un correo electrónico válido para continuar.' });
+      return;
+    }
+
+    setRecoveryLoading(true);
+    setRecoveryStatus(null);
+
+    try {
+      const response = await fetch('/api/password-recovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmedEmail }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = data?.message || 'No pudimos enviar el correo de recuperación.';
+        setRecoveryStatus({ type: 'error', message });
+        toast.error(message);
+      } else {
+        const message =
+          data?.message || 'Te enviamos un correo electrónico con los pasos para recuperar tu contraseña.';
+        setRecoveryStatus({ type: 'success', message });
+        toast.success(message);
+      }
+    } catch (error) {
+      console.error('Error en la solicitud de recuperación:', error);
+      const message = 'Ocurrió un problema al solicitar la recuperación de la contraseña.';
+      setRecoveryStatus({ type: 'error', message });
+      toast.error(message);
+    }
+
+    setRecoveryLoading(false);
+  };
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <form onSubmit={handleLogin} className="flex flex-col gap-4" aria-busy={loading}>
         <div>
           <Label htmlFor="email" className="block text-sm font-medium">
@@ -106,7 +334,8 @@ export default function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
             required
             className="mt-1"
-            disabled={loading}
+            disabled={loading || isForcedReset}
+            aria-describedby={lockMessage ? 'login-status-message' : undefined}
           />
         </div>
 
@@ -125,7 +354,16 @@ export default function LoginForm() {
             disabled={loading}
           />
         </div>
-        <Button type="submit" className="w-full" disabled={loading} aria-disabled={loading}>
+        {lockMessage && (
+          <p
+            id="login-status-message"
+            role="status"
+            className={`text-sm ${attemptState?.forcedReset ? 'text-amber-600' : 'text-red-600'}`}
+          >
+            {lockMessage}
+          </p>
+        )}
+        <Button type="submit" className="w-full" disabled={isLoginDisabled} aria-disabled={isLoginDisabled}>
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {loading ? 'Iniciando...' : 'Iniciar Sesion'}
         </Button>
@@ -166,6 +404,42 @@ export default function LoginForm() {
         {loading ? 'Procesando...' : 'Iniciar con Google'}
         
       </Button>
+      <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+        <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+          ¿Olvidaste tu contraseña?
+        </h2>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          Ingresa tu correo electrónico y te enviaremos los pasos necesarios para recuperar el acceso. Revisa tu
+          bandeja de entrada y sigue las instrucciones para restablecer tu contraseña.
+        </p>
+        <form onSubmit={handleRecoverySubmit} className="mt-3 flex flex-col gap-3">
+          <div>
+            <Label htmlFor="recovery-email" className="text-sm font-medium">
+              Correo electrónico de recuperación
+            </Label>
+            <Input
+              id="recovery-email"
+              type="email"
+              value={recoveryEmail}
+              onChange={(event) => setRecoveryEmail(event.target.value)}
+              placeholder="correo@ejemplo.com"
+              required
+              disabled={recoveryLoading}
+            />
+          </div>
+          {recoveryStatus && (
+            <p
+              role={recoveryStatus.type === 'error' ? 'alert' : 'status'}
+              className={`text-sm ${recoveryStatus.type === 'error' ? 'text-red-600' : 'text-emerald-600'}`}
+            >
+              {recoveryStatus.message}
+            </p>
+          )}
+          <Button type="submit" variant="secondary" disabled={recoveryLoading} aria-disabled={recoveryLoading}>
+            {recoveryLoading ? 'Enviando instrucciones...' : 'Recuperar contraseña'}
+          </Button>
+        </form>
+      </section>
     </div>
  
   );
