@@ -1076,9 +1076,12 @@ export default function CashRegisterDashboard() {
   }, [transactions]);
 
   const latestClosureTimestamp = useMemo(() => {
-    if (closures.length === 0) {
+    if (!Array.isArray(closures) || closures.length === 0) {
       return null;
     }
+
+    const selectedDateEnd = new Date(selectedDate);
+    selectedDateEnd.setHours(23, 59, 59, 999);
 
     return closures.reduce<Date | null>((latest, closure) => {
       if (!closure || !closure.createdAt) {
@@ -1086,7 +1089,7 @@ export default function CashRegisterDashboard() {
       }
 
       const createdAt = new Date(closure.createdAt);
-      if (Number.isNaN(createdAt.getTime()) || !isSameDay(createdAt, selectedDate)) {
+      if (Number.isNaN(createdAt.getTime()) || createdAt > selectedDateEnd) {
         return latest;
       }
 
