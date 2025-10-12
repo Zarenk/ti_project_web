@@ -9,6 +9,33 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
   @Injectable()
   export class CashregisterService {
 
+  private formatPaymentMethods(
+    paymentMethods: Array<
+      Prisma.CashTransactionPaymentMethodGetPayload<{ include: { paymentMethod: true } }>
+    >,
+    options?: { includeAmounts?: boolean; currencySymbol?: string },
+  ) {
+    const includeAmounts = options?.includeAmounts ?? false;
+    const currencySymbol = options?.currencySymbol?.trim() || 'S/.';
+
+    return paymentMethods
+      .map((paymentMethod) => {
+        const methodName = paymentMethod.paymentMethod?.name?.trim();
+
+        if (includeAmounts && paymentMethod.amount !== null && paymentMethod.amount !== undefined) {
+          const numericAmount = Number(paymentMethod.amount);
+
+          if (Number.isFinite(numericAmount)) {
+            const formattedAmount = `${currencySymbol} ${numericAmount.toFixed(2)}`;
+            return methodName ? `${methodName}: ${formattedAmount}` : formattedAmount;
+          }
+        }
+
+        return methodName ?? null;
+      })
+      .filter((entry): entry is string => Boolean(entry && entry.trim().length > 0));
+  }
+
     constructor(private prisma: PrismaService) {}
 
     // Crear una nueva caja
@@ -118,8 +145,18 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
           userId: tx.userId,
           employee: tx.user?.username || "Sistema",
           description: tx.description,
-          paymentMethods:
-            tx.paymentMethods.map((pm) => pm.paymentMethod?.name).filter(Boolean) || [],
+          paymentMethods: this.formatPaymentMethods(tx.paymentMethods ?? [], {
+            includeAmounts:
+              (tx.salePayments ?? []).length === 0 &&
+              (tx.paymentMethods ?? []).some((method) => {
+                if (method.amount === null || method.amount === undefined) {
+                  return false;
+                }
+
+                const numericAmount = Number(method.amount);
+                return Number.isFinite(numericAmount) && numericAmount !== 0;
+              }),
+          }),
           voucher: tx.salePayments[0]?.sale?.invoices[0]
             ? `${tx.salePayments[0].sale.invoices[0].serie}-${tx.salePayments[0].sale.invoices[0].nroCorrelativo}`
             : null,
@@ -301,6 +338,7 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
           data: {
             cashTransactionId: transaction.id,
             paymentMethodId: paymentMethodRecord.id, // ← Ahora seguro que existe
+            amount: new Prisma.Decimal(method.amount),
           },
         });
       }
