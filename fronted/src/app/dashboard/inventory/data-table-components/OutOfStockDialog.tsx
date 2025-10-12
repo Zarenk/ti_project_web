@@ -1,20 +1,42 @@
 ﻿"use client";
 
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getInventoryWithCurrency } from "../inventory.api";
 
 type OutOfStockProduct = {
-    id: string;
-    name: string;
-    category: { id: number; name: string } | null;
-    totalStock: number;
-    storeOnInventory: { storeId: number; storeName: string; stock: number; store:{name:string} }[];
+  id: string;
+  name: string;
+  category: { id: number; name: string } | null;
+  totalStock: number;
+  storeOnInventory: {
+    storeId: number;
+    storeName: string;
+    stock: number;
+    store: { name: string };
+  }[];
 };
 
-export default function OutOfStockDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export default function OutOfStockDialog({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) {
   const [outOfStockProducts, setOutOfStockProducts] = useState<OutOfStockProduct[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -22,7 +44,7 @@ export default function OutOfStockDialog({ isOpen, onClose }: { isOpen: boolean;
     async function fetchOutOfStockProducts() {
       try {
         const inventoryData = await getInventoryWithCurrency();
-        console.log("Datos del inventario:", inventoryData); // DepuraciÃ³n
+        console.log("Datos del inventario:", inventoryData); // Depuración
     
         const groupedByProduct: Record<string, OutOfStockProduct> = {};
     
@@ -30,7 +52,7 @@ export default function OutOfStockDialog({ isOpen, onClose }: { isOpen: boolean;
           const productId = item.product.id;
           const stock = item.storeOnInventory.reduce(
             (sum: number, store: any) => sum + (store.stock || 0),
-            0
+            0,
           );
     
           if (!groupedByProduct[productId]) {
@@ -67,77 +89,147 @@ export default function OutOfStockDialog({ isOpen, onClose }: { isOpen: boolean;
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, outOfStockProducts.length]);
+
+  const filteredProducts = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return outOfStockProducts;
+    }
+
+    const normalizedTerm = searchTerm.toLowerCase();
+    return outOfStockProducts.filter((product) =>
+      (product.name || "").toLowerCase().includes(normalizedTerm),
+    );
+  }, [outOfStockProducts, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    setCurrentPage((prevPage) => Math.min(prevPage, totalPages));
+  }, [totalPages]);
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredProducts, currentPage]);
+
+  const hasProducts = filteredProducts.length > 0;
+  const firstItemIndex = hasProducts ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0;
+  const lastItemIndex = hasProducts ? Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length) : 0;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-full max-w-5xl">
         <DialogHeader>
           <DialogTitle>Productos Sin Stock</DialogTitle>
           <DialogDescription>
-            AquÃ­ puedes ver los productos que tienen stock general en 0 y su desglose por tienda.
+            Aquí puedes ver los productos que tienen stock general en 0 y su desglose por tienda.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="w-full overflow-x-auto max-h-[60vh]">
-          {outOfStockProducts.length > 0 ? (
-            <table className="w-full table-auto border-collapse text-sm">
-              <thead>
-                <tr className="bg-gray-900 text-white uppercase tracking-wide">
-                  <th className="border-b px-4 py-3 text-left">Nombre</th>
-                  <th className="border-b px-4 py-3 text-left">CategorÃ­a</th>
-                  <th className="border-b px-4 py-3 text-left">Stock General</th>
-                  <th className="border-b px-4 py-3 text-left">Stock por Tienda</th>
-                  <th className="border-b px-4 py-3 text-left">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {outOfStockProducts.map((product, index) => (
-                  <tr key={index} className="border-b hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-                    <td className="px-4 py-3">{product.name || "Sin nombre"}</td>
-                    <td className="px-4 py-3">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar por nombre de producto..."
+              className="md:max-w-xs"
+            />
+            {hasProducts && (
+              <p className="text-sm text-muted-foreground">
+                Mostrando {firstItemIndex} - {lastItemIndex} de {filteredProducts.length} productos
+              </p>
+            )}
+          </div>
+
+          <div className="w-full overflow-x-auto max-h-[60vh]">
+            {hasProducts ? (
+              <table className="w-full table-auto border-collapse text-sm">
+                <thead>
+                  <tr className="bg-gray-900 text-white uppercase tracking-wide">
+                    <th className="border-b px-4 py-3 text-left">Nombre</th>
+                    <th className="border-b px-4 py-3 text-left">Categoría</th>
+                    <th className="border-b px-4 py-3 text-left">Stock General</th>
+                    <th className="border-b px-4 py-3 text-left">Stock por Tienda</th>
+                    <th className="border-b px-4 py-3 text-left">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedProducts.map((product, index) => (
+                    <tr key={`${product.id}-${index}`} className="border-b hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+                      <td className="px-4 py-3">{product.name || "Sin nombre"}</td>
+                      <td className="px-4 py-3">
                         {typeof product.category === "string"
                         ? product.category
-                        : product.category?.name || "Sin categorÃ­a"}
-                    </td>
-                    <td
-                      className={`px-4 py-3 font-semibold ${
-                        product.totalStock === 0 ? "text-red-600" : "text-foreground"
-                      }`}
-                    >
-                      {product.totalStock} u.
-                    </td>
-                    <td className="px-4 py-3">
-                      <ul className="list-disc list-inside space-y-0.2">
-                        {product.storeOnInventory.map((storeItem: any) => (
-                          <li key={storeItem.storeId}>
-                            {storeItem.store?.name || "Tienda desconocida"}:{" "}
-                            <span
-                              className={`font-semibold ${storeItem.stock === 0 ? "text-red-600" : "text-foreground"}`}
-                            >
-                              <br />
-                              {storeItem.stock} u.
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </td>
-                    <td className="px-4 py-3">
+                          : product.category?.name || "Sin categoría"}
+                      </td>
+                      <td
+                        className={`px-4 py-3 font-semibold ${
+                          product.totalStock === 0 ? "text-red-600" : "text-foreground"
+                        }`}
+                      >
+                        {product.totalStock} u.
+                      </td>
+                      <td className="px-4 py-3">
+                        <ul className="list-disc list-inside space-y-0.2">
+                          {product.storeOnInventory.map((storeItem: any) => (
+                            <li key={storeItem.storeId}>
+                              {storeItem.store?.name || "Tienda desconocida"}:{" "}
+                              <span
+                                className={`font-semibold ${
+                                  storeItem.stock === 0 ? "text-red-600" : "text-foreground"
+                                }`}
+                              >
+                                <br />
+                                {storeItem.stock} u.
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </td>
+                      <td className="px-4 py-3">
                         <Button
-                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded"
-                        onClick={() => {
+                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded"
+                          onClick={() => {
                             window.location.href = `/dashboard/inventory/product-details/${product.id}`;
-                        }}
+                          }}
                         >
-                        Ver informacion
+                          Ver información
                         </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-muted-foreground text-sm py-4">
-              No hay productos sin stock.
-            </p>
+                        </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-muted-foreground text-sm py-4">No hay productos sin stock.</p>
+            )}
+          </div>
+
+          {hasProducts && (
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                variant="outline"
+                className="text-xs"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              >
+                Anterior
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Página {currentPage} de {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                className="text-xs"
+                disabled={currentPage === totalPages || totalPages === 0}
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              >
+                Siguiente
+              </Button>
+            </div>  
           )}
         </div>
 

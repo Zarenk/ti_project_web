@@ -88,11 +88,13 @@ export default function ProductCombobox({ products, selectedId, selectedLabel, o
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between"
+          className="w-full justify-between gap-2"
           disabled={disabled}
         >
-          {selectedLabel || "Seleccionar producto"}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <span className="truncate text-left max-w-[calc(100%-1.75rem)] md:max-w-none md:overflow-visible md:text-clip">
+            {selectedLabel || "Seleccionar producto"}
+          </span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0 max-w-none" align="start" side="bottom" avoidCollisions={false} sideOffset={4} style={{ width: menuWidth }}>

@@ -207,24 +207,8 @@ export default function ProductReportClient({ products }: ProductReportClientPro
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-muted-foreground">Producto</span>
-                {selectedProduct ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedProduct(null);
-                      setReport(null);
-                      setError(null);
-                      setDateRange(getDefaultDateRange());
-                    }}
-                  >
-                    Limpiar
-                  </Button>
-                ) : null}
-              </div>
+            <div className="space-y-3">
+              <span className="text-sm font-medium text-muted-foreground">Producto</span>
               <ProductCombobox
                 products={sortedProducts}
                 selectedId={selectedProduct?.id ?? null}
@@ -245,12 +229,12 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                 </p>
               )}
             </div>
-            <div className="space-y-2 md:space-y-2">
+            <div className="">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-muted-foreground">Rango de fechas</span>
                 <span aria-hidden className="hidden md:block" />
               </div>
-              <div className="md:mt-0.5">
+              <div>
                 <DatePickerWithRange date={dateRange} setDate={setDateRange} />
               </div>
               <p className="text-xs text-muted-foreground">
@@ -258,6 +242,22 @@ export default function ProductReportClient({ products }: ProductReportClientPro
               </p>
             </div>
           </div>
+          {selectedProduct ? (
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedProduct(null);
+                  setReport(null);
+                  setError(null);
+                  setDateRange(getDefaultDateRange());
+                }}
+              >
+                Limpiar filtros
+              </Button>
+            </div>
+          ) : null}
           {error ? (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -487,32 +487,34 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                 {report.topClients.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Aún no hay clientes asociados a este producto.</p>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Cliente</TableHead>
-                        <TableHead className="text-right">Unidades</TableHead>
-                        <TableHead className="text-right">Ingresos</TableHead>
-                        <TableHead className="text-right">Compras</TableHead>
-                        <TableHead className="text-right">Última compra</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {report.topClients.slice(0, 8).map((client) => (
-                        <TableRow key={client.clientId}>
-                          <TableCell className="font-medium">{client.name}</TableCell>
-                          <TableCell className="text-right">{client.totalUnits.toLocaleString("es-PE")}</TableCell>
-                          <TableCell className="text-right">
-                            {formatCurrency(client.totalRevenue ?? 0, currency)}
-                          </TableCell>
-                          <TableCell className="text-right">{client.salesCount}</TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">
-                            {formatLastPurchase(client.lastPurchase)}
-                          </TableCell>
+                  <div className="max-w-full overflow-x-auto md:overflow-visible">
+                    <Table className="min-w-[560px] md:min-w-full">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="whitespace-nowrap">Cliente</TableHead>
+                          <TableHead className="whitespace-nowrap text-right">Unidades</TableHead>
+                          <TableHead className="whitespace-nowrap text-right">Ingresos</TableHead>
+                          <TableHead className="whitespace-nowrap text-right">Compras</TableHead>
+                          <TableHead className="whitespace-nowrap text-right">Última compra</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {report.topClients.slice(0, 8).map((client) => (
+                          <TableRow key={client.clientId}>
+                            <TableCell className="font-medium">{client.name}</TableCell>
+                            <TableCell className="text-right">{client.totalUnits.toLocaleString("es-PE")}</TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(client.totalRevenue ?? 0, currency)}
+                            </TableCell>
+                            <TableCell className="text-right">{client.salesCount}</TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">
+                              {formatLastPurchase(client.lastPurchase)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -534,9 +536,11 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                 ) : (
                   <div className="space-y-2">
                     {report.stock.byStore.map((store) => (
-                      <div key={store.storeId} className="flex items-center justify-between rounded border p-2">
-                        <span>{store.storeName}</span>
-                        <span className="font-semibold">{store.stock.toLocaleString("es-PE")}</span>
+                      <div key={store.storeId} className="flex items-center justify-between gap-3 rounded border p-2">
+                        <span className="max-w-[65%] truncate text-sm font-medium text-foreground md:max-w-none">
+                          {store.storeName}
+                        </span>
+                        <span className="shrink-0 font-semibold">{store.stock.toLocaleString("es-PE")}</span>
                       </div>
                     ))}
                   </div>
