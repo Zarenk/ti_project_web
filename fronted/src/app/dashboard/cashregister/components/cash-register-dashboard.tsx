@@ -225,9 +225,141 @@ const resolveCurrencySymbol = (record: Record<string, unknown>, fallback: string
 
 const formatPaymentMethodLabel = (value: string) => normalizeWhitespace(value);
 
+const toSentenceCase = (value: string) => {
+  const normalized = normalizeWhitespace(value).toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const resolveLooseMethodLabel = (value: string) => {
+  const normalized = normalizeWhitespace(value).toLowerCase();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.includes("efectivo")) {
+    return "En efectivo";
+  }
+
+  if (normalized.includes("transfer")) {
+    return "Transferencia";
+  }
+
+  if (normalized.includes("yape")) {
+    return "Yape";
+  }
+
+  if (normalized.includes("plin")) {
+    return "Plin";
+  }
+
+  if (
+    normalized.includes("visa") ||
+    normalized.includes("master") ||
+    normalized.includes("tarjeta") ||
+    normalized.includes("crédito") ||
+    normalized.includes("credito") ||
+    normalized.includes("débito") ||
+    normalized.includes("debito")
+  ) {
+    return "Tarjeta";
+  }
+
+  if (normalized.includes("dep")) {
+    return "Depósito";
+  }
+
+  if (normalized.includes("cheque")) {
+    return "Cheque";
+  }
+
+  return toSentenceCase(value);
+};
+
+const consolidateLooseTransferEntries = (
+  values: string[],
+  fallbackCurrency: string,
+  totalAmount?: number,
+): string[] => {
+  if (values.length === 0) {
+    return [];
+  }
+
+  const joined = normalizeWhitespace(values.join(" "));
+
+  if (!/m[eé]todos?\s+de\s+pago/i.test(joined)) {
+    return [];
+  }
+
+  const methodPattern = /(en\s+efectivo|efectivo|transferencia|yape|plin|tarjeta|visa|mastercard|amex|american\s+express|dep[oó]sito|deposito|cheque|cheques)/gi;
+
+  const matches: Array<{ label: string; start: number; end: number }> = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = methodPattern.exec(joined)) !== null) {
+    matches.push({ label: match[0], start: match.index, end: joined.length });
+  }
+
+  if (matches.length === 0) {
+    return [];
+  }
+
+  matches.forEach((entry, index) => {
+    entry.end = index + 1 < matches.length ? matches[index + 1].start : joined.length;
+  });
+
+  const resolvedCurrency = (fallbackCurrency ?? "S/.").trim() || "S/.";
+  const totalReference = typeof totalAmount === "number" && Number.isFinite(totalAmount)
+    ? Math.abs(totalAmount)
+    : null;
+
+  const consolidated: string[] = [];
+
+  matches.forEach((entry) => {
+    const segment = normalizeWhitespace(joined.slice(entry.start, entry.end));
+    const numericMatches = Array.from(segment.matchAll(/-?\d+(?:[.,]\d+)?/g)).map((item) => parseNumber(item[0] ?? ""));
+    const uniqueNumbers = Array.from(
+      new Set(
+        numericMatches
+          .filter((value) => Number.isFinite(value))
+          .map((value) => Math.abs(Number(value.toFixed(2)))),
+      ),
+    ).sort((a, b) => a - b);
+
+    let chosenAmount: number | null = null;
+
+    if (uniqueNumbers.length === 1) {
+      chosenAmount = uniqueNumbers[0];
+    } else if (uniqueNumbers.length > 1) {
+      const filtered = totalReference
+        ? uniqueNumbers.filter((value) => Math.abs(value - totalReference) > 0.009)
+        : uniqueNumbers;
+      if (filtered.length > 0) {
+        chosenAmount = filtered[0];
+      } else {
+        chosenAmount = uniqueNumbers[0];
+      }
+    }
+
+    const label = resolveLooseMethodLabel(entry.label);
+    if (chosenAmount !== null && Number.isFinite(chosenAmount)) {
+      consolidated.push(`${label}: ${resolvedCurrency} ${chosenAmount.toFixed(2)}`);
+    } else {
+      consolidated.push(label);
+    }
+  });
+
+  return consolidated;
+};
+
 const formatPaymentMethodsWithAmounts = (
   raw: unknown,
   fallbackCurrency: string,
+  totalAmount?: number,
 ): string[] => {
   if (!Array.isArray(raw)) {
     return [];
@@ -235,11 +367,18 @@ const formatPaymentMethodsWithAmounts = (
 
   const results: string[] = [];
 
+  const looseCandidates: string[] = [];
+
   raw.forEach((entry) => {
     if (typeof entry === "string") {
       const trimmed = normalizeWhitespace(entry);
       if (trimmed) {
         results.push(trimmed);
+      } else if (trimmed === "") {
+        // Ignore empty strings
+      }
+      if (trimmed) {
+        looseCandidates.push(trimmed);
       }
       return;
     }
@@ -273,6 +412,7 @@ const formatPaymentMethodsWithAmounts = (
         }
 
         results.push(label);
+        looseCandidates.push(label);
         return;
       }
 
@@ -281,10 +421,23 @@ const formatPaymentMethodsWithAmounts = (
       );
 
       if (stringValues.length > 0) {
-        results.push(normalizeWhitespace(stringValues[0]));
+        const normalized = normalizeWhitespace(stringValues[0]);
+        results.push(normalized);
+        looseCandidates.push(normalized);
       }
     }
   });
+
+  if (results.length > 0) {
+    return results;
+  }
+
+  if (looseCandidates.length > 0) {
+    const consolidated = consolidateLooseTransferEntries(looseCandidates, fallbackCurrency, totalAmount);
+    if (consolidated.length > 0) {
+      return consolidated;
+    }
+  }
 
   return results;
 };
@@ -946,6 +1099,7 @@ const adaptTransaction = (transaction: any): Transaction => {
   const formattedPaymentMethods = formatPaymentMethodsWithAmounts(
     transaction?.paymentMethods ?? [],
     resolvedCurrency,
+    Number(transaction?.amount ?? 0),
   );
   const normalizedMethods = normalizePaymentMethods(
     formattedPaymentMethods.length > 0 ? formattedPaymentMethods : transaction?.paymentMethods ?? [],
