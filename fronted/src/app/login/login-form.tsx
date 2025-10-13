@@ -32,10 +32,20 @@ const readAttemptState = (email: string): AttemptState | null => {
     return null;
   }
   try {
-    const storedValue = window.localStorage.getItem(getAttemptsStorageKey(email));
+    const key = getAttemptsStorageKey(email);
+    const storedValue = window.localStorage.getItem(key);
     if (!storedValue) return null;
     const parsed = JSON.parse(storedValue) as AttemptState;
     if (parsed && typeof parsed.count === 'number') {
+      const now = Date.now();
+      const lockExpired = parsed.lockUntil && now >= parsed.lockUntil;
+      const hasTimedOut =
+        !parsed.forcedReset && parsed.lastAttemptAt && now - parsed.lastAttemptAt >= ONE_HOUR_MS;
+
+      if (!parsed.forcedReset && (lockExpired || hasTimedOut)) {
+        window.localStorage.removeItem(key);
+        return null;
+      }
       return parsed;
     }
   } catch (error) {
@@ -121,9 +131,14 @@ export default function LoginForm() {
           if (!prev?.lockUntil) {
             return prev;
           }
-          const updated = { ...prev, lockUntil: undefined };
-          persistAttemptState(normalizedEmail, updated);
-          return updated;
+          if (prev.forcedReset) {
+            const updated = { ...prev, lockUntil: undefined };
+            persistAttemptState(normalizedEmail, updated);
+            return updated;
+          }
+
+          persistAttemptState(normalizedEmail, null);
+          return null;
         });
       } else {
         setLockRemaining(remaining);

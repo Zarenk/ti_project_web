@@ -30,9 +30,63 @@ type SortKey =
   | "createdAt"
   | "lastSaleAt";
 
+type StoreSelection = number | "all" | null;
+
+const selectMostRecentSalesDetails = (
+  currentDetails: any[] | undefined,
+  incomingDetails: any[] | undefined,
+) => {
+  const currentDate = currentDetails?.[0]?.sale?.createdAt
+    ? new Date(currentDetails[0].sale.createdAt)
+    : null;
+  const incomingDate = incomingDetails?.[0]?.sale?.createdAt
+    ? new Date(incomingDetails[0].sale.createdAt)
+    : null;
+
+  if (!incomingDate) {
+    return currentDetails;
+  }
+
+  if (!currentDate || incomingDate > currentDate) {
+    return incomingDetails;
+  }
+
+  return currentDetails;
+};
+
+const aggregateProductsAcrossStores = (items: any[]) => {
+  const aggregated = new Map<number, any>();
+
+  items.forEach((item) => {
+    const productId = item?.inventory?.product?.id;
+    if (!productId) {
+      return;
+    }
+
+    const stock = Number(item?.stock ?? 0);
+    const existing = aggregated.get(productId);
+
+    if (!existing) {
+      aggregated.set(productId, {
+        ...item,
+        stock,
+      });
+      return;
+    }
+
+    aggregated.set(productId, {
+      ...existing,
+      stock: Number(existing.stock ?? 0) + stock,
+      salesDetails: selectMostRecentSalesDetails(existing.salesDetails, item.salesDetails),
+    });
+  });
+
+  return Array.from(aggregated.values());
+};
+
 export default function ProductsByStorePage() {
   const [stores, setStores] = useState<{ id: number; name: string }[]>([]);
-  const [selectedStore, setSelectedStore] = useState<number | null>(null);
+  const [selectedStore, setSelectedStore] = useState<StoreSelection>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -41,7 +95,7 @@ export default function ProductsByStorePage() {
   const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const debouncedSearchTerm = useDebounce(searchTerm, 1000); // 👈 Aplica debounce
-  const debouncedSelectedStore = useDebounce(selectedStore, 600)
+  const debouncedSelectedStore = useDebounce<StoreSelection>(selectedStore, 600)
   const debouncedSelectedCategory = useDebounce(selectedCategory, 600)
   const debouncedSelectedBrand = useDebounce(selectedBrand, 600)
   const [withStockOnly, setWithStockOnly] = useState(false); // ✅ checkbox de stock
@@ -199,7 +253,7 @@ export default function ProductsByStorePage() {
   };
 
   const handleExport = useCallback(() => {
-    if (selectedStore === null || isExporting) {
+    if (typeof selectedStore !== "number" || isExporting) {
       return;
     }
 
@@ -278,23 +332,69 @@ export default function ProductsByStorePage() {
   }, []);
 
   useEffect(() => {
-    if (debouncedSelectedStore !== null) {
-      async function fetchProducts() {
-        try {
-          const data = withStockOnly
-            ? await getProductsByStore(debouncedSelectedStore ?? 0, filtersQuery)
-            : await getAllProductsByStore(debouncedSelectedStore ?? 0, filtersQuery);
-  
-          setProducts(data);
-        } catch (error) {
-          console.error("Error al obtener los productos:", error);
+    let isMounted = true;
+
+    const fetchProducts = async () => {
+      if (debouncedSelectedStore === null) {
+        if (isMounted) {
+          setProducts([]);
+        }
+        return;
+      }
+
+      try {
+        if (debouncedSelectedStore === "all") {
+          if (stores.length === 0) {
+            if (isMounted) {
+              setProducts([]);
+            }
+            return;
+          }
+
+          const responses = await Promise.all(
+            stores.map((store) =>
+              (withStockOnly
+                ? getProductsByStore(store.id, filtersQuery)
+                : getAllProductsByStore(store.id, filtersQuery)
+              ).catch((error) => {
+                console.error(`Error al obtener los productos de la tienda ${store.id}:`, error);
+                return [];
+              }),
+            ),
+          );
+
+          if (!isMounted) {
+            return;
+          }
+
+          setProducts(aggregateProductsAcrossStores(responses.flat()));
+          return;
+        }
+
+        const storeId = debouncedSelectedStore;
+        const data = withStockOnly
+          ? await getProductsByStore(storeId, filtersQuery)
+          : await getAllProductsByStore(storeId, filtersQuery);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProducts(data);
+      } catch (error) {
+        console.error("Error al obtener los productos:", error);
+        if (isMounted) {
+          setProducts([]);
         }
       }
-      fetchProducts();
-      } else {
-      setProducts([]);
-    }
-  }, [debouncedSelectedStore, filtersQuery, withStockOnly]);
+    };
+
+    fetchProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [debouncedSelectedStore, filtersQuery, withStockOnly, stores]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -307,7 +407,7 @@ export default function ProductsByStorePage() {
   
       if (isShortcut) {
         event.preventDefault();
-        if (selectedStore !== null && !isExporting) {
+        if (typeof selectedStore === "number" && !isExporting) {
           handleExport();
         }
       }
@@ -370,6 +470,12 @@ export default function ProductsByStorePage() {
       const productName = product?.name ? product.name.toLowerCase() : "";
       const matchesSearch = productName.includes(normalizedSearch);
 
+      const matchesCategory =
+        !debouncedSelectedCategory ||
+        debouncedSelectedCategory === 0 ||
+        product?.category?.id === debouncedSelectedCategory ||
+        product?.categoryId === debouncedSelectedCategory;
+
       const matchesBrand = (() => {
         if (!debouncedSelectedBrand || debouncedSelectedBrand === 0) {
           return true;
@@ -405,7 +511,7 @@ export default function ProductsByStorePage() {
         );
       })();
 
-      return matchesSearch && matchesBrand;
+      return matchesSearch && matchesBrand && matchesCategory;
     });
 
     const filteredTotalValue = filtered.reduce((acc, item) => {
@@ -441,6 +547,7 @@ export default function ProductsByStorePage() {
     currentPage,
     limit,
     debouncedSelectedBrand,
+    debouncedSelectedCategory,
     brands,
     sortConfig,
     withStockOnly,
@@ -457,7 +564,7 @@ export default function ProductsByStorePage() {
               <TooltipTrigger asChild>
                 <Button
                   onClick={handleExport}
-                  disabled={selectedStore === null || isExporting}
+                  disabled={typeof selectedStore !== "number" || isExporting}
                   style={{ touchAction: 'manipulation' }}
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
@@ -498,14 +605,35 @@ export default function ProductsByStorePage() {
         <div className="flex-1 mb-3 sm:mb-0">
           <label className="block mb-1 text-sm font-medium">Selecciona una tienda</label>
           <Select
-            key={selectedStore ?? -1}
-            value={selectedStore !== null ? selectedStore.toString() : undefined}
-            onValueChange={(value) => setSelectedStore(Number(value))}
+            key={
+              selectedStore === null
+                ? "none"
+                : selectedStore === "all"
+                  ? "all"
+                  : selectedStore
+            }
+            value={
+              selectedStore === null
+                ? undefined
+                : selectedStore === "all"
+                  ? "all"
+                  : selectedStore.toString()
+            }
+            onValueChange={(value) => {
+              if (value === "all") {
+                setSelectedStore("all");
+                return;
+              }
+
+              const parsedValue = Number(value);
+              setSelectedStore(Number.isNaN(parsedValue) ? null : parsedValue);
+            }}
           >
             <SelectTrigger className="w-full h-10 text-sm border-gray-300 shadow-sm">
               <SelectValue placeholder="Selecciona una tienda" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">Todas las Tiendas</SelectItem>
               {stores.map((store) => (
                 <SelectItem key={store.id} value={store.id.toString()}>
                   {store.name}
