@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import RequireAdmin from "@/components/require-admin";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,38 @@ export default function Actividad() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const formatTimestamp = (value: string) =>
+    formatInTimeZone(new Date(value), "America/Lima", "yyyy-MM-dd HH:mm");
+
+  const ActivityDetailDialog = ({ log, trigger }: { log: AuditLog; trigger: ReactNode }) => (
+    <Dialog>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Detalle de actividad</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 text-sm">
+          <div>
+            <span className="font-medium">IP:</span> {log.ip || "-"}
+          </div>
+          <div>
+            <span className="font-medium">User Agent:</span> {log.userAgent || "-"}
+          </div>
+          {log.diff?.message && (
+            <div>
+              <span className="font-medium">Mensaje:</span> {log.diff.message}
+            </div>
+          )}
+        </div>
+        {log.diff && (
+          <pre className="mt-4 max-h-60 overflow-auto rounded bg-slate-100 p-2 text-xs dark:bg-slate-800">
+            {JSON.stringify(log.diff, null, 2)}
+          </pre>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 
   useEffect(() => {
     async function load() {
@@ -108,69 +140,88 @@ export default function Actividad() {
           <p className="text-sm text-slate-500">Sin actividad registrada.</p>
         ) : (
           <div className="space-y-2">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha/Hora</TableHead>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Acción</TableHead>
-                  <TableHead>Entidad</TableHead>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Resumen</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {logs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell>
-                      {formatInTimeZone(
-                        new Date(log.createdAt),
-                        "America/Lima",
-                        "yyyy-MM-dd HH:mm",
-                      )}
-                    </TableCell>
-                    <TableCell>{log.actorEmail || "-"}</TableCell>
-                    <TableCell>{log.action}</TableCell>
-                    <TableCell>{log.entityType || "-"}</TableCell>
-                    <TableCell>{log.entityId || "-"}</TableCell>
-                    <TableCell>{log.summary || "-"}</TableCell>
-                    <TableCell>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            Ver detalle
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-h-[80vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle>Detalle de actividad</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-2 text-sm">
-                            <div>
-                              <span className="font-medium">IP:</span> {log.ip || "-"}
-                            </div>
-                            <div>
-                              <span className="font-medium">User Agent:</span> {log.userAgent || "-"}
-                            </div>
-                            {log.diff?.message && (
-                              <div>
-                                <span className="font-medium">Mensaje:</span> {log.diff.message}
-                              </div>
-                            )}
-                          </div>
-                          {log.diff && (
-                            <pre className="mt-4 max-h-60 overflow-auto rounded bg-slate-100 p-2 text-xs dark:bg-slate-800">
-                              {JSON.stringify(log.diff, null, 2)}
-                            </pre>
-                          )}
-                        </DialogContent>
-                      </Dialog>
-                    </TableCell>
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha/Hora</TableHead>
+                    <TableHead>Usuario</TableHead>
+                    <TableHead>Accion</TableHead>
+                    <TableHead>Entidad</TableHead>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Resumen</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {logs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell>{formatTimestamp(log.createdAt)}</TableCell>
+                      <TableCell>{log.actorEmail || "-"}</TableCell>
+                      <TableCell>{log.action}</TableCell>
+                      <TableCell>{log.entityType || "-"}</TableCell>
+                      <TableCell>{log.entityId || "-"}</TableCell>
+                      <TableCell>{log.summary || "-"}</TableCell>
+                      <TableCell>
+                        <ActivityDetailDialog
+                          log={log}
+                          trigger={
+                            <Button variant="outline" size="sm">
+                              Ver detalle
+                            </Button>
+                          }
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="space-y-3 md:hidden">
+              {logs.map((log) => (
+                <div
+                  key={log.id}
+                  className="space-y-3 rounded-lg border bg-muted/30 p-4 shadow-sm"
+                >
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase text-muted-foreground">Fecha/Hora</span>
+                    <span className="text-sm font-semibold text-foreground">
+                      {formatTimestamp(log.createdAt)}
+                    </span>
+                  </div>
+                  <div className="grid gap-2 text-sm text-muted-foreground">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium text-foreground">Acci�n:</span>
+                      <span className="text-right">{log.action}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium text-foreground">Usuario:</span>
+                      <span className="truncate text-right">{log.actorEmail || "-"}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-2 text-xs">
+                      <span className="font-medium text-foreground">Entidad:</span>
+                      <span className="text-right">{log.entityType || "-"}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-2 text-xs">
+                      <span className="font-medium text-foreground">ID:</span>
+                      <span className="text-right">{log.entityId || "-"}</span>
+                    </div>
+                  </div>
+                  {log.summary ? (
+                    <p className="line-clamp-2 text-sm text-muted-foreground">{log.summary}</p>
+                  ) : null}
+                  <ActivityDetailDialog
+                    log={log}
+                    trigger={
+                      <Button variant="outline" size="sm" className="w-full">
+                        Ver detalle
+                      </Button>
+                    }
+                  />
+                </div>
+              ))}
+            </div>
             <div className="flex items-center justify-between pt-2">
               <Button
                 variant="outline"

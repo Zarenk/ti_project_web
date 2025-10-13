@@ -121,7 +121,7 @@ export default function OutOfStockDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-full max-w-5xl">
+      <DialogContent className="w-full max-w-5xl max-h-[85vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Productos Sin Stock</DialogTitle>
           <DialogDescription>
@@ -129,7 +129,7 @@ export default function OutOfStockDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex h-full flex-col gap-4 overflow-hidden">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <Input
               value={searchTerm}
@@ -144,68 +144,83 @@ export default function OutOfStockDialog({
             )}
           </div>
 
-          <div className="w-full overflow-x-auto max-h-[60vh]">
-            {hasProducts ? (
-              <table className="w-full table-auto border-collapse text-sm">
-                <thead>
-                  <tr className="bg-gray-900 text-white uppercase tracking-wide">
-                    <th className="border-b px-4 py-3 text-left">Nombre</th>
-                    <th className="border-b px-4 py-3 text-left">Categoría</th>
-                    <th className="border-b px-4 py-3 text-left">Stock General</th>
-                    <th className="border-b px-4 py-3 text-left">Stock por Tienda</th>
-                    <th className="border-b px-4 py-3 text-left">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedProducts.map((product, index) => (
-                    <tr key={`${product.id}-${index}`} className="border-b hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-                      <td className="px-4 py-3">{product.name || "Sin nombre"}</td>
-                      <td className="px-4 py-3">
-                        {typeof product.category === "string"
-                        ? product.category
-                          : product.category?.name || "Sin categoría"}
-                      </td>
-                      <td
-                        className={`px-4 py-3 font-semibold ${
-                          product.totalStock === 0 ? "text-red-600" : "text-foreground"
-                        }`}
-                      >
-                        {product.totalStock} u.
-                      </td>
-                      <td className="px-4 py-3">
-                        <ul className="list-disc list-inside space-y-0.2">
-                          {product.storeOnInventory.map((storeItem: any) => (
-                            <li key={storeItem.storeId}>
-                              {storeItem.store?.name || "Tienda desconocida"}:{" "}
-                              <span
-                                className={`font-semibold ${
-                                  storeItem.stock === 0 ? "text-red-600" : "text-foreground"
-                                }`}
-                              >
-                                <br />
-                                {storeItem.stock} u.
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Button
-                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded"
-                          onClick={() => {
-                            window.location.href = `/dashboard/inventory/product-details/${product.id}`;
-                          }}
-                        >
-                          Ver información
-                        </Button>
-                        </td>
+          <div className="w-full flex-1 overflow-hidden">
+            <div className="max-h-[50vh] w-full overflow-auto rounded-md border">
+              {hasProducts ? (
+                <table className="w-full table-fixed border-collapse text-sm">
+                  <colgroup>
+                    <col className="w-[24%]" />
+                    <col className="w-[18%]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[30%]" />
+                    <col className="w-[12%]" />
+                  </colgroup>
+                  <thead>
+                    <tr className="bg-gray-900 text-white uppercase tracking-wide">
+                      <th className="border-b px-4 py-3 text-left">Nombre</th>
+                      <th className="border-b px-4 py-3 text-left">Categoría</th>
+                      <th className="border-b px-4 py-3 text-left">Stock General</th>
+                      <th className="border-b px-4 py-3 text-left">Stock por Tienda</th>
+                      <th className="border-b px-4 py-3 text-left">Acciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="text-muted-foreground text-sm py-4">No hay productos sin stock.</p>
-            )}
+                  </thead>
+                  <tbody>
+                    {paginatedProducts.map((product, index) => (
+                      <tr
+                        key={`${product.id}-${index}`}
+                        className="border-b transition hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        <td className="whitespace-normal break-words px-4 py-3">
+                          {product.name || "Sin nombre"}
+                        </td>
+                        <td className="whitespace-normal break-words px-4 py-3">
+                          {typeof product.category === "string"
+                            ? product.category
+                            : product.category?.name || "Sin categoría"}
+                        </td>
+                        <td
+                          className={`px-4 py-3 font-semibold whitespace-nowrap ${
+                            product.totalStock === 0 ? "text-red-600" : "text-foreground"
+                          }`}
+                        >
+                          {product.totalStock} u.
+                        </td>
+                        <td className="whitespace-normal break-words px-4 py-3">
+                          <ul className="space-y-1 text-sm">
+                            {product.storeOnInventory.map((storeItem: any) => (
+                              <li key={storeItem.storeId} className="flex flex-col">
+                                <span className="font-medium">
+                                  {storeItem.store?.name || "Tienda desconocida"}
+                                </span>
+                                <span
+                                  className={`text-xs font-semibold ${
+                                    storeItem.stock === 0 ? "text-red-600" : "text-foreground"
+                                  }`}
+                                >
+                                  {storeItem.stock} u.
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Button
+                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded"
+                            onClick={() => {
+                              window.location.href = `/dashboard/inventory/product-details/${product.id}`;
+                            }}
+                          >
+                            Ver información
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-muted-foreground text-sm py-4">No hay productos sin stock.</p>
+              )}
+            </div>  
           </div>
 
           {hasProducts && (

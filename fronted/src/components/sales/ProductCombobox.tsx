@@ -88,10 +88,10 @@ export default function ProductCombobox({ products, selectedId, selectedLabel, o
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between gap-2"
+          className="w-full min-w-0 justify-between gap-2"
           disabled={disabled}
         >
-          <span className="truncate text-left max-w-[calc(100%-1.75rem)] md:max-w-none md:overflow-visible md:text-clip">
+          <span className="truncate text-left min-w-0 max-w-[calc(100%-1.75rem)] md:max-w-none md:overflow-visible md:text-clip">
             {selectedLabel || "Seleccionar producto"}
           </span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
@@ -109,8 +109,8 @@ export default function ProductCombobox({ products, selectedId, selectedLabel, o
             <CommandGroup>
               {filtered.map((p) => (
                 <CommandItem key={p.id} value={`${p.id}`} onSelect={() => { onPick(p); setOpen(false); }}>
-                  <div className="flex flex-col">
-                    <span className="font-medium">{p.name}</span>
+                  <div className="flex max-w-full flex-col">
+                    <span className="font-medium break-words">{p.name}</span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">S/. {p.price.toFixed(2)}</span>
                       <Badge

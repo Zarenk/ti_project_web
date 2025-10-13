@@ -1098,7 +1098,7 @@ export default function Page() {
             </div>
           </div>
           <div className="px-5">
-            <div className="space-y-4 rounded-2xl border bg-card p-4 shadow-sm">
+            <div className="space-y-4 rounded-2xl bg-card p-4 shadow-sm">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { DateRange } from "react-day-picker";
-import { endOfDay, format, parseISO, subDays } from "date-fns";
+import { endOfDay, format, parseISO, startOfDay, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   Area,
@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 
 import { DatePickerWithRange } from "../salesdashboard/date-range-picker";
+import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import ProductCombobox from "@/components/sales/ProductCombobox";
 import { getProductSalesReport } from "../sales.api";
 import { formatCurrency } from "@/lib/utils";
@@ -32,6 +33,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -127,13 +135,46 @@ function formatLastPurchase(iso: string) {
 export default function ProductReportClient({ products }: ProductReportClientProps) {
   const [selectedProduct, setSelectedProduct] = useState<{ id: number; name: string; price: number } | null>(null);
   const [dateRange, setDateRange] = useState<DateRange>(() => getDefaultDateRange());
+  const [specificDate, setSpecificDate] = useState<Date | undefined>(undefined);
   const [report, setReport] = useState<ProductSalesReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeClient, setActiveClient] =
+    useState<ProductSalesReport["topClients"][number] | null>(null);
+  const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
 
   const sortedProducts = useMemo(() => {
     return [...products].sort((a, b) => a.name.localeCompare(b.name));
   }, [products]);
+
+  const singleDateRange = useMemo<DateRange>(
+    () =>
+      specificDate
+        ? { from: specificDate, to: specificDate }
+        : { from: undefined, to: undefined },
+    [specificDate],
+  );
+
+  const handleDateRangeChange = (nextRange: DateRange) => {
+    setSpecificDate(undefined);
+    setDateRange(nextRange);
+  };
+
+  const handleSpecificDateSelect = ({ from }: { from?: Date; to?: Date }) => {
+    if (!from) {
+      setSpecificDate(undefined);
+      return;
+    }
+    const start = startOfDay(from);
+    const end = endOfDay(from);
+    setSpecificDate(start);
+    setDateRange({ from: start, to: end });
+  };
+
+  const handleSpecificDateClear = () => {
+    setSpecificDate(undefined);
+    setDateRange(getDefaultDateRange());
+  };
 
   useEffect(() => {
     if (!selectedProduct?.id || !dateRange?.from || !dateRange?.to) {
@@ -189,13 +230,18 @@ export default function ProductReportClient({ products }: ProductReportClientPro
 
   const currency = report?.metrics?.currency ?? "PEN";
 
+  const topClients = useMemo(
+    () => (report?.topClients ? report.topClients.slice(0, 8) : []),
+    [report?.topClients],
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reporte de productos</h1>
           <p className="text-muted-foreground">
-            Analiza el rendimiento histórico de un producto específico y descubre oportunidades de venta.
+            Analiza el rendimiento historico de un producto especifico y descubre oportunidades de venta.
           </p>
         </div>
       </div>
@@ -206,8 +252,8 @@ export default function ProductReportClient({ products }: ProductReportClientPro
           <CardDescription>Selecciona un producto y un rango de fechas para generar el análisis.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-3 min-w-0">
               <span className="text-sm font-medium text-muted-foreground">Producto</span>
               <ProductCombobox
                 products={sortedProducts}
@@ -235,10 +281,31 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                 <span aria-hidden className="hidden md:block" />
               </div>
               <div>
-                <DatePickerWithRange date={dateRange} setDate={setDateRange} />
+                <DatePickerWithRange date={dateRange} setDate={handleDateRangeChange} />
               </div>
               <p className="text-xs text-muted-foreground">
-                El análisis incluirá todas las ventas registradas para el producto en el intervalo seleccionado.
+                El analisis incluira todas las ventas registradas para el producto en el intervalo seleccionado.
+              </p>
+            </div>
+            <div className="space-y-3 md:col-span-2 lg:col-span-1">
+              <span className="text-sm font-medium text-muted-foreground">Buscar por fecha exacta</span>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <CalendarDatePicker
+                  className="sm:w-[220px]"
+                  numberOfMonths={1}
+                  closeOnSelect
+                  variant="outline"
+                  date={singleDateRange}
+                  onDateSelect={handleSpecificDateSelect}
+                />
+                {specificDate ? (
+                  <Button variant="ghost" size="sm" onClick={handleSpecificDateClear} className="sm:w-auto">
+                    Limpiar
+                  </Button>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Selecciona un dia para ajustar automaticamente el informe a esa fecha exacta.
               </p>
             </div>
           </div>
@@ -251,6 +318,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                   setSelectedProduct(null);
                   setReport(null);
                   setError(null);
+                  setSpecificDate(undefined);
                   setDateRange(getDefaultDateRange());
                 }}
               >
@@ -274,7 +342,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
           <div>
             <p className="text-base font-medium text-foreground">Selecciona un producto para ver su rendimiento.</p>
             <p className="text-sm text-muted-foreground">
-              Podrás visualizar tendencias, clientes frecuentes y vendedores destacados.
+              Podras visualizar tendencias, clientes frecuentes y vendedores destacados.
             </p>
           </div>
         </div>
@@ -290,7 +358,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between text-sm font-medium">
-                  Última venta
+                  Ultima venta
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </CardTitle>
               </CardHeader>
@@ -298,7 +366,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                 <p className="text-lg font-semibold text-foreground">
                   {formatDateLabel(report.metrics.lastSaleDate)}
                 </p>
-                <p className="text-xs text-muted-foreground">Fecha de la transacción más reciente registrada.</p>
+                <p className="text-xs text-muted-foreground">Fecha de la transaccion mas reciente registrada.</p>
               </CardContent>
             </Card>
             <Card>
@@ -312,7 +380,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                 <p className="text-lg font-semibold text-foreground">
                   {report.metrics.totalUnitsSold.toLocaleString("es-PE")}
                 </p>
-                <p className="text-xs text-muted-foreground">Cantidad acumulada en el período seleccionado.</p>
+                <p className="text-xs text-muted-foreground">Cantidad acumulada en el periodo seleccionado.</p>
               </CardContent>
             </Card>
             <Card>
@@ -340,7 +408,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                 <p className="text-lg font-semibold text-foreground">
                   {formatCurrency(report.metrics.averageUnitPrice ?? 0, currency)}
                 </p>
-                <p className="text-xs text-muted-foreground">Promedio ponderado según unidades vendidas.</p>
+                <p className="text-xs text-muted-foreground">Promedio ponderado segun unidades vendidas.</p>
               </CardContent>
             </Card>
           </section>
@@ -349,7 +417,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
             <Card className="lg:col-span-4">
               <CardHeader>
                 <CardTitle>Comportamiento de ventas</CardTitle>
-                <CardDescription>Evolución de ingresos y unidades en el rango seleccionado.</CardDescription>
+                <CardDescription>Evolucion de ingresos y unidades en el rango seleccionado.</CardDescription>
               </CardHeader>
               <CardContent className="h-[340px]">
                 {chartData.length === 0 ? (
@@ -422,6 +490,70 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                   </ResponsiveContainer>
                 )}
               </CardContent>
+              <Dialog
+                open={isClientDialogOpen}
+                onOpenChange={(open) => {
+                  setIsClientDialogOpen(open);
+                  if (!open) {
+                    setActiveClient(null);
+                  }
+                }}
+              >
+                <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Detalle de cliente</DialogTitle>
+                    <DialogDescription>
+                      Informacion destacada del cliente en las ventas del producto seleccionado.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {activeClient ? (
+                    <div className="space-y-4 text-sm">
+                      <div className="space-y-1">
+                        <span className="text-xs font-semibold uppercase text-muted-foreground">
+                          Cliente
+                        </span>
+                        <p className="text-base font-semibold text-foreground">
+                          {activeClient.name}
+                        </p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-lg border p-3">
+                          <span className="text-xs font-semibold uppercase text-muted-foreground">
+                            Unidades
+                          </span>
+                          <p className="text-lg font-semibold text-foreground">
+                            {activeClient.totalUnits.toLocaleString("es-PE")}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border p-3">
+                          <span className="text-xs font-semibold uppercase text-muted-foreground">
+                            Compras
+                          </span>
+                          <p className="text-lg font-semibold text-foreground">
+                            {activeClient.salesCount}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border p-3 sm:col-span-2">
+                          <span className="text-xs font-semibold uppercase text-muted-foreground">
+                            Ingresos
+                          </span>
+                          <p className="text-lg font-semibold text-foreground">
+                            {formatCurrency(activeClient.totalRevenue ?? 0, currency)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="rounded-lg border p-3">
+                        <span className="text-xs font-semibold uppercase text-muted-foreground">
+                          Ultima compra
+                        </span>
+                        <p className="text-base font-medium text-foreground">
+                          {formatLastPurchase(activeClient.lastPurchase)}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                </DialogContent>
+              </Dialog>
             </Card>
             <div className="flex flex-col gap-4 lg:col-span-3">
               <Card>
@@ -442,7 +574,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                       </p>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">Aún no se registran vendedores para este producto.</p>
+                    <p className="text-sm text-muted-foreground">Aun no se registran vendedores para este producto.</p>
                   )}
                 </CardContent>
               </Card>
@@ -453,7 +585,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <div className="flex items-center justify-between">
-                    <span>Precio más alto</span>
+                    <span>Precio mas alto</span>
                     <span className="font-semibold">
                       {report.metrics.highestPrice !== null
                         ? formatCurrency(report.metrics.highestPrice, currency)
@@ -461,7 +593,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Precio más bajo</span>
+                    <span>Precio mas bajo</span>
                     <span className="font-semibold">
                       {report.metrics.lowestPrice !== null
                         ? formatCurrency(report.metrics.lowestPrice, currency)
@@ -469,7 +601,7 @@ export default function ProductReportClient({ products }: ProductReportClientPro
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Órdenes analizadas</span>
+                    <span>Ordenes analizadas</span>
                     <span className="font-semibold">{report.metrics.totalOrders.toLocaleString("es-PE")}</span>
                   </div>
                 </CardContent>
@@ -481,41 +613,84 @@ export default function ProductReportClient({ products }: ProductReportClientPro
             <Card className="lg:col-span-4">
               <CardHeader>
                 <CardTitle>Clientes con mayor compra</CardTitle>
-                <CardDescription>Ranking según unidades adquiridas.</CardDescription>
+                <CardDescription>Ranking segun unidades adquiridas.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {report.topClients.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Aún no hay clientes asociados a este producto.</p>
+                {topClients.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aun no hay clientes asociados a este producto.</p>
                 ) : (
-                  <div className="max-w-full overflow-x-auto md:overflow-visible">
-                    <Table className="min-w-[560px] md:min-w-full">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="whitespace-nowrap">Cliente</TableHead>
-                          <TableHead className="whitespace-nowrap text-right">Unidades</TableHead>
-                          <TableHead className="whitespace-nowrap text-right">Ingresos</TableHead>
-                          <TableHead className="whitespace-nowrap text-right">Compras</TableHead>
-                          <TableHead className="whitespace-nowrap text-right">Última compra</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {report.topClients.slice(0, 8).map((client) => (
-                          <TableRow key={client.clientId}>
-                            <TableCell className="font-medium">{client.name}</TableCell>
-                            <TableCell className="text-right">{client.totalUnits.toLocaleString("es-PE")}</TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(client.totalRevenue ?? 0, currency)}
-                            </TableCell>
-                            <TableCell className="text-right">{client.salesCount}</TableCell>
-                            <TableCell className="text-right text-xs text-muted-foreground">
-                              {formatLastPurchase(client.lastPurchase)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <>
+                    <div className="hidden md:block">
+                      <div className="max-w-full overflow-x-auto md:overflow-visible">
+                        <Table className="min-w-[560px] md:min-w-full">
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="whitespace-nowrap">Cliente</TableHead>
+                              <TableHead className="whitespace-nowrap text-right">Unidades</TableHead>
+                              <TableHead className="whitespace-nowrap text-right">Ingresos</TableHead>
+                              <TableHead className="whitespace-nowrap text-right">Compras</TableHead>
+                              <TableHead className="whitespace-nowrap text-right">Ultima compra</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {topClients.map((client) => (
+                              <TableRow key={client.clientId}>
+                                <TableCell className="font-medium">{client.name}</TableCell>
+                                <TableCell className="text-right">{client.totalUnits.toLocaleString("es-PE")}</TableCell>
+                                <TableCell className="text-right">
+                                  {formatCurrency(client.totalRevenue ?? 0, currency)}
+                                </TableCell>
+                                <TableCell className="text-right">{client.salesCount}</TableCell>
+                                <TableCell className="text-right text-xs text-muted-foreground">
+                                  {formatLastPurchase(client.lastPurchase)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 md:hidden">
+                      {topClients.map((client) => (
+                        <div
+                          key={client.clientId}
+                          className="space-y-3 rounded-lg border bg-muted/30 p-4 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 space-y-1">
+                              <p className="truncate font-semibold text-foreground">{client.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Ultima compra: {formatLastPurchase(client.lastPurchase)}
+                              </p>
+                            </div>
+                            <Badge variant="secondary" className="shrink-0">
+                              {client.totalUnits.toLocaleString("es-PE")} uds
+                            </Badge>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                            <span className="font-medium text-foreground">
+                              Ingresos: {formatCurrency(client.totalRevenue ?? 0, currency)}
+                            </span>
+                            <span>Compras: {client.salesCount}</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            variant="outline"
+                            onClick={() => {
+                              setActiveClient(client);
+                              setIsClientDialogOpen(true);
+                            }}
+                          >
+                            Ver detalle
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
+
               </CardContent>
             </Card>
             <Card className="lg:col-span-3">
