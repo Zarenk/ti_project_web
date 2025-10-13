@@ -627,7 +627,7 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-background font-site">
       <header className="sticky top-0 z-40 border-b border-border bg-card/50 backdrop-blur-sm">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
+        <div className="container mx-auto flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Configuración del sitio</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -635,8 +635,8 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex items-center justify-center gap-1 rounded-lg bg-muted p-1 sm:justify-start">
               <Button
                 variant={themeMode === "light" ? "secondary" : "ghost"}
                 size="sm"
@@ -663,14 +663,19 @@ export default function SettingsPage() {
               </Button>
             </div>
 
-            <Button variant="outline" size="sm" onClick={() => setConfirmExportOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmExportOpen(true)}
+              className="w-full sm:w-auto"
+            >
               <Download className="mr-2 h-4 w-4" />
               Exportar JSON
             </Button>
 
             <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="w-full sm:w-auto">
                   <Upload className="mr-2 h-4 w-4" />
                   Importar JSON
                 </Button>
@@ -855,8 +860,8 @@ export default function SettingsPage() {
           animate={{ y: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
         >
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
               {hasUnsavedChanges && (
                 <Badge variant="secondary" className="animate-pulse">
                   Cambios sin guardar
@@ -870,7 +875,7 @@ export default function SettingsPage() {
               )}
             </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <Button
                 type="button"
                 variant="outline"

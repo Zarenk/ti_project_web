@@ -813,7 +813,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
       <form className='relative flex flex-col gap-2' onSubmit={onSubmit}>
         <fieldset disabled={isSubmitting} className="contents">                  
                   <div className="flex flex-wrap gap-4">
-                    <div className="flex-1 flex-col border rounded-md p-2">                       
+                    <div className="flex-1 flex-col border rounded-md p-2">                  
                         <Label className="text-sm font-medium mb-2">Tipo de Comprobante</Label>
                         <Popover open={openInvoice} onOpenChange={setOpenInvoice}>
                           <PopoverTrigger asChild>
@@ -867,10 +867,10 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                             </Command>
                           </PopoverContent>
                       </Popover>
-                      <div className="flex justify-between gap-1">                          
+                      <div className="flex justify-between gap-1">                       
                           <Label className="text-sm font-medium py-2 mr-20 sm:mr-12 md:mr-0 xl:mr-12">Fecha de Comprobante</Label>
                       </div>
-                      <div className="flex gap-1">                                                                        
+                      <div className="flex gap-1">                                                                     
                         <Popover open={openCalendar} onOpenChange={setOpenCalendar}>
                           <PopoverTrigger asChild>
                             <Button
@@ -1110,7 +1110,6 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                           <Label className="text-sm font-medium py-2">Direccion de la tienda</Label>
                           <Input {...register("store_adress")} readOnly></Input>        
                         </div>
-
                         <div className='flex-1 flex-col border border-gray-600 rounded-md p-2'> 
                           <Label htmlFor="product-combobox" className="text-sm font-medium mb-2">
                             Ingrese un producto:
@@ -1644,9 +1643,9 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                         setOpenInvoice(false); // Cierra el combobox de tipo de comprobantes
                     }}  // Restablece los campos del formulario
                     >
-                        Limpiar
+                        Limpiar 
                     </Button>
-                    <Button 
+                    <Button
                     className=""
                     type="button" // Evita que el botón envíe el formulario
                     onClick={() => router.back()} // Regresa a la página anterior
