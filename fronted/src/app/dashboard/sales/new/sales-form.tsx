@@ -821,7 +821,8 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                               variant="outline"
                               role="combobox"
                               aria-expanded={openInvoice}
-                              className="w-[260px] justify-between text-xs"
+                              className="w-[260px] justify-between text-xs cursor-pointer"
+                              title="Selecciona el tipo de comprobante"
                             >
                               {valueInvoice || "Selecciona un tipo de comprobante..."}
                               <ChevronsUpDown className="opacity-50" />
@@ -837,6 +838,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                     <CommandItem
                                       key={type}
                                       value={type}
+                                      className="cursor-pointer"
                                       onSelect={(currentValue) => {
 
                                         if (currentValue === valueInvoice) {
@@ -876,9 +878,10 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                             <Button
                               variant={"outline"}
                               className={cn(
-                                "w-[260px] justify-start text-left font-normal",
+                                "w-[260px] justify-start text-left font-normal cursor-pointer",
                                 !selectedDate && "text-muted-foreground"
                               )}
+                              title="Define la fecha de emisión del comprobante"
                             >
                             <CalendarIcon />
                             {selectedDate
@@ -949,8 +952,9 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   variant="outline"
                                   role="combobox"
                                   aria-expanded={openClient}
-                                  className="w-[260px] justify-between"
+                                  className="w-[260px] justify-between cursor-pointer"
                                   disabled={isClientDisabled}
+                                  title="Selecciona el cliente que realizará la compra"
                                 >
                                   {displayedClientName || "Selecciona un cliente..."}
                                   <ChevronsUpDown className="opacity-50" />
@@ -982,6 +986,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                             <CommandItem
                                               key={client.id ?? client.name}
                                               value={commandValue}
+                                              className="cursor-pointer"
                                               onSelect={() => {
                                                 if (isSelected) {
                                                   setOpenClient(false);
@@ -1006,9 +1011,10 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                               </PopoverContent>
                             </Popover>
                             <Button className='sm:w-auto sm:ml-2 ml-0
-                            bg-green-700 hover:bg-green-800 text-white' type="button" 
+                            bg-green-700 hover:bg-green-800 text-white cursor-pointer' type="button" 
                             disabled={isClientDisabled}
-                            onClick={() => setIsDialogOpenClient(true)}>
+                            onClick={() => setIsDialogOpenClient(true)}
+                            title="Registrar un nuevo cliente durante la venta">
                                 <Save className="w-6 h-6"/>
                             </Button>
                             <AddClientDialog
@@ -1047,7 +1053,8 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   variant="outline"
                                   role="combobox"
                                   aria-expanded={openStore}
-                                  className="w-[260px] justify-between"
+                                  className="w-[260px] justify-between cursor-pointer"
+                                  title="Selecciona la tienda para la venta"
                                 >
                                   {displayedStoreName || "Seleccione una Tienda..."}
                                   <ChevronsUpDown className="opacity-50" />
@@ -1069,6 +1076,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                           <CommandItem
                                             key={store.id ?? store.name}
                                             value={commandValue}
+                                            className="cursor-pointer"
                                             onSelect={() => {
                                               if (isSelected) {
                                                 setOpenStore(false);
@@ -1121,7 +1129,8 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                               variant="outline"
                               role="combobox"
                               aria-expanded={open}
-                              className="w-[200px] sm:w-[300px] justify-between"
+                              className="w-[200px] sm:w-[300px] justify-between cursor-pointer"
+                              title="Selecciona un producto para agregarlo a la venta"
                             >
                               <span className="truncate max-w-[80%] block">
                                 {displayedProductName || "Selecciona un producto..."}
@@ -1145,6 +1154,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                           <CommandItem
                                             key={product.id ?? product.name}
                                             value={commandValue}
+                                            className="cursor-pointer"
                                             onSelect={async () => {
                                               if (isSelected) {
                                                 setOpen(false);
@@ -1231,13 +1241,14 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                               </PopoverContent>
                             </Popover>
                             <Button className='sm:w-auto sm:ml-2 ml-0
-                            bg-green-700 hover:bg-green-800 text-white' type="button" onClick={addProduct}>
+                            bg-green-700 hover:bg-green-800 text-white cursor-pointer' type="button" onClick={addProduct} title="Agregar el producto seleccionado a la venta">
                                 <span className="hidden sm:block">Agregar</span>
                                 <Plus className="w-2 h-2"/>
                             </Button>                            
                             {/* Botón para abrir el modal */}
                             <Button
-                              className="bg-blue-600 hover:bg-blue-700 text-white className='sm:w-auto sm:ml-2 ml-0"
+                              className="sm:w-auto sm:ml-2 ml-0 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                              title="Gestionar series del producto seleccionado"
                               type="button" // Asegúrate de que el botón no envíe el formulario
                               onClick={async () => {
                                 if (!currentProduct || !selectedStoreId) {
@@ -1428,11 +1439,12 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                 <TableCell className="w-[44px] sm:w-[60px] py-1.5">
                                   <Button
                                     variant="outline"
-                                    className="h-8 sm:h-9 px-1"
+                                    className="h-8 sm:h-9 px-1 cursor-pointer"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       removeProduct(product.id);
                                     }}
+                                    title="Eliminar este producto de la venta"
                                   >
                                     <X className="w-4 h-4" color="red" />
                                   </Button>
@@ -1497,8 +1509,11 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                       }}
                     />                   
 
-                    <Button className='mt-4' type="button"
-                    onClick={() => setIsDialogOpen(true)}>
+                    <Button
+                    className='mt-4 cursor-pointer'
+                    type="button"
+                    onClick={() => setIsDialogOpen(true)}
+                    title="Abre la confirmación para registrar la venta">
                       Registrar Venta
                     </Button>
 
@@ -1510,10 +1525,10 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                           </AlertDialogHeader>
                           <p>¿Estás seguro de que deseas registrar esta venta?</p>
                           <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => setIsDialogOpen(false)}>
+                            <AlertDialogCancel onClick={() => setIsDialogOpen(false)} className="cursor-pointer" title="Cancelar el registro de la venta">
                               Cancelar
                             </AlertDialogCancel>
-                            <AlertDialogAction
+                            <AlertDialogAction className="cursor-pointer" title="Confirmar y registrar la venta"
                               onClick={() => {
                                 setIsDialogOpen(false); // Cerrar el diálogo
                                 onSubmit(); // Llamar a la función de envío
@@ -1566,10 +1581,16 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                             />
                           </div>
                           <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => setIsPriceAlertOpen(false)}>
+                            <AlertDialogCancel
+                              onClick={() => setIsPriceAlertOpen(false)}
+                              className="cursor-pointer"
+                              title="Cancelar sin actualizar el precio"
+                            >
                               Cancelar
                             </AlertDialogCancel>
                             <AlertDialogAction
+                              className="cursor-pointer"
+                              title="Confirmar el nuevo precio y continuar"
                               onClick={() => {
                                 if (productWithZeroPrice) {
                                   const updatedProduct = products.find(
@@ -1595,7 +1616,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                         </AlertDialogContent>
                       </AlertDialog>
 
-                    <Button className=''
+                    <Button className="cursor-pointer"
                     type="button" // Evita que el botón envíe el formulario
                     onClick={() => {
                         form.reset({
@@ -1642,13 +1663,15 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                         setOpenStore(false); // Cierra el combobox de tiendas
                         setOpenInvoice(false); // Cierra el combobox de tipo de comprobantes
                     }}  // Restablece los campos del formulario
+                    title="Restablece todos los campos del formulario a sus valores iniciales"
                     >
                         Limpiar 
                     </Button>
                     <Button
-                    className=""
+                    className="cursor-pointer"
                     type="button" // Evita que el botón envíe el formulario
                     onClick={() => router.back()} // Regresa a la página anterior
+                    title="Regresa a la vista anterior sin guardar"
                     >
                         Volver
                     </Button>

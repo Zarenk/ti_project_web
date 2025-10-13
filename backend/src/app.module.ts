@@ -48,6 +48,7 @@ import { KeywordsModule } from './keywords/keywords.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { ModulePermissionsGuard } from './common/guards/module-permissions.guard';
 import { SystemMaintenanceModule } from './system-maintenance/system-maintenance.module';
+import { TenancyModule } from './tenancy/tenancy.module';
 
 @Module({
   imports: [
@@ -91,6 +92,7 @@ import { SystemMaintenanceModule } from './system-maintenance/system-maintenance
     KeywordsModule,
     SiteSettingsModule,
     SystemMaintenanceModule,
+    TenancyModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [

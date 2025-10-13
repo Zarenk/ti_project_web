@@ -173,8 +173,84 @@ model User {
   sentMessages     ChatMessage[]      @relation("SenderMessages")
   favorites        Favorite[]
 
+  memberships OrganizationMembership[]
+
   @@index([email])
   @@index([username])
+}
+
+enum OrganizationMembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model Organization {
+  id        Int       @id @default(autoincrement())
+  name      String
+  code      String?   @unique
+  status    String    @default("ACTIVE")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  units        OrganizationUnit[]
+  memberships  OrganizationMembership[]
+  settings     OrganizationSetting?
+
+  @@unique([name])
+  @@index([status])
+}
+
+model OrganizationUnit {
+  id              Int                @id @default(autoincrement())
+  organizationId  Int
+  parentUnitId    Int?
+  name            String
+  code            String?
+  status          String             @default("ACTIVE")
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent          OrganizationUnit?  @relation("OrganizationUnitHierarchy", fields: [parentUnitId], references: [id])
+  children        OrganizationUnit[] @relation("OrganizationUnitHierarchy")
+  memberships     OrganizationMembership[]
+
+  @@index([organizationId])
+  @@index([parentUnitId])
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+}
+
+model OrganizationMembership {
+  id                  Int                          @id @default(autoincrement())
+  userId              Int
+  organizationId      Int
+  organizationUnitId  Int?
+  role                OrganizationMembershipRole   @default(MEMBER)
+  isDefault           Boolean                      @default(false)
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+
+  user                User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationUnit    OrganizationUnit?            @relation(fields: [organizationUnitId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([organizationUnitId])
+  @@index([userId, isDefault])
+  @@unique([userId, organizationId, organizationUnitId])
+}
+
+model OrganizationSetting {
+  id              Int           @id @default(autoincrement())
+  organizationId  Int           @unique
+  preferences     Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model Client {
