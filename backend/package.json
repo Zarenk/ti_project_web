@@ -18,6 +18,7 @@
     "seed:web": "ts-node prisma/seed-web-store.ts",
     "migrate:accounting": "npx prisma migrate dev --name accounting_init",
     "seed:accounting": "ts-node prisma/seed/accounting.seed.ts",
+    "seed:organizations": "ts-node prisma/seed/organizations.seed.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",

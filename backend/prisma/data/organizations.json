@@ -1,0 +1,14 @@
+[
+  {
+    "code": "DEFAULT",
+    "name": "Organización Única",
+    "status": "ACTIVE",
+    "units": [
+      {
+        "code": "HQ",
+        "name": "Casa Matriz",
+        "status": "ACTIVE"
+      }
+    ]
+  }
+]
