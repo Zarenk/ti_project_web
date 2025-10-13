@@ -154,6 +154,7 @@ model User {
   password     String
   role         UserRole @default(CLIENT) // Enum para roles de usuario
   status       String   @default("ACTIVO")
+  organizationId      Int?
   failedLoginAttempts Int      @default(0)
   lockUntil    DateTime?
   isPermanentlyLocked Boolean  @default(false)
@@ -177,6 +178,7 @@ model User {
 
   @@index([email])
   @@index([username])
+  @@index([organizationId, email])
 }
 
 enum OrganizationMembershipRole {
@@ -217,10 +219,10 @@ model OrganizationUnit {
   children        OrganizationUnit[] @relation("OrganizationUnitHierarchy")
   memberships     OrganizationMembership[]
 
-  @@index([organizationId])
-  @@index([parentUnitId])
   @@unique([organizationId, name])
   @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([parentUnitId])
 }
 
 model OrganizationMembership {
@@ -237,10 +239,10 @@ model OrganizationMembership {
   organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   organizationUnit    OrganizationUnit?            @relation(fields: [organizationUnitId], references: [id], onDelete: SetNull)
 
+  @@unique([userId, organizationId, organizationUnitId])
   @@index([organizationId])
   @@index([organizationUnitId])
   @@index([userId, isDefault])
-  @@unique([userId, organizationId, organizationUnitId])
 }
 
 model OrganizationSetting {
@@ -254,22 +256,25 @@ model OrganizationSetting {
 }
 
 model Client {
-  id         Int      @id @default(autoincrement())
-  userId     Int      @unique
-  name       String
-  type       String?
-  typeNumber String?  @unique
-  phone      String?
-  adress     String?
-  email      String?
-  status     String?
-  image      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  name           String
+  type           String?
+  typeNumber     String?  @unique
+  phone          String?
+  adress         String?
+  email          String?
+  status         String?
+  image          String?
+  organizationId Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   user  User    @relation(fields: [userId], references: [id])
   // Relación con Sales
   sales Sales[] // Relación con el modelo Sales
+
+  @@index([organizationId, name])
 }
 
 model Provider {
@@ -320,6 +325,7 @@ model Entry {
   igvRate      Decimal            @default(0.18)
   pdfUrl       String?
   guiaUrl      String? // URL del PDF de la guía de remisión
+  organizationId Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -339,6 +345,7 @@ model Entry {
   @@index([providerId])
   @@index([journalId])
   @@index([date])
+  @@index([organizationId, date])
 }
 
 model Invoice {
@@ -362,6 +369,7 @@ model Inventory {
   id        Int      @id @default(autoincrement())
   productId Int
   storeId   Int
+  organizationId Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -372,6 +380,7 @@ model Inventory {
   entryDetails EntryDetail[] // Relación uno-a-muchos con EntryDetail
 
   @@unique([productId, storeId]) // Clave compuesta
+  @@index([organizationId, productId])
 }
 
 model EntryDetail {
@@ -418,6 +427,7 @@ model Store {
   website     String?
   status      String?
   image       String?
+  organizationId Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -435,6 +445,8 @@ model Store {
 
   // Relación con la tabla de caja
   CashRegister CashRegister[]
+
+  @@index([organizationId, name])
 }
 
 model StoreOnInventory {
@@ -463,6 +475,7 @@ model InventoryHistory {
   stockChange   Int // Cambio en el stock (positivo o negativo)
   previousStock Int? // Stock anterior (opcional)
   newStock      Int? // Stock nuevo (opcional)
+  organizationId Int?
   createdAt     DateTime @default(now()) // Fecha del cambio
 
   inventory Inventory @relation(fields: [inventoryId], references: [id])
@@ -471,6 +484,7 @@ model InventoryHistory {
   @@index([inventoryId])
   @@index([userId])
   @@index([createdAt])
+  @@index([organizationId, createdAt])
 }
 
 model Transfer {
@@ -480,6 +494,7 @@ model Transfer {
   productId          Int // ID del producto trasladado
   quantity           Int // Cantidad trasladada
   description        String? // Descripción opcional
+  organizationId     Int?
   createdAt          DateTime @default(now()) // Fecha del traslado
 
   // Relación con la tabla Store para la tienda de origen
@@ -493,7 +508,8 @@ model Transfer {
 
   @@index([sourceStoreId]) // Índice para optimizar consultas por tienda de origen
   @@index([destinationStoreId]) // Índice para optimizar consultas por tienda de destino
-  @@index([productId]) // Índice para optimizar consultas por producto 
+  @@index([productId]) // Índice para optimizar consultas por producto
+  @@index([organizationId, createdAt])
 }
 
 model Sales {
@@ -504,6 +520,7 @@ model Sales {
   total       Float // Total de la venta
   description String? // Descripción opcional
   source      SaleSource @default(POS)
+  organizationId Int?
   createdAt   DateTime   @default(now()) // Fecha de la venta
   updatedAt   DateTime   @updatedAt
 
@@ -521,6 +538,7 @@ model Sales {
   @@index([clientId])
   @@index([createdAt])
   @@index([source])
+  @@index([organizationId, createdAt])
 }
 
 model PaymentMethod {
