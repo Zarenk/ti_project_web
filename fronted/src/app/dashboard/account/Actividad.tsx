@@ -19,6 +19,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarIcon } from "lucide-react";
+import { startOfDay, endOfDay, format } from "date-fns";
 import { getAuthHeaders } from "@/utils/auth-token";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -39,11 +43,12 @@ interface AuditLog {
 }
 
 export default function Actividad() {
-    const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const [search, setSearch] = useState("");
+  const [specificDate, setSpecificDate] = useState<Date | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +84,20 @@ export default function Actividad() {
     </Dialog>
   );
 
+  const handleSpecificDateSelect = (date: Date | undefined) => {
+    if (!date) {
+      setSpecificDate(undefined);
+      return;
+    }
+    setSpecificDate(startOfDay(date));
+    setPage(1);
+  };
+
+  const handleSpecificDateClear = () => {
+    setSpecificDate(undefined);
+    setPage(1);
+  };
+
   useEffect(() => {
     async function load() {
       setLoading(true);
@@ -89,6 +108,10 @@ export default function Actividad() {
           pageSize: String(pageSize),
         });
         if (search) params.append("q", search);
+        if (specificDate) {
+          params.append("dateFrom", startOfDay(specificDate).toISOString());
+          params.append("dateTo", endOfDay(specificDate).toISOString());
+        }
         const res = await fetch(
           `${BACKEND_URL}/api/activity?${params.toString()}`,
           {
@@ -115,23 +138,54 @@ export default function Actividad() {
       }
     }
     load();
-  }, [page, search]);
+  }, [page, search, specificDate]);
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <RequireAdmin>
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Buscar por usuario, entidad o acción..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
-          />
-          <Button variant="outline" onClick={() => setSearch("")}>
-            Limpiar filtros
-          </Button>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              placeholder="Buscar por usuario, entidad o acción..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full sm:max-w-sm"
+            />
+            <Button variant="outline" onClick={() => setSearch("")}>
+              Limpiar búsqueda
+            </Button>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start sm:w-[220px]"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {specificDate
+                    ? format(specificDate, "dd/MM/yyyy")
+                    : "Seleccionar fecha"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={specificDate}
+                  onSelect={handleSpecificDateSelect}
+                  initialFocus
+                  numberOfMonths={1}
+                />
+              </PopoverContent>
+            </Popover>
+            {specificDate ? (
+              <Button variant="ghost" size="sm" onClick={handleSpecificDateClear}>
+                Limpiar fecha
+              </Button>
+            ) : null}
+          </div>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         {loading ? (

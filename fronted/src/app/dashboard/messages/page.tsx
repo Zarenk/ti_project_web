@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Eye, X, Paperclip } from 'lucide-react';
+import { Eye, X, Paperclip, ArrowLeft } from 'lucide-react';
 import ClientList from './client-list';
 import socket, { cn } from '@/lib/utils';
 import TypingIndicator from '@/components/TypingIndicator';
@@ -39,6 +39,8 @@ export default function Page() {
   const [showPendingOnly, setShowPendingOnly] = useState(false);
   const [sortByName, setSortByName] = useState(false);
   const [clientTyping, setClientTyping] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileList, setShowMobileList] = useState(true);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
@@ -232,25 +234,77 @@ export default function Page() {
   );
   const isActive = clientInfo?.status === 'Activo';
 
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) {
+        setShowMobileList(true);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleClientSelect = useCallback(
+    (id: number) => {
+      setSelected(id);
+      if (isMobile) {
+        setShowMobileList(false);
+      }
+    },
+    [isMobile],
+  );
+
+  const handleClearSelection = useCallback(() => {
+    setSelected(null);
+    if (isMobile) {
+      setShowMobileList(true);
+    }
+  }, [isMobile]);
+
+  const chatContainerClasses = useMemo(
+    () =>
+      cn(
+        'flex-1 h-full min-h-0 overflow-hidden md:flex md:flex-col',
+        isMobile ? 'flex flex-col' : '',
+        isMobile && showMobileList ? 'hidden' : '',
+      ),
+    [isMobile, showMobileList],
+  );
+
   return (
     <section className="p-4 space-y-4 h-[calc(100vh-8rem)] flex flex-col">
-      <h1 className="text-2xl font-bold">Mensajes</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Mensajes</h1>
+        {isMobile && !showMobileList && (
+          <Button variant="outline" size="sm" onClick={() => setShowMobileList(true)}>
+            Conversaciones
+          </Button>
+        )}
+      </div>
       <div className="flex flex-1 flex-col md:flex-row gap-4 overflow-hidden">
-        <ClientList
-          clients={clients}
-          selected={selected}
-          setSelected={setSelected}
-          displayName={displayName}
-          lastMessages={lastMessages}
-          pendingCounts={pendingCounts}
-          search={search}
-          setSearch={setSearch}
-          showPendingOnly={showPendingOnly}
-          setShowPendingOnly={setShowPendingOnly}
-          sortByName={sortByName}
-          setSortByName={setSortByName}
-        />
-        <div className="flex-1 h-full flex flex-col min-h-0 overflow-hidden">
+        {showMobileList && (
+          <div className="flex flex-col md:w-80 md:flex-shrink-0">
+            <ClientList
+              clients={clients}
+              selected={selected}
+              setSelected={handleClientSelect}
+              displayName={displayName}
+              lastMessages={lastMessages}
+              pendingCounts={pendingCounts}
+              search={search}
+              setSearch={setSearch}
+              showPendingOnly={showPendingOnly}
+              setShowPendingOnly={setShowPendingOnly}
+              sortByName={sortByName}
+              setSortByName={setSortByName}
+            />
+          </div>
+        )}
+        <div className={chatContainerClasses}>
           {selected === null ? (
             <Card className="h-96 flex items-center justify-center p-4">
               <p className="text-muted-foreground">
@@ -259,13 +313,23 @@ export default function Page() {
             </Card>
           ) : (
             <Card className="h-full flex flex-col overflow-hidden">
-              <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-gradient-to-r from-primary/80 to-primary text-primary-foreground shadow-sm">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10">
-                    {clientInfo?.image ? (
-                      <AvatarImage src={clientInfo.image} />
-                    ) : (
-                      <AvatarFallback>
+                <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-gradient-to-r from-primary/80 to-primary text-primary-foreground shadow-sm">
+                  <div className="flex items-center gap-3">
+                    {isMobile && !showMobileList && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="text-primary-foreground"
+                        onClick={() => setShowMobileList(true)}
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Avatar className="h-10 w-10">
+                      {clientInfo?.image ? (
+                        <AvatarImage src={clientInfo.image} />
+                      ) : (
+                        <AvatarFallback>
                         {clientMap.get(selected)?.[0] || '?'}
                       </AvatarFallback>
                     )}
@@ -304,7 +368,7 @@ export default function Page() {
                   <Button
                     size="icon"
                     variant="destructive"
-                    onClick={() => setSelected(null)}
+                    onClick={handleClearSelection}
                   >
                     <X className="h-4 w-4" />
                   </Button>
