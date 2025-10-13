@@ -84,6 +84,7 @@ export default function LoginForm() {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+  const [showRecovery, setShowRecovery] = useState(false);
   const router = useRouter();
   const { refreshUser } = useAuth();
 
@@ -363,7 +364,12 @@ export default function LoginForm() {
             {lockMessage}
           </p>
         )}
-        <Button type="submit" className="w-full" disabled={isLoginDisabled} aria-disabled={isLoginDisabled}>
+        <Button
+          type="submit"
+          className="w-full hover:cursor-pointer disabled:cursor-not-allowed"
+          disabled={isLoginDisabled}
+          aria-disabled={isLoginDisabled}
+        >
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {loading ? 'Iniciando...' : 'Iniciar Sesion'}
         </Button>
@@ -379,7 +385,7 @@ export default function LoginForm() {
       <Button
         variant="outline"
         onClick={handleGoogle}
-        className="w-full border-2 border-slate-200 hover:border-blue-300 hover:bg-blue-50 rounded-lg font-semibold text-slate-700 dark:text-slate-200 transition-all duration-200 bg-transparent"
+        className="w-full border-2 border-slate-200 hover:border-blue-300 hover:bg-blue-50 rounded-lg font-semibold text-slate-700 dark:text-slate-200 transition-all duration-200 bg-transparent hover:cursor-pointer disabled:cursor-not-allowed"
         disabled={loading}
         aria-disabled={loading}
       >
@@ -404,42 +410,62 @@ export default function LoginForm() {
         {loading ? 'Procesando...' : 'Iniciar con Google'}
         
       </Button>
-      <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
-        <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-          ¿Olvidaste tu contraseña?
-        </h2>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-          Ingresa tu correo electrónico y te enviaremos los pasos necesarios para recuperar el acceso. Revisa tu
-          bandeja de entrada y sigue las instrucciones para restablecer tu contraseña.
-        </p>
-        <form onSubmit={handleRecoverySubmit} className="mt-3 flex flex-col gap-3">
-          <div>
-            <Label htmlFor="recovery-email" className="text-sm font-medium">
-              Correo electrónico de recuperación
-            </Label>
-            <Input
-              id="recovery-email"
-              type="email"
-              value={recoveryEmail}
-              onChange={(event) => setRecoveryEmail(event.target.value)}
-              placeholder="correo@ejemplo.com"
-              required
+      <button
+        type="button"
+        onClick={() => setShowRecovery((previous) => !previous)}
+        className="text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline hover:cursor-pointer"
+        aria-expanded={showRecovery}
+        aria-controls="password-recovery-section"
+      >
+        {showRecovery ? 'Ocultar opciones de recuperación' : '¿Olvidaste tu contraseña?'}
+      </button>
+      {showRecovery && (
+        <section
+          id="password-recovery-section"
+          className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40"
+        >
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+            ¿Olvidaste tu contraseña?
+          </h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            Ingresa tu correo electrónico y te enviaremos los pasos necesarios para recuperar el acceso. Revisa tu
+            bandeja de entrada y sigue las instrucciones para restablecer tu contraseña.
+          </p>
+          <form onSubmit={handleRecoverySubmit} className="mt-3 flex flex-col gap-3">
+            <div>
+              <Label htmlFor="recovery-email" className="text-sm font-medium">
+                Correo electrónico de recuperación
+              </Label>
+              <Input
+                id="recovery-email"
+                type="email"
+                value={recoveryEmail}
+                onChange={(event) => setRecoveryEmail(event.target.value)}
+                placeholder="correo@ejemplo.com"
+                required
+                disabled={recoveryLoading}
+              />
+            </div>
+            {recoveryStatus && (
+              <p
+                role={recoveryStatus.type === 'error' ? 'alert' : 'status'}
+                className={`text-sm ${recoveryStatus.type === 'error' ? 'text-red-600' : 'text-emerald-600'}`}
+              >
+                {recoveryStatus.message}
+              </p>
+            )}
+            <Button
+              type="submit"
+              variant="secondary"
+              className="hover:cursor-pointer disabled:cursor-not-allowed"
               disabled={recoveryLoading}
-            />
-          </div>
-          {recoveryStatus && (
-            <p
-              role={recoveryStatus.type === 'error' ? 'alert' : 'status'}
-              className={`text-sm ${recoveryStatus.type === 'error' ? 'text-red-600' : 'text-emerald-600'}`}
+              aria-disabled={recoveryLoading}
             >
-              {recoveryStatus.message}
-            </p>
-          )}
-          <Button type="submit" variant="secondary" disabled={recoveryLoading} aria-disabled={recoveryLoading}>
-            {recoveryLoading ? 'Enviando instrucciones...' : 'Recuperar contraseña'}
-          </Button>
-        </form>
-      </section>
+              {recoveryLoading ? 'Enviando instrucciones...' : 'Recuperar contraseña'}
+            </Button>
+          </form>
+        </section>
+      )}
     </div>
  
   );

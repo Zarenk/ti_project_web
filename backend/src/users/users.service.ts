@@ -6,7 +6,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UserRole, AuditAction } from '@prisma/client';
+import { UserRole, AuditAction, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityService } from 'src/activity/activity.service';
@@ -23,15 +23,128 @@ export class UsersService {
     private activityService: ActivityService,
   ) {}
 
-  async validateUser(email: string, password: string) {
-    const user = await this.prismaService.user.findUnique({ where: { email } });
-    if (user && (await bcrypt.compare(password, user.password))) {
-      const { password, ...result } = user;
-      return result;
+  async validateUser(email: string, password: string, req?: Request) {
+    let user = await this.prismaService.user.findUnique({ where: { email } });
+
+    if (!user) {
+      throw new UnauthorizedException('Credenciales inválidas');
     }
-    throw new UnauthorizedException('Credenciales inválidas');
+
+    const now = new Date();
+
+    if (user.lockUntil && user.lockUntil <= now && !user.isPermanentlyLocked) {
+      user = await this.prismaService.user.update({
+        where: { id: user.id },
+        data: { lockUntil: null },
+      });
+    }
+
+    if (user.isPermanentlyLocked) {
+      throw new UnauthorizedException(
+        'Tu cuenta está bloqueada. Comunícate con soporte para restaurar el acceso.',
+      );
+    }
+
+    if (user.lockUntil && user.lockUntil > now) {
+      const minutesRemaining = Math.ceil((user.lockUntil.getTime() - now.getTime()) / 60000);
+      throw new UnauthorizedException(
+        `Tu cuenta está temporalmente bloqueada. Intenta nuevamente en ${minutesRemaining} minuto(s).`,
+      );
+    }
+
+    const passwordMatches = await bcrypt.compare(password, user.password);
+
+    if (!passwordMatches) {
+      const message = await this.handleFailedLogin(user, req);
+      throw new UnauthorizedException(message);
+    }
+
+    if (user.failedLoginAttempts !== 0 || user.lockUntil || user.isPermanentlyLocked) {
+      user = await this.resetLoginState(user, req);
+    }
+
+    const { password: _password, ...result } = user;
+    return result;
   }
 
+  private async resetLoginState(user: User, req?: Request) {
+    const updatedUser = await this.prismaService.user.update({
+      where: { id: user.id },
+      data: {
+        failedLoginAttempts: 0,
+        lockUntil: null,
+        isPermanentlyLocked: false,
+      },
+    });
+
+    await this.activityService.log(
+      {
+        actorId: updatedUser.id,
+        actorEmail: updatedUser.email,
+        entityType: 'User',
+        entityId: updatedUser.id.toString(),
+        action: AuditAction.OTHER,
+        summary: `Se reinició el contador de intentos fallidos para ${updatedUser.email} tras un inicio de sesión exitoso`,
+      },
+      req,
+    );
+
+    return updatedUser;
+  }
+
+  private async handleFailedLogin(user: User, req?: Request) {
+    const attempts = user.failedLoginAttempts + 1;
+    const now = new Date();
+    let lockUntil: Date | null = null;
+    let isPermanentlyLocked = false;
+    let message = 'Credenciales inválidas.';
+
+    if (attempts >= 6) {
+      isPermanentlyLocked = true;
+      message =
+        'Tu cuenta ha sido bloqueada por múltiples intentos fallidos. Comunícate con soporte para restaurar el acceso.';
+    } else if (attempts === 5) {
+      lockUntil = new Date(now.getTime() + 60 * 60 * 1000);
+      message = 'Tu cuenta se ha bloqueado por 1 hora debido a múltiples intentos fallidos.';
+    } else if (attempts === 4) {
+      lockUntil = new Date(now.getTime() + 10 * 60 * 1000);
+      message = 'Tu cuenta se ha bloqueado temporalmente por 10 minutos debido a intentos fallidos consecutivos.';
+    } else {
+      const remainingBeforeTempLock = Math.max(0, 4 - attempts);
+      if (remainingBeforeTempLock > 0) {
+        message = `Credenciales inválidas. Te quedan ${remainingBeforeTempLock} intento(s) antes de un bloqueo temporal.`;
+      }
+    }
+    const updatedUser = await this.prismaService.user.update({
+      where: { id: user.id },
+      data: {
+        failedLoginAttempts: attempts,
+        lockUntil,
+        isPermanentlyLocked,
+      },
+    });
+
+    const summary = isPermanentlyLocked
+      ? `La cuenta ${updatedUser.email} se bloqueó de forma indefinida tras ${attempts} intentos fallidos.`
+      : lockUntil
+      ? `La cuenta ${updatedUser.email} se bloqueó hasta ${lockUntil.toISOString()} tras ${attempts} intentos fallidos.`
+      : `Intento fallido ${attempts} para la cuenta ${updatedUser.email}.`;
+
+    await this.activityService.log(
+      {
+        actorId: updatedUser.id,
+        actorEmail: updatedUser.email,
+        entityType: 'User',
+        entityId: updatedUser.id.toString(),
+        action: AuditAction.OTHER,
+        summary,
+      },
+      req,
+    );
+
+    return message;
+  }
+  
   async login(user: any, req?: Request) {
     const payload = {
       username: user.username,

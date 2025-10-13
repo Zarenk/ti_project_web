@@ -155,13 +155,379 @@ const splitPaymentMethodCandidates = (value: string) => {
     .replace(/\s+(?:y|e|and)\s+/gi, ",")
     .replace(/\s*&\s*/g, ",")
     .replace(/\s*\+\s*/g, ",")
-    .replace(/[\/,|;]+/g, ",");
+    .replace(/\s*[|,;]\s*/g, ",")
+    .replace(/\s+\/\s+/g, ",");
 
   return normalizedSeparators
     .split(",")
     .map((segment) => segment.replace(/^[\s:-]+/, "").replace(/[\s:-]+$/, ""))
     .map((segment) => normalizeWhitespace(segment))
     .filter((segment) => segment.length > 0);
+};
+
+const applyStoreNameToRegisterLabel = (
+  label: string | undefined,
+  storeName: string | undefined,
+) => {
+  if (!storeName) {
+    return label;
+  }
+
+  const trimmedStoreName = storeName.trim();
+  if (!label || label.trim().length === 0) {
+    return trimmedStoreName;
+  }
+
+  const replaced = label.replace(/Tienda\s+\d+/i, trimmedStoreName);
+  if (replaced !== label) {
+    return replaced;
+  }
+
+  if (label.toLowerCase().includes(trimmedStoreName.toLowerCase())) {
+    return label;
+  }
+
+  return `${label} - ${trimmedStoreName}`;
+};
+
+const decorateTransactionsWithStoreNames = (
+  transactions: Transaction[],
+  storeLookup: Record<number, string>,
+) => {
+  if (!Array.isArray(transactions) || transactions.length === 0) {
+    return transactions;
+  }
+
+  return transactions.map((transaction) => {
+    let storeId =
+      typeof transaction.storeId === "number" ? transaction.storeId : null;
+    if (storeId === null && typeof transaction.cashRegisterName === "string") {
+      const storeMatch = transaction.cashRegisterName.match(/Tienda\s+(\d+)/i);
+      if (storeMatch) {
+        const parsedId = Number(storeMatch[1]);
+        if (Number.isFinite(parsedId)) {
+          storeId = parsedId;
+        }
+      }
+    }
+    const lookupName =
+      storeId !== null && storeId !== undefined ? storeLookup[storeId] : undefined;
+
+    if (!lookupName) {
+      if (transaction.storeName) {
+        return transaction;
+      }
+      return transaction;
+    }
+
+    const normalizedLabel = applyStoreNameToRegisterLabel(
+      transaction.cashRegisterName,
+      lookupName,
+    );
+
+    if (
+      normalizedLabel === transaction.cashRegisterName &&
+      transaction.storeName === lookupName
+    ) {
+      if (
+        transaction.storeName &&
+        transaction.storeId !== null &&
+        transaction.storeId !== undefined
+      ) {
+        return transaction;
+      }
+      return {
+        ...transaction,
+        storeId: storeId ?? transaction.storeId,
+        storeName: lookupName,
+      };
+    }
+
+    return {
+      ...transaction,
+      cashRegisterName: normalizedLabel,
+      storeId: storeId ?? transaction.storeId,
+      storeName: lookupName,
+    };
+  });
+};
+
+const paymentAmountKeyCandidates = [
+  "amount",
+  "total",
+  "value",
+  "paid",
+  "balance",
+  "monto",
+];
+
+const paymentCurrencyKeyCandidates = ["currency", "currencySymbol", "symbol", "moneda"];
+
+const extractNumericAmount = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const matches = value.match(/-?\\d+(?:[.,]\\d+)?/g);
+    if (!matches || matches.length === 0) {
+      return null;
+    }
+
+    const candidate = matches[matches.length - 1]?.replace(/[^0-9,.-]/g, "") ?? "";
+    if (!candidate) {
+      return null;
+    }
+
+    const hasComma = candidate.includes(",");
+    const hasDot = candidate.includes(".");
+
+    let normalized = candidate;
+    if (hasComma && hasDot) {
+      if (candidate.lastIndexOf(",") > candidate.lastIndexOf(".")) {
+        normalized = candidate.replace(/\\./g, "").replace(/,/g, ".");
+      } else {
+        normalized = candidate.replace(/,/g, "");
+      }
+    } else if (hasComma) {
+      normalized = candidate.replace(/\\./g, "").replace(/,/g, ".");
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+const resolveCurrencySymbol = (record: Record<string, unknown>, fallback: string): string => {
+  for (const key of paymentCurrencyKeyCandidates) {
+    const candidate = record[key];
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return fallback;
+};
+
+const formatPaymentMethodLabel = (value: string) => normalizeWhitespace(value);
+
+const toSentenceCase = (value: string) => {
+  const normalized = normalizeWhitespace(value).toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const resolveLooseMethodLabel = (value: string) => {
+  const normalized = normalizeWhitespace(value).toLowerCase();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.includes("efectivo")) {
+    return "En efectivo";
+  }
+
+  if (normalized.includes("transfer")) {
+    return "Transferencia";
+  }
+
+  if (normalized.includes("yape")) {
+    return "Yape";
+  }
+
+  if (normalized.includes("plin")) {
+    return "Plin";
+  }
+
+  if (
+    normalized.includes("visa") ||
+    normalized.includes("master") ||
+    normalized.includes("tarjeta") ||
+    normalized.includes("crédito") ||
+    normalized.includes("credito") ||
+    normalized.includes("débito") ||
+    normalized.includes("debito")
+  ) {
+    return "Tarjeta";
+  }
+
+  if (normalized.includes("dep")) {
+    return "Depósito";
+  }
+
+  if (normalized.includes("cheque")) {
+    return "Cheque";
+  }
+
+  return toSentenceCase(value);
+};
+
+const consolidateLooseTransferEntries = (
+  values: string[],
+  fallbackCurrency: string,
+  totalAmount?: number,
+): string[] => {
+  if (values.length === 0) {
+    return [];
+  }
+
+  const joined = normalizeWhitespace(values.join(" "));
+
+  if (!/m[eé]todos?\s+de\s+pago/i.test(joined)) {
+    return [];
+  }
+
+  const methodPattern = /(en\s+efectivo|efectivo|transferencia|yape|plin|tarjeta|visa|mastercard|amex|american\s+express|dep[oó]sito|deposito|cheque|cheques)/gi;
+
+  const matches: Array<{ label: string; start: number; end: number }> = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = methodPattern.exec(joined)) !== null) {
+    matches.push({ label: match[0], start: match.index, end: joined.length });
+  }
+
+  if (matches.length === 0) {
+    return [];
+  }
+
+  matches.forEach((entry, index) => {
+    entry.end = index + 1 < matches.length ? matches[index + 1].start : joined.length;
+  });
+
+  const resolvedCurrency = (fallbackCurrency ?? "S/.").trim() || "S/.";
+  const totalReference = typeof totalAmount === "number" && Number.isFinite(totalAmount)
+    ? Math.abs(totalAmount)
+    : null;
+
+  const consolidated: string[] = [];
+
+  matches.forEach((entry) => {
+    const segment = normalizeWhitespace(joined.slice(entry.start, entry.end));
+    const numericMatches = Array.from(segment.matchAll(/-?\d+(?:[.,]\d+)?/g)).map((item) => parseNumber(item[0] ?? ""));
+    const uniqueNumbers = Array.from(
+      new Set(
+        numericMatches
+          .filter((value) => Number.isFinite(value))
+          .map((value) => Math.abs(Number(value.toFixed(2)))),
+      ),
+    ).sort((a, b) => a - b);
+
+    let chosenAmount: number | null = null;
+
+    if (uniqueNumbers.length === 1) {
+      chosenAmount = uniqueNumbers[0];
+    } else if (uniqueNumbers.length > 1) {
+      const filtered = totalReference
+        ? uniqueNumbers.filter((value) => Math.abs(value - totalReference) > 0.009)
+        : uniqueNumbers;
+      if (filtered.length > 0) {
+        chosenAmount = filtered[0];
+      } else {
+        chosenAmount = uniqueNumbers[0];
+      }
+    }
+
+    const label = resolveLooseMethodLabel(entry.label);
+    if (chosenAmount !== null && Number.isFinite(chosenAmount)) {
+      consolidated.push(`${label}: ${resolvedCurrency} ${chosenAmount.toFixed(2)}`);
+    } else {
+      consolidated.push(label);
+    }
+  });
+
+  return consolidated;
+};
+
+const formatPaymentMethodsWithAmounts = (
+  raw: unknown,
+  fallbackCurrency: string,
+  totalAmount?: number,
+): string[] => {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  const results: string[] = [];
+
+  const looseCandidates: string[] = [];
+
+  raw.forEach((entry) => {
+    if (typeof entry === "string") {
+      const trimmed = normalizeWhitespace(entry);
+      if (trimmed) {
+        results.push(trimmed);
+      } else if (trimmed === "") {
+        // Ignore empty strings
+      }
+      if (trimmed) {
+        looseCandidates.push(trimmed);
+      }
+      return;
+    }
+
+    if (entry && typeof entry === "object") {
+      const record = entry as Record<string, unknown>;
+
+      const methodCandidate = paymentMethodKeyCandidates
+        .map((key) => record[key])
+        .find(
+          (value): value is string =>
+            typeof value === "string" && normalizeWhitespace(value).length > 0,
+        );
+
+      if (methodCandidate) {
+        const label = formatPaymentMethodLabel(methodCandidate);
+
+        let amount: number | null = null;
+        for (const key of paymentAmountKeyCandidates) {
+          amount = extractNumericAmount(record[key]);
+          if (amount !== null) {
+            break;
+          }
+        }
+
+        if (amount !== null) {
+          const currency = resolveCurrencySymbol(record, fallbackCurrency);
+          const formattedAmount = `${currency} ${Math.abs(amount).toFixed(2)}`;
+          results.push(`${label}: ${formattedAmount}`);
+          return;
+        }
+
+        results.push(label);
+        looseCandidates.push(label);
+        return;
+      }
+
+      const stringValues = Object.values(record).filter(
+        (value): value is string => typeof value === "string" && normalizeWhitespace(value).length > 0,
+      );
+
+      if (stringValues.length > 0) {
+        const normalized = normalizeWhitespace(stringValues[0]);
+        results.push(normalized);
+        looseCandidates.push(normalized);
+      }
+    }
+  });
+
+  if (results.length > 0) {
+    return results;
+  }
+
+  if (looseCandidates.length > 0) {
+    const consolidated = consolidateLooseTransferEntries(looseCandidates, fallbackCurrency, totalAmount);
+    if (consolidated.length > 0) {
+      return consolidated;
+    }
+  }
+
+  return results;
 };
 
 const normalizePaymentMethods = (raw: unknown): string[] => {
@@ -305,27 +671,6 @@ const withLatestClosureOverride = <T extends Record<string, any>>(
       };
     }
     return closure;
-  });
-};
-
-const withClosureTransactionOverride = (
-  transactions: Transaction[],
-  overrideAmount: number | null,
-  targetClosureId: string | null,
-): Transaction[] => {
-  if (overrideAmount === null || !targetClosureId) {
-    return transactions;
-  }
-
-  return transactions.map((transaction) => {
-    const entryType = transaction.internalType ?? transaction.type;
-    if (entryType === "CLOSURE" && transaction.id === targetClosureId) {
-      return {
-        ...transaction,
-        nextOpeningBalance: overrideAmount,
-      };
-    }
-    return transaction;
   });
 };
 
@@ -586,6 +931,18 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
   transactions.forEach((transaction, index) => {
     const description = transaction.description ?? "";
     const saleItems = extractSaleItems(description);
+    const hasSaleIndicators =
+      saleItems.length > 0 ||
+      /venta registrada:/i.test(description) ||
+      isSaleTransaction(description) ||
+      Boolean(transaction.voucher) ||
+      Boolean(transaction.invoiceUrl);
+
+    if (!hasSaleIndicators) {
+      nonSaleTransactions.push({ transaction, order: index });
+      return;
+    }
+
     const fingerprintItems = saleItems
       .map((item) => `${item.name.toLowerCase()}|${item.unitPrice.toFixed(4)}|${item.quantity.toFixed(4)}`)
       .sort()
@@ -615,6 +972,7 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
     const hasExplicitMethods = explicitMethods.length > 0;
     const currentMethods = combinedMethods.length > 0 ? combinedMethods : [...methodsFromText];
     const amountValue = Number(transaction.amount);
+    const absoluteTransactionAmount = Math.abs(amountValue);
     const prefixForFingerprint = stripPaymentMethodDetails(prefix) || prefix;
     const normalizedPrefixForFingerprint = normalizeWhitespace(prefixForFingerprint.toLowerCase());
     const duplicateFingerprint = `${normalizedPrefixForFingerprint}|${transaction.voucher ?? ""}|${fingerprintItems}`;
@@ -692,13 +1050,30 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
       if (!method) {
         return;
       }
-      const amountSet = saleEntry.methodAmounts.get(method) ?? new Set<number>();
-      if (!amountSet.has(amountValue)) {
-        amountSet.add(amountValue);
-        saleEntry.methodAmounts.set(method, amountSet);
-        const previousAmount = saleEntry.breakdown.get(method) ?? 0;
-        saleEntry.breakdown.set(method, previousAmount + amountValue);
+      const colonIndex = method.indexOf(":");
+      const rawLabel = colonIndex === -1 ? method : method.slice(0, colonIndex);
+      const normalizedLabel = formatPaymentMethodLabel(rawLabel || method);
+      if (!normalizedLabel) {
+        return;
       }
+
+      const displayLabel = normalizedLabel.toUpperCase();
+      const explicitAmount = extractAmountFromMethodEntry(method);
+      const resolvedAmount = explicitAmount !== null ? Math.abs(explicitAmount) : absoluteTransactionAmount;
+      const amountIdentifier =
+        explicitAmount !== null
+          ? Number(Math.abs(explicitAmount).toFixed(2))
+          : Number(absoluteTransactionAmount.toFixed(2));
+
+      const amountSet = saleEntry.methodAmounts.get(displayLabel) ?? new Set<number>();
+      if (amountSet.has(amountIdentifier)) {
+        return;
+      }
+
+      amountSet.add(amountIdentifier);
+      saleEntry.methodAmounts.set(displayLabel, amountSet);
+      const previousAmount = saleEntry.breakdown.get(displayLabel) ?? 0;
+      saleEntry.breakdown.set(displayLabel, previousAmount + resolvedAmount);
     });
   });
 
@@ -812,18 +1187,41 @@ const toNullableNumber = (value: unknown): number | null => {
 const adaptTransaction = (transaction: any): Transaction => {
   const timestamp = toValidDate(transaction?.timestamp ?? transaction?.createdAt);
   const createdAt = toValidDate(transaction?.createdAt ?? transaction?.timestamp);
-  const normalizedMethods = normalizePaymentMethods(transaction?.paymentMethods ?? []);
   const currencyCandidates = [transaction?.currency, transaction?.currencySymbol];
   const currencySymbol = currencyCandidates.find(
     (candidate) => typeof candidate === "string" && candidate.trim().length > 0,
   );
 
   const resolvedCurrency = (currencySymbol ?? "S/.").trim() || "S/.";
+  const resolvedStoreId = toNullableNumber(
+    transaction?.storeId ??
+      transaction?.cashRegister?.storeId ??
+      (transaction?.cashRegister?.store?.id ?? null),
+  );
+  const resolvedStoreNameCandidate = [
+    transaction?.storeName,
+    transaction?.cashRegister?.store?.name,
+  ].find((value) => typeof value === "string" && value.trim().length > 0);
+  const resolvedStoreName =
+    typeof resolvedStoreNameCandidate === "string"
+      ? resolvedStoreNameCandidate.trim()
+      : undefined;
+  const formattedPaymentMethods = formatPaymentMethodsWithAmounts(
+    transaction?.paymentMethods ?? [],
+    resolvedCurrency,
+    Number(transaction?.amount ?? 0),
+  );
+  const normalizedMethods = normalizePaymentMethods(
+    formattedPaymentMethods.length > 0 ? formattedPaymentMethods : transaction?.paymentMethods ?? [],
+  );
 
   return {
     id: String(transaction?.id),
     cashRegisterId: toNullableNumber(transaction?.cashRegisterId ?? transaction?.cashRegister?.id),
-    cashRegisterName: transaction?.cashRegisterName ?? transaction?.cashRegister?.name ?? undefined,
+    cashRegisterName: applyStoreNameToRegisterLabel(
+      transaction?.cashRegisterName ?? transaction?.cashRegister?.name ?? undefined,
+      resolvedStoreName,
+    ),
     type: transaction?.type ?? transaction?.internalType ?? "UNKNOWN",
     amount: Number(transaction?.amount) || 0,
     createdAt,
@@ -840,6 +1238,8 @@ const adaptTransaction = (transaction: any): Transaction => {
     invoiceUrl: transaction?.invoiceUrl ?? null,
     internalType: transaction?.type ?? transaction?.internalType ?? "UNKNOWN",
     notes: transaction?.notes ?? undefined,
+    storeId: resolvedStoreId,
+    storeName: resolvedStoreName,
     openingBalance: toNullableNumber(transaction?.openingBalance),
     closingBalance: toNullableNumber(transaction?.closingBalance ?? transaction?.amount),
     totalIncome: toNullableNumber(transaction?.totalIncome),
@@ -848,6 +1248,108 @@ const adaptTransaction = (transaction: any): Transaction => {
       (transaction as any)?.nextOpeningBalance ?? (transaction as any)?.nextInitialBalance ?? null,
     ),
   } as Transaction;
+};
+
+const computeClosureNextOpeningMap = (
+  closuresList: Array<Record<string, any>>,
+  latestOverride: number | null,
+): Map<string, number> => {
+  const result = new Map<string, number>();
+
+  if (!Array.isArray(closuresList) || closuresList.length === 0) {
+    return result;
+  }
+
+  closuresList.forEach((closure, index, array) => {
+    const closureId = normalizeClosureId(closure?.id);
+    if (!closureId) {
+      return;
+    }
+
+    let candidate = toNullableNumber(
+      (closure as any)?.nextOpeningBalance ?? (closure as any)?.nextInitialBalance ?? null,
+    );
+
+    if (candidate === null) {
+      if (index === 0) {
+        candidate = latestOverride !== null ? Number(latestOverride) : null;
+      } else {
+        const previousClosure = array[index - 1];
+        candidate = toNullableNumber((previousClosure as any)?.openingBalance ?? null);
+      }
+    }
+
+    if (candidate !== null) {
+      result.set(closureId, candidate);
+    }
+  });
+
+  return result;
+};
+
+const applyNextOpeningBalanceToClosures = (
+  closuresList: any[],
+  nextOpeningMap: Map<string, number>,
+): any[] => {
+  if (!Array.isArray(closuresList) || nextOpeningMap.size === 0) {
+    return closuresList;
+  }
+
+  return closuresList.map((closure) => {
+    const closureId = normalizeClosureId(closure?.id);
+    if (!closureId) {
+      return closure;
+    }
+
+    const existing = toNullableNumber(
+      (closure as any)?.nextOpeningBalance ?? (closure as any)?.nextInitialBalance ?? null,
+    );
+
+    const candidate = nextOpeningMap.get(closureId);
+    if (candidate === undefined) {
+      return closure;
+    }
+
+    if (existing !== null) {
+      return closure;
+    }
+
+    return {
+      ...closure,
+      nextOpeningBalance: candidate,
+    };
+  });
+};
+
+const applyNextOpeningBalanceToTransactions = (
+  transactions: Transaction[],
+  nextOpeningMap: Map<string, number>,
+): Transaction[] => {
+  if (nextOpeningMap.size === 0) {
+    return transactions;
+  }
+
+  return transactions.map((transaction) => {
+    const entryType = transaction.internalType ?? transaction.type;
+    if (entryType !== "CLOSURE") {
+      return transaction;
+    }
+
+    const closureId = normalizeClosureId(transaction.id) ?? transaction.id;
+    if (!closureId) {
+      return transaction;
+    }
+
+    const candidate = nextOpeningMap.get(closureId);
+    if (candidate === undefined) {
+      return transaction;
+    }
+
+    return {
+      ...transaction,
+      nextOpeningBalance: candidate,
+    };
+  });
 };
 
 // arriba del componente
@@ -900,6 +1402,7 @@ export default function CashRegisterDashboard() {
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const isToday = isSameDay(selectedDate, new Date());
+  const [closureNextOpeningLookup, setClosureNextOpeningLookup] = useState<Record<string, number>>({});
 
   const selectedStoreName = useMemo(() => {
     if (storeId === null) {
@@ -908,6 +1411,13 @@ export default function CashRegisterDashboard() {
     const store = stores.find((item) => item.id === storeId)
     return store?.name ?? "Sin tienda"
   }, [storeId, stores])
+
+  const storeNameLookup = useMemo(() => {
+    return stores.reduce<Record<number, string>>((accumulator, store) => {
+      accumulator[store.id] = store.name
+      return accumulator
+    }, {})
+  }, [stores])
 
   const reportRows = useMemo<CashReportRow[]>(() => {
     return transactions.map((transaction) => {
@@ -1462,35 +1972,45 @@ export default function CashRegisterDashboard() {
       const sortedClosuresRaw = Array.isArray(closuresResponse)
         ? sortClosuresByDateDesc(closuresResponse)
         : [];
-      const { amount: latestClosureOverride, transactionId: latestClosureTransactionId } =
+      const { amount: latestClosureOverride } =
         resolveLatestClosureOverride(activeRegister, sortedClosuresRaw);
       const closuresWithOverride = withLatestClosureOverride(sortedClosuresRaw, latestClosureOverride);
-
-      const transactionsWithOverride = withClosureTransactionOverride(
+      const nextOpeningMap = computeClosureNextOpeningMap(closuresWithOverride, latestClosureOverride);
+      const closuresWithNextOpening = applyNextOpeningBalanceToClosures(
+        closuresWithOverride,
+        nextOpeningMap,
+      );
+      const transactionsWithNextOpening = applyNextOpeningBalanceToTransactions(
         mergedTransactions,
-        latestClosureOverride,
-        latestClosureTransactionId,
+        nextOpeningMap,
       );
 
-      const income = transactionsWithOverride
+      const transactionsWithStoreNames = decorateTransactionsWithStoreNames(
+        transactionsWithNextOpening,
+        storeNameLookup,
+      );
+
+      setClosureNextOpeningLookup(Object.fromEntries(nextOpeningMap.entries()));
+      const income = transactionsWithStoreNames
         .filter((t: any) => t.internalType === "INCOME")
         .reduce((sum: any, t: any) => sum + t.amount, 0);
 
-      const expense = transactionsWithOverride
+      const expense = transactionsWithStoreNames
         .filter((t: any) => t.internalType === "EXPENSE")
         .reduce((sum: any, t: any) => sum + t.amount, 0);
 
-      setTransactions(transactionsWithOverride);
+      setTransactions(transactionsWithStoreNames);
       setTotalIncome(income);
       setTotalExpense(expense);
 
-      setClosures(closuresWithOverride);
+      setClosures(closuresWithNextOpening);
 
       console.log("✅ Recalculado totalIncome:", income);
       console.log("✅ Recalculado totalExpense:", expense);
 
     } catch (error) {
       console.error("Error actualizando datos de caja:", error);
+      setClosureNextOpeningLookup({});
     }
   };
 
@@ -1754,11 +2274,18 @@ export default function CashRegisterDashboard() {
         );
 
         const merged = mergeSaleTransactions(adaptedTransactions);
+        const nextOpeningMap = new Map<string, number>(Object.entries(closureNextOpeningLookup));
+        const mergedWithNextOpening = applyNextOpeningBalanceToTransactions(merged, nextOpeningMap);
 
         if (!cancelled) {
-          setTransactionsForBalance(merged);
+          const mergedWithStoreNames = decorateTransactionsWithStoreNames(
+            mergedWithNextOpening,
+            storeNameLookup,
+          );
 
-          const filteredBySelectedDate = merged.filter((transaction) =>
+          setTransactionsForBalance(mergedWithStoreNames);
+
+          const filteredBySelectedDate = mergedWithStoreNames.filter((transaction) =>
             isSameDay(transaction.timestamp, selectedDate),
           );
 
@@ -1779,7 +2306,7 @@ export default function CashRegisterDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [storeId, selectedDate, isToday, latestClosureTimestamp]);
+  }, [storeId, selectedDate, isToday, latestClosureTimestamp, closureNextOpeningLookup, storeNameLookup]);
 
   useEffect(() => {
     // Solo considera transacciones válidas (evita CLOSURE)

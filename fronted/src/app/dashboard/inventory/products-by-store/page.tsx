@@ -13,13 +13,22 @@ import { useDebounce } from "@/app/hooks/useDebounce";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
-import { Check, ChevronsUpDown, FileSpreadsheet } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronsUpDown, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getBrands } from "../../brands/brands.api";
+
+type SortKey =
+  | "product"
+  | "category"
+  | "purchasePrice"
+  | "salePrice"
+  | "stock"
+  | "createdAt"
+  | "lastSaleAt";
 
 export default function ProductsByStorePage() {
   const [stores, setStores] = useState<{ id: number; name: string }[]>([]);
@@ -42,6 +51,7 @@ export default function ProductsByStorePage() {
   const [isExporting, setIsExporting] = useState(false);
   const [globalInventoryValue, setGlobalInventoryValue] = useState(0);
   const [filteredInventoryValue, setFilteredInventoryValue] = useState(0);
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: "asc" | "desc" } | null>(null);
 
   // Dentro del componente:
   const [open, setOpen] = useState(false)
@@ -87,6 +97,106 @@ export default function ProductsByStorePage() {
       withStockOnly
     );
   }, [selectedBrand, searchTerm, selectedCategory, selectedStore, withStockOnly]);
+
+  const getLastSaleDate = (item: any) => {
+    const rawDate = item?.salesDetails?.[0]?.sale?.createdAt;
+    if (!rawDate) {
+      return null;
+    }
+
+    const parsedDate = new Date(rawDate);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return null;
+    }
+
+    return parsedDate;
+  };
+
+  const formatLastSaleLabel = (item: any) => {
+    const lastSaleDate = getLastSaleDate(item);
+
+    if (!lastSaleDate) {
+      return "Sin ventas";
+    }
+
+    return format(lastSaleDate, "dd/MM/yyyy HH:mm");
+  };
+
+  const extractSortableValue = (item: any, key: SortKey): string | number | Date | null => {
+    const product = item?.inventory?.product ?? {};
+
+    switch (key) {
+      case "product":
+        return product?.name ?? "";
+      case "category":
+        return product?.category?.name ?? "";
+      case "purchasePrice":
+        return Number(product?.price ?? 0);
+      case "salePrice":
+        return Number(product?.priceSell ?? 0);
+      case "stock":
+        return Number(item?.stock ?? 0);
+      case "createdAt": {
+        const createdAt = product?.createdAt ? new Date(product.createdAt) : null;
+        return createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : null;
+      }
+      case "lastSaleAt":
+        return getLastSaleDate(item);
+      default:
+        return null;
+    }
+  };
+
+  const compareSortableValues = (
+    valueA: string | number | Date | null,
+    valueB: string | number | Date | null,
+  ) => {
+    if (valueA === null || valueA === undefined) {
+      return valueB === null || valueB === undefined ? 0 : 1;
+    }
+
+    if (valueB === null || valueB === undefined) {
+      return -1;
+    }
+
+    if (valueA instanceof Date && valueB instanceof Date) {
+      return valueA.getTime() - valueB.getTime();
+    }
+
+    if (typeof valueA === "number" && typeof valueB === "number") {
+      return valueA - valueB;
+    }
+
+    return valueA
+      .toString()
+      .localeCompare(valueB.toString(), "es", { sensitivity: "base" });
+  };
+
+  const handleSort = useCallback((key: SortKey) => {
+    setSortConfig((prev) => {
+      if (prev?.key === key) {
+        return {
+          key,
+          direction: prev.direction === "asc" ? "desc" : "asc",
+        };
+      }
+
+      return { key, direction: "asc" };
+    });
+  }, []);
+
+  const renderSortIcon = (key: SortKey) => {
+    if (sortConfig?.key !== key) {
+      return <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />;
+    }
+
+    return sortConfig.direction === "asc" ? (
+      <ArrowUp className="h-3.5 w-3.5 text-green-600" />
+    ) : (
+      <ArrowDown className="h-3.5 w-3.5 text-green-600" />
+    );
+  };
 
   const handleExport = useCallback(() => {
     if (selectedStore === null || isExporting) {
@@ -242,13 +352,23 @@ export default function ProductsByStorePage() {
   useEffect(() => {
     const deduped = Array.from(
       new Map(
-        products.map((item) => [item.inventory.product.id, item])
+        products.map((item) => {
+          const productId =
+            item?.inventory?.product?.id ??
+            item?.inventory?.id ??
+            item?.id ??
+            item?.inventory?.product?.sku ??
+            item?.inventory?.product?.name ??
+            `product-${Math.random()}`;
+          return [productId, item];
+        })
       ).values()
     );
     const normalizedSearch = debouncedSearchTerm.toLowerCase();
     const filtered = deduped.filter((item) => {
-      const product = item.inventory.product;
-      const matchesSearch = product.name.toLowerCase().includes(normalizedSearch);
+      const product = item?.inventory?.product;
+      const productName = product?.name ? product.name.toLowerCase() : "";
+      const matchesSearch = productName.includes(normalizedSearch);
 
       const matchesBrand = (() => {
         if (!debouncedSelectedBrand || debouncedSelectedBrand === 0) {
@@ -292,16 +412,39 @@ export default function ProductsByStorePage() {
       const purchasePrice = Number(item?.inventory?.product?.price ?? 0);
       const stockQuantity = Number(item?.stock ?? 0);
 
+      if (withStockOnly && stockQuantity <= 0) {
+        return acc;
+      }
+
       return acc + purchasePrice * stockQuantity;
     }, 0);
 
     setFilteredInventoryValue(filteredTotalValue);
     setTotalItems(filtered.length);
-  
+
+    const sorted = sortConfig
+      ? [...filtered].sort((a, b) => {
+          const valueA = extractSortableValue(a, sortConfig.key);
+          const valueB = extractSortableValue(b, sortConfig.key);
+
+          const comparison = compareSortableValues(valueA, valueB);
+          return sortConfig.direction === "asc" ? comparison : -comparison;
+        })
+      : filtered;
+
     const start = (currentPage - 1) * limit;
     const end = start + limit;
-    setFilteredProducts(filtered.slice(start, end));
-  }, [debouncedSearchTerm, products, currentPage, limit, debouncedSelectedBrand, brands]);
+    setFilteredProducts(sorted.slice(start, end));
+  }, [
+    debouncedSearchTerm,
+    products,
+    currentPage,
+    limit,
+    debouncedSelectedBrand,
+    brands,
+    sortConfig,
+    withStockOnly,
+  ]);
 
   return (
     <Card className="p-6 w-full max-w-full sm:max-w-3xl md:max-w-5xl lg:max-w-6xl mx-auto shadow-md">
@@ -355,6 +498,7 @@ export default function ProductsByStorePage() {
         <div className="flex-1 mb-3 sm:mb-0">
           <label className="block mb-1 text-sm font-medium">Selecciona una tienda</label>
           <Select
+            key={selectedStore ?? -1}
             value={selectedStore !== null ? selectedStore.toString() : undefined}
             onValueChange={(value) => setSelectedStore(Number(value))}
           >
@@ -533,13 +677,76 @@ export default function ProductsByStorePage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-xs">Producto</TableHead>
-              <TableHead className="text-xs">Categoría</TableHead>
-              <TableHead className="text-xs">Precio de Compra</TableHead>
-              <TableHead className="text-xs">Precio de Venta</TableHead>
-              <TableHead className="text-xs">Stock</TableHead>
-              <TableHead className="text-xs">Fecha de Ingreso</TableHead>
-              <TableHead className="text-xs">Última salida</TableHead>
+              <TableHead className="text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleSort("product")}
+                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                >
+                  Producto
+                  {renderSortIcon("product")}
+                </button>
+              </TableHead>
+              <TableHead className="text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleSort("category")}
+                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                >
+                  Categoría
+                  {renderSortIcon("category")}
+                </button>
+              </TableHead>
+              <TableHead className="text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleSort("purchasePrice")}
+                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                >
+                  Precio de Compra
+                  {renderSortIcon("purchasePrice")}
+                </button>
+              </TableHead>
+              <TableHead className="text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleSort("salePrice")}
+                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                >
+                  Precio de Venta
+                  {renderSortIcon("salePrice")}
+                </button>
+              </TableHead>
+              <TableHead className="text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleSort("stock")}
+                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                >
+                  Stock
+                  {renderSortIcon("stock")}
+                </button>
+              </TableHead>
+              <TableHead className="text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleSort("createdAt")}
+                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                >
+                  Fecha de Ingreso
+                  {renderSortIcon("createdAt")}
+                </button>
+              </TableHead>
+              <TableHead className="text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleSort("lastSaleAt")}
+                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                >
+                  Última salida
+                  {renderSortIcon("lastSaleAt")}
+                </button>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -555,21 +762,7 @@ export default function ProductsByStorePage() {
                 <TableCell className="text-sm">
                   {format(new Date(item.inventory.product.createdAt), "dd/MM/yyyy")}
                 </TableCell>
-                <TableCell className="text-sm">
-                  {(() => {
-                    const lastSaleAt = item?.salesDetails?.[0]?.sale?.createdAt;
-                    if (!lastSaleAt) {
-                      return "Sin ventas";
-                    }
-
-                    const parsedDate = new Date(lastSaleAt);
-                    if (Number.isNaN(parsedDate.getTime())) {
-                      return "Sin ventas";
-                    }
-
-                    return format(parsedDate, "dd/MM/yyyy HH:mm");
-                  })()}
-                </TableCell>
+                <TableCell className="text-sm">{formatLastSaleLabel(item)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

@@ -64,7 +64,7 @@ function ClientListComponent({
   );
 
   return (
-    <Card className="w-full md:w-1/3 flex flex-col h-full overflow-hidden">
+    <Card className="w-full md:w-80 flex flex-col overflow-hidden max-h-[70vh] md:max-h-none md:h-full">
       <div className="px-4 py-0 border-b flex items-center justify-between">
         <h2 className="text-lg font-semibold">Conversaciones</h2>
         <div className="flex gap-2">

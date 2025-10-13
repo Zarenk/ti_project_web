@@ -88,11 +88,13 @@ export default function ProductCombobox({ products, selectedId, selectedLabel, o
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between"
+          className="w-full min-w-0 justify-between gap-2"
           disabled={disabled}
         >
-          {selectedLabel || "Seleccionar producto"}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <span className="truncate text-left min-w-0 max-w-[calc(100%-1.75rem)] md:max-w-none md:overflow-visible md:text-clip">
+            {selectedLabel || "Seleccionar producto"}
+          </span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0 max-w-none" align="start" side="bottom" avoidCollisions={false} sideOffset={4} style={{ width: menuWidth }}>
@@ -107,15 +109,15 @@ export default function ProductCombobox({ products, selectedId, selectedLabel, o
             <CommandGroup>
               {filtered.map((p) => (
                 <CommandItem key={p.id} value={`${p.id}`} onSelect={() => { onPick(p); setOpen(false); }}>
-                  <div className="flex flex-col">
-                    <span className="font-medium">{p.name}</span>
+                  <div className="flex max-w-full flex-col">
+                    <span className="font-medium break-words">{p.name}</span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">S/. {p.price.toFixed(2)}</span>
                       <Badge
                         variant={chipPresentation.variant}
                         className={cn("text-xs", stockBadgeClass(p.stock))}
                       >
-                        Stock: {p.stock ?? '-'}
+                        Stock: {typeof p.stock === "number" ? p.stock : "-"}
                       </Badge>
                     </div>
                     {p.categoryName ? (

@@ -6,6 +6,8 @@
 
 generator client {
   provider = "prisma-client-js"
+  engineType = "library" // <— NO "wasm"
+  // binaryTargets = ["windows"]   // opcional; si no lo necesitas, quítalo
 }
 
 datasource db {
@@ -152,6 +154,9 @@ model User {
   password     String
   role         UserRole @default(CLIENT) // Enum para roles de usuario
   status       String   @default("ACTIVO")
+  failedLoginAttempts Int      @default(0)
+  lockUntil    DateTime?
+  isPermanentlyLocked Boolean  @default(false)
   client       Client? // Relación opcional con el modelo Client
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -601,6 +606,7 @@ model CashTransactionPaymentMethod {
   id                Int @id @default(autoincrement())
   cashTransactionId Int
   paymentMethodId   Int // Hacer que el campo sea opcional
+  amount            Decimal @default(0.00)
 
   cashTransaction CashTransaction @relation(fields: [cashTransactionId], references: [id])
   paymentMethod   PaymentMethod   @relation(fields: [paymentMethodId], references: [id]) // Relación opcional

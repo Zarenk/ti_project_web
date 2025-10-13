@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
+import { ArrowUpDown } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,32 +65,86 @@ export function createSalesColumns(
   return [
     {
       accessorKey: "id",
-      header: "ID",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          className="h-8 px-2"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          ID
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       cell: ({ row }) => <span>{row.original.id}</span>,
     },
     {
       accessorKey: "user.username",
-      header: "Usuario",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          className="h-8 px-2"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Usuario
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       cell: ({ row }) => <span>{row.original.user.username}</span>,
     },
     {
       accessorKey: "store.name",
-      header: "Tienda",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          className="h-8 px-2"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Tienda
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       cell: ({ row }) => <span>{row.original.store.name}</span>,
     },
     {
       accessorKey: "client.name",
-      header: "Cliente",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          className="h-8 px-2"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Cliente
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       cell: ({ row }) => <span>{row.original.client.name}</span>,
     },
     {
       accessorKey: "total",
-      header: "Total",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          className="h-8 px-2"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Total
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       cell: ({ row }) => <span>S/. {row.original.total.toFixed(2)}</span>,
     },
     {
       accessorKey: "createdAt",
-      header: "Fecha",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          className="h-8 px-2"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Fecha
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       cell: ({ row }) => (
         <span>{format(new Date(row.original.createdAt), "dd/MM/yyyy HH:mm")}</span>
       ),
@@ -97,6 +152,7 @@ export function createSalesColumns(
     {
       accessorKey: "actions",
       header: "Acciones",
+      enableSorting: false,
       cell: ({ row }) => {
       const [isDialogOpen, setIsDialogOpen] = useState(false);
       const [isDeleting, setIsDeleting] = useState(false);
