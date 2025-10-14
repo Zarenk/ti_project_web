@@ -10,6 +10,12 @@ import { format } from 'date-fns-tz';
 import { Buffer } from 'buffer';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import {
+  InventoryUncheckedCreateInputWithOrganization,
+  InventoryHistoryUncheckedCreateInputWithOrganization,
+  InventoryHistoryCreateManyInputWithOrganization,
+  TransferUncheckedCreateInputWithOrganization,
+} from 'src/tenancy/prisma-organization.types';
 
 @Injectable()
 export class InventoryService {
@@ -212,12 +218,14 @@ export class InventoryService {
     
       // Si no existe, crear un nuevo registro en Inventory
       if (!inventory) {
-          inventory = await this.prisma.inventory.create({
-          data: {
-            productId,
-            storeId: destinationStoreId, // Agregar el storeId requerido
-            organizationId,
-          } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryCreateInput
+          const inventoryCreateData: InventoryUncheckedCreateInputWithOrganization = {
+          productId,
+          storeId: destinationStoreId, // Agregar el storeId requerido
+          organizationId,
+        };
+
+        inventory = await this.prisma.inventory.create({
+          data: inventoryCreateData,
         });
       }
     
@@ -232,55 +240,59 @@ export class InventoryService {
     }
     // Registrar el traslado
     try {
+      const transferCreateData: TransferUncheckedCreateInputWithOrganization = {
+        sourceStoreId,
+        destinationStoreId,
+        productId,
+        quantity,
+        description: description || null,
+        organizationId,
+      };
+
       await this.prisma.transfer.create({
-        data: {
-          sourceStoreId,
-          destinationStoreId,
-          productId,
-          quantity,
-          description: description || null,
-          organizationId,
-        } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en TransferCreateInput
+        data: transferCreateData,
       });
 
       // Registrar el evento en el historial de movimientos
+      const historyEntries: InventoryHistoryCreateManyInputWithOrganization[] = [
+        {
+          inventoryId: sourceStoreInventory.inventoryId,
+          action: 'transfer-out', // Acción de salida
+          stockChange: -quantity,
+          previousStock: sourceStoreInventory.stock,
+          newStock: sourceStoreInventory.stock - quantity,
+          userId, // Usuario que realizó la acción
+          organizationId,
+        },
+        {
+          inventoryId: destinationStoreInventory
+            ? destinationStoreInventory.inventoryId
+            : ((
+                await this.prisma.inventory.findFirst({
+                  where: { productId },
+                })
+              )?.id ??
+              (() => {
+                throw new Error(
+                  `No se encontró un inventoryId para el producto ${productId}`,
+                );
+              })()),
+          action: 'transfer-in', // Acción de entrada
+          stockChange: quantity,
+          previousStock: destinationStoreInventory
+            ? destinationStoreInventory.stock
+            : 0,
+          newStock: destinationStoreInventory
+            ? destinationStoreInventory.stock + quantity
+            : quantity,
+          userId, // Usuario que realizó la acción
+          organizationId,
+        },
+      ];
+
       await this.prisma.inventoryHistory.createMany({
-        data: [
-          {
-            inventoryId: sourceStoreInventory.inventoryId,
-            action: 'transfer-out', // Acción de salida
-            stockChange: -quantity,
-            previousStock: sourceStoreInventory.stock,
-            newStock: sourceStoreInventory.stock - quantity,
-            userId, // Usuario que realizó la acción
-            organizationId,
-          },
-          {
-            inventoryId: destinationStoreInventory
-              ? destinationStoreInventory.inventoryId
-              : ((
-                  await this.prisma.inventory.findFirst({
-                    where: { productId },
-                  })
-                )?.id ??
-                (() => {
-                  throw new Error(
-                    `No se encontró un inventoryId para el producto ${productId}`,
-                  );
-                })()),
-            action: 'transfer-in', // Acción de entrada
-            stockChange: quantity,
-            previousStock: destinationStoreInventory
-              ? destinationStoreInventory.stock
-              : 0,
-            newStock: destinationStoreInventory
-              ? destinationStoreInventory.stock + quantity
-              : quantity,
-            userId, // Usuario que realizó la acción
-            organizationId,
-          },
-        ],
-      } as any); // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateManyInput
+        data: historyEntries,
+      });
 
     } catch (error) {
       console.error('Error al registrar el traslado:', error);
@@ -817,13 +829,15 @@ export class InventoryService {
   
       let inventory = await this.prisma.inventory.findFirst({ where: { productId: product.id } })
       if (!inventory) {
-        inventory = await this.prisma.inventory.create({
-          data: {
-            productId: product.id,
-            storeId,
-            organizationId: organizationId ?? null,
-          } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryCreateInput
-        })
+        const inventoryCreateData: InventoryUncheckedCreateInputWithOrganization = {
+          productId: product.id,
+          storeId,
+          organizationId: organizationId ?? null,
+        };
+
+        inventory = await this.prisma.inventory.create({      
+          data: inventoryCreateData,
+        });
       }
   
       let storeInventory = await this.prisma.storeOnInventory.findFirst({
@@ -848,19 +862,21 @@ export class InventoryService {
           },
         })
       }
+
+      const historyCreateData: InventoryHistoryUncheckedCreateInputWithOrganization = {
+        inventoryId: inventory.id,
+        userId,
+        action: 'import',
+        description: `Ingreso masivo desde Excel`,
+        stockChange: parsedStock,
+        previousStock: storeInventory?.stock ?? 0,
+        newStock: (storeInventory?.stock ?? 0) + parsedStock,
+        organizationId: organizationId ?? null,
+      };
   
       await this.prisma.inventoryHistory.create({
-        data: {
-          inventoryId: inventory.id,
-          userId,
-          action: 'import',
-          description: `Ingreso masivo desde Excel`,
-          stockChange: parsedStock,
-          previousStock: storeInventory?.stock ?? 0,
-          newStock: (storeInventory?.stock ?? 0) + parsedStock,
-          organizationId: organizationId ?? null,
-        } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateInput
-      })
+        data: historyCreateData,
+      });
 
       await this.activityService.log({
         actorId: userId,

@@ -23,6 +23,10 @@ import {
   normalizeShippingMethod,
 } from './dto/complete-order.dto';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import {
+  ClientUncheckedCreateInputWithOrganization,
+  UserUncheckedCreateInputWithOrganization,
+} from 'src/tenancy/prisma-organization.types';
 
 @Injectable()
 export class WebSalesService {
@@ -195,14 +199,16 @@ export class WebSalesService {
             organizationId: inputOrganizationId,
             metadata: { documentNumber },
           });
+          const userCreateData: UserUncheckedCreateInputWithOrganization = {
+            email: `web_${unique}@client.local`,
+            username: `web_${unique}`,
+            password: 'default_password',
+            role: 'CLIENT',
+            organizationId: inputOrganizationId ?? null,
+          };
+
           const user = await this.prisma.user.create({
-            data: {
-              email: `web_${unique}@client.local`,
-              username: `web_${unique}`,
-              password: 'default_password',
-              role: 'CLIENT',
-              organizationId: inputOrganizationId ?? null,
-            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en UserCreateInput
+            data: userCreateData,
             select: { id: true },
           });
 
@@ -212,15 +218,17 @@ export class WebSalesService {
             organizationId: inputOrganizationId,
             metadata: { documentNumber },
           });
+          const clientCreateData: ClientUncheckedCreateInputWithOrganization = {
+            name: orderName,
+            type: documentType,
+            typeNumber: documentNumber,
+            userId: user.id,
+            status: 'Activo',
+            organizationId: inputOrganizationId ?? null,
+          };
+
           const newClient = await this.prisma.client.create({
-            data: {
-              name: orderName,
-              type: documentType,
-              typeNumber: documentNumber,
-              userId: user.id,
-              status: 'Activo',
-              organizationId: inputOrganizationId ?? null,
-            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en ClientCreateInput
+            data: clientCreateData,
             select: { id: true },
           });
 

@@ -15,6 +15,10 @@ import { ActivityService } from 'src/activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { AccountingService } from 'src/accounting/accounting.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import {
+  InventoryUncheckedCreateInputWithOrganization,
+  InventoryHistoryCreateInputWithOrganization,
+} from 'src/tenancy/prisma-organization.types';
 
 @Injectable()
 export class EntriesService {
@@ -269,12 +273,14 @@ export class EntriesService {
 
         // Si no existe, crear el registro en Inventory
         if (!inventory) {
+          const inventoryCreateData: InventoryUncheckedCreateInputWithOrganization = {
+            productId: detail.productId,
+            storeId: data.storeId, // Incluye storeId al crear el registro
+            organizationId,
+          };
+
           inventory = await prisma.inventory.create({
-            data: {
-              productId: detail.productId,
-              storeId: data.storeId, // Incluye storeId al crear el registro
-              organizationId,
-            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryCreateInput
+            data: inventoryCreateData,
           });
         }
 
@@ -304,18 +310,21 @@ export class EntriesService {
               stock: detail.quantity || 0, // Inicializa el stock con la cantidad de la entrada
             },
           });
+
+          // Registrar el cambio en el historial
+          const historyCreateData: InventoryHistoryCreateInputWithOrganization = {
+            inventory: { connect: { id: inventory.id } },
+            user: { connect: { id: data.userId } },
+            action: 'update',
+            stockChange: detail.quantity || 0,
+            previousStock: 0,
+            newStock: detail.quantity || 0,
+            organizationId,
+          };
           
           // Registrar el cambio en el historial
           await prisma.inventoryHistory.create({
-            data: {
-              inventoryId: inventory.id,
-              action: "update",
-              stockChange: detail.quantity || 0,
-              previousStock: 0,
-              newStock: detail.quantity || 0,
-              userId: data.userId, // Registrar el usuario que realizó el cambio
-              organizationId,
-            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateInput
+            data: historyCreateData,
           });
         } else {
           // Si existe, actualizar el stock
@@ -325,16 +334,19 @@ export class EntriesService {
           });
 
           // Registrar el cambio en el historial
+          const historyCreateData: InventoryHistoryCreateInputWithOrganization = {
+            inventory: { connect: { id: inventory.id } },
+            user: { connect: { id: data.userId } },
+            action: 'update',
+            stockChange: detail.quantity || 0,
+            previousStock: storeInventory.stock,
+            newStock: storeInventory.stock + (detail.quantity || 0),
+            organizationId,
+          };
+
+          // Registrar el cambio en el historial
           await prisma.inventoryHistory.create({
-            data: {
-              inventoryId: inventory.id,
-              action: "update",
-              stockChange: detail.quantity || 0,
-              previousStock: storeInventory.stock,
-              newStock: storeInventory.stock + (detail.quantity || 0),
-              userId: data.userId, // Registrar el usuario que realizó el cambio
-              organizationId,
-            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateInput
+            data: historyCreateData,
           });
         }
       }
@@ -510,16 +522,19 @@ export class EntriesService {
         });
 
         // Registrar el cambio en el historial
+        const historyCreateData: InventoryHistoryCreateInputWithOrganization = {
+          inventory: { connect: { id: storeInventory.inventoryId } },
+          user: { connect: { id: entry.userId } },
+          action: 'delete',
+          stockChange: -detail.quantity,
+          previousStock: storeInventory.stock,
+          newStock: storeInventory.stock - detail.quantity,
+          organizationId,
+        };
+
+        // Registrar el cambio en el historial
         await this.prisma.inventoryHistory.create({
-          data: {
-            inventoryId: storeInventory.inventoryId,
-            action: "delete",
-            stockChange: -detail.quantity,
-            previousStock: storeInventory.stock,
-            newStock: storeInventory.stock - detail.quantity,
-            userId: entry.userId, // Registrar el usuario que realizó el cambio
-            organizationId,
-          } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateInput
+          data: historyCreateData,
         });
       }
 
@@ -603,16 +618,18 @@ export class EntriesService {
             data: { stock: { decrement: detail.quantity } },
           });
           // Registrar el cambio en el historial
+          const historyCreateData: InventoryHistoryCreateInputWithOrganization = {
+            inventory: { connect: { id: storeInventory.inventoryId } },
+            user: { connect: { id: entry.userId } },
+            action: 'delete',
+            stockChange: -detail.quantity,
+            previousStock: storeInventory.stock,
+            newStock: storeInventory.stock - detail.quantity,
+            organizationId,
+          };
+
           await this.prisma.inventoryHistory.create({
-            data: {
-              inventoryId: storeInventory.inventoryId,
-              action: "delete",
-              stockChange: -detail.quantity,
-              previousStock: storeInventory.stock,
-              newStock: storeInventory.stock - detail.quantity,
-              userId: entry.userId, // Registrar el usuario que realizó el cambio
-              organizationId,
-            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateInput
+            data: historyCreateData,
           });
         }
 
