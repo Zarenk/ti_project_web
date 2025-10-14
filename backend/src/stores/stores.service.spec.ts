@@ -3,17 +3,34 @@ import { StoresService } from './stores.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityService } from 'src/activity/activity.service';
 
+type PrismaMock = {
+  store: {
+    create: jest.Mock;
+    update: jest.Mock;
+    findUnique: jest.Mock;
+  };
+  $transaction: jest.Mock;
+};
+
+const createPrismaMock = (): PrismaMock => ({
+  store: {
+    create: jest.fn(),
+    update: jest.fn(),
+    findUnique: jest.fn(),
+  },
+  $transaction: jest.fn(async (operations: Promise<unknown>[]) =>
+    Promise.all(operations),
+  ),
+});
+
+const createActivityServiceMock = () => ({
+  log: jest.fn().mockResolvedValue(undefined),
+});
+
 describe('StoresService multi-organization support', () => {
   let service: StoresService;
-  let prisma: {
-    store: {
-      create: jest.Mock;
-      update: jest.Mock;
-      findUnique: jest.Mock;
-    };
-    $transaction: jest.Mock;
-  };
-  let activityService: { log: jest.Mock };
+  let prisma: PrismaMock;
+  let activityService: ReturnType<typeof createActivityServiceMock>;
   let request: Request;
 
   const baseStorePayload = {
@@ -29,20 +46,9 @@ describe('StoresService multi-organization support', () => {
   };
 
   beforeEach(() => {
-    prisma = {
-      store: {
-        create: jest.fn(),
-        update: jest.fn(),
-        findUnique: jest.fn(),
-      },
-      $transaction: jest.fn(async (operations: Promise<unknown>[]) =>
-        Promise.all(operations),
-      ),
-    };
+    prisma = createPrismaMock();
 
-    activityService = {
-      log: jest.fn().mockResolvedValue(undefined),
-    };
+    activityService = createActivityServiceMock();
 
     service = new StoresService(
       prisma as unknown as PrismaService,
@@ -59,6 +65,7 @@ describe('StoresService multi-organization support', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+    jest.clearAllMocks();
   });
 
   it('propagates organizationId when creating a store', async () => {

@@ -713,6 +713,7 @@ model CashClosure {
   openingBalance Decimal
   closingBalance Decimal
   totalIncome    Decimal
+  nextOpeningBalance Decimal?
   notes          String?
   totalExpense   Decimal
   createdAt      DateTime @default(now())

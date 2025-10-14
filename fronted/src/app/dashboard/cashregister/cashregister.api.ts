@@ -170,6 +170,7 @@ export interface CashClosureSummary {
   closingBalance: number;
   totalIncome: number;
   totalExpense: number;
+  nextOpeningBalance?: number | null;
   notes?: string | null;
   createdAt: string;
   storeId?: number;
@@ -260,6 +261,10 @@ export async function createCashClosure(payload: any): Promise<CreateCashClosure
     closingBalance: parseDecimal(closure?.closingBalance ?? payload.closingBalance ?? 0),
     totalIncome: parseDecimal(closure?.totalIncome ?? payload.totalIncome ?? 0),
     totalExpense: parseDecimal(closure?.totalExpense ?? payload.totalExpense ?? 0),
+    nextOpeningBalance:
+      closure?.nextOpeningBalance !== undefined && closure?.nextOpeningBalance !== null
+        ? parseDecimal(closure.nextOpeningBalance)
+        : undefined,
     notes: closure?.notes ?? payload.notes ?? null,
     createdAt: closure?.createdAt ?? new Date().toISOString(),
     storeId: Number(closure?.storeId ?? payload.storeId ?? 0) || undefined,

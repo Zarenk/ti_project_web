@@ -183,6 +183,10 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
         closingBalance: Number(closure.closingBalance),
         totalIncome: Number(closure.totalIncome),
         totalExpense: Number(closure.totalExpense),
+        nextOpeningBalance:
+          closure.nextOpeningBalance !== null && closure.nextOpeningBalance !== undefined
+            ? Number(closure.nextOpeningBalance)
+            : null,
         notes: closure.notes ?? null,
         currency: "S/.",
       }));
@@ -430,6 +434,7 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
             totalIncome: data.totalIncome,
             totalExpense: data.totalExpense,
             notes: data.notes,
+            nextOpeningBalance: requestedNextInitialBalance,
           },
         });
 
@@ -456,6 +461,10 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
             closingBalance: Number(closure.closingBalance),
             totalIncome: Number(closure.totalIncome),
             totalExpense: Number(closure.totalExpense),
+            nextOpeningBalance:
+              closure.nextOpeningBalance !== null && closure.nextOpeningBalance !== undefined
+                ? Number(closure.nextOpeningBalance)
+                : null,
           },
           closedCashRegister: {
             ...closedCashRegister,
