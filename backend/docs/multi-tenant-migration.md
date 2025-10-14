@@ -10,7 +10,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy; DTOs de `clients` actualizados y documentados para nuevos consumidores.
-  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización y continúa la priorización para `ClientService`.
+   - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService` y continúa la priorización para `ClientService`.
 
 ## Próximas acciones sugeridas
 1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
@@ -34,7 +34,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 | Tarea | Responsable | Entregable | Fecha objetivo |
 | --- | --- | --- | --- |
 | Inventariar servicios críticos y casos felices/error que requieren cobertura multi-organización (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`). | QA + Ingeniería Backend | Lista priorizada de escenarios de prueba firmada en Confluence. | Miércoles 27/03 |
-| Actualizar suites unitarias en `backend/test` para parametrizar `organizationId` (`NULL` vs definido) utilizando factories existentes. **Completado:** `stores.service.spec.ts` validado y ejecutado en CI local; pendiente extender patrones a `clients`. **En curso:** resolver tipados de Prisma en `ClientService` para destrabar la suite. | QA Automation + Plataforma | Pull request con nuevas pruebas y reporte de cobertura. | Viernes 29/03 |
+| Actualizar suites unitarias en `backend/test` para parametrizar `organizationId` (`NULL` vs definido) utilizando factories existentes. **Completado:** `stores.service.spec.ts` y `sales.service.spec.ts` validados y ejecutados en CI local; pendiente extender patrones a `clients`. **En curso:** resolver tipados de Prisma en `ClientService` para destrabar la suite. | QA Automation + Plataforma | Pull request con nuevas pruebas y reporte de cobertura. | Viernes 29/03 |
 | Extender pruebas de integración/E2E con fixtures multi-organización y datos semilla en Prisma. | Ingeniería Backend | Scripts de seed actualizados + pipeline CI verde. | Lunes 01/04 |
 | Incorporar métrica temporal en CI (badge o reporte) que exponga porcentaje de casos multi-organización ejecutados. **Dependencia:** confirmación de logs temporales operativos. | DevOps | Dashboard en Grafana + enlace en esta bitácora. | Martes 02/04 |
 
@@ -89,6 +89,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Contexto:** Tras habilitar los campos opcionales `organizationId` en Prisma, los consumidores del módulo `clients` necesitaban DTOs alineados para exponer el identificador de organización cuando estuviera disponible.
 - **Implementación:** Se normalizaron los DTOs de entrada y salida en `clients` documentando `organizationId` como campo opcional y se compartió el alcance con integraciones dependientes para garantizar compatibilidad.
 - **Resultado:** El avance consolida el _Paso 2_ de la Fase 2, habilitando que nuevos consumidores adopten `organizationId` sin romper flujos legacy y dejando listo el terreno para robustecer las suites de pruebas multi-organización.
+
+### 2024-04-06 – Cobertura unit-test `SalesService`
+
+- **Contexto:** Para continuar con el _Paso 3_ de la Fase 2 se necesitaba extender la cobertura multi-organización al dominio de ventas, asegurando que las rutas críticas reflejen el `organizationId` cuando exista y mantengan compatibilidad cuando permanezca en `NULL`.
+- **Implementación:** Se incorporó [`backend/src/sales/sales.service.spec.ts`](../src/sales/sales.service.spec.ts) con _mocks_ de Prisma (`storeOnInventory.findFirst`, `salePayment.findMany`, `user.findUnique`), además de aislar `ActivityService`, `AccountingHook` y los helpers `prepareSaleContext`/`executeSale`. Las pruebas parametrizan `createSale` en escenarios con `organizationId` provisto, heredado desde la tienda o ausente, verificando que el payload enviado al helper preserve el campo según corresponda y que la instrumentación temporal registre el contexto correcto.
+- **Resultado:** La suite se ejecuta mediante `npm test -- sales.service.spec.ts` y mantiene alineada la cobertura de ventas con la de `stores` y `clients`, liberando al equipo para continuar la priorización de pruebas en `ClientService`.
 
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
