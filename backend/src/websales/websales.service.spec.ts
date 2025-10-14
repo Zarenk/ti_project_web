@@ -1,4 +1,5 @@
 import { WebSalesService } from './websales.service';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityService } from 'src/activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
@@ -107,6 +108,45 @@ describe('WebSalesService multi-organization support', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('logs organization context when creating a web order', async () => {
+    const now = new Date();
+    prisma.orders.create.mockResolvedValue({
+      id: 501,
+      code: 'WEB-501',
+      shippingName: 'Jane Doe',
+      shippingAddress: 'Av. Example 123',
+      city: 'Lima',
+      postalCode: '15001',
+      phone: '555-1234',
+      status: 'PENDING',
+      payload: baseSaleInput as unknown as Prisma.JsonObject,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await service.createWebOrder({
+      ...baseSaleInput,
+      organizationId: 789,
+      shippingName: 'Jane Doe',
+      shippingAddress: 'Av. Example 123',
+      city: 'Lima',
+      postalCode: '15001',
+      phone: '555-1234',
+    });
+
+    expect(logOrganizationContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'WebSalesService',
+        operation: 'createWebOrder',
+        organizationId: 789,
+        metadata: expect.objectContaining({
+          userId: baseSaleInput.userId,
+          storeId: baseSaleInput.storeId,
+        }),
+      }),
+    );
   });
 
   it('propagates the provided organizationId through logging, user and client creation and sale execution', async () => {

@@ -88,6 +88,21 @@ export class WebSalesService {
       },
     });
 
+    const metadata: Record<string, unknown> = { userId: data.userId };
+    if (typeof data.storeId === 'number') {
+      metadata.storeId = data.storeId;
+    }
+    if (code) {
+      metadata.code = code;
+    }
+
+    logOrganizationContext({
+      service: WebSalesService.name,
+      operation: 'createWebOrder',
+      organizationId: data.organizationId,
+      metadata,
+    });
+
     // Ensure actor is recorded even when req is not provided
     const webEmail =
       (data as any)?.email ??
@@ -418,6 +433,24 @@ export class WebSalesService {
     }
 
     const payloadAny = (order.payload as any) || {};
+    const rawOrganizationId = payloadAny?.organizationId as unknown;
+    let organizationIdForLog: number | null = null;
+    if (typeof rawOrganizationId === 'number') {
+      organizationIdForLog = rawOrganizationId;
+    } else if (typeof rawOrganizationId === 'string') {
+      const parsed = Number(rawOrganizationId);
+      organizationIdForLog = Number.isNaN(parsed) ? null : parsed;
+    }
+
+    logOrganizationContext({
+      service: WebSalesService.name,
+      operation: 'completeWebOrder',
+      organizationId: organizationIdForLog,
+      metadata: {
+        orderId: id,
+        storeId: payloadAny?.storeId ?? null,
+      },
+    });
     const details: any[] = Array.isArray(payloadAny.details)
       ? payloadAny.details
       : [];

@@ -10,13 +10,13 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy; DTOs de `clients` actualizados y documentados para nuevos consumidores.
-  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService`, se incorporó la batería de `InventoryService`, se reactivó la suite de `ClientService` tras resolver tipados de Prisma y se verificó la suite de `UsersService` cubriendo registros con y sin tenant.
+  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService`, se incorporó la batería de `InventoryService`, se reactivó la suite de `ClientService` tras resolver tipados de Prisma, se verificó la suite de `UsersService` cubriendo registros con y sin tenant y se agregó la suite de `WebSalesService` validando la propagación del tenant en órdenes y ventas web.
 
 ## Próximas acciones sugeridas
 1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
 2. Completar la verificación de la instrumentación temporal de logs y métricas en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`), asegurando que los tipados de Prisma permitan los nuevos campos y documentando consumidores faltantes.
 3. Completar las suites unitarias/integración priorizadas (`stores`, `clients`) cubriendo `organizationId` nulo o definido y habilitar su ejecución continua (Fase 2 – Paso 3). Documentar cualquier bloqueo derivado de validaciones o tipados y resolverlo en conjunto con el equipo de plataforma.
-4. Extender la cobertura de pruebas al resto de dominios (`inventory`, `sales`, `websales`) siguiendo el mismo patrón de parametrización multi-organización.
+4. Extender la cobertura de pruebas al resto de dominios (`inventory`, `sales`, `websales`) siguiendo el mismo patrón de parametrización multi-organización. **Actualización:** las suites unitarias de `InventoryService` y `WebSalesService` ya validan escenarios con y sin tenant; queda ampliar fixtures de integración/E2E y monitorear la propagación de `organizationId` en `sales` dentro de staging.
 5. Planificar la **Fase 3 – Poblado y validación** con el equipo de datos. Entregables:
    - Definición de reglas de asignación por tabla (fuentes, columnas puente, excepciones manuales).
    - Scripts idempotentes por dominio con logging y métricas de progreso.
@@ -119,6 +119,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Contexto:** Tras integrar la cobertura multi-organización en `UsersService`, se registró la ejecución local de la suite para dejar constancia del estado verde y facilitar el seguimiento del _Paso 3_ de la Fase 2.
 - **Implementación:** Se volvió a correr `npm test -- users.service.spec.ts` en entorno Windows, verificando los seis casos parametrizados (registro, registro público y sincronización de perfil) con `organizationId` definido y nulo.
 - **Resultado:** Todos los escenarios pasaron sin regresiones (`6 passed`), confirmando que el servicio continúa propagando correctamente el identificador de organización y preserva compatibilidad con flujos legacy.
+
+### 2024-04-14 – Cobertura unit-test `WebSalesService`
+
+- **Contexto:** Al avanzar en el _Paso 3_ de la Fase 2 era necesario sumar el dominio de ventas web para garantizar que tanto las órdenes previas como las ventas completadas propaguen `organizationId` sin romper integraciones existentes.
+- **Implementación:** Se reforzó `WebSalesService` agregando instrumentación de `logOrganizationContext` en la creación y finalización de órdenes, y se extendió la suite [`backend/src/websales/websales.service.spec.ts`](../src/websales/websales.service.spec.ts) para validar que `createWebOrder` registre el tenant recibido y que los escenarios de venta mantengan los `mocks` de Prisma alineados.
+- **Resultado:** Las pruebas corren mediante `npm test -- websales.service.spec.ts` verificando propagación y `logging` de `organizationId` tanto en órdenes como en ventas, dejando listo el servicio para su monitoreo mientras se planifica la fase de poblamiento.
 
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
