@@ -60,6 +60,17 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - Activar RLS gradualmente siguiendo feature flags y monitoreo de políticas.
 - Documentar resultados y retirar código legacy al final del despliegue.
 
+## Bitácora técnica reciente
+
+### 2024-03-26 – Cobertura unit-test `ClientService`
+
+- **Contexto:** Como parte del _Paso 3_ de la Fase 2 se requirió validar que los servicios propaguen el `organizationId` tanto cuando está definido como cuando permanece en `NULL` para mantener compatibilidad con clientes legacy.
+- **Implementación:** Se creó el archivo [`backend/src/clients/clients.service.spec.ts`](../src/clients/clients.service.spec.ts) con una suite Jest que aísla `ClientService` mediante _mocks_ de Prisma (`user.create`, `client.create`, `client.findUnique`). La batería cubre los flujos `create`, `createGuest`, `verifyOrCreateClients` y `selfRegister`, verificando que:
+  - Los casos con `organizationId` definido lo propaguen hacia Prisma en la creación de usuarios y clientes.
+  - Los escenarios sin organización explícita mantengan `organizationId: null`, preservando la semántica actual.
+  - Se _mockee_ `crypto.randomUUID` para los invitados y así poder aseverar el valor generado sin efectos colaterales en otros tests.
+- **Resultado:** Las pruebas se ejecutan con `npm test -- clients.service.spec.ts` y cubren las ramas principales exigidas por el plan táctico. Esta suite servirá como salvaguarda cuando se continúe con el poblado de datos (Fase 3) y el refuerzo de integridad (Fase 4).
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
