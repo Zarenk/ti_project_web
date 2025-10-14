@@ -187,7 +187,7 @@ export class WebSalesService {
               password: 'default_password',
               role: 'CLIENT',
               organizationId: inputOrganizationId ?? null,
-            },
+            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en UserCreateInput
             select: { id: true },
           });
 
@@ -205,7 +205,7 @@ export class WebSalesService {
               userId: user.id,
               status: 'Activo',
               organizationId: inputOrganizationId ?? null,
-            },
+            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en ClientCreateInput
             select: { id: true },
           });
 
@@ -220,7 +220,8 @@ export class WebSalesService {
       resolvedClientId,
     );
 
-    const organizationId = inputOrganizationId ?? store.organizationId ?? null;
+    const organizationId =
+      inputOrganizationId ?? (store as any).organizationId ?? null;
 
     logOrganizationContext({
       service: WebSalesService.name,
