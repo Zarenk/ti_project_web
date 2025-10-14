@@ -10,13 +10,14 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy.
-  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` ya iniciado.
+  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; se priorizaron `stores` y `clients` para las primeras suites parametrizadas.
 
 ## Próximas acciones sugeridas
 1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
 2. Instrumentar temporalmente logs y métricas para detectar accesos a servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) que aún no envíen `organizationId`, y documentar los consumidores faltantes.
-3. Diseñar las pruebas unitarias y de integración que cubran entidades con `organizationId` nulo o definido (Fase 2 – Paso 3). Preparar suites para ejecución continua.
-4. Planificar la **Fase 3 – Poblado y validación** con el equipo de datos. Entregables:
+3. Completar las suites unitarias/integración priorizadas (`stores`, `clients`) cubriendo `organizationId` nulo o definido y habilitar su ejecución continua (Fase 2 – Paso 3).
+4. Extender la cobertura de pruebas al resto de dominios (`inventory`, `sales`, `websales`) siguiendo el mismo patrón de parametrización multi-organización.
+5. Planificar la **Fase 3 – Poblado y validación** con el equipo de datos. Entregables:
    - Definición de reglas de asignación por tabla (fuentes, columnas puente, excepciones manuales).
    - Scripts idempotentes por dominio con logging y métricas de progreso.
    - Calendario de ejecución en producción con ventanas de mantenimiento y responsables.
@@ -33,12 +34,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 | Tarea | Responsable | Entregable | Fecha objetivo |
 | --- | --- | --- | --- |
 | Inventariar servicios críticos y casos felices/error que requieren cobertura multi-organización (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`). | QA + Ingeniería Backend | Lista priorizada de escenarios de prueba firmada en Confluence. | Miércoles 27/03 |
-| Actualizar suites unitarias en `backend/test` para parametrizar `organizationId` (`NULL` vs definido) utilizando factories existentes. | QA Automation | Pull request con nuevas pruebas y reporte de cobertura. | Viernes 29/03 |
+| Actualizar suites unitarias en `backend/test` para parametrizar `organizationId` (`NULL` vs definido) utilizando factories existentes. **En progreso:** `stores.service.spec.ts` documentado, pendiente de implementación. | QA Automation | Pull request con nuevas pruebas y reporte de cobertura. | Viernes 29/03 |
 | Extender pruebas de integración/E2E con fixtures multi-organización y datos semilla en Prisma. | Ingeniería Backend | Scripts de seed actualizados + pipeline CI verde. | Lunes 01/04 |
 | Incorporar métrica temporal en CI (badge o reporte) que exponga porcentaje de casos multi-organización ejecutados. | DevOps | Dashboard en Grafana + enlace en esta bitácora. | Martes 02/04 |
 
 ### Fase 2 – Paso 3 (cobertura de pruebas)
-- Incorporar casos con `organizationId` `NULL` y definido en pruebas unitarias.
+- Incorporar casos con `organizationId` `NULL` y definido en pruebas unitarias, comenzando por `stores` y `clients`.
 - Añadir fixtures de datos multi-organización en pruebas de integración/E2E.
 - Configurar métricas en CI para asegurar que la suite cubra ambos escenarios antes de endurecer restricciones.
 
@@ -70,6 +71,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
   - Los escenarios sin organización explícita mantengan `organizationId: null`, preservando la semántica actual.
   - Se _mockee_ `crypto.randomUUID` para los invitados y así poder aseverar el valor generado sin efectos colaterales en otros tests.
 - **Resultado:** Las pruebas se ejecutan con `npm test -- clients.service.spec.ts` y cubren las ramas principales exigidas por el plan táctico. Esta suite servirá como salvaguarda cuando se continúe con el poblado de datos (Fase 3) y el refuerzo de integridad (Fase 4).
+
+### 2024-03-28 – Preparación suite `StoresService`
+
+- **Contexto:** Para continuar con el _Paso 3_ de la Fase 2 se documentó la especificación de pruebas unitarias que validarán la propagación de `organizationId` en `StoresService`.
+- **Implementación:** Se definieron los casos esperados en la bitácora y se actualizó el plan táctico para que QA Automation implemente la suite Jest reutilizando factories existentes.
+- **Próximo paso:** Consolidar los _mocks_ de Prisma y ejecutar `npm test -- stores.service.spec.ts` con coberturas diferenciadas por `organizationId` presente vs `NULL`.
 
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)

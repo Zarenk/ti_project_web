@@ -22,8 +22,17 @@ export class StoresService {
 
   async create(createStoreDto: CreateStoreDto, req: Request) {
     try {
+      const { organizationId, ...storePayload } = createStoreDto;
+
+      const storeCreateData: (Prisma.StoreUncheckedCreateInput & {
+        organizationId?: number | null;
+      }) = {
+        ...storePayload,
+        organizationId: organizationId ?? null,
+      };
+
       const store = await this.prismaService.store.create({
-        data: createStoreDto,
+        data: storeCreateData as Prisma.StoreUncheckedCreateInput,
       });
 
       await this.activityService.log(
@@ -88,9 +97,21 @@ export class StoresService {
       const before = await this.prismaService.store.findUnique({
         where: { id: Number(id) },
       });
+      const { id: _id, organizationId, ...storePayload } = updateStoreDto;
+
+      const storeUpdateData: (Prisma.StoreUncheckedUpdateInput & {
+        organizationId?: number | null;
+      }) = {
+        ...storePayload,
+      };
+
+      if (organizationId !== undefined) {
+        storeUpdateData.organizationId = organizationId;
+      }
+
       const updated = await this.prismaService.store.update({
         where: { id: Number(id) },
-        data: updateStoreDto,
+        data: storeUpdateData as Prisma.StoreUncheckedUpdateInput,
       });
 
       if (!updated) {
@@ -153,22 +174,27 @@ export class StoresService {
   
       // Ejecutar la transacción para actualizar múltiples productos
       const updatedStores = await this.prismaService.$transaction(
-        stores.map((store) =>
-          this.prismaService.store.update({
+        stores.map((store) => {
+          const updateData: (Prisma.StoreUncheckedUpdateInput & {
+            organizationId?: number | null;
+          }) = {
+            name: store.name,
+            description: store.description,
+            ruc: store.ruc,
+            phone: store.phone,
+            adress: store.adress,
+            email: store.email,
+            website: store.website,
+            status: store.status,
+          };
+
+          updateData.organizationId = store.organizationId ?? null;
+
+          return this.prismaService.store.update({
             where: { id: Number(store.id) },
-            data: {
-              name: store.name,
-              description: store.description,
-              ruc: store.ruc,
-              phone: store.phone,
-              adress: store.adress,
-              email: store.email,
-              website: store.website,
-              status: store.status,
-              organizationId: store.organizationId ?? null,
-            },
-          })
-        )
+            data: updateData as Prisma.StoreUncheckedUpdateInput,
+          });
+        })
       );
 
       await this.activityService.log(
