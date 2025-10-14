@@ -10,7 +10,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy.
-  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; se priorizaron `stores` y `clients` para las primeras suites parametrizadas.
+  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService` y continúa la priorización para `ClientService`.
 
 ## Próximas acciones sugeridas
 1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
@@ -34,7 +34,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 | Tarea | Responsable | Entregable | Fecha objetivo |
 | --- | --- | --- | --- |
 | Inventariar servicios críticos y casos felices/error que requieren cobertura multi-organización (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`). | QA + Ingeniería Backend | Lista priorizada de escenarios de prueba firmada en Confluence. | Miércoles 27/03 |
-| Actualizar suites unitarias en `backend/test` para parametrizar `organizationId` (`NULL` vs definido) utilizando factories existentes. **En progreso:** `stores.service.spec.ts` documentado, pendiente de implementación. | QA Automation | Pull request con nuevas pruebas y reporte de cobertura. | Viernes 29/03 |
+| Actualizar suites unitarias en `backend/test` para parametrizar `organizationId` (`NULL` vs definido) utilizando factories existentes. **Completado:** `stores.service.spec.ts` validado y ejecutado en CI local; pendiente extender patrones a `clients`. | QA Automation | Pull request con nuevas pruebas y reporte de cobertura. | Viernes 29/03 |
 | Extender pruebas de integración/E2E con fixtures multi-organización y datos semilla en Prisma. | Ingeniería Backend | Scripts de seed actualizados + pipeline CI verde. | Lunes 01/04 |
 | Incorporar métrica temporal en CI (badge o reporte) que exponga porcentaje de casos multi-organización ejecutados. | DevOps | Dashboard en Grafana + enlace en esta bitácora. | Martes 02/04 |
 
@@ -72,11 +72,11 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
   - Se _mockee_ `crypto.randomUUID` para los invitados y así poder aseverar el valor generado sin efectos colaterales en otros tests.
 - **Resultado:** Las pruebas se ejecutan con `npm test -- clients.service.spec.ts` y cubren las ramas principales exigidas por el plan táctico. Esta suite servirá como salvaguarda cuando se continúe con el poblado de datos (Fase 3) y el refuerzo de integridad (Fase 4).
 
-### 2024-03-28 – Preparación suite `StoresService`
+### 2024-03-30 – Cobertura unit-test `StoresService`
 
-- **Contexto:** Para continuar con el _Paso 3_ de la Fase 2 se documentó la especificación de pruebas unitarias que validarán la propagación de `organizationId` en `StoresService`.
-- **Implementación:** Se definieron los casos esperados en la bitácora y se actualizó el plan táctico para que QA Automation implemente la suite Jest reutilizando factories existentes.
-- **Próximo paso:** Consolidar los _mocks_ de Prisma y ejecutar `npm test -- stores.service.spec.ts` con coberturas diferenciadas por `organizationId` presente vs `NULL`.
+- **Contexto:** El _Paso 3_ de la Fase 2 requiere validar la propagación del `organizationId` en los servicios. Tras completar `ClientService`, se abordó la suite de `StoresService` para cubrir los flujos críticos de creación y actualización.
+- **Implementación:** Se creó [`backend/src/stores/stores.service.spec.ts`](../src/stores/stores.service.spec.ts) con _mocks_ de Prisma (`store.create`, `store.update`, `store.findUnique`) y de `ActivityService`. La suite parametriza `organizationId` nulo o definido para los métodos `create`, `update` y `updateMany`, asegurando que los payloads mantengan compatibilidad con escenarios legacy y multi-organización.
+- **Resultado:** La suite se ejecuta con `npm test -- stores.service.spec.ts` y quedó documentada como referencia para replicar el patrón en el resto de dominios prioritarios. Esto habilita continuar con la extensión hacia `ClientService` y el resto de módulos definidos en el plan.
 
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
