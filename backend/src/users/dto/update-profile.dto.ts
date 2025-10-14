@@ -1,4 +1,5 @@
-import { IsEmail, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsInt, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -16,4 +17,9 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   image?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  organizationId?: number | null;
 }
