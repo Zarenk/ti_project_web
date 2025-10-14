@@ -10,7 +10,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy.
-  - 🔜 _Paso 3_: Extender la batería de pruebas para cubrir registros con `organizationId` nulo.
+  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` ya iniciado.
 
 ## Próximas acciones sugeridas
 1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
@@ -27,6 +27,15 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - Actualizar DTOs de entrada y salida en los módulos `users`, `clients`, `stores`, `inventory` y `sales` para incluir `organizationId` opcional.
 - Ajustar los mapeos de Prisma/Repositories para leer y escribir la nueva columna sin condicionar la lógica existente.
 - Revisar integraciones externas (ETLs, webhooks) y agregar el campo cuando sea relevante, manteniendo compatibilidad mediante versionado o flags.
+
+#### Plan táctico – Semana actual (Fase 2 – Paso 3)
+
+| Tarea | Responsable | Entregable | Fecha objetivo |
+| --- | --- | --- | --- |
+| Inventariar servicios críticos y casos felices/error que requieren cobertura multi-organización (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`). | QA + Ingeniería Backend | Lista priorizada de escenarios de prueba firmada en Confluence. | Miércoles 27/03 |
+| Actualizar suites unitarias en `backend/test` para parametrizar `organizationId` (`NULL` vs definido) utilizando factories existentes. | QA Automation | Pull request con nuevas pruebas y reporte de cobertura. | Viernes 29/03 |
+| Extender pruebas de integración/E2E con fixtures multi-organización y datos semilla en Prisma. | Ingeniería Backend | Scripts de seed actualizados + pipeline CI verde. | Lunes 01/04 |
+| Incorporar métrica temporal en CI (badge o reporte) que exponga porcentaje de casos multi-organización ejecutados. | DevOps | Dashboard en Grafana + enlace en esta bitácora. | Martes 02/04 |
 
 ### Fase 2 – Paso 3 (cobertura de pruebas)
 - Incorporar casos con `organizationId` `NULL` y definido en pruebas unitarias.
