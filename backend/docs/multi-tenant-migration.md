@@ -10,12 +10,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy.
-  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService` y continúa la priorización para `ClientService`.
+  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización y continúa la priorización para `ClientService`.
 
 ## Próximas acciones sugeridas
 1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
-2. Instrumentar temporalmente logs y métricas para detectar accesos a servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) que aún no envíen `organizationId`, y documentar los consumidores faltantes.
-3. Completar las suites unitarias/integración priorizadas (`stores`, `clients`) cubriendo `organizationId` nulo o definido y habilitar su ejecución continua (Fase 2 – Paso 3).
+2. Completar la verificación de la instrumentación temporal de logs y métricas en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`), asegurando que los tipados de Prisma permitan los nuevos campos y documentando consumidores faltantes.
+3. Completar las suites unitarias/integración priorizadas (`stores`, `clients`) cubriendo `organizationId` nulo o definido y habilitar su ejecución continua (Fase 2 – Paso 3). Documentar cualquier bloqueo derivado de validaciones o tipados y resolverlo en conjunto con el equipo de plataforma.
 4. Extender la cobertura de pruebas al resto de dominios (`inventory`, `sales`, `websales`) siguiendo el mismo patrón de parametrización multi-organización.
 5. Planificar la **Fase 3 – Poblado y validación** con el equipo de datos. Entregables:
    - Definición de reglas de asignación por tabla (fuentes, columnas puente, excepciones manuales).
@@ -34,9 +34,9 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 | Tarea | Responsable | Entregable | Fecha objetivo |
 | --- | --- | --- | --- |
 | Inventariar servicios críticos y casos felices/error que requieren cobertura multi-organización (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`). | QA + Ingeniería Backend | Lista priorizada de escenarios de prueba firmada en Confluence. | Miércoles 27/03 |
-| Actualizar suites unitarias en `backend/test` para parametrizar `organizationId` (`NULL` vs definido) utilizando factories existentes. **Completado:** `stores.service.spec.ts` validado y ejecutado en CI local; pendiente extender patrones a `clients`. | QA Automation | Pull request con nuevas pruebas y reporte de cobertura. | Viernes 29/03 |
+| Actualizar suites unitarias en `backend/test` para parametrizar `organizationId` (`NULL` vs definido) utilizando factories existentes. **Completado:** `stores.service.spec.ts` validado y ejecutado en CI local; pendiente extender patrones a `clients`. **En curso:** resolver tipados de Prisma en `ClientService` para destrabar la suite. | QA Automation + Plataforma | Pull request con nuevas pruebas y reporte de cobertura. | Viernes 29/03 |
 | Extender pruebas de integración/E2E con fixtures multi-organización y datos semilla en Prisma. | Ingeniería Backend | Scripts de seed actualizados + pipeline CI verde. | Lunes 01/04 |
-| Incorporar métrica temporal en CI (badge o reporte) que exponga porcentaje de casos multi-organización ejecutados. | DevOps | Dashboard en Grafana + enlace en esta bitácora. | Martes 02/04 |
+| Incorporar métrica temporal en CI (badge o reporte) que exponga porcentaje de casos multi-organización ejecutados. **Dependencia:** confirmación de logs temporales operativos. | DevOps | Dashboard en Grafana + enlace en esta bitácora. | Martes 02/04 |
 
 ### Fase 2 – Paso 3 (cobertura de pruebas)
 - Incorporar casos con `organizationId` `NULL` y definido en pruebas unitarias, comenzando por `stores` y `clients`.
@@ -77,6 +77,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Contexto:** El _Paso 3_ de la Fase 2 requiere validar la propagación del `organizationId` en los servicios. Tras completar `ClientService`, se abordó la suite de `StoresService` para cubrir los flujos críticos de creación y actualización.
 - **Implementación:** Se creó [`backend/src/stores/stores.service.spec.ts`](../src/stores/stores.service.spec.ts) con _mocks_ de Prisma (`store.create`, `store.update`, `store.findUnique`) y de `ActivityService`. La suite parametriza `organizationId` nulo o definido para los métodos `create`, `update` y `updateMany`, asegurando que los payloads mantengan compatibilidad con escenarios legacy y multi-organización.
 - **Resultado:** La suite se ejecuta con `npm test -- stores.service.spec.ts` y quedó documentada como referencia para replicar el patrón en el resto de dominios prioritarios. Esto habilita continuar con la extensión hacia `ClientService` y el resto de módulos definidos en el plan.
+
+### 2024-04-02 – Instrumentación temporal multi-organización
+
+- **Contexto:** Para dar visibilidad a los flujos que aún no propagan `organizationId`, se incorporó un helper de logging (`organization-context.logger.ts`) que centraliza la emisión de métricas y advertencias.
+- **Implementación:** Se actualizaron los servicios de `clients`, `stores`, `inventory`, `sales`, `users` y `websales` para emitir logs contextualizados durante operaciones críticas de creación y actualización.
+- **Pendientes:** Ajustar los tipados de Prisma para aceptar explícitamente los campos instrumentados y recuperar la suite `clients.service.spec.ts` en CI.
 
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
