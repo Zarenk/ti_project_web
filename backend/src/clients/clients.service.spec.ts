@@ -1,10 +1,14 @@
 jest.mock('crypto', () => ({
   randomUUID: jest.fn(),
 }));
+jest.mock('src/tenancy/organization-context.logger', () => ({
+  logOrganizationContext: jest.fn(),
+}));
 
 import { ClientService } from './clients.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { randomUUID } from 'crypto';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 
 describe('ClientService multi-organization support', () => {
   let service: ClientService;
@@ -19,6 +23,7 @@ describe('ClientService multi-organization support', () => {
     };
   };
   let randomUUIDMock: jest.Mock;
+  let logOrganizationContextMock: jest.Mock;
 
   beforeEach(() => {
     prisma = {
@@ -35,6 +40,9 @@ describe('ClientService multi-organization support', () => {
     service = new ClientService(prisma as unknown as PrismaService);
     randomUUIDMock = randomUUID as unknown as jest.Mock;
     randomUUIDMock.mockReset();
+    logOrganizationContextMock =
+      logOrganizationContext as unknown as jest.Mock;
+    logOrganizationContextMock.mockClear();
   });
 
   afterEach(() => {
@@ -64,6 +72,13 @@ describe('ClientService multi-organization support', () => {
         data: expect.objectContaining({ organizationId: 77 }),
       }),
     );
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: ClientService.name,
+        operation: 'create',
+        organizationId: 77,
+      }),
+    );
 
     nowSpy.mockRestore();
   });
@@ -82,6 +97,13 @@ describe('ClientService multi-organization support', () => {
     expect(prisma.client.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ organizationId: null }),
+      }),
+    );
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: ClientService.name,
+        operation: 'create',
+        organizationId: undefined,
       }),
     );
   });
@@ -106,6 +128,13 @@ describe('ClientService multi-organization support', () => {
         data: expect.objectContaining({ organizationId: 321 }),
       }),
     );
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: ClientService.name,
+        operation: 'createGuest',
+        organizationId: 321,
+      }),
+    );
 
     randomUUIDMock.mockReset();
   });
@@ -123,6 +152,13 @@ describe('ClientService multi-organization support', () => {
     expect(prisma.client.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ organizationId: null }),
+      }),
+    );
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: ClientService.name,
+        operation: 'createGuest',
+        organizationId: undefined,
       }),
     );
 
@@ -165,6 +201,18 @@ describe('ClientService multi-organization support', () => {
         data: expect.objectContaining({ organizationId: null }),
       }),
     );
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'verifyOrCreateClients',
+        organizationId: 400,
+      }),
+    );
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'verifyOrCreateClients',
+        organizationId: undefined,
+      }),
+    );
   });
 
   it('propagates organizationId during self registration', async () => {
@@ -182,6 +230,13 @@ describe('ClientService multi-organization support', () => {
         data: expect.objectContaining({ organizationId: 654 }),
       }),
     );
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: ClientService.name,
+        operation: 'selfRegister',
+        organizationId: 654,
+      }),
+    );
   });
 
   it('defaults organizationId to null during self registration when not provided', async () => {
@@ -196,6 +251,13 @@ describe('ClientService multi-organization support', () => {
     expect(prisma.client.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ organizationId: null }),
+      }),
+    );
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: ClientService.name,
+        operation: 'selfRegister',
+        organizationId: undefined,
       }),
     );
   });
