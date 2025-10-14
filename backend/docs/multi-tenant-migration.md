@@ -108,6 +108,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se añadió `backend/src/inventory/inventory.service.spec.ts` con _mocks_ de Prisma (`storeOnInventory.findFirst`, `inventory.create`, `transfer.create`, `inventoryHistory.createMany`) y del logger multi-organización. Las pruebas parametrizan `transferProduct` con `organizationId` definido y ausente, verificando que los payloads hacia Prisma mantengan el identificador correcto y que la instrumentación temporal registre el contexto adecuado.
 - **Resultado:** La suite se ejecuta con `npm test -- inventory.service.spec.ts`, reafirmando la propagación de `organizationId` en traslados y habilitando la extensión del patrón hacia los módulos restantes (`websales`, `users`).
 
+### 2024-04-12 – Cobertura unit-test `UsersService`
+
+- **Contexto:** Para seguir avanzando en el _Paso 3_ de la Fase 2 era necesario validar que los flujos críticos de usuarios preserven el `organizationId` tanto cuando llega explícito como cuando permanece en `NULL`, alineando la cobertura con los dominios ya instrumentados.
+- **Implementación:** Se creó [`backend/src/users/users.service.spec.ts`](../src/users/users.service.spec.ts) aislando `UsersService` con _mocks_ de Prisma (`user.findUnique`, `user.create`, `client.create`, `client.update`), de `ActivityService` y del logger multi-organización. La batería cubre `register`, `publicRegister` y `updateProfile`, parametrizando casos con `organizationId` definido y omitido para asegurar que las llamadas a Prisma y la sincronización con clientes mantengan compatibilidad legacy.
+- **Resultado:** Las pruebas corren mediante `npm test -- users.service.spec.ts`, dejando lista la validación multi-organización del módulo `users` y sirviendo como plantilla para extender el patrón hacia `websales` y servicios pendientes.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
