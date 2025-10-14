@@ -10,7 +10,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy; DTOs de `clients` actualizados y documentados para nuevos consumidores.
-  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService`, se incorporó la batería de `InventoryService` y se reactivó la suite de `ClientService` tras resolver tipados de Prisma.
+  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService`, se incorporó la batería de `InventoryService`, se reactivó la suite de `ClientService` tras resolver tipados de Prisma y se verificó la suite de `UsersService` cubriendo registros con y sin tenant.
 
 ## Próximas acciones sugeridas
 1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
@@ -113,6 +113,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Contexto:** Para seguir avanzando en el _Paso 3_ de la Fase 2 era necesario validar que los flujos críticos de usuarios preserven el `organizationId` tanto cuando llega explícito como cuando permanece en `NULL`, alineando la cobertura con los dominios ya instrumentados.
 - **Implementación:** Se creó [`backend/src/users/users.service.spec.ts`](../src/users/users.service.spec.ts) aislando `UsersService` con _mocks_ de Prisma (`user.findUnique`, `user.create`, `client.create`, `client.update`), de `ActivityService` y del logger multi-organización. La batería cubre `register`, `publicRegister` y `updateProfile`, parametrizando casos con `organizationId` definido y omitido para asegurar que las llamadas a Prisma y la sincronización con clientes mantengan compatibilidad legacy.
 - **Resultado:** Las pruebas corren mediante `npm test -- users.service.spec.ts`, dejando lista la validación multi-organización del módulo `users` y sirviendo como plantilla para extender el patrón hacia `websales` y servicios pendientes.
+
+### 2024-04-13 – Validación local suite `UsersService`
+
+- **Contexto:** Tras integrar la cobertura multi-organización en `UsersService`, se registró la ejecución local de la suite para dejar constancia del estado verde y facilitar el seguimiento del _Paso 3_ de la Fase 2.
+- **Implementación:** Se volvió a correr `npm test -- users.service.spec.ts` en entorno Windows, verificando los seis casos parametrizados (registro, registro público y sincronización de perfil) con `organizationId` definido y nulo.
+- **Resultado:** Todos los escenarios pasaron sin regresiones (`6 passed`), confirmando que el servicio continúa propagando correctamente el identificador de organización y preserva compatibilidad con flujos legacy.
 
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
