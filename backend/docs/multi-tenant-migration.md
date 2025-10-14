@@ -10,7 +10,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy; DTOs de `clients` actualizados y documentados para nuevos consumidores.
-  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService`, se incorporó la batería de `InventoryService`, se reactivó la suite de `ClientService` tras resolver tipados de Prisma, se verificó la suite de `UsersService` cubriendo registros con y sin tenant y se agregó la suite de `WebSalesService` validando la propagación del tenant en órdenes y ventas web.
+  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService`, se incorporó la batería de `InventoryService`, se reactivó la suite de `ClientService` tras resolver tipados de Prisma, se verificó la suite de `UsersService` cubriendo registros con y sin tenant y se agregó la suite de `WebSalesService` validando la propagación del tenant en órdenes y ventas web. Se registró una corrida verde de todas las suites parametrizadas, habilitando el foco en fixtures de integración/E2E multi-organización.
 
 ## Próximas acciones sugeridas
 1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
@@ -125,6 +125,18 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Contexto:** Al avanzar en el _Paso 3_ de la Fase 2 era necesario sumar el dominio de ventas web para garantizar que tanto las órdenes previas como las ventas completadas propaguen `organizationId` sin romper integraciones existentes.
 - **Implementación:** Se reforzó `WebSalesService` agregando instrumentación de `logOrganizationContext` en la creación y finalización de órdenes, y se extendió la suite [`backend/src/websales/websales.service.spec.ts`](../src/websales/websales.service.spec.ts) para validar que `createWebOrder` registre el tenant recibido y que los escenarios de venta mantengan los `mocks` de Prisma alineados.
 - **Resultado:** Las pruebas corren mediante `npm test -- websales.service.spec.ts` verificando propagación y `logging` de `organizationId` tanto en órdenes como en ventas, dejando listo el servicio para su monitoreo mientras se planifica la fase de poblamiento.
+
+### 2024-04-15 – Verificación integrada de suites multi-organización
+
+- **Contexto:** Tras completar las suites unitarias priorizadas para `clients`, `stores`, `inventory`, `sales`, `users` y `websales`, era necesario validar una corrida conjunta que demostrara estabilidad antes de continuar con fixtures de integración.
+- **Implementación:** Se ejecutaron localmente las baterías parametrizadas, confirmando que los _mocks_ de Prisma, los `DTOs` y la instrumentación temporal están alineados con la propagación opcional de `organizationId`.
+- **Resultado:** Todas las suites finalizaron en verde, habilitando el siguiente paso del plan: extender datos semilla y fixtures de integración/E2E para escenarios multi-organización y preparar la cobertura necesaria antes de iniciar el poblado masivo de la Fase 3.
+
+### 2024-04-16 – Cobertura unit-test `EntriesService`
+
+- **Contexto:** Para continuar con el _Paso 3_ de la Fase 2 era necesario incorporar el dominio de compras (`entries`), garantizando que las altas y bajas de entradas propaguen `organizationId` tanto en los registros principales como en el historial de inventario.
+- **Implementación:** Se actualizó `EntriesService` para calcular el tenant a partir del payload o de la tienda asociada y propagarlo en `Entry`, `Inventory` e `InventoryHistory`, además de emitir trazas con `logOrganizationContext` en las operaciones de creación y borrado. Se sumó la suite [`backend/src/entries/entries.service.spec.ts`](../src/entries/entries.service.spec.ts) que parametriza escenarios con `organizationId` explícito, heredado desde la tienda o ausente.
+- **Resultado:** Las pruebas se ejecutan con `npm test -- entries.service.spec.ts` verificando la propagación y el _logging_ del tenant en flujos de alta, dejando el módulo listo para su incorporación en los fixtures multi-organización.
 
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)

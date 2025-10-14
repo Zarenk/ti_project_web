@@ -22,4 +22,7 @@ export class CreateEntryDto {
 
   @ApiPropertyOptional()
   igvRate?: number;
+
+  @ApiPropertyOptional({ nullable: true })
+  organizationId?: number | null;
 }

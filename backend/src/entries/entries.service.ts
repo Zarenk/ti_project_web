@@ -14,6 +14,7 @@ import { CategoryService } from 'src/category/category.service';
 import { ActivityService } from 'src/activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { AccountingService } from 'src/accounting/accounting.service';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 
 @Injectable()
 export class EntriesService {
@@ -63,6 +64,7 @@ export class EntriesService {
     providerName?: string;
     totalGross?: number;
     igvRate?: number;
+    organizationId?: number | null;
     details: { productId: number; name: string; quantity: number; price: number; priceInSoles: number; series?: string[]; }[];
     invoice?: { serie: string; nroCorrelativo: string; tipoComprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
   }) {
@@ -137,12 +139,19 @@ export class EntriesService {
     const totalNet = +(totalGross / (1 + igvRate)).toFixed(2);
     const totalIgv = +(totalGross - totalNet).toFixed(2);
 
+    let resolvedOrganizationId: number | null = null;
+
     const entry = await this.prisma.$transaction(async (prisma) => {
       // Verificar que la tienda exista
       const store = await prisma.store.findUnique({ where: { id: data.storeId } });
       if (!store) {
         throw new NotFoundException(`La tienda con ID ${data.storeId} no existe.`);
       }
+
+      const storeOrganizationId =
+        (store as { organizationId?: number | null }).organizationId ?? null;
+      const organizationId = data.organizationId ?? storeOrganizationId;
+      resolvedOrganizationId = organizationId;
 
       // Verificar que el proveedor exista
       const provider = await prisma.provider.findUnique({
@@ -199,6 +208,7 @@ export class EntriesService {
           providerName: data.providerName,
           totalGross,
           igvRate,
+          organizationId,
           details: {
             create: verifiedProducts.map((product) => ({
               productId: product.productId,
@@ -263,7 +273,8 @@ export class EntriesService {
             data: {
               productId: detail.productId,
               storeId: data.storeId, // Incluye storeId al crear el registro
-            },
+              organizationId,
+            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryCreateInput
           });
         }
 
@@ -303,7 +314,8 @@ export class EntriesService {
               previousStock: 0,
               newStock: detail.quantity || 0,
               userId: data.userId, // Registrar el usuario que realizó el cambio
-            },
+              organizationId,
+            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateInput
           });
         } else {
           // Si existe, actualizar el stock
@@ -321,7 +333,8 @@ export class EntriesService {
               previousStock: storeInventory.stock,
               newStock: storeInventory.stock + (detail.quantity || 0),
               userId: data.userId, // Registrar el usuario que realizó el cambio
-            },
+              organizationId,
+            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateInput
           });
         }
       }
@@ -330,6 +343,18 @@ export class EntriesService {
     });
 
     await this.accountingService.createJournalForInventoryEntry(entry.id);
+
+    logOrganizationContext({
+      service: EntriesService.name,
+      operation: 'createEntry',
+      organizationId: resolvedOrganizationId,
+      metadata: {
+        entryId: entry.id,
+        storeId: data.storeId,
+        providerId: data.providerId,
+        userId: data.userId,
+      },
+    });
 
     const summary = verifiedProducts
       .map((d) => `${d.quantity}x ${d.name}`)
@@ -438,9 +463,23 @@ export class EntriesService {
         include: { details: { include: { series: true, product: true } } },
       });
 
-    if (!entry) {
+      if (!entry) {
         throw new NotFoundException(`La entrada con ID ${id} no existe.`);
-      }  
+      }
+
+      const organizationId =
+        (entry as { organizationId?: number | null }).organizationId ?? null;
+
+      logOrganizationContext({
+        service: EntriesService.name,
+        operation: 'deleteEntry',
+        organizationId,
+        metadata: {
+          entryId: entry.id,
+          storeId: entry.storeId,
+          userId: entry.userId,
+        },
+      }); 
 
       // Eliminar series asociadas
       for (const detail of entry.details) {
@@ -479,7 +518,8 @@ export class EntriesService {
             previousStock: storeInventory.stock,
             newStock: storeInventory.stock - detail.quantity,
             userId: entry.userId, // Registrar el usuario que realizó el cambio
-          },
+            organizationId,
+          } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateInput
         });
       }
 
@@ -522,6 +562,19 @@ export class EntriesService {
 
       // Actualizar el inventario restando las cantidades de los productos
       for (const entry of entries) {
+        const organizationId =
+          (entry as { organizationId?: number | null }).organizationId ?? null;
+
+        logOrganizationContext({
+          service: EntriesService.name,
+          operation: 'deleteEntries.entry',
+          organizationId,
+          metadata: {
+            entryId: entry.id,
+            storeId: entry.storeId,
+            userId: entry.userId,
+          },
+        });
         // Eliminar series asociadas
         for (const detail of entry.details) {
           await this.prisma.entryDetailSeries.deleteMany({
@@ -558,7 +611,8 @@ export class EntriesService {
               previousStock: storeInventory.stock,
               newStock: storeInventory.stock - detail.quantity,
               userId: entry.userId, // Registrar el usuario que realizó el cambio
-            },
+              organizationId,
+            } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateInput
           });
         }
 
