@@ -10,7 +10,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy; DTOs de `clients` actualizados y documentados para nuevos consumidores.
-  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService`, se incorporó la batería de `InventoryService`, se reactivó la suite de `ClientService` tras resolver tipados de Prisma, se verificó la suite de `UsersService` cubriendo registros con y sin tenant y se agregó la suite de `WebSalesService` validando la propagación del tenant en órdenes y ventas web. Se registró una corrida verde de todas las suites parametrizadas, habilitando el foco en fixtures de integración/E2E multi-organización.
+  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService`, se incorporó la batería de `InventoryService`, se reactivó la suite de `ClientService` tras resolver tipados de Prisma, se verificó la suite de `UsersService` cubriendo registros con y sin tenant, se agregó la suite de `WebSalesService` validando la propagación del tenant en órdenes y ventas web y se instrumentó `EntriesService` con su batería multi-organización. Se registró una corrida verde de todas las suites parametrizadas, habilitando el foco en fixtures de integración/E2E multi-organización.
 
 ## Próximas acciones sugeridas
 1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
@@ -137,6 +137,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Contexto:** Para continuar con el _Paso 3_ de la Fase 2 era necesario incorporar el dominio de compras (`entries`), garantizando que las altas y bajas de entradas propaguen `organizationId` tanto en los registros principales como en el historial de inventario.
 - **Implementación:** Se actualizó `EntriesService` para calcular el tenant a partir del payload o de la tienda asociada y propagarlo en `Entry`, `Inventory` e `InventoryHistory`, además de emitir trazas con `logOrganizationContext` en las operaciones de creación y borrado. Se sumó la suite [`backend/src/entries/entries.service.spec.ts`](../src/entries/entries.service.spec.ts) que parametriza escenarios con `organizationId` explícito, heredado desde la tienda o ausente.
 - **Resultado:** Las pruebas se ejecutan con `npm test -- entries.service.spec.ts` verificando la propagación y el _logging_ del tenant en flujos de alta, dejando el módulo listo para su incorporación en los fixtures multi-organización.
+
+### 2024-04-17 – Verificación local suite `EntriesService`
+
+- **Contexto:** Tras incorporar la suite parametrizada de `EntriesService`, se registró una corrida adicional para capturar evidencia de los escenarios con `organizationId` explícito, heredado y ausente.
+- **Implementación:** Se ejecutó `npm test -- entries.service.spec.ts` en entorno Windows, habilitando los `console.log` temporales que trazan el payload recibido por `createEntry` y los objetos creados en Prisma para cada combinación de tenant.
+- **Resultado:** Los tres casos finalizaron en verde (`3 passed`), confirmando que la instrumentación multi-organización no altera los flujos legacy y que los registros de depuración reflejan el `organizationId` según corresponda antes de avanzar con fixtures de integración.
 
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
