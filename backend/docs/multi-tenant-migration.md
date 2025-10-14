@@ -10,7 +10,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy; DTOs de `clients` actualizados y documentados para nuevos consumidores.
-  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService` y se reactivó la suite de `ClientService` tras resolver tipados de Prisma.
+  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService`, se incorporó la batería de `InventoryService` y se reactivó la suite de `ClientService` tras resolver tipados de Prisma.
 
 ## Próximas acciones sugeridas
 1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
@@ -101,6 +101,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Contexto:** Luego de la instrumentación temporal multi-organización, la suite de `ClientService` había quedado bloqueada por los tipados de Prisma. El objetivo era recuperar su ejecución para consolidar el _Paso 3_ de la Fase 2.
 - **Implementación:** Se ajustaron los tipos consumidos por `ClientService` y se refrescaron los _mocks_ de Prisma (`user.create`, `client.create`, `client.findUnique`) asegurando la propagación opcional de `organizationId`. También se mantuvo el _mock_ de `crypto.randomUUID` para validar los invitados.
 - **Resultado:** Las pruebas se ejecutan con `npm test -- clients.service.spec.ts` y arrojaron resultado positivo, recuperando la cobertura multi-organización para `create`, `createGuest`, `verifyOrCreateClients` y `selfRegister`.
+
+### 2024-04-10 – Cobertura unit-test `InventoryService`
+
+- **Contexto:** Para continuar con el _Paso 3_ de la Fase 2 se requería cubrir el flujo de traslados de inventario asegurando que el `organizationId` se propague tanto cuando se explicita como cuando permanece en `NULL`.
+- **Implementación:** Se añadió `backend/src/inventory/inventory.service.spec.ts` con _mocks_ de Prisma (`storeOnInventory.findFirst`, `inventory.create`, `transfer.create`, `inventoryHistory.createMany`) y del logger multi-organización. Las pruebas parametrizan `transferProduct` con `organizationId` definido y ausente, verificando que los payloads hacia Prisma mantengan el identificador correcto y que la instrumentación temporal registre el contexto adecuado.
+- **Resultado:** La suite se ejecuta con `npm test -- inventory.service.spec.ts`, reafirmando la propagación de `organizationId` en traslados y habilitando la extensión del patrón hacia los módulos restantes (`websales`, `users`).
 
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)

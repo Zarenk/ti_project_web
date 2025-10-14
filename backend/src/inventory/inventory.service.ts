@@ -213,11 +213,11 @@ export class InventoryService {
       // Si no existe, crear un nuevo registro en Inventory
       if (!inventory) {
           inventory = await this.prisma.inventory.create({
-            data: {
-              productId,
-              storeId: destinationStoreId, // Agregar el storeId requerido
-              organizationId,
-            },
+          data: {
+            productId,
+            storeId: destinationStoreId, // Agregar el storeId requerido
+            organizationId,
+          } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryCreateInput
         });
       }
     
@@ -240,7 +240,7 @@ export class InventoryService {
           quantity,
           description: description || null,
           organizationId,
-        },
+        } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en TransferCreateInput
       });
 
       // Registrar el evento en el historial de movimientos
@@ -280,7 +280,7 @@ export class InventoryService {
             organizationId,
           },
         ],
-      });
+      } as any); // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateManyInput
 
     } catch (error) {
       console.error('Error al registrar el traslado:', error);
@@ -822,7 +822,7 @@ export class InventoryService {
             productId: product.id,
             storeId,
             organizationId: organizationId ?? null,
-          },
+          } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryCreateInput
         })
       }
   
@@ -859,7 +859,7 @@ export class InventoryService {
           previousStock: storeInventory?.stock ?? 0,
           newStock: (storeInventory?.stock ?? 0) + parsedStock,
           organizationId: organizationId ?? null,
-        },
+        } as any, // TODO: eliminar cast cuando Prisma exponga organizationId en InventoryHistoryCreateInput
       })
 
       await this.activityService.log({
