@@ -263,6 +263,7 @@ export class InventoryController {
       quantity: number;
       description?: string;
       userId: number;
+      organizationId?: number | null;
     },
   ) {
     return this.inventoryService.transferProduct(transferDto);
@@ -291,9 +292,22 @@ export class InventoryController {
 
   @Post('import-excel/commit')
   async commitExcelImport(
-    @Body() body: { storeId: number; userId: number; providerId: number | null; data: any[] }
+    @Body()
+    body: {
+      storeId: number;
+      userId: number;
+      providerId: number | null;
+      data: any[];
+      organizationId?: number | null;
+    },
   ) {
-    return this.inventoryService.processExcelData(body.data, body.storeId, body.userId, body.providerId);
+    return this.inventoryService.processExcelData(
+      body.data,
+      body.storeId,
+      body.userId,
+      body.providerId,
+      body.organizationId,
+    );
   }
 
   @Get('export/:storeId')

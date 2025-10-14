@@ -181,7 +181,14 @@ export class UsersService {
     return { message: 'Logged out' };
   }
 
-  async register(data: { email: string; username?: string; password: string; role: string; status?: string }) {
+  async register(data: {
+    email: string;
+    username?: string;
+    password: string;
+    role: string;
+    status?: string;
+    organizationId?: number | null;
+  }) {
     const username = data.username || data.email.split('@')[0];
 
     const existingEmail = await this.prismaService.user.findUnique({ where: { email: data.email } });
@@ -204,6 +211,7 @@ export class UsersService {
           password: hashedPassword,
           role: data.role as UserRole,
           status: data.status ?? 'ACTIVO',
+          organizationId: data.organizationId ?? null,
         },
       });
 
@@ -226,13 +234,23 @@ export class UsersService {
     }
   }
 
-  async publicRegister(data: { email: string; username?: string; password: string; name: string; image?: string | null; type?: string | null; typeNumber?: string | null }) {
+  async publicRegister(data: {
+    email: string;
+    username?: string;
+    password: string;
+    name: string;
+    image?: string | null;
+    type?: string | null;
+    typeNumber?: string | null;
+    organizationId?: number | null;
+  }) {
     const user = await this.register({
       email: data.email,
       username: data.username,
       password: data.password,
       role: 'CLIENT',
       status: 'ACTIVO',
+      organizationId: data.organizationId,
     });
 
     try {
@@ -244,6 +262,7 @@ export class UsersService {
           type: data.type ?? null,
           typeNumber: data.typeNumber ?? null,
           email: data.email,
+          organizationId: data.organizationId ?? null,
         },
       });
     } catch (error) {
@@ -333,14 +352,21 @@ export class UsersService {
     const { phone, image, ...userData } = data;
     const updated = await this.update(id, userData);
 
-    if (phone !== undefined || image !== undefined) {
+    if (phone !== undefined || image !== undefined || updated.organizationId !== undefined) {
       const existingClient = await this.prismaService.client.findUnique({
         where: { userId: id },
       });
 
-      const clientData: { phone?: string | null; image?: string | null; name?: string; email?: string } = {};
+      const clientData: {
+        phone?: string | null;
+        image?: string | null;
+        name?: string;
+        email?: string;
+        organizationId?: number | null;
+      } = {};
       if (phone !== undefined) clientData.phone = phone;
       if (image !== undefined) clientData.image = image;
+      clientData.organizationId = updated.organizationId ?? null;
 
       if (existingClient) {
         await this.prismaService.client.update({

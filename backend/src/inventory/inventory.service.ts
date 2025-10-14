@@ -151,6 +151,7 @@ export class InventoryService {
     quantity: number;
     description?: string;
     userId: number; // ID del usuario que realiza la transferencia
+    organizationId?: number | null;
   }) {
     const {
       sourceStoreId,
@@ -159,7 +160,9 @@ export class InventoryService {
       quantity,
       description,
       userId,
+      organizationId: inputOrganizationId,
     } = transferDto;
+    const organizationId = inputOrganizationId ?? null;
 
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -205,6 +208,7 @@ export class InventoryService {
             data: {
               productId,
               storeId: destinationStoreId, // Agregar el storeId requerido
+              organizationId,
             },
         });
       }
@@ -227,6 +231,7 @@ export class InventoryService {
           productId,
           quantity,
           description: description || null,
+          organizationId,
         },
       });
 
@@ -240,10 +245,11 @@ export class InventoryService {
             previousStock: sourceStoreInventory.stock,
             newStock: sourceStoreInventory.stock - quantity,
             userId, // Usuario que realizó la acción
+            organizationId,
           },
           {
             inventoryId: destinationStoreInventory
-            ? destinationStoreInventory.inventoryId
+              ? destinationStoreInventory.inventoryId
               : ((
                   await this.prisma.inventory.findFirst({
                     where: { productId },
@@ -263,6 +269,7 @@ export class InventoryService {
               ? destinationStoreInventory.stock + quantity
               : quantity,
             userId, // Usuario que realizó la acción
+            organizationId,
           },
         ],
       });
@@ -723,7 +730,13 @@ export class InventoryService {
     });
   }
 
-  async processExcelData(data: any[], storeId: number, userId: number, providerId: number | null) {
+  async processExcelData(
+    data: any[],
+    storeId: number,
+    userId: number,
+    providerId: number | null,
+    organizationId?: number | null,
+  ) {
     
     const parsedUserId = Number(userId);
     if (!Number.isInteger(parsedUserId)) {
@@ -794,6 +807,7 @@ export class InventoryService {
           data: {
             productId: product.id,
             storeId,
+            organizationId: organizationId ?? null,
           },
         })
       }
@@ -830,6 +844,7 @@ export class InventoryService {
           stockChange: parsedStock,
           previousStock: storeInventory?.stock ?? 0,
           newStock: (storeInventory?.stock ?? 0) + parsedStock,
+          organizationId: organizationId ?? null,
         },
       })
 

@@ -34,7 +34,7 @@ export class UsersController {
   @Post('register')
   async register(
     @Body()
-    body: { email: string; username?: string; password: string; role: string; status?: string },
+    body: { email: string; username?: string; password: string; role: string; status?: string; organizationId?: number | null },
   ) {
     return this.usersService.register(body);
   }
@@ -51,6 +51,7 @@ export class UsersController {
       image?: string | null;
       type?: string | null;
       typeNumber?: string | null;
+      organizationId?: number | null;
     },
   ) {
     return this.usersService.publicRegister(body);

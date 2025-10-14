@@ -9,14 +9,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
   - 🔜 _Paso 3_: Documentar y socializar el flujo de alta/baja de organizaciones con Operaciones (pendiente de coordinación con stakeholders).
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
-  - 🆕 _Paso 2_: Exponer los campos `organizationId` en servicios y repositorios, manteniendo la lógica legacy intacta.
+  - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy.
   - 🔜 _Paso 3_: Extender la batería de pruebas para cubrir registros con `organizationId` nulo.
 
 ## Próximas acciones sugeridas
 1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
-2. Iniciar revisión de servicios críticos (`users`, `clients`, `stores`, `inventory`, `sales`) para incluir `organizationId` en DTOs, repositorios y contratos públicos sin alterar flujos vigentes. Entregables:
-   - Pull requests que propaguen el campo opcional en capas de transporte y persistencia.
-   - Instrumentación temporal (logs/metrics) para detectar accesos sin `organizationId`.
+2. Instrumentar temporalmente logs y métricas para detectar accesos a servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) que aún no envíen `organizationId`, y documentar los consumidores faltantes.
 3. Diseñar las pruebas unitarias y de integración que cubran entidades con `organizationId` nulo o definido (Fase 2 – Paso 3). Preparar suites para ejecución continua.
 4. Planificar la **Fase 3 – Poblado y validación** con el equipo de datos. Entregables:
    - Definición de reglas de asignación por tabla (fuentes, columnas puente, excepciones manuales).

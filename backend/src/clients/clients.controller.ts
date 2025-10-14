@@ -20,6 +20,7 @@ export class ClientController {
       type: createClientDto.type || '',
       typeNumber: createClientDto.typeNumber || '',
       userId: createClientDto.userId,
+      organizationId: createClientDto.organizationId ?? null,
     };
     return this.clientService.create(clientData);
   }
@@ -34,6 +35,7 @@ export class ClientController {
       typeNumber: createClientDto.typeNumber ?? undefined,
       userId: createClientDto.userId,
       image: createClientDto.image ?? undefined,
+      organizationId: createClientDto.organizationId ?? null,
     };
     return this.clientService.selfRegister(clientData);
   }
@@ -46,7 +48,7 @@ export class ClientController {
 
   @Post('verify-or-create-products')
   async verifyOrCreateProducts(
-    @Body() clients: { name: string; type?: string; typerNumber?: string; userId: number }[],
+    @Body() clients: { name: string; type?: string; typerNumber?: string; userId: number; organizationId?: number | null }[],
   ) {
     // Mapea las propiedades para que coincidan con el tipo esperado
     const formattedClients = clients.map((client) => ({
@@ -54,6 +56,7 @@ export class ClientController {
       type: client.type || '', // Proporciona un valor predeterminado si es opcional
       typeNumber: client.typerNumber || '', // Proporciona un valor predeterminado si es opcional
       idUser: client.userId, // Asegúrate de usar idUser
+      organizationId: client.organizationId ?? null,
     }));
     return this.clientService.verifyOrCreateClients(formattedClients);
   }

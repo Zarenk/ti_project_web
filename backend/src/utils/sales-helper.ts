@@ -96,6 +96,7 @@ export async function executeSale(prisma: PrismaService, params: {
   source: 'POS' | 'WEB';
   getStoreName: (alloc: SaleAllocation) => string;
   onSalePosted?: (saleId: number, postedAt: Date) => Promise<void> | void;
+  organizationId?: number | null;
 }) {
   const {
     userId,
@@ -111,6 +112,7 @@ export async function executeSale(prisma: PrismaService, params: {
     source,
     getStoreName,
     onSalePosted,
+    organizationId,
   } = params;
 
   const sale = await prisma.$transaction(async (prismaTx) => {
@@ -122,6 +124,7 @@ export async function executeSale(prisma: PrismaService, params: {
         total,
         description,
         source,
+        organizationId: organizationId ?? null,
       },
     });
 
@@ -260,6 +263,7 @@ export async function executeSale(prisma: PrismaService, params: {
           stockChange: -detail.quantity,
           previousStock: storeInventory.stock,
           newStock: storeInventory.stock - detail.quantity,
+          organizationId: organizationId ?? null,
         },
       });
     }

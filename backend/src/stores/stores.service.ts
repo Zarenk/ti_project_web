@@ -156,15 +156,16 @@ export class StoresService {
         stores.map((store) =>
           this.prismaService.store.update({
             where: { id: Number(store.id) },
-            data: {  
+            data: {
               name: store.name,
-              description: store.description,  
-              ruc: store.ruc,        
+              description: store.description,
+              ruc: store.ruc,
               phone: store.phone,
               adress: store.adress,
               email: store.email,
               website: store.website,
               status: store.status,
+              organizationId: store.organizationId ?? null,
             },
           })
         )

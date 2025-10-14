@@ -143,6 +143,7 @@ export class WebSalesService {
       lastName,
       invoiceName,
       razonSocial,
+      organizationId: inputOrganizationId,
     } = data;
 
     let resolvedClientId = clientId;
@@ -171,6 +172,7 @@ export class WebSalesService {
               username: `web_${unique}`,
               password: 'default_password',
               role: 'CLIENT',
+              organizationId: inputOrganizationId ?? null,
             },
             select: { id: true },
           });
@@ -182,6 +184,7 @@ export class WebSalesService {
               typeNumber: documentNumber,
               userId: user.id,
               status: 'Activo',
+              organizationId: inputOrganizationId ?? null,
             },
             select: { id: true },
           });
@@ -196,6 +199,8 @@ export class WebSalesService {
       storeId,
       resolvedClientId,
     );
+
+    const organizationId = inputOrganizationId ?? store.organizationId ?? null;
 
     const allocations: SaleAllocation[] = [];
     
@@ -232,6 +237,7 @@ export class WebSalesService {
       total,
       source: 'WEB',
       getStoreName: ({ storeInventory }) => storeInventory.store.name,
+      organizationId,
 
       onSalePosted: async (id) => {
         try {

@@ -30,10 +30,23 @@ export class SalesService {
     tipoComprobante?: string;
     tipoMoneda: string;
     payments: { paymentMethodId: number; amount: number; currency: string }[];
+    organizationId?: number | null;
   }) {
-    const { userId, storeId, clientId, description, details, payments, tipoComprobante, tipoMoneda } = data;
+    const {
+      userId,
+      storeId,
+      clientId,
+      description,
+      details,
+      payments,
+      tipoComprobante,
+      tipoMoneda,
+      organizationId: inputOrganizationId,
+    } = data;
 
     const { store, cashRegister, clientIdToUse } = await prepareSaleContext(this.prisma, storeId, clientId);
+
+    const organizationId = inputOrganizationId ?? store.organizationId ?? null;
 
     // Validar stock, calcular el total y preparar las asignaciones de inventario
     const allocations: SaleAllocation[] = [];
@@ -66,6 +79,7 @@ export class SalesService {
       total,
       source: 'POS',
       getStoreName: () => store.name,
+      organizationId,
       onSalePosted: async (id) => {
         try {
           await this.accountingHook.postSale(id);

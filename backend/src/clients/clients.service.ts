@@ -12,8 +12,16 @@ export class ClientService {
     private prismaService: PrismaService,
   ) {}
 
-  async create(data: { name: string; type: string; typeNumber: string; userId?: number; image?: string }) {
-    const userId = data.userId || (await this.createGenericUser()); // Crear un usuario genérico si no se proporciona uno
+  async create(data: {
+    name: string;
+    type: string;
+    typeNumber: string;
+    userId?: number;
+    image?: string;
+    organizationId?: number | null;
+  }) {
+    const userId =
+      data.userId || (await this.createGenericUser(data.organizationId)); // Crear un usuario genérico si no se proporciona uno
   
     try {
       return await this.prismaService.client.create({
@@ -23,6 +31,7 @@ export class ClientService {
           typeNumber: data.typeNumber,
           userId,
           image: data.image,
+          organizationId: data.organizationId ?? null,
         },
       });
     } catch (error) {
@@ -34,19 +43,20 @@ export class ClientService {
     }
   }
   
-  private async createGenericUser() {
+  private async createGenericUser(organizationId?: number | null) {
     const genericUser = await this.prismaService.user.create({
       data: {
         email: `generic_${Date.now()}@example.com`,
         username: `generic_${Date.now()}`,
         password: "default_password", // Asegúrate de encriptar esto si es necesario
         role: "CLIENT",
+        organizationId: organizationId ?? null,
       },
     });
     return genericUser.id;
   }
 
-  async createGuest() {
+  async createGuest(organizationId?: number | null) {
     const username = `generic_${randomUUID()}`;
     const user = await this.prismaService.user.create({
       data: {
@@ -54,6 +64,7 @@ export class ClientService {
         username,
         password: 'default_password',
         role: 'GUEST',
+        organizationId: organizationId ?? null,
       },
       select: { id: true },
     });
@@ -63,6 +74,7 @@ export class ClientService {
         data: {
           name: username,
           userId: user.id,
+          organizationId: organizationId ?? null,
         },
         select: { id: true, name: true },
       });
@@ -81,7 +93,15 @@ export class ClientService {
     }
   }
 
-  async verifyOrCreateClients(clients: { name: string; type:string; typeNumber: string; idUser: number }[]) {
+  async verifyOrCreateClients(
+    clients: {
+      name: string;
+      type: string;
+      typeNumber: string;
+      idUser: number;
+      organizationId?: number | null;
+    }[],
+  ) {
     const createdClients: {
       id: number;
       name: string | null;
@@ -110,6 +130,7 @@ export class ClientService {
             type: client.type || '',
             typeNumber: client.typeNumber || '',
             userId: client.idUser,
+            organizationId: client.organizationId ?? null,
           },
         });
         createdClients.push(newClient);
@@ -127,7 +148,14 @@ export class ClientService {
    * Registro rápido de clientes desde el formulario público.
    * No realiza comprobaciones de número o tipo de documento.
    */
-  async selfRegister(data: { name: string; userId: number; type?: string | null; typeNumber?: string | null; image?: string | null }) {
+  async selfRegister(data: {
+    name: string;
+    userId: number;
+    type?: string | null;
+    typeNumber?: string | null;
+    image?: string | null;
+    organizationId?: number | null;
+  }) {    
     // Si el usuario ya tiene cliente simplemente devuélvelo
     const existing = await this.prismaService.client.findUnique({ where: { userId: data.userId } });
     if (existing) return existing;
@@ -140,6 +168,7 @@ export class ClientService {
           typeNumber: data.typeNumber ?? null,
           userId: data.userId,
           image: data.image ?? null,
+          organizationId: data.organizationId ?? null,
         },
       });
     } catch (error) {
@@ -249,7 +278,7 @@ export class ClientService {
         clients.map((client) =>
           this.prismaService.client.update({
             where: { id: Number(client.id) },
-            data: {             
+            data: {
               name: client.name,
               type: client.type,
               typeNumber: client.typeNumber,
@@ -257,6 +286,7 @@ export class ClientService {
               adress: client.adress,
               email: client.email,
               status: client.status,
+              organizationId: client.organizationId ?? null,
             },
           })
         )
