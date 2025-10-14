@@ -14,6 +14,7 @@ import { Prisma } from '@prisma/client';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { Request } from 'express';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 
 @Injectable()
 export class UsersService {
@@ -189,6 +190,12 @@ export class UsersService {
     status?: string;
     organizationId?: number | null;
   }) {
+    logOrganizationContext({
+      service: UsersService.name,
+      operation: 'register',
+      organizationId: data.organizationId,
+      metadata: { role: data.role },
+    });
     const username = data.username || data.email.split('@')[0];
 
     const existingEmail = await this.prismaService.user.findUnique({ where: { email: data.email } });
@@ -244,6 +251,11 @@ export class UsersService {
     typeNumber?: string | null;
     organizationId?: number | null;
   }) {
+    logOrganizationContext({
+      service: UsersService.name,
+      operation: 'publicRegister',
+      organizationId: data.organizationId,
+    });
     const user = await this.register({
       email: data.email,
       username: data.username,
@@ -254,6 +266,12 @@ export class UsersService {
     });
 
     try {
+      logOrganizationContext({
+        service: UsersService.name,
+        operation: 'publicRegister.createClient',
+        organizationId: data.organizationId,
+        metadata: { userId: user.id },
+      });
       await this.prismaService.client.create({
         data: {
           name: data.name,
@@ -315,6 +333,14 @@ export class UsersService {
   }
 
   async update(id: number, data: UpdateUserDto) {
+    if (data.organizationId !== undefined) {
+      logOrganizationContext({
+        service: UsersService.name,
+        operation: 'update',
+        organizationId: data.organizationId,
+        metadata: { userId: id },
+      });
+    }
     if (data.email) {
       const existing = await this.prismaService.user.findUnique({
         where: { email: data.email },
@@ -350,9 +376,23 @@ export class UsersService {
 
   async updateProfile(id: number, data: UpdateProfileDto) {
     const { phone, image, ...userData } = data;
+    if (userData.organizationId !== undefined) {
+      logOrganizationContext({
+        service: UsersService.name,
+        operation: 'updateProfile',
+        organizationId: userData.organizationId,
+        metadata: { userId: id },
+      });
+    }
     const updated = await this.update(id, userData);
 
     if (phone !== undefined || image !== undefined || updated.organizationId !== undefined) {
+      logOrganizationContext({
+        service: UsersService.name,
+        operation: 'updateProfile.syncClient',
+        organizationId: updated.organizationId,
+        metadata: { userId: id },
+      });
       const existingClient = await this.prismaService.client.findUnique({
         where: { userId: id },
       });

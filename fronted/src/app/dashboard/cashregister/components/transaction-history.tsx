@@ -12,7 +12,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { format, isSameDay } from "date-fns"
 import { BACKEND_URL } from "@/lib/utils"
 import { Transaction } from "../types/cash-register"
-import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
@@ -912,6 +912,29 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
       [modalTransaction?.description],
     )
 
+    const dialogDescriptionId = "transaction-history-dialog-description"
+    const dialogDescriptionText = modalTransaction
+      ? (() => {
+          const effectiveType = modalTransaction.internalType ?? modalTransaction.type
+          const typeLabel = typeLabels[effectiveType ?? ""] ?? effectiveType ?? "Transacción"
+
+          let formattedTimestamp = "sin fecha registrada"
+          if (modalTransaction.timestamp) {
+            const parsedTimestamp = new Date(modalTransaction.timestamp)
+            if (!Number.isNaN(parsedTimestamp.getTime())) {
+              formattedTimestamp = parsedTimestamp.toLocaleString()
+            }
+          }
+
+          const amountIsNumeric = typeof modalTransaction.amount === "number" && Number.isFinite(modalTransaction.amount)
+          const amountSnippet = amountIsNumeric
+            ? ` Monto: ${formatAmountWithSign(modalTransaction.amount, effectiveType, modalCurrency)}.`
+            : ""
+
+          return `${typeLabel} registrado el ${formattedTimestamp}.${amountSnippet}`
+        })()
+      : "Consulta los detalles de la transacción seleccionada."
+
     const structuredNotes = useMemo(() => {
       const baseEntries = parseStructuredNotes(
         modalTransaction?.description,
@@ -1721,6 +1744,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
           <Dialog open={!!modalTransaction} onOpenChange={() => setModalTransaction(null)}>
             <DialogContent
               className="max-h-[85vh] overflow-y-auto sm:max-w-3xl lg:max-w-4xl"
+              aria-describedby={dialogDescriptionText ? dialogDescriptionId : undefined}
             >
               <DialogHeader className="pb-4">
                 <div className="flex items-start justify-between gap-4">
@@ -1728,6 +1752,14 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                     Detalle de Transacción
                   </DialogTitle>
                 </div>
+                {dialogDescriptionText && (
+                  <DialogDescription
+                    id={dialogDescriptionId}
+                    className="text-sm text-muted-foreground"
+                  >
+                    {dialogDescriptionText}
+                  </DialogDescription>
+                )}
               </DialogHeader>
               {modalTransaction && (
                 <div className="space-y-4 text-sm sm:text-base">

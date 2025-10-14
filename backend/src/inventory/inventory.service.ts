@@ -9,6 +9,7 @@ import * as ExcelJS from 'exceljs';
 import { format } from 'date-fns-tz';
 import { Buffer } from 'buffer';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 
 @Injectable()
 export class InventoryService {
@@ -163,6 +164,13 @@ export class InventoryService {
       organizationId: inputOrganizationId,
     } = transferDto;
     const organizationId = inputOrganizationId ?? null;
+
+    logOrganizationContext({
+      service: InventoryService.name,
+      operation: 'transferProduct',
+      organizationId,
+      metadata: { sourceStoreId, destinationStoreId, productId, userId },
+    });
 
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -737,7 +745,13 @@ export class InventoryService {
     providerId: number | null,
     organizationId?: number | null,
   ) {
-    
+    logOrganizationContext({
+      service: InventoryService.name,
+      operation: 'processExcelData',
+      organizationId,
+      metadata: { storeId, userId },
+    });
+
     const parsedUserId = Number(userId);
     if (!Number.isInteger(parsedUserId)) {
       throw new Error('El usuario responsable es obligatorio para importar el Excel');

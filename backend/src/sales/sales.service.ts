@@ -7,6 +7,7 @@ import { eachDayOfInterval } from 'date-fns';
 import { executeSale, prepareSaleContext, SaleAllocation } from 'src/utils/sales-helper';
 import { ActivityService } from 'src/activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 
 @Injectable()
 export class SalesService {
@@ -47,6 +48,13 @@ export class SalesService {
     const { store, cashRegister, clientIdToUse } = await prepareSaleContext(this.prisma, storeId, clientId);
 
     const organizationId = inputOrganizationId ?? store.organizationId ?? null;
+
+    logOrganizationContext({
+      service: SalesService.name,
+      operation: 'createSale',
+      organizationId,
+      metadata: { storeId, userId, clientId: clientIdToUse ?? clientId },
+    });
 
     // Validar stock, calcular el total y preparar las asignaciones de inventario
     const allocations: SaleAllocation[] = [];

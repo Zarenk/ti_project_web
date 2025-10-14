@@ -1124,11 +1124,11 @@ export default function Page() {
                     className="h-10"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Monto total (S/)
                   </p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
                     <Input
                       value={minTotal}
                       onChange={(event) => setMinTotal(event.target.value)}

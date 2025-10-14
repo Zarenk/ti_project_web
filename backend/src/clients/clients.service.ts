@@ -4,6 +4,7 @@ import { Prisma} from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateClientDto } from './dto/update-client.dto';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 
 @Injectable()
 export class ClientService {
@@ -20,6 +21,15 @@ export class ClientService {
     image?: string;
     organizationId?: number | null;
   }) {
+    logOrganizationContext({
+      service: ClientService.name,
+      operation: 'create',
+      organizationId: data.organizationId,
+      metadata: {
+        userId: data.userId ?? null,
+        type: data.type,
+      },
+    });
     const userId =
       data.userId || (await this.createGenericUser(data.organizationId)); // Crear un usuario genérico si no se proporciona uno
   
@@ -44,6 +54,11 @@ export class ClientService {
   }
   
   private async createGenericUser(organizationId?: number | null) {
+    logOrganizationContext({
+      service: ClientService.name,
+      operation: 'createGenericUser',
+      organizationId,
+    });
     const genericUser = await this.prismaService.user.create({
       data: {
         email: `generic_${Date.now()}@example.com`,
@@ -57,6 +72,11 @@ export class ClientService {
   }
 
   async createGuest(organizationId?: number | null) {
+    logOrganizationContext({
+      service: ClientService.name,
+      operation: 'createGuest',
+      organizationId,
+    });
     const username = `generic_${randomUUID()}`;
     const user = await this.prismaService.user.create({
       data: {
@@ -117,6 +137,12 @@ export class ClientService {
     }[] = [];
   
     for (const client of clients) {
+      logOrganizationContext({
+        service: ClientService.name,
+        operation: 'verifyOrCreateClients',
+        organizationId: client.organizationId,
+        metadata: { userId: client.idUser, typeNumber: client.typeNumber },
+      });
       // Verificar si el documento ya existe
       let existingClient = await this.prismaService.client.findUnique({
         where: { typeNumber: client.typeNumber },
@@ -155,7 +181,13 @@ export class ClientService {
     typeNumber?: string | null;
     image?: string | null;
     organizationId?: number | null;
-  }) {    
+  }) {
+    logOrganizationContext({
+      service: ClientService.name,
+      operation: 'selfRegister',
+      organizationId: data.organizationId,
+      metadata: { userId: data.userId },
+    });  
     // Si el usuario ya tiene cliente simplemente devuélvelo
     const existing = await this.prismaService.client.findUnique({ where: { userId: data.userId } });
     if (existing) return existing;

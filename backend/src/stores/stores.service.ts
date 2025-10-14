@@ -11,6 +11,7 @@ import { UpdateStoreDto } from './dto/update-store.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AuditAction } from '@prisma/client';
 import { ActivityService } from '../activity/activity.service';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 
 @Injectable()
 export class StoresService {
@@ -23,6 +24,13 @@ export class StoresService {
   async create(createStoreDto: CreateStoreDto, req: Request) {
     try {
       const { organizationId, ...storePayload } = createStoreDto;
+
+      logOrganizationContext({
+        service: StoresService.name,
+        operation: 'create',
+        organizationId,
+        metadata: { storeName: createStoreDto.name },
+      });
 
       const storeCreateData: (Prisma.StoreUncheckedCreateInput & {
         organizationId?: number | null;
@@ -98,6 +106,15 @@ export class StoresService {
         where: { id: Number(id) },
       });
       const { id: _id, organizationId, ...storePayload } = updateStoreDto;
+
+      if (organizationId !== undefined) {
+        logOrganizationContext({
+          service: StoresService.name,
+          operation: 'update',
+          organizationId,
+          metadata: { storeId: id },
+        });
+      }
 
       const storeUpdateData: (Prisma.StoreUncheckedUpdateInput & {
         organizationId?: number | null;
@@ -175,6 +192,12 @@ export class StoresService {
       // Ejecutar la transacción para actualizar múltiples productos
       const updatedStores = await this.prismaService.$transaction(
         stores.map((store) => {
+          logOrganizationContext({
+            service: StoresService.name,
+            operation: 'updateMany',
+            organizationId: store.organizationId,
+            metadata: { storeId: store.id },
+          });
           const updateData: (Prisma.StoreUncheckedUpdateInput & {
             organizationId?: number | null;
           }) = {

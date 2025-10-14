@@ -22,6 +22,7 @@ import {
   normalizeCarrierMode,
   normalizeShippingMethod,
 } from './dto/complete-order.dto';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 
 @Injectable()
 export class WebSalesService {
@@ -146,6 +147,13 @@ export class WebSalesService {
       organizationId: inputOrganizationId,
     } = data;
 
+    logOrganizationContext({
+      service: WebSalesService.name,
+      operation: 'createWebSale',
+      organizationId: inputOrganizationId,
+      metadata: { storeId, userId },
+    });
+
     let resolvedClientId = clientId;
 
     if (!resolvedClientId) {
@@ -166,6 +174,12 @@ export class WebSalesService {
           resolvedClientId = existingClient.id;
         } else {
           const unique = Date.now();
+          logOrganizationContext({
+            service: WebSalesService.name,
+            operation: 'createWebSale.createUser',
+            organizationId: inputOrganizationId,
+            metadata: { documentNumber },
+          });
           const user = await this.prisma.user.create({
             data: {
               email: `web_${unique}@client.local`,
@@ -177,6 +191,12 @@ export class WebSalesService {
             select: { id: true },
           });
 
+          logOrganizationContext({
+            service: WebSalesService.name,
+            operation: 'createWebSale.createClient',
+            organizationId: inputOrganizationId,
+            metadata: { documentNumber },
+          });
           const newClient = await this.prisma.client.create({
             data: {
               name: orderName,
@@ -201,6 +221,17 @@ export class WebSalesService {
     );
 
     const organizationId = inputOrganizationId ?? store.organizationId ?? null;
+
+    logOrganizationContext({
+      service: WebSalesService.name,
+      operation: 'createWebSale.executeSale',
+      organizationId,
+      metadata: {
+        storeId,
+        userId,
+        clientId: clientIdToUse ?? resolvedClientId ?? null,
+      },
+    });
 
     const allocations: SaleAllocation[] = [];
     
