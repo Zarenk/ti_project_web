@@ -7,7 +7,17 @@ export interface OrganizationContextLogOptions {
   metadata?: Record<string, unknown>;
 }
 
-const organizationLogger = new Logger('OrganizationContext');
+type OrganizationLogger = Pick<Logger, 'log' | 'warn'>;
+
+let organizationLogger: OrganizationLogger = new Logger('OrganizationContext');
+
+export function setOrganizationContextLogger(logger: OrganizationLogger) {
+  organizationLogger = logger;
+}
+
+export function resetOrganizationContextLogger() {
+  organizationLogger = new Logger('OrganizationContext');
+}
 
 export function logOrganizationContext({
   service,
