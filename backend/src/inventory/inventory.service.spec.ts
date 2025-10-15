@@ -2,6 +2,7 @@ jest.mock('src/tenancy/organization-context.logger', () => ({
   logOrganizationContext: jest.fn(),
 }));
 
+import { BadRequestException } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityService } from 'src/activity/activity.service';
@@ -135,7 +136,10 @@ describe('InventoryService multi-organization support', () => {
     prisma.inventoryHistory.createMany.mockResolvedValue({ count: 2 });
     prisma.inventoryHistory.create.mockResolvedValue({ id: 900 });
     prisma.user.findUnique.mockResolvedValue({ username: 'user@example.com' });
-    prisma.store.findUnique.mockResolvedValue({ id: 1, organizationId: 777 });
+    prisma.store.findUnique.mockImplementation(async ({ where: { id } }) => ({
+      id,
+      organizationId: 777,
+    }));
     prisma.category.findFirst.mockResolvedValue(null);
     prisma.category.create.mockResolvedValue({ id: 303, name: 'Category' });
     prisma.provider.findFirst.mockResolvedValue(null);
@@ -158,6 +162,10 @@ describe('InventoryService multi-organization support', () => {
   });
 
   it('propagates organizationId when transferring inventory with an explicit tenant', async () => {
+    prisma.store.findUnique.mockImplementation(async ({ where: { id } }) => ({
+      id,
+      organizationId: 777,
+    }));
     prisma.storeOnInventory.findFirst
       .mockResolvedValueOnce({ id: 10, stock: 20, inventoryId: 50 })
       .mockResolvedValueOnce(null);
@@ -207,6 +215,10 @@ describe('InventoryService multi-organization support', () => {
   });
 
   it('defaults organizationId to null when tenant context is missing', async () => {
+    prisma.store.findUnique.mockImplementation(async ({ where: { id } }) => ({
+      id,
+      organizationId: null,
+    }));
     prisma.storeOnInventory.findFirst
       .mockResolvedValueOnce({ id: 11, stock: 15, inventoryId: 55 })
       .mockResolvedValueOnce({ id: 22, stock: 5, inventoryId: 66 });
@@ -242,6 +254,28 @@ describe('InventoryService multi-organization support', () => {
       }),
     );
   });
+
+  it('throws when source and destination stores belong to different organizations', async () => {
+    prisma.store.findUnique.mockImplementation(async ({ where: { id } }) => ({
+      id,
+      organizationId: id === 1 ? 101 : 202,
+    }));
+
+    prisma.storeOnInventory.findFirst.mockResolvedValue({ id: 50, stock: 10, inventoryId: 80 });
+
+    await expect(
+      service.transferProduct({
+        sourceStoreId: 1,
+        destinationStoreId: 2,
+        productId: 3,
+        quantity: 1,
+        userId: 4,
+        organizationId: 101,
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.transfer.create).not.toHaveBeenCalled();
+  });
   describe('processExcelData multi-organization support', () => {
     const excelRows = [
       {
@@ -275,7 +309,10 @@ describe('InventoryService multi-organization support', () => {
     });
 
     it('propagates an explicit organizationId across inventory and accounting artifacts', async () => {
-      prisma.store.findUnique.mockResolvedValue({ id: 1, organizationId: 555 });
+      prisma.store.findUnique.mockImplementation(async ({ where: { id } }) => ({
+        id,
+        organizationId: 555,
+      }));
 
       await service.processExcelData(excelRows, 1, 10, 2, 999);
 
@@ -304,7 +341,10 @@ describe('InventoryService multi-organization support', () => {
     });
 
     it('falls back to the store organizationId when no explicit tenant is provided', async () => {
-      prisma.store.findUnique.mockResolvedValue({ id: 5, organizationId: 444 });
+      prisma.store.findUnique.mockImplementation(async ({ where: { id } }) => ({
+        id,
+        organizationId: 444,
+      }));
 
       await service.processExcelData(excelRows, 5, 11, 3);
 

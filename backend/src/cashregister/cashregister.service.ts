@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import { resolveOrganizationId } from 'src/tenancy/organization.utils';
 import { CreateCashTransactionDto } from './dto/create-cashtransactions.dto';
 import { CreateCashClosureDto } from './dto/create-cashclosure.dto';
 import { CreateCashRegisterDto } from './dto/create-cashregister.dto';
@@ -50,28 +51,24 @@ export class CashregisterService {
   private resolveOrganizationId({
     provided,
     fallback,
+    fallbacks = [],
     mismatchMessage,
   }: {
     provided?: number | null;
     fallback?: number | null;
+    fallbacks?: Array<number | null | undefined>;
     mismatchMessage: string;
   }): number | null {
-    const hasProvided = provided !== undefined && provided !== null;
-    const hasFallback = fallback !== undefined && fallback !== null;
+    const normalizedFallbacks = [
+      ...(fallback !== undefined ? [fallback] : []),
+      ...fallbacks,
+    ].filter((value): value is number | null => value !== undefined);
 
-    if (hasProvided && hasFallback && provided !== fallback) {
-      throw new BadRequestException(mismatchMessage);
-    }
-
-    if (hasProvided) {
-      return provided as number;
-    }
-
-    if (hasFallback) {
-      return fallback as number;
-    }
-
-    return null;
+    return resolveOrganizationId({
+      provided,
+      fallbacks: normalizedFallbacks,
+      mismatchError: mismatchMessage,
+    });
   }
 
   // Crear una nueva caja
@@ -80,16 +77,17 @@ export class CashregisterService {
 
     const store = await this.prisma.store.findUnique({
       where: { id: storeId },
-      select: { organizationId: true },
     });
 
     if (!store) {
       throw new NotFoundException(`No se encontró la tienda con ID ${storeId}.`);
     }
 
-  const organizationId = this.resolveOrganizationId({
+    const organizationId = this.resolveOrganizationId({
       provided: providedOrganizationId,
-      fallback: store.organizationId,
+      fallbacks: [
+        (store as { organizationId?: number | null }).organizationId ?? null,
+      ],
       mismatchMessage: 'La tienda pertenece a otra organización.',
     });
 
@@ -98,7 +96,7 @@ export class CashregisterService {
       where: {
         storeId,
         status: 'ACTIVE',
-        ...this.buildOrganizationFilter(organizationId),
+        ...(this.buildOrganizationFilter(organizationId) as any),
       },
     });
 
@@ -119,7 +117,7 @@ export class CashregisterService {
         storeId,
         organizationId,
         currentBalance: rest.initialBalance, // 👈 setear también el saldo actual
-      },
+      } as Prisma.CashRegisterUncheckedCreateInput,
     });
   }
 
@@ -131,12 +129,12 @@ export class CashregisterService {
       where: {
         storeId,
         status: 'ACTIVE',
-        ...this.buildOrganizationFilter(options?.organizationId),
+        ...(this.buildOrganizationFilter(options?.organizationId) as any),
       },
       select: {
         currentBalance: true,
         organizationId: true,
-      },
+      } as any,
     });
 
     // Si no existe una caja activa simplemente retorna null para evitar un 404
@@ -149,7 +147,7 @@ export class CashregisterService {
     endOfDay: Date,
     options?: { organizationId?: number | null },
   ) {
-    const organizationFilter = this.buildOrganizationFilter(options?.organizationId);
+    const organizationFilter = this.buildOrganizationFilter(options?.organizationId) as any;
 
     const transactions = await this.prisma.cashTransaction.findMany({
       where: {
@@ -260,8 +258,9 @@ export class CashregisterService {
         totalIncome: Number(closure.totalIncome),
         totalExpense: Number(closure.totalExpense),
         nextOpeningBalance:
-          closure.nextOpeningBalance !== null && closure.nextOpeningBalance !== undefined
-            ? Number(closure.nextOpeningBalance)
+          (closure as any).nextOpeningBalance !== null &&
+          (closure as any).nextOpeningBalance !== undefined
+            ? Number((closure as any).nextOpeningBalance)
             : null,
         notes: closure.notes ?? null,
         currency: "S/.",
@@ -285,7 +284,7 @@ export class CashregisterService {
         where: {
           storeId,
           status: 'ACTIVE',
-          ...this.buildOrganizationFilter(options?.organizationId),
+          ...(this.buildOrganizationFilter(options?.organizationId) as any),
         },
         select: {
           id: true,
@@ -293,14 +292,14 @@ export class CashregisterService {
           currentBalance: true,
           initialBalance: true,
           organizationId: true,
-        },
+        } as any,
       });
     }
 
     // Listar todas las cajas
     async findAll(options?: { organizationId?: number | null }) {
       return this.prisma.cashRegister.findMany({
-        where: this.buildOrganizationFilter(options?.organizationId),
+        where: this.buildOrganizationFilter(options?.organizationId) as any,
         include: {
           store: true,
           transactions: true,
@@ -386,7 +385,7 @@ export class CashregisterService {
               organizationId: true,
             },
           },
-        },
+        } as any,
       });
       if (!cashRegister) {
         throw new NotFoundException(`No se encontró la caja con ID ${cashRegisterId}.`);
@@ -398,7 +397,10 @@ export class CashregisterService {
 
       const organizationId = this.resolveOrganizationId({
         provided: providedOrganizationId,
-        fallback: cashRegister.organizationId ?? cashRegister.store?.organizationId ?? null,
+        fallbacks: [
+          (cashRegister as any).organizationId ?? null,
+          (cashRegister as any).store?.organizationId ?? null,
+        ],
         mismatchMessage: 'La caja pertenece a otra organización.',
       });
 
@@ -431,7 +433,7 @@ export class CashregisterService {
           clientDocument: clientDocument || null,
           clientDocumentType: clientDocumentType || null,
           organizationId,
-        },
+        } as Prisma.CashTransactionUncheckedCreateInput,
       });
     
       // Asociar métodos de pago
@@ -476,7 +478,7 @@ export class CashregisterService {
 
     async findAllTransaction(options?: { organizationId?: number | null }) {
       return this.prisma.cashTransaction.findMany({
-        where: this.buildOrganizationFilter(options?.organizationId),
+        where: this.buildOrganizationFilter(options?.organizationId) as any,
         include: {
           cashRegister: true,
           paymentMethods: true,
@@ -493,7 +495,7 @@ export class CashregisterService {
       return this.prisma.cashTransaction.findMany({
         where: {
           cashRegisterId,
-          ...this.buildOrganizationFilter(options?.organizationId),
+          ...(this.buildOrganizationFilter(options?.organizationId) as any),
         },
         include: {
           paymentMethods: true,
@@ -513,7 +515,7 @@ export class CashregisterService {
         where: {
           id: data.cashRegisterId,
           status: 'ACTIVE',
-          ...this.buildOrganizationFilter(providedOrganizationId),
+          ...(this.buildOrganizationFilter(providedOrganizationId) as any),
         },
         include: {
           store: {
@@ -521,7 +523,7 @@ export class CashregisterService {
               organizationId: true,
             },
           },
-        },
+        } as any,
       });
 
       if (!cashRegister) {
@@ -540,7 +542,10 @@ export class CashregisterService {
 
       const organizationId = this.resolveOrganizationId({
         provided: providedOrganizationId,
-        fallback: cashRegister.organizationId ?? cashRegister.store?.organizationId ?? null,
+        fallbacks: [
+          (cashRegister as any).organizationId ?? null,
+          (cashRegister as any).store?.organizationId ?? null,
+        ],
         mismatchMessage: 'La caja pertenece a otra organización.',
       });
 
@@ -583,7 +588,7 @@ export class CashregisterService {
           notes: data.notes,
           nextOpeningBalance: requestedNextInitialBalance,
           organizationId,
-        },
+        } as Prisma.CashClosureUncheckedCreateInput,
       });
 
     const nextCashRegisterName = await this.generateNextCashRegisterName(
@@ -600,7 +605,7 @@ export class CashregisterService {
           currentBalance: requestedNextInitialBalance,
           status: 'ACTIVE',
           organizationId,
-        },
+        } as Prisma.CashRegisterUncheckedCreateInput,
       });
 
     return {
@@ -611,8 +616,9 @@ export class CashregisterService {
           totalIncome: Number(closure.totalIncome),
           totalExpense: Number(closure.totalExpense),
           nextOpeningBalance:
-            closure.nextOpeningBalance !== null && closure.nextOpeningBalance !== undefined
-              ? Number(closure.nextOpeningBalance)
+            (closure as any).nextOpeningBalance !== null &&
+            (closure as any).nextOpeningBalance !== undefined
+              ? Number((closure as any).nextOpeningBalance)
               : null,
         },
         closedCashRegister: {
@@ -662,7 +668,7 @@ export class CashregisterService {
     storeId: number,
     options?: { organizationId?: number | null },
   ) {
-    const organizationFilter = this.buildOrganizationFilter(options?.organizationId);
+    const organizationFilter = this.buildOrganizationFilter(options?.organizationId) as any;
 
     return this.prisma.cashClosure.findMany({
       where: {
@@ -693,7 +699,7 @@ export class CashregisterService {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const organizationFilter = this.buildOrganizationFilter(options?.organizationId);
+    const organizationFilter = this.buildOrganizationFilter(options?.organizationId) as any;
 
     return this.prisma.cashClosure.findFirst({
       where: {
@@ -713,7 +719,7 @@ export class CashregisterService {
 
   async findAllClosure(options?: { organizationId?: number | null  }) {
     return this.prisma.cashClosure.findMany({
-      where: this.buildOrganizationFilter(options?.organizationId),
+      where: this.buildOrganizationFilter(options?.organizationId) as any,
       include: {
         cashRegister: true,
         user: true,

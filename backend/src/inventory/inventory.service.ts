@@ -10,6 +10,7 @@ import { format } from 'date-fns-tz';
 import { Buffer } from 'buffer';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import { resolveOrganizationId } from 'src/tenancy/organization.utils';
 import {
   InventoryUncheckedCreateInputWithOrganization,
   InventoryHistoryUncheckedCreateInputWithOrganization,
@@ -170,7 +171,38 @@ export class InventoryService {
       userId,
       organizationId: inputOrganizationId,
     } = transferDto;
-    const organizationId = inputOrganizationId ?? null;
+    const [sourceStore, destinationStore] = await Promise.all([
+      this.prisma.store.findUnique({
+        where: { id: sourceStoreId },
+      }),
+      this.prisma.store.findUnique({
+        where: { id: destinationStoreId },
+      }),
+    ]);
+
+    if (!sourceStore) {
+      throw new NotFoundException(`La tienda con ID ${sourceStoreId} no existe.`);
+    }
+
+    if (!destinationStore) {
+      throw new NotFoundException(`La tienda con ID ${destinationStoreId} no existe.`);
+    }
+
+    const organizationIdFromSource = resolveOrganizationId({
+      provided: inputOrganizationId,
+      fallbacks: [
+        (sourceStore as { organizationId?: number | null }).organizationId ?? null,
+      ],
+      mismatchError: 'La tienda de origen pertenece a otra organización.',
+    });
+
+    const organizationId = resolveOrganizationId({
+      provided: organizationIdFromSource,
+      fallbacks: [
+        (destinationStore as { organizationId?: number | null }).organizationId ?? null,
+      ],
+      mismatchError: 'La tienda de destino pertenece a otra organización.',
+    });
 
     logOrganizationContext({
       service: InventoryService.name,

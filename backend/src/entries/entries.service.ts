@@ -15,6 +15,7 @@ import { ActivityService } from 'src/activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { AccountingService } from 'src/accounting/accounting.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import { resolveOrganizationId } from 'src/tenancy/organization.utils';
 import {
   InventoryUncheckedCreateInputWithOrganization,
   InventoryHistoryCreateInputWithOrganization,
@@ -154,7 +155,11 @@ export class EntriesService {
 
       const storeOrganizationId =
         (store as { organizationId?: number | null }).organizationId ?? null;
-      const organizationId = data.organizationId ?? storeOrganizationId;
+      const organizationId = resolveOrganizationId({
+        provided: data.organizationId,
+        fallbacks: [storeOrganizationId],
+        mismatchError: `La tienda con ID ${data.storeId} pertenece a otra organización.`,
+      });
       resolvedOrganizationId = organizationId;
 
       // Verificar que el proveedor exista

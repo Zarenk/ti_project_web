@@ -68,7 +68,6 @@ describe('CashregisterService (multi-organization)', () => {
 
       expect(prisma.store.findUnique).toHaveBeenCalledWith({
         where: { id: 5 },
-        select: { organizationId: true },
       });
       expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
         where: { storeId: 5, status: 'ACTIVE', organizationId: 42 },
@@ -242,7 +241,7 @@ describe('CashregisterService (multi-organization)', () => {
           organizationId: 15,
         }),
       );
-      expect(response.closure.organizationId).toBe(15);
+      expect((response as any).closure.organizationId).toBe(15);
     });
 
     it('validates organization mismatches', async () => {

@@ -2,6 +2,7 @@ jest.mock('src/tenancy/organization-context.logger', () => ({
   logOrganizationContext: jest.fn(),
 }));
 
+import { BadRequestException } from '@nestjs/common';
 import { EntriesService } from './entries.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityService } from 'src/activity/activity.service';
@@ -118,6 +119,7 @@ describe('EntriesService multi-organization support', () => {
   });
 
   it('propagates organizationId when provided explicitly', async () => {
+    prisma.store.findUnique.mockResolvedValue({ id: baseInput.storeId, organizationId: 321 });
     await service.createEntry({ ...baseInput, organizationId: 321 });
 
     expect(prisma.entry.create).toHaveBeenCalledWith(
@@ -167,6 +169,17 @@ describe('EntriesService multi-organization support', () => {
         payload.operation === 'createEntry' && payload.organizationId === 654,
       ),
     ).toBe(true);
+  });
+
+  it('throws when the provided tenant differs from the store organization', async () => {
+    prisma.store.findUnique.mockResolvedValue({ id: baseInput.storeId, organizationId: 987 });
+
+    await expect(
+      service.createEntry({ ...baseInput, organizationId: 555 }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.entry.create).not.toHaveBeenCalled();
+    expect(prisma.inventory.create).not.toHaveBeenCalled();
   });
 
   it('defaults organizationId to null when neither payload nor store defines it', async () => {
