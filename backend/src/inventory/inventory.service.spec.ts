@@ -138,7 +138,7 @@ describe('InventoryService multi-organization support', () => {
     prisma.user.findUnique.mockResolvedValue({ username: 'user@example.com' });
     prisma.store.findUnique.mockImplementation(async ({ where: { id } }) => ({
       id,
-      organizationId: 777,
+      organizationId: 321,
     }));
     prisma.category.findFirst.mockResolvedValue(null);
     prisma.category.create.mockResolvedValue({ id: 303, name: 'Category' });
@@ -164,7 +164,7 @@ describe('InventoryService multi-organization support', () => {
   it('propagates organizationId when transferring inventory with an explicit tenant', async () => {
     prisma.store.findUnique.mockImplementation(async ({ where: { id } }) => ({
       id,
-      organizationId: 777,
+      organizationId: 321,
     }));
     prisma.storeOnInventory.findFirst
       .mockResolvedValueOnce({ id: 10, stock: 20, inventoryId: 50 })
