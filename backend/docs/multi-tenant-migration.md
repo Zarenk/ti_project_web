@@ -218,6 +218,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó nuevamente `npm test -- organization-context.logger.spec.ts`, confirmando los tres escenarios cubiertos (identificador presente, metadatos opcionales y advertencia por ausencia del tenant).
 - **Resultado:** La prueba concluyó con los tres casos en verde, manteniendo la evidencia de que el helper de logging soporta los flujos multi-organización planificados y permitiendo continuar con la siguiente etapa del plan.
 
+### 2024-04-24 – Extensión de cobertura `EntriesService`
+
+- **Contexto:** Continuando con el _Paso 3_ de la Fase 2 se requirió ampliar la batería de `EntriesService` para cubrir la eliminación de entradas y su impacto en el historial de inventario, asegurando que la propagación de `organizationId` se mantenga en operaciones de baja.
+- **Implementación:** Se actualizó la suite [`backend/src/entries/entries.service.spec.ts`](../src/entries/entries.service.spec.ts) incorporando casos de `deleteEntry` con y sin tenant explícito y verificando que el helper `logOrganizationContext` registre el contexto al depurar inventario. La corrida `npm test -- entries.service.spec.ts` ahora parametriza cinco escenarios: creación con `organizationId` provisto, heredado o ausente, y eliminación respetando el identificador cuando está presente o conservando `NULL` en entradas legacy.
+- **Resultado:** La ejecución reportó los cinco casos en verde, confirmando que tanto las altas como las bajas de entradas mantienen la propagación opcional del tenant y habilitando la siguiente iteración sobre fixtures de integración multi-organización.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
