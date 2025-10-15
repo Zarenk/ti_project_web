@@ -248,6 +248,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se incorporó la suite [`backend/src/providers/providers.service.spec.ts`](../src/providers/providers.service.spec.ts), _mockeando_ Prisma y `ActivityService` para cubrir las operaciones de creación y actualización. Las pruebas parametrizan escenarios con `organizationId` explícito, omitido y actualizado para asegurar que el servicio propague el tenant cuando corresponde y mantenga `NULL` en flujos existentes.
 - **Resultado:** La ejecución `npm test -- providers.service.spec.ts` reportó los cuatro casos en verde, registrando la propagación correcta del identificador y extendiendo la cobertura transversal previa a los fixtures de integración multi-organización.
 
+### 2024-04-29 – Corrida local suites `Entries`, `Inventory`, `Cashregister` y utilidades de organización
+
+- **Contexto:** Para continuar con el seguimiento del _Paso 3_ de la Fase 2 se consolidó una nueva corrida local que validara la estabilidad de las suites priorizadas tras los últimos ajustes en fixtures y utilitarios de tenancy.
+- **Implementación:** Se ejecutaron las baterías `npm test -- entries.service.spec.ts`, `npm test -- inventory.service.spec.ts`, `npm test -- cashregister.service.spec.ts` y `npm test -- tenancy/organization.utils.spec.ts`, verificando la propagación del `organizationId` explícito, heredado o nulo y los escenarios de validación cruzada entre referencias de tenant.
+- **Resultado:** Las cuatro suites finalizaron en verde, dejando evidencia actualizada de que los dominios de compras, inventario, caja y las utilidades de organización mantienen compatibilidad con flujos legacy mientras propagan el tenant cuando está disponible.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
