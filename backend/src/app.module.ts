@@ -49,6 +49,7 @@ import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { ModulePermissionsGuard } from './common/guards/module-permissions.guard';
 import { SystemMaintenanceModule } from './system-maintenance/system-maintenance.module';
 import { TenancyModule } from './tenancy/tenancy.module';
+import { TenantContextGuard } from './tenancy/tenant-context.guard';
 
 @Module({
   imports: [
@@ -99,6 +100,10 @@ import { TenancyModule } from './tenancy/tenancy.module';
     AppService,
     BarcodeGateway,
     PrismaService,
+    {
+      provide: APP_GUARD,
+      useClass: TenantContextGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: ModulePermissionsGuard,
