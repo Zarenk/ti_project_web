@@ -206,6 +206,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejercitó la suite [`backend/src/tenancy/tenant-context.service.spec.ts`](../src/tenancy/tenant-context.service.spec.ts), verificando escenarios con encabezados únicos o múltiples, usuarios con organizaciones por defecto y actualizaciones parciales del contexto.
 - **Resultado:** El comando `npm test -- tenant-context.service.spec.ts` reportó los cinco casos en verde, dejando documentada la evidencia de que el servicio mantiene la semántica multi-organización requerida para las siguientes iteraciones del plan.
 
+### 2024-04-22 – Reejecución suite `InventoryService`
+
+- **Contexto:** Como continuidad del _Paso 3_ de la Fase 2 se volvió a ejecutar la batería de `InventoryService` para confirmar que los escenarios multi-organización se mantienen estables tras los últimos ajustes en fixtures y propagación del tenant.
+- **Implementación:** Se corrió `npm test -- inventory.service.spec.ts` en el entorno local de QA, revisando los casos parametrizados que cubren `transferProduct` y `processExcelData` con `organizationId` explícito, heredado o ausente.
+- **Resultado:** La corrida finalizó con los cuatro casos en verde, ratificando que la suite continúa validando correctamente la propagación opcional del tenant y habilitando el enfoque en la ampliación de fixtures de integración.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
