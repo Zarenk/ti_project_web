@@ -144,6 +144,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó `npm test -- entries.service.spec.ts` en entorno Windows, habilitando los `console.log` temporales que trazan el payload recibido por `createEntry` y los objetos creados en Prisma para cada combinación de tenant.
 - **Resultado:** Los tres casos finalizaron en verde (`3 passed`), confirmando que la instrumentación multi-organización no altera los flujos legacy y que los registros de depuración reflejan el `organizationId` según corresponda antes de avanzar con fixtures de integración.
 
+### 2024-04-18 – Corrida local suites `Entries`, `Inventory` y `WebSales`
+
+- **Contexto:** Como seguimiento al _Paso 3_ de la Fase 2 y a la instrumentación temporal de `organizationId`, se consolidó una corrida local adicional para verificar el estado de las suites priorizadas en `entries`, `inventory` y `websales`.
+- **Implementación:** Se ejecutaron `npm test -- entries.service.spec.ts`, `npm test -- inventory.service.spec.ts` y `npm test -- websales.service.spec.ts`, registrando los `console.log` temporales que muestran la propagación del tenant en los payloads enviados a Prisma.
+- **Resultado:** Las tres suites finalizaron en verde con `organizationId` explícito, heredado o nulo, confirmando que los servicios mantienen compatibilidad legacy y dejando listo el camino para avanzar con los fixtures de integración multi-organización.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
