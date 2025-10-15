@@ -199,6 +199,8 @@ model Organization {
   units        OrganizationUnit[]
   memberships  OrganizationMembership[]
   settings     OrganizationSetting?
+  providers    Provider[]
+
 
   @@unique([name])
   @@index([status])
@@ -289,11 +291,15 @@ model Provider {
   website        String?
   status         String?
   image          String?
+  organizationId Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   entrys     Entry[] // Relación con el modelo Entry
   accEntries AccEntry[] // Relación con el modelo AccEntry
+
+  @@index([organizationId])
 }
 
 enum PaymentTerm {

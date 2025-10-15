@@ -1,10 +1,17 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AuditAction } from '@prisma/client';
 import { ActivityService } from '../activity/activity.service';
 import { Request } from 'express';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 
 @Injectable()
 export class ProvidersService {
@@ -15,36 +22,52 @@ export class ProvidersService {
   ) {}
 
    async create(createProviderDto: CreateProviderDto, req?: Request) {
-      try {
-         const provider = await this.prismaService.provider.create({
-           data: createProviderDto,
-        });
-        await this.activityService.log(
-          {
-              actorId: (req as any)?.user?.userId,
-              actorEmail: (req as any)?.user?.username,
-              entityType: 'Provider',
-              entityId: provider.id.toString(),
-              action: AuditAction.CREATED,
-              summary: `Proveedor ${provider.name} creado`,
-              diff: { after: provider } as any,
-            },
-            req,
-          );
-          return provider;
-        } catch (error) {
-          if (
-            error instanceof Prisma.PrismaClientKnownRequestError &&
-            error.code === "P2002"
-          ) {
-            throw new ConflictException(
-              `El Proveedor con el RUC "${createProviderDto.documentNumber}" ya existe.`
-            );
-          }
-          console.error("Error en el backend:", error);
-          throw error;
+    try {
+      const { organizationId, ...providerPayload } = createProviderDto as CreateProviderDto & {
+        organizationId?: number | null;
+      };
+
+      logOrganizationContext({
+        service: ProvidersService.name,
+        operation: 'create',
+        organizationId,
+        metadata: { providerName: createProviderDto.name },
+      });
+
+      const provider = await this.prismaService.provider.create({
+        data: {
+          ...providerPayload,
+          organizationId: organizationId ?? null,
+        },
+      });
+
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Provider',
+          entityId: provider.id.toString(),
+          action: AuditAction.CREATED,
+          summary: `Proveedor ${provider.name} creado`,
+          diff: { after: provider } as any,
+        },
+        req,
+      );
+
+      return provider;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          `El Proveedor con el RUC "${createProviderDto.documentNumber}" ya existe.`,
+        );
       }
+      console.error('Error en el backend:', error);
+      throw error;
     }
+  }
   
   findAll() {
     try{
@@ -95,10 +118,27 @@ export class ProvidersService {
       const before = await this.prismaService.provider.findUnique({
         where: { id: Number(id) },
       });
+      const { id: _id, organizationId, ...providerPayload } = updateProviderDto as UpdateProviderDto & {
+        organizationId?: number | null;
+      };
+
+      if (organizationId !== undefined) {
+        logOrganizationContext({
+          service: ProvidersService.name,
+          operation: 'update',
+          organizationId,
+          metadata: { providerId: id },
+        });
+      }
       const providerFound = await this.prismaService.provider.update({
-        where: {id: Number(id)},  
-        data: updateProviderDto
-      })
+        where: { id: Number(id) },
+        data: {
+          ...providerPayload,
+          ...(organizationId !== undefined
+            ? { organizationId: organizationId ?? null }
+            : {}),
+        },
+      });
   
       if(!providerFound){
         throw new NotFoundException(`Provider with id ${id} not found`)
@@ -159,22 +199,28 @@ export class ProvidersService {
   
       // Ejecutar la transacción para actualizar múltiples productos
       const updatedProviders = await this.prismaService.$transaction(
-        providers.map((provider) =>
-          this.prismaService.provider.update({
-            where: { id: Number(provider.id) },
-            data: {  
-              name: provider.name,
-              document: provider.document,
-              documentNumber: provider.documentNumber,
-              description: provider.description,          
-              phone: provider.phone,
-              adress: provider.adress,
-              email: provider.email,
-              website: provider.website,
-              status: provider.status,
+        providers.map((provider) => {
+          const { organizationId, id: providerId, ...rest } = provider as UpdateProviderDto & {
+            organizationId?: number | null;
+          };
+
+          logOrganizationContext({
+            service: ProvidersService.name,
+            operation: 'updateMany',
+            organizationId,
+            metadata: { providerId },
+          });
+
+          return this.prismaService.provider.update({
+            where: { id: Number(providerId) },
+            data: {
+              ...rest,
+              ...(organizationId !== undefined
+                ? { organizationId: organizationId ?? null }
+                : {}),
             },
-          }),
-        ),
+          });
+        }),
       );
 
       await this.activityService.log(
@@ -226,6 +272,13 @@ export class ProvidersService {
         where: {
           id,
         },
+      });
+    
+      logOrganizationContext({
+        service: ProvidersService.name,
+        operation: 'remove',
+        organizationId: (deletedProvider as { organizationId?: number | null })?.organizationId,
+        metadata: { providerId: id },
       });
       if (!deletedProvider) {
         throw new NotFoundException(`Provider with id ${id} not found`);
@@ -283,6 +336,13 @@ export class ProvidersService {
           `No se encontraron proveedores con los IDs proporcionados.`,
         );
       }
+
+      logOrganizationContext({
+        service: ProvidersService.name,
+        operation: 'removeMany',
+        organizationId: null,
+        metadata: { providerIds: ids },
+      });
       
       await this.activityService.log(
         {
