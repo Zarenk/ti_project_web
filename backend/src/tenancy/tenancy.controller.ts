@@ -1,34 +1,49 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { TenancyService } from './tenancy.service';
 import { CreateTenancyDto } from './dto/create-tenancy.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
+import { TenancySnapshot } from './entities/tenancy.entity';
 
 @Controller('tenancy')
 export class TenancyController {
   constructor(private readonly tenancyService: TenancyService) {}
 
   @Post()
-  create(@Body() createTenancyDto: CreateTenancyDto) {
+  create(@Body() createTenancyDto: CreateTenancyDto): Promise<TenancySnapshot> {
     return this.tenancyService.create(createTenancyDto);
   }
 
   @Get()
-  findAll() {
+  findAll(): Promise<TenancySnapshot[]> {
     return this.tenancyService.findAll();
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.tenancyService.findOne(+id);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<TenancySnapshot> {
+    return this.tenancyService.findOne(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateTenancyDto: UpdateTenancyDto) {
-    return this.tenancyService.update(+id, updateTenancyDto);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateTenancyDto: UpdateTenancyDto,
+  ): Promise<TenancySnapshot> {
+    return this.tenancyService.update(id, updateTenancyDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.tenancyService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number): Promise<TenancySnapshot> {
+    return this.tenancyService.remove(id);
   }
 }
