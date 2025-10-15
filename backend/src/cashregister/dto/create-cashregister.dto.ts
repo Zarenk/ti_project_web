@@ -16,4 +16,8 @@ export class CreateCashRegisterDto {
   @IsNotEmpty()
   @IsNumber()
   initialBalance!: number;
+
+  @IsOptional()
+  @IsNumber()
+  organizationId?: number | null;
 }

@@ -37,4 +37,8 @@ export class CreateCashClosureDto {
   @IsNumber()
   @Min(0)
   nextInitialBalance?: number;
+
+  @IsOptional()
+  @IsNumber()
+  organizationId?: number | null;
 }

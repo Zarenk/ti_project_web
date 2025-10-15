@@ -666,6 +666,7 @@ model CashRegister {
   initialBalance Decimal            @default(0.00)
   currentBalance Decimal            @default(0.00)
   status         CashRegisterStatus @default(ACTIVE)
+  organizationId Int?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
@@ -673,6 +674,7 @@ model CashRegister {
   transactions CashTransaction[]
   closures     CashClosure[]
 
+  @@index([organizationId, storeId])
   @@map("cash_registers")
 }
 
@@ -686,6 +688,7 @@ model CashTransaction {
   clientDocument     String?
   clientDocumentType String?
   userId             Int
+  organizationId     Int?
   createdAt          DateTime            @default(now())
 
   cashRegister   CashRegister                   @relation(fields: [cashRegisterId], references: [id])
@@ -693,6 +696,7 @@ model CashTransaction {
   user           User                           @relation(fields: [userId], references: [id])
   salePayments   SalePayment[]
 
+  @@index([organizationId, createdAt])
   @@map("cash_transactions")
 }
 
@@ -716,11 +720,13 @@ model CashClosure {
   nextOpeningBalance Decimal?
   notes          String?
   totalExpense   Decimal
+  organizationId     Int?
   createdAt      DateTime @default(now())
 
   cashRegister CashRegister @relation(fields: [cashRegisterId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
 
+  @@index([organizationId, createdAt])
   @@map("cash_closures")
 }
 
