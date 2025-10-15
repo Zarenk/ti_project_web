@@ -47,3 +47,11 @@ export type ClientCreateInputWithOrganization = WithOptionalOrganizationId<
 export type ClientUncheckedCreateInputWithOrganization = WithOptionalOrganizationId<
   Prisma.ClientUncheckedCreateInput
 >;
+
+export type EntryCreateInputWithOrganization = WithOptionalOrganizationId<
+  Prisma.EntryCreateInput
+>;
+
+export type EntryUncheckedCreateInputWithOrganization = WithOptionalOrganizationId<
+  Prisma.EntryUncheckedCreateInput
+>;

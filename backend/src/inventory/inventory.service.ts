@@ -15,6 +15,7 @@ import {
   InventoryHistoryUncheckedCreateInputWithOrganization,
   InventoryHistoryCreateManyInputWithOrganization,
   TransferUncheckedCreateInputWithOrganization,
+  EntryUncheckedCreateInputWithOrganization,
 } from 'src/tenancy/prisma-organization.types';
 
 @Injectable()
@@ -757,10 +758,24 @@ export class InventoryService {
     providerId: number | null,
     organizationId?: number | null,
   ) {
+    const store = await this.prisma.store.findUnique({
+      where: { id: storeId },
+    });
+
+    if (!store) {
+      throw new NotFoundException(`La tienda con ID ${storeId} no existe.`);
+    }
+
+    const storeOrganizationId = (
+      store as { organizationId?: number | null }
+    ).organizationId;
+    const resolvedOrganizationId =
+      organizationId ?? storeOrganizationId ?? null;
+
     logOrganizationContext({
       service: InventoryService.name,
       operation: 'processExcelData',
-      organizationId,
+      organizationId: resolvedOrganizationId,
       metadata: { storeId, userId },
     });
 
@@ -832,10 +847,10 @@ export class InventoryService {
         const inventoryCreateData: InventoryUncheckedCreateInputWithOrganization = {
           productId: product.id,
           storeId,
-          organizationId: organizationId ?? null,
+          organizationId: resolvedOrganizationId,
         };
 
-        inventory = await this.prisma.inventory.create({      
+        inventory = await this.prisma.inventory.create({
           data: inventoryCreateData,
         });
       }
@@ -871,7 +886,7 @@ export class InventoryService {
         stockChange: parsedStock,
         previousStock: storeInventory?.stock ?? 0,
         newStock: (storeInventory?.stock ?? 0) + parsedStock,
-        organizationId: organizationId ?? null,
+        organizationId: resolvedOrganizationId,
       };
   
       await this.prisma.inventoryHistory.create({
@@ -910,15 +925,18 @@ export class InventoryService {
           .filter((s: string) => s.length > 0)
       }
 
+      const entryCreateData: EntryUncheckedCreateInputWithOrganization = {
+        storeId,
+        tipoMoneda: 'PEN',
+        userId,
+        description: 'import_excel',
+        providerId,
+        organizationId: resolvedOrganizationId,
+        ...(defaultExchangeRate ? { tipoCambioId: defaultExchangeRate.id } : {}),
+      };
+
       const entry = await this.prisma.entry.create({
-        data: {
-          storeId,
-          tipoMoneda: 'PEN',
-          userId,
-          description: 'import_excel',
-          providerId,
-          ...(defaultExchangeRate ? { tipoCambioId: defaultExchangeRate.id } : {}),
-        },
+        data: entryCreateData,
       })
 
       const entryDetail = await this.prisma.entryDetail.create({

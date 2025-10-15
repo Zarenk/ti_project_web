@@ -9,7 +9,11 @@ import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 
 type InventoryPrismaMock = {
-  product: { findUnique: jest.Mock };
+  product: {
+    findUnique: jest.Mock;
+    findFirst: jest.Mock;
+    create: jest.Mock;
+  };
   storeOnInventory: {
     findFirst: jest.Mock;
     update: jest.Mock;
@@ -24,9 +28,34 @@ type InventoryPrismaMock = {
   };
   inventoryHistory: {
     createMany: jest.Mock;
+    create: jest.Mock;
   };
   user: {
     findUnique: jest.Mock;
+  };
+  store: {
+    findUnique: jest.Mock;
+  };
+  category: {
+    findFirst: jest.Mock;
+    create: jest.Mock;
+  };
+  provider: {
+    findFirst: jest.Mock;
+    create: jest.Mock;
+  };
+  tipoCambio: {
+    findFirst: jest.Mock;
+  };
+  entry: {
+    create: jest.Mock;
+  };
+  entryDetail: {
+    create: jest.Mock;
+  };
+  entryDetailSeries: {
+    findFirst: jest.Mock;
+    create: jest.Mock;
   };
 };
 
@@ -39,7 +68,7 @@ describe('InventoryService multi-organization support', () => {
 
   beforeEach(() => {
     prisma = {
-      product: { findUnique: jest.fn() },
+      product: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
       storeOnInventory: {
         findFirst: jest.fn(),
         update: jest.fn(),
@@ -54,9 +83,34 @@ describe('InventoryService multi-organization support', () => {
       },
       inventoryHistory: {
         createMany: jest.fn(),
+        create: jest.fn(),
       },
       user: {
         findUnique: jest.fn(),
+      },
+      store: {
+        findUnique: jest.fn(),
+      },
+      category: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
+      },
+      provider: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
+      },
+      tipoCambio: {
+        findFirst: jest.fn(),
+      },
+      entry: {
+        create: jest.fn(),
+      },
+      entryDetail: {
+        create: jest.fn(),
+      },
+      entryDetailSeries: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
       },
     };
 
@@ -64,7 +118,9 @@ describe('InventoryService multi-organization support', () => {
       log: jest.fn().mockResolvedValue(undefined),
     };
 
-    accountingHook = {};
+    accountingHook = {
+      postInventoryAdjustment: jest.fn().mockResolvedValue(undefined),
+    };
 
     service = new InventoryService(
       prisma as unknown as PrismaService,
@@ -73,9 +129,24 @@ describe('InventoryService multi-organization support', () => {
     );
 
     prisma.product.findUnique.mockResolvedValue({ name: 'Widget' });
+    prisma.product.findFirst.mockResolvedValue(null);
+    prisma.product.create.mockResolvedValue({ id: 101, name: 'Widget' });
     prisma.transfer.create.mockResolvedValue({ id: 1 });
     prisma.inventoryHistory.createMany.mockResolvedValue({ count: 2 });
+    prisma.inventoryHistory.create.mockResolvedValue({ id: 900 });
     prisma.user.findUnique.mockResolvedValue({ username: 'user@example.com' });
+    prisma.store.findUnique.mockResolvedValue({ id: 1, organizationId: 777 });
+    prisma.category.findFirst.mockResolvedValue(null);
+    prisma.category.create.mockResolvedValue({ id: 303, name: 'Category' });
+    prisma.provider.findFirst.mockResolvedValue(null);
+    prisma.provider.create.mockResolvedValue({ id: 404, name: 'Provider' });
+    prisma.tipoCambio.findFirst.mockResolvedValue(null);
+    prisma.inventory.create.mockResolvedValue({ id: 202, productId: 101 });
+    prisma.storeOnInventory.create.mockResolvedValue({ id: 303, stock: 0 });
+    prisma.entry.create.mockResolvedValue({ id: 505 });
+    prisma.entryDetail.create.mockResolvedValue({ id: 606 });
+    prisma.entryDetailSeries.findFirst.mockResolvedValue(null);
+    prisma.entryDetailSeries.create.mockResolvedValue({ id: 707 });
 
     logOrganizationContextMock =
       logOrganizationContext as unknown as jest.Mock;
@@ -170,5 +241,93 @@ describe('InventoryService multi-organization support', () => {
         organizationId: null,
       }),
     );
+  });
+  describe('processExcelData multi-organization support', () => {
+    const excelRows = [
+      {
+        nombre: 'Laptop X',
+        categoria: 'Laptops',
+        descripcion: 'High end laptop',
+        precioCompra: '1500',
+        precioVenta: '2000',
+        stock: '3',
+      },
+    ];
+
+    beforeEach(() => {
+      prisma.category.findFirst.mockResolvedValue(null);
+      prisma.category.create.mockResolvedValue({ id: 20, name: 'Laptops' });
+      prisma.product.findFirst.mockResolvedValue(null);
+      prisma.product.create.mockResolvedValue({
+        id: 30,
+        name: 'Laptop X',
+      });
+      prisma.inventory.findFirst.mockResolvedValue(null);
+      prisma.inventory.create.mockResolvedValue({ id: 40, productId: 30 });
+      prisma.storeOnInventory.findFirst.mockResolvedValue(null);
+      prisma.storeOnInventory.create.mockResolvedValue({ id: 50, stock: 0 });
+      prisma.inventoryHistory.create.mockResolvedValue({ id: 60 });
+      prisma.entry.create.mockResolvedValue({ id: 70 });
+      prisma.entryDetail.create.mockResolvedValue({ id: 80 });
+      prisma.tipoCambio.findFirst.mockResolvedValue(null);
+      activityService.log.mockClear();
+      logOrganizationContextMock.mockClear();
+    });
+
+    it('propagates an explicit organizationId across inventory and accounting artifacts', async () => {
+      prisma.store.findUnique.mockResolvedValue({ id: 1, organizationId: 555 });
+
+      await service.processExcelData(excelRows, 1, 10, 2, 999);
+
+      expect(prisma.inventory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ organizationId: 999 }),
+        }),
+      );
+      expect(prisma.inventoryHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ organizationId: 999 }),
+        }),
+      );
+      expect(prisma.entry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ organizationId: 999 }),
+        }),
+      );
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          service: InventoryService.name,
+          operation: 'processExcelData',
+          organizationId: 999,
+        }),
+      );
+    });
+
+    it('falls back to the store organizationId when no explicit tenant is provided', async () => {
+      prisma.store.findUnique.mockResolvedValue({ id: 5, organizationId: 444 });
+
+      await service.processExcelData(excelRows, 5, 11, 3);
+
+      expect(prisma.inventory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ organizationId: 444 }),
+        }),
+      );
+      expect(prisma.inventoryHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ organizationId: 444 }),
+        }),
+      );
+      expect(prisma.entry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ organizationId: 444 }),
+        }),
+      );
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: 444,
+        }),
+      );
+    });
   });
 });
