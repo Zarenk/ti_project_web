@@ -212,6 +212,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se corrió `npm test -- inventory.service.spec.ts` en el entorno local de QA, revisando los casos parametrizados que cubren `transferProduct` y `processExcelData` con `organizationId` explícito, heredado o ausente.
 - **Resultado:** La corrida finalizó con los cuatro casos en verde, ratificando que la suite continúa validando correctamente la propagación opcional del tenant y habilitando el enfoque en la ampliación de fixtures de integración.
 
+### 2024-04-23 – Verificación logger de contexto de organización
+
+- **Contexto:** Tras los ajustes recientes en la instrumentación temporal era necesario revalidar la suite de `logOrganizationContext` para asegurar que continúe alertando cuando falta `organizationId` y registre los metadatos requeridos.
+- **Implementación:** Se ejecutó nuevamente `npm test -- organization-context.logger.spec.ts`, confirmando los tres escenarios cubiertos (identificador presente, metadatos opcionales y advertencia por ausencia del tenant).
+- **Resultado:** La prueba concluyó con los tres casos en verde, manteniendo la evidencia de que el helper de logging soporta los flujos multi-organización planificados y permitiendo continuar con la siguiente etapa del plan.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
