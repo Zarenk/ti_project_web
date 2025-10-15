@@ -12,6 +12,7 @@ import { Prisma, AuditAction } from '@prisma/client';
 import { ActivityService } from '../activity/activity.service';
 import { Request } from 'express';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import { buildOrganizationFilter } from 'src/tenancy/organization.utils';
 
 @Injectable()
 export class ProvidersService {
@@ -38,7 +39,7 @@ export class ProvidersService {
         data: {
           ...providerPayload,
           organizationId: organizationId ?? null,
-        },
+        } as Prisma.ProviderUncheckedCreateInput,
       });
 
       await this.activityService.log(
@@ -69,12 +70,17 @@ export class ProvidersService {
     }
   }
   
-  findAll() {
-    try{
-      return this.prismaService.provider.findMany()
-    }
-    catch(error){
-      console.error("Error en el backend:", error);
+  findAll(options?: { organizationId?: number | null }) {
+    try {
+      const organizationFilter = buildOrganizationFilter(
+        options?.organizationId,
+      ) as Prisma.ProviderWhereInput;
+
+      return this.prismaService.provider.findMany({
+        where: organizationFilter,
+      });
+    } catch (error) {
+      console.error('Error en el backend:', error);
       throw error;
     }
   }

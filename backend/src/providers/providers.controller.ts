@@ -5,6 +5,7 @@ import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
 import { Request } from 'express';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
 @ModulePermission(['inventory', 'purchases'])
 @Controller('providers')
@@ -29,9 +30,13 @@ export class ProvidersController {
   }
 
   @Get()
-  @ApiResponse({status: 200, description: 'Return all providers'}) // Swagger 
-  findAll() {
-    return this.providersService.findAll();
+  @ApiResponse({status: 200, description: 'Return all providers'}) // Swagger
+  findAll(@CurrentTenant('organizationId') organizationId: number | null) {
+    if (organizationId === null || organizationId === undefined) {
+      return this.providersService.findAll();
+    }
+
+    return this.providersService.findAll({ organizationId });
   }
 
   @Get(':id')

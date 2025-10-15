@@ -11,6 +11,7 @@ jest.mock('src/tenancy/organization-context.logger', () => ({
 type PrismaMock = PrismaService & {
   provider: {
     create: jest.Mock;
+    findMany: jest.Mock;
     findUnique: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
@@ -30,6 +31,7 @@ describe('ProvidersService multi-organization support', () => {
   const prismaMock = {
     provider: {
       create: jest.fn(),
+      findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -58,6 +60,34 @@ describe('ProvidersService multi-organization support', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     service = new ProvidersService(prismaMock, activityServiceMock);
+  });
+
+  it('filters providers by organizationId when provided', async () => {
+    prismaMock.provider.findMany.mockResolvedValue([{ id: 1 }]);
+
+    await service.findAll({ organizationId: 99 });
+
+    expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
+      where: { organizationId: 99 },
+    });
+  });
+
+  it('keeps legacy providers accessible when organizationId is null', async () => {
+    prismaMock.provider.findMany.mockResolvedValue([{ id: 2 }]);
+
+    await service.findAll({ organizationId: null });
+
+    expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
+      where: { organizationId: null },
+    });
+  });
+
+  it('returns all providers when no organization context is provided', async () => {
+    prismaMock.provider.findMany.mockResolvedValue([{ id: 3 }]);
+
+    await service.findAll();
+
+    expect(prismaMock.provider.findMany).toHaveBeenCalledWith({ where: {} });
   });
 
   it('persists the provided organizationId on creation and logs the context', async () => {
