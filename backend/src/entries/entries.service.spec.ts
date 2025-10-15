@@ -14,11 +14,15 @@ interface PrismaMock {
   provider: { findUnique: jest.Mock };
   user: { findUnique: jest.Mock };
   product: { findUnique: jest.Mock };
-  entry: { create: jest.Mock };
+  entry: { create: jest.Mock; findUnique: jest.Mock; delete: jest.Mock };
   entryDetail: { update: jest.Mock };
-  entryDetailSeries: { createMany: jest.Mock };
+  entryDetailSeries: { createMany: jest.Mock; deleteMany: jest.Mock };
   inventory: { findFirst: jest.Mock; create: jest.Mock };
-  storeOnInventory: { findFirst: jest.Mock; create: jest.Mock; update: jest.Mock };
+  storeOnInventory: {
+    findFirst: jest.Mock;
+    create: jest.Mock;
+    update: jest.Mock;
+  };
   inventoryHistory: { create: jest.Mock };
   invoice: { create: jest.Mock };
   $transaction: jest.Mock;
@@ -29,9 +33,9 @@ const createPrismaMock = (): PrismaMock => ({
   provider: { findUnique: jest.fn() },
   user: { findUnique: jest.fn() },
   product: { findUnique: jest.fn() },
-  entry: { create: jest.fn() },
+  entry: { create: jest.fn(), findUnique: jest.fn(), delete: jest.fn() },
   entryDetail: { update: jest.fn() },
-  entryDetailSeries: { createMany: jest.fn() },
+  entryDetailSeries: { createMany: jest.fn(), deleteMany: jest.fn() },
   inventory: { findFirst: jest.fn(), create: jest.fn() },
   storeOnInventory: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
   inventoryHistory: { create: jest.fn() },
@@ -86,6 +90,9 @@ describe('EntriesService multi-organization support', () => {
     prisma.storeOnInventory.update.mockResolvedValue(undefined);
     prisma.inventoryHistory.create.mockResolvedValue(undefined);
     prisma.entryDetailSeries.createMany.mockResolvedValue(undefined);
+    prisma.entry.findUnique.mockResolvedValue(null);
+    prisma.entry.delete.mockResolvedValue(undefined);
+    prisma.entryDetailSeries.deleteMany.mockResolvedValue(undefined);
     prisma.invoice.create.mockResolvedValue(undefined);
 
     activityService = { log: jest.fn().mockResolvedValue(undefined) };
@@ -186,5 +193,78 @@ describe('EntriesService multi-organization support', () => {
         payload.operation === 'createEntry' && payload.organizationId === null,
       ),
     ).toBe(true);
+  });
+describe('deleteEntry', () => {
+    const entryBase = {
+      id: 999,
+      storeId: 10,
+      userId: 20,
+      details: [
+        {
+          id: 1001,
+          productId: 99,
+          quantity: 2,
+          product: { name: 'Widget' },
+          series: [{ serial: 'A1' }],
+        },
+      ],
+    };
+
+    beforeEach(() => {
+      prisma.storeOnInventory.findFirst.mockResolvedValue({
+        id: 222,
+        stock: 10,
+        inventoryId: 333,
+      });
+      prisma.entry.delete.mockResolvedValue({ id: entryBase.id });
+    });
+
+    it('propagates organizationId to inventory history and logging when present', async () => {
+      prisma.entry.findUnique.mockResolvedValue({
+        ...entryBase,
+        organizationId: 55,
+      });
+
+      await service.deleteEntry(entryBase.id);
+
+      expect(prisma.entryDetailSeries.deleteMany).toHaveBeenCalledWith({
+        where: { entryDetailId: entryBase.details[0].id },
+      });
+      expect(prisma.storeOnInventory.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 222 },
+          data: { stock: { decrement: entryBase.details[0].quantity } },
+        }),
+      );
+      expect(prisma.inventoryHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ organizationId: 55 }),
+      });
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'deleteEntry',
+          organizationId: 55,
+        }),
+      );
+      expect(prisma.entry.delete).toHaveBeenCalledWith({ where: { id: entryBase.id } });
+    });
+
+    it('defaults organizationId to null during deletion when entry is legacy', async () => {
+      prisma.entry.findUnique.mockResolvedValue({
+        ...entryBase,
+        organizationId: null,
+      });
+
+      await service.deleteEntry(entryBase.id);
+
+      expect(prisma.inventoryHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ organizationId: null }),
+      });
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'deleteEntry',
+          organizationId: null,
+        }),
+      );
+    });
   });
 });
