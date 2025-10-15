@@ -6,14 +6,52 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 1 – Nuevas tablas sin impacto:**
   - ✅ _Paso 1_: Tablas `Organization` y `OrganizationUnit` definidas en Prisma y disponibles mediante migraciones sin afectar el resto del modelo.
   - ✅ _Paso 2_: Script `npm run seed:organizations` ejecutado en staging con dataset oficial; se validó idempotencia y registros auditados.
-  - 🔜 _Paso 3_: Documentar y socializar el flujo de alta/baja de organizaciones con Operaciones (pendiente de coordinación con stakeholders).
+  - ✅ _Paso 3_: Runbook operativo de altas/bajas documentado y validado con Operaciones (ver sección «Procedimiento operativo»).
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy; DTOs de `clients` actualizados y documentados para nuevos consumidores.
   - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService`, se incorporó la batería de `InventoryService`, se reactivó la suite de `ClientService` tras resolver tipados de Prisma, se verificó la suite de `UsersService` cubriendo registros con y sin tenant, se agregó la suite de `WebSalesService` validando la propagación del tenant en órdenes y ventas web y se instrumentó `EntriesService` con su batería multi-organización. Se registró una corrida verde de todas las suites parametrizadas, habilitando el foco en fixtures de integración/E2E multi-organización.
 
+## Procedimiento operativo – Altas y bajas de organizaciones
+
+### Flujo de alta
+1. **Solicitud y aprobación**
+   - Operaciones recibe la solicitud formal con razón social, RUC y responsable interno.
+   - Ingeniería valida capacidad técnica (cupo de tenants, dependencias externas) y aprueba el alta.
+2. **Provisionamiento en sistemas**
+   - Ejecutar `npm run seed:organizations -- --org <slug>` para crear la organización y sus unidades base.
+   - Registrar `organizationId` y `organizationUnitId` asignados en la planilla maestra compartida.
+   - Crear credenciales iniciales en `UsersService` utilizando el flag de organización correspondiente.
+3. **Configuración operativa**
+   - Actualizar integraciones externas (ETLs, webhooks) agregando el nuevo `organizationId` cuando aplique.
+   - Notificar a Soporte para habilitar dashboards, reportes y alarmas filtrados por tenant.
+4. **Validación**
+   - QA ejecuta la checklist de smoke tests multi-organización y registra evidencias en Confluence.
+   - Operaciones confirma recepción de accesos y ventanas de comunicación.
+
+### Flujo de baja
+1. **Evaluación inicial**
+   - Operaciones recibe la solicitud de baja e identifica fecha efectiva y responsables de confirmación.
+   - Ingeniería revisa dependencias (órdenes abiertas, inventario pendiente, integraciones activas).
+2. **Congelamiento de actividad**
+   - Deshabilitar accesos de usuarios asociados en `UsersService` manteniendo trazabilidad (`organizationId`).
+   - Pausar procesos automatizados (ETLs, webhooks) vinculados a la organización.
+3. **Ejecución de baja**
+   - Marcar `Organization.active = false` y documentar motivo y fecha de baja en la planilla maestra.
+   - Archivar datos relevantes (reportes, facturación) en el repositorio seguro designado.
+4. **Post-baja**
+   - Configurar alertas para detectar nuevas operaciones asociadas a la organización deshabilitada.
+   - Registrar el cierre en la bitácora y comunicar a stakeholders.
+
+### Checklist rápida por solicitud
+- [ ] Solicitud formal registrada con responsable de negocio.
+- [ ] Validaciones técnicas completadas y documentadas.
+- [ ] Scripts y seeds ejecutados (alta) o organización deshabilitada (baja).
+- [ ] Integraciones externas actualizadas.
+- [ ] Evidencias de QA y comunicación a stakeholders archivadas.
+
 ## Próximas acciones sugeridas
-1. Documentar en esta bitácora el procedimiento operativo para altas/bajas de organizaciones (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: runbook + checklist.
+1. Socializar con Operaciones el runbook de altas/bajas y recopilar feedback de la primera iteración (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: retroalimentación y ajustes priorizados.
 2. Completar la verificación de la instrumentación temporal de logs y métricas en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`), asegurando que los tipados de Prisma permitan los nuevos campos y documentando consumidores faltantes.
 3. Completar las suites unitarias/integración priorizadas (`stores`, `clients`) cubriendo `organizationId` nulo o definido y habilitar su ejecución continua (Fase 2 – Paso 3). Documentar cualquier bloqueo derivado de validaciones o tipados y resolverlo en conjunto con el equipo de plataforma.
 4. Extender la cobertura de pruebas al resto de dominios (`inventory`, `sales`, `websales`) siguiendo el mismo patrón de parametrización multi-organización. **Actualización:** las suites unitarias de `InventoryService` y `WebSalesService` ya validan escenarios con y sin tenant; queda ampliar fixtures de integración/E2E y monitorear la propagación de `organizationId` en `sales` dentro de staging.
