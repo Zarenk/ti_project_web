@@ -200,6 +200,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó la suite [`backend/src/tenancy/organization-context.logger.spec.ts`](../src/tenancy/organization-context.logger.spec.ts), que cubre la emisión de `info` cuando llega el identificador, el agregado de `metadata` opcional y la advertencia (`warn`) en escenarios sin tenant.
 - **Resultado:** El comando `npm test -- organization-context.logger.spec.ts` concluyó con los tres casos en verde (`3 passed`), confirmando que el helper registra el contexto requerido para auditar propagaciones de `organizationId` mientras se completan las suites multi-organización.
 
+### 2024-04-21 – Cobertura unit-test `TenantContextService`
+
+- **Contexto:** Para consolidar la capa de tenancy antes de continuar con las suites de servicios, se requería validar que `TenantContextService` resuelva el `organizationId` siguiendo la prioridad de cabeceras, preferencias del usuario y banderas de super administración.
+- **Implementación:** Se ejercitó la suite [`backend/src/tenancy/tenant-context.service.spec.ts`](../src/tenancy/tenant-context.service.spec.ts), verificando escenarios con encabezados únicos o múltiples, usuarios con organizaciones por defecto y actualizaciones parciales del contexto.
+- **Resultado:** El comando `npm test -- tenant-context.service.spec.ts` reportó los cinco casos en verde, dejando documentada la evidencia de que el servicio mantiene la semántica multi-organización requerida para las siguientes iteraciones del plan.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
