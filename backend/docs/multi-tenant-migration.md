@@ -150,6 +150,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutaron `npm test -- entries.service.spec.ts`, `npm test -- inventory.service.spec.ts` y `npm test -- websales.service.spec.ts`, registrando los `console.log` temporales que muestran la propagación del tenant en los payloads enviados a Prisma.
 - **Resultado:** Las tres suites finalizaron en verde con `organizationId` explícito, heredado o nulo, confirmando que los servicios mantienen compatibilidad legacy y dejando listo el camino para avanzar con los fixtures de integración multi-organización.
 
+### 2024-04-19 – Guardia de contexto de tenant
+
+- **Contexto:** Para reforzar el _Paso 3_ de la Fase 2 se validó el guard de contexto de tenant que inyecta el `tenantContext` en cada petición antes de continuar con la instrumentación de servicios multi-organización.
+- **Implementación:** Se ejecutó la suite [`backend/src/tenancy/tenant-context.guard.spec.ts`](../src/tenancy/tenant-context.guard.spec.ts), aislando `TenantContextGuard` con un `TenantContextService` _mockeado_ que retorna un `tenantContext` completo (organización, unidad, usuario y permisos) y verificando que se adjunte al request.
+- **Resultado:** El comando `npm test -- tenant-context.guard.spec.ts` finalizó en verde, confirmando que el guard mantiene la semántica esperada y habilitando que las próximas pruebas de servicios partan del contexto correcto.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
