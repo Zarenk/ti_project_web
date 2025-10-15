@@ -156,6 +156,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó la suite [`backend/src/tenancy/tenant-context.guard.spec.ts`](../src/tenancy/tenant-context.guard.spec.ts), aislando `TenantContextGuard` con un `TenantContextService` _mockeado_ que retorna un `tenantContext` completo (organización, unidad, usuario y permisos) y verificando que se adjunte al request.
 - **Resultado:** El comando `npm test -- tenant-context.guard.spec.ts` finalizó en verde, confirmando que el guard mantiene la semántica esperada y habilitando que las próximas pruebas de servicios partan del contexto correcto.
 
+### 2024-04-20 – Validación logger de contexto de organización
+
+- **Contexto:** Como seguimiento a la instrumentación temporal de `logOrganizationContext`, se necesitaba capturar evidencia de que el helper alerta cuando falta `organizationId` y enriquece los eventos con metadatos serializados, requisito clave para monitorear flujos durante el _Paso 3_ de la Fase 2.
+- **Implementación:** Se ejecutó la suite [`backend/src/tenancy/organization-context.logger.spec.ts`](../src/tenancy/organization-context.logger.spec.ts), que cubre la emisión de `info` cuando llega el identificador, el agregado de `metadata` opcional y la advertencia (`warn`) en escenarios sin tenant.
+- **Resultado:** El comando `npm test -- organization-context.logger.spec.ts` concluyó con los tres casos en verde (`3 passed`), confirmando que el helper registra el contexto requerido para auditar propagaciones de `organizationId` mientras se completan las suites multi-organización.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
