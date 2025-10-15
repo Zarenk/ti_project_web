@@ -230,6 +230,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejercitó la suite [`backend/src/ads/ads.service.spec.ts`](../src/ads/ads.service.spec.ts) que cubre campañas y creatividades en escenarios con `organizationId` definido y cruzado, asegurando que los _mocks_ de Prisma aíslen `ads` por tenant y que la paginación no mezcle datos entre organizaciones.
 - **Resultado:** El comando `npm test -- ads.service.spec.ts` finalizó en verde (`4 passed`), documentando que `AdsService` impide interacciones entre organizaciones distintas y consolidando la cobertura necesaria antes de avanzar con los fixtures de integración multi-organización.
 
+### 2024-04-26 – Validación suite `TenancyService`
+
+- **Contexto:** Para continuar con el seguimiento del _Paso 3_ de la Fase 2 era necesario corroborar que los procesos operativos sobre organizaciones y unidades mantuvieran la propagación del `organizationId` y sus jerarquías antes de ampliar los fixtures de integración.
+- **Implementación:** Se ejecutó la suite [`backend/src/tenancy/tenancy.service.spec.ts`](../src/tenancy/tenancy.service.spec.ts), cubriendo la creación de organizaciones con unidades por defecto, la generación de jerarquías, la actualización de metadatos y la desactivación controlada, además de las operaciones de lectura.
+- **Resultado:** La corrida `npm test -- tenancy.service.spec.ts` reportó los ocho casos en verde, dejando constancia de que `TenancyService` respalda las operaciones administrativas multi-organización y habilita continuar con el plan de pruebas integrado.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
