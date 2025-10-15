@@ -245,8 +245,8 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 ### 2024-04-28 – Cobertura unit-test `ProvidersService`
 
 - **Contexto:** Como parte del _Paso 3_ de la Fase 2 se necesitaba verificar que el dominio de proveedores respete el aislamiento multi-organización, preservando compatibilidad con registros legacy que aún no definen `organizationId`.
-- **Implementación:** Se incorporó la suite [`backend/src/providers/providers.service.spec.ts`](../src/providers/providers.service.spec.ts), _mockeando_ Prisma y `ActivityService` para cubrir las operaciones de creación y actualización. Las pruebas parametrizan escenarios con `organizationId` explícito, omitido y actualizado para asegurar que el servicio propague el tenant cuando corresponde y mantenga `NULL` en flujos existentes.
-- **Resultado:** La ejecución `npm test -- providers.service.spec.ts` reportó los cuatro casos en verde, registrando la propagación correcta del identificador y extendiendo la cobertura transversal previa a los fixtures de integración multi-organización.
+- **Implementación:** Se incorporó la suite [`backend/src/providers/providers.service.spec.ts`](../src/providers/providers.service.spec.ts), _mockeando_ Prisma y `ActivityService` para cubrir filtrados, listados, creación, actualizaciones puntuales y masivas. Las pruebas parametrizan escenarios con `organizationId` explícito, omitido y actualizado para asegurar que el servicio propague el tenant cuando corresponde, mantenga `NULL` en flujos existentes y proteja los listados para cada organización.
+- **Resultado:** La ejecución `npm test -- providers.service.spec.ts` reportó siete casos en verde, registrando que los filtros por tenant, las operaciones legacy y las altas/actualizaciones preservan el identificador correcto y extendiendo la cobertura transversal previa a los fixtures de integración multi-organización.
 
 ### 2024-04-29 – Corrida local suites `Entries`, `Inventory`, `Cashregister` y utilidades de organización
 
