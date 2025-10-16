@@ -308,6 +308,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó la suite [`backend/src/providers/providers.controller.spec.ts`](../src/providers/providers.controller.spec.ts), verificando la propagación del tenant en altas, listados, lecturas, actualizaciones y bajas masivas, además de las validaciones de payload.
 - **Resultado:** La corrida `npm test -- providers.controller.spec.ts` finalizó con `13 passed`, confirmando que el controlador respeta el contexto multi-organización y dejando habilitado continuar con el plan táctico.
 
+### 2024-05-08 – Ampliación de cobertura `ProvidersService`
+
+- **Contexto:** Tras la validación del controlador y las suites previas, se extendió nuevamente la batería de `ProvidersService` para cubrir escenarios adicionales de lecturas, validaciones cruzadas y operaciones masivas multi-organización.
+- **Implementación:** Se enriquecieron los _mocks_ de Prisma en [`backend/src/providers/providers.service.spec.ts`](../src/providers/providers.service.spec.ts) para contemplar verificaciones del `organizationId` durante la lectura individual, las actualizaciones puntuales y en bloque, además de reforzar las guardas que impiden operaciones fuera del tenant activo. La suite se reejecutó con `npm test -- providers.service.spec.ts` registrando los nuevos casos.
+- **Resultado:** La ejecución reportó `18 passed`, confirmando que los escenarios ampliados mantienen la propagación del tenant, preservan compatibilidad con proveedores legacy (`organizationId: null`) y dejan lista la cobertura para enfocarse en fixtures de integración/E2E multi-organización.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
