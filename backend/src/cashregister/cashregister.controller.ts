@@ -168,8 +168,18 @@ export class CashregisterController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.cashregisterService.findOne(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId')
+    organizationIdFromContext?: number | null,
+  ) {
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
+
+    return this.cashregisterService.findOne(id, { organizationId });
   }
 
   @Patch(':id')
@@ -189,8 +199,18 @@ export class CashregisterController {
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    return this.cashregisterService.remove(id);
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId')
+    organizationIdFromContext?: number | null,
+  ) {
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
+
+    return this.cashregisterService.remove(id, { organizationId });
   }
   
   //////////////////////////////// TRANSFER //////////////////////////////////

@@ -8,6 +8,8 @@ describe('CashregisterController (multi-organization)', () => {
     create: jest.Mock;
     findAll: jest.Mock;
     createTransaction: jest.Mock;
+    findOne: jest.Mock;
+    remove: jest.Mock;
   } & Partial<CashregisterService>;
 
   beforeEach(() => {
@@ -15,6 +17,8 @@ describe('CashregisterController (multi-organization)', () => {
       create: jest.fn(),
       findAll: jest.fn(),
       createTransaction: jest.fn(),
+      findOne: jest.fn(),
+      remove: jest.fn(),
     } as any;
 
     controller = new CashregisterController(serviceMock as unknown as CashregisterService);
@@ -84,4 +88,21 @@ describe('CashregisterController (multi-organization)', () => {
       expect.objectContaining({ organizationId: 3 }),
     );
   });
+
+  it('passes merged organizationId to findOne', async () => {
+    serviceMock.findOne.mockResolvedValue({ id: 99 });
+
+    await controller.findOne(99, undefined, 15);
+
+    expect(serviceMock.findOne).toHaveBeenCalledWith(99, { organizationId: 15 });
+  });
+
+  it('delegates remove with tenant organizationId when query omitted', async () => {
+    serviceMock.remove.mockResolvedValue({ id: 5 });
+
+    await controller.remove(5, undefined, 12);
+
+    expect(serviceMock.remove).toHaveBeenCalledWith(5, { organizationId: 12 });
+  });
+  
 });

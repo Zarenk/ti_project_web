@@ -52,6 +52,32 @@ describe('CashregisterService (multi-organization)', () => {
     logOrganizationContextMock.mockClear();
   });
 
+  describe('findOne', () => {
+    it('applies organization filter when provided', async () => {
+      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({ id: 4, organizationId: 22 });
+
+      const result = await service.findOne(4, { organizationId: 22 });
+
+      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+        where: { id: 4, organizationId: 22 },
+        include: {
+          store: true,
+          transactions: true,
+          closures: true,
+        },
+      });
+      expect(result).toEqual({ id: 4, organizationId: 22 });
+    });
+
+    it('throws when cash register not found for tenant', async () => {
+      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.findOne(9, { organizationId: 1 })).rejects.toThrow(
+        /No se encontró la caja con ID 9/,
+      );
+    });
+  });
+
   describe('create', () => {
     it('propagates provided organizationId and logs context', async () => {
       (prisma.store.findUnique as jest.Mock).mockResolvedValue({ organizationId: 42 });
@@ -269,4 +295,62 @@ describe('CashregisterService (multi-organization)', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
+
+  describe('update', () => {
+    beforeEach(() => {
+      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({
+        id: 3,
+        name: 'Principal',
+        organizationId: 12,
+        store: { organizationId: 12 },
+      });
+      (prisma.cashRegister.update as jest.Mock).mockResolvedValue({ id: 3 });
+    });
+
+    it('resolves organizationId using existing record', async () => {
+      const result = await service.update(3, { name: 'Caja', organizationId: undefined });
+
+      expect(prisma.cashRegister.update).toHaveBeenCalledWith({
+        where: { id: 3 },
+        data: expect.objectContaining({ organizationId: 12, name: 'Caja' }),
+      });
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: 'update', organizationId: 12 }),
+      );
+      expect(result).toEqual({ id: 3 });
+    });
+
+    it('throws when organization mismatches existing record', async () => {
+      await expect(
+        service.update(3, { name: 'Caja', organizationId: 99 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('remove', () => {
+    it('validates organization before deleting', async () => {
+      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({
+        id: 7,
+        organizationId: 5,
+      });
+      (prisma.cashRegister.delete as jest.Mock).mockResolvedValue({ id: 7 });
+
+      const result = await service.remove(7, { organizationId: 5 });
+
+      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+        where: { id: 7, organizationId: 5 },
+        include: {
+          store: true,
+          transactions: true,
+          closures: true,
+        },
+      });
+      expect(prisma.cashRegister.delete).toHaveBeenCalledWith({ where: { id: 7 } });
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: 'remove', organizationId: 5 }),
+      );
+      expect(result).toEqual({ id: 7 });
+    });
+  });
+  
 });

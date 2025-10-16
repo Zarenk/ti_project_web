@@ -297,53 +297,103 @@ export class CashregisterService {
     }
 
     // Listar todas las cajas
-    async findAll(options?: { organizationId?: number | null }) {
-      return this.prisma.cashRegister.findMany({
-        where: this.buildOrganizationFilter(options?.organizationId) as any,
-        include: {
-          store: true,
-          transactions: true,
-          closures: true,
-        },
-      });
+  async findAll(options?: { organizationId?: number | null }) {
+    return this.prisma.cashRegister.findMany({
+      where: this.buildOrganizationFilter(options?.organizationId) as any,
+      include: {
+        store: true,
+        transactions: true,
+        closures: true,
+      },
+    });
+  }
+
+  // Obtener una caja por ID
+  async findOne(
+    id: number,
+    options?: { organizationId?: number | null },
+  ) {
+    const cashRegister = await this.prisma.cashRegister.findFirst({
+      where: {
+        id,
+        ...(this.buildOrganizationFilter(options?.organizationId) as any),
+      },
+      include: {
+        store: true,
+        transactions: true,
+        closures: true,
+      } as any,
+    });
+
+    if (!cashRegister) {
+      throw new NotFoundException(
+        `No se encontró la caja con ID ${id}` +
+          (options?.organizationId !== undefined
+            ? ' para la organización solicitada.'
+            : '.'),
+      );
     }
 
     // Obtener una caja por ID
-    async findOne(id: number) {
-      const cashRegister = await this.prisma.cashRegister.findUnique({
-        where: { id },
-        include: {
-          store: true,
-          transactions: true,
-          closures: true,
-        },
-      });
+    return cashRegister;
+  }
 
-      if (!cashRegister) {
-        throw new NotFoundException(`No se encontró la caja con ID ${id}`);
-      }
+      // Actualizar una caja
+  async update(id: number, updateCashRegisterDto: UpdateCashRegisterDto) {
+    const existing = await this.findOne(id, {
+      organizationId: updateCashRegisterDto.organizationId,
+    });
 
-      return cashRegister;
-    }
+    const normalizedExisting = existing as {
+      organizationId?: number | null;
+      store?: { organizationId?: number | null } | null;
+    };
 
-    // Actualizar una caja
-    async update(id: number, updateCashRegisterDto: UpdateCashRegisterDto) {
-      await this.findOne(id); // Validar que existe
+    const organizationId = this.resolveOrganizationId({
+      provided: updateCashRegisterDto.organizationId,
+      fallbacks: [
+        normalizedExisting.organizationId ?? null,
+        normalizedExisting.store?.organizationId ?? null,
+      ],
+      mismatchMessage: 'La caja pertenece a otra organización.',
+    });
 
-      return this.prisma.cashRegister.update({
-        where: { id },
-        data: updateCashRegisterDto,
-      });
-    }
+    logOrganizationContext({
+      service: CashregisterService.name,
+      operation: 'update',
+      organizationId,
+      metadata: { cashRegisterId: id },
+    });
+
+    return this.prisma.cashRegister.update({
+      where: { id },
+      data: {
+        ...updateCashRegisterDto,
+        organizationId,
+      } as Prisma.CashRegisterUncheckedUpdateInput,
+    });
+  }
 
     // Eliminar una caja
-    async remove(id: number) {
-      await this.findOne(id); // Validar que existe
+  async remove(
+    id: number,
+    options?: { organizationId?: number | null },
+  ) {
+    const existing = await this.findOne(id, options);
 
-      return this.prisma.cashRegister.delete({
-        where: { id },
-      });
-    }
+    const normalizedExisting = existing as { organizationId?: number | null };
+
+    logOrganizationContext({
+      service: CashregisterService.name,
+      operation: 'remove',
+      organizationId: normalizedExisting.organizationId ?? null,
+      metadata: { cashRegisterId: id },
+    });
+
+    return this.prisma.cashRegister.delete({
+      where: { id },
+    });
+  }
 
     /////////////////////////////CASH TRANSFER/////////////////////////////
     
