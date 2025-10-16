@@ -155,7 +155,9 @@ describe('WebSalesService multi-organization support', () => {
 
     expect(prisma.orders.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ organizationId: 789 }),
+        data: expect.objectContaining({
+          organization: { connect: { id: 789 } },
+        }),
       }),
     );
 
@@ -187,11 +189,8 @@ describe('WebSalesService multi-organization support', () => {
       phone: '555-0000',
     });
 
-    expect(prisma.orders.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ organizationId: null }),
-      }),
-    );
+    const [[createArgs]] = prisma.orders.create.mock.calls;
+    expect(createArgs.data.organization).toBeUndefined();
   });
 
   it('propagates the provided organizationId through logging, user and client creation and sale execution', async () => {

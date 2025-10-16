@@ -95,7 +95,9 @@ export class WebSalesService {
         phone,
         code: code ?? Math.random().toString(36).substr(2, 9).toUpperCase(),
         payload: data as unknown as Prisma.JsonObject,
-        organizationId: data.organizationId ?? null,
+        ...(typeof data.organizationId === 'number'
+          ? { organization: { connect: { id: data.organizationId } } }
+          : {}),
       },
     });
 

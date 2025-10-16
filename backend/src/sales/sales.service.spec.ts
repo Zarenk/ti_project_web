@@ -18,6 +18,7 @@ type PrismaMock = {
   storeOnInventory: { findFirst: jest.Mock };
   salePayment: { findMany: jest.Mock };
   user: { findUnique: jest.Mock };
+  sales: { findMany: jest.Mock };
 };
 
 describe('SalesService multi-organization support', () => {
@@ -54,6 +55,9 @@ describe('SalesService multi-organization support', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue({ username: 'seller@example.com' }),
       },
+      sales: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     };
 
     activityService = { log: jest.fn().mockResolvedValue(undefined) };
@@ -81,7 +85,7 @@ describe('SalesService multi-organization support', () => {
 
   it('propagates the provided organizationId to executeSale and logging', async () => {
     (prepareSaleContext as jest.Mock).mockResolvedValue({
-      store: { id: baseSaleInput.storeId, name: 'Store', organizationId: 500 },
+      store: { id: baseSaleInput.storeId, name: 'Store', organizationId: 321 },
       cashRegister: { id: 99 },
       clientIdToUse: baseSaleInput.clientId,
     });
@@ -164,4 +168,46 @@ describe('SalesService multi-organization support', () => {
       }),
     );
   });
+  
+  it('rejects mismatching organizationId between payload and store', async () => {
+    (prepareSaleContext as jest.Mock).mockResolvedValue({
+      store: { id: baseSaleInput.storeId, name: 'Store', organizationId: 999 },
+      cashRegister: { id: 99 },
+      clientIdToUse: baseSaleInput.clientId,
+    });
+
+    await expect(
+      service.createSale({
+        ...baseSaleInput,
+        organizationId: 123,
+      }),
+    ).rejects.toThrow('La organización proporcionada no coincide con la tienda seleccionada.');
+  });
+
+  it('applies organization filters when listing sales', async () => {
+    const findMany = prisma.sales.findMany;
+    findMany.mockResolvedValueOnce([]);
+
+    await service.findAllSales(55);
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { organizationId: 55 },
+      }),
+    );
+  });
+
+  it('keeps legacy listing behavior when organizationId is undefined', async () => {
+    const findMany = prisma.sales.findMany;
+    findMany.mockResolvedValueOnce([]);
+
+    await service.findAllSales();
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {},
+      }),
+    );
+  });
+  
 });
