@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityService } from 'src/activity/activity.service';
@@ -12,7 +13,7 @@ type PrismaMock = PrismaService & {
   provider: {
     create: jest.Mock;
     findMany: jest.Mock;
-    findUnique: jest.Mock;
+    findFirst: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
     deleteMany: jest.Mock;
@@ -32,7 +33,7 @@ describe('ProvidersService multi-organization support', () => {
     provider: {
       create: jest.fn(),
       findMany: jest.fn(),
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
@@ -56,10 +57,16 @@ describe('ProvidersService multi-organization support', () => {
   };
 
   let service: ProvidersService;
+  let consoleErrorSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     service = new ProvidersService(prismaMock, activityServiceMock);
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   it('filters providers by organizationId when provided', async () => {
@@ -151,8 +158,39 @@ describe('ProvidersService multi-organization support', () => {
     );
   });
 
+  it('scopes lookups by organization when provided', async () => {
+    prismaMock.provider.findFirst.mockResolvedValue({
+      id: 42,
+      ...baseProvider,
+      organizationId: 777,
+    });
+
+    await service.findOne(42, 777);
+
+    expect(prismaMock.provider.findFirst).toHaveBeenCalledWith({
+      where: { id: 42, organizationId: 777 },
+    });
+  });
+
+  it('throws when updating a provider from another organization', async () => {
+    prismaMock.provider.findFirst.mockResolvedValueOnce({
+      id: 99,
+      ...baseProvider,
+      organizationId: 200,
+    });
+
+    await expect(
+      service.update(
+        99,
+        { id: 99, status: 'ACTIVE' } as any,
+        undefined,
+        999,
+      ),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('allows updating the organizationId of a provider explicitly', async () => {
-    prismaMock.provider.findUnique.mockResolvedValueOnce({
+    prismaMock.provider.findFirst.mockResolvedValueOnce({
       id: 10,
       ...baseProvider,
       organizationId: null,
@@ -186,7 +224,57 @@ describe('ProvidersService multi-organization support', () => {
     expect((updated as any).organizationId).toBe(303);
   });
 
+  it('scopes deletions to the tenant context', async () => {
+    prismaMock.provider.findFirst.mockResolvedValueOnce({
+      id: 5,
+      ...baseProvider,
+      organizationId: 33,
+    });
+    prismaMock.entry.findMany.mockResolvedValueOnce([]);
+    prismaMock.provider.delete.mockResolvedValue({
+      id: 5,
+      ...baseProvider,
+      organizationId: 33,
+    });
+
+    await service.remove(5, undefined, 33);
+
+    expect(prismaMock.provider.findFirst).toHaveBeenCalledWith({
+      where: { id: 5, organizationId: 33 },
+    });
+    expect(prismaMock.provider.delete).toHaveBeenCalledWith({
+      where: { id: 5 },
+    });
+  });
+
+  it('filters bulk deletions by organization', async () => {
+    prismaMock.entry.findMany.mockResolvedValue([]);
+    prismaMock.provider.findMany.mockResolvedValueOnce([
+      { id: 8, organizationId: 77 },
+    ]);
+    prismaMock.provider.deleteMany.mockResolvedValue({ count: 1 });
+
+    await service.removes([8], undefined, 77);
+
+    expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [8] }, organizationId: 77 },
+    });
+    expect(prismaMock.provider.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [8] }, organizationId: 77 },
+    });
+    expect(logOrganizationContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'removeMany',
+        organizationId: 77,
+      }),
+    );
+  });
+
   it('keeps organizationId untouched on bulk updates when not provided', async () => {
+    prismaMock.provider.findMany.mockResolvedValueOnce([
+      { id: 1, organizationId: 404 },
+      { id: 2, organizationId: null },
+    ]);
     prismaMock.provider.update.mockImplementation(async ({ where, data }) => ({
       id: where.id,
       ...baseProvider,
@@ -229,9 +317,27 @@ describe('ProvidersService multi-organization support', () => {
     expect(logOrganizationContext).toHaveBeenCalledWith(
       expect.objectContaining({
         operation: 'updateMany',
-        organizationId: undefined,
+        organizationId: null,
         metadata: { providerId: 2 },
       }),
     );
   });
+
+  it('scopes bulk updates to the tenant context', async () => {
+    prismaMock.provider.findMany.mockResolvedValueOnce([
+      { id: 7, organizationId: 55 },
+    ]);
+    prismaMock.provider.update.mockResolvedValue({ id: 7, ...baseProvider, organizationId: 55 });
+
+    await service.updateMany(
+      [{ id: 7, status: 'ACTIVE' } as any],
+      undefined,
+      55,
+    );
+
+    expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [7] }, organizationId: 55 },
+    });
+  });
+  
 });
