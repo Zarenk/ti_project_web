@@ -77,8 +77,6 @@ type OrganizationFixture = {
   products?: ProductFixture[];
 };
 
-const prisma = new PrismaClient();
-
 const seedOrganizations: OrganizationFixture[] = [
   {
     code: 'tenant-alpha',
@@ -228,7 +226,10 @@ const seedOrganizations: OrganizationFixture[] = [
   },
 ];
 
-async function ensureCategories(fixtures: OrganizationFixture[]) {
+async function ensureCategories(
+  prisma: PrismaClient,
+  fixtures: OrganizationFixture[],
+) {
   const categoryNames = new Set<string>();
   for (const org of fixtures) {
     for (const product of org.products ?? []) {
@@ -257,7 +258,12 @@ async function ensureCategories(fixtures: OrganizationFixture[]) {
   return categories;
 }
 
-async function ensureOrganization(fixture: OrganizationFixture, categories: Map<string, number>) {
+async function ensureOrganization(
+  prisma: PrismaClient,
+  fixture: OrganizationFixture,
+  categories: Map<string, number>,
+  logger: (message: string) => void,
+) {
   const organization = await prisma.organization.upsert({
     where: { code: fixture.code },
     update: {
@@ -556,22 +562,37 @@ async function ensureOrganization(fixture: OrganizationFixture, categories: Map<
     }
   }
 
-  console.log(`Fixture applied for organization ${fixture.code}`);
+  logger(`Fixture applied for organization ${fixture.code}`);
 }
 
-async function main() {
-  const categories = await ensureCategories(seedOrganizations);
-  for (const organization of seedOrganizations) {
-    await ensureOrganization(organization, categories);
+type ApplyFixturesOptions = {
+  prisma?: PrismaClient;
+  logger?: (message: string) => void;
+};
+
+export async function applyMultiTenantFixtures(
+  options: ApplyFixturesOptions = {},
+) {
+  const prisma = options.prisma ?? new PrismaClient();
+  const logger = options.logger ?? console.log;
+  const shouldDisconnect = !options.prisma;
+
+  try {
+    const categories = await ensureCategories(prisma, seedOrganizations);
+    for (const organization of seedOrganizations) {
+      await ensureOrganization(prisma, organization, categories, logger);
+    }
+    logger('Multi-tenant fixtures ensured.');
+  } finally {
+    if (shouldDisconnect) {
+      await prisma.$disconnect();
+    }
   }
-  console.log('Multi-tenant fixtures ensured.');
 }
 
-main()
-  .catch((error) => {
+if (require.main === module) {
+  applyMultiTenantFixtures().catch((error) => {
     console.error('Error applying multi-tenant fixtures:', error);
     process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
   });
+}
