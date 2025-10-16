@@ -320,6 +320,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se añadieron llamadas a `logOrganizationContext` en los métodos `findAll`, `findOne` y `checkIfExists` del servicio de proveedores, registrando el alcance (`tenant`, `legacy`, `global`) y el identificador consultado. La suite [`backend/src/providers/providers.service.spec.ts`](../src/providers/providers.service.spec.ts) se actualizó para afirmar las nuevas trazas y se incorporó un caso que valida el registro cuando la búsqueda no encuentra resultados.
 - **Resultado:** Las operaciones de lectura ahora generan métricas y advertencias consistentes con el resto del dominio, habilitando el monitoreo del acceso legacy y multi-organización mientras se continúan los trabajos sobre fixtures de integración y E2E.
 
+### 2024-05-10 – Reejecución suite `ProvidersController`
+
+- **Contexto:** Tras los últimos ajustes en la capa HTTP de proveedores se solicitó validar nuevamente la propagación del `organizationId` antes de continuar con la fase de fixtures de integración/E2E.
+- **Implementación:** Se volvió a ejecutar la suite [`backend/src/providers/providers.controller.spec.ts`](../src/providers/providers.controller.spec.ts), abarcando los escenarios de altas, lecturas, listados, actualizaciones puntuales y masivas, eliminaciones individuales y en bloque, además de las validaciones de payload cuando faltan parámetros obligatorios.
+- **Resultado:** El comando `npm test -- providers.controller.spec.ts` finalizó con `19 passed`, confirmando que los controles multi-tenant y las salvaguardas para contextos legacy permanecen estables y habilitando continuar con el plan sin regresiones en la capa HTTP.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
