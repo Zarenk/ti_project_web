@@ -6,7 +6,13 @@ export class OrderTrackingController {
   constructor(private readonly orderTrackingService: OrderTrackingService) {}
 
   @Get(':code/tracking')
-  getTracking(@Param('code') code: string) {
-    return this.orderTrackingService.findByOrderCode(code.trim());
+  getTracking(
+    @Param('code') code: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.orderTrackingService.findByOrderCode(
+      code.trim(),
+      organizationId ?? undefined,
+    );
   }
 }

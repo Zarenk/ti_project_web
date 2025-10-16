@@ -23,6 +23,7 @@ import { CompleteOrderDto } from './dto/complete-order.dto';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
 @Controller('web-sales')
 export class WebSalesController {
@@ -52,26 +53,40 @@ export class WebSalesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CompleteOrderDto,
     @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
   ) {
-    return this.webSalesService.completeWebOrder(id, dto, req);
+    return this.webSalesService.completeWebOrder(
+      id,
+      dto,
+      req,
+      organizationId ?? undefined,
+    );
   }
 
   @Patch('order/:id/series')
   async updateOrderSeries(
     @Param('id', ParseIntPipe) id: number,
     @Body('items') items: { productId: number; series: string[] }[],
+    @CurrentTenant('organizationId') organizationId: number | null,
   ) {
     if (!Array.isArray(items)) {
       throw new BadRequestException(
         'Formato inválido: items debe ser un arreglo',
       );
     }
-    return this.webSalesService.updateOrderSeries(id, items);
+    return this.webSalesService.updateOrderSeries(
+      id,
+      items,
+      organizationId ?? undefined,
+    );
   }
   
   @Post('order/:id/reject')
-  async rejectOrder(@Param('id', ParseIntPipe) id: number) {
-    return this.webSalesService.rejectWebOrder(id);
+  async rejectOrder(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.webSalesService.rejectWebOrder(id, organizationId ?? undefined);
   }
 
   @Post('order/:id/proofs')
@@ -99,12 +114,18 @@ export class WebSalesController {
     @Param('id', ParseIntPipe) id: number,
     @UploadedFiles() files: Express.Multer.File[],
     @Body('description') description: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
   ) {
     if (!files || files.length === 0) {
       throw new BadRequestException('No se proporcionaron imagenes');
     }
     const urls = files.map((f) => `/uploads/order-proofs/${f.filename}`);
-    return this.webSalesService.addOrderProofs(id, urls, description);
+    return this.webSalesService.addOrderProofs(
+      id,
+      urls,
+      description,
+      organizationId ?? undefined,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -116,15 +137,29 @@ export class WebSalesController {
     @Query('to') to?: string,
     @Query('clientId') clientId?: string,
     @Query('code') code?: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
   ) {
-    return this.webSalesService.getOrders({ status, from, to, clientId, code });
+    return this.webSalesService.getOrders({
+      status,
+      from,
+      to,
+      clientId,
+      code,
+      organizationId: organizationId ?? undefined,
+    });
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Get('orders/count')
-  async getOrdersCount(@Query('status') status?: string) {
-    const count = await this.webSalesService.getOrderCount(status);
+  async getOrdersCount(
+    @Query('status') status?: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+  ) {
+    const count = await this.webSalesService.getOrderCount(
+      status,
+      organizationId ?? undefined,
+    );
     return { count };
   }
 
@@ -135,38 +170,71 @@ export class WebSalesController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('limit') limit?: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
   ) {
     const lim = limit ? parseInt(limit, 10) : undefined;
-    return this.webSalesService.getRecentOrders({ from, to, limit: lim });
+    return this.webSalesService.getRecentOrders({
+      from,
+      to,
+      limit: lim,
+      organizationId: organizationId ?? undefined,
+    });
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.webSalesService.getWebSaleById(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.webSalesService.getWebSaleById(id, organizationId ?? undefined);
   }
 
   @Get('order/:id')
-  async findOrder(@Param('id', ParseIntPipe) id: number) {
-    return this.webSalesService.getWebOrderById(id);
+  async findOrder(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.webSalesService.getWebOrderById(id, organizationId ?? undefined);
   }
 
   @Get('order/by-code/:code')
-  async findOrderByCode(@Param('code') code: string) {
-    return this.webSalesService.getWebOrderByCode(code);
+  async findOrderByCode(
+    @Param('code') code: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.webSalesService.getWebOrderByCode(
+      code,
+      organizationId ?? undefined,
+    );
   }
 
   @Get('order/by-user/:id')
-  async findOrdersByUser(@Param('id', ParseIntPipe) id: number) {
-    return this.webSalesService.getWebOrdersByUser(id);
+  async findOrdersByUser(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.webSalesService.getWebOrdersByUser(id, organizationId ?? undefined);
   }
 
   @Get('order/by-email/:email')
-  async findOrdersByEmail(@Param('email') email: string) {
-    return this.webSalesService.getWebOrdersByEmail(email);
+  async findOrdersByEmail(
+    @Param('email') email: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.webSalesService.getWebOrdersByEmail(
+      email,
+      organizationId ?? undefined,
+    );
   }
 
   @Get('order/by-dni/:dni')
-  async findOrdersByDni(@Param('dni') dni: string) {
-    return this.webSalesService.getWebOrdersByDni(dni);
+  async findOrdersByDni(
+    @Param('dni') dni: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.webSalesService.getWebOrdersByDni(
+      dni,
+      organizationId ?? undefined,
+    );
   }
 }

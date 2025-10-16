@@ -195,7 +195,8 @@ model Organization {
   status    String    @default("ACTIVE")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-
+  
+  orders       Orders[]
   units        OrganizationUnit[]
   memberships  OrganizationMembership[]
   settings     OrganizationSetting?
@@ -629,14 +630,17 @@ model Orders {
   phone           String?
   carrierId       String?
   carrierName     String?
+  organizationId  Int?
   carrierMode     String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   sale          Sales?          @relation(fields: [salesId], references: [id])
   OrderTracking OrderTracking[]
+  organization  Organization?   @relation(fields: [organizationId], references: [id])
 
   @@index([salesId])
+  @@index([organizationId, createdAt])
 }
 
 model OrderTracking {
