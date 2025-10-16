@@ -17,6 +17,7 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
 import { CreateCashClosureDto } from './dto/create-cashclosure.dto';
 import { CreateCashTransactionDto } from './dto/create-cashtransactions.dto';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
 @Controller('cashregister')
 export class CashregisterController {
@@ -45,14 +46,52 @@ export class CashregisterController {
     return parsed;
   }
 
+  private mergeOrganizationId(
+    provided?: number | null,
+    context?: number | null,
+  ): number | null | undefined {
+    if (provided === undefined) {
+      return context === undefined ? undefined : context;
+    }
+
+    if (context === undefined || context === null) {
+      return provided;
+    }
+
+    if (provided === context) {
+      return provided;
+    }
+
+    throw new BadRequestException(
+      'La organización proporcionada no coincide con el contexto actual.',
+    );
+  }
+
   @Post()
-  async create(@Body() createCashRegisterDto: CreateCashRegisterDto) {
-    return this.cashregisterService.create(createCashRegisterDto);
+  async create(
+    @Body() createCashRegisterDto: CreateCashRegisterDto,
+    @CurrentTenant('organizationId') organizationIdFromContext: number | null,
+  ) {
+    const organizationId = this.mergeOrganizationId(
+      createCashRegisterDto.organizationId,
+      organizationIdFromContext,
+    );
+
+    return this.cashregisterService.create({
+      ...createCashRegisterDto,
+      organizationId,
+    });
   }
 
   @Get()
-  async findAll(@Query('organizationId') organizationIdRaw?: string) {
-    const organizationId = this.parseOrganizationId(organizationIdRaw);
+  async findAll(
+    @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+  ) {
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
     return this.cashregisterService.findAll({ organizationId });
   }
 
@@ -60,9 +99,15 @@ export class CashregisterController {
   async getCashRegisterBalance(
     @Param('storeId', ParseIntPipe) storeId: number,
     @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
   ) {
-    const organizationId = this.parseOrganizationId(organizationIdRaw);
-    const cashRegister = await this.cashregisterService.getCashRegisterBalance(storeId, { organizationId });
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
+    const cashRegister = await this.cashregisterService.getCashRegisterBalance(storeId, {
+      organizationId,
+    });
 
     // En lugar de devolver un 404 cuando no existe caja activa, respondemos con
     // null para que el cliente maneje el estado adecuadamente.
@@ -77,8 +122,12 @@ export class CashregisterController {
   async getTodayTransactions(
     @Param('storeId', ParseIntPipe) storeId: number,
     @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
   ) {
-    const organizationId = this.parseOrganizationId(organizationIdRaw);
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
     const today = new Date();
     const startOfDay = new Date(today);
     startOfDay.setHours(0, 0, 0, 0);
@@ -100,9 +149,15 @@ export class CashregisterController {
   async getActiveCashRegister(
     @Param('storeId') storeId: number,
     @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
   ) {
-    const organizationId = this.parseOrganizationId(organizationIdRaw);
-    const cashRegister = await this.cashregisterService.getActiveCashRegister(storeId, { organizationId });
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
+    const cashRegister = await this.cashregisterService.getActiveCashRegister(storeId, {
+      organizationId,
+    });
 
     // Si no hay caja activa simplemente devuelve null. El cliente decidirá qué hacer.
     if (!cashRegister) {
@@ -121,8 +176,16 @@ export class CashregisterController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCashRegisterDto: UpdateCashRegisterDto,
+    @CurrentTenant('organizationId') organizationIdFromContext: number | null,
   ) {
-    return this.cashregisterService.update(id, updateCashRegisterDto);
+    const organizationId = this.mergeOrganizationId(
+      updateCashRegisterDto.organizationId,
+      organizationIdFromContext,
+    );
+    return this.cashregisterService.update(id, {
+      ...updateCashRegisterDto,
+      organizationId,
+    });
   }
 
   @Delete(':id')
@@ -133,13 +196,29 @@ export class CashregisterController {
   //////////////////////////////// TRANSFER //////////////////////////////////
 
   @Post('transaction')
-  async createTransaction(@Body() createCashTransactionDto: CreateCashTransactionDto) {
-    return this.cashregisterService.createTransaction(createCashTransactionDto);
+  async createTransaction(
+    @Body() createCashTransactionDto: CreateCashTransactionDto,
+    @CurrentTenant('organizationId') organizationIdFromContext: number | null,
+  ) {
+    const organizationId = this.mergeOrganizationId(
+      createCashTransactionDto.organizationId,
+      organizationIdFromContext,
+    );
+    return this.cashregisterService.createTransaction({
+      ...createCashTransactionDto,
+      organizationId,
+    });
   }
 
   @Get('transaction')
-  async findAllTransaction(@Query('organizationId') organizationIdRaw?: string) {
-    const organizationId = this.parseOrganizationId(organizationIdRaw);
+  async findAllTransaction(
+    @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+  ) {
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
     return this.cashregisterService.findAllTransaction({ organizationId });
   }
 
@@ -147,8 +226,12 @@ export class CashregisterController {
   async findByCashRegister(
     @Param('cashRegisterId', ParseIntPipe) cashRegisterId: number,
     @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
   ) {
-    const organizationId = this.parseOrganizationId(organizationIdRaw);
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
     return this.cashregisterService.findByCashRegister(cashRegisterId, { organizationId });
   }
 
@@ -157,6 +240,7 @@ export class CashregisterController {
       @Param('storeId') storeIdRaw: string,
       @Param('date') date: string,
       @Query('organizationId') organizationIdRaw?: string,
+      @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
     ) {
       console.log('[GET] /get-transactions', { storeIdRaw, date });
 
@@ -165,7 +249,10 @@ export class CashregisterController {
         throw new BadRequestException('storeId inválido.');
       }
 
-      const organizationId = this.parseOrganizationId(organizationIdRaw);
+      const organizationId = this.mergeOrganizationId(
+        this.parseOrganizationId(organizationIdRaw),
+        organizationIdFromContext,
+      );
 
       const [year, month, day] = date.split('-').map(Number);
       if (!year || !month || !day) {
@@ -183,16 +270,30 @@ export class CashregisterController {
   ///////////////////////////////// CLOSURE //////////////////////////////////
 
   @Post('closure')
-  async createClosure(@Body() createCashClosureDto: CreateCashClosureDto) {
-    return this.cashregisterService.createClosure(createCashClosureDto);
+  async createClosure(
+    @Body() createCashClosureDto: CreateCashClosureDto,
+    @CurrentTenant('organizationId') organizationIdFromContext: number | null,
+  ) {
+    const organizationId = this.mergeOrganizationId(
+      createCashClosureDto.organizationId,
+      organizationIdFromContext,
+    );
+    return this.cashregisterService.createClosure({
+      ...createCashClosureDto,
+      organizationId,
+    });
   }
 
   @Get('closures/:storeId')
   async getClosuresByStore(
     @Param('storeId', ParseIntPipe) storeId: number,
     @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
   ) {
-    const organizationId = this.parseOrganizationId(organizationIdRaw);
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
     return this.cashregisterService.getClosuresByStore(storeId, { organizationId });
   }
 
@@ -201,14 +302,24 @@ export class CashregisterController {
     @Param('storeId', ParseIntPipe) storeId: number,
     @Param('date') date: string,
     @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
   ) {
-    const organizationId = this.parseOrganizationId(organizationIdRaw);
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
     return this.cashregisterService.getClosureByStoreAndDate(storeId, new Date(date), { organizationId });
   }
 
   @Get('closure')
-  async findAllClosure(@Query('organizationId') organizationIdRaw?: string) {
-    const organizationId = this.parseOrganizationId(organizationIdRaw);
+  async findAllClosure(
+    @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+  ) {
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
     return this.cashregisterService.findAllClosure({ organizationId });
   }
 
