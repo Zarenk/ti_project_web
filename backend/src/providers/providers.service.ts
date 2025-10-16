@@ -375,11 +375,15 @@ export class ProvidersService {
     req?: Request,
     organizationIdFromContext?: number | null,
   ) {
-    try{
+    try {
+      const organizationFilter = buildOrganizationFilter(
+        organizationIdFromContext,
+      ) as Prisma.ProviderWhereInput;
+
       const provider = await this.prismaService.provider.findFirst({
         where: {
           id,
-          ...buildOrganizationFilter(organizationIdFromContext),
+          ...organizationFilter,
         },
       });
 
@@ -398,21 +402,29 @@ export class ProvidersService {
         );
       }
       // Proceder con la eliminación si no hay proveedores relacionados
-      const deletedProvider = await this.prismaService.provider.delete({
+      const deletionResult = await this.prismaService.provider.deleteMany({
         where: {
           id,
+          ...organizationFilter,
         },
       });
+
+      if (deletionResult.count === 0) {
+        throw new NotFoundException(`Provider with id ${id} not found`);
+      }
+
+      const providerOrganizationId =
+        (provider as { organizationId?: number | null }).organizationId;
     
       logOrganizationContext({
         service: ProvidersService.name,
         operation: 'remove',
-        organizationId: (deletedProvider as { organizationId?: number | null })?.organizationId,
+        organizationId:
+          providerOrganizationId !== undefined
+            ? providerOrganizationId
+            : organizationIdFromContext ?? undefined,
         metadata: { providerId: id },
       });
-      if (!deletedProvider) {
-        throw new NotFoundException(`Provider with id ${id} not found`);
-      }
       await this.activityService.log(
         {
           actorId: (req as any)?.user?.userId,
@@ -420,13 +432,13 @@ export class ProvidersService {
           entityType: 'Provider',
           entityId: id.toString(),
           action: AuditAction.DELETED,
-          summary: `Proveedor ${deletedProvider.name} eliminado`,
-          diff: { before: deletedProvider } as any,
+          summary: `Proveedor ${provider.name} eliminado`,
+          diff: { before: provider } as any,
         },
         req,
       );
 
-      return deletedProvider;
+      return provider;
     } catch (error) {
       console.error('Error en el backend:', error);
       throw error; // Lanza otros errores no manejados

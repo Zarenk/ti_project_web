@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityService } from 'src/activity/activity.service';
@@ -15,7 +15,6 @@ type PrismaMock = PrismaService & {
     findMany: jest.Mock;
     findFirst: jest.Mock;
     update: jest.Mock;
-    delete: jest.Mock;
     deleteMany: jest.Mock;
   };
   entry: {
@@ -35,7 +34,6 @@ describe('ProvidersService multi-organization support', () => {
       findMany: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
-      delete: jest.fn(),
       deleteMany: jest.fn(),
     },
     entry: {
@@ -266,20 +264,33 @@ describe('ProvidersService multi-organization support', () => {
       organizationId: 33,
     });
     prismaMock.entry.findMany.mockResolvedValueOnce([]);
-    prismaMock.provider.delete.mockResolvedValue({
-      id: 5,
-      ...baseProvider,
-      organizationId: 33,
-    });
+    prismaMock.provider.deleteMany.mockResolvedValue({ count: 1 });
 
     await service.remove(5, undefined, 33);
 
     expect(prismaMock.provider.findFirst).toHaveBeenCalledWith({
       where: { id: 5, organizationId: 33 },
     });
-    expect(prismaMock.provider.delete).toHaveBeenCalledWith({
-      where: { id: 5 },
+    expect(prismaMock.provider.deleteMany).toHaveBeenCalledWith({
+      where: { id: 5, organizationId: 33 },
     });
+    expect(logOrganizationContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'remove',
+        organizationId: 33,
+        metadata: { providerId: 5 },
+      }),
+    );
+  });
+
+  it('prevents deleting providers outside of the tenant scope', async () => {
+    prismaMock.provider.findFirst.mockResolvedValueOnce(null);
+
+    await expect(service.remove(42, undefined, 100)).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(prismaMock.entry.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.provider.deleteMany).not.toHaveBeenCalled();
   });
 
   it('filters bulk deletions by organization', async () => {
