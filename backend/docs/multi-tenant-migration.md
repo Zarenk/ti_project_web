@@ -284,6 +284,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se creó [`backend/src/ordertracking/ordertracking.service.spec.ts`](../src/ordertracking/ordertracking.service.spec.ts) con _mocks_ de Prisma que parametrizan la búsqueda de órdenes por `organizationId`, cubriendo escenarios exitosos y de rechazo cuando la orden pertenece a otro tenant.
 - **Resultado:** El comando `npm test -- ordertracking.service.spec.ts` finalizó con `2 passed`, dejando constancia de que el servicio limita las consultas al tenant activo y aportando evidencia adicional para cerrar la cobertura priorizada en esta fase.
 
+### 2024-05-04 – Corrida consolidada `SalesService` y `WebSalesService`
+
+- **Contexto:** Tras los ajustes recurrentes en ventas presenciales y web, se requirió validar nuevamente que ambos dominios continúen propagando `organizationId` antes de avanzar con la siguiente iteración del plan.
+- **Implementación:** Se ejecutó `npm test -- sales.service.spec.ts`, lo que dispara las suites de `SalesService` y `WebSalesService` debido al patrón compartido; se observaron los _mocks_ de Prisma y la instrumentación temporal confirmando la propagación del tenant en órdenes físicas y web.
+- **Resultado:** La corrida arrojó `16 passed` entre ambas suites, confirmando el estado verde y habilitando continuar con los siguientes hitos de la Fase 2 – Paso 3.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
