@@ -146,6 +146,113 @@ describe('CashregisterService (multi-organization)', () => {
     });
   });
 
+  describe('findAll', () => {
+    it('applies organization filter when provided', async () => {
+      (prisma.cashRegister.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findAll({ organizationId: 21 });
+
+      expect(prisma.cashRegister.findMany).toHaveBeenCalledWith({
+        where: { organizationId: 21 },
+        include: {
+          store: true,
+          transactions: true,
+          closures: true,
+        },
+      });
+    });
+
+    it('omits organization filter when undefined', async () => {
+      (prisma.cashRegister.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findAll();
+
+      expect(prisma.cashRegister.findMany).toHaveBeenCalledWith({
+        where: {},
+        include: {
+          store: true,
+          transactions: true,
+          closures: true,
+        },
+      });
+    });
+
+    it('supports querying legacy records with null organizationId', async () => {
+      (prisma.cashRegister.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findAll({ organizationId: null });
+
+      expect(prisma.cashRegister.findMany).toHaveBeenCalledWith({
+        where: { organizationId: null },
+        include: {
+          store: true,
+          transactions: true,
+          closures: true,
+        },
+      });
+    });
+  });
+
+  describe('getCashRegisterBalance', () => {
+    it('propagates organization filter when provided', async () => {
+      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({
+        currentBalance: 150,
+        organizationId: 9,
+      });
+
+      await service.getCashRegisterBalance(4, { organizationId: 9 });
+
+      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+        where: { storeId: 4, status: 'ACTIVE', organizationId: 9 },
+        select: { currentBalance: true, organizationId: true },
+      });
+    });
+
+    it('returns null when cash register not found', async () => {
+      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue(null);
+
+      const result = await service.getCashRegisterBalance(2, { organizationId: 7 });
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getActiveCashRegister', () => {
+    it('passes organization filter to prisma query', async () => {
+      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await service.getActiveCashRegister(8, { organizationId: 5 });
+
+      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+        where: { storeId: 8, status: 'ACTIVE', organizationId: 5 },
+        select: {
+          id: true,
+          name: true,
+          currentBalance: true,
+          initialBalance: true,
+          organizationId: true,
+        },
+      });
+    });
+
+    it('omits organization filter when undefined', async () => {
+      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({ id: 1 });
+
+      await service.getActiveCashRegister(3);
+
+      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+        where: { storeId: 3, status: 'ACTIVE' },
+        select: {
+          id: true,
+          name: true,
+          currentBalance: true,
+          initialBalance: true,
+          organizationId: true,
+        },
+      });
+    });
+  });
+
   describe('createTransaction', () => {
     beforeEach(() => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 11 });
@@ -204,6 +311,128 @@ describe('CashregisterService (multi-organization)', () => {
           organizationId: 500,
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('getTransactionsByStoreAndDate', () => {
+    const startOfDay = new Date('2024-05-01T00:00:00.000Z');
+    const endOfDay = new Date('2024-05-01T23:59:59.999Z');
+
+    beforeEach(() => {
+      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cashClosure.findMany as jest.Mock).mockResolvedValue([]);
+    });
+
+    it('applies organization filter on transactions and closures', async () => {
+      await service.getTransactionsByStoreAndDate(10, startOfDay, endOfDay, {
+        organizationId: 6,
+      });
+
+      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            organizationId: 6,
+            cashRegister: { storeId: 10, organizationId: 6 },
+            createdAt: { gte: startOfDay, lte: endOfDay },
+          },
+        }),
+      );
+      expect(prisma.cashClosure.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            organizationId: 6,
+            cashRegister: { storeId: 10, organizationId: 6 },
+            createdAt: { gte: startOfDay, lte: endOfDay },
+          },
+        }),
+      );
+    });
+
+    it('omits organization filter when not provided', async () => {
+      await service.getTransactionsByStoreAndDate(7, startOfDay, endOfDay);
+
+      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            cashRegister: { storeId: 7 },
+            createdAt: { gte: startOfDay, lte: endOfDay },
+          },
+        }),
+      );
+      expect(prisma.cashClosure.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            cashRegister: { storeId: 7 },
+            createdAt: { gte: startOfDay, lte: endOfDay },
+          },
+        }),
+      );
+    });
+  });
+
+  describe('findAllTransaction', () => {
+    it('filters by organization when provided', async () => {
+      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findAllTransaction({ organizationId: 3 });
+
+      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith({
+        where: { organizationId: 3 },
+        include: {
+          cashRegister: true,
+          paymentMethods: true,
+          user: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+
+    it('omits organization filter for global queries', async () => {
+      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findAllTransaction();
+
+      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith({
+        where: {},
+        include: {
+          cashRegister: true,
+          paymentMethods: true,
+          user: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+  });
+
+  describe('findByCashRegister', () => {
+    it('combines cash register id with organization filter', async () => {
+      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findByCashRegister(11, { organizationId: null });
+
+      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith({
+        where: { cashRegisterId: 11, organizationId: null },
+        include: {
+          paymentMethods: true,
+          user: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+
+    it('omits organization filter when undefined', async () => {
+      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findByCashRegister(12);
+
+      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith({
+        where: { cashRegisterId: 12 },
+        include: {
+          paymentMethods: true,
+          user: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
     });
   });
 
@@ -296,6 +525,80 @@ describe('CashregisterService (multi-organization)', () => {
     });
   });
 
+  describe('getClosuresByStore', () => {
+    it('applies organization filter to closures and related register', async () => {
+      (prisma.cashClosure.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.getClosuresByStore(4, { organizationId: 13 });
+
+      expect(prisma.cashClosure.findMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: 13,
+          cashRegister: { storeId: 4, organizationId: 13 },
+        },
+        include: {
+          user: true,
+          cashRegister: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+  });
+
+  describe('getClosureByStoreAndDate', () => {
+    it('propagates organization filter when provided', async () => {
+      (prisma.cashClosure.findFirst as jest.Mock).mockResolvedValue(null);
+      const baseDate = new Date('2024-04-30T12:34:56.000Z');
+      const expectedStart = new Date(baseDate);
+      expectedStart.setHours(0, 0, 0, 0);
+      const expectedEnd = new Date(baseDate);
+      expectedEnd.setHours(23, 59, 59, 999);
+
+      await service.getClosureByStoreAndDate(9, baseDate, { organizationId: 2 });
+
+      expect(prisma.cashClosure.findFirst).toHaveBeenCalledWith({
+        where: {
+          organizationId: 2,
+          cashRegister: { storeId: 9, organizationId: 2 },
+          createdAt: { gte: expectedStart, lte: expectedEnd },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+  });
+
+  describe('findAllClosure', () => {
+    it('filters by organization when provided', async () => {
+      (prisma.cashClosure.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findAllClosure({ organizationId: 5 });
+
+      expect(prisma.cashClosure.findMany).toHaveBeenCalledWith({
+        where: { organizationId: 5 },
+        include: {
+          cashRegister: true,
+          user: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+
+    it('omits organization filter when undefined', async () => {
+      (prisma.cashClosure.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findAllClosure();
+
+      expect(prisma.cashClosure.findMany).toHaveBeenCalledWith({
+        where: {},
+        include: {
+          cashRegister: true,
+          user: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+  });
+
   describe('update', () => {
     beforeEach(() => {
       (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({
@@ -352,5 +655,5 @@ describe('CashregisterService (multi-organization)', () => {
       expect(result).toEqual({ id: 7 });
     });
   });
-  
+
 });
