@@ -1,18 +1,31 @@
-import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AuditAction, OrderStatus } from '@prisma/client';
-import { zonedTimeToUtc, utcToZonedTime, format as formatTz } from 'date-fns-tz'
-import { subDays, startOfDay, endOfDay } from 'date-fns'
+import { zonedTimeToUtc, utcToZonedTime, format as formatTz } from 'date-fns-tz';
+import { subDays, startOfDay, endOfDay } from 'date-fns';
 import { eachDayOfInterval } from 'date-fns';
 import { executeSale, prepareSaleContext, SaleAllocation } from 'src/utils/sales-helper';
 import { ActivityService } from 'src/activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import {
+  buildOrganizationFilter,
+  resolveOrganizationId,
+} from 'src/tenancy/organization.utils';
 
 @Injectable()
 export class SalesService {
 
   private readonly logger = new Logger(SalesService.name);
+
+  private buildSalesWhere(organizationId?: number | null): Prisma.SalesWhereInput {
+    return buildOrganizationFilter(organizationId) as Prisma.SalesWhereInput;
+  }
 
   constructor(
     private prisma: PrismaService,
@@ -45,9 +58,22 @@ export class SalesService {
       organizationId: inputOrganizationId,
     } = data;
 
-    const { store, cashRegister, clientIdToUse } = await prepareSaleContext(this.prisma, storeId, clientId);
+    const { store, cashRegister, clientIdToUse } = await prepareSaleContext(
+      this.prisma,
+      storeId,
+      clientId,
+    );
 
-    const organizationId = inputOrganizationId ?? store.organizationId ?? null;
+    const storeOrganizationId = (
+      store as { organizationId?: number | null } | undefined
+    )?.organizationId ?? null;
+
+    const organizationId = resolveOrganizationId({
+      provided: inputOrganizationId ?? null,
+      fallbacks: [storeOrganizationId],
+      mismatchError:
+        'La organización proporcionada no coincide con la tienda seleccionada.',
+    });
 
     logOrganizationContext({
       service: SalesService.name,
@@ -130,8 +156,11 @@ export class SalesService {
     return sale;
   }
 
-  async findAllSales() {
+  async findAllSales(organizationId?: number | null) {
+    const organizationFilter = this.buildSalesWhere(organizationId);
+
     return this.prisma.sales.findMany({
+      where: organizationFilter,
       include: {
         user: true,
         store: true,
@@ -158,9 +187,10 @@ export class SalesService {
     });
   }
 
-  async findSalesByUser(userId: number) {
+  async findSalesByUser(userId: number, organizationId?: number | null) {
+    const organizationFilter = this.buildSalesWhere(organizationId);
     return this.prisma.sales.findMany({
-      where: { client: { userId } },
+      where: { client: { userId }, ...organizationFilter },
       include: {
         user: true,
         store: true,
@@ -189,9 +219,9 @@ export class SalesService {
     });
   }
 
-  async findOne(id: number) {
-    const sale = await this.prisma.sales.findUnique({
-      where: { id },
+  async findOne(id: number, organizationId?: number | null) {
+    const sale = await this.prisma.sales.findFirst({
+      where: { id, ...this.buildSalesWhere(organizationId) },
       include: {
         user: { select: { username: true } },
         store: { select: { name: true } },
@@ -214,10 +244,15 @@ export class SalesService {
     return sale;
   }
 
-  async deleteSale(id: number, actorId?: number) {
+  async deleteSale(
+    id: number,
+    actorId?: number,
+    organizationId?: number | null,
+  ) {
+    const organizationFilter = this.buildSalesWhere(organizationId);
     const { sale, deletedSale } = await this.prisma.$transaction(async (prismaTx) => {
-      const sale = await prismaTx.sales.findUnique({
-        where: { id },
+      const sale = await prismaTx.sales.findFirst({
+        where: { id, ...organizationFilter },
         include: {
           user: { select: { id: true, username: true } },
           store: { select: { id: true, name: true } },
@@ -322,7 +357,9 @@ export class SalesService {
 
       await prismaTx.invoiceSales.deleteMany({ where: { salesId: sale.id } });
 
-      const deletedSale = await prismaTx.sales.delete({ where: { id: sale.id } });
+      const deletedSale = await prismaTx.sales.delete({
+        where: { id: sale.id },
+      });
 
       return { sale, deletedSale };
     });
@@ -360,10 +397,10 @@ export class SalesService {
   }
 
   // Método para obtener las series vendidas en una venta específica
-  async getSoldSeriesBySale(saleId: number) {
+  async getSoldSeriesBySale(saleId: number, organizationId?: number | null) {
     // Buscar la venta con los detalles y las series asociadas
-    const sale = await this.prisma.sales.findUnique({
-      where: { id: saleId },
+    const sale = await this.prisma.sales.findFirst({
+      where: { id: saleId, ...this.buildSalesWhere(organizationId) },
       include: {
         salesDetails: {
           include: {
@@ -394,20 +431,28 @@ export class SalesService {
     };
   }
 
-  async getMonthlySalesTotal() {
+  async getMonthlySalesTotal(organizationId?: number | null) {
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1); // 1 día antes del inicio del mes actual
+
+    const organizationFilter = this.buildSalesWhere(organizationId);
   
     const [currentMonth, previousMonth] = await Promise.all([
       this.prisma.sales.aggregate({
         _sum: { total: true },
-        where: { createdAt: { gte: startOfCurrentMonth, lte: now } },
+        where: {
+          ...organizationFilter,
+          createdAt: { gte: startOfCurrentMonth, lte: now },
+        },
       }),
       this.prisma.sales.aggregate({
         _sum: { total: true },
-        where: { createdAt: { gte: startOfPreviousMonth, lte: endOfPreviousMonth } },
+        where: {
+          ...organizationFilter,
+          createdAt: { gte: startOfPreviousMonth, lte: endOfPreviousMonth },
+        },
       }),
     ]);
   
@@ -424,7 +469,11 @@ export class SalesService {
     };
   }
   
-  async getRevenueByCategory(startDate?: Date, endDate?: Date) {
+  async getRevenueByCategory(
+    startDate?: Date,
+    endDate?: Date,
+    organizationId?: number | null,
+  ) {
     const timeZone = 'America/Lima';
     const filters: any = {};
   
@@ -436,7 +485,7 @@ export class SalesService {
     }
   
     const sales = await this.prisma.sales.findMany({
-      where: filters,
+      where: { ...filters, ...this.buildSalesWhere(organizationId) },
       select: { id: true },
     });
   
@@ -465,7 +514,11 @@ export class SalesService {
     return Object.entries(revenueByCategory).map(([name, value]) => ({ name, value }));
   }
 
-  async getDailySalesByDateRange(from: Date, to: Date) {
+  async getDailySalesByDateRange(
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+  ) {
     const timeZone = 'America/Lima';
   
     const zonedFrom = zonedTimeToUtc(new Date(from), timeZone);
@@ -473,6 +526,7 @@ export class SalesService {
   
     const sales = await this.prisma.sales.findMany({
       where: {
+        ...this.buildSalesWhere(organizationId),
         createdAt: {
           gte: zonedFrom,
           lte: zonedTo,
@@ -504,8 +558,16 @@ export class SalesService {
     return result;
   }
 
-  async getTopProducts(limit = 10, startDate?: string, endDate?: string) {
-    const filters: any = {};
+  async getTopProducts(
+    limit = 10,
+    startDate?: string,
+    endDate?: string,
+    organizationId?: number | null,
+  ) {
+    const filters: Prisma.SalesDetailWhereInput = {};
+    if (organizationId !== undefined) {
+      filters.sale = this.buildSalesWhere(organizationId);
+    }
     const timeZone = 'America/Lima';
   
     if (startDate && endDate) {
@@ -514,6 +576,7 @@ export class SalesService {
   
       const salesInRange = await this.prisma.sales.findMany({
         where: {
+          ...this.buildSalesWhere(organizationId),
           createdAt: {
             gte: zonedFrom,
             lte: zonedTo,
@@ -570,7 +633,12 @@ export class SalesService {
     });
   }
 
-  async getProductSalesReport(productId: number, from?: string, to?: string) {
+  async getProductSalesReport(
+    productId: number,
+    from?: string,
+    to?: string,
+    organizationId?: number | null,
+  ) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
       select: {
@@ -597,12 +665,15 @@ export class SalesService {
       createdAtFilter.lte = zonedTimeToUtc(endOfDay(new Date(to)), timeZone);
     }
 
-    const where: Prisma.SalesDetailWhereInput = {
-      productId,
-    };
+    const where: Prisma.SalesDetailWhereInput = { productId };
+    const saleFilters: Prisma.SalesWhereInput = this.buildSalesWhere(organizationId);
 
     if (Object.keys(createdAtFilter).length > 0) {
-      where.sale = { createdAt: createdAtFilter };
+      saleFilters.createdAt = createdAtFilter;
+    }
+
+    if (Object.keys(saleFilters).length > 0) {
+      where.sale = saleFilters;
     }
 
     const details = await this.prisma.salesDetail.findMany({
@@ -806,18 +877,26 @@ export class SalesService {
     };
   }
 
-  async getMonthlySalesCount() {
+  async getMonthlySalesCount(organizationId?: number | null) {
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1);
+
+    const organizationFilter = this.buildSalesWhere(organizationId);
   
     const [currentCount, previousCount] = await Promise.all([
       this.prisma.sales.count({
-        where: { createdAt: { gte: startOfCurrentMonth, lte: now } },
+        where: {
+          ...organizationFilter,
+          createdAt: { gte: startOfCurrentMonth, lte: now },
+        },
       }),
       this.prisma.sales.count({
-        where: { createdAt: { gte: startOfPreviousMonth, lte: endOfPreviousMonth } },
+        where: {
+          ...organizationFilter,
+          createdAt: { gte: startOfPreviousMonth, lte: endOfPreviousMonth },
+        },
       }),
     ]);
   
@@ -831,15 +910,18 @@ export class SalesService {
     };
   }
 
-  async getMonthlyClientStats() {
+  async getMonthlyClientStats(organizationId?: number | null) {
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1);
+
+    const organizationFilter = this.buildSalesWhere(organizationId);
   
     const [currentClients, previousClients] = await Promise.all([
       this.prisma.sales.findMany({
         where: {
+          ...organizationFilter,
           createdAt: {
             gte: startOfCurrentMonth,
             lte: now,
@@ -850,6 +932,7 @@ export class SalesService {
       }),
       this.prisma.sales.findMany({
         where: {
+          ...organizationFilter,
           createdAt: {
             gte: startOfPreviousMonth,
             lte: endOfPreviousMonth,
@@ -873,17 +956,28 @@ export class SalesService {
     };
   }
 
-  async getRecentSales(from?: string, to?: string, limit: number = 10) {
+  async getRecentSales(
+    from?: string,
+    to?: string,
+    limit: number = 10,
+    organizationId?: number | null,
+  ) {
     const timeZone = 'America/Lima';
   
-    const whereClause = from && to
-      ? {
-          createdAt: {
-            gte: zonedTimeToUtc(new Date(from), timeZone),
-            lte: zonedTimeToUtc(endOfDay(new Date(to)), timeZone), // 👈 Asegura fin del día
-          },
-        }
-      : undefined;
+    const organizationFilter = this.buildSalesWhere(organizationId);
+
+    const whereClause: Prisma.SalesWhereInput | undefined = (() => {
+      const base: Prisma.SalesWhereInput = { ...organizationFilter };
+
+      if (from && to) {
+        base.createdAt = {
+          gte: zonedTimeToUtc(new Date(from), timeZone),
+          lte: zonedTimeToUtc(endOfDay(new Date(to)), timeZone), // 👈 Asegura fin del día
+        };
+      }
+
+      return Object.keys(base).length > 0 ? base : undefined;
+    })();
   
     const sales = await this.prisma.sales.findMany({
       where: whereClause,
@@ -937,9 +1031,14 @@ export class SalesService {
     });
   }
 
-  async getTopClients(limit = 10, from?: string, to?: string) {
+  async getTopClients(
+    limit = 10,
+    from?: string,
+    to?: string,
+    organizationId?: number | null,
+  ) {
     const timeZone = 'America/Lima';
-    const where: any = {};
+    const where: Prisma.SalesWhereInput = this.buildSalesWhere(organizationId);
 
     if (from && to) {
       where.createdAt = {
@@ -1006,8 +1105,12 @@ export class SalesService {
     });
   }
 
-  async getSalesTransactions(from?: Date, to?: Date) {
-    const where: Prisma.SalesWhereInput = {};
+  async getSalesTransactions(
+    from?: Date,
+    to?: Date,
+    organizationId?: number | null,
+  ) {
+    const where: Prisma.SalesWhereInput = this.buildSalesWhere(organizationId);
 
     if (from || to) {
       where.createdAt = {};

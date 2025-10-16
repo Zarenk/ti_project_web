@@ -152,7 +152,7 @@ export class SalesController {
   getTopClients(
     @Query('from') from?: string,
     @Query('to') to?: string,
-    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('organizationId') organizationId?: number | null,
   ) {
     return this.salesService.getTopClients(
       10,
@@ -167,7 +167,7 @@ export class SalesController {
     @Param('productId', ParseIntPipe) productId: number,
     @Query('from') from?: string,
     @Query('to') to?: string,
-    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('organizationId') organizationId?: number | null,
   ) {
     return this.salesService.getProductSalesReport(
       productId,
@@ -181,7 +181,7 @@ export class SalesController {
   getSalesTransactions(
     @Query('from') from?: string,
     @Query('to') to?: string,
-    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('organizationId') organizationId?: number | null,
   ) {
     return this.salesService.getSalesTransactions(
       from ? new Date(from) : undefined,
@@ -206,7 +206,7 @@ export class SalesController {
   async getRecentSales(
     @Param('from') from: string,
     @Param('to') to: string,
-    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('organizationId') organizationId?: number | null,
   ) {
     return this.salesService.getRecentSales(
       from,
