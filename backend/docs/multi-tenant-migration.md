@@ -332,6 +332,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejercitó la suite [`backend/src/sales/sales.controller.spec.ts`](../src/sales/sales.controller.spec.ts), validando la creación de ventas, listados, consultas y eliminaciones con `organizationId` explícito, heredado desde el contexto o ausente, además de las invocaciones a métricas como `getTopProducts` y `getTopProductsByRange`.
 - **Resultado:** La ejecución `npm test -- sales.controller.spec.ts` reportó `11 passed`, registrando la propagación correcta del tenant y dejando la capa de ventas alineada con el resto de servicios multi-organización mientras se avanza hacia fixtures de integración/E2E.
 
+### 2024-05-12 – Validación E2E multi-organización
+
+- **Contexto:** Con las suites unitarias priorizadas en verde se debía evidenciar que los fixtures multi-tenant habilitados por `applyMultiTenantFixtures` permiten ejecutar las pruebas end-to-end sin regresiones mientras se avanza con el _Paso 3_ de la Fase 2.
+- **Implementación:** Se corrió `npm run test:e2e`, lo que dispara Jest con la configuración `backend/test/jest-e2e.json` e invoca el _setup_ global que garantiza la siembra `npm run seed:multi-tenant` para las organizaciones `tenant-alpha` y `tenant-beta` antes de iniciar la batería.
+- **Resultado:** La corrida finalizó en verde (`test/tenancy.e2e-spec.ts`) tras aplicar los fixtures multi-organización, dejando constancia de que la suite E2E opera correctamente con los nuevos datos idempotentes y permitiendo continuar con la expansión de fixtures de integración.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
