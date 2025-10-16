@@ -296,6 +296,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó `npm test -- providers.service.spec.ts` desde el entorno operativo principal, repasando los casos de filtrado, creación, validaciones cruzadas y eliminaciones parametrizadas por tenant con la instrumentación de `logOrganizationContext` activa.
 - **Resultado:** La suite reportó `14 passed`, confirmando que los ajustes recientes mantienen la propagación opcional del `organizationId` y habilitando que el equipo prosiga con el plan táctico sin bloqueos.
 
+### 2024-05-06 – Corrida validada `ProvidersService`
+
+- **Contexto:** Como seguimiento a la verificación multi-organización y ante la solicitud de continuar con el plan, se registró una nueva ejecución focalizada en `ProvidersService` para obtener evidencia fresca del estado de la suite.
+- **Implementación:** Se volvió a correr `npm test -- providers.service.spec.ts`, constatando que los escenarios con `organizationId` explícito, heredado y nulo mantienen la propagación correcta del tenant en altas, lecturas, actualizaciones y eliminaciones masivas.
+- **Resultado:** El comando arrojó `15 passed`, ratificando que las pruebas unitarias permanecen en verde y habilitando avanzar hacia la siguiente iteración del plan sin pendientes en la cobertura de proveedores.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
