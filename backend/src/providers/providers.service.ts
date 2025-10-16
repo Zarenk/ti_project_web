@@ -124,10 +124,15 @@ export class ProvidersService {
     }
   }
 
-  // providers.service.ts
-  async checkIfExists(documentNumber: string): Promise<boolean> {
-    const provider = await this.prismaService.provider.findUnique({
-      where: { documentNumber },
+  async checkIfExists(
+    documentNumber: string,
+    organizationIdFromContext?: number | null,
+  ): Promise<boolean> {
+    const provider = await this.prismaService.provider.findFirst({
+      where: {
+        documentNumber,
+        ...buildOrganizationFilter(organizationIdFromContext),
+      },
     });
     return !!provider; // Devuelve true si el proveedor existe, false si no
   }

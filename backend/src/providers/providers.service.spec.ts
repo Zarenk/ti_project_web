@@ -95,6 +95,39 @@ describe('ProvidersService multi-organization support', () => {
     expect(prismaMock.provider.findMany).toHaveBeenCalledWith({ where: {} });
   });
 
+  it('checks provider existence within the active organization when available', async () => {
+    prismaMock.provider.findFirst.mockResolvedValue({ id: 9 });
+
+    const exists = await service.checkIfExists('12345678901', 55);
+
+    expect(prismaMock.provider.findFirst).toHaveBeenCalledWith({
+      where: { documentNumber: '12345678901', organizationId: 55 },
+    });
+    expect(exists).toBe(true);
+  });
+
+  it('keeps legacy provider checks when no organization context is provided', async () => {
+    prismaMock.provider.findFirst.mockResolvedValue(null);
+
+    const exists = await service.checkIfExists('12345678901');
+
+    expect(prismaMock.provider.findFirst).toHaveBeenCalledWith({
+      where: { documentNumber: '12345678901' },
+    });
+    expect(exists).toBe(false);
+  });
+
+  it('allows checking legacy providers scoped by null organizationId', async () => {
+    prismaMock.provider.findFirst.mockResolvedValue({ id: 15 });
+
+    const exists = await service.checkIfExists('12345678901', null);
+
+    expect(prismaMock.provider.findFirst).toHaveBeenCalledWith({
+      where: { documentNumber: '12345678901', organizationId: null },
+    });
+    expect(exists).toBe(true);
+  });
+
   it('persists the provided organizationId on creation and logs the context', async () => {
     prismaMock.provider.create.mockResolvedValue({
       id: 1,

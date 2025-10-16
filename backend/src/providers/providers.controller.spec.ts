@@ -110,12 +110,24 @@ describe('ProvidersController multi-tenant mapping', () => {
   it('checks providers existence delegating to the service', async () => {
     service.checkIfExists.mockResolvedValue(true);
 
-    await expect(controller.checkProvider('12345678901')).resolves.toEqual({ exists: true });
-    expect(service.checkIfExists).toHaveBeenCalledWith('12345678901');
+    await expect(controller.checkProvider('12345678901', 55)).resolves.toEqual({
+      exists: true,
+    });
+    expect(service.checkIfExists).toHaveBeenCalledWith('12345678901', 55);
+  });
+
+  it('omits organization scoping when context is null to preserve legacy lookups', async () => {
+    service.checkIfExists.mockResolvedValue(false);
+
+    await controller.checkProvider('12345678901', null);
+
+    expect(service.checkIfExists).toHaveBeenCalledWith('12345678901', undefined);
   });
 
   it('throws BadRequestException when checking providers without document number', async () => {
-    await expect(controller.checkProvider('')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(controller.checkProvider('', null)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
     expect(service.checkIfExists).not.toHaveBeenCalled();
   });
 });

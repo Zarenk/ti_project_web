@@ -37,13 +37,19 @@ export class ProvidersController {
   }
 
   // providers.controller.ts
-  @Post("check")
-  async checkProvider(@Body("documentNumber") documentNumber: string) {
+  @Post('check')
+  async checkProvider(
+    @Body('documentNumber') documentNumber: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
     if (!documentNumber) {
       throw new BadRequestException("El Nombre y el Ruc son obligatorios.");
     }
 
-    const exists = await this.providersService.checkIfExists(documentNumber);
+    const exists = await this.providersService.checkIfExists(
+      documentNumber,
+      organizationId ?? undefined,
+    );
     return { exists };
   }
 
