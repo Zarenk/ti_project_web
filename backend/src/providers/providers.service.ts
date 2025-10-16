@@ -25,23 +25,34 @@ export class ProvidersService {
     private activityService: ActivityService,
   ) {}
 
-   async create(createProviderDto: CreateProviderDto, req?: Request) {
+   async create(
+    createProviderDto: CreateProviderDto,
+    req?: Request,
+    organizationIdFromContext?: number | null,
+  ) {
     try {
       const { organizationId, ...providerPayload } = createProviderDto as CreateProviderDto & {
         organizationId?: number | null;
       };
 
+      const resolvedOrganizationId = resolveOrganizationId({
+        provided: organizationId === undefined ? undefined : organizationId,
+        fallbacks: [organizationIdFromContext ?? undefined],
+        mismatchError:
+          'La organización del proveedor no coincide con el contexto actual.',
+      });
+
       logOrganizationContext({
         service: ProvidersService.name,
         operation: 'create',
-        organizationId,
+        organizationId: resolvedOrganizationId ?? organizationId ?? undefined,
         metadata: { providerName: createProviderDto.name },
       });
 
       const provider = await this.prismaService.provider.create({
         data: {
           ...providerPayload,
-          organizationId: organizationId ?? null,
+          organizationId: resolvedOrganizationId ?? null,
         } as Prisma.ProviderUncheckedCreateInput,
       });
 

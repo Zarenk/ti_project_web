@@ -23,9 +23,17 @@ export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
 
   @Post()
-  @ApiOperation({summary: 'Create a provider'})    // Swagger
-  create(@Body() createProviderDto: CreateProviderDto, @Req() req: Request) {
-    return this.providersService.create(createProviderDto, req);
+  @ApiOperation({ summary: 'Create a provider' })
+  create(
+    @Body() createProviderDto: CreateProviderDto,
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.providersService.create(
+      createProviderDto,
+      req,
+      organizationId ?? undefined,
+    );
   }
 
   // providers.controller.ts

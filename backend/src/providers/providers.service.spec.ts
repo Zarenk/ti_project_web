@@ -110,6 +110,7 @@ describe('ProvidersService multi-organization support', () => {
         organizationId: 101,
       } as any,
       { user: { userId: 5, username: 'ops@tenant' } } as any,
+      undefined,
     );
 
     expect(prismaMock.provider.create).toHaveBeenCalledWith({
@@ -156,6 +157,40 @@ describe('ProvidersService multi-organization support', () => {
         organizationId: undefined,
       }),
     );
+  });
+
+  it('falls back to the organizationId provided by the context when absent in the payload', async () => {
+    prismaMock.provider.create.mockResolvedValue({
+      id: 3,
+      ...baseProvider,
+      organizationId: 77,
+    });
+
+    await service.create(baseProvider as any, undefined, 77);
+
+    expect(prismaMock.provider.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ organizationId: 77 }),
+    });
+    expect(logOrganizationContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'create',
+        organizationId: 77,
+      }),
+    );
+  });
+
+  it('throws when payload organizationId differs from the tenant context', async () => {
+    await expect(
+      service.create(
+        {
+          ...baseProvider,
+          organizationId: 10,
+        } as any,
+        undefined,
+        20,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prismaMock.provider.create).not.toHaveBeenCalled();
   });
 
   it('scopes lookups by organization when provided', async () => {
