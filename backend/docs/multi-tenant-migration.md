@@ -266,6 +266,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se extendió `ProvidersController` para propagar el `organizationId` del contexto a las operaciones de lectura y escritura, y se actualizó `ProvidersService` para validar la pertenencia del recurso utilizando `buildOrganizationFilter`/`resolveOrganizationId`. Se añadieron guardas para impedir limpiar el tenant en contextos multi-organización y se consolidó la suite [`backend/src/providers/providers.service.spec.ts`](../src/providers/providers.service.spec.ts) con nuevos casos que cubren filtrados, actualizaciones masivas y eliminaciones parametrizadas por organización.
 - **Resultado:** Las operaciones `findOne`, `update`, `updateMany`, `remove` y `removes` respetan ahora el contexto multi-tenant, con trazabilidad mediante `logOrganizationContext` y evidencias unitarias verdes (`npm test -- providers.service.spec.ts`) que habilitan la siguiente iteración sobre fixtures de integración/E2E.
 
+### 2024-05-02 – Verificación local suite `ProvidersService`
+
+- **Contexto:** Tras los ajustes recientes en la suite multi-organización de proveedores, se registró una nueva corrida para documentar la estabilidad de los escenarios ampliados antes de continuar con los fixtures de integración.
+- **Implementación:** Se ejecutó `npm test -- providers.service.spec.ts` en entorno Windows, repasando los casos de filtrado, creación, actualizaciones puntuales y masivas, así como las eliminaciones parametrizadas por tenant, todos instrumentados con `logOrganizationContext`.
+- **Resultado:** La ejecución reportó `12 passed`, confirmando que la batería extendida de `ProvidersService` preserva el `organizationId` en cada operación y mantiene compatibilidad con flujos legacy mientras se avanza al siguiente hito del plan.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
