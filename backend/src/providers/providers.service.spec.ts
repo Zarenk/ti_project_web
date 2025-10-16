@@ -9,6 +9,9 @@ jest.mock('src/tenancy/organization-context.logger', () => ({
   logOrganizationContext: jest.fn(),
 }));
 
+const logOrganizationContextMock =
+  logOrganizationContext as unknown as jest.Mock;
+
 type PrismaMock = PrismaService & {
   provider: {
     create: jest.Mock;
@@ -75,6 +78,14 @@ describe('ProvidersService multi-organization support', () => {
     expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
       where: { organizationId: 99 },
     });
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'ProvidersService',
+        operation: 'findAll',
+        organizationId: 99,
+        metadata: { scope: 'tenant' },
+      }),
+    );
   });
 
   it('keeps legacy providers accessible when organizationId is null', async () => {
@@ -85,6 +96,14 @@ describe('ProvidersService multi-organization support', () => {
     expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
       where: { organizationId: null },
     });
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'ProvidersService',
+        operation: 'findAll',
+        organizationId: null,
+        metadata: { scope: 'legacy' },
+      }),
+    );
   });
 
   it('returns all providers when no organization context is provided', async () => {
@@ -93,6 +112,14 @@ describe('ProvidersService multi-organization support', () => {
     await service.findAll();
 
     expect(prismaMock.provider.findMany).toHaveBeenCalledWith({ where: {} });
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'ProvidersService',
+        operation: 'findAll',
+        organizationId: undefined,
+        metadata: { scope: 'global' },
+      }),
+    );
   });
 
   it('checks provider existence within the active organization when available', async () => {
@@ -104,6 +131,14 @@ describe('ProvidersService multi-organization support', () => {
       where: { documentNumber: '12345678901', organizationId: 55 },
     });
     expect(exists).toBe(true);
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'ProvidersService',
+        operation: 'checkIfExists',
+        organizationId: 55,
+        metadata: { documentNumber: '12345678901', exists: true },
+      }),
+    );
   });
 
   it('keeps legacy provider checks when no organization context is provided', async () => {
@@ -115,6 +150,14 @@ describe('ProvidersService multi-organization support', () => {
       where: { documentNumber: '12345678901' },
     });
     expect(exists).toBe(false);
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'ProvidersService',
+        operation: 'checkIfExists',
+        organizationId: null,
+        metadata: { documentNumber: '12345678901', exists: false },
+      }),
+    );
   });
 
   it('allows checking legacy providers scoped by null organizationId', async () => {
@@ -126,6 +169,14 @@ describe('ProvidersService multi-organization support', () => {
       where: { documentNumber: '12345678901', organizationId: null },
     });
     expect(exists).toBe(true);
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'ProvidersService',
+        operation: 'checkIfExists',
+        organizationId: null,
+        metadata: { documentNumber: '12345678901', exists: true },
+      }),
+    );
   });
 
   it('persists the provided organizationId on creation and logs the context', async () => {
@@ -236,6 +287,32 @@ describe('ProvidersService multi-organization support', () => {
     expect(prismaMock.provider.findFirst).toHaveBeenCalledWith({
       where: { id: 42, organizationId: 777 },
     });
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'ProvidersService',
+        operation: 'findOne',
+        organizationId: 777,
+        metadata: { providerId: 42, found: true },
+      }),
+    );
+  });
+
+  it('logs the lookup even when the provider is not found', async () => {
+    prismaMock.provider.findFirst.mockResolvedValue(null);
+
+    await expect(service.findOne(404, 11)).rejects.toThrow(NotFoundException);
+
+    expect(prismaMock.provider.findFirst).toHaveBeenCalledWith({
+      where: { id: 404, organizationId: 11 },
+    });
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'ProvidersService',
+        operation: 'findOne',
+        organizationId: 11,
+        metadata: { providerId: 404, found: false },
+      }),
+    );
   });
 
   it('throws when updating a provider from another organization', async () => {

@@ -90,6 +90,23 @@ export class ProvidersService {
         options?.organizationId,
       ) as Prisma.ProviderWhereInput;
 
+      const scope =
+        options?.organizationId === undefined
+          ? 'global'
+          : options.organizationId === null
+          ? 'legacy'
+          : 'tenant';
+
+      logOrganizationContext({
+        service: ProvidersService.name,
+        operation: 'findAll',
+        organizationId:
+          options?.organizationId === undefined
+            ? undefined
+            : options.organizationId,
+        metadata: { scope },
+      });
+
       return this.prismaService.provider.findMany({
         where: organizationFilter,
       });
@@ -104,16 +121,33 @@ export class ProvidersService {
       if (!id || typeof id !== 'number') {
         throw new Error('El ID proporcionado no es válido.');
       }
+
+      const organizationFilter = buildOrganizationFilter(
+        organizationId,
+      ) as Prisma.ProviderWhereInput;
   
       const providerFound = await this.prismaService.provider.findFirst({
         where: {
           id,
-          ...buildOrganizationFilter(organizationId),
+          ...organizationFilter,
         },
       });
   
-      if(!providerFound){
-        throw new NotFoundException(`Provider with id ${id} not found`)
+      const resolvedOrganizationId =
+        organizationId !== undefined
+          ? organizationId
+          : (providerFound as { organizationId?: number | null })
+              ?.organizationId ?? null;
+
+      logOrganizationContext({
+        service: ProvidersService.name,
+        operation: 'findOne',
+        organizationId: resolvedOrganizationId,
+        metadata: { providerId: id, found: !!providerFound },
+      });
+
+      if (!providerFound) {
+        throw new NotFoundException(`Provider with id ${id} not found`);
       }
   
       return providerFound;
@@ -128,12 +162,29 @@ export class ProvidersService {
     documentNumber: string,
     organizationIdFromContext?: number | null,
   ): Promise<boolean> {
+    const organizationFilter = buildOrganizationFilter(
+      organizationIdFromContext,
+    ) as Prisma.ProviderWhereInput;
+
     const provider = await this.prismaService.provider.findFirst({
       where: {
         documentNumber,
-        ...buildOrganizationFilter(organizationIdFromContext),
+        ...organizationFilter,
       },
     });
+
+    const resolvedOrganizationId =
+      organizationIdFromContext !== undefined
+        ? organizationIdFromContext
+        : (provider as { organizationId?: number | null })?.organizationId ?? null;
+
+    logOrganizationContext({
+      service: ProvidersService.name,
+      operation: 'checkIfExists',
+      organizationId: resolvedOrganizationId,
+      metadata: { documentNumber, exists: !!provider },
+    });
+    
     return !!provider; // Devuelve true si el proveedor existe, false si no
   }
 

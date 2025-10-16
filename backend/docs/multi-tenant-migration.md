@@ -314,6 +314,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se enriquecieron los _mocks_ de Prisma en [`backend/src/providers/providers.service.spec.ts`](../src/providers/providers.service.spec.ts) para contemplar verificaciones del `organizationId` durante la lectura individual, las actualizaciones puntuales y en bloque, además de reforzar las guardas que impiden operaciones fuera del tenant activo. La suite se reejecutó con `npm test -- providers.service.spec.ts` registrando los nuevos casos.
 - **Resultado:** La ejecución reportó `18 passed`, confirmando que los escenarios ampliados mantienen la propagación del tenant, preservan compatibilidad con proveedores legacy (`organizationId: null`) y dejan lista la cobertura para enfocarse en fixtures de integración/E2E multi-organización.
 
+### 2024-05-09 – Instrumentación de lecturas `ProvidersService`
+
+- **Contexto:** Para sostener la observabilidad del _Paso 3_ de la Fase 2 se necesitaba extender la instrumentación temporal de `logOrganizationContext` a las operaciones de consulta de proveedores y verificar que las trazas alerten cuando falta `organizationId`.
+- **Implementación:** Se añadieron llamadas a `logOrganizationContext` en los métodos `findAll`, `findOne` y `checkIfExists` del servicio de proveedores, registrando el alcance (`tenant`, `legacy`, `global`) y el identificador consultado. La suite [`backend/src/providers/providers.service.spec.ts`](../src/providers/providers.service.spec.ts) se actualizó para afirmar las nuevas trazas y se incorporó un caso que valida el registro cuando la búsqueda no encuentra resultados.
+- **Resultado:** Las operaciones de lectura ahora generan métricas y advertencias consistentes con el resto del dominio, habilitando el monitoreo del acceso legacy y multi-organización mientras se continúan los trabajos sobre fixtures de integración y E2E.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
