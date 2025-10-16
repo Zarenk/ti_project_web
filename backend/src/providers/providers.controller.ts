@@ -32,7 +32,7 @@ export class ProvidersController {
     return this.providersService.create(
       createProviderDto,
       req,
-      organizationId ?? undefined,
+      organizationId === undefined ? undefined : organizationId,
     );
   }
 
@@ -48,7 +48,7 @@ export class ProvidersController {
 
     const exists = await this.providersService.checkIfExists(
       documentNumber,
-      organizationId ?? undefined,
+      organizationId === undefined ? undefined : organizationId,
     );
     return { exists };
   }
@@ -56,7 +56,7 @@ export class ProvidersController {
   @Get()
   @ApiResponse({status: 200, description: 'Return all providers'}) // Swagger
   findAll(@CurrentTenant('organizationId') organizationId: number | null) {
-    if (organizationId === null || organizationId === undefined) {
+    if (organizationId === undefined) {
       return this.providersService.findAll();
     }
 
@@ -72,7 +72,10 @@ export class ProvidersController {
     if (isNaN(numericId)) {
     throw new BadRequestException('El ID debe ser un número válido.');
     }
-    return this.providersService.findOne(numericId, organizationId ?? undefined);
+    return this.providersService.findOne(
+      numericId,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Patch(':id')
@@ -86,7 +89,7 @@ export class ProvidersController {
       +id,
       updateProviderDto,
       req,
-      organizationId ?? undefined,
+      organizationId === undefined ? undefined : organizationId,
     );
   }
 
@@ -107,7 +110,7 @@ export class ProvidersController {
     return this.providersService.updateMany(
       updateProvidersDto,
       req,
-      organizationId ?? undefined,
+      organizationId === undefined ? undefined : organizationId,
     );
   }
 
@@ -117,7 +120,11 @@ export class ProvidersController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @Req() req: Request,
   ) {
-    return this.providersService.remove(+id, req, organizationId ?? undefined);
+    return this.providersService.remove(
+      +id,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Delete()
@@ -126,6 +133,10 @@ export class ProvidersController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @Req() req: Request,
   ) {
-    return this.providersService.removes(ids, req, organizationId ?? undefined);
+    return this.providersService.removes(
+      ids,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 }
