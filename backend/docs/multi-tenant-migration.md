@@ -290,6 +290,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó `npm test -- sales.service.spec.ts`, lo que dispara las suites de `SalesService` y `WebSalesService` debido al patrón compartido; se observaron los _mocks_ de Prisma y la instrumentación temporal confirmando la propagación del tenant en órdenes físicas y web.
 - **Resultado:** La corrida arrojó `16 passed` entre ambas suites, confirmando el estado verde y habilitando continuar con los siguientes hitos de la Fase 2 – Paso 3.
 
+### 2024-05-05 – Reejecución suite `ProvidersService`
+
+- **Contexto:** Tras las últimas adiciones de escenarios multi-organización en proveedores, se coordinó una nueva corrida dedicada para asegurar que la batería extendida continúe estable antes de avanzar con los fixtures de integración/E2E.
+- **Implementación:** Se ejecutó `npm test -- providers.service.spec.ts` desde el entorno operativo principal, repasando los casos de filtrado, creación, validaciones cruzadas y eliminaciones parametrizadas por tenant con la instrumentación de `logOrganizationContext` activa.
+- **Resultado:** La suite reportó `14 passed`, confirmando que los ajustes recientes mantienen la propagación opcional del `organizationId` y habilitando que el equipo prosiga con el plan táctico sin bloqueos.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
