@@ -27,7 +27,7 @@ describe('ProvidersController multi-tenant mapping', () => {
 
     controller.create(dto, req, 123);
 
-    expect(service.create).toHaveBeenCalledWith(dto, undefined, null);
+    expect(service.create).toHaveBeenCalledWith(dto, req, 123);
   });
 
   it('propagates a null organizationId when tenant context is legacy', () => {
@@ -35,7 +35,7 @@ describe('ProvidersController multi-tenant mapping', () => {
 
     controller.create(dto, undefined as any, null);
 
-    expect(service.create).toHaveBeenCalledWith(dto, undefined, undefined);
+    expect(service.create).toHaveBeenCalledWith(dto, undefined, null);
   });
 
   it('lists all providers when organizationId is not provided', async () => {
