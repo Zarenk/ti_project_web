@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
@@ -11,7 +11,7 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
 @Injectable()
 export class CashregisterService {
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   private formatPaymentMethods(
     paymentMethods: Array<
