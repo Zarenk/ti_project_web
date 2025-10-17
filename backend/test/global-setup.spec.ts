@@ -1,7 +1,7 @@
 import { applyMultiTenantFixtures } from "prisma/seed/multi-tenant-fixtures.seed";
 import globalSetup from "./global-setup";
 
-jest.mock('../../prisma/seed/multi-tenant-fixtures.seed', () => ({
+jest.mock("prisma/seed/multi-tenant-fixtures.seed", () => ({
   applyMultiTenantFixtures: jest.fn(),
 }));
 

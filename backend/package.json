@@ -127,19 +127,24 @@
       "ts",
       "tsx"
     ],
-    "rootDir": "src",
+    "rootDir": ".",
+    "roots": [
+      "<rootDir>/src",
+      "<rootDir>/test"
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)sx?$": "ts-jest"
     },
     "moduleNameMapper": {
-      "^src/(.*)$": "<rootDir>/$1"
+      "^src/(.*)$": "<rootDir>/src/$1",
+      "^prisma/(.*)$": "<rootDir>/prisma/$1"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s",
-      "**/*.(t|j)sx"
+      "src/**/*.(t|j)s",
+      "src/**/*.(t|j)sx"
     ],
-    "coverageDirectory": "../coverage",
+    "coverageDirectory": "./coverage",
     "testEnvironment": "node"
   }
 }
