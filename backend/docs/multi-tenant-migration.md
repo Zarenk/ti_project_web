@@ -344,6 +344,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó `npm test -- test/global-setup.spec.ts`, ejercitando los escenarios de _skip_ por bandera, ausencia de `DATABASE_URL`, aplicación exitosa de fixtures con _logger_ prefijado y manejo de errores recuperables y no recuperables de Prisma.
 - **Resultado:** La suite reportó cinco casos en verde, confirmando que el _setup_ global orquesta correctamente la siembra multi-organización y deja evidencias listas para integrarlas al pipeline continuo.
 
+### 2024-05-14 – Reejecución suites `EntriesService` y `EntriesController`
+
+- **Contexto:** Tras completar los ajustes multi-organización en compras era necesario capturar una corrida conjunta que demostrara la estabilidad de `EntriesService` y su controlador HTTP antes de continuar con los fixtures de integración.
+- **Implementación:** Se ejecutaron `npm test -- entries.service.spec.ts` y `npm test -- entries.controller.spec.ts`, manteniendo los _mocks_ de Prisma y la instrumentación temporal que trazan los payloads enviados a `createEntry`, `deleteEntry` y a los manejadores expuestos por la capa HTTP.
+- **Resultado:** Las suites reportaron ocho y tres casos en verde respectivamente, ratificando que las altas, bajas y delegaciones hacia el servicio continúan propagando el `organizationId` explícito, heredado o nulo sin romper compatibilidad legacy y habilitando avanzar con la siguiente iteración del plan.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
