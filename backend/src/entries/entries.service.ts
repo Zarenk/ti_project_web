@@ -54,25 +54,35 @@ export class EntriesService {
   }
 
   // Crear una nueva entrada con detalles
-  async createEntry(data: {
-    storeId: number;
-    userId: number;
-    providerId: number;
-    date: Date;
-    description?: string;
-    tipoMoneda?: string;
-    tipoCambioId?: number;
-    paymentMethod?: EntryPaymentMethod;
-    paymentTerm?: PaymentTerm;
-    serie?: string;
-    correlativo?: string;
-    providerName?: string;
-    totalGross?: number;
-    igvRate?: number;
-    organizationId?: number | null;
-    details: { productId: number; name: string; quantity: number; price: number; priceInSoles: number; series?: string[]; }[];
-    invoice?: { serie: string; nroCorrelativo: string; tipoComprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
-  }) {
+  async createEntry(
+    data: {
+      storeId: number;
+      userId: number;
+      providerId: number;
+      date: Date;
+      description?: string;
+      tipoMoneda?: string;
+      tipoCambioId?: number;
+      paymentMethod?: EntryPaymentMethod;
+      paymentTerm?: PaymentTerm;
+      serie?: string;
+      correlativo?: string;
+      providerName?: string;
+      totalGross?: number;
+      igvRate?: number;
+      organizationId?: number | null;
+      details: { productId: number; name: string; quantity: number; price: number; priceInSoles: number; series?: string[]; }[];
+      invoice?: {
+        serie: string;
+        nroCorrelativo: string;
+        tipoComprobante: string;
+        tipoMoneda: string;
+        total: number;
+        fechaEmision: Date;
+      };
+    },
+    organizationIdFromContext?: number | null,
+  ) {
 
   try{
     console.log("Datos recibidos en createEntry:", data);
@@ -157,7 +167,12 @@ export class EntriesService {
         (store as { organizationId?: number | null }).organizationId ?? null;
       const organizationId = resolveOrganizationId({
         provided: data.organizationId,
-        fallbacks: [storeOrganizationId],
+        fallbacks: [
+          organizationIdFromContext === undefined
+            ? undefined
+            : organizationIdFromContext,
+          storeOrganizationId,
+        ],
         mismatchError: `La tienda con ID ${data.storeId} pertenece a otra organización.`,
       });
       resolvedOrganizationId = organizationId;

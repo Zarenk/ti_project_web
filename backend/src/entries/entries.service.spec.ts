@@ -207,7 +207,38 @@ describe('EntriesService multi-organization support', () => {
       ),
     ).toBe(true);
   });
-describe('deleteEntry', () => {
+  it('uses the tenant context when provided and the payload omits organizationId', async () => {
+    prisma.store.findUnique.mockResolvedValue({ id: baseInput.storeId, organizationId: null });
+
+    await service.createEntry(baseInput, 4321);
+
+    expect(prisma.entry.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ organizationId: 4321 }),
+      }),
+    );
+    expect(prisma.inventory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ organizationId: 4321 }),
+      }),
+    );
+    expect(
+      logOrganizationContextMock.mock.calls.some(([payload]) =>
+        payload.operation === 'createEntry' && payload.organizationId === 4321,
+      ),
+    ).toBe(true);
+  });
+
+  it('throws when the tenant context mismatches the resolved organization', async () => {
+    prisma.store.findUnique.mockResolvedValue({ id: baseInput.storeId, organizationId: 888 });
+
+    await expect(service.createEntry(baseInput, 999)).rejects.toThrow(BadRequestException);
+
+    expect(prisma.entry.create).not.toHaveBeenCalled();
+    expect(prisma.inventory.create).not.toHaveBeenCalled();
+  });
+
+  describe('deleteEntry', () => {
     const entryBase = {
       id: 999,
       storeId: 10,

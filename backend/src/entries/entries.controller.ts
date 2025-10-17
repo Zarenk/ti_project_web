@@ -21,6 +21,7 @@ import pdfParse from 'pdf-parse';
 import { diskStorage } from 'multer';
 import path from 'path';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
 @ModulePermission('inventory')
 @Controller('entries')
@@ -62,6 +63,7 @@ export class EntriesController {
         fechaEmision: Date;
       };
     },
+    @CurrentTenant('organizationId') organizationId: number | null | undefined,
   ) {
     if (
       body.paymentTerm &&
@@ -75,7 +77,10 @@ export class EntriesController {
     if (body.igvRate !== undefined && typeof body.igvRate !== 'number') {
       throw new BadRequestException('igvRate debe ser un número.');
     }
-    return this.entriesService.createEntry(body);
+    return this.entriesService.createEntry(
+      body,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   // Endpoint para registrar historial de inventario
