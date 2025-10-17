@@ -1,27 +1,9 @@
-declare module '@prisma/client' {
-  class PrismaClient {
-    constructor(...args: any[]);
-    $disconnect(): Promise<void>;
-    [key: string]: any;
-  }
-
-  const UserRole: {
-    ADMIN: 'ADMIN';
-    CLIENT: 'CLIENT';
-    SELLER: 'SELLER';
-    SUPER_ADMIN: 'SUPER_ADMIN';
-    CASHIER: 'CASHIER';
-  };
-
-  type UserRole = (typeof UserRole)[keyof typeof UserRole];
-
-  const OrganizationMembershipRole: {
-    OWNER: 'OWNER';
-    ADMIN: 'ADMIN';
-    MEMBER: 'MEMBER';
-    VIEWER: 'VIEWER';
-  };
-
-  type OrganizationMembershipRole =
-    (typeof OrganizationMembershipRole)[keyof typeof OrganizationMembershipRole];
-}
+/**
+ * Test helpers previously attempted to stub the `@prisma/client` module from here,
+ * but that shadowed the real Prisma type declarations and caused errors such as
+ * `TS2305: Module "@prisma/client" has no exported member 'Prisma'.`
+ *
+ * Leaving this file as an explicit (empty) module keeps the door open for future
+ * test-specific augmentations without overriding the generated Prisma typings.
+ */
+export {};
