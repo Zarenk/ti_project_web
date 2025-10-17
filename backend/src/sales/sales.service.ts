@@ -17,6 +17,7 @@ import {
   buildOrganizationFilter,
   resolveOrganizationId,
 } from 'src/tenancy/organization.utils';
+import { InventoryHistoryUncheckedCreateInputWithOrganization } from 'src/tenancy/prisma-organization.types';
 
 @Injectable()
 export class SalesService {
@@ -288,6 +289,9 @@ export class SalesService {
         throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
       }
 
+      const saleOrganizationId =
+        (sale as { organizationId?: number | null }).organizationId ?? null;
+
       for (const detail of sale.salesDetails) {
         const inventoryRecord = await prismaTx.storeOnInventory.findUnique({
           where: { id: detail.storeOnInventoryId },
@@ -304,16 +308,19 @@ export class SalesService {
           data: { stock: { increment: detail.quantity } },
         });
 
+        const inventoryHistoryData: InventoryHistoryUncheckedCreateInputWithOrganization = {
+          inventoryId: inventoryRecord.inventoryId,
+          userId: actorId ?? sale.userId,
+          action: 'sale_deleted',
+          description: `Reversión de la venta ${sale.id} en ${sale.store.name}`,
+          stockChange: detail.quantity,
+          previousStock: inventoryRecord.stock,
+          newStock: inventoryRecord.stock + detail.quantity,
+          organizationId: saleOrganizationId,
+        };
+
         await prismaTx.inventoryHistory.create({
-          data: {
-            inventoryId: inventoryRecord.inventoryId,
-            userId: actorId ?? sale.userId,
-            action: 'sale_deleted',
-            description: `Reversión de la venta ${sale.id} en ${sale.store.name}`,
-            stockChange: detail.quantity,
-            previousStock: inventoryRecord.stock,
-            newStock: inventoryRecord.stock + detail.quantity,
-          },
+          data: inventoryHistoryData,
         });
 
         if (detail.series && detail.series.length > 0) {

@@ -15,10 +15,30 @@ jest.mock('src/tenancy/organization-context.logger', () => ({
 }));
 
 type PrismaMock = {
-  storeOnInventory: { findFirst: jest.Mock };
-  salePayment: { findMany: jest.Mock };
+  storeOnInventory: {
+    findFirst: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
+  };
+  salePayment: {
+    findMany: jest.Mock;
+    deleteMany: jest.Mock;
+  };
   user: { findUnique: jest.Mock };
-  sales: { findMany: jest.Mock };
+  sales: {
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
+    delete: jest.Mock;
+  };
+  inventoryHistory: { create: jest.Mock };
+  entryDetailSeries: { updateMany: jest.Mock };
+  cashTransactionPaymentMethod: { deleteMany: jest.Mock };
+  cashRegister: { update: jest.Mock };
+  cashTransaction: { delete: jest.Mock };
+  invoiceSales: { deleteMany: jest.Mock };
+  orders: { update: jest.Mock };
+  shippingGuide: { updateMany: jest.Mock };
+  $transaction: jest.Mock;
 };
 
 describe('SalesService multi-organization support', () => {
@@ -48,16 +68,46 @@ describe('SalesService multi-organization support', () => {
     prisma = {
       storeOnInventory: {
         findFirst: jest.fn().mockResolvedValue({ id: 1, stock: 10 }),
+        findUnique: jest.fn(),
+        update: jest.fn(),
       },
       salePayment: {
         findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
       },
       user: {
         findUnique: jest.fn().mockResolvedValue({ username: 'seller@example.com' }),
       },
       sales: {
         findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn(),
+        delete: jest.fn(),
       },
+      inventoryHistory: {
+        create: jest.fn(),
+      },
+      entryDetailSeries: {
+        updateMany: jest.fn(),
+      },
+      cashTransactionPaymentMethod: {
+        deleteMany: jest.fn(),
+      },
+      cashRegister: {
+        update: jest.fn(),
+      },
+      cashTransaction: {
+        delete: jest.fn(),
+      },
+      invoiceSales: {
+        deleteMany: jest.fn(),
+      },
+      orders: {
+        update: jest.fn(),
+      },
+      shippingGuide: {
+        updateMany: jest.fn(),
+      },
+      $transaction: jest.fn(),
     };
 
     activityService = { log: jest.fn().mockResolvedValue(undefined) };
@@ -208,6 +258,130 @@ describe('SalesService multi-organization support', () => {
         where: {},
       }),
     );
+  });
+  
+  describe('deleteSale', () => {
+    it('propagates the organizationId to the inventory history when deleting a sale with tenant context', async () => {
+      const sale = {
+        id: 500,
+        total: 200,
+        userId: 42,
+        organizationId: 77,
+        store: { id: 9, name: 'Tenant Store' },
+        client: { id: 10, name: 'Tenant Client', type: 'PERSON', typeNumber: 'TC-1' },
+        salesDetails: [
+          {
+            storeOnInventoryId: 30,
+            quantity: 2,
+            price: 100,
+            series: ['SER-001'],
+            entryDetail: { product: { id: 5, name: 'Laptop' } },
+          },
+        ],
+        payments: [],
+        shippingGuides: [],
+        order: null,
+      };
+
+      const inventoryRecord = {
+        id: 30,
+        inventoryId: 44,
+        stock: 5,
+      };
+
+      const inventoryHistoryCreate = jest.fn().mockResolvedValue(undefined);
+
+      prisma.$transaction.mockImplementation(async (callback) =>
+        callback({
+          sales: {
+            findFirst: jest.fn().mockResolvedValue(sale),
+            delete: jest.fn().mockResolvedValue({ id: sale.id }),
+          },
+          storeOnInventory: {
+            findUnique: jest.fn().mockResolvedValue(inventoryRecord),
+            update: jest.fn().mockResolvedValue(undefined),
+          },
+          inventoryHistory: { create: inventoryHistoryCreate },
+          entryDetailSeries: { updateMany: jest.fn().mockResolvedValue(undefined) },
+          salePayment: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+          shippingGuide: { updateMany: jest.fn().mockResolvedValue(undefined) },
+          orders: { update: jest.fn().mockResolvedValue(undefined) },
+          invoiceSales: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+          cashTransactionPaymentMethod: {
+            deleteMany: jest.fn().mockResolvedValue(undefined),
+          },
+          cashRegister: { update: jest.fn().mockResolvedValue(undefined) },
+          cashTransaction: { delete: jest.fn().mockResolvedValue(undefined) },
+        }),
+      );
+
+      await service.deleteSale(sale.id, 88, sale.organizationId);
+
+      expect(inventoryHistoryCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ organizationId: sale.organizationId }),
+      });
+    });
+
+    it('defaults organizationId to null when the sale belongs to legacy data', async () => {
+      const sale = {
+        id: 600,
+        total: 75,
+        userId: 11,
+        organizationId: null,
+        store: { id: 1, name: 'Legacy Store' },
+        client: { id: 2, name: 'Legacy Client', type: 'PERSON', typeNumber: 'LC-1' },
+        salesDetails: [
+          {
+            storeOnInventoryId: 15,
+            quantity: 1,
+            price: 75,
+            series: [],
+            entryDetail: { product: { id: 3, name: 'Mouse' } },
+          },
+        ],
+        payments: [],
+        shippingGuides: [],
+        order: null,
+      };
+
+      const inventoryRecord = {
+        id: 15,
+        inventoryId: 22,
+        stock: 8,
+      };
+
+      const inventoryHistoryCreate = jest.fn().mockResolvedValue(undefined);
+
+      prisma.$transaction.mockImplementation(async (callback) =>
+        callback({
+          sales: {
+            findFirst: jest.fn().mockResolvedValue(sale),
+            delete: jest.fn().mockResolvedValue({ id: sale.id }),
+          },
+          storeOnInventory: {
+            findUnique: jest.fn().mockResolvedValue(inventoryRecord),
+            update: jest.fn().mockResolvedValue(undefined),
+          },
+          inventoryHistory: { create: inventoryHistoryCreate },
+          entryDetailSeries: { updateMany: jest.fn().mockResolvedValue(undefined) },
+          salePayment: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+          shippingGuide: { updateMany: jest.fn().mockResolvedValue(undefined) },
+          orders: { update: jest.fn().mockResolvedValue(undefined) },
+          invoiceSales: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+          cashTransactionPaymentMethod: {
+            deleteMany: jest.fn().mockResolvedValue(undefined),
+          },
+          cashRegister: { update: jest.fn().mockResolvedValue(undefined) },
+          cashTransaction: { delete: jest.fn().mockResolvedValue(undefined) },
+        }),
+      );
+
+      await service.deleteSale(sale.id);
+
+      expect(inventoryHistoryCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ organizationId: null }),
+      });
+    });
   });
   
 });

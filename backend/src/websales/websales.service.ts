@@ -26,6 +26,7 @@ import { logOrganizationContext } from 'src/tenancy/organization-context.logger'
 import { buildOrganizationFilter } from 'src/tenancy/organization.utils';
 import {
   ClientUncheckedCreateInputWithOrganization,
+  OrdersUncheckedCreateInputWithOrganization,
   UserUncheckedCreateInputWithOrganization,
 } from 'src/tenancy/prisma-organization.types';
 
@@ -326,18 +327,20 @@ export class WebSalesService {
     }    
 
     if (!skipOrder && shippingName && shippingAddress && city && postalCode) {
+      const orderData: OrdersUncheckedCreateInputWithOrganization = {
+        salesId: createdSale.id,
+        shippingName,
+        shippingAddress,
+        city,
+        postalCode,
+        phone,
+        code: code ?? Math.random().toString(36).substr(2, 9).toUpperCase(),
+        status: 'COMPLETED',
+        organizationId: organizationId ?? null,
+      };
+
       await this.prisma.orders.create({
-        data: {
-          salesId: createdSale.id,
-          shippingName,
-          shippingAddress,
-          city,
-          postalCode,
-          phone,
-          code: code ?? Math.random().toString(36).substr(2, 9).toUpperCase(),
-          status: 'COMPLETED',
-          organizationId: organizationId ?? null,
-        },
+        data: orderData,
       });
     }
 
