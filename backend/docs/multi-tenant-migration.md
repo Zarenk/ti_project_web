@@ -73,7 +73,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 | --- | --- | --- | --- |
 | Inventariar servicios críticos y casos felices/error que requieren cobertura multi-organización (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`). | QA + Ingeniería Backend | Lista priorizada de escenarios de prueba firmada en Confluence. | Miércoles 27/03 |
 | Actualizar suites unitarias en `backend/test` para parametrizar `organizationId` (`NULL` vs definido) utilizando factories existentes. **Completado:** `stores.service.spec.ts`, `sales.service.spec.ts` y `clients.service.spec.ts` validados y ejecutados en CI local tras corregir tipados de Prisma en `ClientService`. | QA Automation + Plataforma | Pull request con nuevas pruebas y reporte de cobertura. | Viernes 29/03 |
-| Extender pruebas de integración/E2E con fixtures multi-organización y datos semilla en Prisma. **Actualización:** `npm run seed:multi-tenant` carga organizaciones alfa/beta y propaga `organizationId` en tiendas, usuarios, proveedores e inventario; resta alinear fixtures de pruebas y dejar constancia en CI. **Nuevo:** `backend/test/global-setup.ts` ejecuta `applyMultiTenantFixtures` antes de `npm run test:e2e`, validando `DATABASE_URL` y respetando `SKIP_MULTI_TENANT_SEED`. | Ingeniería Backend | Scripts de seed actualizados + pipeline CI verde. | Lunes 01/04 |
+| Extender pruebas de integración/E2E con fixtures multi-organización y datos semilla en Prisma. **Actualización:** `npm run seed:multi-tenant` carga organizaciones alfa/beta y propaga `organizationId` en tiendas, usuarios, proveedores e inventario; resta alinear fixtures de pruebas y dejar constancia en CI. **Nuevo:** `backend/test/global-setup.ts` ejecuta `applyMultiTenantFixtures` antes de `npm run test:e2e`, validando `DATABASE_URL` y respetando `SKIP_MULTI_TENANT_SEED`. **Validado:** `npm test -- test/global-setup.spec.ts` registró cinco casos en verde confirmando la orquestación del _setup_ global y el manejo de banderas. | Ingeniería Backend | Scripts de seed actualizados + pipeline CI verde. | Lunes 01/04 |
 | Incorporar métrica temporal en CI (badge o reporte) que exponga porcentaje de casos multi-organización ejecutados. **Dependencia:** confirmación de logs temporales operativos. | DevOps | Dashboard en Grafana + enlace en esta bitácora. | Martes 02/04 |
 
 ### Fase 2 – Paso 3 (cobertura de pruebas)
@@ -337,6 +337,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Contexto:** Con las suites unitarias priorizadas en verde se debía evidenciar que los fixtures multi-tenant habilitados por `applyMultiTenantFixtures` permiten ejecutar las pruebas end-to-end sin regresiones mientras se avanza con el _Paso 3_ de la Fase 2.
 - **Implementación:** Se corrió `npm run test:e2e`, lo que dispara Jest con la configuración `backend/test/jest-e2e.json` e invoca el _setup_ global que garantiza la siembra `npm run seed:multi-tenant` para las organizaciones `tenant-alpha` y `tenant-beta` antes de iniciar la batería.
 - **Resultado:** La corrida finalizó en verde (`test/tenancy.e2e-spec.ts`) tras aplicar los fixtures multi-organización, dejando constancia de que la suite E2E opera correctamente con los nuevos datos idempotentes y permitiendo continuar con la expansión de fixtures de integración.
+
+### 2024-05-13 – Cobertura `global-setup` multi-organización
+
+- **Contexto:** Para asegurar la estabilidad del _setup_ global previo a las suites E2E se requería validar que `applyMultiTenantFixtures` respete las banderas de control (`SKIP_MULTI_TENANT_SEED`) y el manejo de errores durante la carga de datos multi-tenant.
+- **Implementación:** Se ejecutó `npm test -- test/global-setup.spec.ts`, ejercitando los escenarios de _skip_ por bandera, ausencia de `DATABASE_URL`, aplicación exitosa de fixtures con _logger_ prefijado y manejo de errores recuperables y no recuperables de Prisma.
+- **Resultado:** La suite reportó cinco casos en verde, confirmando que el _setup_ global orquesta correctamente la siembra multi-organización y deja evidencias listas para integrarlas al pipeline continuo.
 
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
