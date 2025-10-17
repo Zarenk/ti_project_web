@@ -350,6 +350,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutaron `npm test -- entries.service.spec.ts` y `npm test -- entries.controller.spec.ts`, manteniendo los _mocks_ de Prisma y la instrumentación temporal que trazan los payloads enviados a `createEntry`, `deleteEntry` y a los manejadores expuestos por la capa HTTP.
 - **Resultado:** Las suites reportaron ocho y tres casos en verde respectivamente, ratificando que las altas, bajas y delegaciones hacia el servicio continúan propagando el `organizationId` explícito, heredado o nulo sin romper compatibilidad legacy y habilitando avanzar con la siguiente iteración del plan.
 
+### 2024-05-15 – Corrida validada `SalesService` y `WebSalesService`
+
+- **Contexto:** Como seguimiento al _Paso 3_ de la Fase 2 se solicitó verificar nuevamente los dominios de ventas presenciales y web tras los últimos ajustes en la propagación del `organizationId`, asegurando que la cobertura unitaria permanezca estable antes de continuar con los fixtures de integración.
+- **Implementación:** Se ejecutó `npm test -- sales.service.spec.ts` desde el entorno operativo principal, lo que dispara las suites de `SalesService` y `WebSalesService` y reutiliza los _mocks_ de Prisma junto con la instrumentación de `logOrganizationContext` para casos con `organizationId` explícito, heredado o ausente.
+- **Resultado:** La corrida reportó `18 passed` distribuidos en ambas baterías, confirmando el estado verde y habilitando que el equipo prosiga con el plan táctico centrado en la ampliación de fixtures de integración y E2E multi-organización.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
