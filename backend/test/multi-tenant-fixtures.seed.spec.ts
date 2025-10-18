@@ -151,6 +151,18 @@ describe('applyMultiTenantFixtures', () => {
 
     await applyMultiTenantFixtures({ prisma: prisma as unknown as PrismaClient, logger });
 
+    const organizationUnitCalls = prisma.organizationUnit.upsert.mock.calls.map(([args]) => args);
+    expect(organizationUnitCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          create: expect.objectContaining({ organizationId: 1 }),
+        }),
+        expect.objectContaining({
+          create: expect.objectContaining({ organizationId: 2 }),
+        }),
+      ]),
+    );
+
     const storeCalls = prisma.store.upsert.mock.calls.map(([args]) => args);
     expect(storeCalls).toEqual(
       expect.arrayContaining([
@@ -167,6 +179,35 @@ describe('applyMultiTenantFixtures', () => {
 
     const providerCalls = prisma.provider.upsert.mock.calls.map(([args]) => args);
     expect(providerCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          create: expect.objectContaining({ organizationId: 1 }),
+          update: expect.objectContaining({ organizationId: 1 }),
+        }),
+        expect.objectContaining({
+          create: expect.objectContaining({ organizationId: 2 }),
+          update: expect.objectContaining({ organizationId: 2 }),
+        }),
+      ]),
+    );
+
+    const membershipCalls = prisma.organizationMembership.upsert.mock.calls.map(([args]) => args);
+    expect(membershipCalls.length).toBeGreaterThan(0);
+    for (const call of membershipCalls) {
+      const { where, create } = call;
+      const compositeKey = where.userId_organizationId_organizationUnitId;
+      expect(compositeKey.organizationId).toBeDefined();
+      expect(create.organizationId).toBe(compositeKey.organizationId);
+      expect(create.organizationUnitId).toBe(compositeKey.organizationUnitId);
+    }
+
+    const membershipOrganizationIds = membershipCalls.map(
+      ({ where }) => where.userId_organizationId_organizationUnitId.organizationId,
+    );
+    expect(membershipOrganizationIds).toEqual(expect.arrayContaining([1, 2]));
+
+    const clientCalls = prisma.client.upsert.mock.calls.map(([args]) => args);
+    expect(clientCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           create: expect.objectContaining({ organizationId: 1 }),
@@ -224,6 +265,8 @@ describe('applyMultiTenantFixtures', () => {
     );
 
     expect(logger).toHaveBeenCalledWith('Multi-tenant fixtures ensured.');
+    expect(logger).toHaveBeenCalledWith('Fixture applied for organization tenant-alpha');
+    expect(logger).toHaveBeenCalledWith('Fixture applied for organization tenant-beta');
     expect(prisma.$disconnect).not.toHaveBeenCalled();
   });
 });
