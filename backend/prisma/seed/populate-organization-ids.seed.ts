@@ -27,6 +27,8 @@ type PopulateOptions = {
   logger?: Logger;
   dryRun?: boolean;
   chunkSize?: number;
+  onlyEntities?: PopulateEntityKey[];
+  skipEntities?: PopulateEntityKey[];
 };
 
 type UpdatePlan = {
