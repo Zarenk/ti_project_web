@@ -4,6 +4,24 @@ type Logger = Pick<typeof console, 'info' | 'warn' | 'error'>;
 
 type PrismaContextClient = PrismaClient & Record<string, any>;
 
+const POPULATE_ENTITY_KEYS = [
+  'store',
+  'cash-register',
+  'user',
+  'client',
+  'inventory',
+  'inventory-history',
+  'entry',
+  'provider',
+  'sales',
+  'transfer',
+  'orders',
+  'cash-transaction',
+  'cash-closure',
+] as const;
+
+type PopulateEntityKey = (typeof POPULATE_ENTITY_KEYS)[number];
+
 type PopulateOptions = {
   prisma?: PrismaClient;
   logger?: Logger;
@@ -26,7 +44,7 @@ type EntitySummary = {
 type PopulateSummary = {
   defaultOrganizationId: number;
   defaultOrganizationCreated: boolean;
-  processed: Record<string, EntitySummary>;
+  processed: Record<PopulateEntityKey, EntitySummary>;
 };
 
 type PopulateContext = {
@@ -38,6 +56,15 @@ type PopulateContext = {
 
 const DEFAULT_CHUNK_SIZE = 25;
 const DEFAULT_ORGANIZATION_CODE = 'DEFAULT';
+const POPULATE_ENTITY_KEY_SET = new Set<PopulateEntityKey>(POPULATE_ENTITY_KEYS);
+
+function createEmptyEntitySummary(): EntitySummary {
+  return { planned: 0, updated: 0, reasons: {} };
+}
+
+function isPopulateEntityKey(value: string): value is PopulateEntityKey {
+  return POPULATE_ENTITY_KEY_SET.has(value as PopulateEntityKey);
+}
 
 function chunkArray<T>(items: T[], size: number): T[][] {
   if (items.length === 0) {
@@ -634,6 +661,25 @@ async function populateCashClosures(context: PopulateContext, defaultOrganizatio
   );
 }
 
+const ENTITY_POPULATORS: ReadonlyArray<{
+  key: PopulateEntityKey;
+  handler: (context: PopulateContext, defaultOrganizationId: number) => Promise<EntitySummary>;
+}> = [
+  { key: 'store', handler: populateStores },
+  { key: 'cash-register', handler: populateCashRegisters },
+  { key: 'user', handler: populateUsers },
+  { key: 'client', handler: populateClients },
+  { key: 'inventory', handler: populateInventory },
+  { key: 'inventory-history', handler: populateInventoryHistory },
+  { key: 'entry', handler: populateEntries },
+  { key: 'provider', handler: populateProviders },
+  { key: 'sales', handler: populateSales },
+  { key: 'transfer', handler: populateTransfers },
+  { key: 'orders', handler: populateOrders },
+  { key: 'cash-transaction', handler: populateCashTransactions },
+  { key: 'cash-closure', handler: populateCashClosures },
+];
+
 export async function populateMissingOrganizationIds(
   options: PopulateOptions = {},
 ): Promise<PopulateSummary> {
@@ -642,26 +688,70 @@ export async function populateMissingOrganizationIds(
   const logger = options.logger ?? console;
   const dryRun = options.dryRun ?? false;
   const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
+  const onlyEntities = options.onlyEntities ?? [];
+  const skipEntities = options.skipEntities ?? [];
+
+  for (const entity of onlyEntities) {
+    if (!isPopulateEntityKey(entity)) {
+      throw new Error(`[populate-org] Unknown entity provided in onlyEntities: ${entity}`);
+    }
+  }
+
+  for (const entity of skipEntities) {
+    if (!isPopulateEntityKey(entity)) {
+      throw new Error(`[populate-org] Unknown entity provided in skipEntities: ${entity}`);
+    }
+  }
+
+  const effectiveOnly = onlyEntities.length ? new Set(onlyEntities) : new Set<PopulateEntityKey>(POPULATE_ENTITY_KEYS);
+  const skipSet = new Set(skipEntities);
+  const enabledEntities = POPULATE_ENTITY_KEYS.filter((entity) => effectiveOnly.has(entity) && !skipSet.has(entity));
+  const enabledSet = new Set(enabledEntities);
+  const hasCustomSelection = onlyEntities.length > 0 || skipEntities.length > 0;
+
+  const processed = POPULATE_ENTITY_KEYS.reduce((accumulator, key) => {
+    accumulator[key] = createEmptyEntitySummary();
+    return accumulator;
+  }, {} as Record<PopulateEntityKey, EntitySummary>);
   const context: PopulateContext = { prisma: prismaWithAny, logger, dryRun, chunkSize };
   const shouldDisconnect = !options.prisma;
 
   try {
     const { id: defaultOrganizationId, created } = await ensureDefaultOrganization(prismaWithAny, logger);
 
-    const processed: PopulateSummary['processed'] = {};
-    processed.store = await populateStores(context, defaultOrganizationId);
-    processed['cash-register'] = await populateCashRegisters(context, defaultOrganizationId);
-    processed.user = await populateUsers(context, defaultOrganizationId);
-    processed.client = await populateClients(context, defaultOrganizationId);
-    processed.inventory = await populateInventory(context, defaultOrganizationId);
-    processed['inventory-history'] = await populateInventoryHistory(context, defaultOrganizationId);
-    processed.entry = await populateEntries(context, defaultOrganizationId);
-    processed.provider = await populateProviders(context, defaultOrganizationId);
-    processed.sales = await populateSales(context, defaultOrganizationId);
-    processed.transfer = await populateTransfers(context, defaultOrganizationId);
-    processed.orders = await populateOrders(context, defaultOrganizationId);
-    processed['cash-transaction'] = await populateCashTransactions(context, defaultOrganizationId);
-    processed['cash-closure'] = await populateCashClosures(context, defaultOrganizationId);
+    for (const { key, handler } of ENTITY_POPULATORS) {
+      if (!enabledSet.has(key)) {
+        if (hasCustomSelection) {
+          logger.info(`[populate-org] ${key}: skipped by configuration.`);
+        }
+        continue;
+      }
+
+      processed[key] = await handler(context, defaultOrganizationId);
+    }
+
+    if (!enabledSet.size) {
+      logger.warn('[populate-org] No entities selected for population.');
+    } else {
+      const totalUpdated = Array.from(enabledSet).reduce(
+        (accumulator, entity) => accumulator + processed[entity].updated,
+        0,
+      );
+      logger.info(
+        `[populate-org] Summary: processed ${enabledSet.size} entities, updated ${totalUpdated} records.`,
+      );
+
+      for (const entity of POPULATE_ENTITY_KEYS) {
+        if (!enabledSet.has(entity)) {
+          continue;
+        }
+
+        const summary = processed[entity];
+        logger.info(
+          `[populate-org] Summary ${entity}: planned=${summary.planned}, updated=${summary.updated}, reasons=${formatReasonCounts(summary.reasons)}.`,
+        );
+      }
+    }
 
     return {
       defaultOrganizationId,
@@ -675,9 +765,138 @@ export async function populateMissingOrganizationIds(
   }
 }
 
+type CliOptions = Pick<PopulateOptions, 'dryRun' | 'chunkSize' | 'onlyEntities' | 'skipEntities'>;
+
+function parseListArgument(
+  flag: string,
+  value: string | undefined,
+): PopulateEntityKey[] {
+  if (!value) {
+    throw new Error(`[populate-org] Missing value for ${flag}.`);
+  }
+
+  const items = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  if (!items.length) {
+    throw new Error(`[populate-org] ${flag} requires at least one entity.`);
+  }
+
+  const unique = Array.from(new Set(items));
+  const entities: PopulateEntityKey[] = [];
+
+  for (const item of unique) {
+    if (!isPopulateEntityKey(item)) {
+      throw new Error(`[populate-org] Unknown entity provided for ${flag}: ${item}`);
+    }
+    entities.push(item);
+  }
+
+  return entities;
+}
+
+function parseNumericArgument(flag: string, value: string | undefined): number {
+  if (!value) {
+    throw new Error(`[populate-org] Missing value for ${flag}.`);
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`[populate-org] ${flag} must be a positive number.`);
+  }
+
+  return parsed;
+}
+
+export function parsePopulateOrganizationCliArgs(argv: string[]): CliOptions {
+  const options: CliOptions = {};
+
+  const nextValue = (args: string[], index: number): [string | undefined, number] => {
+    const value = args[index + 1];
+    if (!value || value.startsWith('--')) {
+      return [undefined, index];
+    }
+    return [value, index + 1];
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+
+    if (arg === '--dry-run' || arg === '--dryRun') {
+      options.dryRun = true;
+      continue;
+    }
+
+    if (arg.startsWith('--chunk-size=')) {
+      options.chunkSize = parseNumericArgument('--chunk-size', arg.split('=')[1]);
+      continue;
+    }
+
+    if (arg === '--chunk-size' || arg === '--chunkSize') {
+      const [value, nextIndex] = nextValue(argv, index);
+      options.chunkSize = parseNumericArgument(arg, value);
+      index = nextIndex;
+      continue;
+    }
+
+    if (arg.startsWith('--only=') || arg.startsWith('--only-entities=')) {
+      const [, raw] = arg.split('=');
+      options.onlyEntities = parseListArgument(arg.split('=')[0], raw);
+      continue;
+    }
+
+    if (arg === '--only' || arg === '--only-entities' || arg === '--onlyEntities') {
+      const [value, nextIndex] = nextValue(argv, index);
+      options.onlyEntities = parseListArgument(arg, value);
+      index = nextIndex;
+      continue;
+    }
+
+    if (arg.startsWith('--skip=') || arg.startsWith('--skip-entities=')) {
+      const [, raw] = arg.split('=');
+      options.skipEntities = parseListArgument(arg.split('=')[0], raw);
+      continue;
+    }
+
+    if (arg === '--skip' || arg === '--skip-entities' || arg === '--skipEntities') {
+      const [value, nextIndex] = nextValue(argv, index);
+      options.skipEntities = parseListArgument(arg, value);
+      index = nextIndex;
+      continue;
+    }
+
+    if (arg.trim().length > 0) {
+      throw new Error(`[populate-org] Unknown argument: ${arg}`);
+    }
+  }
+
+  return options;
+}
+
 if (require.main === module) {
-  populateMissingOrganizationIds().catch((error) => {
-    console.error('[populate-org] Failed to populate organization identifiers.', error);
+  try {
+    const cliOptions = parsePopulateOrganizationCliArgs(process.argv.slice(2));
+    populateMissingOrganizationIds(cliOptions)
+      .then((summary) => {
+        console.info(
+          `[populate-org] Completed. defaultOrganizationId=${summary.defaultOrganizationId} created=${summary.defaultOrganizationCreated ? 'yes' : 'no'}.`,
+        );
+
+        for (const entity of POPULATE_ENTITY_KEYS) {
+          const stats = summary.processed[entity];
+          console.info(
+            `[populate-org] ${entity}: planned=${stats.planned}, updated=${stats.updated}, reasons=${formatReasonCounts(stats.reasons)}.`,
+          );
+        }
+      })
+      .catch((error) => {
+        console.error('[populate-org] Failed to populate organization identifiers.', error);
+        process.exit(1);
+      });
+  } catch (error) {
+    console.error('[populate-org] Failed to parse CLI arguments.', error);
     process.exit(1);
-  });
+  }
 }

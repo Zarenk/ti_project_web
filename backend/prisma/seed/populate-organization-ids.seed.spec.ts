@@ -1,5 +1,8 @@
 import type { PrismaClient } from '@prisma/client';
-import { populateMissingOrganizationIds } from './populate-organization-ids.seed';
+import {
+  populateMissingOrganizationIds,
+  parsePopulateOrganizationCliArgs,
+} from './populate-organization-ids.seed';
 
 type AsyncMock<T = unknown> = jest.Mock<Promise<T>, any[]>;
 
@@ -297,5 +300,61 @@ describe('populateMissingOrganizationIds', () => {
     expect(summary.processed.store.updated).toBe(0);
     expect(prisma.store.update).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('allows filtering the entities to process', async () => {
+    const prisma = buildPrismaMock();
+    const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    const options = {
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      onlyEntities: ['store', 'user'],
+      skipEntities: ['user'],
+    } as any;
+
+    const summary = await populateMissingOrganizationIds(options);
+
+    expect(prisma.store.update).toHaveBeenCalledTimes(1);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.client.update).not.toHaveBeenCalled();
+
+    expect(summary.processed.store.updated).toBe(1);
+    expect(summary.processed.user.updated).toBe(0);
+    expect(summary.processed.client.updated).toBe(0);
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith('[populate-org] user: skipped by configuration.');
+  });
+});
+
+describe('parsePopulateOrganizationCliArgs', () => {
+  it('parses boolean, numeric and list arguments', () => {
+    const options = parsePopulateOrganizationCliArgs([
+      '--dry-run',
+      '--chunk-size',
+      '50',
+      '--only',
+      'store,client',
+      '--skip=client',
+    ]);
+
+    expect(options).toEqual({
+      dryRun: true,
+      chunkSize: 50,
+      onlyEntities: ['store', 'client'],
+      skipEntities: ['client'],
+    });
+  });
+
+  it('throws on invalid entities', () => {
+    expect(() => parsePopulateOrganizationCliArgs(['--only', 'unknown'])).toThrow(
+      '[populate-org] Unknown entity provided for --only: unknown',
+    );
+  });
+
+  it('throws on unknown arguments', () => {
+    expect(() => parsePopulateOrganizationCliArgs(['--unexpected'])).toThrow(
+      '[populate-org] Unknown argument: --unexpected',
+    );
   });
 });
