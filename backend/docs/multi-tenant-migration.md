@@ -368,6 +368,18 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó la batería `npm test -- multi-tenant-fixtures.seed.spec.ts`, la cual valida el helper `applyMultiTenantFixtures` verificando que los datos sembrados para `tenant-alpha` y `tenant-beta` mantengan las referencias de organización en cascada.
 - **Resultado:** La suite reportó `1 passed`, confirmando que el seed conserva la integridad multi-tenant y dejando el terreno listo para extender las pruebas de integración con los datasets alfa/beta.
 
+### 2024-05-18 – Corrida validada `SalesService` y `WebSalesService`
+
+- **Contexto:** Como seguimiento al _Paso 3_ de la Fase 2 y para mantener la bitácora de ejecuciones locales, se solicitó volver a comprobar que las ventas presenciales y web preserven el `organizationId` al ejecutar su suite dedicada.
+- **Implementación:** Se ejecutó `npm test -- sales.service.spec.ts` en el entorno operativo de QA (Windows), lo que dispara las suites de `SalesService` y `WebSalesService` con los _mocks_ de Prisma e instrumentación de `logOrganizationContext` activos para escenarios con `organizationId` explícito, heredado y nulo.
+- **Resultado:** Ambas suites reportaron `22 passed` en conjunto, confirmando que la propagación del tenant se mantiene estable y habilitando que el equipo continúe con las tareas del plan (alinear fixtures de integración/E2E y monitorear métricas en CI).
+
+### 2024-05-19 – Script de poblado de `organizationId`
+
+- **Contexto:** Con la Fase 2 enfocada en validar cobertura se requería habilitar el primer entregable de la Fase 3 (_Poblado y validación_) que permita asignar `organizationId` de forma idempotente sobre datos legacy.
+- **Implementación:** Se incorporó el script [`backend/prisma/seed/populate-organization-ids.seed.ts`](../prisma/seed/populate-organization-ids.seed.ts) junto al comando `npm run seed:populate-organization-ids`. El helper recorre dominios críticos (`stores`, `users`, `clients`, `inventory`, `entries`, `providers`, `sales`, `transfers`, `orders`, `cashRegister`, `cashTransaction`, `cashClosure`) propagando el tenant desde referencias existentes (tienda, usuario, cliente, entry) y registrando métricas por motivo (`inherit:*`, `fallback`). Se añadió la batería [`backend/test/populate-organization-ids.seed.spec.ts`](../test/populate-organization-ids.seed.spec.ts) para validar los flujos con _mocks_ de Prisma y modo `dryRun`.
+- **Resultado:** El comando `npm run seed:populate-organization-ids` deja trazabilidad de los registros actualizados y habilita ejecutar corridas de prueba sin modificar datos mediante `--dryRun`, preparando el terreno para los scripts específicos por dominio y la validación en staging.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
