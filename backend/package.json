@@ -131,7 +131,8 @@
     "rootDir": ".",
     "roots": [
       "<rootDir>/src",
-      "<rootDir>/test"
+      "<rootDir>/test",
+      "<rootDir>/prisma"
     ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
