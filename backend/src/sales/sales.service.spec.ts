@@ -29,6 +29,7 @@ type PrismaMock = {
     findMany: jest.Mock;
     findFirst: jest.Mock;
     delete: jest.Mock;
+    aggregate: jest.Mock;
   };
   inventoryHistory: { create: jest.Mock };
   entryDetailSeries: { updateMany: jest.Mock };
@@ -39,6 +40,8 @@ type PrismaMock = {
   orders: { update: jest.Mock };
   shippingGuide: { updateMany: jest.Mock };
   $transaction: jest.Mock;
+  salesDetail: { findMany: jest.Mock };
+  product: { findMany: jest.Mock };
 };
 
 describe('SalesService multi-organization support', () => {
@@ -82,6 +85,7 @@ describe('SalesService multi-organization support', () => {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
         delete: jest.fn(),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { total: 0 } }),
       },
       inventoryHistory: {
         create: jest.fn(),
@@ -108,6 +112,12 @@ describe('SalesService multi-organization support', () => {
         updateMany: jest.fn(),
       },
       $transaction: jest.fn(),
+      salesDetail: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      product: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     };
 
     activityService = { log: jest.fn().mockResolvedValue(undefined) };
@@ -258,6 +268,128 @@ describe('SalesService multi-organization support', () => {
         where: {},
       }),
     );
+  });
+
+  it('propagates the organization filter to monthly totals aggregation', async () => {
+    const aggregate = prisma.sales.aggregate;
+    aggregate
+      .mockResolvedValueOnce({ _sum: { total: 1500 } })
+      .mockResolvedValueOnce({ _sum: { total: 500 } });
+
+    const result = await service.getMonthlySalesTotal(99);
+
+    expect(aggregate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: expect.objectContaining({ organizationId: 99 }),
+      }),
+    );
+    expect(aggregate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({ organizationId: 99 }),
+      }),
+    );
+    expect(result.total).toBe(1500);
+  });
+
+  it('keeps monthly totals compatible with legacy data when organizationId is undefined', async () => {
+    const aggregate = prisma.sales.aggregate;
+    aggregate
+      .mockResolvedValueOnce({ _sum: { total: 300 } })
+      .mockResolvedValueOnce({ _sum: { total: 100 } });
+
+    await service.getMonthlySalesTotal();
+
+    const firstCallWhere = aggregate.mock.calls[0][0].where;
+    const secondCallWhere = aggregate.mock.calls[1][0].where;
+
+    expect(firstCallWhere).not.toHaveProperty('organizationId');
+    expect(secondCallWhere).not.toHaveProperty('organizationId');
+  });
+
+  it('filters revenue by category using the provided organizationId', async () => {
+    const startDate = new Date('2024-01-01T00:00:00.000Z');
+    const endDate = new Date('2024-01-31T23:59:59.000Z');
+    prisma.sales.findMany.mockResolvedValueOnce([{ id: 123 }]);
+    prisma.salesDetail.findMany.mockResolvedValueOnce([
+      { productId: 10, quantity: 2, price: 50 },
+    ]);
+    prisma.product.findMany.mockResolvedValueOnce([
+      { id: 10, category: { name: 'Electrónicos' } },
+    ]);
+
+    const result = await service.getRevenueByCategory(startDate, endDate, 77);
+
+    expect(prisma.sales.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ organizationId: 77 }),
+      }),
+    );
+    expect(prisma.salesDetail.findMany).toHaveBeenCalledWith({
+      where: { salesId: { in: [123] } },
+    });
+    expect(result).toEqual([{ name: 'Electrónicos', value: 100 }]);
+  });
+
+  it('applies organization filters when retrieving sales transactions', async () => {
+    const saleDate = new Date('2024-02-15T10:00:00.000Z');
+    prisma.sales.findMany.mockResolvedValueOnce([
+      {
+        id: 987,
+        createdAt: saleDate,
+        total: 250,
+        tipoMoneda: 'PEN',
+        client: { name: 'Alpha Cliente' },
+        invoices: [
+          { serie: 'F001', nroCorrelativo: '000123', tipoComprobante: 'FACTURA' },
+        ],
+        payments: [
+          {
+            amount: 250,
+            currency: 'PEN',
+            paymentMethod: { name: 'Tarjeta' },
+          },
+        ],
+        salesDetails: [
+          {
+            quantity: 1,
+            price: 250,
+            entryDetail: {
+              price: 180,
+              product: { name: 'Alpha Laptop 13"' },
+              series: [{ serial: 'ALPHA-001' }],
+            },
+          },
+        ],
+      },
+    ]);
+
+    const result = await service.getSalesTransactions(undefined, undefined, 44);
+
+    expect(prisma.sales.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: 44 } }),
+    );
+    expect(result).toEqual([
+      {
+        date: saleDate,
+        serie: 'F001',
+        correlativo: '000123',
+        tipoComprobante: 'FACTURA',
+        customerName: 'Alpha Cliente',
+        total: 250,
+        payments: [{ method: 'Tarjeta', amount: 250 }],
+        items: [
+          {
+            qty: 1,
+            unitPrice: 250,
+            costUnit: 180,
+            productName: 'Alpha Laptop 13"',
+            series: ['ALPHA-001'],
+          },
+        ],
+      },
+    ]);
   });
   
   describe('deleteSale', () => {
