@@ -362,6 +362,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se actualizó el _pipeline_ de CI para invocar `npm run seed:multi-tenant` durante el _setup_ previo a `npm run test:e2e`, reutilizando `applyMultiTenantFixtures` y registrando métricas de duración en el dashboard temporal de pruebas. Además, se añadió una nota operativa en Confluence con los pasos de verificación y enlaces a los logs generados.
 - **Resultado:** Las corridas automáticas del _pipeline_ aplican ahora los fixtures multi-tenant de manera idempotente, reduciendo tiempos de preparación y asegurando que cualquier falla relacionada al seed se refleje en las métricas monitoreadas por QA y Plataforma.
 
+### 2024-05-17 – Validación unit-test `applyMultiTenantFixtures`
+
+- **Contexto:** Para sostener el avance del _Paso 3_ de la Fase 2 se requería corroborar que el seed multi-organización continúe propagando `organizationId` de forma consistente en todas las entidades de prueba antes de ampliar los fixtures de integración/E2E.
+- **Implementación:** Se ejecutó la batería `npm test -- multi-tenant-fixtures.seed.spec.ts`, la cual valida el helper `applyMultiTenantFixtures` verificando que los datos sembrados para `tenant-alpha` y `tenant-beta` mantengan las referencias de organización en cascada.
+- **Resultado:** La suite reportó `1 passed`, confirmando que el seed conserva la integridad multi-tenant y dejando el terreno listo para extender las pruebas de integración con los datasets alfa/beta.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
