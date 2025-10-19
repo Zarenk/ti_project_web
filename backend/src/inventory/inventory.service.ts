@@ -52,10 +52,18 @@ export class InventoryService {
 
   // Listar todas las entradas
   async findAllInventoryHistory(organizationId?: number | null) {
+    const resolvedOrganizationId = organizationId ?? null;
     const where: Prisma.InventoryHistoryWhereInput = {};
 
+    logOrganizationContext({
+      service: InventoryService.name,
+      operation: 'findAllInventoryHistory',
+      organizationId: resolvedOrganizationId,
+      metadata: { scope: 'inventoryHistory' },
+    });
+
     if (organizationId !== undefined) {
-      Object.assign(where, { organizationId: organizationId ?? null });
+      Object.assign(where, { organizationId: resolvedOrganizationId });
     }
     return this.prisma.inventoryHistory.findMany({
       where,
