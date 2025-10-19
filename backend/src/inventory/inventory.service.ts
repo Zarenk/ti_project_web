@@ -3,7 +3,7 @@ import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityService } from 'src/activity/activity.service';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
 import * as xlsx from 'xlsx';
 import * as ExcelJS from 'exceljs';
 import { format } from 'date-fns-tz';
@@ -51,8 +51,14 @@ export class InventoryService {
   }
 
   // Listar todas las entradas
-  async findAllInventoryHistory() {
+  async findAllInventoryHistory(organizationId?: number | null) {
+    const where: Prisma.InventoryHistoryWhereInput = {};
+
+    if (organizationId !== undefined) {
+      Object.assign(where, { organizationId: organizationId ?? null });
+    }
     return this.prisma.inventoryHistory.findMany({
+      where,
       include: {
         user: true, // Incluir información del usuario que realizó la acción
         inventory: {
@@ -74,9 +80,14 @@ export class InventoryService {
   //
 
   // Obtener el historial de un inventario específico por ID
-  async findAllHistoryByUser(userId: number) {
+  async findAllHistoryByUser(userId: number, organizationId?: number | null) {
+    const where: Prisma.InventoryHistoryWhereInput = { userId };
+
+    if (organizationId !== undefined) {
+      Object.assign(where, { organizationId: organizationId ?? null });
+    }
     return this.prisma.inventoryHistory.findMany({
-      where: { userId }, // Filtrar por el ID del usuario
+      where, // Filtrar por el ID del usuario
       include: {
         user: true, // Incluir información del usuario
         inventory: {
@@ -98,9 +109,15 @@ export class InventoryService {
   //
 
   // Obtener el precio de compra de un producto 
-  async getAllPurchasePrices() {
+  async getAllPurchasePrices(organizationId?: number | null) {
+    const entryWhere: Prisma.EntryDetailWhereInput = {};
+
+    if (organizationId !== undefined) {
+      entryWhere.entry = { organizationId: organizationId ?? null } as Prisma.EntryWhereInput;
+    }
     // Obtener todos los detalles de entrada agrupados por producto
     const entryDetails = await this.prisma.entryDetail.findMany({
+      where: entryWhere,
       select: {
         productId: true,
         price: true,

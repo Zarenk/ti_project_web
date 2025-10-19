@@ -23,6 +23,7 @@ import { extname, join } from 'path';
 import { Response } from 'express';
 import { format } from 'date-fns';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
 @Controller('inventory')
 export class InventoryController {
@@ -86,24 +87,38 @@ export class InventoryController {
 
   // Endpoint para obtener el historial de inventario completo
   @Get('/history')
-  async findAllInventoryHistories() {
-    return this.inventoryService.findAllInventoryHistory();
+  async findAllInventoryHistories(
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.inventoryService.findAllInventoryHistory(
+      organizationId ?? undefined,
+    );
   }
 
   // Endpoint para obtener el historial de un usuario específico
   @Get('/history/users/:userId')
-  async getHistoryByUser(@Param('userId') userId: string) {
+  async getHistoryByUser(
+    @Param('userId') userId: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
     const id = parseInt(userId, 10); // Convertir a número entero
     if (isNaN(id)) {
       throw new Error('El ID del usuario debe ser un número válido');
     }
-    return this.inventoryService.findAllHistoryByUser(id);
+    return this.inventoryService.findAllHistoryByUser(
+      id,
+      organizationId ?? undefined,
+    );
   }
 
   // Endpoint para obtener el historial de un producto específico
   @Get('/purchase-prices')
-  async getAllPurchasePrices() {
-    const prices = await this.inventoryService.getAllPurchasePrices();
+  async getAllPurchasePrices(
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    const prices = await this.inventoryService.getAllPurchasePrices(
+      organizationId ?? undefined,
+    );
     return prices;
   }
 

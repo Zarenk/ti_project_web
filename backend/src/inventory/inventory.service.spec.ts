@@ -30,6 +30,7 @@ type InventoryPrismaMock = {
   inventoryHistory: {
     createMany: jest.Mock;
     create: jest.Mock;
+    findMany?: jest.Mock;
   };
   user: {
     findUnique: jest.Mock;
@@ -53,6 +54,7 @@ type InventoryPrismaMock = {
   };
   entryDetail: {
     create: jest.Mock;
+    findMany?: jest.Mock;
   };
   entryDetailSeries: {
     findFirst: jest.Mock;
@@ -85,6 +87,7 @@ describe('InventoryService multi-organization support', () => {
       inventoryHistory: {
         createMany: jest.fn(),
         create: jest.fn(),
+        findMany: jest.fn(),
       },
       user: {
         findUnique: jest.fn(),
@@ -108,6 +111,7 @@ describe('InventoryService multi-organization support', () => {
       },
       entryDetail: {
         create: jest.fn(),
+        findMany: jest.fn(),
       },
       entryDetailSeries: {
         findFirst: jest.fn(),
@@ -276,6 +280,29 @@ describe('InventoryService multi-organization support', () => {
 
     expect(prisma.transfer.create).not.toHaveBeenCalled();
   });
+
+  it('filters inventory history by organization when provided', async () => {
+    prisma.inventoryHistory.findMany = jest.fn().mockResolvedValue([]);
+
+    await service.findAllInventoryHistory(42);
+
+    expect(prisma.inventoryHistory.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: 42 } }),
+    );
+  });
+
+  it('filters purchase prices by organization when provided', async () => {
+    prisma.entryDetail.findMany = jest.fn().mockResolvedValue([]);
+
+    await service.getAllPurchasePrices(15);
+
+    expect(prisma.entryDetail.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { entry: { organizationId: 15 } },
+      }),
+    );
+  });
+  
   describe('processExcelData multi-organization support', () => {
     const excelRows = [
       {
