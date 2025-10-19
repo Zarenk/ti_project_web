@@ -29,6 +29,7 @@ type PopulateOptions = {
   chunkSize?: number;
   onlyEntities?: PopulateEntityKey[];
   skipEntities?: PopulateEntityKey[];
+  defaultOrganizationCode?: string;
 };
 
 type UpdatePlan = {
@@ -45,6 +46,7 @@ type EntitySummary = {
 
 type PopulateSummary = {
   defaultOrganizationId: number;
+  defaultOrganizationCode: string;
   defaultOrganizationCreated: boolean;
   processed: Record<PopulateEntityKey, EntitySummary>;
 };
@@ -141,9 +143,10 @@ async function executePlan(
 async function ensureDefaultOrganization(
   prisma: PrismaContextClient,
   logger: Logger,
+  organizationCode: string,
 ): Promise<{ id: number; created: boolean }> {
   const existingByCode = (await prisma.organization.findFirst({
-    where: { code: DEFAULT_ORGANIZATION_CODE },
+    where: { code: organizationCode },
     select: { id: true },
   })) as any;
 
@@ -166,7 +169,7 @@ async function ensureDefaultOrganization(
   const created = (await prisma.organization.create({
     data: {
       name: 'Organización Única',
-      code: DEFAULT_ORGANIZATION_CODE,
+      code: organizationCode,
       status: 'ACTIVE',
     },
     select: { id: true },
@@ -692,6 +695,13 @@ export async function populateMissingOrganizationIds(
   const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
   const onlyEntities = options.onlyEntities ?? [];
   const skipEntities = options.skipEntities ?? [];
+  const trimmedDefaultCode = options.defaultOrganizationCode?.trim();
+
+  if (typeof trimmedDefaultCode === 'string' && trimmedDefaultCode.length === 0) {
+    throw new Error('[populate-org] defaultOrganizationCode cannot be empty.');
+  }
+
+  const defaultOrganizationCode = trimmedDefaultCode ?? DEFAULT_ORGANIZATION_CODE;
 
   for (const entity of onlyEntities) {
     if (!isPopulateEntityKey(entity)) {
@@ -719,7 +729,11 @@ export async function populateMissingOrganizationIds(
   const shouldDisconnect = !options.prisma;
 
   try {
-    const { id: defaultOrganizationId, created } = await ensureDefaultOrganization(prismaWithAny, logger);
+    const { id: defaultOrganizationId, created } = await ensureDefaultOrganization(
+      prismaWithAny,
+      logger,
+      defaultOrganizationCode,
+    );
 
     for (const { key, handler } of ENTITY_POPULATORS) {
       if (!enabledSet.has(key)) {
@@ -757,6 +771,7 @@ export async function populateMissingOrganizationIds(
 
     return {
       defaultOrganizationId,
+      defaultOrganizationCode,
       defaultOrganizationCreated: created,
       processed,
     };
@@ -767,7 +782,7 @@ export async function populateMissingOrganizationIds(
   }
 }
 
-type CliOptions = Pick<PopulateOptions, 'dryRun' | 'chunkSize' | 'onlyEntities' | 'skipEntities'>;
+type CliOptions = Pick<PopulateOptions, 'dryRun' | 'chunkSize' | 'onlyEntities' | 'skipEntities' | 'defaultOrganizationCode'>;
 
 function parseListArgument(
   flag: string,
@@ -810,6 +825,19 @@ function parseNumericArgument(flag: string, value: string | undefined): number {
   }
 
   return parsed;
+}
+
+function parseStringArgument(flag: string, value: string | undefined): string {
+  if (!value) {
+    throw new Error(`[populate-org] Missing value for ${flag}.`);
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed.length) {
+    throw new Error(`[populate-org] ${flag} cannot be empty.`);
+  }
+
+  return trimmed;
 }
 
 export function parsePopulateOrganizationCliArgs(argv: string[]): CliOptions {
@@ -869,6 +897,24 @@ export function parsePopulateOrganizationCliArgs(argv: string[]): CliOptions {
       continue;
     }
 
+    if (arg.startsWith('--default-org-code=') || arg.startsWith('--default-organization-code=')) {
+      const [flag, raw] = arg.split('=');
+      options.defaultOrganizationCode = parseStringArgument(flag, raw);
+      continue;
+    }
+
+    if (
+      arg === '--default-org-code' ||
+      arg === '--default-organization-code' ||
+      arg === '--defaultOrgCode' ||
+      arg === '--defaultOrganizationCode'
+    ) {
+      const [value, nextIndex] = nextValue(argv, index);
+      options.defaultOrganizationCode = parseStringArgument(arg, value);
+      index = nextIndex;
+      continue;
+    }
+
     if (arg.trim().length > 0) {
       throw new Error(`[populate-org] Unknown argument: ${arg}`);
     }
@@ -883,7 +929,7 @@ if (require.main === module) {
     populateMissingOrganizationIds(cliOptions)
       .then((summary) => {
         console.info(
-          `[populate-org] Completed. defaultOrganizationId=${summary.defaultOrganizationId} created=${summary.defaultOrganizationCreated ? 'yes' : 'no'}.`,
+          `[populate-org] Completed. defaultOrganizationId=${summary.defaultOrganizationId} defaultOrganizationCode=${summary.defaultOrganizationCode} created=${summary.defaultOrganizationCreated ? 'yes' : 'no'}.`,
         );
 
         for (const entity of POPULATE_ENTITY_KEYS) {

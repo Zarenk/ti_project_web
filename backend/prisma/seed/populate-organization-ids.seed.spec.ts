@@ -213,6 +213,7 @@ describe('populateMissingOrganizationIds', () => {
     });
 
     expect(summary.defaultOrganizationId).toBe(1);
+    expect(summary.defaultOrganizationCode).toBe('DEFAULT');
     expect(summary.defaultOrganizationCreated).toBe(true);
 
     expect(prisma.store.update).toHaveBeenCalledWith({
@@ -325,6 +326,30 @@ describe('populateMissingOrganizationIds', () => {
     expect(logger.warn).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith('[populate-org] user: skipped by configuration.');
   });
+
+  it('allows overriding the default organization code when provided', async () => {
+    const prisma = buildPrismaMock();
+    const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    prisma.organization.findFirst.mockReset();
+    prisma.organization.findFirst.mockResolvedValueOnce({ id: 42, code: 'TENANT' });
+
+    const summary = await populateMissingOrganizationIds({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      defaultOrganizationCode: 'TENANT',
+    });
+
+    expect(summary.defaultOrganizationId).toBe(42);
+    expect(summary.defaultOrganizationCode).toBe('TENANT');
+    expect(summary.defaultOrganizationCreated).toBe(false);
+    expect(prisma.organization.create).not.toHaveBeenCalled();
+    expect(prisma.store.update).toHaveBeenCalledWith({
+      where: { id: 101 },
+      data: { organizationId: 42 },
+    });
+  });
+
 });
 
 describe('parsePopulateOrganizationCliArgs', () => {
@@ -336,6 +361,8 @@ describe('parsePopulateOrganizationCliArgs', () => {
       '--only',
       'store,client',
       '--skip=client',
+      '--default-org-code',
+      'TENANT',
     ]);
 
     expect(options).toEqual({
@@ -343,6 +370,7 @@ describe('parsePopulateOrganizationCliArgs', () => {
       chunkSize: 50,
       onlyEntities: ['store', 'client'],
       skipEntities: ['client'],
+      defaultOrganizationCode: 'TENANT',
     });
   });
 
