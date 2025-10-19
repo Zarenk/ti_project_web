@@ -91,8 +91,17 @@ export class InventoryService {
   async findAllHistoryByUser(userId: number, organizationId?: number | null) {
     const where: Prisma.InventoryHistoryWhereInput = { userId };
 
+    const resolvedOrganizationId = organizationId ?? null;
+
+    logOrganizationContext({
+      service: InventoryService.name,
+      operation: 'findAllHistoryByUser',
+      organizationId: resolvedOrganizationId,
+      metadata: { userId },
+    });
+
     if (organizationId !== undefined) {
-      Object.assign(where, { organizationId: organizationId ?? null });
+      Object.assign(where, { organizationId: resolvedOrganizationId });
     }
     return this.prisma.inventoryHistory.findMany({
       where, // Filtrar por el ID del usuario
@@ -119,9 +128,19 @@ export class InventoryService {
   // Obtener el precio de compra de un producto 
   async getAllPurchasePrices(organizationId?: number | null) {
     const entryWhere: Prisma.EntryDetailWhereInput = {};
+    const resolvedOrganizationId = organizationId ?? null;
+
+    logOrganizationContext({
+      service: InventoryService.name,
+      operation: 'getAllPurchasePrices',
+      organizationId: resolvedOrganizationId,
+      metadata: { scope: 'purchasePrices' },
+    });
 
     if (organizationId !== undefined) {
-      entryWhere.entry = { organizationId: organizationId ?? null } as Prisma.EntryWhereInput;
+      entryWhere.entry = {
+        organizationId: resolvedOrganizationId,
+      } as Prisma.EntryWhereInput;
     }
     // Obtener todos los detalles de entrada agrupados por producto
     const entryDetails = await this.prisma.entryDetail.findMany({
