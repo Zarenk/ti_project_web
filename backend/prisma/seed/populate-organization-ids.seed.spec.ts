@@ -213,6 +213,8 @@ const buildPrismaMock = (): PrismaMock => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedMkdir.mockResolvedValue(undefined);
+  mockedWriteFile.mockResolvedValue(undefined);
 });
 
 describe('populateMissingOrganizationIds', () => {
@@ -322,6 +324,27 @@ describe('populateMissingOrganizationIds', () => {
     expect(summary.processed['cash-closure'].updated).toBe(1);
 
     expect(prisma.$disconnect).not.toHaveBeenCalled();
+  });
+
+  it('warns and continues when the summary file cannot be written', async () => {
+    const prisma = buildPrismaMock();
+    const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    mockedWriteFile.mockRejectedValueOnce(new Error('EACCES: permission denied'));
+
+    const summary = await populateMissingOrganizationIds({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      summaryPath: './tmp/populate-summary.json',
+    });
+
+    expect(summary.summaryFilePath).toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '[populate-org] Failed to write summary file at ./tmp/populate-summary.json',
+      ),
+    );
+    expect(mockedWriteFile).toHaveBeenCalledTimes(1);
   });
 
   it('supports dry-run mode without executing updates', async () => {

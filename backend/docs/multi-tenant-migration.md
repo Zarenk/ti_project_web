@@ -405,6 +405,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se añadió la bandera `--summary-path=<ruta>` al comando, persistiendo un JSON con el `organizationId` utilizado, el detalle por entidad y un sello temporal (`generatedAt`). El helper asegura la creación del directorio destino y registra advertencias si la escritura falla.
 - **Resultado:** Cada corrida del seed puede almacenar su resumen estructurado y reutilizable, habilitando la trazabilidad de métricas en staging y producción y simplificando la evidencia requerida por Operaciones y QA.
 
+### 2024-05-24 – Resiliencia ante errores al generar el resumen del seed
+
+- **Contexto:** Para garantizar la trazabilidad aun cuando falle la escritura del resumen en disco se necesitaba validar el manejo de errores del helper `persistSummaryToFile` y las métricas entregadas por `populateMissingOrganizationIds`.
+- **Implementación:** Se incorporó una prueba unitaria que fuerza un error de E/S en `writeFile`, verificando que el seed registre la advertencia correspondiente y continúe retornando el resumen en memoria sin adjuntar `summaryFilePath`.
+- **Resultado:** El comando `npm test -- populate-organization-ids.seed.spec.ts` ahora evidencia el comportamiento resiliente del seed, asegurando que la corrida entregue estadísticas aunque no pueda persistir el archivo JSON.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
