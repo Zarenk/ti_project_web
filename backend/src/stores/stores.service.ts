@@ -76,7 +76,6 @@ export class StoresService {
           `La tienda con el nombre "${createStoreDto.name}" ya existe.`
         );
       }
-      console.error("Error en el backend:", error);
       throw error;
     }
   }
@@ -204,6 +203,9 @@ export class StoresService {
 
       return updated;
     } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
 
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -301,7 +303,9 @@ export class StoresService {
         updatedStores,
       };
     } catch (error) {
-      console.error('Error al actualizar tiendas:', error);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
   
       // Manejar errores específicos de Prisma
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -396,8 +400,11 @@ export class StoresService {
         message: `${deletedStores.count} tienda(s) eliminada(s) correctamente.`,
       };
     } catch (error) {
-      console.error("Error en el backend:", error);
-      throw new InternalServerErrorException('Hubo un error al eliminar los productos.');     
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('Hubo un error al eliminar los productos.');
     }
   }
 }
