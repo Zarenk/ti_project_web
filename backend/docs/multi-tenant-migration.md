@@ -393,6 +393,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó `npm test -- src/inventory/inventory.service.spec.ts` en el entorno operativo de QA (Windows), verificando los escenarios parametrizados de transferencias, historiales, precios de compra y procesamiento de catálogos con `organizationId` explícito, heredado o nulo.
 - **Resultado:** La suite reportó `13 passed`, ratificando que las operaciones de inventario preservan el tenant en cada flujo y habilitando continuar con las próximas acciones del plan sin regresiones en este dominio.
 
+### 2024-05-22 – Corrida validada `EntriesService`
+
+- **Contexto:** Como seguimiento al _Paso 3_ de la Fase 2 y tras los últimos ajustes en fixtures multi-organización, se requería reconfirmar que el dominio de compras preserve la propagación opcional del `organizationId` antes de avanzar con las siguientes iteraciones del plan.
+- **Implementación:** Se corrió `npm test -- entries.service.spec.ts`, observando los _logs_ instrumentados que documentan los payloads recibidos por `createEntry` y las entidades generadas en Prisma para escenarios con `organizationId` explícito, heredado desde la tienda o ausente, además de la cobertura de búsquedas y eliminaciones parametrizadas por tenant.
+- **Resultado:** La batería registró `14 passed`, con evidencia de que las operaciones de alta, lectura y baja mantienen el identificador de organización correspondiente o `NULL` para flujos legacy, dejando habilitado continuar con la planificación de fixtures de integración/E2E multi-organización.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
