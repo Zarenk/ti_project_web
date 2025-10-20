@@ -326,6 +326,35 @@ describe('populateMissingOrganizationIds', () => {
     expect(prisma.$disconnect).not.toHaveBeenCalled();
   });
 
+  it('logs chunk progress when processing large batches', async () => {
+    const prisma = buildPrismaMock();
+    const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    prisma.store.findMany.mockResolvedValueOnce([
+      { id: 1 },
+      { id: 2 },
+      { id: 3 },
+    ] as any);
+
+    const summary = await populateMissingOrganizationIds({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      chunkSize: 2,
+      onlyEntities: ['store'],
+    });
+
+    expect(summary.processed.store.updated).toBe(3);
+    expect(logger.info).toHaveBeenCalledWith(
+      '[populate-org] store: chunk 1/2 updated 2 records.',
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      '[populate-org] store: chunk 2/2 updated 1 records.',
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      '[populate-org] store: updated 3 records (fallback:default-organization=3).',
+    );
+  });
+
   it('warns and continues when the summary file cannot be written', async () => {
     const prisma = buildPrismaMock();
     const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };

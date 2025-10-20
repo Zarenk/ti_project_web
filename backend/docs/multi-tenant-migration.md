@@ -411,6 +411,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se incorporó una prueba unitaria que fuerza un error de E/S en `writeFile`, verificando que el seed registre la advertencia correspondiente y continúe retornando el resumen en memoria sin adjuntar `summaryFilePath`.
 - **Resultado:** El comando `npm test -- populate-organization-ids.seed.spec.ts` ahora evidencia el comportamiento resiliente del seed, asegurando que la corrida entregue estadísticas aunque no pueda persistir el archivo JSON.
 
+### 2024-05-25 – Métricas de progreso por _chunks_ en el seed multi-organización
+
+- **Contexto:** Con el objetivo de monitorear la ejecución del poblamiento en lotes grandes (Fase 3) se necesitaba instrumentar trazas por _chunk_ que permitan seguir el avance en tiempo real y detectar fácilmente cuellos de botella o fallas puntuales.
+- **Implementación:** Se actualizó `populateMissingOrganizationIds` para registrar un log por cada lote procesado indicando el número de _chunk_ y la cantidad de registros actualizados, además de acumular los totales parciales antes del resumen final. Se añadió una prueba unitaria que fuerza lotes de tres tiendas con `chunkSize=2`, validando las nuevas trazas (`chunk 1/2`, `chunk 2/2`) y la métrica consolidada.
+- **Resultado:** El seed deja evidencia granular de progreso y mantiene el resumen acumulado, habilitando la observabilidad necesaria cuando se ejecute en staging y producción.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)

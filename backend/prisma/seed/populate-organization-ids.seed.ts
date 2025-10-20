@@ -163,13 +163,17 @@ async function executePlan(
   }
 
   const chunks = chunkArray(plans, context.chunkSize);
-  for (const chunk of chunks) {
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
     await executor(chunk);
+    summary.updated += chunk.length;
+    context.logger.info(
+      `[populate-org] ${entity}: chunk ${index + 1}/${chunks.length} updated ${chunk.length} records.`,
+    );
   }
 
-  summary.updated = plans.length;
   context.logger.info(
-    `[populate-org] ${entity}: updated ${plans.length} records (${reasonDescription}).`,
+    `[populate-org] ${entity}: updated ${summary.updated} records (${reasonDescription}).`,
   );
 
   return summary;
