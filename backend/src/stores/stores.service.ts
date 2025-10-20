@@ -12,6 +12,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AuditAction } from '@prisma/client';
 import { ActivityService } from '../activity/activity.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import { buildOrganizationFilter } from 'src/tenancy/organization.utils';
 
 @Injectable()
 export class StoresService {
@@ -21,14 +22,23 @@ export class StoresService {
     private activityService: ActivityService,
   ) {}
 
-  async create(createStoreDto: CreateStoreDto, req: Request) {
+  async create(
+    createStoreDto: CreateStoreDto,
+    req: Request,
+    organizationIdFromContext?: number | null,
+  ) {
     try {
       const { organizationId, ...storePayload } = createStoreDto;
+
+      const resolvedOrganizationId =
+        organizationIdFromContext === undefined
+          ? organizationId ?? null
+          : organizationIdFromContext;
 
       logOrganizationContext({
         service: StoresService.name,
         operation: 'create',
-        organizationId,
+        organizationId: resolvedOrganizationId ?? null,
         metadata: { storeName: createStoreDto.name },
       });
 
@@ -36,7 +46,7 @@ export class StoresService {
         organizationId?: number | null;
       }) = {
         ...storePayload,
-        organizationId: organizationId ?? null,
+        organizationId: resolvedOrganizationId ?? null,
       };
 
       const store = await this.prismaService.store.create({
@@ -71,19 +81,30 @@ export class StoresService {
     }
   }
 
-  findAll() {
-    return this.prismaService.store.findMany()
+  findAll(organizationIdFromContext?: number | null) {
+    const where = buildOrganizationFilter(
+      organizationIdFromContext,
+    ) as Prisma.StoreWhereInput;
+
+    if (Object.keys(where).length === 0) {
+      return this.prismaService.store.findMany();
+    }
+
+    return this.prismaService.store.findMany({ where });
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, organizationIdFromContext?: number | null) {
 
     if (!id || typeof id !== 'number') {
       throw new Error('El ID proporcionado no es válido.');
     }
 
-    const storeFound = await this.prismaService.store.findUnique({ // NO OLVIDAR EL AWAIT O ASYNC CON FUNCIONES
-      where: {id: id,},
-    })
+    const storeFound = await this.prismaService.store.findFirst({
+      where: {
+        id,
+        ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
+      },
+    });
 
     if(!storeFound){
       throw new NotFoundException(`Store with id ${id} not found`)
@@ -93,25 +114,47 @@ export class StoresService {
   }
 
   // store.service.ts
-  async checkIfExists(name: string): Promise<boolean> {
-    const store = await this.prismaService.store.findUnique({
-      where: { name },
+  async checkIfExists(
+    name: string,
+    organizationIdFromContext?: number | null,
+  ): Promise<boolean> {
+    const store = await this.prismaService.store.findFirst({
+      where: {
+        name,
+        ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
+      },
     });
     return !!store; // Devuelve true si el proveedor existe, false si no
   }
 
-  async update(id: number, updateStoreDto: UpdateStoreDto, req: Request) {
+  async update(
+    id: number,
+    updateStoreDto: UpdateStoreDto,
+    req: Request,
+    organizationIdFromContext?: number | null,
+  ) {
     try {
-      const before = await this.prismaService.store.findUnique({
-        where: { id: Number(id) },
+      const before = await this.prismaService.store.findFirst({
+        where: {
+          id: Number(id),
+          ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
+        },
       });
+
+      if (!before) {
+        throw new NotFoundException(`Store with id ${id} not found`);
+      }
+
       const { id: _id, organizationId, ...storePayload } = updateStoreDto;
 
-      if (organizationId !== undefined) {
+      const resolvedOrganizationId =
+        organizationIdFromContext === undefined ? organizationId : organizationIdFromContext;
+
+      if (resolvedOrganizationId !== undefined) {
         logOrganizationContext({
           service: StoresService.name,
           operation: 'update',
-          organizationId,
+          organizationId: resolvedOrganizationId ?? null,
           metadata: { storeId: id },
         });
       }
@@ -122,8 +165,8 @@ export class StoresService {
         ...storePayload,
       };
 
-      if (organizationId !== undefined) {
-        storeUpdateData.organizationId = organizationId;
+      if (resolvedOrganizationId !== undefined) {
+        storeUpdateData.organizationId = resolvedOrganizationId ?? null;
       }
 
       const updated = await this.prismaService.store.update({
@@ -175,7 +218,11 @@ export class StoresService {
     }    
   }
 
-  async updateMany(stores: UpdateStoreDto[], req: Request) {
+  async updateMany(
+    stores: UpdateStoreDto[],
+    req: Request,
+    organizationIdFromContext?: number | null,
+  ) {
     if (!Array.isArray(stores) || stores.length === 0) {
       throw new BadRequestException('No se proporcionaron tiendas para actualizar.');
     }
@@ -190,17 +237,32 @@ export class StoresService {
       }
   
       // Ejecutar la transacción para actualizar múltiples productos
-      const updatedStores = await this.prismaService.$transaction(
-        stores.map((store) => {
+      const updatedStores = await this.prismaService.$transaction(async (tx) => {
+        const results: any[] = [];
+
+        for (const store of stores) {
+          const existing = await tx.store.findFirst({
+            where: {
+              id: Number(store.id),
+              ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
+            },
+          });
+
+          if (!existing) {
+            throw new NotFoundException(`Store with id ${store.id} not found`);
+          }
+
+          const resolvedOrganizationId =
+            organizationIdFromContext === undefined
+              ? store.organizationId ?? null
+              : organizationIdFromContext;
           logOrganizationContext({
             service: StoresService.name,
             operation: 'updateMany',
-            organizationId: store.organizationId,
+            organizationId: resolvedOrganizationId ?? null,
             metadata: { storeId: store.id },
           });
-          const updateData: (Prisma.StoreUncheckedUpdateInput & {
-            organizationId?: number | null;
-          }) = {
+          const updateData = {
             name: store.name,
             description: store.description,
             ruc: store.ruc,
@@ -209,16 +271,18 @@ export class StoresService {
             email: store.email,
             website: store.website,
             status: store.status,
-          };
+            organizationId: resolvedOrganizationId ?? null,
+          } as Prisma.StoreUncheckedUpdateInput;
 
-          updateData.organizationId = store.organizationId ?? null;
-
-          return this.prismaService.store.update({
+          const updated = await tx.store.update({
             where: { id: Number(store.id) },
-            data: updateData as Prisma.StoreUncheckedUpdateInput,
+            data: updateData,
           });
-        })
-      );
+          results.push(updated);
+        }
+
+        return results;
+      });
 
       await this.activityService.log(
         {
@@ -250,16 +314,27 @@ export class StoresService {
     }
   }
 
-  async remove(id: number, req: Request) {
+  async remove(
+    id: number,
+    req: Request,
+    organizationIdFromContext?: number | null,
+  ) {
+    const existing = await this.prismaService.store.findFirst({
+      where: {
+        id,
+        ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`Store with id ${id} not found`);
+    }
+
     const deletedStore = await this.prismaService.store.delete({
       where: {
         id,
       },
     });
-
-    if(!deletedStore){
-      throw new NotFoundException(`Store with id ${id} not found`)
-    }
 
     await this.activityService.log(
       {
@@ -277,7 +352,11 @@ export class StoresService {
     return deletedStore;
   }
 
-  async removes(ids: number[], req: Request) {
+  async removes(
+    ids: number[],
+    req: Request,
+    organizationIdFromContext?: number | null,
+  ) {
     if (!Array.isArray(ids) || ids.length === 0) {
       throw new NotFoundException('No se proporcionaron IDs válidos para eliminar.');
     }
@@ -292,6 +371,7 @@ export class StoresService {
           id: {
             in: numericIds, // Elimina todos los productos cuyos IDs estén en este array
           },
+          ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
         },
       });
   

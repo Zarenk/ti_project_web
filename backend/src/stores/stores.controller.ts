@@ -14,6 +14,7 @@ import { StoresService } from './stores.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
 @Controller('stores')
 export class StoresController {
@@ -21,33 +22,55 @@ export class StoresController {
 
   @Post()
   @ApiOperation({ summary: 'Create a store' }) // Swagger
-  create(@Body() createStoreDto: CreateStoreDto, @Req() req: Request) {
-    return this.storesService.create(createStoreDto, req);
+  create(
+    @Body() createStoreDto: CreateStoreDto,
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.storesService.create(
+      createStoreDto,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Get()
-  @ApiResponse({status: 200, description: 'Return all stores'}) // Swagger 
-  findAll() {
-    return this.storesService.findAll();
+  @ApiResponse({status: 200, description: 'Return all stores'}) // Swagger
+  findAll(@CurrentTenant('organizationId') organizationId: number | null) {
+    return this.storesService.findAll(
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
     const numericId = parseInt(id, 10); // Convierte el ID a un número entero
     if (isNaN(numericId)) {
-    throw new BadRequestException('El ID debe ser un número válido.');
+      throw new BadRequestException('El ID debe ser un número válido.');
     }
-    return this.storesService.findOne(numericId);
+    return this.storesService.findOne(
+      numericId,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   // stores.controller.ts
   @Post("check")
-  async checkStore(@Body("name") name: string) {
+  async checkStore(
+    @Body("name") name: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
     if (!name) {
       throw new BadRequestException("El nombre de la tienda es obligatorio.");
     }
 
-    const exists = await this.storesService.checkIfExists(name);
+    const exists = await this.storesService.checkIfExists(
+      name,
+      organizationId === undefined ? undefined : organizationId,
+    );
     return { exists };
   }
 
@@ -56,8 +79,14 @@ export class StoresController {
     @Param('id') id: string,
     @Body() updateStoreDto: UpdateStoreDto,
     @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
   ) {
-    return this.storesService.update(+id, updateStoreDto, req);
+    return this.storesService.update(
+      +id,
+      updateStoreDto,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Patch()
@@ -66,6 +95,7 @@ export class StoresController {
   async updateMany(
     @Body() updateStoresDto: UpdateStoreDto[],
     @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
   ) {
 
     if (!Array.isArray(updateStoresDto) || updateStoresDto.length === 0) {
@@ -73,16 +103,36 @@ export class StoresController {
     }
 
     // Delegar la lógica al servicio
-    return this.storesService.updateMany(updateStoresDto, req);
+    return this.storesService.updateMany(
+      updateStoresDto,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: Request) {
-    return this.storesService.remove(+id, req);
+  remove(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.storesService.remove(
+      +id,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Delete()
-  async removes(@Body('ids') ids: number[], @Req() req: Request) {
-    return this.storesService.removes(ids, req);
+  async removes(
+    @Body('ids') ids: number[],
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.storesService.removes(
+      ids,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 }
