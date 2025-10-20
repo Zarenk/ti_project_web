@@ -735,20 +735,44 @@ type FixtureCliOptions = {
   summaryPath?: string;
 };
 
-function parseFixtureCliArgs(argv: string[]): FixtureCliOptions {
+function parseSummaryFlagValue(
+  argv: string[],
+  index: number,
+  flag: string,
+): { value?: string; nextIndex: number } {
+  if (flag.includes('=')) {
+    const equalsIndex = flag.indexOf('=');
+    const rawValue = flag.slice(equalsIndex + 1);
+    return { value: rawValue || undefined, nextIndex: index };
+  }
+
+  const nextValue = argv[index + 1];
+  return {
+    value: nextValue,
+    nextIndex: nextValue === undefined ? index : index + 1,
+  };
+}
+
+const SUMMARY_PATH_FLAGS = new Set([
+  '--summary-path',
+  '--summaryPath',
+  '--summary-file',
+  '--summaryFile',
+]);
+
+export function parseFixtureCliArgs(argv: string[]): FixtureCliOptions {
   const options: FixtureCliOptions = {};
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
 
-    if (arg.startsWith('--summary-path=')) {
-      options.summaryPath = arg.split('=')[1] ?? '';
-      continue;
-    }
-
-    if (arg === '--summary-path') {
-      options.summaryPath = argv[index + 1];
-      index += 1;
+    const [flagName] = arg.split('=');
+    if (SUMMARY_PATH_FLAGS.has(flagName)) {
+      const { value, nextIndex } = parseSummaryFlagValue(argv, index, arg);
+      options.summaryPath = value;
+      if (!arg.includes('=')) {
+        index = nextIndex;
+      }
       continue;
     }
   }
