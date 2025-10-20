@@ -19,9 +19,19 @@ jest.mock('@prisma/client', () => ({
   },
 }));
 
+jest.mock('node:fs/promises', () => ({
+  mkdir: jest.fn(() => Promise.resolve(undefined)),
+  writeFile: jest.fn(() => Promise.resolve(undefined)),
+}));
+
+import { mkdir, writeFile } from 'node:fs/promises';
+
 import { applyMultiTenantFixtures } from '../prisma/seed/multi-tenant-fixtures.seed';
 
 type AsyncMock<T = unknown> = jest.Mock<Promise<T>, any[]>;
+
+const mockedMkdir = mkdir as jest.MockedFunction<typeof mkdir>;
+const mockedWriteFile = writeFile as jest.MockedFunction<typeof writeFile>;
 
 type MockedPrisma = {
   category: { upsert: AsyncMock<{ id: number }> };
@@ -144,12 +154,29 @@ const buildMockPrisma = (): MockedPrisma => {
   };
 };
 
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockedMkdir.mockResolvedValue(undefined);
+  mockedWriteFile.mockResolvedValue(undefined);
+});
+
 describe('applyMultiTenantFixtures', () => {
   it('propagates organizationId across multi-tenant fixtures', async () => {
     const prisma = buildMockPrisma();
     const logger = jest.fn();
 
-    await applyMultiTenantFixtures({ prisma: prisma as unknown as PrismaClient, logger });
+    const summary = await applyMultiTenantFixtures({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+    });
+
+    expect(summary.totals.organizations).toBe(2);
+    expect(summary.totals.units).toBe(4);
+    expect(summary.totals.stores).toBe(2);
+    expect(summary.totals.products).toBe(2);
+    expect(summary.summaryFilePath).toBeUndefined();
+    expect(mkdir).not.toHaveBeenCalled();
+    expect(writeFile).not.toHaveBeenCalled();
 
     const organizationUnitCalls = prisma.organizationUnit.upsert.mock.calls.map(([args]) => args);
     expect(organizationUnitCalls).toEqual(
@@ -264,9 +291,32 @@ describe('applyMultiTenantFixtures', () => {
       ]),
     );
 
-    expect(logger).toHaveBeenCalledWith('Multi-tenant fixtures ensured.');
+    expect(logger).toHaveBeenCalledWith(
+      'Multi-tenant fixtures ensured for 2 organization(s).',
+    );
     expect(logger).toHaveBeenCalledWith('Fixture applied for organization tenant-alpha');
     expect(logger).toHaveBeenCalledWith('Fixture applied for organization tenant-beta');
     expect(prisma.$disconnect).not.toHaveBeenCalled();
+  });
+
+  it('persists a summary file when summaryPath is provided', async () => {
+    const prisma = buildMockPrisma();
+    const logger = jest.fn();
+
+    const summary = await applyMultiTenantFixtures({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      summaryPath: './tmp/fixtures-summary.json',
+    });
+
+    expect(mkdir).toHaveBeenCalledWith(expect.stringContaining('./tmp'), {
+      recursive: true,
+    });
+    expect(writeFile).toHaveBeenCalledWith(
+      './tmp/fixtures-summary.json',
+      expect.stringContaining('tenant-alpha'),
+      'utf8',
+    );
+    expect(summary.summaryFilePath).toBe('./tmp/fixtures-summary.json');
   });
 });

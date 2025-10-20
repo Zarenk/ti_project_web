@@ -48,9 +48,14 @@ export default async function globalSetup(): Promise<void> {
   }
 
   try {
-    await applyMultiTenantFixtures({
+    const summary = await applyMultiTenantFixtures({
       logger: (message) => console.log(`[multi-tenant-seed] ${message}`),
     });
+    console.log(
+      `[multi-tenant-seed] Processed organizations: ${summary.organizations
+        .map((organization) => organization.code)
+        .join(', ')}`,
+    );
   } catch (error) {
     if (isRecoverablePrismaConnectionError(error)) {
       const details = error instanceof Error ? error.message : String(error);

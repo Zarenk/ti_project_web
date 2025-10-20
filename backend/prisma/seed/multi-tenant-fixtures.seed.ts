@@ -1,8 +1,6 @@
-import {
-  OrganizationMembershipRole,
-  PrismaClient,
-  UserRole,
-} from '@prisma/client';
+import { PrismaClient, UserRole } from '@prisma/client';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 type OrganizationUnitFixture = {
   code: string;
@@ -46,10 +44,14 @@ type UserFixture = {
   role: UserRole;
   status?: string;
   membershipUnitCode?: string;
-  membershipRole?: OrganizationMembershipRole;
+  membershipRole?: MembershipRole;
   membershipDefault?: boolean;
   client?: UserClientFixture;
 };
+
+type MembershipRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
+
+type PrismaSeedClient = PrismaClient & Record<string, any>;
 
 type ProductAllocation = {
   storeName: string;
@@ -75,6 +77,42 @@ type OrganizationFixture = {
   providers: ProviderFixture[];
   users: UserFixture[];
   products?: ProductFixture[];
+};
+
+type OrganizationFixtureSummary = {
+  code: string;
+  organizationId: number;
+  units: number;
+  stores: number;
+  providers: number;
+  users: number;
+  clients: number;
+  memberships: number;
+  products: number;
+  inventories: number;
+  storeOnInventories: number;
+  inventoryHistories: number;
+};
+
+type FixtureTotals = {
+  organizations: number;
+  units: number;
+  stores: number;
+  providers: number;
+  users: number;
+  clients: number;
+  memberships: number;
+  products: number;
+  inventories: number;
+  storeOnInventories: number;
+  inventoryHistories: number;
+};
+
+type MultiTenantFixtureSummary = {
+  processedAt: string;
+  organizations: OrganizationFixtureSummary[];
+  totals: FixtureTotals;
+  summaryFilePath?: string;
 };
 
 const seedOrganizations: OrganizationFixture[] = [
@@ -116,7 +154,7 @@ const seedOrganizations: OrganizationFixture[] = [
         role: UserRole.ADMIN,
         status: 'ACTIVO',
         membershipUnitCode: 'alpha-hq',
-        membershipRole: OrganizationMembershipRole.ADMIN,
+        membershipRole: 'ADMIN',
         membershipDefault: true,
       },
       {
@@ -126,7 +164,7 @@ const seedOrganizations: OrganizationFixture[] = [
         role: UserRole.CLIENT,
         status: 'ACTIVO',
         membershipUnitCode: 'alpha-retail',
-        membershipRole: OrganizationMembershipRole.MEMBER,
+        membershipRole: 'MEMBER',
         membershipDefault: false,
         client: {
           name: 'Alpha Cliente',
@@ -189,7 +227,7 @@ const seedOrganizations: OrganizationFixture[] = [
         role: UserRole.ADMIN,
         status: 'ACTIVO',
         membershipUnitCode: 'beta-hq',
-        membershipRole: OrganizationMembershipRole.ADMIN,
+        membershipRole: 'ADMIN',
         membershipDefault: true,
       },
       {
@@ -199,7 +237,7 @@ const seedOrganizations: OrganizationFixture[] = [
         role: UserRole.CLIENT,
         status: 'ACTIVO',
         membershipUnitCode: 'beta-store',
-        membershipRole: OrganizationMembershipRole.MEMBER,
+        membershipRole: 'MEMBER',
         membershipDefault: false,
         client: {
           name: 'Beta Cliente',
@@ -227,7 +265,7 @@ const seedOrganizations: OrganizationFixture[] = [
 ];
 
 async function ensureCategories(
-  prisma: PrismaClient,
+  prisma: PrismaSeedClient,
   fixtures: OrganizationFixture[],
 ) {
   const categoryNames = new Set<string>();
@@ -259,7 +297,7 @@ async function ensureCategories(
 }
 
 async function ensureOrganization(
-  prisma: PrismaClient,
+  prisma: PrismaSeedClient,
   fixture: OrganizationFixture,
   categories: Map<string, number>,
   logger: (message: string) => void,
@@ -276,6 +314,21 @@ async function ensureOrganization(
       status: fixture.status ?? 'ACTIVE',
     },
   });
+
+  const summary: OrganizationFixtureSummary = {
+    code: fixture.code,
+    organizationId: organization.id,
+    units: 0,
+    stores: 0,
+    providers: 0,
+    users: 0,
+    clients: 0,
+    memberships: 0,
+    products: 0,
+    inventories: 0,
+    storeOnInventories: 0,
+    inventoryHistories: 0,
+  };
 
   const unitIds = new Map<string, number>();
   for (const unit of fixture.units) {
@@ -320,6 +373,7 @@ async function ensureOrganization(
       unitIds.set(unit.code, savedUnit.id);
     }
     unitIds.set(unit.name, savedUnit.id);
+    summary.units += 1;
   }
 
   const storeIds = new Map<string, number>();
@@ -333,7 +387,7 @@ async function ensureOrganization(
         email: store.email ?? null,
         website: store.website ?? null,
         organizationId: organization.id,
-      },
+      } as any,
       create: {
         name: store.name,
         status: store.status ?? 'ACTIVE',
@@ -342,10 +396,11 @@ async function ensureOrganization(
         email: store.email ?? null,
         website: store.website ?? null,
         organizationId: organization.id,
-      },
+      } as any,
     });
 
     storeIds.set(store.name, savedStore.id);
+    summary.stores += 1;
   }
 
   for (const provider of fixture.providers) {
@@ -360,7 +415,7 @@ async function ensureOrganization(
         website: provider.website ?? null,
         status: provider.status ?? 'ACTIVE',
         organizationId: organization.id,
-      },
+      } as any,
       create: {
         name: provider.name,
         document: provider.document,
@@ -371,8 +426,9 @@ async function ensureOrganization(
         website: provider.website ?? null,
         status: provider.status ?? 'ACTIVE',
         organizationId: organization.id,
-      },
+      } as any,
     });
+    summary.providers += 1;
   }
 
   const createdUsers: {
@@ -389,7 +445,7 @@ async function ensureOrganization(
         role: userFixture.role,
         status: userFixture.status ?? 'ACTIVO',
         organizationId: organization.id,
-      },
+      } as any,
       create: {
         email: userFixture.email,
         username: userFixture.username,
@@ -397,7 +453,7 @@ async function ensureOrganization(
         role: userFixture.role,
         status: userFixture.status ?? 'ACTIVO',
         organizationId: organization.id,
-      },
+      } as any,
     });
 
     if (userFixture.membershipUnitCode) {
@@ -416,47 +472,50 @@ async function ensureOrganization(
           },
         },
         update: {
-          role: userFixture.membershipRole ?? OrganizationMembershipRole.MEMBER,
+          role: userFixture.membershipRole ?? 'MEMBER',
           isDefault: userFixture.membershipDefault ?? false,
         },
         create: {
           userId: user.id,
           organizationId: organization.id,
           organizationUnitId: unitId,
-          role: userFixture.membershipRole ?? OrganizationMembershipRole.MEMBER,
+          role: userFixture.membershipRole ?? 'MEMBER',
           isDefault: userFixture.membershipDefault ?? false,
         },
       });
+      summary.memberships += 1;
     }
 
     if (userFixture.client) {
       await prisma.client.upsert({
         where: { userId: user.id },
         update: {
-          name: userFixture.client.name,
-          type: userFixture.client.type ?? 'PERSON',
-          typeNumber: userFixture.client.typeNumber,
-          phone: userFixture.client.phone ?? null,
-          adress: userFixture.client.adress ?? null,
-          email: userFixture.client.email ?? userFixture.email,
-          status: 'ACTIVE',
-          organizationId: organization.id,
-        },
-        create: {
-          userId: user.id,
-          name: userFixture.client.name,
-          type: userFixture.client.type ?? 'PERSON',
-          typeNumber: userFixture.client.typeNumber,
-          phone: userFixture.client.phone ?? null,
-          adress: userFixture.client.adress ?? null,
-          email: userFixture.client.email ?? userFixture.email,
-          status: 'ACTIVE',
-          organizationId: organization.id,
-        },
-      });
+        name: userFixture.client.name,
+        type: userFixture.client.type ?? 'PERSON',
+        typeNumber: userFixture.client.typeNumber,
+        phone: userFixture.client.phone ?? null,
+        adress: userFixture.client.adress ?? null,
+        email: userFixture.client.email ?? userFixture.email,
+        status: 'ACTIVE',
+        organizationId: organization.id,
+      } as any,
+      create: {
+        userId: user.id,
+        name: userFixture.client.name,
+        type: userFixture.client.type ?? 'PERSON',
+        typeNumber: userFixture.client.typeNumber,
+        phone: userFixture.client.phone ?? null,
+        adress: userFixture.client.adress ?? null,
+        email: userFixture.client.email ?? userFixture.email,
+        status: 'ACTIVE',
+        organizationId: organization.id,
+      } as any,
+    });
+      summary.clients += 1;
     }
 
     createdUsers.push({ fixture: userFixture, user: { id: user.id, role: user.role } });
+    summary.users += 1;
   }
 
   const referenceUser =
@@ -491,6 +550,7 @@ async function ensureOrganization(
         categoryId,
       },
     });
+    summary.products += 1;
 
     for (const allocation of product.allocations) {
       const storeId = storeIds.get(allocation.storeName);
@@ -509,13 +569,14 @@ async function ensureOrganization(
         },
         update: {
           organizationId: organization.id,
-        },
+        } as any,
         create: {
           productId: savedProduct.id,
           storeId,
           organizationId: organization.id,
-        },
+        } as any,
       });
+      summary.inventories += 1;
 
       const existingRelation = await prisma.storeOnInventory.findFirst({
         where: { inventoryId: inventory.id, storeId },
@@ -537,6 +598,7 @@ async function ensureOrganization(
           },
         });
       }
+      summary.storeOnInventories += 1;
 
       if (referenceUser) {
         await prisma.inventoryHistory.deleteMany({
@@ -556,33 +618,112 @@ async function ensureOrganization(
             previousStock: 0,
             newStock: allocation.stock,
             organizationId: organization.id,
-          },
+          } as any,
         });
+        summary.inventoryHistories += 1;
       }
     }
   }
 
   logger(`Fixture applied for organization ${fixture.code}`);
+  return summary;
 }
 
 type ApplyFixturesOptions = {
-  prisma?: PrismaClient;
+  prisma?: PrismaSeedClient;
   logger?: (message: string) => void;
+  summaryPath?: string;
 };
+
+async function persistFixtureSummaryToFile(
+  summaryPath: string,
+  summary: MultiTenantFixtureSummary,
+  logger: (message: string) => void,
+): Promise<boolean> {
+  try {
+    await mkdir(dirname(summaryPath), { recursive: true });
+    await writeFile(summaryPath, JSON.stringify(summary, null, 2), 'utf8');
+    logger(`Fixture summary persisted at ${summaryPath}.`);
+    return true;
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    logger(
+      `Failed to persist multi-tenant fixture summary at ${summaryPath}: ${details}`,
+    );
+    return false;
+  }
+}
+
+function computeTotals(summaries: OrganizationFixtureSummary[]): FixtureTotals {
+  const totals: FixtureTotals = {
+    organizations: summaries.length,
+    units: 0,
+    stores: 0,
+    providers: 0,
+    users: 0,
+    clients: 0,
+    memberships: 0,
+    products: 0,
+    inventories: 0,
+    storeOnInventories: 0,
+    inventoryHistories: 0,
+  };
+
+  for (const summary of summaries) {
+    totals.units += summary.units;
+    totals.stores += summary.stores;
+    totals.providers += summary.providers;
+    totals.users += summary.users;
+    totals.clients += summary.clients;
+    totals.memberships += summary.memberships;
+    totals.products += summary.products;
+    totals.inventories += summary.inventories;
+    totals.storeOnInventories += summary.storeOnInventories;
+    totals.inventoryHistories += summary.inventoryHistories;
+  }
+
+  return totals;
+}
 
 export async function applyMultiTenantFixtures(
   options: ApplyFixturesOptions = {},
-) {
-  const prisma = options.prisma ?? new PrismaClient();
+): Promise<MultiTenantFixtureSummary> {
+  const prisma = (options.prisma ?? new PrismaClient()) as PrismaSeedClient;
   const logger = options.logger ?? console.log;
   const shouldDisconnect = !options.prisma;
 
   try {
     const categories = await ensureCategories(prisma, seedOrganizations);
+    const organizationSummaries: OrganizationFixtureSummary[] = [];
     for (const organization of seedOrganizations) {
-      await ensureOrganization(prisma, organization, categories, logger);
+      const summary = await ensureOrganization(
+        prisma,
+        organization,
+        categories,
+        logger,
+      );
+      organizationSummaries.push(summary);
     }
-    logger('Multi-tenant fixtures ensured.');
+    const summary: MultiTenantFixtureSummary = {
+      processedAt: new Date().toISOString(),
+      organizations: organizationSummaries,
+      totals: computeTotals(organizationSummaries),
+    };
+
+    if (options.summaryPath) {
+      const persisted = await persistFixtureSummaryToFile(
+        options.summaryPath,
+        summary,
+        logger,
+      );
+      if (persisted) {
+        summary.summaryFilePath = options.summaryPath;
+      }
+    }
+    logger(
+      `Multi-tenant fixtures ensured for ${summary.totals.organizations} organization(s).`,
+    );
+    return summary;
   } finally {
     if (shouldDisconnect) {
       await prisma.$disconnect();
@@ -590,9 +731,43 @@ export async function applyMultiTenantFixtures(
   }
 }
 
+type FixtureCliOptions = {
+  summaryPath?: string;
+};
+
+function parseFixtureCliArgs(argv: string[]): FixtureCliOptions {
+  const options: FixtureCliOptions = {};
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+
+    if (arg.startsWith('--summary-path=')) {
+      options.summaryPath = arg.split('=')[1] ?? '';
+      continue;
+    }
+
+    if (arg === '--summary-path') {
+      options.summaryPath = argv[index + 1];
+      index += 1;
+      continue;
+    }
+  }
+
+  return options;
+}
+
 if (require.main === module) {
-  applyMultiTenantFixtures().catch((error) => {
-    console.error('Error applying multi-tenant fixtures:', error);
-    process.exit(1);
-  });
+  const cliOptions = parseFixtureCliArgs(process.argv.slice(2));
+  applyMultiTenantFixtures({ summaryPath: cliOptions.summaryPath })
+    .then((summary) => {
+      if (cliOptions.summaryPath && summary.summaryFilePath) {
+        console.log(
+          `[multi-tenant-seed] Summary written to ${summary.summaryFilePath}.`,
+        );
+      }
+    })
+    .catch((error) => {
+      console.error('Error applying multi-tenant fixtures:', error);
+      process.exit(1);
+    });
 }

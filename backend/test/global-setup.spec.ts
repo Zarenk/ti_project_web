@@ -45,7 +45,38 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
 
   it('applies fixtures with a prefixed logger when configuration is valid', async () => {
     process.env.DATABASE_URL = 'postgres://user:pass@localhost:5432/db';
-    mockedApplyFixtures.mockResolvedValueOnce();
+    mockedApplyFixtures.mockResolvedValueOnce({
+      processedAt: '2024-01-01T00:00:00.000Z',
+      organizations: [
+        {
+          code: 'tenant-alpha',
+          organizationId: 1,
+          units: 2,
+          stores: 1,
+          providers: 1,
+          users: 2,
+          clients: 1,
+          memberships: 2,
+          products: 1,
+          inventories: 1,
+          storeOnInventories: 1,
+          inventoryHistories: 1,
+        },
+      ],
+      totals: {
+        organizations: 1,
+        units: 2,
+        stores: 1,
+        providers: 1,
+        users: 2,
+        clients: 1,
+        memberships: 2,
+        products: 1,
+        inventories: 1,
+        storeOnInventories: 1,
+        inventoryHistories: 1,
+      },
+    });
 
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
 
@@ -63,7 +94,10 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
 
     callArgs.logger?.('fixtures ready');
     expect(logSpy).toHaveBeenCalledWith('[multi-tenant-seed] fixtures ready');
-
+    expect(logSpy).toHaveBeenCalledWith(
+      '[multi-tenant-seed] Processed organizations: tenant-alpha',
+    );
+    
     logSpy.mockRestore();
   });
 
