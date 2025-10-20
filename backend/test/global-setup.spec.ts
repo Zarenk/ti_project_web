@@ -14,6 +14,7 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
     jest.clearAllMocks();
     delete process.env.SKIP_MULTI_TENANT_SEED;
     delete process.env.DATABASE_URL;
+    delete process.env.MULTI_TENANT_FIXTURES_SUMMARY_PATH;
   });
 
   it('skips fixture application when SKIP_MULTI_TENANT_SEED is true', async () => {
@@ -91,13 +92,50 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
     }
 
     expect(callArgs.logger).toBeInstanceOf(Function);
+    expect(callArgs.summaryPath).toBeUndefined();
 
     callArgs.logger?.('fixtures ready');
     expect(logSpy).toHaveBeenCalledWith('[multi-tenant-seed] fixtures ready');
     expect(logSpy).toHaveBeenCalledWith(
       '[multi-tenant-seed] Processed organizations: tenant-alpha',
     );
-    
+
+    logSpy.mockRestore();
+  });
+
+  it('passes summaryPath to the fixture helper when configured via environment variable', async () => {
+    process.env.DATABASE_URL = 'postgres://user:pass@localhost:5432/db';
+    process.env.MULTI_TENANT_FIXTURES_SUMMARY_PATH = './tmp/fixtures-summary.json';
+    mockedApplyFixtures.mockResolvedValueOnce({
+      processedAt: '2024-01-02T00:00:00.000Z',
+      organizations: [],
+      totals: {
+        organizations: 0,
+        units: 0,
+        stores: 0,
+        providers: 0,
+        users: 0,
+        clients: 0,
+        memberships: 0,
+        products: 0,
+        inventories: 0,
+        storeOnInventories: 0,
+        inventoryHistories: 0,
+      },
+      summaryFilePath: './tmp/fixtures-summary.json',
+    });
+
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await globalSetup();
+
+    expect(mockedApplyFixtures).toHaveBeenCalledTimes(1);
+    const [[callArgs]] = mockedApplyFixtures.mock.calls;
+    expect(callArgs?.summaryPath).toBe('./tmp/fixtures-summary.json');
+    expect(logSpy).toHaveBeenCalledWith(
+      '[multi-tenant-seed] Summary file available at ./tmp/fixtures-summary.json.',
+    );
+
     logSpy.mockRestore();
   });
 
@@ -129,5 +167,6 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
   afterAll(() => {
     delete process.env.SKIP_MULTI_TENANT_SEED;
     delete process.env.DATABASE_URL;
+    delete process.env.MULTI_TENANT_FIXTURES_SUMMARY_PATH;
   });
 });

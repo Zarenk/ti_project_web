@@ -47,15 +47,25 @@ export default async function globalSetup(): Promise<void> {
     return;
   }
 
+  const summaryPath = process.env.MULTI_TENANT_FIXTURES_SUMMARY_PATH?.trim();
+
   try {
     const summary = await applyMultiTenantFixtures({
       logger: (message) => console.log(`[multi-tenant-seed] ${message}`),
+      ...(summaryPath ? { summaryPath } : {}),
     });
     console.log(
       `[multi-tenant-seed] Processed organizations: ${summary.organizations
         .map((organization) => organization.code)
         .join(', ')}`,
     );
+
+    if (summary.summaryFilePath) {
+      console.log(
+        `[multi-tenant-seed] Summary file available at ${summary.summaryFilePath}.`,
+      );
+    }
+    
   } catch (error) {
     if (isRecoverablePrismaConnectionError(error)) {
       const details = error instanceof Error ? error.message : String(error);
