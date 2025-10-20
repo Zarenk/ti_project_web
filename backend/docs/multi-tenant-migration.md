@@ -417,6 +417,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se actualizó `populateMissingOrganizationIds` para registrar un log por cada lote procesado indicando el número de _chunk_ y la cantidad de registros actualizados, además de acumular los totales parciales antes del resumen final. Se añadió una prueba unitaria que fuerza lotes de tres tiendas con `chunkSize=2`, validando las nuevas trazas (`chunk 1/2`, `chunk 2/2`) y la métrica consolidada.
 - **Resultado:** El seed deja evidencia granular de progreso y mantiene el resumen acumulado, habilitando la observabilidad necesaria cuando se ejecute en staging y producción.
 
+### 2024-05-26 – Reejecución suite `populate-organization-ids.seed`
+
+- **Contexto:** Como seguimiento al _Paso 3_ de la Fase 2 y previo a coordinar la ejecución controlada del poblado en staging, se requirió validar nuevamente que la batería de pruebas del seed multi-organización permaneciera estable.
+- **Implementación:** Se ejecutó `npm test -- populate-organization-ids.seed.spec.ts`, repasando los escenarios de propagación por herencia, métricas por _chunk_, manejo de errores al persistir el resumen, modo `--dryRun`, filtros por entidad y sobreescritura del código de organización por defecto.
+- **Resultado:** La suite reportó `9 passed`, confirmando que las recientes mejoras mantienen la integridad del seed y habilitando avanzar con la planificación operativa de la Fase 3.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
