@@ -17,19 +17,33 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
     delete process.env.MULTI_TENANT_FIXTURES_SUMMARY_PATH;
   });
 
-  it('skips fixture application when SKIP_MULTI_TENANT_SEED is true', async () => {
-    process.env.SKIP_MULTI_TENANT_SEED = 'true';
-    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+  it.each([
+    ['true', 'true'],
+    ['TRUE', 'true'],
+    [' TrUe ', 'true'],
+    ['1', '1'],
+    ['yes', 'yes'],
+    ['YES', 'yes'],
+    ['on', 'on'],
+    ['ON', 'on'],
+    [' y ', 'y'],
+    ['T', 't'],
+  ])(
+    'skips fixture application when SKIP_MULTI_TENANT_SEED=%s',
+    async (envValue, expectedLoggedValue) => {
+      process.env.SKIP_MULTI_TENANT_SEED = envValue;
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
 
-    await globalSetup();
+      await globalSetup();
 
-    expect(mockedApplyFixtures).not.toHaveBeenCalled();
-    expect(logSpy).toHaveBeenCalledWith(
-      '[multi-tenant-seed] SKIP_MULTI_TENANT_SEED=true detected, skipping fixture application.',
-    );
+      expect(mockedApplyFixtures).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalledWith(
+        `[multi-tenant-seed] SKIP_MULTI_TENANT_SEED=${expectedLoggedValue} detected, skipping fixture application.`,
+      );
 
-    logSpy.mockRestore();
-  });
+      logSpy.mockRestore();
+    },
+  );
 
   it('warns and skips when DATABASE_URL is missing', async () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);

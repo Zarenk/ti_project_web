@@ -6,6 +6,32 @@ type PrismaConnectionError = {
   message?: string;
 };
 
+const TRUTHY_SKIP_FLAG_VALUES = new Set([
+  '1',
+  'true',
+  'yes',
+  'on',
+  'y',
+  't',
+]);
+
+function normalizeSkipMultiTenantSeed(flag?: string | null): string | null {
+  if (flag == null) {
+    return null;
+  }
+
+  const normalized = flag.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  return TRUTHY_SKIP_FLAG_VALUES.has(normalized) ? normalized : null;
+}
+
+export function shouldSkipMultiTenantSeed(flag?: string | null): boolean {
+  return normalizeSkipMultiTenantSeed(flag) !== null;
+}
+
 export function isRecoverablePrismaConnectionError(
   error: unknown,
 ): error is PrismaConnectionError {
@@ -33,9 +59,13 @@ export function isRecoverablePrismaConnectionError(
 }
 
 export default async function globalSetup(): Promise<void> {
-  if (process.env.SKIP_MULTI_TENANT_SEED === 'true') {
+  const normalizedSkipFlag = normalizeSkipMultiTenantSeed(
+    process.env.SKIP_MULTI_TENANT_SEED,
+  );
+
+  if (normalizedSkipFlag) {
     console.log(
-      '[multi-tenant-seed] SKIP_MULTI_TENANT_SEED=true detected, skipping fixture application.',
+      `[multi-tenant-seed] SKIP_MULTI_TENANT_SEED=${normalizedSkipFlag} detected, skipping fixture application.`,
     );
     return;
   }
@@ -65,7 +95,7 @@ export default async function globalSetup(): Promise<void> {
         `[multi-tenant-seed] Summary file available at ${summary.summaryFilePath}.`,
       );
     }
-    
+
   } catch (error) {
     if (isRecoverablePrismaConnectionError(error)) {
       const details = error instanceof Error ? error.message : String(error);
