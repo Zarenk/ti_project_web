@@ -396,7 +396,11 @@ export class InventoryService {
   //
 
   // Obtener el stock de un producto en una tienda específica
-  async getSeriesByProductAndStore(storeId: number, productId: number) {
+  async getSeriesByProductAndStore(
+    storeId: number,
+    productId: number,
+    organizationId?: number | null,
+  ) {
     // Busca las series asociadas al producto en la tienda seleccionada
     const series = await this.prisma.entryDetailSeries.findMany({
       where: {
@@ -404,9 +408,12 @@ export class InventoryService {
           productId,
           entry: {
             storeId,
+            ...(organizationId !== undefined
+              ? { organizationId: organizationId ?? null }
+              : {}),
           },
         },
-        status: 'active', // Filtrar solo series activas     
+        status: 'active', // Filtrar solo series activas
       },
       select: {
         serial: true, // Devuelve solo los números de serie
@@ -417,8 +424,14 @@ export class InventoryService {
   }
 
   // Obtener el inventario con detalles de entradas y tiendas
-  async getInventoryWithEntries() {
+  async getInventoryWithEntries(organizationId?: number | null) {
+    const where: Prisma.InventoryWhereInput = {};
+
+    if (organizationId !== undefined) {
+      where.organizationId = organizationId ?? null;
+    }
     return this.prisma.inventory.findMany({
+      where,
       include: {
         product: {
           include: {
@@ -442,8 +455,10 @@ export class InventoryService {
   }
 
   // Obtener el inventario con desglose por moneda y tienda
-  async calculateInventoryWithCurrencyByStore() {
-    const inventory = await this.getInventoryWithEntries();
+  async calculateInventoryWithCurrencyByStore(
+    organizationId?: number | null,
+  ) {
+    const inventory = await this.getInventoryWithEntries(organizationId);
   
     return inventory.map((item) => {
       // Agrupar los detalles de entrada por tienda
@@ -482,8 +497,8 @@ export class InventoryService {
   }
 
   // Obtener el inventario con desglose por moneda
-  async getStockDetailsByStoreAndCurrency() {
-    const inventory = await this.getInventoryWithEntries();
+  async getStockDetailsByStoreAndCurrency(organizationId?: number | null) {
+    const inventory = await this.getInventoryWithEntries(organizationId);
   
     // Agrupar los detalles por producto
     const groupedDetails = inventory.reduce((acc: any, item) => {
@@ -551,10 +566,21 @@ export class InventoryService {
   }
   
   // Obtener las entradas de un producto específico
-  async getProductEntries(productId: number) {
+  async getProductEntries(
+    productId: number,
+    organizationId?: number | null,
+  ) {
+    const entryWhere: Prisma.EntryDetailWhereInput = {
+      productId,
+      entry: {
+        ...(organizationId !== undefined
+          ? { organizationId: organizationId ?? null }
+          : {}),
+      },
+    };
     // Obtener todas las entradas del producto
     const entries = await this.prisma.entryDetail.findMany({
-      where: { productId },
+      where: entryWhere,
       select: {
         createdAt: true, // Fecha de la entrada
         price: true, // Precio de compra
@@ -596,9 +622,17 @@ export class InventoryService {
   }
 
   // Obtener el producto por ID de StoreOnInventory y Inventory
-  async getProductByInventoryId(inventoryId: number) {
-    const inventory = await this.prisma.inventory.findUnique({
-      where: { id: inventoryId },
+  async getProductByInventoryId(
+    inventoryId: number,
+    organizationId?: number | null,
+  ) {
+    const inventory = await this.prisma.inventory.findFirst({
+      where: {
+        id: inventoryId,
+        ...(organizationId !== undefined
+          ? { organizationId: organizationId ?? null }
+          : {}),
+      },
       include: {
         product: true, // Incluye la relación con el producto
       },
@@ -616,9 +650,16 @@ export class InventoryService {
   //
 
    // Obtener las salidas de un producto específico
-  async getProductSales(productId: number) {
+  async getProductSales(productId: number, organizationId?: number | null) {
     const sales = await this.prisma.salesDetail.findMany({
-      where: { productId },
+      where: {
+        productId,
+        sale: {
+          ...(organizationId !== undefined
+            ? { organizationId: organizationId ?? null }
+            : {}),
+        },
+      },
       include: {
         sale: {
           include: {
@@ -640,11 +681,16 @@ export class InventoryService {
     }));
   }
 
-  async getCategoriesFromInventory() {
+  async getCategoriesFromInventory(organizationId?: number | null) {
+    const inventoryFilter: Prisma.InventoryWhereInput = {};
+
+    if (organizationId !== undefined) {
+      inventoryFilter.organizationId = organizationId ?? null;
+    }
     const productsWithCategories = await this.prisma.product.findMany({
       where: {
         inventory: {
-          some: {}, // Asegurarse de que el producto esté en el inventario
+          some: inventoryFilter, // Asegurarse de que el producto esté en el inventario
         },
       },
       select: {
@@ -671,8 +717,14 @@ export class InventoryService {
   }
 
   // Nuevo método para obtener el inventario total agrupado por nombre
-  async getTotalInventoryByName() {
+  async getTotalInventoryByName(organizationId?: number | null) {
+    const where: Prisma.InventoryWhereInput = {};
+
+    if (organizationId !== undefined) {
+      where.organizationId = organizationId ?? null;
+    }
     const inventory = await this.prisma.inventory.findMany({
+      where,
       include: {
         product: true, // Incluye información del producto
         storeOnInventory: true, // Incluye información de las tiendas
@@ -703,8 +755,15 @@ export class InventoryService {
     return Object.values(groupedInventory);
   }
 
-  async getProductsWithLowStockAcrossStores() {
+  async getProductsWithLowStockAcrossStores(organizationId?: number | null) {
+    const where: Prisma.InventoryWhereInput = {};
+
+    if (organizationId !== undefined) {
+      where.organizationId = organizationId ?? null;
+    }
+
     const inventories = await this.prisma.inventory.findMany({
+      where,
       include: {
         product: true,
         storeOnInventory: true,
@@ -746,18 +805,41 @@ export class InventoryService {
     return Array.from(groupedByProduct.values()).filter(item => item.totalStock <= 0);
   }
 
-  async getProductsByStore(storeId: number, categoryId?: number, search?: string) {
-    const categoryFilter = categoryId ? { categoryId } : {};
+  async getProductsByStore(
+    storeId: number,
+    categoryId?: number,
+    search?: string,
+    organizationId?: number | null,
+  ) {
+    const categoryFilter: Prisma.ProductWhereInput = categoryId
+      ? { categoryId }
+      : {};
+
+    if (search) {
+      categoryFilter.name = {
+        contains: search,
+        mode: 'insensitive',
+      };
+    }
+
+    const inventoryFilter: Prisma.InventoryWhereInput = {
+      product: categoryFilter,
+    };
+
+    if (organizationId !== undefined) {
+      inventoryFilter.organizationId = organizationId ?? null;
+    }
   
     return this.prisma.storeOnInventory.findMany({
       where: {
         storeId,
+        ...(organizationId !== undefined
+          ? { store: { organizationId: organizationId ?? null } }
+          : {}),
         stock: {
           gt: 0, // Solo productos con stock > 0
         },
-        inventory: {
-          product: categoryFilter,
-        },
+        inventory: inventoryFilter,
       },
       include: {
         inventory: {
@@ -788,15 +870,30 @@ export class InventoryService {
     });
   }
 
-  async getAllProductsByStore(storeId: number, categoryId?: number) {
-    const categoryFilter = categoryId ? { categoryId } : {};
+  async getAllProductsByStore(
+    storeId: number,
+    categoryId?: number,
+    organizationId?: number | null,
+  ) {
+    const categoryFilter: Prisma.ProductWhereInput = categoryId
+      ? { categoryId }
+      : {};
+
+    const inventoryFilter: Prisma.InventoryWhereInput = {
+      product: categoryFilter,
+    };
+
+    if (organizationId !== undefined) {
+      inventoryFilter.organizationId = organizationId ?? null;
+    }
   
     return this.prisma.storeOnInventory.findMany({
       where: {
         storeId,
-        inventory: {
-          product: categoryFilter,
-        },
+        ...(organizationId !== undefined
+          ? { store: { organizationId: organizationId ?? null } }
+          : {}),
+        inventory: inventoryFilter,
       },
       include: {
         inventory: {

@@ -17,11 +17,13 @@ type InventoryPrismaMock = {
   };
   storeOnInventory: {
     findFirst: jest.Mock;
+    findMany: jest.Mock;
     update: jest.Mock;
     create: jest.Mock;
   };
   inventory: {
     findFirst: jest.Mock;
+    findMany: jest.Mock;
     create: jest.Mock;
   };
   transfer: {
@@ -60,6 +62,9 @@ type InventoryPrismaMock = {
     findFirst: jest.Mock;
     create: jest.Mock;
   };
+  salesDetail: {
+    findMany: jest.Mock;
+  };
 };
 
 describe('InventoryService multi-organization support', () => {
@@ -74,11 +79,13 @@ describe('InventoryService multi-organization support', () => {
       product: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
       storeOnInventory: {
         findFirst: jest.fn(),
+        findMany: jest.fn(),
         update: jest.fn(),
         create: jest.fn(),
       },
       inventory: {
         findFirst: jest.fn(),
+        findMany: jest.fn(),
         create: jest.fn(),
       },
       transfer: {
@@ -117,6 +124,9 @@ describe('InventoryService multi-organization support', () => {
         findFirst: jest.fn(),
         create: jest.fn(),
       },
+      salesDetail: {
+        findMany: jest.fn(),
+      },
     };
 
     activityService = {
@@ -151,12 +161,15 @@ describe('InventoryService multi-organization support', () => {
     prisma.provider.create.mockResolvedValue({ id: 404, name: 'Provider' });
     prisma.tipoCambio.findFirst.mockResolvedValue(null);
     prisma.inventory.create.mockResolvedValue({ id: 202, productId: 101 });
+    prisma.inventory.findMany.mockResolvedValue([]);
     prisma.storeOnInventory.create.mockResolvedValue({ id: 303, stock: 0 });
+    prisma.storeOnInventory.findMany.mockResolvedValue([]);
     prisma.entry.create.mockResolvedValue({ id: 505 });
     prisma.entryDetail.create.mockResolvedValue({ id: 606 });
     prisma.entryDetail.findMany.mockResolvedValue([]);
     prisma.entryDetailSeries.findFirst.mockResolvedValue(null);
     prisma.entryDetailSeries.create.mockResolvedValue({ id: 707 });
+    prisma.salesDetail.findMany.mockResolvedValue([]);
 
     logOrganizationContextMock =
       logOrganizationContext as unknown as jest.Mock;
@@ -428,4 +441,92 @@ describe('InventoryService multi-organization support', () => {
       );
     });
   });
+
+  it('filters getInventoryWithEntries by organization when provided', async () => {
+    prisma.inventory.findMany.mockResolvedValueOnce([]);
+
+    await service.getInventoryWithEntries(987);
+
+    expect(prisma.inventory.findMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: { organizationId: 987 },
+      }),
+    );
+
+    prisma.inventory.findMany.mockResolvedValueOnce([]);
+
+    await service.getInventoryWithEntries(null);
+
+    expect(prisma.inventory.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { organizationId: null },
+      }),
+    );
+  });
+
+  it('filters store products by organization when provided', async () => {
+    prisma.storeOnInventory.findMany.mockResolvedValue([]);
+
+    await service.getProductsByStore(99, undefined, undefined, 55);
+
+    expect(prisma.storeOnInventory.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          storeId: 99,
+          store: { organizationId: 55 },
+          inventory: expect.objectContaining({ organizationId: 55 }),
+        }),
+      }),
+    );
+  });
+
+  it('filters product entries by organization when provided', async () => {
+    prisma.entryDetail.findMany.mockResolvedValue([]);
+
+    await service.getProductEntries(44, 12);
+
+    expect(prisma.entryDetail.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          productId: 44,
+          entry: expect.objectContaining({ organizationId: 12 }),
+        }),
+      }),
+    );
+  });
+
+  it('filters inventory lookup by organization when requesting a product by inventory id', async () => {
+    prisma.inventory.findFirst.mockResolvedValue({
+      product: { id: 1, name: 'Widget' },
+    });
+
+    await service.getProductByInventoryId(200, 77);
+
+    expect(prisma.inventory.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 200,
+          organizationId: 77,
+        }),
+      }),
+    );
+  });
+
+  it('filters product sales by organization when provided', async () => {
+    prisma.salesDetail.findMany.mockResolvedValue([]);
+
+    await service.getProductSales(42, 88);
+
+    expect(prisma.salesDetail.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          productId: 42,
+          sale: expect.objectContaining({ organizationId: 88 }),
+        }),
+      }),
+    );
+  });
+  
 });
