@@ -1,5 +1,9 @@
 import { applyMultiTenantFixtures } from "prisma/seed/multi-tenant-fixtures.seed";
-import globalSetup from "./global-setup";
+import globalSetup, {
+  formatFixtureTotals,
+  isRecoverablePrismaConnectionError,
+  shouldSkipMultiTenantSeed,
+} from "./global-setup";
 
 jest.mock("prisma/seed/multi-tenant-fixtures.seed", () => ({
   applyMultiTenantFixtures: jest.fn(),
@@ -113,6 +117,9 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
     expect(logSpy).toHaveBeenCalledWith(
       '[multi-tenant-seed] Processed organizations: tenant-alpha',
     );
+    expect(logSpy).toHaveBeenCalledWith(
+      '[multi-tenant-seed] Fixture totals => organizations: 1, units: 2, stores: 1, providers: 1, users: 2, clients: 1, memberships: 2, products: 1, inventories: 1, storeOnInventories: 1, inventoryHistories: 1.',
+    );
 
     logSpy.mockRestore();
   });
@@ -149,6 +156,9 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
     expect(logSpy).toHaveBeenCalledWith(
       '[multi-tenant-seed] Summary file available at ./tmp/fixtures-summary.json.',
     );
+    expect(logSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Fixture totals =>'),
+    );
 
     logSpy.mockRestore();
   });
@@ -182,5 +192,78 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
     delete process.env.SKIP_MULTI_TENANT_SEED;
     delete process.env.DATABASE_URL;
     delete process.env.MULTI_TENANT_FIXTURES_SUMMARY_PATH;
+  });
+});
+
+describe('shouldSkipMultiTenantSeed', () => {
+  it('returns false when flag is undefined or empty', () => {
+    expect(shouldSkipMultiTenantSeed(undefined)).toBe(false);
+    expect(shouldSkipMultiTenantSeed(null)).toBe(false);
+    expect(shouldSkipMultiTenantSeed('')).toBe(false);
+    expect(shouldSkipMultiTenantSeed('   ')).toBe(false);
+  });
+
+  it('returns true for any supported truthy value regardless of case and spacing', () => {
+    const truthyValues = ['true', 'TRUE', '  TrUe  ', '1', 'yes', 'YES', 'on', 'ON', ' y ', 'T'];
+    for (const value of truthyValues) {
+      expect(shouldSkipMultiTenantSeed(value)).toBe(true);
+    }
+  });
+
+  it('returns false for any other value', () => {
+    ['false', '0', 'no', 'off', 'skip', 'apply'].forEach((value) => {
+      expect(shouldSkipMultiTenantSeed(value)).toBe(false);
+    });
+  });
+});
+
+describe('isRecoverablePrismaConnectionError', () => {
+  it('returns true when Prisma error codes indicate connectivity issues', () => {
+    expect(isRecoverablePrismaConnectionError({ errorCode: 'P1001' })).toBe(true);
+    expect(isRecoverablePrismaConnectionError({ code: 'P1001' })).toBe(true);
+    expect(
+      isRecoverablePrismaConnectionError(new Error("Can't reach database server")),
+    ).toBe(true);
+  });
+
+  it('returns true when error message hints connectivity problems even without Prisma code', () => {
+    const cases = [
+      new Error('ECONNREFUSED connection attempt failed'),
+      new Error('Timed out waiting for database'),
+      new Error('Failed to connect to postgres instance'),
+    ];
+
+    for (const error of cases) {
+      expect(isRecoverablePrismaConnectionError(error)).toBe(true);
+    }
+  });
+
+  it('returns false for unrelated errors', () => {
+    expect(isRecoverablePrismaConnectionError(new Error('Validation failed'))).toBe(
+      false,
+    );
+    expect(isRecoverablePrismaConnectionError({})).toBe(false);
+    expect(isRecoverablePrismaConnectionError(null)).toBe(false);
+    expect(isRecoverablePrismaConnectionError(undefined)).toBe(false);
+  });
+});
+
+describe('formatFixtureTotals', () => {
+  it('returns null when totals are undefined, null or empty', () => {
+    expect(formatFixtureTotals(undefined)).toBeNull();
+    expect(formatFixtureTotals(null)).toBeNull();
+    expect(formatFixtureTotals({})).toBeNull();
+    expect(formatFixtureTotals({ organizations: 0, users: 0 })).toBeNull();
+  });
+
+  it('formats totals by skipping zero or non-positive values', () => {
+    const formatted = formatFixtureTotals({
+      organizations: 2,
+      users: 5,
+      clients: 0,
+      stores: -1,
+    });
+
+    expect(formatted).toBe('organizations: 2, users: 5');
   });
 });

@@ -6,6 +6,8 @@ type PrismaConnectionError = {
   message?: string;
 };
 
+type FixtureTotals = Record<string, number>;
+
 const TRUTHY_SKIP_FLAG_VALUES = new Set([
   '1',
   'true',
@@ -50,12 +52,29 @@ export function isRecoverablePrismaConnectionError(
     return (
       normalizedMessage.includes("can't reach database server") ||
       normalizedMessage.includes('econnrefused') ||
+      normalizedMessage.includes('timed out') ||
       normalizedMessage.includes('timeout') ||
       normalizedMessage.includes('failed to connect')
     );
   }
 
   return false;
+}
+
+export function formatFixtureTotals(totals?: FixtureTotals | null): string | null {
+  if (!totals) {
+    return null;
+  }
+
+  const formattedEntries = Object.entries(totals)
+    .filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value > 0)
+    .map(([entity, value]) => `${entity}: ${value}`);
+
+  if (formattedEntries.length === 0) {
+    return null;
+  }
+
+  return formattedEntries.join(', ');
 }
 
 export default async function globalSetup(): Promise<void> {
@@ -89,6 +108,11 @@ export default async function globalSetup(): Promise<void> {
         .map((organization) => organization.code)
         .join(', ')}`,
     );
+
+    const formattedTotals = formatFixtureTotals(summary.totals);
+    if (formattedTotals) {
+      console.log(`[multi-tenant-seed] Fixture totals => ${formattedTotals}.`);
+    }
 
     if (summary.summaryFilePath) {
       console.log(
