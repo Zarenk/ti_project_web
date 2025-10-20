@@ -264,6 +264,10 @@ const seedOrganizations: OrganizationFixture[] = [
   },
 ];
 
+const FIXTURE_ORGANIZATION_CODES = new Set(
+  seedOrganizations.map((organization) => organization.code),
+);
+
 async function ensureCategories(
   prisma: PrismaSeedClient,
   fixtures: OrganizationFixture[],
@@ -633,6 +637,8 @@ type ApplyFixturesOptions = {
   prisma?: PrismaSeedClient;
   logger?: (message: string) => void;
   summaryPath?: string;
+  onlyOrganizations?: string[];
+  skipOrganizations?: string[];
 };
 
 async function persistFixtureSummaryToFile(
@@ -685,6 +691,54 @@ function computeTotals(summaries: OrganizationFixtureSummary[]): FixtureTotals {
   return totals;
 }
 
+function normalizeOrganizationCodes(codes?: string[]): string[] {
+  if (!codes || codes.length === 0) {
+    return [];
+  }
+
+  const unique: string[] = [];
+  for (const code of codes) {
+    const trimmed = code.trim();
+    if (!trimmed.length) {
+      continue;
+    }
+    if (!unique.includes(trimmed)) {
+      unique.push(trimmed);
+    }
+  }
+
+  return unique;
+}
+
+function validateOrganizationCodes(codes: string[], source: string) {
+  for (const code of codes) {
+    if (!FIXTURE_ORGANIZATION_CODES.has(code)) {
+      throw new Error(
+        `[multi-tenant-seed] Unknown organization code provided in ${source}: ${code}`,
+      );
+    }
+  }
+}
+
+function filterOrganizations(
+  onlyOrganizations: string[],
+  skipOrganizations: string[],
+) {
+  const hasFilters = onlyOrganizations.length > 0 || skipOrganizations.length > 0;
+  const effectiveOnly =
+    onlyOrganizations.length > 0
+      ? new Set(onlyOrganizations)
+      : new Set(FIXTURE_ORGANIZATION_CODES);
+  const skipSet = new Set(skipOrganizations);
+
+  const selected = seedOrganizations.filter(
+    (organization) =>
+      effectiveOnly.has(organization.code) && !skipSet.has(organization.code),
+  );
+
+  return { selected, hasFilters } as const;
+}
+
 export async function applyMultiTenantFixtures(
   options: ApplyFixturesOptions = {},
 ): Promise<MultiTenantFixtureSummary> {
@@ -693,9 +747,45 @@ export async function applyMultiTenantFixtures(
   const shouldDisconnect = !options.prisma;
 
   try {
-    const categories = await ensureCategories(prisma, seedOrganizations);
+    const onlyOrganizations = normalizeOrganizationCodes(options.onlyOrganizations);
+    const skipOrganizations = normalizeOrganizationCodes(options.skipOrganizations);
+
+    validateOrganizationCodes(onlyOrganizations, 'onlyOrganizations');
+    validateOrganizationCodes(skipOrganizations, 'skipOrganizations');
+
+    const { selected, hasFilters } = filterOrganizations(
+      onlyOrganizations,
+      skipOrganizations,
+    );
+
+    if (selected.length === 0) {
+      if (hasFilters) {
+        logger('[multi-tenant-seed] No organizations matched the provided filters.');
+      }
+
+      const emptySummary: MultiTenantFixtureSummary = {
+        processedAt: new Date().toISOString(),
+        organizations: [],
+        totals: computeTotals([]),
+      };
+
+      if (options.summaryPath) {
+        const persisted = await persistFixtureSummaryToFile(
+          options.summaryPath,
+          emptySummary,
+          logger,
+        );
+        if (persisted) {
+          emptySummary.summaryFilePath = options.summaryPath;
+        }
+      }
+
+      return emptySummary;
+    }
+
+    const categories = await ensureCategories(prisma, selected);
     const organizationSummaries: OrganizationFixtureSummary[] = [];
-    for (const organization of seedOrganizations) {
+    for (const organization of selected) {
       const summary = await ensureOrganization(
         prisma,
         organization,
@@ -733,9 +823,11 @@ export async function applyMultiTenantFixtures(
 
 type FixtureCliOptions = {
   summaryPath?: string;
+  onlyOrganizations?: string[];
+  skipOrganizations?: string[];
 };
 
-function parseSummaryFlagValue(
+function parseFlagValue(
   argv: string[],
   index: number,
   flag: string,
@@ -760,6 +852,44 @@ const SUMMARY_PATH_FLAGS = new Set([
   '--summaryFile',
 ]);
 
+const ONLY_ORGANIZATION_FLAGS = new Set([
+  '--only',
+  '--only-organizations',
+  '--onlyOrganizations',
+]);
+
+const SKIP_ORGANIZATION_FLAGS = new Set([
+  '--skip',
+  '--skip-organizations',
+  '--skipOrganizations',
+]);
+
+function parseOrganizationList(value: string | undefined, flag: string): string[] {
+  if (!value) {
+    throw new Error(`[multi-tenant-seed] Missing value for ${flag}.`);
+  }
+
+  const codes = value
+    .split(',')
+    .map((code) => code.trim())
+    .filter((code) => code.length > 0);
+
+  if (!codes.length) {
+    throw new Error(
+      `[multi-tenant-seed] ${flag} requires at least one organization code.`,
+    );
+  }
+
+  const unique: string[] = [];
+  for (const code of codes) {
+    if (!unique.includes(code)) {
+      unique.push(code);
+    }
+  }
+
+  return unique;
+}
+
 export function parseFixtureCliArgs(argv: string[]): FixtureCliOptions {
   const options: FixtureCliOptions = {};
 
@@ -768,13 +898,32 @@ export function parseFixtureCliArgs(argv: string[]): FixtureCliOptions {
 
     const [flagName] = arg.split('=');
     if (SUMMARY_PATH_FLAGS.has(flagName)) {
-      const { value, nextIndex } = parseSummaryFlagValue(argv, index, arg);
+      const { value, nextIndex } = parseFlagValue(argv, index, arg);
       options.summaryPath = value;
       if (!arg.includes('=')) {
         index = nextIndex;
       }
       continue;
     }
+
+    if (ONLY_ORGANIZATION_FLAGS.has(flagName)) {
+      const { value, nextIndex } = parseFlagValue(argv, index, arg);
+      options.onlyOrganizations = parseOrganizationList(value, flagName);
+      if (!arg.includes('=')) {
+        index = nextIndex;
+      }
+      continue;
+    }
+
+    if (SKIP_ORGANIZATION_FLAGS.has(flagName)) {
+      const { value, nextIndex } = parseFlagValue(argv, index, arg);
+      options.skipOrganizations = parseOrganizationList(value, flagName);
+      if (!arg.includes('=')) {
+        index = nextIndex;
+      }
+      continue;
+    }
+
   }
 
   return options;
@@ -782,7 +931,11 @@ export function parseFixtureCliArgs(argv: string[]): FixtureCliOptions {
 
 if (require.main === module) {
   const cliOptions = parseFixtureCliArgs(process.argv.slice(2));
-  applyMultiTenantFixtures({ summaryPath: cliOptions.summaryPath })
+  applyMultiTenantFixtures({
+    summaryPath: cliOptions.summaryPath,
+    onlyOrganizations: cliOptions.onlyOrganizations,
+    skipOrganizations: cliOptions.skipOrganizations,
+  })
     .then((summary) => {
       if (cliOptions.summaryPath && summary.summaryFilePath) {
         console.log(

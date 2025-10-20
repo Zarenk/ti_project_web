@@ -319,4 +319,81 @@ describe('applyMultiTenantFixtures', () => {
     );
     expect(summary.summaryFilePath).toBe('./tmp/fixtures-summary.json');
   });
+
+  it('allows restricting fixtures to a subset of organizations', async () => {
+    const prisma = buildMockPrisma();
+    const logger = jest.fn();
+
+    const summary = await applyMultiTenantFixtures({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      onlyOrganizations: ['tenant-alpha'],
+    });
+
+    expect(summary.totals.organizations).toBe(1);
+    expect(summary.organizations.map((item) => item.code)).toEqual([
+      'tenant-alpha',
+    ]);
+
+    const organizationCalls = prisma.organization.upsert.mock.calls.map(
+      ([args]) => args,
+    );
+    expect(organizationCalls).toHaveLength(1);
+    expect(organizationCalls[0].where.code).toBe('tenant-alpha');
+
+    expect(logger).toHaveBeenCalledWith(
+      'Multi-tenant fixtures ensured for 1 organization(s).',
+    );
+    expect(logger).toHaveBeenCalledWith('Fixture applied for organization tenant-alpha');
+    expect(logger).not.toHaveBeenCalledWith(
+      'Fixture applied for organization tenant-beta',
+    );
+  });
+
+  it('skips organizations listed in skipOrganizations', async () => {
+    const prisma = buildMockPrisma();
+    const logger = jest.fn();
+
+    const summary = await applyMultiTenantFixtures({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      skipOrganizations: ['tenant-beta'],
+    });
+
+    expect(summary.totals.organizations).toBe(1);
+    expect(summary.organizations.map((item) => item.code)).toEqual([
+      'tenant-alpha',
+    ]);
+    expect(logger).toHaveBeenCalledWith(
+      'Multi-tenant fixtures ensured for 1 organization(s).',
+    );
+  });
+
+  it('throws when filtering with an unknown organization code', async () => {
+    const prisma = buildMockPrisma();
+
+    await expect(
+      applyMultiTenantFixtures({
+        prisma: prisma as unknown as PrismaClient,
+        onlyOrganizations: ['tenant-gamma'],
+      }),
+    ).rejects.toThrow(/Unknown organization code/);
+  });
+
+  it('returns an empty summary when filters exclude all organizations', async () => {
+    const prisma = buildMockPrisma();
+    const logger = jest.fn();
+
+    const summary = await applyMultiTenantFixtures({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      skipOrganizations: ['tenant-alpha', 'tenant-beta'],
+    });
+
+    expect(summary.totals.organizations).toBe(0);
+    expect(summary.organizations).toEqual([]);
+    expect(logger).toHaveBeenCalledWith(
+      '[multi-tenant-seed] No organizations matched the provided filters.',
+    );
+  });
 });

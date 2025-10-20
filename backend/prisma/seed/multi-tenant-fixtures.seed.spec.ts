@@ -51,4 +51,23 @@ describe('parseFixtureCliArgs', () => {
   it('returns an empty object when no flags are provided', () => {
     expect(parseFixtureCliArgs([])).toEqual({});
   });
+
+  it('parses --only-organizations list', () => {
+    expect(
+      parseFixtureCliArgs(['--only-organizations=tenant-alpha,tenant-beta'])
+        .onlyOrganizations,
+    ).toEqual(['tenant-alpha', 'tenant-beta']);
+  });
+
+  it('parses --skip-organizations with separated value', () => {
+    expect(
+      parseFixtureCliArgs(['--skip-organizations', 'tenant-beta']).skipOrganizations,
+    ).toEqual(['tenant-beta']);
+  });
+
+  it('throws when organization filters miss a value', () => {
+    expect(() => parseFixtureCliArgs(['--only-organizations'])).toThrow(
+      /Missing value for --only-organizations/,
+    );
+  });
 });
