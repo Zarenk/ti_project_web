@@ -234,6 +234,7 @@ describe('populateMissingOrganizationIds', () => {
     expect(summary.generatedAt).toEqual(expect.any(String));
     expect(summary.summaryFilePath).toBe('./tmp/populate-summary.json');
     expect(summary.overall.durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.overall.chunks).toBe(13);
     expect(summary.overall.planned).toBe(13);
     expect(summary.overall.updated).toBe(13);
     expect(summary.overall.reasons).toEqual({
@@ -311,18 +312,31 @@ describe('populateMissingOrganizationIds', () => {
     });
 
     expect(summary.processed.store.updated).toBe(1);
+    expect(summary.processed.store.chunks).toBe(1);
     expect(summary.processed['cash-register'].updated).toBe(1);
+    expect(summary.processed['cash-register'].chunks).toBe(1);
     expect(summary.processed.user.updated).toBe(1);
+    expect(summary.processed.user.chunks).toBe(1);
     expect(summary.processed.client.updated).toBe(1);
+    expect(summary.processed.client.chunks).toBe(1);
     expect(summary.processed.inventory.updated).toBe(1);
+    expect(summary.processed.inventory.chunks).toBe(1);
     expect(summary.processed['inventory-history'].updated).toBe(1);
+    expect(summary.processed['inventory-history'].chunks).toBe(1);
     expect(summary.processed.entry.updated).toBe(1);
+    expect(summary.processed.entry.chunks).toBe(1);
     expect(summary.processed.provider.updated).toBe(1);
+    expect(summary.processed.provider.chunks).toBe(1);
     expect(summary.processed.sales.updated).toBe(1);
+    expect(summary.processed.sales.chunks).toBe(1);
     expect(summary.processed.transfer.updated).toBe(1);
+    expect(summary.processed.transfer.chunks).toBe(1);
     expect(summary.processed.orders.updated).toBe(1);
+    expect(summary.processed.orders.chunks).toBe(1);
     expect(summary.processed['cash-transaction'].updated).toBe(1);
+    expect(summary.processed['cash-transaction'].chunks).toBe(1);
     expect(summary.processed['cash-closure'].updated).toBe(1);
+    expect(summary.processed['cash-closure'].chunks).toBe(1);
     expect(summary.processed.store.durationMs).toBeGreaterThanOrEqual(0);
     expect(summary.processed['cash-register'].durationMs).toBeGreaterThanOrEqual(0);
     expect(summary.processed.user.durationMs).toBeGreaterThanOrEqual(0);
@@ -358,6 +372,7 @@ describe('populateMissingOrganizationIds', () => {
     });
 
     expect(summary.processed.store.updated).toBe(3);
+    expect(summary.processed.store.chunks).toBe(2);
     expect(logger.info).toHaveBeenCalledWith(
       '[populate-org] store: chunk 1/2 updated 2 records.',
     );
@@ -368,6 +383,9 @@ describe('populateMissingOrganizationIds', () => {
       expect.stringContaining(
         '[populate-org] store: updated 3 records (fallback:default-organization=3) in ',
       ),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('across 2 chunk(s).'),
     );
   });
 
@@ -403,13 +421,21 @@ describe('populateMissingOrganizationIds', () => {
     });
 
     expect(summary.processed.store.updated).toBe(0);
+    expect(summary.processed.store.chunks).toBe(1);
     expect(prisma.store.update).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(mockedMkdir).not.toHaveBeenCalled();
     expect(mockedWriteFile).not.toHaveBeenCalled();
     expect(summary.overall.planned).toBe(13);
     expect(summary.overall.updated).toBe(0);
+    expect(summary.overall.chunks).toBe(13);
     expect(summary.overall.reasons['fallback:default-organization']).toBe(1);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('dry-run active'),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('across 1 chunk(s).'),
+    );
   });
 
   it('allows filtering the entities to process', async () => {

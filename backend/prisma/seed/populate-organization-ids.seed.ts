@@ -46,6 +46,7 @@ type EntitySummary = {
   updated: number;
   reasons: Record<string, number>;
   durationMs: number;
+  chunks: number;
 };
 
 type PopulateSummary = {
@@ -89,7 +90,7 @@ async function persistSummaryToFile(
 }
 
 function createEmptyEntitySummary(): EntitySummary {
-  return { planned: 0, updated: 0, reasons: {}, durationMs: 0 };
+  return { planned: 0, updated: 0, reasons: {}, durationMs: 0, chunks: 0 };
 }
 
 function isPopulateEntityKey(value: string): value is PopulateEntityKey {
@@ -148,13 +149,14 @@ async function executePlan(
     updated: 0,
     reasons: countReasons(plans),
     durationMs: 0,
+    chunks: 0,
   };
   const startedAt = Date.now();
 
   if (!plans.length) {
     summary.durationMs = Date.now() - startedAt;
     context.logger.info(
-      `[populate-org] ${entity}: no pending records (durationMs=${summary.durationMs}).`,
+      `[populate-org] ${entity}: no pending records (durationMs=${summary.durationMs}, chunks=0).`,
     );
     return summary;
   }
@@ -162,14 +164,17 @@ async function executePlan(
   const reasonDescription = formatReasonCounts(summary.reasons);
 
   if (context.dryRun) {
+    const chunkCount = chunkArray(plans, context.chunkSize).length;
+    summary.chunks = chunkCount;
     summary.durationMs = Date.now() - startedAt;
     context.logger.info(
-      `[populate-org] ${entity}: dry-run active, ${plans.length} records would be updated (${reasonDescription}) in ${summary.durationMs}ms.`,
+      `[populate-org] ${entity}: dry-run active, ${plans.length} records would be updated (${reasonDescription}) in ${summary.durationMs}ms across ${chunkCount} chunk(s).`,
     );
     return summary;
   }
 
   const chunks = chunkArray(plans, context.chunkSize);
+  summary.chunks = chunks.length;
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = chunks[index];
     await executor(chunk);
@@ -182,7 +187,7 @@ async function executePlan(
   summary.durationMs = Date.now() - startedAt;
 
   context.logger.info(
-    `[populate-org] ${entity}: updated ${summary.updated} records (${reasonDescription}) in ${summary.durationMs}ms.`,
+    `[populate-org] ${entity}: updated ${summary.updated} records (${reasonDescription}) in ${summary.durationMs}ms across ${summary.chunks} chunk(s).`,
   );
 
   return summary;
@@ -814,15 +819,16 @@ export async function populateMissingOrganizationIds(
         const entitySummary = processed[entity];
         overall.planned += entitySummary.planned;
         overall.updated += entitySummary.updated;
+        overall.chunks += entitySummary.chunks;
         mergeReasonCounts(overall.reasons, entitySummary.reasons);
         overall.durationMs += entitySummary.durationMs;
         logger.info(
-          `[populate-org] Summary ${entity}: planned=${entitySummary.planned}, updated=${entitySummary.updated}, reasons=${formatReasonCounts(entitySummary.reasons)}, durationMs=${entitySummary.durationMs}.`,
+          `[populate-org] Summary ${entity}: planned=${entitySummary.planned}, updated=${entitySummary.updated}, chunks=${entitySummary.chunks}, reasons=${formatReasonCounts(entitySummary.reasons)}, durationMs=${entitySummary.durationMs}.`,
         );
       }
 
       logger.info(
-        `[populate-org] Summary overall: planned=${overall.planned}, updated=${overall.updated}, reasons=${formatReasonCounts(overall.reasons)}, durationMs=${overall.durationMs}.`,
+        `[populate-org] Summary overall: planned=${overall.planned}, updated=${overall.updated}, chunks=${overall.chunks}, reasons=${formatReasonCounts(overall.reasons)}, durationMs=${overall.durationMs}.`,
       );
     }
 
@@ -1025,12 +1031,12 @@ if (require.main === module) {
         for (const entity of POPULATE_ENTITY_KEYS) {
           const stats = summary.processed[entity];
           console.info(
-            `[populate-org] ${entity}: planned=${stats.planned}, updated=${stats.updated}, reasons=${formatReasonCounts(stats.reasons)}.`,
+            `[populate-org] ${entity}: planned=${stats.planned}, updated=${stats.updated}, chunks=${stats.chunks}, reasons=${formatReasonCounts(stats.reasons)}.`,
           );
         }
 
         console.info(
-          `[populate-org] overall: planned=${summary.overall.planned}, updated=${summary.overall.updated}, reasons=${formatReasonCounts(summary.overall.reasons)}.`,
+          `[populate-org] overall: planned=${summary.overall.planned}, updated=${summary.overall.updated}, chunks=${summary.overall.chunks}, reasons=${formatReasonCounts(summary.overall.reasons)}.`,
         );
       })
       .catch((error) => {
