@@ -59,7 +59,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
    - Definición de reglas de asignación por tabla (fuentes, columnas puente, excepciones manuales).
    - Scripts idempotentes por dominio con logging y métricas de progreso.
    - Calendario de ejecución en producción con ventanas de mantenimiento y responsables.
-6. Coordinar la ejecución controlada de `npm run seed:populate-organization-ids` en staging, documentando resultados y métricas antes de habilitar la corrida en producción.
+6. Coordinar la ejecución controlada de `npm run seed:populate-organization-ids` en staging, documentando resultados y métricas antes de habilitar la corrida en producción. Utilizar `--summary-path=<ruta>` para generar un reporte JSON idempotente con los totales procesados.
 
 ## Detalle de próximas fases
 
@@ -398,6 +398,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Contexto:** Como seguimiento al _Paso 3_ de la Fase 2 y tras los últimos ajustes en fixtures multi-organización, se requería reconfirmar que el dominio de compras preserve la propagación opcional del `organizationId` antes de avanzar con las siguientes iteraciones del plan.
 - **Implementación:** Se corrió `npm test -- entries.service.spec.ts`, observando los _logs_ instrumentados que documentan los payloads recibidos por `createEntry` y las entidades generadas en Prisma para escenarios con `organizationId` explícito, heredado desde la tienda o ausente, además de la cobertura de búsquedas y eliminaciones parametrizadas por tenant.
 - **Resultado:** La batería registró `14 passed`, con evidencia de que las operaciones de alta, lectura y baja mantienen el identificador de organización correspondiente o `NULL` para flujos legacy, dejando habilitado continuar con la planificación de fixtures de integración/E2E multi-organización.
+
+### 2024-05-23 – Registro automatizado de resúmenes del seed multi-organización
+
+- **Contexto:** Para documentar métricas durante la ejecución controlada de `npm run seed:populate-organization-ids` (Fase 3), era necesario generar un reporte idempotente con los totales procesados por entidad sin depender de capturas manuales.
+- **Implementación:** Se añadió la bandera `--summary-path=<ruta>` al comando, persistiendo un JSON con el `organizationId` utilizado, el detalle por entidad y un sello temporal (`generatedAt`). El helper asegura la creación del directorio destino y registra advertencias si la escritura falla.
+- **Resultado:** Cada corrida del seed puede almacenar su resumen estructurado y reutilizable, habilitando la trazabilidad de métricas en staging y producción y simplificando la evidencia requerida por Operaciones y QA.
 
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
