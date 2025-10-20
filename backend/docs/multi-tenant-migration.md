@@ -387,6 +387,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se corrió `npm test -- populate-organization-ids.seed.spec.ts`, verificando los escenarios de propagación por herencia y `fallback`, el modo `--dryRun`, los filtros de entidades y la sobreescritura del código de organización por defecto, además del manejo de argumentos inválidos.
 - **Resultado:** La batería reportó `7 passed`, confirmando que las reglas de asignación funcionan según lo esperado y habilitando la siguiente etapa: ejecutar el seed en staging monitoreando métricas y trazas.
 
+### 2024-05-21 – Revalidación suite `InventoryService`
+
+- **Contexto:** Tras los ajustes recientes en fixtures multi-organización se solicitó confirmar que el dominio de inventario mantenga la propagación del `organizationId` antes de continuar con la fase de fixtures de integración/E2E.
+- **Implementación:** Se ejecutó `npm test -- src/inventory/inventory.service.spec.ts` en el entorno operativo de QA (Windows), verificando los escenarios parametrizados de transferencias, historiales, precios de compra y procesamiento de catálogos con `organizationId` explícito, heredado o nulo.
+- **Resultado:** La suite reportó `13 passed`, ratificando que las operaciones de inventario preservan el tenant en cada flujo y habilitando continuar con las próximas acciones del plan sin regresiones en este dominio.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
