@@ -54,6 +54,7 @@ type PopulateSummary = {
   processed: Record<PopulateEntityKey, EntitySummary>;
   generatedAt: string;
   summaryFilePath?: string;
+  overall: EntitySummary;
 };
 
 type PopulateContext = {
@@ -112,6 +113,16 @@ function countReasons(plans: UpdatePlan[]): Record<string, number> {
     accumulator[plan.reason] = (accumulator[plan.reason] ?? 0) + 1;
     return accumulator;
   }, {});
+}
+
+function mergeReasonCounts(
+  accumulator: Record<string, number>,
+  reasons: Record<string, number>,
+): Record<string, number> {
+  for (const [reason, count] of Object.entries(reasons)) {
+    accumulator[reason] = (accumulator[reason] ?? 0) + count;
+  }
+  return accumulator;
 }
 
 function formatReasonCounts(reasons: Record<string, number>): string {
@@ -749,6 +760,7 @@ export async function populateMissingOrganizationIds(
     accumulator[key] = createEmptyEntitySummary();
     return accumulator;
   }, {} as Record<PopulateEntityKey, EntitySummary>);
+  const overall = createEmptyEntitySummary();
   const context: PopulateContext = { prisma: prismaWithAny, logger, dryRun, chunkSize };
   const shouldDisconnect = !options.prisma;
 
@@ -787,18 +799,26 @@ export async function populateMissingOrganizationIds(
         }
 
         const entitySummary = processed[entity];
+        overall.planned += entitySummary.planned;
+        overall.updated += entitySummary.updated;
+        mergeReasonCounts(overall.reasons, entitySummary.reasons);
         logger.info(
           `[populate-org] Summary ${entity}: planned=${entitySummary.planned}, updated=${entitySummary.updated}, reasons=${formatReasonCounts(entitySummary.reasons)}.`,
         );
       }
+
+      logger.info(
+        `[populate-org] Summary overall: planned=${overall.planned}, updated=${overall.updated}, reasons=${formatReasonCounts(overall.reasons)}.`,
+      );
     }
 
-    const summary: PopulateSummary = {  
+    const summary: PopulateSummary = {
       defaultOrganizationId,
       defaultOrganizationCode,
       defaultOrganizationCreated: created,
       processed,
       generatedAt: new Date().toISOString(),
+      overall,
     };
 
     if (options.summaryPath) {
@@ -994,6 +1014,10 @@ if (require.main === module) {
             `[populate-org] ${entity}: planned=${stats.planned}, updated=${stats.updated}, reasons=${formatReasonCounts(stats.reasons)}.`,
           );
         }
+
+        console.info(
+          `[populate-org] overall: planned=${summary.overall.planned}, updated=${summary.overall.updated}, reasons=${formatReasonCounts(summary.overall.reasons)}.`,
+        );
       })
       .catch((error) => {
         console.error('[populate-org] Failed to populate organization identifiers.', error);

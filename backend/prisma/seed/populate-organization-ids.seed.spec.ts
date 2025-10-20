@@ -231,6 +231,19 @@ describe('populateMissingOrganizationIds', () => {
     expect(summary.defaultOrganizationCreated).toBe(true);
     expect(summary.generatedAt).toEqual(expect.any(String));
     expect(summary.summaryFilePath).toBe('./tmp/populate-summary.json');
+    expect(summary.overall.planned).toBe(13);
+    expect(summary.overall.updated).toBe(13);
+    expect(summary.overall.reasons).toEqual({
+      'fallback:default-organization': 1,
+      'inherit:cash-register': 2,
+      'inherit:entry': 1,
+      'inherit:inventory': 1,
+      'inherit:membership-default': 1,
+      'inherit:sale': 1,
+      'inherit:source-store': 1,
+      'inherit:store': 4,
+      'inherit:user': 1,
+    });
 
     expect(mockedMkdir).toHaveBeenCalledWith('./tmp', { recursive: true });
     expect(mockedWriteFile).toHaveBeenCalledWith(
@@ -326,6 +339,9 @@ describe('populateMissingOrganizationIds', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(mockedMkdir).not.toHaveBeenCalled();
     expect(mockedWriteFile).not.toHaveBeenCalled();
+    expect(summary.overall.planned).toBe(13);
+    expect(summary.overall.updated).toBe(0);
+    expect(summary.overall.reasons['fallback:default-organization']).toBe(1);
   });
 
   it('allows filtering the entities to process', async () => {
@@ -350,6 +366,11 @@ describe('populateMissingOrganizationIds', () => {
     expect(summary.processed.client.updated).toBe(0);
     expect(logger.warn).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith('[populate-org] user: skipped by configuration.');
+    expect(summary.overall).toEqual({
+      planned: 1,
+      updated: 1,
+      reasons: { 'fallback:default-organization': 1 },
+    });
   });
 
   it('allows overriding the default organization code when provided', async () => {
@@ -373,6 +394,8 @@ describe('populateMissingOrganizationIds', () => {
       where: { id: 101 },
       data: { organizationId: 42 },
     });
+    expect(summary.overall.planned).toBe(13);
+    expect(summary.overall.updated).toBe(13);
   });
 
 });
