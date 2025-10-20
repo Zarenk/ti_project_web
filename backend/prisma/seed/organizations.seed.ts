@@ -2,20 +2,26 @@ import { PrismaClient } from '@prisma/client'
 import { readFile } from 'fs/promises'
 import path from 'path'
 
-const prisma = new PrismaClient()
+type SeedPrismaClient = PrismaClient & Record<string, any>
 
-type SeedOrganizationUnit = {
+const prisma = new PrismaClient() as SeedPrismaClient
+
+export type SeedOrganizationUnit = {
   code?: string
   name: string
   status?: string
   parentCode?: string
 }
 
-type SeedOrganization = {
+export type SeedOrganization = {
   code: string
   name: string
   status?: string
   units?: SeedOrganizationUnit[]
+}
+
+type SeedCliOptions = {
+  onlyOrganizations?: string[]
 }
 
 function resolveSeedPath(): string {
@@ -28,6 +34,96 @@ function resolveSeedPath(): string {
 
 function mapKey(unit: SeedOrganizationUnit): string {
   return unit.code ?? unit.name
+}
+
+function ensureValue(arg: string, value: string | undefined): string {
+  if (value === undefined || value.trim().length === 0) {
+    throw new Error(`[organizations-seed] Missing value for ${arg}`)
+  }
+  return value
+}
+
+function normalizeCodes(codes: string[]): string[] {
+  const unique: string[] = []
+  for (const raw of codes) {
+    const code = raw.trim()
+    if (!code) {
+      continue
+    }
+    if (!unique.includes(code)) {
+      unique.push(code)
+    }
+  }
+  return unique
+}
+
+export function parseSeedCliArgs(argv: string[]): SeedCliOptions {
+  const collected: string[] = []
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index]
+
+    if (arg.startsWith('--org=')) {
+      const [, rawValue] = arg.split('=')
+      const ensured = ensureValue('--org', rawValue)
+      collected.push(...ensured.split(','))
+      continue
+    }
+
+    if (arg === '--org') {
+      const nextValue = ensureValue(arg, argv[index + 1])
+      collected.push(...nextValue.split(','))
+      index += 1
+      continue
+    }
+
+    if (arg.startsWith('--organization=')) {
+      const [, rawValue] = arg.split('=')
+      const ensured = ensureValue('--organization', rawValue)
+      collected.push(...ensured.split(','))
+      continue
+    }
+
+    if (arg === '--organization') {
+      const nextValue = ensureValue(arg, argv[index + 1])
+      collected.push(...nextValue.split(','))
+      index += 1
+    }
+  }
+
+  const codes = normalizeCodes(collected)
+  return codes.length ? { onlyOrganizations: codes } : {}
+}
+
+export function filterSeedOrganizations(
+  organizations: SeedOrganization[],
+  onlyOrganizations: string[] | undefined,
+): SeedOrganization[] {
+  if (!onlyOrganizations?.length) {
+    return organizations
+  }
+
+  const requested = new Set(onlyOrganizations)
+  const missing: string[] = []
+  const filtered = organizations.filter((organization) => {
+    if (requested.has(organization.code)) {
+      requested.delete(organization.code)
+      return true
+    }
+    return false
+  })
+
+  if (requested.size > 0) {
+    missing.push(...requested)
+  }
+
+  if (missing.length) {
+    throw new Error(
+      `[organizations-seed] Unknown organization code(s): ${missing.join(', ')}`,
+    )
+  }
+
+  return filtered
 }
 
 async function loadSeedFile(seedPath: string): Promise<SeedOrganization[]> {
@@ -156,23 +252,45 @@ async function upsertOrganization(org: SeedOrganization) {
 }
 
 async function main() {
+  const cliOptions = parseSeedCliArgs(process.argv.slice(2))
   const seedPath = resolveSeedPath()
   const organizations = await loadSeedFile(seedPath)
+
   if (!organizations.length) {
     console.log('No organizations provided in seed file. Nothing to do.')
     return
   }
 
-  for (const org of organizations) {
+  const selectedOrganizations = filterSeedOrganizations(
+    organizations,
+    cliOptions.onlyOrganizations,
+  )
+
+  if (!selectedOrganizations.length) {
+    console.log('No organizations matched the provided filters. Nothing to do.')
+    return
+  }
+
+  if (cliOptions.onlyOrganizations?.length) {
+    console.log(
+      `Processing ${selectedOrganizations.length} organization(s): ${cliOptions.onlyOrganizations.join(', ')}`,
+    )
+  }
+
+  for (const org of selectedOrganizations) {
     await upsertOrganization(org)
   }
 }
 
-main()
-  .catch((error) => {
-    console.error('Error seeding organizations:', error)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
+if (require.main === module) {
+  main()
+    .catch((error) => {
+      console.error('Error seeding organizations:', error)
+      process.exit(1)
+    })
+    .finally(async () => {
+      await prisma.$disconnect()
+    })
+}
+
+export { main as runOrganizationsSeed }
