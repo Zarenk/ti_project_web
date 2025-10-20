@@ -15,7 +15,10 @@ import { ActivityService } from 'src/activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { AccountingService } from 'src/accounting/accounting.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
-import { resolveOrganizationId } from 'src/tenancy/organization.utils';
+import {
+  buildOrganizationFilter,
+  resolveOrganizationId,
+} from 'src/tenancy/organization.utils';
 import {
   InventoryUncheckedCreateInputWithOrganization,
   InventoryHistoryCreateInputWithOrganization,
@@ -430,10 +433,27 @@ export class EntriesService {
   //
 
   // Listar todas las entradas
-  async findAllEntries() {
+  async findAllEntries(organizationId?: number | null) {
     try {
+      const resolvedOrganizationId = organizationId ?? null;
+
+      logOrganizationContext({
+        service: EntriesService.name,
+        operation: 'findAllEntries',
+        organizationId: resolvedOrganizationId,
+        metadata: { scope: 'list' },
+      });
+
+      const where = buildOrganizationFilter(organizationId) as Prisma.EntryWhereInput;
+
       const entries = await this.prisma.entry.findMany({
-        include: { details: { include: { product: true, series: true, }, }, provider: true, user: true, store: true },
+        where,
+        include: {
+          details: { include: { product: true, series: true } },
+          provider: true,
+          user: true,
+          store: true,
+        },
       });
       // Transformar los datos para incluir las series en cada detalle
       const transformedEntries = entries.map((entry) => ({
@@ -456,11 +476,30 @@ export class EntriesService {
   //
 
   // Obtener una entrada específica por ID
-  async findEntryById(id: number) {
+  async findEntryById(id: number, organizationId?: number | null) {
     try {
-      const entry = await this.prisma.entry.findUnique({
-        where: { id },
-        include: { details: { include: { product: true, series: true, }, }, provider: true, user: true, store: true },
+      const resolvedOrganizationId = organizationId ?? null;
+
+      logOrganizationContext({
+        service: EntriesService.name,
+        operation: 'findEntryById',
+        organizationId: resolvedOrganizationId,
+        metadata: { entryId: id },
+      });
+
+      const where: Prisma.EntryWhereInput = {
+        id,
+        ...(buildOrganizationFilter(organizationId) as Prisma.EntryWhereInput),
+      };
+
+      const entry = await this.prisma.entry.findFirst({
+        where,
+        include: {
+          details: { include: { product: true, series: true } },
+          provider: true,
+          user: true,
+          store: true,
+        },
       });
 
     if (!entry) {

@@ -192,32 +192,46 @@ export class EntriesController {
 
   // Endpoint para listar todas las entradas
   @Get()
-  async findAllEntries() {
-    return this.entriesService.findAllEntries();
+  async findAllEntries(
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.entriesService.findAllEntries(organizationId ?? undefined);
   }
 
   // Endpoint para obtener una entrada específica por ID
   @Get('by-id/:id')
-  async findEntryById(@Param('id') id: string) {
+  async findEntryById(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) {
       throw new BadRequestException(
         'El ID de la entrada debe ser un número válido.',
       );
     }
-    return this.entriesService.findEntryById(numericId);
+    return this.entriesService.findEntryById(
+      numericId,
+      organizationId ?? undefined,
+    );
   }
 
   // Alias para compatibilidad: GET /entries/:id
   @Get('id/:id')
-  async findEntryAlias(@Param('id') id: string) {
+  async findEntryAlias(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) {
       throw new BadRequestException(
         'El ID de la entrada debe ser un número válido.',
       );
     }
-    return this.entriesService.findEntryById(numericId);
+    return this.entriesService.findEntryById(
+      numericId,
+      organizationId ?? undefined,
+    );
   }
 
   @Get('store/:storeId')

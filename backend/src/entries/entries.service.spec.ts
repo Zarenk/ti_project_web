@@ -2,7 +2,7 @@ jest.mock('src/tenancy/organization-context.logger', () => ({
   logOrganizationContext: jest.fn(),
 }));
 
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EntriesService } from './entries.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityService } from 'src/activity/activity.service';
@@ -15,7 +15,13 @@ interface PrismaMock {
   provider: { findUnique: jest.Mock };
   user: { findUnique: jest.Mock };
   product: { findUnique: jest.Mock };
-  entry: { create: jest.Mock; findUnique: jest.Mock; delete: jest.Mock };
+  entry: {
+    create: jest.Mock;
+    findUnique: jest.Mock;
+    findFirst: jest.Mock;
+    findMany: jest.Mock;
+    delete: jest.Mock;
+  };
   entryDetail: { update: jest.Mock };
   entryDetailSeries: { createMany: jest.Mock; deleteMany: jest.Mock };
   inventory: { findFirst: jest.Mock; create: jest.Mock };
@@ -34,7 +40,13 @@ const createPrismaMock = (): PrismaMock => ({
   provider: { findUnique: jest.fn() },
   user: { findUnique: jest.fn() },
   product: { findUnique: jest.fn() },
-  entry: { create: jest.fn(), findUnique: jest.fn(), delete: jest.fn() },
+  entry: {
+    create: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    delete: jest.fn(),
+  },
   entryDetail: { update: jest.fn() },
   entryDetailSeries: { createMany: jest.fn(), deleteMany: jest.fn() },
   inventory: { findFirst: jest.fn(), create: jest.fn() },
@@ -83,6 +95,8 @@ describe('EntriesService multi-organization support', () => {
       userId: baseInput.userId,
       providerId: baseInput.providerId,
     });
+    prisma.entry.findMany.mockResolvedValue([]);
+    prisma.entry.findFirst.mockResolvedValue(null);
     prisma.entryDetail.update.mockResolvedValue(undefined);
     prisma.inventory.findFirst.mockResolvedValue(null);
     prisma.inventory.create.mockResolvedValue({ id: 444 });
@@ -236,6 +250,145 @@ describe('EntriesService multi-organization support', () => {
 
     expect(prisma.entry.create).not.toHaveBeenCalled();
     expect(prisma.inventory.create).not.toHaveBeenCalled();
+  });
+
+  describe('findAllEntries', () => {
+    const entryTemplate = {
+      id: 1,
+      organizationId: 77,
+      details: [
+        {
+          id: 200,
+          product: { name: 'Widget' },
+          series: [{ serial: 'S-1' }, { serial: 'S-2' }],
+        },
+      ],
+      provider: { id: 300 },
+      user: { id: 400 },
+      store: { id: 500 },
+    };
+
+    it('lists entries without filtering when organizationId is undefined', async () => {
+      prisma.entry.findMany.mockResolvedValue([entryTemplate]);
+
+      const result = await service.findAllEntries();
+
+      expect(prisma.entry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {} }),
+      );
+      expect(result[0].details[0].series).toEqual(['S-1', 'S-2']);
+      expect(result[0].details[0].product_name).toBe('Widget');
+      expect(
+        logOrganizationContextMock,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'findAllEntries',
+          organizationId: null,
+        }),
+      );
+    });
+
+    it('applies organization filters when provided', async () => {
+      prisma.entry.findMany.mockResolvedValue([{ ...entryTemplate, organizationId: 123 }]);
+
+      await service.findAllEntries(123);
+
+      expect(prisma.entry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { organizationId: 123 } }),
+      );
+      expect(
+        logOrganizationContextMock,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'findAllEntries',
+          organizationId: 123,
+        }),
+      );
+    });
+
+    it('includes legacy rows when organizationId is null', async () => {
+      prisma.entry.findMany.mockResolvedValue([{ ...entryTemplate, organizationId: null }]);
+
+      await service.findAllEntries(null);
+
+      expect(prisma.entry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { organizationId: null } }),
+      );
+      expect(
+        logOrganizationContextMock,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'findAllEntries',
+          organizationId: null,
+        }),
+      );
+    });
+  });
+
+  describe('findEntryById', () => {
+    const baseEntry = {
+      id: 900,
+      organizationId: 321,
+      details: [
+        {
+          id: 901,
+          product: { name: 'Widget' },
+          series: [{ serial: 'AA' }],
+        },
+      ],
+      provider: { id: 88 },
+      user: { id: 77 },
+      store: { id: 66 },
+    };
+
+    it('fetches entry constrained to the provided organizationId', async () => {
+      prisma.entry.findFirst.mockResolvedValue(baseEntry);
+
+      const result = await service.findEntryById(900, 321);
+
+      expect(prisma.entry.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 900, organizationId: 321 } }),
+      );
+      expect(result.details[0].series).toEqual(['AA']);
+      expect(
+        logOrganizationContextMock,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'findEntryById',
+          organizationId: 321,
+          metadata: { entryId: 900 },
+        }),
+      );
+    });
+
+    it('returns legacy entries when organizationId is null', async () => {
+      prisma.entry.findFirst.mockResolvedValue({ ...baseEntry, organizationId: null });
+
+      await service.findEntryById(900, null);
+
+      expect(prisma.entry.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 900, organizationId: null } }),
+      );
+      expect(
+        logOrganizationContextMock,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'findEntryById',
+          organizationId: null,
+          metadata: { entryId: 900 },
+        }),
+      );
+    });
+
+    it('throws NotFoundException when no entry matches the tenant filter', async () => {
+      prisma.entry.findFirst.mockResolvedValue(null);
+
+      await expect(service.findEntryById(123, 999)).rejects.toThrow(NotFoundException);
+
+      expect(prisma.entry.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 123, organizationId: 999 } }),
+      );
+    });
   });
 
   describe('deleteEntry', () => {
