@@ -45,6 +45,7 @@ type EntitySummary = {
   planned: number;
   updated: number;
   reasons: Record<string, number>;
+  durationMs: number;
 };
 
 type PopulateSummary = {
@@ -88,7 +89,7 @@ async function persistSummaryToFile(
 }
 
 function createEmptyEntitySummary(): EntitySummary {
-  return { planned: 0, updated: 0, reasons: {} };
+  return { planned: 0, updated: 0, reasons: {}, durationMs: 0 };
 }
 
 function isPopulateEntityKey(value: string): value is PopulateEntityKey {
@@ -146,18 +147,24 @@ async function executePlan(
     planned: plans.length,
     updated: 0,
     reasons: countReasons(plans),
+    durationMs: 0,
   };
+  const startedAt = Date.now();
 
   if (!plans.length) {
-    context.logger.info(`[populate-org] ${entity}: no pending records.`);
+    summary.durationMs = Date.now() - startedAt;
+    context.logger.info(
+      `[populate-org] ${entity}: no pending records (durationMs=${summary.durationMs}).`,
+    );
     return summary;
   }
 
   const reasonDescription = formatReasonCounts(summary.reasons);
 
   if (context.dryRun) {
+    summary.durationMs = Date.now() - startedAt;
     context.logger.info(
-      `[populate-org] ${entity}: dry-run active, ${plans.length} records would be updated (${reasonDescription}).`,
+      `[populate-org] ${entity}: dry-run active, ${plans.length} records would be updated (${reasonDescription}) in ${summary.durationMs}ms.`,
     );
     return summary;
   }
@@ -172,8 +179,10 @@ async function executePlan(
     );
   }
 
+  summary.durationMs = Date.now() - startedAt;
+
   context.logger.info(
-    `[populate-org] ${entity}: updated ${summary.updated} records (${reasonDescription}).`,
+    `[populate-org] ${entity}: updated ${summary.updated} records (${reasonDescription}) in ${summary.durationMs}ms.`,
   );
 
   return summary;
@@ -806,13 +815,14 @@ export async function populateMissingOrganizationIds(
         overall.planned += entitySummary.planned;
         overall.updated += entitySummary.updated;
         mergeReasonCounts(overall.reasons, entitySummary.reasons);
+        overall.durationMs += entitySummary.durationMs;
         logger.info(
-          `[populate-org] Summary ${entity}: planned=${entitySummary.planned}, updated=${entitySummary.updated}, reasons=${formatReasonCounts(entitySummary.reasons)}.`,
+          `[populate-org] Summary ${entity}: planned=${entitySummary.planned}, updated=${entitySummary.updated}, reasons=${formatReasonCounts(entitySummary.reasons)}, durationMs=${entitySummary.durationMs}.`,
         );
       }
 
       logger.info(
-        `[populate-org] Summary overall: planned=${overall.planned}, updated=${overall.updated}, reasons=${formatReasonCounts(overall.reasons)}.`,
+        `[populate-org] Summary overall: planned=${overall.planned}, updated=${overall.updated}, reasons=${formatReasonCounts(overall.reasons)}, durationMs=${overall.durationMs}.`,
       );
     }
 

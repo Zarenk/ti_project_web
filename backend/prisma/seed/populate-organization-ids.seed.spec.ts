@@ -233,6 +233,7 @@ describe('populateMissingOrganizationIds', () => {
     expect(summary.defaultOrganizationCreated).toBe(true);
     expect(summary.generatedAt).toEqual(expect.any(String));
     expect(summary.summaryFilePath).toBe('./tmp/populate-summary.json');
+    expect(summary.overall.durationMs).toBeGreaterThanOrEqual(0);
     expect(summary.overall.planned).toBe(13);
     expect(summary.overall.updated).toBe(13);
     expect(summary.overall.reasons).toEqual({
@@ -322,6 +323,19 @@ describe('populateMissingOrganizationIds', () => {
     expect(summary.processed.orders.updated).toBe(1);
     expect(summary.processed['cash-transaction'].updated).toBe(1);
     expect(summary.processed['cash-closure'].updated).toBe(1);
+    expect(summary.processed.store.durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed['cash-register'].durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed.user.durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed.client.durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed.inventory.durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed['inventory-history'].durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed.entry.durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed.provider.durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed.sales.durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed.transfer.durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed.orders.durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed['cash-transaction'].durationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.processed['cash-closure'].durationMs).toBeGreaterThanOrEqual(0);
 
     expect(prisma.$disconnect).not.toHaveBeenCalled();
   });
@@ -351,7 +365,9 @@ describe('populateMissingOrganizationIds', () => {
       '[populate-org] store: chunk 2/2 updated 1 records.',
     );
     expect(logger.info).toHaveBeenCalledWith(
-      '[populate-org] store: updated 3 records (fallback:default-organization=3).',
+      expect.stringContaining(
+        '[populate-org] store: updated 3 records (fallback:default-organization=3) in ',
+      ),
     );
   });
 
@@ -418,11 +434,13 @@ describe('populateMissingOrganizationIds', () => {
     expect(summary.processed.client.updated).toBe(0);
     expect(logger.warn).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith('[populate-org] user: skipped by configuration.');
-    expect(summary.overall).toEqual({
-      planned: 1,
-      updated: 1,
-      reasons: { 'fallback:default-organization': 1 },
-    });
+    expect(summary.overall).toEqual(
+      expect.objectContaining({
+        planned: 1,
+        updated: 1,
+        reasons: { 'fallback:default-organization': 1 },
+      }),
+    );
   });
 
   it('allows overriding the default organization code when provided', async () => {
