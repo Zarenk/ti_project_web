@@ -1,4 +1,6 @@
 import { PrismaClient } from '@prisma/client';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 type Logger = Pick<typeof console, 'info' | 'warn' | 'error'>;
 
@@ -30,6 +32,7 @@ type PopulateOptions = {
   onlyEntities?: PopulateEntityKey[];
   skipEntities?: PopulateEntityKey[];
   defaultOrganizationCode?: string;
+  summaryPath?: string;
 };
 
 type UpdatePlan = {
@@ -49,6 +52,8 @@ type PopulateSummary = {
   defaultOrganizationCode: string;
   defaultOrganizationCreated: boolean;
   processed: Record<PopulateEntityKey, EntitySummary>;
+  generatedAt: string;
+  summaryFilePath?: string;
 };
 
 type PopulateContext = {
@@ -61,6 +66,25 @@ type PopulateContext = {
 const DEFAULT_CHUNK_SIZE = 25;
 const DEFAULT_ORGANIZATION_CODE = 'DEFAULT';
 const POPULATE_ENTITY_KEY_SET = new Set<PopulateEntityKey>(POPULATE_ENTITY_KEYS);
+
+async function persistSummaryToFile(
+  summaryPath: string,
+  summary: PopulateSummary,
+  logger: Logger,
+): Promise<boolean> {
+  try {
+    await mkdir(dirname(summaryPath), { recursive: true });
+    await writeFile(summaryPath, JSON.stringify(summary, null, 2), 'utf8');
+    logger.info(`[populate-org] Summary written to ${summaryPath}.`);
+    return true;
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    logger.warn(
+      `[populate-org] Failed to write summary file at ${summaryPath}: ${details}`,
+    );
+    return false;
+  }
+}
 
 function createEmptyEntitySummary(): EntitySummary {
   return { planned: 0, updated: 0, reasons: {} };
@@ -762,19 +786,29 @@ export async function populateMissingOrganizationIds(
           continue;
         }
 
-        const summary = processed[entity];
+        const entitySummary = processed[entity];
         logger.info(
-          `[populate-org] Summary ${entity}: planned=${summary.planned}, updated=${summary.updated}, reasons=${formatReasonCounts(summary.reasons)}.`,
+          `[populate-org] Summary ${entity}: planned=${entitySummary.planned}, updated=${entitySummary.updated}, reasons=${formatReasonCounts(entitySummary.reasons)}.`,
         );
       }
     }
 
-    return {
+    const summary: PopulateSummary = {  
       defaultOrganizationId,
       defaultOrganizationCode,
       defaultOrganizationCreated: created,
       processed,
+      generatedAt: new Date().toISOString(),
     };
+
+    if (options.summaryPath) {
+      const persisted = await persistSummaryToFile(options.summaryPath, summary, logger);
+      if (persisted) {
+        summary.summaryFilePath = options.summaryPath;
+      }
+    }
+
+    return summary;
   } finally {
     if (shouldDisconnect) {
       await prisma.$disconnect();
@@ -782,7 +816,10 @@ export async function populateMissingOrganizationIds(
   }
 }
 
-type CliOptions = Pick<PopulateOptions, 'dryRun' | 'chunkSize' | 'onlyEntities' | 'skipEntities' | 'defaultOrganizationCode'>;
+type CliOptions = Pick<
+  PopulateOptions,
+  'dryRun' | 'chunkSize' | 'onlyEntities' | 'skipEntities' | 'defaultOrganizationCode' | 'summaryPath'
+>;
 
 function parseListArgument(
   flag: string,
@@ -915,6 +952,19 @@ export function parsePopulateOrganizationCliArgs(argv: string[]): CliOptions {
       continue;
     }
 
+    if (arg.startsWith('--summary-path=') || arg.startsWith('--summaryPath=')) {
+      const [flag, raw] = arg.split('=');
+      options.summaryPath = parseStringArgument(flag, raw);
+      continue;
+    }
+
+    if (arg === '--summary-path' || arg === '--summaryPath' || arg === '--summaryFile') {
+      const [value, nextIndex] = nextValue(argv, index);
+      options.summaryPath = parseStringArgument(arg, value);
+      index = nextIndex;
+      continue;
+    }
+
     if (arg.trim().length > 0) {
       throw new Error(`[populate-org] Unknown argument: ${arg}`);
     }
@@ -931,6 +981,12 @@ if (require.main === module) {
         console.info(
           `[populate-org] Completed. defaultOrganizationId=${summary.defaultOrganizationId} defaultOrganizationCode=${summary.defaultOrganizationCode} created=${summary.defaultOrganizationCreated ? 'yes' : 'no'}.`,
         );
+
+        if (summary.summaryFilePath) {
+          console.info(
+            `[populate-org] Summary file available at ${summary.summaryFilePath}.`,
+          );
+        }
 
         for (const entity of POPULATE_ENTITY_KEYS) {
           const stats = summary.processed[entity];

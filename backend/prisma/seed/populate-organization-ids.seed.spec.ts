@@ -1,8 +1,17 @@
+import { mkdir, writeFile } from 'node:fs/promises';
 import type { PrismaClient } from '@prisma/client';
 import {
   populateMissingOrganizationIds,
   parsePopulateOrganizationCliArgs,
 } from './populate-organization-ids.seed';
+
+jest.mock('node:fs/promises', () => ({
+  mkdir: jest.fn(() => Promise.resolve(undefined)),
+  writeFile: jest.fn(() => Promise.resolve(undefined)),
+}));
+
+const mockedMkdir = mkdir as jest.MockedFunction<typeof mkdir>;
+const mockedWriteFile = writeFile as jest.MockedFunction<typeof writeFile>;
 
 type AsyncMock<T = unknown> = jest.Mock<Promise<T>, any[]>;
 
@@ -202,6 +211,10 @@ const buildPrismaMock = (): PrismaMock => {
   return prisma;
 };
 
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
 describe('populateMissingOrganizationIds', () => {
   it('fills organizationId across dependent entities using fallback rules', async () => {
     const prisma = buildPrismaMock();
@@ -210,11 +223,21 @@ describe('populateMissingOrganizationIds', () => {
     const summary = await populateMissingOrganizationIds({
       prisma: prisma as unknown as PrismaClient,
       logger,
+      summaryPath: './tmp/populate-summary.json',
     });
 
     expect(summary.defaultOrganizationId).toBe(1);
     expect(summary.defaultOrganizationCode).toBe('DEFAULT');
     expect(summary.defaultOrganizationCreated).toBe(true);
+    expect(summary.generatedAt).toEqual(expect.any(String));
+    expect(summary.summaryFilePath).toBe('./tmp/populate-summary.json');
+
+    expect(mockedMkdir).toHaveBeenCalledWith('./tmp', { recursive: true });
+    expect(mockedWriteFile).toHaveBeenCalledWith(
+      './tmp/populate-summary.json',
+      expect.stringContaining('"defaultOrganizationId": 1'),
+      'utf8',
+    );
 
     expect(prisma.store.update).toHaveBeenCalledWith({
       where: { id: 101 },
@@ -301,6 +324,8 @@ describe('populateMissingOrganizationIds', () => {
     expect(summary.processed.store.updated).toBe(0);
     expect(prisma.store.update).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(mockedMkdir).not.toHaveBeenCalled();
+    expect(mockedWriteFile).not.toHaveBeenCalled();
   });
 
   it('allows filtering the entities to process', async () => {
@@ -363,6 +388,8 @@ describe('parsePopulateOrganizationCliArgs', () => {
       '--skip=client',
       '--default-org-code',
       'TENANT',
+      '--summary-path',
+      './summary.json',
     ]);
 
     expect(options).toEqual({
@@ -371,6 +398,7 @@ describe('parsePopulateOrganizationCliArgs', () => {
       onlyEntities: ['store', 'client'],
       skipEntities: ['client'],
       defaultOrganizationCode: 'TENANT',
+      summaryPath: './summary.json',
     });
   });
 
