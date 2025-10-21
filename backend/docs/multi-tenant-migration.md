@@ -447,6 +447,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se añadió `npm run seed:populate-and-validate`, respaldado por [`backend/prisma/seed/populate-and-validate.seed.ts`](../prisma/seed/populate-and-validate.seed.ts). El comando permite saltar etapas (`--skip-populate`, `--skip-validate`), reutiliza las selecciones de entidades entre ambos pasos, acepta directorios de resumen (`--summary-dir`) y expone banderas específicas para poblamiento y validación. La suite [`backend/prisma/seed/populate-and-validate.seed.spec.ts`](../prisma/seed/populate-and-validate.seed.spec.ts) asegura la propagación de Prisma/logger compartidos y la compatibilidad del parser CLI con combinaciones de banderas y valores booleanos explícitos.
 - **Resultado:** Operaciones puede gatillar una sola instrucción para poblar y auditar `organizationId`, registrando reportes diferenciados por fase y habilitando la trazabilidad exigida antes de promover el script a producción.
 
+### 2024-05-31 – Reejecución suite `populate-and-validate`
+
+- **Contexto:** Luego de habilitar el _wrapper_ combinado era necesario registrar una corrida adicional que constatara la estabilidad de la suite dedicada antes de coordinar la ejecución controlada en staging.
+- **Implementación:** Se ejecutó `npm test -- prisma/seed/populate-and-validate.seed.spec.ts`, verificando nuevamente la orquestación conjunta del poblamiento y la validación, el intercambio del cliente Prisma y del _logger_ compartido, así como el parseo de banderas para filtros, _skip_ y generación de resúmenes.
+- **Resultado:** La batería reportó `11 passed`, confirmando que los ajustes recientes se mantienen en verde y que el comando `seed:populate-and-validate` está listo para utilizarse durante las corridas supervisadas de la Fase 3.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
