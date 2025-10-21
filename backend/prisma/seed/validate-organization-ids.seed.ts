@@ -10,7 +10,7 @@ import {
 
 type Logger = Pick<typeof console, 'info' | 'warn' | 'error'>;
 
-type ValidationOptions = {
+export type ValidationOptions = {
   prisma?: PrismaClient;
   logger?: Logger;
   onlyEntities?: PopulateEntityKey[];

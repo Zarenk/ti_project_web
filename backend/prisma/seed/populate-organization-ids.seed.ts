@@ -24,7 +24,7 @@ export const POPULATE_ENTITY_KEYS = [
 
 export type PopulateEntityKey = (typeof POPULATE_ENTITY_KEYS)[number];
 
-type PopulateOptions = {
+export type PopulateOptions = {
   prisma?: PrismaClient;
   logger?: Logger;
   dryRun?: boolean;

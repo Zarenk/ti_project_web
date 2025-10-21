@@ -441,6 +441,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se creó el comando `npm run seed:validate-organization-ids`, el cual reutiliza los modelos de Prisma para contabilizar valores presentes, ausentes y desalineados por dominio. La suite [`backend/prisma/seed/validate-organization-ids.seed.spec.ts`](../prisma/seed/validate-organization-ids.seed.spec.ts) cubre filtros por entidad, exportes del resumen (`--summary-path`, `--summary-stdout`) y la bandera `--fail-on-missing` que corta la ejecución ante hallazgos críticos. Se confirmó la integración con `populateMissingOrganizationIds` ejecutando `npm test -- prisma/seed/validate-organization-ids.seed.spec.ts prisma/seed/populate-organization-ids.seed.spec.ts`.
 - **Resultado:** El validador entrega métricas homogéneas por entidad, provee ejemplos de registros inconsistentes y permite fallar la tubería cuando se detectan faltantes o desalineaciones, completando el andamiaje de comprobaciones previo a la Fase 3.
 
+### 2024-05-30 – Orquestación combinada de poblamiento y validación
+
+- **Contexto:** Para coordinar la corrida controlada en staging (Próximas acciones 6) se necesitaba un _wrapper_ que ejecutara secuencialmente `populateMissingOrganizationIds` y `validateOrganizationIds`, compartiendo Prisma, filtros y rutas de reporte.
+- **Implementación:** Se añadió `npm run seed:populate-and-validate`, respaldado por [`backend/prisma/seed/populate-and-validate.seed.ts`](../prisma/seed/populate-and-validate.seed.ts). El comando permite saltar etapas (`--skip-populate`, `--skip-validate`), reutiliza las selecciones de entidades entre ambos pasos, acepta directorios de resumen (`--summary-dir`) y expone banderas específicas para poblamiento y validación. La suite [`backend/prisma/seed/populate-and-validate.seed.spec.ts`](../prisma/seed/populate-and-validate.seed.spec.ts) asegura la propagación de Prisma/logger compartidos y la compatibilidad del parser CLI con combinaciones de banderas y valores booleanos explícitos.
+- **Resultado:** Operaciones puede gatillar una sola instrucción para poblar y auditar `organizationId`, registrando reportes diferenciados por fase y habilitando la trazabilidad exigida antes de promover el script a producción.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
