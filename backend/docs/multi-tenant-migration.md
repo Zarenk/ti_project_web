@@ -429,6 +429,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se extendió `ProvidersService.findAll` agregando filtros `OR` con coincidencias insensibles a mayúsculas por nombre, RUC, correo, teléfono y dirección, respetando el `organizationId` activo y registrando el `scope` junto al término buscado en `logOrganizationContext`. El controlador expone ahora el query param `search`, normaliza el valor y delega la combinación de filtros hacia el servicio, manteniendo el ordenamiento ascendente por nombre. Las suites `providers.service.spec.ts` y `providers.controller.spec.ts` se actualizaron con casos que cubren búsquedas con y sin tenant, valores vacíos y propagación de metadatos multi-organización.
 - **Resultado:** El listado de proveedores ofrece búsquedas consistentes para escenarios multi-organización y legacy, dejando documentada la funcionalidad en la bitácora para las próximas iteraciones del plan.
 
+### 2024-05-28 – Extensión de CLI y métricas del seed multi-organización
+
+- **Contexto:** Antes de coordinar la ejecución del poblado en staging se necesitaba reforzar la trazabilidad del comando `npm run seed:populate-organization-ids`, incorporando banderas operativas y validaciones adicionales que faciliten la supervisión durante corridas controladas.
+- **Implementación:** Se añadió el soporte `--summary-stdout` para imprimir en consola el resumen JSON generado por `populateMissingOrganizationIds`, junto con nuevos parseos tipados para argumentos booleanos, numéricos y listas en `parsePopulateOrganizationCliArgs`. Además, se robustecieron las métricas por _chunk_ y las advertencias cuando se omiten entidades o se detectan argumentos inválidos, extendiendo la suite `populate-organization-ids.seed.spec.ts` con casos dedicados.
+- **Resultado:** El comando reporta ahora once casos en verde (`npm test -- populate-organization-ids.seed.spec.ts`), dejando documentadas las banderas adicionales y asegurando que los equipos operativos cuenten con telemetría suficiente para monitorear la corrida del seed multi-organización.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
