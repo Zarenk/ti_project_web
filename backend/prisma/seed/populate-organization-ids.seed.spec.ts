@@ -354,6 +354,27 @@ describe('populateMissingOrganizationIds', () => {
     expect(prisma.$disconnect).not.toHaveBeenCalled();
   });
 
+  it('logs the JSON summary when summaryStdout is enabled', async () => {
+    const prisma = buildPrismaMock();
+    const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    const summary = await populateMissingOrganizationIds({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      summaryStdout: true,
+      summaryPath: './tmp/populate-summary.json',
+    });
+
+    const jsonCall = logger.info.mock.calls.find(
+      ([message]) => message === '[populate-org] Summary JSON:',
+    );
+
+    expect(jsonCall).toBeDefined();
+    expect(jsonCall?.[1]).toContain('"defaultOrganizationId": 1');
+    expect(jsonCall?.[1]).toContain('"summaryFilePath": "./tmp/populate-summary.json"');
+    expect(summary.summaryFilePath).toBe('./tmp/populate-summary.json');
+  });
+
   it('logs chunk progress when processing large batches', async () => {
     const prisma = buildPrismaMock();
     const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
@@ -519,6 +540,12 @@ describe('parsePopulateOrganizationCliArgs', () => {
       defaultOrganizationCode: 'TENANT',
       summaryPath: './summary.json',
     });
+  });
+
+  it('parses the summary stdout flag', () => {
+    const options = parsePopulateOrganizationCliArgs(['--summary-stdout']);
+
+    expect(options).toEqual({ summaryStdout: true });
   });
 
   it('throws on invalid entities', () => {

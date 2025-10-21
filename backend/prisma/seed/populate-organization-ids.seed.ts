@@ -33,6 +33,7 @@ type PopulateOptions = {
   skipEntities?: PopulateEntityKey[];
   defaultOrganizationCode?: string;
   summaryPath?: string;
+  summaryStdout?: boolean;
 };
 
 type UpdatePlan = {
@@ -848,6 +849,10 @@ export async function populateMissingOrganizationIds(
       }
     }
 
+    if (options.summaryStdout) {
+      logger.info('[populate-org] Summary JSON:', JSON.stringify(summary, null, 2));
+    }
+
     return summary;
   } finally {
     if (shouldDisconnect) {
@@ -858,7 +863,13 @@ export async function populateMissingOrganizationIds(
 
 type CliOptions = Pick<
   PopulateOptions,
-  'dryRun' | 'chunkSize' | 'onlyEntities' | 'skipEntities' | 'defaultOrganizationCode' | 'summaryPath'
+  | 'dryRun'
+  | 'chunkSize'
+  | 'onlyEntities'
+  | 'skipEntities'
+  | 'defaultOrganizationCode'
+  | 'summaryPath'
+  | 'summaryStdout'
 >;
 
 function parseListArgument(
@@ -1002,6 +1013,16 @@ export function parsePopulateOrganizationCliArgs(argv: string[]): CliOptions {
       const [value, nextIndex] = nextValue(argv, index);
       options.summaryPath = parseStringArgument(arg, value);
       index = nextIndex;
+      continue;
+    }
+
+    if (
+      arg === '--summary-stdout' ||
+      arg === '--summaryStdout' ||
+      arg === '--summary-json' ||
+      arg === '--summaryJson'
+    ) {
+      options.summaryStdout = true;
       continue;
     }
 
