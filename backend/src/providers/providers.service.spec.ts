@@ -77,6 +77,7 @@ describe('ProvidersService multi-organization support', () => {
 
     expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
       where: { organizationId: 99 },
+      orderBy: { name: 'asc' },
     });
     expect(logOrganizationContextMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -227,6 +228,7 @@ describe('ProvidersService multi-organization support', () => {
 
     expect(prismaMock.provider.findFirst).toHaveBeenCalledWith({
       where: { documentNumber: '12345678901' },
+      orderBy: { name: 'asc' },
     });
     expect(exists).toBe(false);
     expect(logOrganizationContextMock).toHaveBeenCalledWith(
@@ -246,6 +248,7 @@ describe('ProvidersService multi-organization support', () => {
 
     expect(prismaMock.provider.findFirst).toHaveBeenCalledWith({
       where: { documentNumber: '12345678901', organizationId: null },
+      orderBy: { name: 'asc' },
     });
     expect(exists).toBe(true);
     expect(logOrganizationContextMock).toHaveBeenCalledWith(

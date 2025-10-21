@@ -219,6 +219,7 @@ export class ProvidersService {
         documentNumber,
         ...organizationFilter,
       },
+      orderBy: { name: 'asc' },
     });
 
     const resolvedOrganizationId =
