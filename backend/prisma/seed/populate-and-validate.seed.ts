@@ -312,6 +312,25 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
       continue;
     }
 
+    if (
+      arg.startsWith('--populate-overrides-path=') ||
+      arg.startsWith('--populate-overridesPath=')
+    ) {
+      const [flag, raw] = arg.split('=');
+      populateOptions.overridesPath = parseStringArgument(flag, raw);
+      continue;
+    }
+
+    if (
+      arg === '--populate-overrides-path' ||
+      arg === '--populateOverridesPath'
+    ) {
+      const [value, nextIndex] = nextValue(argv, index);
+      populateOptions.overridesPath = parseStringArgument(arg, value);
+      index = nextIndex;
+      continue;
+    }
+
     if (arg.startsWith('--populate-summary-path=')) {
       const [flag, raw] = arg.split('=');
       populateOptions.summaryPath = parseStringArgument(flag, raw);
@@ -429,6 +448,30 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
       const [value, nextIndex] = nextValue(argv, index);
       const parsed = parseListArgument(arg, value);
       sharedSkipEntities = mergeSharedEntities(sharedSkipEntities, parsed);
+      index = nextIndex;
+      continue;
+    }
+    
+    if (
+      arg.startsWith('--overrides-path=') ||
+      arg.startsWith('--overridesPath=')
+    ) {
+      const [flag, raw] = arg.split('=');
+      if (!populateOptions.overridesPath) {
+        populateOptions.overridesPath = parseStringArgument(flag, raw);
+      }
+      continue;
+    }
+
+    if (
+      arg === '--overrides-path' ||
+      arg === '--overridesPath' ||
+      arg === '--overridesFile'
+    ) {
+      const [value, nextIndex] = nextValue(argv, index);
+      if (!populateOptions.overridesPath) {
+        populateOptions.overridesPath = parseStringArgument(arg, value);
+      }
       index = nextIndex;
       continue;
     }

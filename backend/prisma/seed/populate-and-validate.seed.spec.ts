@@ -78,6 +78,7 @@ describe('populateAndValidate', () => {
         dryRun: true,
         onlyEntities: ['store', 'client'],
         summaryStdout: true,
+        overridesPath: './overrides.json',
       } as any,
       validate: {
         summaryStdout: true,
@@ -134,6 +135,7 @@ describe('parsePopulateAndValidateCliArgs', () => {
       '--populate-chunk-size=10',
       '--populate-dry-run',
       '--populate-summary-stdout=false',
+      '--populate-overrides-path=./data/overrides.json',
       '--validate-summary-stdout',
       '--summary-dir=./reports/run1',
     ]);
@@ -143,6 +145,7 @@ describe('parsePopulateAndValidateCliArgs', () => {
     expect(options.populateOptions.dryRun).toBe(true);
     expect(options.populateOptions.summaryStdout).toBe(false);
     expect(options.populateOptions.summaryPath).toBe('./reports/run1/populate-summary.json');
+    expect(options.populateOptions.overridesPath).toBe('./data/overrides.json');
     expect(options.validateOptions.summaryStdout).toBe(true);
     expect(options.validateOptions.summaryPath).toBe('./reports/run1/validate-summary.json');
     expect(options.validateOptions.onlyEntities).toEqual(['store', 'client']);
@@ -164,19 +167,14 @@ describe('parsePopulateAndValidateCliArgs', () => {
     expect(options.validateOptions.failOnMissing).toBe(false);
   });
 
-  it('applies shared only/skip filters when provided', () => {
-    const options = parsePopulateAndValidateCliArgs([
-      '--only=store,client',
-      '--skip=sales,transfer',
-    ]);
+  it('applies shared overrides path when provided', () => {
+  const options = parsePopulateAndValidateCliArgs(['--overrides-path=./shared-overrides.json']);
 
-    expect(options.populateOptions.onlyEntities).toEqual(['store', 'client']);
-    expect(options.validateOptions.onlyEntities).toEqual(['store', 'client']);
-    expect(options.populateOptions.skipEntities).toEqual(['sales', 'transfer']);
-    expect(options.validateOptions.skipEntities).toEqual(['sales', 'transfer']);
-  });
+  expect(options.populateOptions.overridesPath).toBe('./shared-overrides.json');
+});
 
-  it('prefers specific populate filters over shared ones', () => {
+
+it('applies shared only/skip filters when provided', () => {
     const options = parsePopulateAndValidateCliArgs([
       '--only=store,client',
       '--populate-only=inventory',

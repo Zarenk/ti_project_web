@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 type Logger = Pick<typeof console, 'info' | 'warn' | 'error'>;
@@ -24,6 +24,24 @@ export const POPULATE_ENTITY_KEYS = [
 
 export type PopulateEntityKey = (typeof POPULATE_ENTITY_KEYS)[number];
 
+export type PopulateOverrideEntry = {
+  id: number;
+  organizationId: number;
+  reason?: string;
+};
+
+export type PopulateOverrides = Partial<
+  Record<PopulateEntityKey, PopulateOverrideEntry[]>
+>;
+
+type NormalizedOverrideEntry = {
+  id: number;
+  organizationId: number;
+  reason: string;
+};
+
+type OverridesMap = Map<PopulateEntityKey, NormalizedOverrideEntry[]>;
+
 export type PopulateOptions = {
   prisma?: PrismaClient;
   logger?: Logger;
@@ -34,6 +52,8 @@ export type PopulateOptions = {
   defaultOrganizationCode?: string;
   summaryPath?: string;
   summaryStdout?: boolean;
+  overrides?: PopulateOverrides;
+  overridesPath?: string;
 };
 
 type UpdatePlan = {
@@ -65,6 +85,7 @@ type PopulateContext = {
   logger: Logger;
   dryRun: boolean;
   chunkSize: number;
+  overrides: OverridesMap;
 };
 
 const DEFAULT_CHUNK_SIZE = 25;
@@ -139,22 +160,220 @@ function formatReasonCounts(reasons: Record<string, number>): string {
     .join(', ');
 }
 
+function normalizeOverrides(sourceName: string, raw: unknown): OverridesMap {
+  const overrides: OverridesMap = new Map();
+
+  if (raw === undefined) {
+    return overrides;
+  }
+
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(
+      `[populate-org] Overrides from ${sourceName} must be an object mapping entities to override arrays.`,
+    );
+  }
+
+  for (const [entityKey, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!isPopulateEntityKey(entityKey)) {
+      throw new Error(
+        `[populate-org] Unknown entity provided in overrides from ${sourceName}: ${entityKey}`,
+      );
+    }
+
+    if (!Array.isArray(value)) {
+      throw new Error(
+        `[populate-org] Overrides for ${entityKey} in ${sourceName} must be an array.`,
+      );
+    }
+
+    const normalized: NormalizedOverrideEntry[] = [];
+
+    for (const entry of value) {
+      if (typeof entry !== 'object' || entry === null) {
+        throw new Error(
+          `[populate-org] Invalid override entry for ${entityKey} in ${sourceName}; expected object with id and organizationId.`,
+        );
+      }
+
+      const id = Number((entry as any).id);
+      const organizationId = Number((entry as any).organizationId);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        throw new Error(
+          `[populate-org] Override id for ${entityKey} in ${sourceName} must be a positive integer.`,
+        );
+      }
+
+      if (!Number.isInteger(organizationId) || organizationId <= 0) {
+        throw new Error(
+          `[populate-org] Override organizationId for ${entityKey} in ${sourceName} must be a positive integer.`,
+        );
+      }
+
+      const rawReason = (entry as any).reason;
+      if (rawReason !== undefined && typeof rawReason !== 'string') {
+        throw new Error(
+          `[populate-org] Override reason for ${entityKey} in ${sourceName} must be a string when provided.`,
+        );
+      }
+
+      const reason =
+        typeof rawReason === 'string' && rawReason.trim().length > 0
+          ? rawReason.trim()
+          : 'manual:override';
+
+      normalized.push({ id, organizationId, reason });
+    }
+
+    if (normalized.length) {
+      overrides.set(entityKey as PopulateEntityKey, normalized);
+    }
+  }
+
+  return overrides;
+}
+
+function cloneOverrideEntries(entries: NormalizedOverrideEntry[]): NormalizedOverrideEntry[] {
+  return entries.map((entry) => ({ ...entry }));
+}
+
+function mergeOverrideMaps(target: OverridesMap, source: OverridesMap): OverridesMap {
+  for (const [entity, overrides] of source) {
+    if (!target.has(entity)) {
+      target.set(entity, cloneOverrideEntries(overrides));
+      continue;
+    }
+
+    const existing = target.get(entity) ?? [];
+    const merged = new Map<number, NormalizedOverrideEntry>();
+
+    for (const entry of existing) {
+      merged.set(entry.id, { ...entry });
+    }
+
+    for (const entry of overrides) {
+      merged.set(entry.id, { ...entry });
+    }
+
+    target.set(entity, Array.from(merged.values()));
+  }
+
+  return target;
+}
+
+async function resolveOverrides(
+  options: PopulateOptions,
+  logger: Logger,
+): Promise<OverridesMap> {
+  const combined: OverridesMap = new Map();
+
+  if (options.overridesPath) {
+    let content: string;
+
+    try {
+      content = await readFile(options.overridesPath, 'utf8');
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `[populate-org] Failed to read overrides file at ${options.overridesPath}: ${details}`,
+      );
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content);
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `[populate-org] Failed to parse overrides file at ${options.overridesPath}: ${details}`,
+      );
+    }
+
+    const fileOverrides = normalizeOverrides(`file ${options.overridesPath}`, parsed);
+    mergeOverrideMaps(combined, fileOverrides);
+  }
+
+  if (options.overrides) {
+    const inlineOverrides = normalizeOverrides('inline overrides', options.overrides);
+    mergeOverrideMaps(combined, inlineOverrides);
+  }
+
+  if (combined.size > 0) {
+    const totalOverrides = Array.from(combined.values()).reduce(
+      (accumulator, entries) => accumulator + entries.length,
+      0,
+    );
+
+    logger.info(
+      `[populate-org] Loaded ${totalOverrides} manual override(s) across ${combined.size} entit${
+        combined.size === 1 ? 'y' : 'ies'
+      }.`,
+    );
+  }
+
+  return combined;
+}
+
+function applyOverrides(
+  entity: PopulateEntityKey,
+  plans: UpdatePlan[],
+  context: PopulateContext,
+): UpdatePlan[] {
+  const overrides = context.overrides.get(entity);
+  if (!overrides || overrides.length === 0) {
+    return plans;
+  }
+
+  const planMap = new Map<number, UpdatePlan>();
+  for (const plan of plans) {
+    planMap.set(plan.id, { ...plan });
+  }
+
+  for (const override of overrides) {
+    const existing = planMap.get(override.id);
+    if (existing) {
+      if (
+        existing.organizationId !== override.organizationId ||
+        existing.reason !== override.reason
+      ) {
+        context.logger.info(
+          `[populate-org] ${entity}: applying override for id=${override.id} -> organizationId=${override.organizationId} (reason=${override.reason}).`,
+        );
+      }
+      existing.organizationId = override.organizationId;
+      existing.reason = override.reason;
+    } else {
+      context.logger.info(
+        `[populate-org] ${entity}: scheduling override for id=${override.id} -> organizationId=${override.organizationId} (reason=${override.reason}).`,
+      );
+      planMap.set(override.id, {
+        id: override.id,
+        organizationId: override.organizationId,
+        reason: override.reason,
+      });
+    }
+  }
+
+  return Array.from(planMap.values());
+}
+
 async function executePlan(
-  entity: string,
+  entity: PopulateEntityKey,
   plans: UpdatePlan[],
   context: PopulateContext,
   executor: (chunk: UpdatePlan[]) => Promise<unknown>,
 ): Promise<EntitySummary> {
+  const finalPlans = applyOverrides(entity, plans, context);
   const summary: EntitySummary = {
-    planned: plans.length,
+    planned: finalPlans.length,
     updated: 0,
-    reasons: countReasons(plans),
+    reasons: countReasons(finalPlans),
     durationMs: 0,
     chunks: 0,
   };
   const startedAt = Date.now();
 
-  if (!plans.length) {
+  if (!finalPlans.length) {
     summary.durationMs = Date.now() - startedAt;
     context.logger.info(
       `[populate-org] ${entity}: no pending records (durationMs=${summary.durationMs}, chunks=0).`,
@@ -165,16 +384,16 @@ async function executePlan(
   const reasonDescription = formatReasonCounts(summary.reasons);
 
   if (context.dryRun) {
-    const chunkCount = chunkArray(plans, context.chunkSize).length;
+    const chunkCount = chunkArray(finalPlans, context.chunkSize).length;
     summary.chunks = chunkCount;
     summary.durationMs = Date.now() - startedAt;
     context.logger.info(
-      `[populate-org] ${entity}: dry-run active, ${plans.length} records would be updated (${reasonDescription}) in ${summary.durationMs}ms across ${chunkCount} chunk(s).`,
+      `[populate-org] ${entity}: dry-run active, ${finalPlans.length} records would be updated (${reasonDescription}) in ${summary.durationMs}ms across ${chunkCount} chunk(s).`,
     );
     return summary;
   }
 
-  const chunks = chunkArray(plans, context.chunkSize);
+  const chunks = chunkArray(finalPlans, context.chunkSize);
   summary.chunks = chunks.length;
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = chunks[index];
@@ -775,12 +994,14 @@ export async function populateMissingOrganizationIds(
   const enabledSet = new Set(enabledEntities);
   const hasCustomSelection = onlyEntities.length > 0 || skipEntities.length > 0;
 
+  const overrides = await resolveOverrides(options, logger);
+
   const processed = POPULATE_ENTITY_KEYS.reduce((accumulator, key) => {
     accumulator[key] = createEmptyEntitySummary();
     return accumulator;
   }, {} as Record<PopulateEntityKey, EntitySummary>);
   const overall = createEmptyEntitySummary();
-  const context: PopulateContext = { prisma: prismaWithAny, logger, dryRun, chunkSize };
+  const context: PopulateContext = { prisma: prismaWithAny, logger, dryRun, chunkSize, overrides };
   const shouldDisconnect = !options.prisma;
 
   try {
@@ -870,6 +1091,7 @@ type CliOptions = Pick<
   | 'defaultOrganizationCode'
   | 'summaryPath'
   | 'summaryStdout'
+  | 'overridesPath'
 >;
 
 const TRUTHY_VALUES = new Set(['1', 'true', 'yes', 'on']);
@@ -1029,6 +1251,26 @@ export function parsePopulateOrganizationCliArgs(argv: string[]): CliOptions {
     ) {
       const [value, nextIndex] = nextValue(argv, index);
       options.defaultOrganizationCode = parseStringArgument(arg, value);
+      index = nextIndex;
+      continue;
+    }
+
+    if (
+      arg.startsWith('--overrides-path=') ||
+      arg.startsWith('--overridesPath=')
+    ) {
+      const [flag, raw] = arg.split('=');
+      options.overridesPath = parseStringArgument(flag, raw);
+      continue;
+    }
+
+    if (
+      arg === '--overrides-path' ||
+      arg === '--overridesPath' ||
+      arg === '--overridesFile'
+    ) {
+      const [value, nextIndex] = nextValue(argv, index);
+      options.overridesPath = parseStringArgument(arg, value);
       index = nextIndex;
       continue;
     }

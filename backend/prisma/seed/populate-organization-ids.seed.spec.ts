@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { PrismaClient } from '@prisma/client';
 import {
   populateMissingOrganizationIds,
@@ -7,10 +7,12 @@ import {
 
 jest.mock('node:fs/promises', () => ({
   mkdir: jest.fn(() => Promise.resolve(undefined)),
+  readFile: jest.fn(() => Promise.resolve('{}')),
   writeFile: jest.fn(() => Promise.resolve(undefined)),
 }));
 
 const mockedMkdir = mkdir as jest.MockedFunction<typeof mkdir>;
+const mockedReadFile = readFile as jest.MockedFunction<typeof readFile>;
 const mockedWriteFile = writeFile as jest.MockedFunction<typeof writeFile>;
 
 type AsyncMock<T = unknown> = jest.Mock<Promise<T>, any[]>;
@@ -214,6 +216,7 @@ const buildPrismaMock = (): PrismaMock => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedMkdir.mockResolvedValue(undefined);
+  mockedReadFile.mockResolvedValue('{}');
   mockedWriteFile.mockResolvedValue(undefined);
 });
 
@@ -490,6 +493,74 @@ describe('populateMissingOrganizationIds', () => {
     );
   });
 
+  it('applies manual overrides for entities outside automatic selection', async () => {
+    const prisma = buildPrismaMock();
+    const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    prisma.store.findMany.mockResolvedValueOnce([]);
+
+    const summary = await populateMissingOrganizationIds({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      onlyEntities: ['store'],
+      overrides: {
+        store: [{ id: 999, organizationId: 77, reason: 'manual:store' }],
+      },
+    });
+
+    expect(prisma.store.update).toHaveBeenCalledWith({
+      where: { id: 999 },
+      data: { organizationId: 77 },
+    });
+    expect(summary.processed.store.planned).toBe(1);
+    expect(summary.processed.store.updated).toBe(1);
+    expect(summary.processed.store.reasons).toEqual({ 'manual:store': 1 });
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('scheduling override for id=999'),
+    );
+  });
+
+  it('loads overrides from JSON file when overridesPath is provided', async () => {
+    const prisma = buildPrismaMock();
+    const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    prisma.store.findMany.mockResolvedValueOnce([]);
+    mockedReadFile.mockResolvedValueOnce(
+      JSON.stringify({ store: [{ id: 555, organizationId: 88 }] }),
+    );
+
+    const summary = await populateMissingOrganizationIds({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      onlyEntities: ['store'],
+      overridesPath: './overrides.json',
+    });
+
+    expect(mockedReadFile).toHaveBeenCalledWith('./overrides.json', 'utf8');
+    expect(prisma.store.update).toHaveBeenCalledWith({
+      where: { id: 555 },
+      data: { organizationId: 88 },
+    });
+    expect(summary.processed.store.reasons).toEqual({ 'manual:override': 1 });
+  });
+
+  it('throws when overrides contain invalid identifiers', async () => {
+    const prisma = buildPrismaMock();
+    const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    await expect(
+      populateMissingOrganizationIds({
+        prisma: prisma as unknown as PrismaClient,
+        logger,
+        overrides: {
+          store: [{ id: 'abc' as unknown as number, organizationId: 1 }],
+        } as any,
+      }),
+    ).rejects.toThrow(
+      '[populate-org] Override id for store in inline overrides must be a positive integer.',
+    );
+  });
+
   it('allows overriding the default organization code when provided', async () => {
     const prisma = buildPrismaMock();
     const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
@@ -530,6 +601,8 @@ describe('parsePopulateOrganizationCliArgs', () => {
       'TENANT',
       '--summary-path',
       './summary.json',
+      '--overrides-path',
+      './overrides.json',
     ]);
 
     expect(options).toEqual({
@@ -539,6 +612,7 @@ describe('parsePopulateOrganizationCliArgs', () => {
       skipEntities: ['client'],
       defaultOrganizationCode: 'TENANT',
       summaryPath: './summary.json',
+      overridesPath: './overrides.json',
     });
   });
 
