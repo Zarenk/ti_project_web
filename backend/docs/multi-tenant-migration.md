@@ -453,6 +453,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó `npm test -- prisma/seed/populate-and-validate.seed.spec.ts`, verificando nuevamente la orquestación conjunta del poblamiento y la validación, el intercambio del cliente Prisma y del _logger_ compartido, así como el parseo de banderas para filtros, _skip_ y generación de resúmenes.
 - **Resultado:** La batería reportó `11 passed`, confirmando que los ajustes recientes se mantienen en verde y que el comando `seed:populate-and-validate` está listo para utilizarse durante las corridas supervisadas de la Fase 3.
 
+### 2024-06-01 – Reejecución suite `populate-organization-ids.seed`
+
+- **Contexto:** Tras los ajustes de trazabilidad y el refuerzo del parser CLI, se requería validar nuevamente que el script de poblamiento mantuviera la cobertura completa antes de ejecutar corridas extendidas en ambientes supervisados.
+- **Implementación:** Se volvió a correr `npm test -- populate-organization-ids.seed.spec.ts` desde el entorno operativo principal, verificando los escenarios de propagación por herencia y `fallback`, el _logging_ de resúmenes con `--summary-stdout`, las métricas por _chunk_ y el parseo de argumentos booleanos, numéricos y de listas.
+- **Resultado:** La suite reportó `13 passed` en 8 segundos, confirmando que las salvaguardas del seed permanecen estables para futuras iteraciones del plan.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
