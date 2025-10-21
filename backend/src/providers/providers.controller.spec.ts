@@ -42,22 +42,43 @@ describe('ProvidersController multi-tenant mapping', () => {
     const expected = [{ id: 1 }];
     service.findAll.mockReturnValue(expected as any);
 
-    const result = controller.findAll(undefined as any);
+    const result = controller.findAll(undefined as any, undefined);
 
     expect(service.findAll).toHaveBeenCalledWith();
     expect(result).toBe(expected);
   });
 
   it('scopes providers to legacy records when organizationId is null', () => {
-    controller.findAll(null as any);
+    controller.findAll(null as any, undefined);
 
     expect(service.findAll).toHaveBeenCalledWith({ organizationId: null });
   });
 
   it('filters providers by organization when context is available', () => {
-    controller.findAll(55);
+    controller.findAll(55, undefined);
 
     expect(service.findAll).toHaveBeenCalledWith({ organizationId: 55 });
+  });
+
+  it('propagates trimmed search terms along the tenant context', () => {
+    controller.findAll(88, '  ACME  ');
+
+    expect(service.findAll).toHaveBeenCalledWith({
+      organizationId: 88,
+      search: 'ACME',
+    });
+  });
+
+  it('supports global searches when no tenant context is present', () => {
+    controller.findAll(undefined as any, 'Beta');
+
+    expect(service.findAll).toHaveBeenCalledWith({ search: 'Beta' });
+  });
+
+  it('ignores empty search values', () => {
+    controller.findAll(77, '   ');
+
+    expect(service.findAll).toHaveBeenCalledWith({ organizationId: 77 });
   });
 
   it('retrieves a provider using the contextual organizationId when present', () => {

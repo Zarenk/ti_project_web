@@ -95,13 +95,14 @@ describe('ProvidersService multi-organization support', () => {
 
     expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
       where: { organizationId: null },
+      orderBy: { name: 'asc' },
     });
     expect(logOrganizationContextMock).toHaveBeenCalledWith(
       expect.objectContaining({
         service: 'ProvidersService',
         operation: 'findAll',
         organizationId: null,
-        metadata: { scope: 'legacy' },
+        metadata: expect.objectContaining({ scope: 'legacy' }),
       }),
     );
   });
@@ -111,13 +112,90 @@ describe('ProvidersService multi-organization support', () => {
 
     await service.findAll();
 
-    expect(prismaMock.provider.findMany).toHaveBeenCalledWith({ where: {} });
+    expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
+      where: {},
+      orderBy: { name: 'asc' },
+    });
     expect(logOrganizationContextMock).toHaveBeenCalledWith(
       expect.objectContaining({
         service: 'ProvidersService',
         operation: 'findAll',
         organizationId: undefined,
-        metadata: { scope: 'global' },
+        metadata: expect.objectContaining({ scope: 'global' }),
+      }),
+    );
+  });
+
+  it('applies search filters when a search term is provided', async () => {
+    prismaMock.provider.findMany.mockResolvedValue([{ id: 4 }]);
+
+    await service.findAll({ organizationId: 44, search: '  ACME  ' });
+
+    expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: 44,
+        OR: [
+          { name: { contains: 'ACME', mode: 'insensitive' } },
+          { documentNumber: { contains: 'ACME', mode: 'insensitive' } },
+          { email: { contains: 'ACME', mode: 'insensitive' } },
+          { phone: { contains: 'ACME', mode: 'insensitive' } },
+          { adress: { contains: 'ACME', mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { name: 'asc' },
+    });
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'ProvidersService',
+        operation: 'findAll',
+        organizationId: 44,
+        metadata: expect.objectContaining({ scope: 'tenant', search: 'ACME' }),
+      }),
+    );
+  });
+
+  it('supports global searches when only the search term is provided', async () => {
+    prismaMock.provider.findMany.mockResolvedValue([{ id: 5 }]);
+
+    await service.findAll({ search: 'Beta' });
+
+    expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { name: { contains: 'Beta', mode: 'insensitive' } },
+          { documentNumber: { contains: 'Beta', mode: 'insensitive' } },
+          { email: { contains: 'Beta', mode: 'insensitive' } },
+          { phone: { contains: 'Beta', mode: 'insensitive' } },
+          { adress: { contains: 'Beta', mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { name: 'asc' },
+    });
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'ProvidersService',
+        operation: 'findAll',
+        organizationId: undefined,
+        metadata: expect.objectContaining({ scope: 'global', search: 'Beta' }),
+      }),
+    );
+  });
+
+  it('ignores empty search strings after trimming', async () => {
+    prismaMock.provider.findMany.mockResolvedValue([{ id: 6 }]);
+
+    await service.findAll({ organizationId: 12, search: '   ' });
+
+    expect(prismaMock.provider.findMany).toHaveBeenCalledWith({
+      where: { organizationId: 12 },
+      orderBy: { name: 'asc' },
+    });
+    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        service: 'ProvidersService',
+        operation: 'findAll',
+        organizationId: 12,
+        metadata: expect.objectContaining({ scope: 'tenant' }),
       }),
     );
   });
@@ -129,6 +207,7 @@ describe('ProvidersService multi-organization support', () => {
 
     expect(prismaMock.provider.findFirst).toHaveBeenCalledWith({
       where: { documentNumber: '12345678901', organizationId: 55 },
+      orderBy: { name: 'asc' },
     });
     expect(exists).toBe(true);
     expect(logOrganizationContextMock).toHaveBeenCalledWith(

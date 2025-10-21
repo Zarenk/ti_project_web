@@ -8,6 +8,7 @@ import {
   Delete,
   BadRequestException,
   Req,
+  Query,
 } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -55,12 +56,21 @@ export class ProvidersController {
 
   @Get()
   @ApiResponse({status: 200, description: 'Return all providers'}) // Swagger
-  findAll(@CurrentTenant('organizationId') organizationId: number | null) {
-    if (organizationId === undefined) {
+  findAll(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @Query('search') search?: string,
+  ) {
+    const trimmedSearch = typeof search === 'string' ? search.trim() : undefined;
+    const hasSearch = Boolean(trimmedSearch);
+
+    if (organizationId === undefined && !hasSearch) {
       return this.providersService.findAll();
     }
 
-    return this.providersService.findAll({ organizationId });
+    return this.providersService.findAll({
+      ...(organizationId === undefined ? {} : { organizationId }),
+      ...(hasSearch ? { search: trimmedSearch } : {}),
+    });
   }
 
   @Get(':id')

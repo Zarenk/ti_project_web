@@ -113,11 +113,23 @@ export class ProvidersService {
     }
   }
   
-  findAll(options?: { organizationId?: number | null }) {
+  findAll(options?: { organizationId?: number | null; search?: string }) {
     try {
       const organizationFilter = buildOrganizationFilter(
         options?.organizationId,
       ) as Prisma.ProviderWhereInput;
+      const searchTerm = options?.search?.trim();
+      const where: Prisma.ProviderWhereInput = { ...organizationFilter };
+
+      if (searchTerm) {
+        where.OR = [
+          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { documentNumber: { contains: searchTerm, mode: 'insensitive' } },
+          { email: { contains: searchTerm, mode: 'insensitive' } },
+          { phone: { contains: searchTerm, mode: 'insensitive' } },
+          { adress: { contains: searchTerm, mode: 'insensitive' } },
+        ];
+      }
 
       const scope =
         options?.organizationId === undefined
@@ -125,6 +137,12 @@ export class ProvidersService {
           : options.organizationId === null
           ? 'legacy'
           : 'tenant';
+      
+      const metadata: Record<string, unknown> = { scope };
+
+      if (searchTerm) {
+        metadata.search = searchTerm;
+      }
 
       logOrganizationContext({
         service: ProvidersService.name,
@@ -133,11 +151,12 @@ export class ProvidersService {
           options?.organizationId === undefined
             ? undefined
             : options.organizationId,
-        metadata: { scope },
+        metadata,
       });
 
       return this.prismaService.provider.findMany({
-        where: organizationFilter,
+        where,
+        orderBy: { name: 'asc' },
       });
     } catch (error) {
       this.logIfUnexpected(error, 'findAll');

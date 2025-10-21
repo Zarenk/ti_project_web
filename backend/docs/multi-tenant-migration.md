@@ -423,6 +423,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó `npm test -- populate-organization-ids.seed.spec.ts`, repasando los escenarios de propagación por herencia, métricas por _chunk_, manejo de errores al persistir el resumen, modo `--dryRun`, filtros por entidad y sobreescritura del código de organización por defecto.
 - **Resultado:** La suite reportó `9 passed`, confirmando que las recientes mejoras mantienen la integridad del seed y habilitando avanzar con la planificación operativa de la Fase 3.
 
+### 2024-05-27 – Búsqueda multi-tenant en `Providers`
+
+- **Contexto:** Para facilitar la operación durante el _Paso 3_ de la Fase 2 se requería habilitar búsquedas acotadas por tenant que reutilicen los filtros de organización sin perder compatibilidad con proveedores legacy.
+- **Implementación:** Se extendió `ProvidersService.findAll` agregando filtros `OR` con coincidencias insensibles a mayúsculas por nombre, RUC, correo, teléfono y dirección, respetando el `organizationId` activo y registrando el `scope` junto al término buscado en `logOrganizationContext`. El controlador expone ahora el query param `search`, normaliza el valor y delega la combinación de filtros hacia el servicio, manteniendo el ordenamiento ascendente por nombre. Las suites `providers.service.spec.ts` y `providers.controller.spec.ts` se actualizaron con casos que cubren búsquedas con y sin tenant, valores vacíos y propagación de metadatos multi-organización.
+- **Resultado:** El listado de proveedores ofrece búsquedas consistentes para escenarios multi-organización y legacy, dejando documentada la funcionalidad en la bitácora para las próximas iteraciones del plan.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
