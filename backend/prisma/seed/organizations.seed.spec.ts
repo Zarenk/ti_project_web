@@ -1,8 +1,14 @@
 import {
+  buildSeedSummary,
   filterSeedOrganizations,
   parseSeedCliArgs,
+  persistSeedSummary,
+  type OrganizationSeedResult,
   type SeedOrganization,
 } from './organizations.seed';
+import { mkdtemp, readFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import path from 'path';
 
 describe('organizations.seed CLI utilities', () => {
   const organizations: SeedOrganization[] = [
@@ -44,6 +50,19 @@ describe('organizations.seed CLI utilities', () => {
         '[organizations-seed] Missing value for --org',
       );
     });
+
+    it('captures the summary path option using kebab or camel case', () => {
+      expect(parseSeedCliArgs(['--summary-path', 'reports/output.json'])).toEqual({
+        summaryPath: 'reports/output.json',
+      });
+      expect(
+        parseSeedCliArgs(['--summaryPath= ./artifacts/summary.json', '--org', 'tenant-alpha']),
+      ).toEqual({
+        summaryPath: './artifacts/summary.json',
+        onlyOrganizations: ['tenant-alpha'],
+      });
+    });
+
   });
 
   describe('filterSeedOrganizations', () => {
@@ -68,6 +87,62 @@ describe('organizations.seed CLI utilities', () => {
       ).toThrow(
         '[organizations-seed] Unknown organization code(s): tenant-unknown',
       );
+    });
+  });
+
+  describe('buildSeedSummary', () => {
+    it('aggregates counters from organization results', () => {
+      const results: OrganizationSeedResult[] = [
+        {
+          code: 'tenant-alpha',
+          action: 'created',
+          unitsCreated: 2,
+          unitsUpdated: 0,
+          unitsEnsured: 2,
+        },
+        {
+          code: 'tenant-beta',
+          action: 'updated',
+          unitsCreated: 1,
+          unitsUpdated: 3,
+          unitsEnsured: 4,
+        },
+      ];
+
+      const summary = buildSeedSummary(results);
+
+      expect(summary.totalOrganizations).toBe(2);
+      expect(summary.totalCreated).toBe(1);
+      expect(summary.totalUpdated).toBe(1);
+      expect(summary.totalUnitsCreated).toBe(3);
+      expect(summary.totalUnitsUpdated).toBe(3);
+      expect(new Date(summary.processedAt).toISOString()).toBe(summary.processedAt);
+      expect(summary.organizations).toEqual(results);
+    });
+  });
+
+  describe('persistSeedSummary', () => {
+    it('writes the summary file creating intermediate directories', async () => {
+      const tempDir = await mkdtemp(path.join(tmpdir(), 'org-seed-'));
+      const summaryPath = path.join(tempDir, 'reports', 'summary.json');
+
+      const summary = buildSeedSummary([
+        {
+          code: 'tenant-alpha',
+          action: 'created',
+          unitsCreated: 1,
+          unitsUpdated: 0,
+          unitsEnsured: 1,
+        },
+      ]);
+
+      const persisted = await persistSeedSummary(summaryPath, summary);
+
+      expect(persisted).toBe(true);
+      const disk = JSON.parse(await readFile(summaryPath, 'utf8'));
+      expect(disk.totalOrganizations).toBe(summary.totalOrganizations);
+      expect(disk.organizations).toHaveLength(1);
+      expect(disk.organizations[0].code).toBe('tenant-alpha');
     });
   });
 });
