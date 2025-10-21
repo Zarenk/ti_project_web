@@ -181,6 +181,7 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
   let summaryDir: string | undefined;
   let sharedOnlyEntities: PopulateEntityKey[] | undefined;
   let sharedSkipEntities: PopulateEntityKey[] | undefined;
+  let sharedSummaryStdout: boolean | undefined;
 
   const mergeSharedEntities = (
     current: PopulateEntityKey[] | undefined,
@@ -423,6 +424,19 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
       continue;
     }
 
+    if (arg.startsWith('--summary-stdout=')) {
+      const [flag, raw] = arg.split('=');
+      sharedSummaryStdout = parseBooleanFlag(flag, raw).value;
+      continue;
+    }
+
+    if (arg === '--summary-stdout' || arg === '--summaryStdout') {
+      const { consumed, value } = parseBooleanFlag(arg, argv[index + 1]);
+      sharedSummaryStdout = value;
+      index += consumed;
+      continue;
+    }
+
     if (arg.trim().length > 0) {
       throw new Error(`[populate-org:combo] Unknown argument: ${arg}`);
     }
@@ -472,6 +486,16 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
     populateOptions.skipEntities.length > 0
   ) {
     validateOptions.skipEntities = cloneEntityArray(populateOptions.skipEntities);
+  }
+
+  if (typeof sharedSummaryStdout === 'boolean') {
+    if (typeof populateOptions.summaryStdout !== 'boolean') {
+      populateOptions.summaryStdout = sharedSummaryStdout;
+    }
+
+    if (typeof validateOptions.summaryStdout !== 'boolean') {
+      validateOptions.summaryStdout = sharedSummaryStdout;
+    }
   }
 
   return { populateOptions, validateOptions, skipPopulate, skipValidate };

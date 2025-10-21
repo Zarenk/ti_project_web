@@ -186,6 +186,23 @@ describe('parsePopulateAndValidateCliArgs', () => {
     expect(options.validateOptions.onlyEntities).toEqual(['store', 'client']);
   });
 
+  it('applies shared summary stdout flag when provided', () => {
+    const options = parsePopulateAndValidateCliArgs(['--summary-stdout=false']);
+
+    expect(options.populateOptions.summaryStdout).toBe(false);
+    expect(options.validateOptions.summaryStdout).toBe(false);
+  });
+
+  it('allows overriding shared summary stdout with specific flags', () => {
+    const options = parsePopulateAndValidateCliArgs([
+      '--summary-stdout=true',
+      '--validate-summary-stdout=false',
+    ]);
+
+    expect(options.populateOptions.summaryStdout).toBe(true);
+    expect(options.validateOptions.summaryStdout).toBe(false);
+  });
+
   it('throws on unknown arguments', () => {
     expect(() => parsePopulateAndValidateCliArgs(['--unknown-flag'])).toThrow(
       /Unknown argument/,
