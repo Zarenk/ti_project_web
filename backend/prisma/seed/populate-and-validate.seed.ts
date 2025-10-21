@@ -179,6 +179,22 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
   let skipPopulate = false;
   let skipValidate = false;
   let summaryDir: string | undefined;
+  let sharedOnlyEntities: PopulateEntityKey[] | undefined;
+  let sharedSkipEntities: PopulateEntityKey[] | undefined;
+
+  const mergeSharedEntities = (
+    current: PopulateEntityKey[] | undefined,
+    incoming: PopulateEntityKey[],
+  ): PopulateEntityKey[] => {
+    if (!current || current.length === 0) {
+      return incoming;
+    }
+    const next = new Set(current);
+    for (const entity of incoming) {
+      next.add(entity);
+    }
+    return Array.from(next);
+  };
 
   const nextValue = (args: string[], index: number): [string | undefined, number] => {
     const value = args[index + 1];
@@ -364,6 +380,36 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
       continue;
     }
 
+    if (arg.startsWith('--only=')) {
+      const [, raw] = arg.split('=');
+      const parsed = parseListArgument('--only', raw);
+      sharedOnlyEntities = mergeSharedEntities(sharedOnlyEntities, parsed);
+      continue;
+    }
+
+    if (arg === '--only' || arg === '--onlyEntities') {
+      const [value, nextIndex] = nextValue(argv, index);
+      const parsed = parseListArgument(arg, value);
+      sharedOnlyEntities = mergeSharedEntities(sharedOnlyEntities, parsed);
+      index = nextIndex;
+      continue;
+    }
+
+    if (arg.startsWith('--skip=')) {
+      const [, raw] = arg.split('=');
+      const parsed = parseListArgument('--skip', raw);
+      sharedSkipEntities = mergeSharedEntities(sharedSkipEntities, parsed);
+      continue;
+    }
+
+    if (arg === '--skip' || arg === '--skipEntities') {
+      const [value, nextIndex] = nextValue(argv, index);
+      const parsed = parseListArgument(arg, value);
+      sharedSkipEntities = mergeSharedEntities(sharedSkipEntities, parsed);
+      index = nextIndex;
+      continue;
+    }
+
     if (arg.startsWith('--summary-dir=')) {
       const [flag, raw] = arg.split('=');
       summaryDir = parseStringArgument(flag, raw);
@@ -389,6 +435,26 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
 
     if (!validateOptions.summaryPath) {
       validateOptions.summaryPath = `${summaryDir.replace(/\/+$/, '')}/${VALIDATE_SUMMARY_FILENAME}`;
+    }
+  }
+
+  if (sharedOnlyEntities && sharedOnlyEntities.length > 0) {
+    if (!populateOptions.onlyEntities) {
+      populateOptions.onlyEntities = cloneEntityArray(sharedOnlyEntities);
+    }
+
+    if (!validateOptions.onlyEntities) {
+      validateOptions.onlyEntities = cloneEntityArray(sharedOnlyEntities);
+    }
+  }
+
+  if (sharedSkipEntities && sharedSkipEntities.length > 0) {
+    if (!populateOptions.skipEntities) {
+      populateOptions.skipEntities = cloneEntityArray(sharedSkipEntities);
+    }
+
+    if (!validateOptions.skipEntities) {
+      validateOptions.skipEntities = cloneEntityArray(sharedSkipEntities);
     }
   }
 

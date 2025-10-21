@@ -164,6 +164,28 @@ describe('parsePopulateAndValidateCliArgs', () => {
     expect(options.validateOptions.failOnMissing).toBe(false);
   });
 
+  it('applies shared only/skip filters when provided', () => {
+    const options = parsePopulateAndValidateCliArgs([
+      '--only=store,client',
+      '--skip=sales,transfer',
+    ]);
+
+    expect(options.populateOptions.onlyEntities).toEqual(['store', 'client']);
+    expect(options.validateOptions.onlyEntities).toEqual(['store', 'client']);
+    expect(options.populateOptions.skipEntities).toEqual(['sales', 'transfer']);
+    expect(options.validateOptions.skipEntities).toEqual(['sales', 'transfer']);
+  });
+
+  it('prefers specific populate filters over shared ones', () => {
+    const options = parsePopulateAndValidateCliArgs([
+      '--only=store,client',
+      '--populate-only=inventory',
+    ]);
+
+    expect(options.populateOptions.onlyEntities).toEqual(['inventory']);
+    expect(options.validateOptions.onlyEntities).toEqual(['store', 'client']);
+  });
+
   it('throws on unknown arguments', () => {
     expect(() => parsePopulateAndValidateCliArgs(['--unknown-flag'])).toThrow(
       /Unknown argument/,
