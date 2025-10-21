@@ -244,9 +244,9 @@ async function detectCashRegisterMismatches(context: ValidationContext): Promise
     select: {
       id: true,
       organizationId: true,
-      store: { select: { organizationId: true } },
+      store: { select: { organizationId: true } as any },
     },
-  })) as Array<{ id: number; organizationId: number | null; store: { organizationId: number | null } | null }>;
+  } as any)) as unknown as Array<{ id: number; organizationId: number | null; store: { organizationId: number | null } | null }>;
 
   return summarizeMismatches(
     registers,
@@ -263,9 +263,9 @@ async function detectClientMismatches(context: ValidationContext): Promise<Misma
     select: {
       id: true,
       organizationId: true,
-      user: { select: { organizationId: true } },
+      user: { select: { organizationId: true } as any },
     },
-  })) as Array<{ id: number; organizationId: number | null; user: { organizationId: number | null } | null }>;
+  } as any)) as unknown as Array<{ id: number; organizationId: number | null; user: { organizationId: number | null } | null }>;
 
   return summarizeMismatches(
     clients,
@@ -282,14 +282,14 @@ async function detectInventoryMismatches(context: ValidationContext): Promise<Mi
       organizationId: true,
       storeId: true,
     },
-  })) as Array<{ id: number; organizationId: number | null; storeId: number }>;
+  } as any)) as unknown as Array<{ id: number; organizationId: number | null; storeId: number }>;
 
   const storeIds = Array.from(new Set(inventories.map((inventory) => inventory.storeId)));
   const stores = storeIds.length
     ? ((await context.prisma.store.findMany({
         where: { id: { in: storeIds } },
         select: { id: true, organizationId: true },
-      })) as Array<{ id: number; organizationId: number | null }>)
+      } as any)) as unknown as Array<{ id: number; organizationId: number | null }>)
     : [];
 
   const storeOrganizationMap = new Map<number, number | null>();
@@ -317,9 +317,9 @@ async function detectInventoryHistoryMismatches(
     select: {
       id: true,
       organizationId: true,
-      inventory: { select: { organizationId: true } },
+      inventory: { select: { organizationId: true } as any },
     },
-  })) as Array<{
+  } as any)) as unknown as Array<{
     id: number;
     organizationId: number | null;
     inventory: { organizationId: number | null } | null;
@@ -338,11 +338,11 @@ async function detectEntryMismatches(context: ValidationContext): Promise<Mismat
     select: {
       id: true,
       organizationId: true,
-      store: { select: { organizationId: true } },
-      user: { select: { organizationId: true } },
-      provider: { select: { organizationId: true } },
+      store: { select: { organizationId: true } as any },
+      user: { select: { organizationId: true } as any },
+      client: { select: { organizationId: true } as any },
     },
-  })) as Array<{
+  } as any)) as unknown as Array<{
     id: number;
     organizationId: number | null;
     store: { organizationId: number | null } | null;
@@ -396,10 +396,10 @@ async function detectTransferMismatches(context: ValidationContext): Promise<Mis
     select: {
       id: true,
       organizationId: true,
-      sourceStore: { select: { organizationId: true } },
-      destinationStore: { select: { organizationId: true } },
+      sourceStore: { select: { organizationId: true } as any },
+      destinationStore: { select: { organizationId: true } as any },
     },
-  })) as Array<{
+  } as any)) as unknown as Array<{
     id: number;
     organizationId: number | null;
     sourceStore: { organizationId: number | null } | null;
@@ -422,9 +422,9 @@ async function detectOrderMismatches(context: ValidationContext): Promise<Mismat
     select: {
       id: true,
       organizationId: true,
-      sale: { select: { organizationId: true } },
+      sale: { select: { organizationId: true } as any },
     },
-  })) as Array<{
+  } as any)) as unknown as Array<{
     id: number;
     organizationId: number | null;
     sale: { organizationId: number | null } | null;
@@ -445,10 +445,10 @@ async function detectCashTransactionMismatches(
     select: {
       id: true,
       organizationId: true,
-      cashRegister: { select: { organizationId: true } },
-      user: { select: { organizationId: true } },
+      cashRegister: { select: { organizationId: true } as any },
+      user: { select: { organizationId: true } as any },
     },
-  })) as Array<{
+  } as any)) as unknown as Array<{
     id: number;
     organizationId: number | null;
     cashRegister: { organizationId: number | null } | null;
@@ -471,10 +471,10 @@ async function detectCashClosureMismatches(context: ValidationContext): Promise<
     select: {
       id: true,
       organizationId: true,
-      cashRegister: { select: { organizationId: true } },
-      user: { select: { organizationId: true } },
+      cashRegister: { select: { organizationId: true } as any },
+      user: { select: { organizationId: true } as any },
     },
-  })) as Array<{
+  } as any)) as unknown as Array<{
     id: number;
     organizationId: number | null;
     cashRegister: { organizationId: number | null } | null;
