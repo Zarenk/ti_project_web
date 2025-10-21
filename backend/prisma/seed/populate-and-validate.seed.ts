@@ -34,6 +34,28 @@ function cloneEntityArray(value: PopulateEntityKey[] | undefined) {
   return value ? [...value] : undefined;
 }
 
+function normalizeDirectoryPath(path: string): string {
+  const trimmed = path.replace(/[\\/]+$/, '');
+
+  if (trimmed.length === 0 && path.length > 0) {
+    return path[0] === '\\' ? '\\' : '/';
+  }
+
+  return trimmed;
+}
+
+function buildSummaryPath(directory: string, filename: string): string {
+  if (!directory) {
+    return filename;
+  }
+
+  if (directory === '/' || directory === '\\') {
+    return `${directory}${filename}`;
+  }
+
+  return `${directory}/${filename}`;
+}
+
 export async function populateAndValidate(
   options: PopulateAndValidateOptions = {},
 ): Promise<PopulateAndValidateResult> {
@@ -443,12 +465,21 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
   }
 
   if (summaryDir) {
+
+    const normalizedDir = normalizeDirectoryPath(summaryDir);
+
     if (!populateOptions.summaryPath) {
-      populateOptions.summaryPath = `${summaryDir.replace(/\/+$/, '')}/${POPULATE_SUMMARY_FILENAME}`;
+      populateOptions.summaryPath = buildSummaryPath(
+        normalizedDir,
+        POPULATE_SUMMARY_FILENAME,
+      );
     }
 
     if (!validateOptions.summaryPath) {
-      validateOptions.summaryPath = `${summaryDir.replace(/\/+$/, '')}/${VALIDATE_SUMMARY_FILENAME}`;
+      validateOptions.summaryPath = buildSummaryPath(
+        normalizedDir,
+        VALIDATE_SUMMARY_FILENAME,
+      );
     }
   }
 

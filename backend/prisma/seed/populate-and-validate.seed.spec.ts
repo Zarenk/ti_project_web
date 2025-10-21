@@ -203,6 +203,32 @@ describe('parsePopulateAndValidateCliArgs', () => {
     expect(options.validateOptions.summaryStdout).toBe(false);
   });
 
+  it('normalizes summary directory removing trailing separators', () => {
+    const options = parsePopulateAndValidateCliArgs([
+      '--summary-dir=C:/reports/run1//',
+    ]);
+
+    expect(options.populateOptions.summaryPath).toBe(
+      'C:/reports/run1/populate-summary.json',
+    );
+    expect(options.validateOptions.summaryPath).toBe(
+      'C:/reports/run1/validate-summary.json',
+    );
+  });
+
+  it('normalizes summary directory with Windows-style separators', () => {
+    const options = parsePopulateAndValidateCliArgs([
+      '--summary-dir=X:\\org\\unit\\',
+    ]);
+
+    expect(options.populateOptions.summaryPath).toBe(
+      'X:\\org\\unit/populate-summary.json',
+    );
+    expect(options.validateOptions.summaryPath).toBe(
+      'X:\\org\\unit/validate-summary.json',
+    );
+  });
+
   it('throws on unknown arguments', () => {
     expect(() => parsePopulateAndValidateCliArgs(['--unknown-flag'])).toThrow(
       /Unknown argument/,
