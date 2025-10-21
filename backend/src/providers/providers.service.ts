@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateProviderDto } from './dto/create-provider.dto';
@@ -19,11 +21,38 @@ import {
 
 @Injectable()
 export class ProvidersService {
+
+  private readonly logger = new Logger(ProvidersService.name);
   
   constructor(
     private prismaService: PrismaService,
     private activityService: ActivityService,
   ) {}
+
+  private logIfUnexpected(error: unknown, operation: string) {
+    if (error instanceof HttpException) {
+      if (error.getStatus() >= 500) {
+        this.logger.error(
+          `HTTP ${error.getStatus()} during ${operation}: ${error.message}`,
+          error.stack,
+        );
+      }
+
+      return;
+    }
+
+    if (error instanceof Error) {
+      this.logger.error(
+        `Unexpected error during ${operation}: ${error.message}`,
+        error.stack,
+      );
+      return;
+    }
+
+    this.logger.error(
+      `Unexpected non-error thrown during ${operation}: ${JSON.stringify(error)}`,
+    );
+  }
 
    async create(
     createProviderDto: CreateProviderDto,
@@ -79,7 +108,7 @@ export class ProvidersService {
           `El Proveedor con el RUC "${createProviderDto.documentNumber}" ya existe.`,
         );
       }
-      console.error('Error en el backend:', error);
+      this.logIfUnexpected(error, 'create');
       throw error;
     }
   }
@@ -111,7 +140,7 @@ export class ProvidersService {
         where: organizationFilter,
       });
     } catch (error) {
-      console.error('Error en el backend:', error);
+      this.logIfUnexpected(error, 'findAll');
       throw error;
     }
   }
@@ -153,7 +182,7 @@ export class ProvidersService {
       return providerFound;
     }
     catch(error){
-      console.error("Error en el backend:", error);
+      this.logIfUnexpected(error, 'findOne');
       throw error;
     }
   }
@@ -296,9 +325,9 @@ export class ProvidersService {
           `El proveedor con el RUC "${updateProviderDto.name}" ya existe.`
         );
       }
-      console.error("Error en el backend:", error);
+      this.logIfUnexpected(error, 'update');
       throw error; // Lanza otros errores no manejados
-    }    
+    }
   }
 
   async updateMany(
@@ -411,7 +440,6 @@ export class ProvidersService {
         updatedProviders,
       };
     } catch (error) {
-      console.error('Error al actualizar proveedores:', error);
   
       // Manejar errores específicos de Prisma
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -419,6 +447,8 @@ export class ProvidersService {
           throw new NotFoundException('Uno o mas proveedores no fueron encontrados.');
         }
       }
+
+      this.logIfUnexpected(error, 'updateMany');
   
       throw new InternalServerErrorException(
         'Hubo un error al actualizar los proveedores.',
@@ -496,7 +526,7 @@ export class ProvidersService {
 
       return provider;
     } catch (error) {
-      console.error('Error en el backend:', error);
+      this.logIfUnexpected(error, 'remove');
       throw error; // Lanza otros errores no manejados
     }
   }
@@ -579,10 +609,10 @@ export class ProvidersService {
         message: `${deletedProviders.count} proveedor(es) eliminado(s) correctamente.`,
       };
     } catch (error) {
-      console.error('Error en el backend:', error);
+      this.logIfUnexpected(error, 'removeMany');
       throw new InternalServerErrorException(
         'Hubo un error al eliminar los proveedores.',
-      );   
+      );
     }
   }
 }
