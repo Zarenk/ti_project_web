@@ -77,7 +77,22 @@ const buildPrismaValidationMock = (): PrismaValidationMock => ({
   },
   entry: {
     count: createCountMock(8, 1),
-    findMany: createFindManyMock([]),
+    findMany: createFindManyMock([
+      {
+        id: 300,
+        organizationId: 2,
+        store: { organizationId: 2 },
+        user: { organizationId: 2 },
+        provider: { organizationId: 5 },
+      },
+      {
+        id: 301,
+        organizationId: 3,
+        store: { organizationId: 3 },
+        user: { organizationId: 3 },
+        provider: { organizationId: 3 },
+      },
+    ]),
   },
   provider: {
     count: createCountMock(5, 0),
@@ -124,14 +139,21 @@ describe('validateOrganizationIds', () => {
     expect(summary.hasMissing).toBe(true);
     expect(summary.missingEntities).toEqual(['store', 'user', 'entry']);
     expect(summary.hasMismatched).toBe(true);
-    expect(summary.mismatchedEntities).toEqual(['cash-register', 'client']);
+    expect(summary.mismatchedEntities).toEqual(['cash-register', 'client', 'entry']);
     expect(summary.processed['cash-register']?.mismatched).toBe(1);
     expect(summary.processed['cash-register']?.mismatchSample).toEqual([
       '11 (org=2 | refs=store:3)',
     ]);
+    expect(summary.processed.entry?.mismatched).toBe(1);
+    expect(summary.processed.entry?.mismatchSample).toEqual([
+      '300 (org=2 | refs=store:2, user:2, provider:5)',
+    ]);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('store'));
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('cash-register: detected 1 records'),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('entry: detected 1 records'),
     );
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringContaining('Summary JSON'),

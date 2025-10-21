@@ -340,7 +340,7 @@ async function detectEntryMismatches(context: ValidationContext): Promise<Mismat
       organizationId: true,
       store: { select: { organizationId: true } as any },
       user: { select: { organizationId: true } as any },
-      client: { select: { organizationId: true } as any },
+      provider: { select: { organizationId: true } as any },
     },
   } as any)) as unknown as Array<{
     id: number;
@@ -367,11 +367,11 @@ async function detectSalesMismatches(context: ValidationContext): Promise<Mismat
     select: {
       id: true,
       organizationId: true,
-      store: { select: { organizationId: true } },
-      user: { select: { organizationId: true } },
-      client: { select: { organizationId: true } },
+      store: { select: { organizationId: true } as any },
+      user: { select: { organizationId: true } as any },
+      client: { select: { organizationId: true } as any },
     },
-  })) as Array<{
+  } as any)) as unknown as Array<{
     id: number;
     organizationId: number | null;
     store: { organizationId: number | null } | null;
