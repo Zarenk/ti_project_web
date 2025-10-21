@@ -6,7 +6,7 @@ type Logger = Pick<typeof console, 'info' | 'warn' | 'error'>;
 
 type PrismaContextClient = PrismaClient & Record<string, any>;
 
-const POPULATE_ENTITY_KEYS = [
+export const POPULATE_ENTITY_KEYS = [
   'store',
   'cash-register',
   'user',
@@ -22,7 +22,7 @@ const POPULATE_ENTITY_KEYS = [
   'cash-closure',
 ] as const;
 
-type PopulateEntityKey = (typeof POPULATE_ENTITY_KEYS)[number];
+export type PopulateEntityKey = (typeof POPULATE_ENTITY_KEYS)[number];
 
 type PopulateOptions = {
   prisma?: PrismaClient;
@@ -94,7 +94,7 @@ function createEmptyEntitySummary(): EntitySummary {
   return { planned: 0, updated: 0, reasons: {}, durationMs: 0, chunks: 0 };
 }
 
-function isPopulateEntityKey(value: string): value is PopulateEntityKey {
+export function isPopulateEntityKey(value: string): value is PopulateEntityKey {
   return POPULATE_ENTITY_KEY_SET.has(value as PopulateEntityKey);
 }
 
