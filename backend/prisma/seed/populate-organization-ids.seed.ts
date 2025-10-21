@@ -872,6 +872,28 @@ type CliOptions = Pick<
   | 'summaryStdout'
 >;
 
+const TRUTHY_VALUES = new Set(['1', 'true', 'yes', 'on']);
+const FALSY_VALUES = new Set(['0', 'false', 'no', 'off']);
+
+type ParsedBooleanFlag = { value: boolean; consumed: number };
+
+function parseBooleanFlag(flag: string, raw: string | undefined): ParsedBooleanFlag {
+  if (!raw || raw.startsWith('--')) {
+    return { value: true, consumed: 0 };
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  if (TRUTHY_VALUES.has(normalized)) {
+    return { value: true, consumed: 1 };
+  }
+
+  if (FALSY_VALUES.has(normalized)) {
+    return { value: false, consumed: 1 };
+  }
+
+  throw new Error(`[populate-org] Invalid boolean value for ${flag}: ${raw}`);
+}
+
 function parseListArgument(
   flag: string,
   value: string | undefined,
@@ -942,8 +964,16 @@ export function parsePopulateOrganizationCliArgs(argv: string[]): CliOptions {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
 
+    if (arg.startsWith('--dry-run=') || arg.startsWith('--dryRun=')) {
+      const [flag, raw] = arg.split('=');
+      options.dryRun = parseBooleanFlag(flag, raw).value;
+      continue;
+    }
+
     if (arg === '--dry-run' || arg === '--dryRun') {
-      options.dryRun = true;
+      const { consumed, value } = parseBooleanFlag(arg, argv[index + 1]);
+      options.dryRun = value;
+      index += consumed;
       continue;
     }
 
@@ -1017,12 +1047,25 @@ export function parsePopulateOrganizationCliArgs(argv: string[]): CliOptions {
     }
 
     if (
+      arg.startsWith('--summary-stdout=') ||
+      arg.startsWith('--summaryStdout=') ||
+      arg.startsWith('--summary-json=') ||
+      arg.startsWith('--summaryJson=')
+    ) {
+      const [flag, raw] = arg.split('=');
+      options.summaryStdout = parseBooleanFlag(flag, raw).value;
+      continue;
+    }
+
+    if (
       arg === '--summary-stdout' ||
       arg === '--summaryStdout' ||
       arg === '--summary-json' ||
       arg === '--summaryJson'
     ) {
-      options.summaryStdout = true;
+      const { consumed, value } = parseBooleanFlag(arg, argv[index + 1]);
+      options.summaryStdout = value;
+      index += consumed;
       continue;
     }
 

@@ -548,6 +548,30 @@ describe('parsePopulateOrganizationCliArgs', () => {
     expect(options).toEqual({ summaryStdout: true });
   });
 
+  it('parses explicit boolean values for dry-run and summary stdout', () => {
+    expect(parsePopulateOrganizationCliArgs(['--dry-run=false'])).toEqual({
+      dryRun: false,
+    });
+
+    expect(
+      parsePopulateOrganizationCliArgs(['--dryRun', 'false', '--summary-stdout', '0']),
+    ).toEqual({ dryRun: false, summaryStdout: false });
+
+    expect(
+      parsePopulateOrganizationCliArgs(['--summary-json=false']),
+    ).toEqual({ summaryStdout: false });
+  });
+
+  it('throws on invalid boolean values', () => {
+    expect(() =>
+      parsePopulateOrganizationCliArgs(['--dry-run', 'maybe']),
+    ).toThrow('[populate-org] Invalid boolean value for --dry-run: maybe');
+
+    expect(() =>
+      parsePopulateOrganizationCliArgs(['--summary-stdout=nah']),
+    ).toThrow('[populate-org] Invalid boolean value for --summary-stdout: nah');
+  });
+
   it('throws on invalid entities', () => {
     expect(() => parsePopulateOrganizationCliArgs(['--only', 'unknown'])).toThrow(
       '[populate-org] Unknown entity provided for --only: unknown',
