@@ -1,12 +1,27 @@
+import { mkdir, writeFile } from 'node:fs/promises';
 import type { PrismaClient } from '@prisma/client';
 import {
   applyRlsPolicies,
   parseApplyRlsCliArgs,
 } from './apply-rls-policies.seed';
 
+jest.mock('node:fs/promises', () => ({
+  mkdir: jest.fn(() => Promise.resolve(undefined)),
+  writeFile: jest.fn(() => Promise.resolve(undefined)),
+}));
+
+const mockedMkdir = mkdir as jest.MockedFunction<typeof mkdir>;
+const mockedWriteFile = writeFile as jest.MockedFunction<typeof writeFile>;
+
 const createMockPrisma = () => ({
   $executeRawUnsafe: jest.fn(),
   $disconnect: jest.fn(),
+});
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockedMkdir.mockClear();
+  mockedWriteFile.mockClear();
 });
 
 describe('applyRlsPolicies', () => {
@@ -35,6 +50,13 @@ describe('applyRlsPolicies', () => {
 
     expect(prisma.$executeRawUnsafe).toHaveBeenCalledTimes(4);
     expect(logger.warn).not.toHaveBeenCalled();
+
+    expect(result.summary.totalStatements).toBe(4);
+    expect(result.summary.entries).toHaveLength(1);
+    expect(result.summary.entries[0]).toMatchObject({
+      entity: 'store',
+      statementCount: 4,
+    });
   });
 
   it('forces policies when requested', async () => {
@@ -89,11 +111,47 @@ describe('applyRlsPolicies', () => {
     );
   });
 
+  it('persists and prints the summary when configured', async () => {
+    const prisma = createMockPrisma() as unknown as PrismaClient;
+    const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    mockedMkdir.mockResolvedValue(undefined);
+    mockedWriteFile.mockResolvedValue(undefined);
+
+    const result = await applyRlsPolicies({
+      prisma,
+      logger,
+      onlyEntities: ['store', 'client'],
+      summaryPath: '/tmp/rls-summary.json',
+      summaryStdout: true,
+    });
+
+    expect(mockedMkdir).toHaveBeenCalledWith('/tmp', { recursive: true });
+    expect(mockedWriteFile).toHaveBeenCalledTimes(1);
+    const [, payload, encoding] = mockedWriteFile.mock.calls[0];
+    expect(encoding).toBe('utf8');
+
+    const parsed = JSON.parse(payload as string);
+    expect(parsed.totalStatements).toBe(8);
+    expect(parsed.entries).toHaveLength(2);
+    expect(parsed.entries[0]).toMatchObject({
+      entity: 'store',
+      statementCount: 4,
+    });
+
+    expect(result.summary.summaryFilePath).toBe('/tmp/rls-summary.json');
+    expect(
+      logger.info.mock.calls.some(
+        ([message]) => message === '[apply-rls] Summary JSON:',
+      ),
+    ).toBe(true);
+  });
+
   it('warns when no entities are matched', async () => {
     const prisma = createMockPrisma() as unknown as PrismaClient;
     const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
 
-    await applyRlsPolicies({
+    const result = await applyRlsPolicies({
       prisma,
       logger,
       onlyEntities: [],
@@ -103,6 +161,7 @@ describe('applyRlsPolicies', () => {
       '[apply-rls] No entities matched the provided filters.',
     );
     expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+    expect(result.summary.totalStatements).toBe(0);
   });
 });
 
@@ -139,5 +198,17 @@ describe('parseApplyRlsCliArgs', () => {
     expect(options.dryRun).toBe(true);
     expect(options.disable).toBe(false);
     expect(options.force).toBe(true);
+  });
+
+  it('parses summary path and stdout flags', () => {
+    const options = parseApplyRlsCliArgs([
+      '--summary-path',
+      'out/summary.json',
+      '--summary-stdout=no',
+      '--summaryStdout',
+    ]);
+
+    expect(options.summaryPath).toBe('out/summary.json');
+    expect(options.summaryStdout).toBe(true);
   });
 });

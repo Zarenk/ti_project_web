@@ -1,4 +1,6 @@
 import { PrismaClient } from '@prisma/client';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { POPULATE_ENTITY_KEYS, type PopulateEntityKey } from './populate-organization-ids.seed';
 
 const DEFAULT_SESSION_VARIABLE = 'app.current_organization_id';
@@ -20,6 +22,8 @@ type ApplyRlsOptions = {
   policyPrefix?: string;
   policyRoles?: string[];
   sessionVariable?: string;
+  summaryPath?: string;
+  summaryStdout?: boolean;
 };
 
 type ApplyRlsResult = {
@@ -27,12 +31,32 @@ type ApplyRlsResult = {
     entity: PopulateEntityKey;
     applied: string[];
   }>;
+  summary: ApplyRlsSummary;
 };
 
 type CliOptions = Omit<
   ApplyRlsOptions,
   'prisma' | 'logger'
 >;
+
+type ApplyRlsSummaryEntry = {
+  entity: PopulateEntityKey;
+  statements: string[];
+  statementCount: number;
+};
+
+type ApplyRlsSummary = {
+  dryRun: boolean;
+  disable: boolean;
+  force: boolean;
+  policyPrefix: string;
+  policyRoles: string[];
+  sessionVariable: string;
+  generatedAt: string;
+  totalStatements: number;
+  entries: ApplyRlsSummaryEntry[];
+  summaryFilePath?: string;
+};
 
 const ENTITY_TABLES: Record<PopulateEntityKey, { table: string; column: string }>
   = {
@@ -121,6 +145,90 @@ function createStatements(
   ];
 }
 
+async function persistSummaryToFile(
+  summaryPath: string,
+  summary: ApplyRlsSummary,
+  logger: Logger,
+): Promise<boolean> {
+  try {
+    await mkdir(dirname(summaryPath), { recursive: true });
+    await writeFile(summaryPath, JSON.stringify(summary, null, 2), 'utf8');
+    logger.info(`[apply-rls] Summary written to ${summaryPath}.`);
+    return true;
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    logger.warn(`[apply-rls] Failed to write summary at ${summaryPath}: ${details}`);
+    return false;
+  }
+}
+
+async function finalizeSummary(
+  executed: ApplyRlsResult['statements'],
+  context: {
+    dryRun: boolean;
+    disable: boolean;
+    force: boolean;
+    policyPrefix: string;
+    policyRoles: string[];
+    sessionVariable: string;
+    summaryPath?: string;
+    summaryStdout?: boolean;
+    logger: Logger;
+  },
+): Promise<ApplyRlsSummary> {
+  const entries: ApplyRlsSummaryEntry[] = executed.map((entry) => ({
+    entity: entry.entity,
+    statements: entry.applied,
+    statementCount: entry.applied.length,
+  }));
+
+  if (!entries.length) {
+    context.logger.info('[apply-rls] No statements were generated for the selected entities.');
+  } else {
+    for (const entry of entries) {
+      context.logger.info(
+        `[apply-rls] Summary ${entry.entity}: statements=${entry.statementCount}.`,
+      );
+    }
+  }
+
+  const totalStatements = entries.reduce(
+    (accumulator, entry) => accumulator + entry.statementCount,
+    0,
+  );
+
+  context.logger.info(`[apply-rls] Summary overall: statements=${totalStatements}.`);
+
+  const summary: ApplyRlsSummary = {
+    dryRun: context.dryRun,
+    disable: context.disable,
+    force: context.force,
+    policyPrefix: context.policyPrefix,
+    policyRoles: context.policyRoles,
+    sessionVariable: context.sessionVariable,
+    generatedAt: new Date().toISOString(),
+    totalStatements,
+    entries,
+  };
+
+  if (context.summaryPath) {
+    const persisted = await persistSummaryToFile(
+      context.summaryPath,
+      summary,
+      context.logger,
+    );
+    if (persisted) {
+      summary.summaryFilePath = context.summaryPath;
+    }
+  }
+
+  if (context.summaryStdout) {
+    context.logger.info('[apply-rls] Summary JSON:', JSON.stringify(summary, null, 2));
+  }
+
+  return summary;
+}
+
 export async function applyRlsPolicies(
   options: ApplyRlsOptions = {},
 ): Promise<ApplyRlsResult> {
@@ -141,10 +249,21 @@ export async function applyRlsPolicies(
 
   if (!entities.length) {
     logger.warn('[apply-rls] No entities matched the provided filters.');
+    const summary = await finalizeSummary([], {
+      dryRun,
+      disable,
+      force,
+      policyPrefix,
+      policyRoles,
+      sessionVariable,
+      summaryPath: options.summaryPath,
+      summaryStdout: options.summaryStdout,
+      logger,
+    });
     if (shouldDisconnect) {
       await prisma.$disconnect();
     }
-    return { statements: [] };
+    return { statements: [], summary };
   }
 
   const executed: ApplyRlsResult['statements'] = [];
@@ -189,7 +308,19 @@ export async function applyRlsPolicies(
     }
   }
 
-  return { statements: executed };
+  const summary = await finalizeSummary(executed, {
+    dryRun,
+    disable,
+    force,
+    policyPrefix,
+    policyRoles,
+    sessionVariable,
+    summaryPath: options.summaryPath,
+    summaryStdout: options.summaryStdout,
+    logger,
+  });
+
+  return { statements: executed, summary };
 }
 
 function parseBooleanFlag(
@@ -343,6 +474,44 @@ export function parseApplyRlsCliArgs(argv: string[]): CliOptions {
       const [value, next] = nextValue(argv, index);
       options.policyRoles = parseListArgument(arg, value);
       index = next;
+      continue;
+    }
+
+    if (arg.startsWith('--summary-path=')) {
+      const [, raw] = arg.split('=');
+      options.summaryPath = parseStringArgument('--summary-path', raw);
+      continue;
+    }
+
+    if (arg.startsWith('--summaryPath=')) {
+      const [, raw] = arg.split('=');
+      options.summaryPath = parseStringArgument('--summaryPath', raw);
+      continue;
+    }
+
+    if (arg === '--summary-path' || arg === '--summaryPath') {
+      const [value, next] = nextValue(argv, index);
+      options.summaryPath = parseStringArgument(arg, value);
+      index = next;
+      continue;
+    }
+
+    if (arg.startsWith('--summary-stdout=')) {
+      const [, raw] = arg.split('=');
+      options.summaryStdout = parseBooleanFlag('--summary-stdout', raw).value;
+      continue;
+    }
+
+    if (arg.startsWith('--summaryStdout=')) {
+      const [, raw] = arg.split('=');
+      options.summaryStdout = parseBooleanFlag('--summaryStdout', raw).value;
+      continue;
+    }
+
+    if (arg === '--summary-stdout' || arg === '--summaryStdout') {
+      const { value, consumed } = parseBooleanFlag(arg, argv[index + 1]);
+      options.summaryStdout = value;
+      index += consumed;
       continue;
     }
   }
