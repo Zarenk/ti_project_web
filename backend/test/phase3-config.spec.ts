@@ -23,6 +23,7 @@ describe('buildPhase3OptionsFromEnv', () => {
       path.resolve(cwd, 'tmp', 'phase3'),
     );
     expect(config.printOptions).toBe(false);
+    expect(config.optionsPath).toBeUndefined();
     expect(options.populate?.summaryPath).toBe(
       path.join(config.resolvedSummaryDir, 'populate-summary.json'),
     );
@@ -50,6 +51,7 @@ describe('buildPhase3OptionsFromEnv', () => {
       PHASE3_VALIDATE_FAIL_ON_MISSING: 'false',
       PHASE3_VALIDATE_MISMATCH_SAMPLE_SIZE: '7',
       PHASE3_PRINT_OPTIONS: 'true',
+      PHASE3_OPTIONS_PATH: './reports/phase3-options.json',
     };
 
     const cwd = path.join(process.cwd(), 'phase3-overrides');
@@ -85,6 +87,9 @@ describe('buildPhase3OptionsFromEnv', () => {
     expect(options.validate?.onlyEntities).toEqual(['store', 'client']);
     expect(options.validate?.skipEntities).toEqual(['sales']);
     expect(config.printOptions).toBe(true);
+    expect(config.optionsPath).toBe(
+      path.resolve(cwd, 'reports', 'phase3-options.json'),
+    );
   });
 
   it('throws when invalid entities are supplied', () => {

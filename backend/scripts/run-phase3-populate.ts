@@ -1,4 +1,5 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 import { config as loadEnv } from 'dotenv';
 
@@ -14,6 +15,7 @@ async function main(): Promise<void> {
     dryRun,
     resolvedSummaryDir,
     printOptions,
+    optionsPath,
   } = buildPhase3OptionsFromEnv();
 
   await mkdir(resolvedSummaryDir, { recursive: true });
@@ -30,6 +32,17 @@ async function main(): Promise<void> {
 
   if (printOptions) {
     console.info('[phase3] Effective options:', JSON.stringify(options, null, 2));
+  }
+
+  if (optionsPath) {
+    try {
+      await mkdir(dirname(optionsPath), { recursive: true });
+      await writeFile(optionsPath, JSON.stringify(options, null, 2), 'utf8');
+      console.info(`[phase3] Options persisted to ${optionsPath}.`);
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      console.warn(`[phase3] Failed to persist options at ${optionsPath}: ${details}`);
+    }
   }
 
   const result = await populateAndValidate(options);

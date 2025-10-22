@@ -20,6 +20,7 @@ export type Phase3Config = {
   availableEntities: readonly PopulateEntityKey[];
   dryRun: boolean;
   printOptions: boolean;
+  optionsPath?: string;
 };
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'y', 'on']);
@@ -154,10 +155,14 @@ export function buildPhase3OptionsFromEnv(
   const summaryStdout = readBooleanEnv(env, 'PHASE3_SUMMARY_STDOUT', true);
   const summaryDirEnv = readStringEnv(env, 'PHASE3_SUMMARY_DIR');
   const printOptions = readBooleanEnv(env, 'PHASE3_PRINT_OPTIONS', false);
+  const optionsPathEnv = readStringEnv(env, 'PHASE3_OPTIONS_PATH');
   const resolvedSummaryDir = path.resolve(
     cwd,
     summaryDirEnv ?? DEFAULT_SUMMARY_DIR,
   );
+  const resolvedOptionsPath = optionsPathEnv
+    ? path.resolve(cwd, optionsPathEnv)
+    : undefined;
   const defaultOrganizationCode = readStringEnv(
     env,
     'PHASE3_DEFAULT_ORG_CODE',
@@ -225,5 +230,6 @@ export function buildPhase3OptionsFromEnv(
     availableEntities: POPULATE_ENTITY_KEYS,
     dryRun: options.populate?.dryRun ?? true,
     printOptions,
+    optionsPath: resolvedOptionsPath,
   };
 }
