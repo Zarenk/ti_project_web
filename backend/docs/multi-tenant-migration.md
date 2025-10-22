@@ -97,7 +97,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 
 ### Fase 5 en adelante
 - Implementar middleware multi-tenant en NestJS, activarlo tras validar integridad.
-- Activar RLS gradualmente siguiendo feature flags y monitoreo de políticas.
+- Activar RLS gradualmente siguiendo feature flags y monitoreo de políticas utilizando `npm run seed:apply-rls` para habilitar o deshabilitar políticas por dominio.
 - Documentar resultados y retirar código legacy al final del despliegue.
 
 ## Bitácora técnica reciente

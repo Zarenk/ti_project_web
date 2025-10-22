@@ -20,6 +20,7 @@
     "seed:accounting": "ts-node prisma/seed/accounting.seed.ts",
     "seed:organizations": "ts-node prisma/seed/organizations.seed.ts",
     "seed:multi-tenant": "ts-node prisma/seed/multi-tenant-fixtures.seed.ts",
+    "seed:apply-rls": "ts-node prisma/seed/apply-rls-policies.seed.ts",
     "seed:populate-organization-ids": "ts-node prisma/seed/populate-organization-ids.seed.ts",
     "seed:populate-and-validate": "ts-node prisma/seed/populate-and-validate.seed.ts",
     "seed:validate-organization-ids": "ts-node prisma/seed/validate-organization-ids.seed.ts",
