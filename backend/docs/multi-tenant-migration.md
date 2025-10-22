@@ -465,6 +465,12 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Implementación:** Se ejecutó `npm test -- prisma/seed/populate-organization-ids.seed.spec.ts prisma/seed/populate-and-validate.seed.spec.ts`, verificando que ambas suites convivan en una misma corrida y que el _wrapper_ reutilice correctamente Prisma, los parsers CLI y las métricas consolidadas de resumen.
 - **Resultado:** El comando registró `27 passed` con ambas baterías en verde, confirmando que la orquestación conjunta está lista para supervisar corridas controladas y habilitando el siguiente paso del plan en ambientes superiores.
 
+### 2024-06-03 – Revalidación guardia y servicio de contexto de tenant
+
+- **Contexto:** Con las suites de seeds consolidadas se requirió confirmar que la capa transversal de tenancy siga resolviendo el contexto correctamente antes de ampliar las pruebas de integración multi-organización.
+- **Implementación:** Se reejecutaron `npm test -- tenant-context.service.spec.ts` y `npm test -- tenant-context.guard.spec.ts`, verificando la priorización de cabeceras `x-org-id`/`x-org-unit-id`, los _fallbacks_ hacia organizaciones por defecto, la preservación de listas permitidas y la inyección del `tenantContext` en la capa HTTP.
+- **Resultado:** Las baterías reportaron `7 passed` y `1 passed` respectivamente, dejando constancia de que tanto `TenantContextService` como `TenantContextGuard` mantienen la propagación esperada del `organizationId` y habilitando el avance hacia fixtures de integración supervisados.
+
 ## Referencias
 - Script de seed: [`prisma/seed/organizations.seed.ts`](../prisma/seed/organizations.seed.ts)
 - Fixtures multi-tenant: [`prisma/seed/multi-tenant-fixtures.seed.ts`](../prisma/seed/multi-tenant-fixtures.seed.ts)
