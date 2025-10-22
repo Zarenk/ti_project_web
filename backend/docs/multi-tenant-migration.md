@@ -74,6 +74,13 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
   - `--skip-populate` / `--skip-validate` para ejecutar fases individuales.
   - `--summary-dir=<ruta>` para centralizar reportes.
   - Propaga banderas específicas de cada fase (`--populate.*`, `--validate.*`) manteniendo un único cliente de Prisma y _logger_.
+- `npm run phase3:run`: ejecuta `populate-and-validate` leyendo banderas desde variables de entorno (`PHASE3_*`), guarda los resúmenes JSON en `tmp/phase3` por defecto y publica los totales en consola para supervisión operativa. Variables clave:
+  - `PHASE3_DRY_RUN`, `PHASE3_SKIP_POPULATE`, `PHASE3_SKIP_VALIDATE` y `PHASE3_SUMMARY_STDOUT` controlan el flujo principal.
+  - `PHASE3_SUMMARY_DIR` redefine el directorio de reportes (`populate-summary.json`, `validate-summary.json`).
+  - `PHASE3_ONLY_ENTITIES` / `PHASE3_SKIP_ENTITIES` aplican filtros compartidos; `PHASE3_POPULATE_*` y `PHASE3_VALIDATE_*` afinan cada fase (incluye `*_CHUNK_SIZE`, `*_FAIL_ON_MISSING`, `*_MISMATCH_SAMPLE_SIZE`).
+  - `PHASE3_OVERRIDES_PATH` y `PHASE3_DEFAULT_ORG_CODE` habilitan ajustes manuales durante el poblado.
+  - `PHASE3_PRINT_OPTIONS=true` imprime en consola la configuración efectiva previa a la ejecución.
+- `npm run ci:multi-tenant-report`: automatiza la corrida E2E con métricas multi-tenant; acepta `--phase3` y banderas `--phase3-*` para ejecutar `phase3:run` previo a las pruebas (p. ej. `--phase3-dry-run=false`, `--phase3-summary-dir=...`, `--phase3-print-options`).
 
 ## Detalle de próximas fases
 
