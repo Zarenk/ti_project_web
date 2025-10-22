@@ -28,6 +28,7 @@ describe('TenantContextService', () => {
       userId: 42,
       isSuperAdmin: false,
       allowedOrganizationIds: [789],
+      allowedOrganizationUnitIds: [],
     });
   });
 
@@ -47,6 +48,7 @@ describe('TenantContextService', () => {
       userId: 99,
       isSuperAdmin: false,
       allowedOrganizationIds: [321],
+      allowedOrganizationUnitIds: [],
     });
   });
 
@@ -63,6 +65,7 @@ describe('TenantContextService', () => {
       userId: null,
       isSuperAdmin: false,
       allowedOrganizationIds: [888, 777],
+      allowedOrganizationUnitIds: [],
     });
   });
 
@@ -81,6 +84,7 @@ describe('TenantContextService', () => {
       userId: 1,
       isSuperAdmin: true,
       allowedOrganizationIds: [],
+      allowedOrganizationUnitIds: [],
     });
 
     const explicitFlagService = createService({
@@ -92,11 +96,52 @@ describe('TenantContextService', () => {
     expect(explicitFlagService.getContext().isSuperAdmin).toBe(true);
   });
 
+  it('prioritizes the x-org-unit-id header when resolving organizationUnitId', () => {
+    const service = createService({
+      headers: { 'x-org-unit-id': '33' },
+      user: {
+        defaultOrganizationUnitId: '44',
+        organizationUnits: ['55', 'not-a-number'],
+      },
+    });
+
+    expect(service.getContext()).toMatchObject({
+      organizationUnitId: 33,
+      allowedOrganizationUnitIds: [55],
+    });
+  });
+
+  it('falls back to the default organization unit and allowed list when no header is provided', () => {
+    const serviceWithDefault = createService({
+      user: {
+        defaultOrganizationUnitId: '101',
+        organizationUnitIds: ['202', '303'],
+      },
+    });
+
+    expect(serviceWithDefault.getContext()).toMatchObject({
+      organizationUnitId: 101,
+      allowedOrganizationUnitIds: [202, 303],
+    });
+
+    const serviceWithAllowedList = createService({
+      user: {
+        organizationUnits: ['707', '808'],
+      },
+    });
+
+    expect(serviceWithAllowedList.getContext()).toMatchObject({
+      organizationUnitId: 707,
+      allowedOrganizationUnitIds: [707, 808],
+    });
+  });
+
   it('allows updating parts of the context while preserving allowed organizations by default', () => {
     const service = createService({
       user: {
         id: 10,
         organizations: ['100', '200'],
+        organizationUnits: ['30', '40'],
       },
     });
 
@@ -104,13 +149,18 @@ describe('TenantContextService', () => {
 
     expect(service.getContext()).toEqual({
       organizationId: 999,
-      organizationUnitId: null,
+      organizationUnitId: 30,
       userId: 10,
       isSuperAdmin: false,
       allowedOrganizationIds: [100, 200],
+      allowedOrganizationUnitIds: [30, 40],
     });
 
-    service.updateContext({ allowedOrganizationIds: [400], organizationUnitId: 55 });
+    service.updateContext({
+      allowedOrganizationIds: [400],
+      allowedOrganizationUnitIds: [60],
+      organizationUnitId: 55,
+    });
 
     expect(service.getContext()).toEqual({
       organizationId: 999,
@@ -118,6 +168,7 @@ describe('TenantContextService', () => {
       userId: 10,
       isSuperAdmin: false,
       allowedOrganizationIds: [400],
+      allowedOrganizationUnitIds: [60],
     });
   });
 });

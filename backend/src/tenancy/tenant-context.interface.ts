@@ -4,4 +4,5 @@ export interface TenantContext {
   userId: number | null;
   isSuperAdmin: boolean;
   allowedOrganizationIds: number[];
+  allowedOrganizationUnitIds: number[];
 }

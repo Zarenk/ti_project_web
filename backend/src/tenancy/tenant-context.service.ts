@@ -10,6 +10,9 @@ interface RequestUserPayload {
   organizations?: Array<number | string>;
   defaultOrganizationId?: number | string | null;
   isSuperAdmin?: boolean;
+  organizationUnits?: Array<number | string>;
+  organizationUnitIds?: Array<number | string>;
+  defaultOrganizationUnitId?: number | string | null;
 }
 
 @Injectable({ scope: Scope.REQUEST })
@@ -29,6 +32,8 @@ export class TenantContextService {
       ...this.context,
       ...partial,
       allowedOrganizationIds: partial.allowedOrganizationIds ?? this.context.allowedOrganizationIds,
+      allowedOrganizationUnitIds:
+        partial.allowedOrganizationUnitIds ?? this.context.allowedOrganizationUnitIds,
     };
   }
 
@@ -36,21 +41,25 @@ export class TenantContextService {
     const user = (request.user ?? {}) as RequestUserPayload;
     const headerOrgId = this.normalizeId(request.headers['x-org-id']);
     const defaultOrgId = this.normalizeId(user.defaultOrganizationId);
+    const headerOrgUnitId = this.normalizeId(request.headers['x-org-unit-id']);
+    const defaultOrgUnitId = this.normalizeId(user.defaultOrganizationUnitId);
 
-    const allowedOrganizationIds = Array.isArray(user.organizations)
-      ? user.organizations
-          .map((value) => this.normalizeId(value))
-          .filter((value): value is number => value !== null)
-      : [];
+    const allowedOrganizationIds = this.normalizeIdArray(user.organizations);
+    const allowedOrganizationUnitIds = this.normalizeIdArray(
+      user.organizationUnits ?? user.organizationUnitIds ?? [],
+    );
 
     const organizationId = headerOrgId ?? defaultOrgId ?? allowedOrganizationIds[0] ?? null;
+    const organizationUnitId =
+      headerOrgUnitId ?? defaultOrgUnitId ?? allowedOrganizationUnitIds[0] ?? null;
 
     const context: TenantContext = {
       organizationId,
-      organizationUnitId: null,
+      organizationUnitId,
       userId: this.normalizeId(user.id),
       isSuperAdmin: Boolean(user.isSuperAdmin || (user.role && user.role.toLowerCase() === 'super_admin')),
       allowedOrganizationIds,
+      allowedOrganizationUnitIds,
     };
 
     return context;
@@ -67,5 +76,25 @@ export class TenantContextService {
 
     const parsed = typeof value === 'string' ? Number.parseInt(value, 10) : value;
     return Number.isFinite(parsed) ? Number(parsed) : null;
+  }
+
+  private normalizeIdArray(values: unknown): number[] {
+    if (!Array.isArray(values)) {
+      return [];
+    }
+
+    const seen = new Set<number>();
+    const normalized: number[] = [];
+
+    for (const raw of values) {
+      const id = this.normalizeId(raw as any);
+      if (id === null || seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+      normalized.push(id);
+    }
+
+    return normalized;
   }
 }

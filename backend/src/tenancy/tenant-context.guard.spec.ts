@@ -11,6 +11,7 @@ describe('TenantContextGuard', () => {
       userId: 101,
       isSuperAdmin: false,
       allowedOrganizationIds: [42, 99],
+      allowedOrganizationUnitIds: [7, 8],
     };
 
     const tenantContextService: Pick<TenantContextService, 'getContext'> = {
