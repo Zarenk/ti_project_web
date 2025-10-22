@@ -491,3 +491,11 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
 - Validador multi-tenant: [`prisma/seed/validate-organization-ids.seed.ts`](../prisma/seed/validate-organization-ids.seed.ts)
 - Plan de migración original (resumen provisto en la historia de usuario).
+### 2024-06-04 - Métricas de cobertura multi-tenant en global setup
+
+- **Contexto:** Para completar la visibilidad requerida en el Paso 3 (Fase 2) era necesario medir cuántas entidades quedan cubiertas en cada corrida de fixtures multi-organización.
+- **Implementación:** Se extendió backend/test/global-setup.ts para generar un JSON con organizaciones procesadas, entidades cubiertas y ratio de cobertura (MULTI_TENANT_FIXTURES_METRICS_PATH, MULTI_TENANT_FIXTURES_METRICS_STDOUT), se añadió el runner 
+pm run test:e2e:metrics y 
+pm run badge:multi-tenant-coverage para publicar la métrica, y se actualizó 	est/global-setup.spec.ts verificando la escritura del archivo y la salida por stdout.
+- **Resultado:** La tubería de CI puede consumir el archivo o la salida estándar para publicar la métrica de cobertura multi-tenant, dejando el Paso 3 listo para enfocarse en fixtures de integración/E2E y la planificación de la Fase 3.
+
