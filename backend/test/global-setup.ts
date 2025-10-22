@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { applyMultiTenantFixtures } from '../prisma/seed/multi-tenant-fixtures.seed';
 
 type PrismaConnectionError = {
@@ -7,6 +9,14 @@ type PrismaConnectionError = {
 };
 
 type FixtureTotals = Record<string, number>;
+type FixtureMetrics = {
+  generatedAt: string;
+  organizationsProcessed: number;
+  entitiesTotal: number;
+  entitiesCovered: number;
+  coverageRatio: number;
+  totals: FixtureTotals | undefined;
+};
 
 const TRUTHY_SKIP_FLAG_VALUES = new Set([
   '1',
@@ -32,6 +42,26 @@ function normalizeSkipMultiTenantSeed(flag?: string | null): string | null {
 
 export function shouldSkipMultiTenantSeed(flag?: string | null): boolean {
   return normalizeSkipMultiTenantSeed(flag) !== null;
+}
+
+function isTruthyFlag(flag?: string | null): boolean {
+  return normalizeSkipMultiTenantSeed(flag) !== null;
+}
+
+async function persistFixtureMetrics(
+  metricsPath: string,
+  metrics: FixtureMetrics,
+): Promise<void> {
+  try {
+    await mkdir(dirname(metricsPath), { recursive: true });
+    await writeFile(metricsPath, JSON.stringify(metrics, null, 2), 'utf8');
+    console.log(`[multi-tenant-seed] Metrics written to ${metricsPath}.`);
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[multi-tenant-seed] Failed to write metrics file at ${metricsPath}: ${details}`,
+    );
+  }
 }
 
 export function isRecoverablePrismaConnectionError(
@@ -97,6 +127,10 @@ export default async function globalSetup(): Promise<void> {
   }
 
   const summaryPath = process.env.MULTI_TENANT_FIXTURES_SUMMARY_PATH?.trim();
+  const metricsPath = process.env.MULTI_TENANT_FIXTURES_METRICS_PATH?.trim();
+  const emitMetricsStdout = isTruthyFlag(
+    process.env.MULTI_TENANT_FIXTURES_METRICS_STDOUT,
+  );
 
   try {
     const summary = await applyMultiTenantFixtures({
@@ -118,6 +152,37 @@ export default async function globalSetup(): Promise<void> {
       console.log(
         `[multi-tenant-seed] Summary file available at ${summary.summaryFilePath}.`,
       );
+    }
+
+    const metrics: FixtureMetrics = {
+      generatedAt: new Date().toISOString(),
+      organizationsProcessed: summary.organizations.length,
+      entitiesTotal: summary.totals ? Object.keys(summary.totals).length : 0,
+      entitiesCovered: summary.totals
+        ? Object.values(summary.totals).filter(
+            (value) => typeof value === 'number' && Number.isFinite(value) && value > 0,
+          ).length
+        : 0,
+      coverageRatio:
+        summary.totals && Object.keys(summary.totals).length > 0
+          ? Number(
+              (
+                Object.values(summary.totals).filter(
+                  (value) =>
+                    typeof value === 'number' && Number.isFinite(value) && value > 0,
+                ).length / Object.keys(summary.totals).length
+              ).toFixed(4),
+            )
+          : 0,
+      totals: summary.totals,
+    };
+
+    if (metricsPath) {
+      await persistFixtureMetrics(metricsPath, metrics);
+    }
+
+    if (emitMetricsStdout) {
+      console.log('[multi-tenant-seed] Metrics JSON:', JSON.stringify(metrics));
     }
 
   } catch (error) {

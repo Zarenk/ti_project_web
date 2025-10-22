@@ -1,4 +1,4 @@
-# Seguimiento migración Single DB + RLS
+﻿# Seguimiento migración Single DB + RLS
 
 Este documento detalla el avance táctico del plan por fases para habilitar multi-tenancy en un único esquema con Row-Level Security.
 

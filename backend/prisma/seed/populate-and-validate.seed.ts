@@ -163,6 +163,14 @@ function parseNumericArgument(flag: string, value: string | undefined): number {
   return parsed;
 }
 
+function parsePositiveIntegerArgument(flag: string, value: string | undefined): number {
+  const parsed = parseNumericArgument(flag, value);
+  if (!Number.isInteger(parsed)) {
+    throw new Error(`[populate-org:combo] ${flag} must be an integer value.`);
+  }
+  return parsed;
+}
+
 function parseStringArgument(flag: string, value: string | undefined): string {
   if (!value) {
     throw new Error(`[populate-org:combo] Missing value for ${flag}.`);
@@ -204,6 +212,7 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
   let sharedOnlyEntities: PopulateEntityKey[] | undefined;
   let sharedSkipEntities: PopulateEntityKey[] | undefined;
   let sharedSummaryStdout: boolean | undefined;
+  let sharedMismatchSampleSize: number | undefined;
 
   const mergeSharedEntities = (
     current: PopulateEntityKey[] | undefined,
@@ -422,6 +431,25 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
       continue;
     }
 
+    if (
+      arg.startsWith('--validate-mismatch-sample-size=') ||
+      arg.startsWith('--validateMismatchSampleSize=')
+    ) {
+      const [flag, raw] = arg.split('=');
+      validateOptions.mismatchSampleSize = parsePositiveIntegerArgument(flag, raw);
+      continue;
+    }
+
+    if (
+      arg === '--validate-mismatch-sample-size' ||
+      arg === '--validateMismatchSampleSize'
+    ) {
+      const [value, nextIndex] = nextValue(argv, index);
+      validateOptions.mismatchSampleSize = parsePositiveIntegerArgument(arg, value);
+      index = nextIndex;
+      continue;
+    }
+
     if (arg.startsWith('--only=')) {
       const [, raw] = arg.split('=');
       const parsed = parseListArgument('--only', raw);
@@ -451,7 +479,23 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
       index = nextIndex;
       continue;
     }
-    
+
+    if (
+      arg.startsWith('--mismatch-sample-size=') ||
+      arg.startsWith('--mismatchSampleSize=')
+    ) {
+      const [flag, raw] = arg.split('=');
+      sharedMismatchSampleSize = parsePositiveIntegerArgument(flag, raw);
+      continue;
+    }
+
+    if (arg === '--mismatch-sample-size' || arg === '--mismatchSampleSize') {
+      const [value, nextIndex] = nextValue(argv, index);
+      sharedMismatchSampleSize = parsePositiveIntegerArgument(arg, value);
+      index = nextIndex;
+      continue;
+    }
+
     if (
       arg.startsWith('--overrides-path=') ||
       arg.startsWith('--overridesPath=')
@@ -570,6 +614,13 @@ export function parsePopulateAndValidateCliArgs(argv: string[]): ParsedCliOption
     if (typeof validateOptions.summaryStdout !== 'boolean') {
       validateOptions.summaryStdout = sharedSummaryStdout;
     }
+  }
+
+  if (
+    typeof sharedMismatchSampleSize === 'number' &&
+    typeof validateOptions.mismatchSampleSize !== 'number'
+  ) {
+    validateOptions.mismatchSampleSize = sharedMismatchSampleSize;
   }
 
   return { populateOptions, validateOptions, skipPopulate, skipValidate };

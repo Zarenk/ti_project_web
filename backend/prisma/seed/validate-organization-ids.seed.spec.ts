@@ -148,6 +148,7 @@ describe('validateOrganizationIds', () => {
     expect(summary.processed.entry?.mismatchSample).toEqual([
       '300 (org=2 | refs=store:2, user:2, provider:5)',
     ]);
+    expect(summary.mismatchSampleSize).toBe(5);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('store'));
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('cash-register: detected 1 records'),
@@ -238,6 +239,49 @@ describe('validateOrganizationIds', () => {
       'utf8',
     );
   });
+
+  it('limits mismatch samples according to configuration', async () => {
+    const prisma = buildPrismaValidationMock();
+    const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    prisma.entry.findMany.mockResolvedValueOnce([
+      {
+        id: 400,
+        organizationId: 1,
+        store: { organizationId: 2 },
+        user: { organizationId: 1 },
+        provider: { organizationId: 1 },
+      },
+      {
+        id: 401,
+        organizationId: 1,
+        store: { organizationId: 1 },
+        user: { organizationId: 2 },
+        provider: { organizationId: 1 },
+      },
+      {
+        id: 402,
+        organizationId: 1,
+        store: { organizationId: 3 },
+        user: { organizationId: 3 },
+        provider: { organizationId: 1 },
+      },
+    ] as any);
+
+    const summary = await validateOrganizationIds({
+      prisma: prisma as unknown as PrismaClient,
+      logger,
+      onlyEntities: ['entry'],
+      mismatchSampleSize: 2,
+    });
+
+    expect(summary.mismatchSampleSize).toBe(2);
+    expect(summary.processed.entry?.mismatchSample).toHaveLength(2);
+    expect(summary.processed.entry?.mismatchSample).toEqual([
+      '400 (org=1 | refs=store:2, user:1, provider:1)',
+      '401 (org=1 | refs=store:1, user:2, provider:1)',
+    ]);
+  });
 });
 
 describe('parseValidateOrganizationCliArgs', () => {
@@ -249,6 +293,7 @@ describe('parseValidateOrganizationCliArgs', () => {
       'report.json',
       '--summary-stdout=false',
       '--fail-on-missing',
+      '--mismatch-sample-size=3',
     ]);
 
     expect(options).toEqual({
@@ -257,6 +302,7 @@ describe('parseValidateOrganizationCliArgs', () => {
       summaryPath: 'report.json',
       summaryStdout: false,
       failOnMissing: true,
+      mismatchSampleSize: 3,
     });
   });
 

@@ -18,6 +18,7 @@ export type ValidationOptions = {
   summaryPath?: string;
   summaryStdout?: boolean;
   failOnMissing?: boolean;
+  mismatchSampleSize?: number;
 };
 
 type EntityValidationSummary = {
@@ -35,15 +36,31 @@ type ValidationSummary = {
   mismatchedEntities: PopulateEntityKey[];
   hasMissing: boolean;
   hasMismatched: boolean;
+  mismatchSampleSize: number;
   summaryFilePath?: string;
 };
 
 type ValidationContext = {
   prisma: PrismaClient & Record<string, any>;
   logger: Logger;
+  mismatchSampleSize: number;
 };
 
 type EntityCounter = (context: ValidationContext) => Promise<EntityValidationSummary>;
+
+const DEFAULT_MISMATCH_SAMPLE_SIZE = 5;
+
+function normalizeMismatchSampleSize(value: number | undefined): number {
+  if (value === undefined) {
+    return DEFAULT_MISMATCH_SAMPLE_SIZE;
+  }
+
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+    throw new Error('[validate-org] mismatchSampleSize must be a positive integer.');
+  }
+
+  return value;
+}
 
 const VALIDATION_ENTITY_COUNTERS: ReadonlyArray<{
   key: PopulateEntityKey;
@@ -64,7 +81,7 @@ const VALIDATION_ENTITY_COUNTERS: ReadonlyArray<{
   { key: 'cash-closure', counter: countCashClosures },
 ];
 
-function createSummary(): ValidationSummary {
+function createSummary(mismatchSampleSize: number): ValidationSummary {
   return {
     processed: {},
     generatedAt: new Date().toISOString(),
@@ -72,6 +89,7 @@ function createSummary(): ValidationSummary {
     mismatchedEntities: [],
     hasMissing: false,
     hasMismatched: false,
+    mismatchSampleSize,
   };
 }
 
@@ -209,6 +227,7 @@ function summarizeMismatches<T>(
   getId: (record: T) => string | number,
   getActual: (record: T) => number | null,
   getReferences: (record: T) => ReferenceValue[],
+  mismatchSampleSize: number,
 ): MismatchSummary {
   const mismatched: string[] = [];
 
@@ -236,7 +255,10 @@ function summarizeMismatches<T>(
     }
   }
 
-  return { count: mismatched.length, sample: mismatched.slice(0, 5) };
+  return {
+    count: mismatched.length,
+    sample: mismatched.slice(0, Math.max(0, mismatchSampleSize)),
+  };
 }
 
 async function detectCashRegisterMismatches(context: ValidationContext): Promise<MismatchSummary> {
@@ -255,6 +277,7 @@ async function detectCashRegisterMismatches(context: ValidationContext): Promise
     (register) => [
       { label: 'store', value: register.store?.organizationId ?? null },
     ],
+    context.mismatchSampleSize,
   );
 }
 
@@ -272,6 +295,7 @@ async function detectClientMismatches(context: ValidationContext): Promise<Misma
     (client) => client.id,
     (client) => client.organizationId ?? null,
     (client) => [{ label: 'user', value: client.user?.organizationId ?? null }],
+    context.mismatchSampleSize,
   );
 }
 
@@ -307,6 +331,7 @@ async function detectInventoryMismatches(context: ValidationContext): Promise<Mi
         value: storeOrganizationMap.get(inventory.storeId) ?? null,
       },
     ],
+    context.mismatchSampleSize,
   );
 }
 
@@ -330,6 +355,7 @@ async function detectInventoryHistoryMismatches(
     (history) => history.id,
     (history) => history.organizationId ?? null,
     (history) => [{ label: 'inventory', value: history.inventory?.organizationId ?? null }],
+    context.mismatchSampleSize,
   );
 }
 
@@ -359,6 +385,7 @@ async function detectEntryMismatches(context: ValidationContext): Promise<Mismat
       { label: 'user', value: entry.user?.organizationId ?? null },
       { label: 'provider', value: entry.provider?.organizationId ?? null },
     ],
+    context.mismatchSampleSize,
   );
 }
 
@@ -388,6 +415,7 @@ async function detectSalesMismatches(context: ValidationContext): Promise<Mismat
       { label: 'user', value: sale.user?.organizationId ?? null },
       { label: 'client', value: sale.client?.organizationId ?? null },
     ],
+    context.mismatchSampleSize,
   );
 }
 
@@ -414,6 +442,7 @@ async function detectTransferMismatches(context: ValidationContext): Promise<Mis
       { label: 'sourceStore', value: transfer.sourceStore?.organizationId ?? null },
       { label: 'destinationStore', value: transfer.destinationStore?.organizationId ?? null },
     ],
+    context.mismatchSampleSize,
   );
 }
 
@@ -435,6 +464,7 @@ async function detectOrderMismatches(context: ValidationContext): Promise<Mismat
     (order) => order.id,
     (order) => order.organizationId ?? null,
     (order) => [{ label: 'sale', value: order.sale?.organizationId ?? null }],
+    context.mismatchSampleSize,
   );
 }
 
@@ -463,6 +493,7 @@ async function detectCashTransactionMismatches(
       { label: 'cashRegister', value: transaction.cashRegister?.organizationId ?? null },
       { label: 'user', value: transaction.user?.organizationId ?? null },
     ],
+    context.mismatchSampleSize,
   );
 }
 
@@ -489,6 +520,7 @@ async function detectCashClosureMismatches(context: ValidationContext): Promise<
       { label: 'cashRegister', value: closure.cashRegister?.organizationId ?? null },
       { label: 'user', value: closure.user?.organizationId ?? null },
     ],
+    context.mismatchSampleSize,
   );
 }
 
@@ -514,11 +546,16 @@ export async function validateOrganizationIds(
   const prisma = options.prisma ?? new PrismaClient();
   const shouldDisconnect = !options.prisma;
   const logger = options.logger ?? console;
-  const context: ValidationContext = { prisma: prisma as ValidationContext['prisma'], logger };
+  const mismatchSampleSize = normalizeMismatchSampleSize(options.mismatchSampleSize);
+  const context: ValidationContext = {
+    prisma: prisma as ValidationContext['prisma'],
+    logger,
+    mismatchSampleSize,
+  };
   const selectedEntities = resolveEntities(options.onlyEntities, options.skipEntities);
 
   try {
-    const summary = createSummary();
+    const summary = createSummary(mismatchSampleSize);
 
     if (!selectedEntities.length) {
       logger.warn('[validate-org] No entities selected for validation.');
@@ -608,7 +645,12 @@ export async function validateOrganizationIds(
 
 type CliOptions = Pick<
   ValidationOptions,
-  'onlyEntities' | 'skipEntities' | 'summaryPath' | 'summaryStdout' | 'failOnMissing'
+  | 'onlyEntities'
+  | 'skipEntities'
+  | 'summaryPath'
+  | 'summaryStdout'
+  | 'failOnMissing'
+  | 'mismatchSampleSize'
 >;
 
 function parseEntityList(flag: string, value: string | undefined): PopulateEntityKey[] {
@@ -649,6 +691,19 @@ function parseStringArgument(flag: string, value: string | undefined): string {
   }
 
   return trimmed;
+}
+
+function parsePositiveInteger(flag: string, value: string | undefined): number {
+  if (!value) {
+    throw new Error(`[validate-org] Missing value for ${flag}.`);
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`[validate-org] ${flag} must be a positive integer.`);
+  }
+
+  return parsed;
 }
 
 const TRUTHY_VALUES = new Set(['1', 'true', 'yes', 'on']);
@@ -747,6 +802,22 @@ export function parseValidateOrganizationCliArgs(argv: string[]): CliOptions {
       const { consumed, value } = parseBooleanFlag(arg, argv[index + 1]);
       options.summaryStdout = value;
       index += consumed;
+      continue;
+    }
+
+    if (
+      arg.startsWith('--mismatch-sample-size=') ||
+      arg.startsWith('--mismatchSampleSize=')
+    ) {
+      const [flag, raw] = arg.split('=');
+      options.mismatchSampleSize = parsePositiveInteger(flag, raw);
+      continue;
+    }
+
+    if (arg === '--mismatch-sample-size' || arg === '--mismatchSampleSize') {
+      const [value, nextIndex] = nextValue(argv, index);
+      options.mismatchSampleSize = parsePositiveInteger(arg, value);
+      index = nextIndex;
       continue;
     }
 

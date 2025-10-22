@@ -240,9 +240,12 @@ export async function applyRlsPolicies(
   const disable = Boolean(options.disable);
   const force = Boolean(options.force);
   const policyPrefix = options.policyPrefix ?? DEFAULT_POLICY_PREFIX;
-  const policyRoles = (options.policyRoles ?? DEFAULT_POLICY_ROLES).map((role) =>
-    role.trim().length ? role.trim() : 'PUBLIC',
-  );
+  const rawPolicyRoles = options.policyRoles ?? DEFAULT_POLICY_ROLES;
+  const normalizedPolicyRoles = rawPolicyRoles
+    .map((role) => role.trim())
+    .filter((role) => role.length > 0);
+  const policyRoles =
+    normalizedPolicyRoles.length > 0 ? normalizedPolicyRoles : DEFAULT_POLICY_ROLES;
   const sessionVariable = options.sessionVariable ?? DEFAULT_SESSION_VARIABLE;
 
   const entities = pickEntities(options.onlyEntities, options.skipEntities);

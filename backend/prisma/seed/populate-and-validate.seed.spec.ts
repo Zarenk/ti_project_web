@@ -59,6 +59,7 @@ const defaultValidateSummary = () => ({
   mismatchedEntities: [],
   hasMissing: false,
   hasMismatched: false,
+  mismatchSampleSize: 5,
 });
 
 describe('populateAndValidate', () => {
@@ -137,6 +138,7 @@ describe('parsePopulateAndValidateCliArgs', () => {
       '--populate-summary-stdout=false',
       '--populate-overrides-path=./data/overrides.json',
       '--validate-summary-stdout',
+      '--validate-mismatch-sample-size=7',
       '--summary-dir=./reports/run1',
     ]);
 
@@ -149,6 +151,7 @@ describe('parsePopulateAndValidateCliArgs', () => {
     expect(options.validateOptions.summaryStdout).toBe(true);
     expect(options.validateOptions.summaryPath).toBe('./reports/run1/validate-summary.json');
     expect(options.validateOptions.onlyEntities).toEqual(['store', 'client']);
+    expect(options.validateOptions.mismatchSampleSize).toBe(7);
     expect(options.skipPopulate).toBe(false);
     expect(options.skipValidate).toBe(false);
   });
@@ -199,6 +202,21 @@ it('applies shared only/skip filters when provided', () => {
 
     expect(options.populateOptions.summaryStdout).toBe(true);
     expect(options.validateOptions.summaryStdout).toBe(false);
+  });
+
+  it('applies shared mismatch sample size when provided', () => {
+    const options = parsePopulateAndValidateCliArgs(['--mismatch-sample-size=6']);
+
+    expect(options.validateOptions.mismatchSampleSize).toBe(6);
+  });
+
+  it('allows overriding shared mismatch sample size with validate flag', () => {
+    const options = parsePopulateAndValidateCliArgs([
+      '--mismatch-sample-size=4',
+      '--validate-mismatch-sample-size=2',
+    ]);
+
+    expect(options.validateOptions.mismatchSampleSize).toBe(2);
   });
 
   it('normalizes summary directory removing trailing separators', () => {

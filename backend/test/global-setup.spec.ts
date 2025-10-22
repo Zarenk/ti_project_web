@@ -1,3 +1,4 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import { applyMultiTenantFixtures } from "prisma/seed/multi-tenant-fixtures.seed";
 import globalSetup, {
   formatFixtureTotals,
@@ -9,16 +10,51 @@ jest.mock("prisma/seed/multi-tenant-fixtures.seed", () => ({
   applyMultiTenantFixtures: jest.fn(),
 }));
 
+jest.mock("node:fs/promises", () => ({
+  mkdir: jest.fn(() => Promise.resolve(undefined)),
+  writeFile: jest.fn(() => Promise.resolve(undefined)),
+}));
 describe('globalSetup multi-tenant fixtures orchestration', () => {
   const mockedApplyFixtures = applyMultiTenantFixtures as jest.MockedFunction<
     typeof applyMultiTenantFixtures
   >;
+  const mockedMkdir = mkdir as jest.MockedFunction<typeof mkdir>;
+  const mockedWriteFile = writeFile as jest.MockedFunction<typeof writeFile>;
+  const baseTotals = {
+    organizations: 1,
+    units: 0,
+    stores: 0,
+    providers: 0,
+    users: 0,
+    clients: 0,
+    memberships: 0,
+    products: 0,
+    inventories: 0,
+    storeOnInventories: 0,
+    inventoryHistories: 0,
+  };
+  const baseOrganizationSummary = {
+    code: 'tenant-alpha',
+    organizationId: 1,
+    units: 0,
+    stores: 0,
+    providers: 0,
+    users: 0,
+    clients: 0,
+    memberships: 0,
+    products: 0,
+    inventories: 0,
+    storeOnInventories: 0,
+    inventoryHistories: 0,
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
     delete process.env.SKIP_MULTI_TENANT_SEED;
     delete process.env.DATABASE_URL;
     delete process.env.MULTI_TENANT_FIXTURES_SUMMARY_PATH;
+    delete process.env.MULTI_TENANT_FIXTURES_METRICS_PATH;
+    delete process.env.MULTI_TENANT_FIXTURES_METRICS_STDOUT;
   });
 
   it.each([
@@ -163,6 +199,72 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
     logSpy.mockRestore();
   });
 
+  it('persists metrics to disk when metrics path is provided', async () => {
+    process.env.DATABASE_URL = 'postgres://user:pass@localhost:5432/db';
+    process.env.MULTI_TENANT_FIXTURES_METRICS_PATH = './metrics/fixtures.json';
+    mockedApplyFixtures.mockResolvedValueOnce({
+      processedAt: '2024-01-01T00:00:00.000Z',
+      organizations: [baseOrganizationSummary],
+      totals: baseTotals,
+    });
+
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await globalSetup();
+
+    expect(mockedMkdir).toHaveBeenCalledWith('./metrics', { recursive: true });
+    expect(mockedWriteFile).toHaveBeenCalledWith(
+      './metrics/fixtures.json',
+      expect.any(String),
+      'utf8',
+    );
+    const [, payload] = mockedWriteFile.mock.calls[0];
+    const parsedMetrics = JSON.parse(payload as string);
+    expect(parsedMetrics.organizationsProcessed).toBe(1);
+    expect(parsedMetrics.entitiesTotal).toBe(Object.keys(baseTotals).length);
+    expect(parsedMetrics.entitiesCovered).toBe(1);
+    expect(parsedMetrics.coverageRatio).toBe(
+      Number((1 / Object.keys(baseTotals).length).toFixed(4)),
+    );
+    expect(logSpy).toHaveBeenCalledWith(
+      '[multi-tenant-seed] Metrics written to ./metrics/fixtures.json.',
+    );
+
+    logSpy.mockRestore();
+  });
+
+  it('emits metrics JSON to stdout when flag is enabled', async () => {
+    process.env.DATABASE_URL = 'postgres://user:pass@localhost:5432/db';
+    process.env.MULTI_TENANT_FIXTURES_METRICS_STDOUT = 'true';
+    mockedApplyFixtures.mockResolvedValueOnce({
+      processedAt: '2024-01-01T00:00:00.000Z',
+      organizations: [
+        baseOrganizationSummary,
+        {
+          ...baseOrganizationSummary,
+          code: 'tenant-beta',
+          organizationId: 2,
+        },
+      ],
+      totals: { ...baseTotals, organizations: 2 },
+    });
+
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await globalSetup();
+
+    expect(
+      logSpy.mock.calls.some(
+        ([message, payload]) =>
+          message === '[multi-tenant-seed] Metrics JSON:' &&
+          typeof payload === 'string' &&
+          payload.includes('"organizationsProcessed":2'),
+      ),
+    ).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
   it('logs a warning and swallows recoverable Prisma errors', async () => {
     process.env.DATABASE_URL = 'postgres://user:pass@localhost:5432/db';
     mockedApplyFixtures.mockRejectedValueOnce({
@@ -192,6 +294,8 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
     delete process.env.SKIP_MULTI_TENANT_SEED;
     delete process.env.DATABASE_URL;
     delete process.env.MULTI_TENANT_FIXTURES_SUMMARY_PATH;
+    delete process.env.MULTI_TENANT_FIXTURES_METRICS_PATH;
+    delete process.env.MULTI_TENANT_FIXTURES_METRICS_STDOUT;
   });
 });
 

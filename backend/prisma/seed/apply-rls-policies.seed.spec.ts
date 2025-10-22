@@ -147,6 +147,26 @@ describe('applyRlsPolicies', () => {
     ).toBe(true);
   });
 
+  it('falls back to PUBLIC when roles list is empty or blank', async () => {
+    const prisma = createMockPrisma() as unknown as PrismaClient;
+    const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    const result = await applyRlsPolicies({
+      prisma,
+      logger,
+      onlyEntities: ['store'],
+      policyRoles: ['   '],
+    });
+
+    const [entry] = result.statements;
+    const createPolicyStatement = entry.applied.find((statement) =>
+      statement.startsWith('CREATE POLICY'),
+    );
+
+    expect(createPolicyStatement).toContain('TO PUBLIC');
+    expect(result.summary.policyRoles).toEqual(['PUBLIC']);
+  });
+
   it('warns when no entities are matched', async () => {
     const prisma = createMockPrisma() as unknown as PrismaClient;
     const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
