@@ -10,7 +10,8 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy; DTOs de `clients` actualizados y documentados para nuevos consumidores.
-  - 🚧 _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` en curso; ya se consolidó la batería de `StoresService`, se extendió la instrumentación temporal de logs multi-organización, se añadió la suite de `SalesService`, se incorporó la batería de `InventoryService`, se reactivó la suite de `ClientService` tras resolver tipados de Prisma, se verificó la suite de `UsersService` cubriendo registros con y sin tenant, se agregó la suite de `WebSalesService` validando la propagación del tenant en órdenes y ventas web, se instrumentó `EntriesService` con su batería multi-organización, se incorporó la suite de `AdsService` garantizando el aislamiento de campañas y creatividades por tenant, se añadió la suite de `ProvidersService` reforzando altas, actualizaciones y eliminaciones multi-tenant, se consolidó la suite de `ProvidersController` asegurando el mapeo del tenant en la capa HTTP, se sumó la suite de `CashregisterService` validando cajas y cierres multi-organización, se documentó la suite de `OrderTrackingService` asegurando búsquedas acotadas al tenant activo y se agregó la suite de `SalesController` validando la propagación del tenant desde la capa HTTP. Se registró una corrida verde de todas las suites parametrizadas, habilitando el foco en fixtures de integración/E2E multi-organización. **Actualización:** se creó el seed `npm run seed:multi-tenant` con datasets alfa/beta para soportar pruebas de integración y E2E, se validó la suite `populate-organization-ids.seed.spec.ts` para asegurar la cobertura de la nueva automatización de poblamiento y se habilitó la verificación `npm run seed:validate-organization-ids` junto con su batería `validate-organization-ids.seed.spec.ts` para auditar la propagación del tenant tras cada corrida del seed. También se consolidó el _wrapper_ `npm run seed:populate-and-validate`, con su suite dedicada ejecutada en conjunto para garantizar la compatibilidad entre poblamiento y validación antes de promover corridas supervisadas.
+  - ✅ _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` completados. Se consolidaron las suites multi-organización de `StoresService`, `SalesService`, `InventoryService`, `ClientService`, `UsersService`, `WebSalesService`, `EntriesService`, `AdsService`, `ProvidersService`, `ProvidersController`, `CashregisterService`, `OrderTrackingService` y `SalesController`, todas ejecutadas en corridas verdes compartidas. El _setup_ global de pruebas E2E aplica ahora `applyMultiTenantFixtures`, se habilitó el seed `npm run seed:multi-tenant` con datasets alfa/beta y se documentaron ejecuciones exitosas en CI y entornos locales. **Actualización:** el _wrapper_ `npm run seed:populate-and-validate` se encuentra disponible con su batería dedicada, y los comandos `npm run seed:populate-organization-ids` y `npm run seed:validate-organization-ids` cuentan con suites específicas (`populate-organization-ids.seed.spec.ts` y `validate-organization-ids.seed.spec.ts`) que cubren propagación, métricas y telemetría del tenant.
+  - 🆕 _Preparación Fase 3_: Scripts de poblamiento, validación y orquestación (`populate-organization-ids`, `validate-organization-ids`, `populate-and-validate`) listos para corridas supervisadas con métricas por _chunk_, resúmenes en disco/STDOUT y banderas de control (`--dryRun`, `--summary-path`, `--summary-stdout`, `--summary-dir`, `--skip-*`).
 
 ## Procedimiento operativo – Altas y bajas de organizaciones
 
@@ -52,14 +53,27 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 
 ## Próximas acciones sugeridas
 1. Socializar con Operaciones el runbook de altas/bajas y recopilar feedback de la primera iteración (Fase 1 – Paso 3). Responsable: Operaciones + Ingeniería. Artefacto esperado: retroalimentación y ajustes priorizados.
-2. Completar la verificación de la instrumentación temporal de logs y métricas en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`), asegurando que los tipados de Prisma permitan los nuevos campos y documentando consumidores faltantes.
-3. Completar las suites unitarias/integración priorizadas (`stores`, `clients`) cubriendo `organizationId` nulo o definido y habilitar su ejecución continua (Fase 2 – Paso 3). Documentar cualquier bloqueo derivado de validaciones o tipados y resolverlo en conjunto con el equipo de plataforma.
-4. Extender la cobertura de pruebas al resto de dominios (`inventory`, `sales`, `websales`) siguiendo el mismo patrón de parametrización multi-organización. **Actualización:** las suites unitarias de `InventoryService` y `WebSalesService` ya validan escenarios con y sin tenant; queda ampliar fixtures de integración/E2E y monitorear la propagación de `organizationId` en `sales` dentro de staging.
-5. Planificar la **Fase 3 – Poblado y validación** con el equipo de datos. Entregables:
-   - Definición de reglas de asignación por tabla (fuentes, columnas puente, excepciones manuales).
-   - Scripts idempotentes por dominio con logging y métricas de progreso.
-   - Calendario de ejecución en producción con ventanas de mantenimiento y responsables.
-6. Coordinar la ejecución controlada de `npm run seed:populate-organization-ids` en staging, documentando resultados y métricas antes de habilitar la corrida en producción. Utilizar `--summary-path=<ruta>` para generar un reporte JSON idempotente con los totales procesados.
+2. Coordinar la ejecución supervisada de `npm run seed:populate-and-validate` en staging utilizando `--summary-dir=<ruta>` para centralizar los reportes JSON por fase. Registrar métricas de duración, totales afectados y advertencias generadas por los _chunks_.
+3. Mantener la suite de seeds (`populate-organization-ids`, `validate-organization-ids`, `populate-and-validate`) y el _setup_ global de E2E en CI (respetando `SKIP_MULTI_TENANT_SEED`) para detectar regresiones tempranas. Documentar cualquier bloqueo derivado de nuevas dependencias o cambios de esquema.
+4. Alinear fixtures de integración/E2E adicionales con el dataset multi-tenant (alfa/beta) y extender la cobertura para dominios pendientes (por ejemplo, flujos combinados `sales` + `inventory`). Registrar en la bitácora los escenarios agregados y su ejecución en pipelines automáticos.
+5. Preparar la **Fase 3 – Poblado y validación** en producción definiendo ventanas de mantenimiento, responsables de aprobación y umbrales de alerta basados en las métricas emitidas por los seeds. Incorporar la bandera `--summary-stdout` en las corridas supervisadas para adjuntar evidencia en los reportes operativos.
+
+## Automatizaciones disponibles y banderas clave
+- `npm run seed:multi-tenant`: aplica los fixtures alfa/beta. Respeta la bandera `SKIP_MULTI_TENANT_SEED` durante `npm run test:e2e` y reutiliza `applyMultiTenantFixtures` en `backend/test/global-setup.ts`.
+- `npm run seed:populate-organization-ids`: propaga `organizationId` a datos legacy. Banderas relevantes:
+  - `--dryRun` para validar sin escribir en la base.
+  - `--default-org-code=<code>` para definir el tenant por defecto.
+  - `--entities=<lista>` para acotar dominios procesados.
+  - `--summary-path=<ruta>` y `--summary-stdout` para registrar métricas.
+  - Métricas por _chunk_ disponibles via `--chunk-size=<n>`.
+- `npm run seed:validate-organization-ids`: audita filas sin `organizationId` o inconsistentes. Banderas:
+  - `--fail-on-missing` para retornar error en CI ante hallazgos críticos.
+  - `--entities=<lista>` para filtrar dominios.
+  - `--summary-path=<ruta>` y `--summary-stdout` para reportes reutilizables.
+- `npm run seed:populate-and-validate`: orquesta poblamiento y validación con un solo comando.
+  - `--skip-populate` / `--skip-validate` para ejecutar fases individuales.
+  - `--summary-dir=<ruta>` para centralizar reportes.
+  - Propaga banderas específicas de cada fase (`--populate.*`, `--validate.*`) manteniendo un único cliente de Prisma y _logger_.
 
 ## Detalle de próximas fases
 
