@@ -10,7 +10,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Fase 2 – Columnas opcionales (`NULL`):**
   - ✅ _Paso 1_: Columnas `organizationId` agregadas como opcionales a las tablas operativas (`User`, `Client`, `Store`, `Inventory`, `Entry`, `Sales`, `Transfer`, etc.).
   - ✅ _Paso 2_: Campos `organizationId` propagados en servicios (`users`, `clients`, `stores`, `inventory`, `sales`, `websales`) y en los repositorios Prisma manteniendo compatibilidad legacy; DTOs de `clients` actualizados y documentados para nuevos consumidores.
-  - ✅ _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` completados. Se consolidaron las suites multi-organización de `StoresService`, `SalesService`, `InventoryService`, `ClientService`, `UsersService`, `WebSalesService`, `EntriesService`, `AdsService`, `ProvidersService`, `ProvidersController`, `CashregisterService`, `OrderTrackingService` y `SalesController`, todas ejecutadas en corridas verdes compartidas. El _setup_ global de pruebas E2E aplica ahora `applyMultiTenantFixtures`, se habilitó el seed `npm run seed:multi-tenant` con datasets alfa/beta y se documentaron ejecuciones exitosas en CI y entornos locales. **Actualización:** el _wrapper_ `npm run seed:populate-and-validate` se encuentra disponible con su batería dedicada, y los comandos `npm run seed:populate-organization-ids` y `npm run seed:validate-organization-ids` cuentan con suites específicas (`populate-organization-ids.seed.spec.ts` y `validate-organization-ids.seed.spec.ts`) que cubren propagación, métricas y telemetría del tenant.
+  - ✅ _Paso 3_: Diseño y ejecución de pruebas unitarias/integración para escenarios con y sin `organizationId` completados. Se consolidaron las suites multi-organización de `StoresService`, `SalesService`, `InventoryService`, `ClientService`, `UsersService`, `WebSalesService`, `EntriesService`, `AdsService`, `ProvidersService`, `ProvidersController`, `CashregisterService`, `OrderTrackingService` y `SalesController`, todas ejecutadas en corridas verdes compartidas. El _setup_ global de pruebas E2E aplica ahora `applyMultiTenantFixtures`, se habilitó el seed `npm run seed:multi-tenant` con datasets alfa/beta y se documentaron ejecuciones exitosas en CI y entornos locales. **Actualización:** el _wrapper_ `npm run seed:populate-and-validate` se encuentra disponible con su batería dedicada, los comandos `npm run seed:populate-organization-ids` y `npm run seed:validate-organization-ids` cuentan con suites específicas (`populate-organization-ids.seed.spec.ts` y `validate-organization-ids.seed.spec.ts`) que cubren propagación, métricas y telemetría del tenant, y el _setup_ global genera métricas de cobertura multi-tenant reutilizables en CI.
   - 🆕 _Preparación Fase 3_: Scripts de poblamiento, validación y orquestación (`populate-organization-ids`, `validate-organization-ids`, `populate-and-validate`) listos para corridas supervisadas con métricas por _chunk_, resúmenes en disco/STDOUT y banderas de control (`--dryRun`, `--summary-path`, `--summary-stdout`, `--summary-dir`, `--skip-*`).
 
 ## Procedimiento operativo – Altas y bajas de organizaciones
@@ -80,7 +80,8 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
   - `PHASE3_ONLY_ENTITIES` / `PHASE3_SKIP_ENTITIES` aplican filtros compartidos; `PHASE3_POPULATE_*` y `PHASE3_VALIDATE_*` afinan cada fase (incluye `*_CHUNK_SIZE`, `*_FAIL_ON_MISSING`, `*_MISMATCH_SAMPLE_SIZE`).
   - `PHASE3_OVERRIDES_PATH` y `PHASE3_DEFAULT_ORG_CODE` habilitan ajustes manuales durante el poblado.
   - `PHASE3_PRINT_OPTIONS=true` imprime en consola la configuración efectiva previa a la ejecución.
-- `npm run ci:multi-tenant-report`: automatiza la corrida E2E con métricas multi-tenant; acepta `--phase3` y banderas `--phase3-*` para ejecutar `phase3:run` previo a las pruebas (p. ej. `--phase3-dry-run=false`, `--phase3-summary-dir=...`, `--phase3-print-options`).
+- `npm run ci:multi-tenant-report`: automatiza la corrida E2E con métricas multi-tenant; acepta `--phase3` y banderas `--phase3-*` para ejecutar `phase3:run` previo a las pruebas (p. ej. `--phase3-dry-run=false`, `--phase3-summary-dir=...`, `--phase3-print-options`, `--phase3-env PHASE3_DEFAULT_ORG_CODE=tenant-alpha`).
+- Workflow `Multi-tenant Coverage`: corre `npm run ci:multi-tenant-report -- --phase3` en CI, adjunta los resúmenes de `tmp/phase3` y los artefactos de métricas/badge para su descarga.
 
 ## Detalle de próximas fases
 
@@ -498,11 +499,21 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - Datos de ejemplo: [`prisma/data/organizations.json`](../prisma/data/organizations.json)
 - Validador multi-tenant: [`prisma/seed/validate-organization-ids.seed.ts`](../prisma/seed/validate-organization-ids.seed.ts)
 - Plan de migración original (resumen provisto en la historia de usuario).
-### 2024-06-04 - Métricas de cobertura multi-tenant en global setup
+### 2024-06-04 – Métricas de cobertura multi-tenant en _global setup_
 
 - **Contexto:** Para completar la visibilidad requerida en el Paso 3 (Fase 2) era necesario medir cuántas entidades quedan cubiertas en cada corrida de fixtures multi-organización.
-- **Implementación:** Se extendió backend/test/global-setup.ts para generar un JSON con organizaciones procesadas, entidades cubiertas y ratio de cobertura (MULTI_TENANT_FIXTURES_METRICS_PATH, MULTI_TENANT_FIXTURES_METRICS_STDOUT), se añadió el runner 
-pm run test:e2e:metrics y 
-pm run badge:multi-tenant-coverage para publicar la métrica, y se actualizó 	est/global-setup.spec.ts verificando la escritura del archivo y la salida por stdout.
+- **Implementación:** Se extendió `backend/test/global-setup.ts` para generar un JSON con organizaciones procesadas, entidades cubiertas y ratio de cobertura (`MULTI_TENANT_FIXTURES_METRICS_PATH`, `MULTI_TENANT_FIXTURES_METRICS_STDOUT`), se añadieron los _runners_ `npm run test:e2e:metrics` y `npm run badge:multi-tenant-coverage` para publicar la métrica, y se actualizó `backend/test/global-setup.spec.ts` verificando la escritura del archivo y la salida por `stdout`.
 - **Resultado:** La tubería de CI puede consumir el archivo o la salida estándar para publicar la métrica de cobertura multi-tenant, dejando el Paso 3 listo para enfocarse en fixtures de integración/E2E y la planificación de la Fase 3.
+
+### 2024-06-05 – Orquestación Phase 3 en pipelines multi-tenant
+
+- **Contexto:** De cara a las corridas supervisadas de la Fase 3 era necesario automatizar la invocación del `populate-and-validate` previo a las suites E2E, aprovechando los CLI existentes y sin duplicar lógica de banderas.
+- **Implementación:** Se añadió el helper `buildPhase3OptionsFromEnv` (`backend/scripts/phase3-config.ts`) que interpreta las variables `PHASE3_*`, crea el directorio de reportes y expone `printOptions` para depuración. El runner `npm run phase3:run` quedó apoyado en dicho helper y permite imprimir la configuración efectiva con `PHASE3_PRINT_OPTIONS=true`. Se actualizó `npm run ci:multi-tenant-report` (`backend/scripts/e2e-multi-tenant-report.ts`) para aceptar `--phase3` y banderas `--phase3-*`, ejecutar `phase3:run` antes de `npm run test:e2e:metrics` y propagar los paths de métricas/`badge` a partir de las rutas configuradas.
+- **Resultado:** Los pipelines CI/CD pueden poblar y validar `organizationId` automáticamente antes de la suite multi-organización, registrar resúmenes JSON en `tmp/phase3` u otra ruta, imprimir la configuración usada y reutilizar los mismos comandos en corridas manuales o supervisadas.
+
+### 2024-06-05 – Artefactos Phase 3 en CI
+
+- **Contexto:** Luego de habilitar la ejecución automática de `phase3:run`, era necesario conservar los reportes JSON generados (`populate-summary.json`, `validate-summary.json`) junto a las métricas multi-tenant para su análisis posterior.
+- **Implementación:** El workflow `Multi-tenant Coverage` ahora sube el directorio `backend/tmp/phase3` como parte del artefacto `multi-tenant-metrics`, garantizando que los resúmenes de Phase 3 queden disponibles tras cada corrida de CI.
+- **Resultado:** Operaciones y QA pueden descargar los reportes de poblado/validación desde los artefactos de la pipeline, manteniendo la trazabilidad requerida para las corridas supervisadas de la Fase 3.
 

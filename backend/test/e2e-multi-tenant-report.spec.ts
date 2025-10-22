@@ -1,4 +1,4 @@
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 import { parsePipelineArgs } from '../scripts/e2e-multi-tenant-report';
 
@@ -32,6 +32,9 @@ describe('parsePipelineArgs', () => {
       '--phase3-print-options',
       '--phase3-default-org-code',
       'TENANT-42',
+      '--phase3-env',
+      'PHASE3_ONLY_ENTITIES=store,client',
+      '--phase3-env=PHASE3_CUSTOM_FLAG=value',
       '--runInBand',
       '--testNamePattern=multi-tenant',
     ];
@@ -50,6 +53,8 @@ describe('parsePipelineArgs', () => {
       PHASE3_SKIP_VALIDATE: 'false',
       PHASE3_PRINT_OPTIONS: 'true',
       PHASE3_DEFAULT_ORG_CODE: 'TENANT-42',
+      PHASE3_ONLY_ENTITIES: 'store,client',
+      PHASE3_CUSTOM_FLAG: 'value',
     });
   });
 
@@ -58,7 +63,7 @@ describe('parsePipelineArgs', () => {
 
     expect(result.runPhase3).toBe(true);
     expect(result.phase3Env.PHASE3_SUMMARY_DIR).toBe(
-      dirname(resolve(process.cwd(), 'out', 'metrics.json')),
+      resolve(process.cwd(), 'tmp', 'phase3'),
     );
   });
 
@@ -66,5 +71,11 @@ describe('parsePipelineArgs', () => {
     const result = parsePipelineArgs(['--phase3=false']);
 
     expect(result.runPhase3).toBe(false);
+  });
+
+  it('throws when phase3 env flag is invalid', () => {
+    expect(() => parsePipelineArgs(['--phase3-env', 'INVALID'])).toThrow(
+      '[ci-multi-tenant] phase3 env variables require KEY=VALUE format.',
+    );
   });
 });

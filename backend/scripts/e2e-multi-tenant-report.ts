@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 export type PipelineArgs = {
   metricsPath: string;
@@ -42,6 +42,20 @@ export function parsePipelineArgs(argv: string[]): PipelineArgs {
       return false;
     }
     throw new Error(`[ci-multi-tenant] Invalid boolean value for ${flag}: ${raw}`);
+  };
+
+  const assignPhase3Env = (entry: string) => {
+    const separatorIndex = entry.indexOf('=');
+    if (separatorIndex <= 0 || separatorIndex === entry.length - 1) {
+      throw new Error('[ci-multi-tenant] phase3 env variables require KEY=VALUE format.');
+    }
+    const key = entry.slice(0, separatorIndex).trim();
+    const value = entry.slice(separatorIndex + 1).trim();
+    if (!key || !value) {
+      throw new Error('[ci-multi-tenant] phase3 env variables require KEY=VALUE format.');
+    }
+    phase3Env[key] = value;
+    runPhase3 = true;
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -189,10 +203,23 @@ export function parsePipelineArgs(argv: string[]): PipelineArgs {
       continue;
     }
 
+    if (arg.startsWith('--phase3-env=')) {
+      const raw = arg.slice('--phase3-env='.length);
+      assignPhase3Env(raw);
+      continue;
+    }
+
     if (arg.startsWith('--phase3-default-org-code=')) {
       const [, raw] = arg.split('=');
       phase3Env.PHASE3_DEFAULT_ORG_CODE = raw;
       runPhase3 = true;
+      continue;
+    }
+
+    if (arg === '--phase3-env') {
+      const [value, nextIndex] = nextValue(arg, argv, index);
+      assignPhase3Env(value);
+      index = nextIndex;
       continue;
     }
 
@@ -207,7 +234,7 @@ export function parsePipelineArgs(argv: string[]): PipelineArgs {
     : resolve(process.cwd(), 'tmp', 'multi-tenant-fixtures', 'coverage-badge.json');
 
   if (runPhase3 && !phase3SummaryExplicit) {
-    phase3Env.PHASE3_SUMMARY_DIR = dirname(resolvedMetrics);
+    phase3Env.PHASE3_SUMMARY_DIR = resolve(process.cwd(), 'tmp', 'phase3');
   }
 
   return {
