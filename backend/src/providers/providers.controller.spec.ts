@@ -178,7 +178,7 @@ describe('ProvidersController multi-tenant mapping', () => {
     expect(service.checkIfExists).toHaveBeenCalledWith('12345678901', 55);
   });
 
-  it('scopes organization lookups to legacy records when context is null', async () => {    
+  it('scopes organization lookups to legacy records when context is null', async () => {
     service.checkIfExists.mockResolvedValue(false);
 
     await controller.checkProvider('12345678901', null);

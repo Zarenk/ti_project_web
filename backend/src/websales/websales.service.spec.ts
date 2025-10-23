@@ -44,12 +44,8 @@ describe('WebSalesService multi-organization support', () => {
     userId: 10,
     storeId: 20,
     description: 'Test web sale',
-    details: [
-      { productId: 1, quantity: 2, price: 50 },
-    ],
-    payments: [
-      { paymentMethodId: 1, amount: 100, currency: 'PEN' },
-    ],
+    details: [{ productId: 1, quantity: 2, price: 50 }],
+    payments: [{ paymentMethodId: 1, amount: 100, currency: 'PEN' }],
     tipoComprobante: 'BOL',
     tipoMoneda: 'PEN',
     total: 100,
@@ -63,13 +59,19 @@ describe('WebSalesService multi-organization support', () => {
       },
       user: {
         create: jest.fn().mockResolvedValue({ id: 300 }),
-        findUnique: jest.fn().mockResolvedValue({ username: 'seller@example.com' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ username: 'seller@example.com' }),
       },
       storeOnInventory: {
         findFirst: jest.fn().mockResolvedValue({
           id: 50,
           stock: 20,
-          store: { id: baseSaleInput.storeId, name: 'Main store', organizationId: null },
+          store: {
+            id: baseSaleInput.storeId,
+            name: 'Main store',
+            organizationId: null,
+          },
         }),
       },
       salePayment: {
@@ -195,7 +197,11 @@ describe('WebSalesService multi-organization support', () => {
 
   it('propagates the provided organizationId through logging, user and client creation and sale execution', async () => {
     (prepareSaleContext as jest.Mock).mockResolvedValue({
-      store: { id: baseSaleInput.storeId, name: 'Main store', organizationId: 987 },
+      store: {
+        id: baseSaleInput.storeId,
+        name: 'Main store',
+        organizationId: 987,
+      },
       cashRegister: { id: 77 },
       clientIdToUse: undefined,
     });
@@ -233,7 +239,11 @@ describe('WebSalesService multi-organization support', () => {
 
   it('falls back to the store organizationId when none is provided in the payload', async () => {
     (prepareSaleContext as jest.Mock).mockResolvedValue({
-      store: { id: baseSaleInput.storeId, name: 'Main store', organizationId: 654 },
+      store: {
+        id: baseSaleInput.storeId,
+        name: 'Main store',
+        organizationId: 654,
+      },
       cashRegister: { id: 88 },
       clientIdToUse: 222,
     });
@@ -256,7 +266,11 @@ describe('WebSalesService multi-organization support', () => {
 
   it('defaults organizationId to null when both payload and store lack a tenant', async () => {
     (prepareSaleContext as jest.Mock).mockResolvedValue({
-      store: { id: baseSaleInput.storeId, name: 'Main store', organizationId: null },
+      store: {
+        id: baseSaleInput.storeId,
+        name: 'Main store',
+        organizationId: null,
+      },
       cashRegister: { id: 55 },
       clientIdToUse: 333,
     });

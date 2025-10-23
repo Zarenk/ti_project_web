@@ -5,6 +5,6 @@ import { PrismaService } from 'src/prisma/prisma.service';
 
 @Module({
   controllers: [SunatController],
-  providers: [SunatService,PrismaService],
+  providers: [SunatService, PrismaService],
 })
 export class SunatModule {}

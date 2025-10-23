@@ -21,9 +21,8 @@ import {
 
 @Injectable()
 export class ProvidersService {
-
   private readonly logger = new Logger(ProvidersService.name);
-  
+
   constructor(
     private prismaService: PrismaService,
     private activityService: ActivityService,
@@ -54,15 +53,16 @@ export class ProvidersService {
     );
   }
 
-   async create(
+  async create(
     createProviderDto: CreateProviderDto,
     req?: Request,
     organizationIdFromContext?: number | null,
   ) {
     try {
-      const { organizationId, ...providerPayload } = createProviderDto as CreateProviderDto & {
-        organizationId?: number | null;
-      };
+      const { organizationId, ...providerPayload } =
+        createProviderDto as CreateProviderDto & {
+          organizationId?: number | null;
+        };
 
       const resolvedOrganizationId = resolveOrganizationId({
         provided: organizationId === undefined ? undefined : organizationId,
@@ -112,7 +112,7 @@ export class ProvidersService {
       throw error;
     }
   }
-  
+
   findAll(options?: { organizationId?: number | null; search?: string }) {
     try {
       const organizationFilter = buildOrganizationFilter(
@@ -135,9 +135,9 @@ export class ProvidersService {
         options?.organizationId === undefined
           ? 'global'
           : options.organizationId === null
-          ? 'legacy'
-          : 'tenant';
-      
+            ? 'legacy'
+            : 'tenant';
+
       const metadata: Record<string, unknown> = { scope };
 
       if (searchTerm) {
@@ -165,7 +165,7 @@ export class ProvidersService {
   }
 
   async findOne(id: number, organizationId?: number | null) {
-    try{
+    try {
       if (!id || typeof id !== 'number') {
         throw new Error('El ID proporcionado no es válido.');
       }
@@ -173,19 +173,19 @@ export class ProvidersService {
       const organizationFilter = buildOrganizationFilter(
         organizationId,
       ) as Prisma.ProviderWhereInput;
-  
+
       const providerFound = await this.prismaService.provider.findFirst({
         where: {
           id,
           ...organizationFilter,
         },
       });
-  
+
       const resolvedOrganizationId =
         organizationId !== undefined
           ? organizationId
-          : (providerFound as { organizationId?: number | null })
-              ?.organizationId ?? null;
+          : ((providerFound as { organizationId?: number | null })
+              ?.organizationId ?? null);
 
       logOrganizationContext({
         service: ProvidersService.name,
@@ -197,10 +197,9 @@ export class ProvidersService {
       if (!providerFound) {
         throw new NotFoundException(`Provider with id ${id} not found`);
       }
-  
+
       return providerFound;
-    }
-    catch(error){
+    } catch (error) {
       this.logIfUnexpected(error, 'findOne');
       throw error;
     }
@@ -225,7 +224,8 @@ export class ProvidersService {
     const resolvedOrganizationId =
       organizationIdFromContext !== undefined
         ? organizationIdFromContext
-        : (provider as { organizationId?: number | null })?.organizationId ?? null;
+        : ((provider as { organizationId?: number | null })?.organizationId ??
+          null);
 
     logOrganizationContext({
       service: ProvidersService.name,
@@ -233,7 +233,7 @@ export class ProvidersService {
       organizationId: resolvedOrganizationId,
       metadata: { documentNumber, exists: !!provider },
     });
-    
+
     return !!provider; // Devuelve true si el proveedor existe, false si no
   }
 
@@ -256,10 +256,13 @@ export class ProvidersService {
         throw new NotFoundException(`Provider with id ${id} not found`);
       }
 
-      const { id: _id, organizationId, ...providerPayload } =
-        updateProviderDto as UpdateProviderDto & {
-          organizationId?: number | null;
-        };
+      const {
+        id: _id,
+        organizationId,
+        ...providerPayload
+      } = updateProviderDto as UpdateProviderDto & {
+        organizationId?: number | null;
+      };
 
       if (
         organizationId === null &&
@@ -304,9 +307,9 @@ export class ProvidersService {
             : {}),
         },
       });
-  
-      if(!providerFound){
-        throw new NotFoundException(`Provider with id ${id} not found`)
+
+      if (!providerFound) {
+        throw new NotFoundException(`Provider with id ${id} not found`);
       }
 
       const diff: any = { before: {}, after: {} };
@@ -334,15 +337,15 @@ export class ProvidersService {
         },
         req,
       );
-  
+
       return providerFound;
-    } catch (error){
+    } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
+        error.code === 'P2002'
       ) {
         throw new ConflictException(
-          `El proveedor con el RUC "${updateProviderDto.name}" ya existe.`
+          `El proveedor con el RUC "${updateProviderDto.name}" ya existe.`,
         );
       }
       this.logIfUnexpected(error, 'update');
@@ -356,14 +359,20 @@ export class ProvidersService {
     organizationIdFromContext?: number | null,
   ) {
     if (!Array.isArray(providers) || providers.length === 0) {
-      throw new BadRequestException('No se proporcionaron proveedores para actualizar.');
+      throw new BadRequestException(
+        'No se proporcionaron proveedores para actualizar.',
+      );
     }
-  
+
     try {
       // Validar que todos los productos tengan un ID válido
-      const invalidProviders = providers.filter((provider) => !provider.id || isNaN(Number(provider.id)));
+      const invalidProviders = providers.filter(
+        (provider) => !provider.id || isNaN(Number(provider.id)),
+      );
       if (invalidProviders.length > 0) {
-        throw new BadRequestException('Todos los proveedores deben tener un ID válido.');
+        throw new BadRequestException(
+          'Todos los proveedores deben tener un ID válido.',
+        );
       }
 
       const ids = providers.map((provider) => Number(provider.id));
@@ -383,11 +392,15 @@ export class ProvidersService {
       const providersById = new Map(
         existingProviders.map((provider) => [provider.id, provider]),
       );
-  
+
       // Ejecutar la transacción para actualizar múltiples productos
       const updatedProviders = await this.prismaService.$transaction(
         providers.map((provider) => {
-          const { organizationId, id: providerId, ...rest } = provider as UpdateProviderDto & {
+          const {
+            organizationId,
+            id: providerId,
+            ...rest
+          } = provider as UpdateProviderDto & {
             organizationId?: number | null;
           };
 
@@ -413,7 +426,8 @@ export class ProvidersService {
             provided: organizationId === undefined ? undefined : organizationId,
             fallbacks: [
               organizationIdFromContext ?? undefined,
-              (existing as { organizationId?: number | null }).organizationId ?? null,
+              (existing as { organizationId?: number | null }).organizationId ??
+                null,
             ],
             mismatchError:
               'La organización del proveedor no coincide con el contexto actual.',
@@ -454,22 +468,23 @@ export class ProvidersService {
         },
         req,
       );
-  
+
       return {
         message: `${updatedProviders.length} Proveedor(es) actualizado(s) correctamente.`,
         updatedProviders,
       };
     } catch (error) {
-  
       // Manejar errores específicos de Prisma
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          throw new NotFoundException('Uno o mas proveedores no fueron encontrados.');
+          throw new NotFoundException(
+            'Uno o mas proveedores no fueron encontrados.',
+          );
         }
       }
 
       this.logIfUnexpected(error, 'updateMany');
-  
+
       throw new InternalServerErrorException(
         'Hubo un error al actualizar los proveedores.',
       );
@@ -504,7 +519,7 @@ export class ProvidersService {
 
       if (relatedProviders.length > 0) {
         throw new ConflictException(
-          `No se puede eliminar el proveedor con ID ${id} porque tiene entradas relacionadas.`
+          `No se puede eliminar el proveedor con ID ${id} porque tiene entradas relacionadas.`,
         );
       }
       // Proceder con la eliminación si no hay proveedores relacionados
@@ -519,16 +534,17 @@ export class ProvidersService {
         throw new NotFoundException(`Provider with id ${id} not found`);
       }
 
-      const providerOrganizationId =
-        (provider as { organizationId?: number | null }).organizationId;
-    
+      const providerOrganizationId = (
+        provider as { organizationId?: number | null }
+      ).organizationId;
+
       logOrganizationContext({
         service: ProvidersService.name,
         operation: 'remove',
         organizationId:
           providerOrganizationId !== undefined
             ? providerOrganizationId
-            : organizationIdFromContext ?? undefined,
+            : (organizationIdFromContext ?? undefined),
         metadata: { providerId: id },
       });
       await this.activityService.log(
@@ -557,9 +573,11 @@ export class ProvidersService {
     organizationIdFromContext?: number | null,
   ) {
     if (!Array.isArray(ids) || ids.length === 0) {
-      throw new NotFoundException('No se proporcionaron IDs válidos para eliminar.');
+      throw new NotFoundException(
+        'No se proporcionaron IDs válidos para eliminar.',
+      );
     }
-      // Verificar si alguna de las categorías tiene productos relacionados
+    // Verificar si alguna de las categorías tiene productos relacionados
     const relatedProviders = await this.prismaService.entry.findMany({
       where: {
         providerId: {
@@ -608,11 +626,12 @@ export class ProvidersService {
         operation: 'removeMany',
         organizationId:
           organizationIdFromContext ??
-          ((accessibleProviders[0] as { organizationId?: number | null })
-            ?.organizationId ?? null),
+          (accessibleProviders[0] as { organizationId?: number | null })
+            ?.organizationId ??
+          null,
         metadata: { providerIds: ids },
       });
-      
+
       await this.activityService.log(
         {
           actorId: (req as any)?.user?.userId,
@@ -636,4 +655,3 @@ export class ProvidersService {
     }
   }
 }
-

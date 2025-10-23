@@ -47,7 +47,9 @@ export class UsersService {
     }
 
     if (user.lockUntil && user.lockUntil > now) {
-      const minutesRemaining = Math.ceil((user.lockUntil.getTime() - now.getTime()) / 60000);
+      const minutesRemaining = Math.ceil(
+        (user.lockUntil.getTime() - now.getTime()) / 60000,
+      );
       throw new UnauthorizedException(
         `Tu cuenta está temporalmente bloqueada. Intenta nuevamente en ${minutesRemaining} minuto(s).`,
       );
@@ -60,7 +62,11 @@ export class UsersService {
       throw new UnauthorizedException(message);
     }
 
-    if (user.failedLoginAttempts !== 0 || user.lockUntil || user.isPermanentlyLocked) {
+    if (
+      user.failedLoginAttempts !== 0 ||
+      user.lockUntil ||
+      user.isPermanentlyLocked
+    ) {
       user = await this.resetLoginState(user, req);
     }
 
@@ -106,10 +112,12 @@ export class UsersService {
         'Tu cuenta ha sido bloqueada por múltiples intentos fallidos. Comunícate con soporte para restaurar el acceso.';
     } else if (attempts === 5) {
       lockUntil = new Date(now.getTime() + 60 * 60 * 1000);
-      message = 'Tu cuenta se ha bloqueado por 1 hora debido a múltiples intentos fallidos.';
+      message =
+        'Tu cuenta se ha bloqueado por 1 hora debido a múltiples intentos fallidos.';
     } else if (attempts === 4) {
       lockUntil = new Date(now.getTime() + 10 * 60 * 1000);
-      message = 'Tu cuenta se ha bloqueado temporalmente por 10 minutos debido a intentos fallidos consecutivos.';
+      message =
+        'Tu cuenta se ha bloqueado temporalmente por 10 minutos debido a intentos fallidos consecutivos.';
     } else {
       const remainingBeforeTempLock = Math.max(0, 4 - attempts);
       if (remainingBeforeTempLock > 0) {
@@ -128,8 +136,8 @@ export class UsersService {
     const summary = isPermanentlyLocked
       ? `La cuenta ${updatedUser.email} se bloqueó de forma indefinida tras ${attempts} intentos fallidos.`
       : lockUntil
-      ? `La cuenta ${updatedUser.email} se bloqueó hasta ${lockUntil.toISOString()} tras ${attempts} intentos fallidos.`
-      : `Intento fallido ${attempts} para la cuenta ${updatedUser.email}.`;
+        ? `La cuenta ${updatedUser.email} se bloqueó hasta ${lockUntil.toISOString()} tras ${attempts} intentos fallidos.`
+        : `Intento fallido ${attempts} para la cuenta ${updatedUser.email}.`;
 
     await this.activityService.log(
       {
@@ -145,7 +153,7 @@ export class UsersService {
 
     return message;
   }
-  
+
   async login(user: any, req?: Request) {
     const payload = {
       username: user.username,
@@ -198,12 +206,16 @@ export class UsersService {
     });
     const username = data.username || data.email.split('@')[0];
 
-    const existingEmail = await this.prismaService.user.findUnique({ where: { email: data.email } });
+    const existingEmail = await this.prismaService.user.findUnique({
+      where: { email: data.email },
+    });
     if (existingEmail) {
       throw new BadRequestException('El correo ya está registrado');
     }
 
-    const existingUsername = await this.prismaService.user.findUnique({ where: { username } });
+    const existingUsername = await this.prismaService.user.findUnique({
+      where: { username },
+    });
     if (existingUsername) {
       throw new BadRequestException('El nombre de usuario ya está registrado');
     }
@@ -231,9 +243,11 @@ export class UsersService {
         summary: `User ${user.email} registered`,
       });
       return user;
-
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException('El usuario ya existe');
       }
       console.error('Error en el backend:', error);
@@ -286,7 +300,10 @@ export class UsersService {
     } catch (error) {
       // Si falla la creación del cliente, eliminamos el usuario recién creado
       await this.prismaService.user.delete({ where: { id: user.id } });
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException('Ya existe un cliente con esos datos');
       }
       console.error('Error en el backend:', error);
@@ -329,7 +346,7 @@ export class UsersService {
   }
 
   findAll() {
-    return this.prismaService.user.findMany()
+    return this.prismaService.user.findMany();
   }
 
   async update(id: number, data: UpdateUserDto) {
@@ -355,7 +372,9 @@ export class UsersService {
         where: { username: data.username },
       });
       if (existing && existing.id !== id) {
-        throw new BadRequestException('El nombre de usuario ya está registrado');
+        throw new BadRequestException(
+          'El nombre de usuario ya está registrado',
+        );
       }
     }
 
@@ -386,7 +405,11 @@ export class UsersService {
     }
     const updated = await this.update(id, userData);
 
-    if (phone !== undefined || image !== undefined || updated.organizationId !== undefined) {
+    if (
+      phone !== undefined ||
+      image !== undefined ||
+      updated.organizationId !== undefined
+    ) {
       logOrganizationContext({
         service: UsersService.name,
         operation: 'updateProfile.syncClient',
@@ -437,7 +460,11 @@ export class UsersService {
     return updated;
   }
 
-  async changePassword(id: number, currentPassword: string, newPassword: string) {
+  async changePassword(
+    id: number,
+    currentPassword: string,
+    newPassword: string,
+  ) {
     const user = await this.prismaService.user.findUnique({ where: { id } });
     if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
       throw new UnauthorizedException('Contraseña actual incorrecta');
@@ -457,7 +484,7 @@ export class UsersService {
       action: AuditAction.UPDATED,
       summary: `User ${user.email} changed password`,
     });
-    
+
     return { message: 'Password updated successfully' };
   }
 }

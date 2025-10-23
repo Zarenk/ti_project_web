@@ -10,7 +10,12 @@ describe('parsePipelineArgs', () => {
       resolve(process.cwd(), 'tmp', 'multi-tenant-fixtures', 'metrics.json'),
     );
     expect(result.badgePath).toBe(
-      resolve(process.cwd(), 'tmp', 'multi-tenant-fixtures', 'coverage-badge.json'),
+      resolve(
+        process.cwd(),
+        'tmp',
+        'multi-tenant-fixtures',
+        'coverage-badge.json',
+      ),
     );
     expect(result.skipBadge).toBe(false);
     expect(result.jestArgs).toEqual([]);
@@ -41,10 +46,17 @@ describe('parsePipelineArgs', () => {
 
     const result = parsePipelineArgs(args);
 
-    expect(result.metricsPath).toBe(resolve(process.cwd(), 'artifacts', 'metrics.json'));
-    expect(result.badgePath).toBe(resolve(process.cwd(), 'artifacts', 'badge.json'));
+    expect(result.metricsPath).toBe(
+      resolve(process.cwd(), 'artifacts', 'metrics.json'),
+    );
+    expect(result.badgePath).toBe(
+      resolve(process.cwd(), 'artifacts', 'badge.json'),
+    );
     expect(result.skipBadge).toBe(true);
-    expect(result.jestArgs).toEqual(['--runInBand', '--testNamePattern=multi-tenant']);
+    expect(result.jestArgs).toEqual([
+      '--runInBand',
+      '--testNamePattern=multi-tenant',
+    ]);
     expect(result.runPhase3).toBe(true);
     expect(result.phase3Env).toEqual({
       PHASE3_SUMMARY_DIR: resolve(process.cwd(), 'phase3', 'output'),
@@ -59,7 +71,10 @@ describe('parsePipelineArgs', () => {
   });
 
   it('fills defaults for phase3 summary directory when only --phase3 is provided', () => {
-    const result = parsePipelineArgs(['--phase3', '--metrics=./out/metrics.json']);
+    const result = parsePipelineArgs([
+      '--phase3',
+      '--metrics=./out/metrics.json',
+    ]);
 
     expect(result.runPhase3).toBe(true);
     expect(result.phase3Env.PHASE3_SUMMARY_DIR).toBe(

@@ -80,7 +80,7 @@ export class WebSalesController {
       organizationId ?? undefined,
     );
   }
-  
+
   @Post('order/:id/reject')
   async rejectOrder(
     @Param('id', ParseIntPipe) id: number,
@@ -194,7 +194,10 @@ export class WebSalesController {
     @Param('id', ParseIntPipe) id: number,
     @CurrentTenant('organizationId') organizationId: number | null,
   ) {
-    return this.webSalesService.getWebOrderById(id, organizationId ?? undefined);
+    return this.webSalesService.getWebOrderById(
+      id,
+      organizationId ?? undefined,
+    );
   }
 
   @Get('order/by-code/:code')
@@ -213,7 +216,10 @@ export class WebSalesController {
     @Param('id', ParseIntPipe) id: number,
     @CurrentTenant('organizationId') organizationId: number | null,
   ) {
-    return this.webSalesService.getWebOrdersByUser(id, organizationId ?? undefined);
+    return this.webSalesService.getWebOrdersByUser(
+      id,
+      organizationId ?? undefined,
+    );
   }
 
   @Get('order/by-email/:email')

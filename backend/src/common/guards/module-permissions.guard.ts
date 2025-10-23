@@ -41,9 +41,7 @@ export class ModulePermissionsGuard implements CanActivate {
       return true;
     }
 
-    const request = context
-      .switchToHttp()
-      .getRequest<RequestWithUser>();
+    const request = context.switchToHttp().getRequest<RequestWithUser>();
 
     const requiredKeys = Array.isArray(permissionKey)
       ? permissionKey

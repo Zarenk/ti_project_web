@@ -77,7 +77,13 @@ export class EntriesRepository {
     serie?: string;
     correlativo?: string;
     invoiceUrl?: string;
-    lines: { account: string; description?: string; debit: number; credit: number; quantity?: number }[];
+    lines: {
+      account: string;
+      description?: string;
+      debit: number;
+      credit: number;
+      quantity?: number;
+    }[];
   }): Promise<EntryWithRelations> {
     return this.prisma.accEntry.create({
       data: {
@@ -112,17 +118,17 @@ export class EntriesRepository {
     });
   }
 
-  async findInventoryPdfUrls(entryIds: number[]): Promise<Map<number, string | undefined>> {
+  async findInventoryPdfUrls(
+    entryIds: number[],
+  ): Promise<Map<number, string | undefined>> {
     if (!entryIds || entryIds.length === 0) {
       return new Map();
     }
 
     const uniqueIds = Array.from(
       new Set(
-        entryIds
-          .map((id) => Number(id))
-          .filter((id) => Number.isInteger(id))
-      )
+        entryIds.map((id) => Number(id)).filter((id) => Number.isInteger(id)),
+      ),
     );
 
     if (uniqueIds.length === 0) {
@@ -135,7 +141,7 @@ export class EntriesRepository {
     });
 
     return new Map(
-      entries.map((entry) => [entry.id, entry.pdfUrl?.trim() || undefined])
+      entries.map((entry) => [entry.id, entry.pdfUrl?.trim() || undefined]),
     );
   }
 

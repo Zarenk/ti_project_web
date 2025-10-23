@@ -81,8 +81,11 @@ describe('TenancyController multi-tenant fixtures (e2e)', () => {
   const prismaStub = {
     organization: {
       findMany: jest.fn(async () => organizationSnapshots),
-      findUnique: jest.fn(async ({ where: { id } }) =>
-        organizationSnapshots.find((organization) => organization.id === id) ?? null,
+      findUnique: jest.fn(
+        async ({ where: { id } }) =>
+          organizationSnapshots.find(
+            (organization) => organization.id === id,
+          ) ?? null,
       ),
     },
   } as unknown as PrismaService;
@@ -122,7 +125,9 @@ describe('TenancyController multi-tenant fixtures (e2e)', () => {
     expect(beta.units[1].code).toBe('beta-store');
     expect(beta.membershipCount).toBe(1);
 
-    expect((prismaStub.organization.findMany as jest.Mock).mock.calls[0][0]).toEqual({
+    expect(
+      (prismaStub.organization.findMany as jest.Mock).mock.calls[0][0],
+    ).toEqual({
       include: organizationInclude,
       orderBy: { id: 'asc' },
     });
@@ -138,7 +143,9 @@ describe('TenancyController multi-tenant fixtures (e2e)', () => {
       'beta-store',
     ]);
     expect(response.body.membershipCount).toBe(1);
-    expect((prismaStub.organization.findUnique as jest.Mock).mock.calls[0][0]).toEqual({
+    expect(
+      (prismaStub.organization.findUnique as jest.Mock).mock.calls[0][0],
+    ).toEqual({
       where: { id: 2 },
       include: organizationInclude,
     });
@@ -149,7 +156,9 @@ describe('TenancyController multi-tenant fixtures (e2e)', () => {
 
     expect(response.status).toBe(404);
     expect(response.body.message).toContain('Organization 999');
-    expect((prismaStub.organization.findUnique as jest.Mock).mock.calls[0][0]).toEqual({
+    expect(
+      (prismaStub.organization.findUnique as jest.Mock).mock.calls[0][0],
+    ).toEqual({
       where: { id: 999 },
       include: organizationInclude,
     });

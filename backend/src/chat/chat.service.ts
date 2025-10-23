@@ -79,11 +79,7 @@ export class ChatService {
   }
 
   async updateMessage(
-    {
-      id,
-      senderId,
-      text,
-    }: { id: number; senderId: number; text: string },
+    { id, senderId, text }: { id: number; senderId: number; text: string },
     req?: Request,
   ): Promise<ChatMessage> {
     const message = await this.prisma.chatMessage.findUnique({

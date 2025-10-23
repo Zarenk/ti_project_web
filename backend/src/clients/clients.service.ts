@@ -1,6 +1,12 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateClientDto } from './dto/create-client.dto';
-import { Prisma} from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateClientDto } from './dto/update-client.dto';
@@ -8,10 +14,7 @@ import { logOrganizationContext } from 'src/tenancy/organization-context.logger'
 
 @Injectable()
 export class ClientService {
-  
-  constructor(
-    private prismaService: PrismaService,
-  ) {}
+  constructor(private prismaService: PrismaService) {}
 
   async create(data: {
     name: string;
@@ -32,7 +35,7 @@ export class ClientService {
     });
     const userId =
       data.userId || (await this.createGenericUser(data.organizationId)); // Crear un usuario genérico si no se proporciona uno
-  
+
     try {
       return await this.prismaService.client.create({
         data: {
@@ -45,14 +48,17 @@ export class ClientService {
         },
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException('Ya existe un cliente con esos datos');
       }
       console.error('Error en el backend:', error);
       throw new InternalServerErrorException('Error al crear el cliente');
     }
   }
-  
+
   private async createGenericUser(organizationId?: number | null) {
     logOrganizationContext({
       service: ClientService.name,
@@ -63,8 +69,8 @@ export class ClientService {
       data: {
         email: `generic_${Date.now()}@example.com`,
         username: `generic_${Date.now()}`,
-        password: "default_password", // Asegúrate de encriptar esto si es necesario
-        role: "CLIENT",
+        password: 'default_password', // Asegúrate de encriptar esto si es necesario
+        role: 'CLIENT',
         organizationId: organizationId ?? null,
       },
     });
@@ -109,7 +115,9 @@ export class ClientService {
         throw new ConflictException('Ya existe un cliente con esos datos');
       }
       console.error('Error en el backend:', error);
-      throw new InternalServerErrorException('Error al crear el cliente invitado');
+      throw new InternalServerErrorException(
+        'Error al crear el cliente invitado',
+      );
     }
   }
 
@@ -135,7 +143,7 @@ export class ClientService {
       createdAt: Date;
       updatedAt: Date;
     }[] = [];
-  
+
     for (const client of clients) {
       logOrganizationContext({
         service: ClientService.name,
@@ -144,10 +152,10 @@ export class ClientService {
         metadata: { userId: client.idUser, typeNumber: client.typeNumber },
       });
       // Verificar si el documento ya existe
-      let existingClient = await this.prismaService.client.findUnique({
+      const existingClient = await this.prismaService.client.findUnique({
         where: { typeNumber: client.typeNumber },
       });
-  
+
       if (!existingClient) {
         // Crear el producto si no existe
         const newClient = await this.prismaService.client.create({
@@ -160,13 +168,12 @@ export class ClientService {
           },
         });
         createdClients.push(newClient);
-      }
-      else {
+      } else {
         createdClients.push(existingClient);
       }
     }
-  
-    console.log("Clientes creados/verificados:", createdClients);
+
+    console.log('Clientes creados/verificados:', createdClients);
     return createdClients;
   }
 
@@ -187,11 +194,13 @@ export class ClientService {
       operation: 'selfRegister',
       organizationId: data.organizationId,
       metadata: { userId: data.userId },
-    });  
+    });
     // Si el usuario ya tiene cliente simplemente devuélvelo
-    const existing = await this.prismaService.client.findUnique({ where: { userId: data.userId } });
+    const existing = await this.prismaService.client.findUnique({
+      where: { userId: data.userId },
+    });
     if (existing) return existing;
-    
+
     try {
       return await this.prismaService.client.create({
         data: {
@@ -204,7 +213,10 @@ export class ClientService {
         },
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException('Ya existe un cliente con esos datos');
       }
       console.error('Error en el backend:', error);
@@ -217,11 +229,11 @@ export class ClientService {
     const client = await this.prismaService.client.findUnique({
       where: { typeNumber },
     });
-    return !! client; // Devuelve true si el proveedor existe, false si no
+    return !!client; // Devuelve true si el proveedor existe, false si no
   }
 
   findAll() {
-    return this.prismaService.client.findMany()
+    return this.prismaService.client.findMany();
   }
 
   findRegistered() {
@@ -248,17 +260,17 @@ export class ClientService {
   }
 
   async findOne(id: number) {
-
     if (!id || typeof id !== 'number') {
       throw new Error('El ID proporcionado no es válido.');
     }
 
-    const clientFound = await this.prismaService.client.findUnique({ // NO OLVIDAR EL AWAIT O ASYNC CON FUNCIONES
-      where: {id: id,}
-    })
+    const clientFound = await this.prismaService.client.findUnique({
+      // NO OLVIDAR EL AWAIT O ASYNC CON FUNCIONES
+      where: { id: id },
+    });
 
-    if(!clientFound){
-      throw new NotFoundException(`Client with id ${id} not found`)
+    if (!clientFound) {
+      throw new NotFoundException(`Client with id ${id} not found`);
     }
 
     return clientFound;
@@ -278,7 +290,7 @@ export class ClientService {
         error.code === 'P2002'
       ) {
         throw new ConflictException(
-          `El cliente con el nombre "${updateClientDto.name}" ya existe.`
+          `El cliente con el nombre "${updateClientDto.name}" ya existe.`,
         );
       }
       if (
@@ -290,21 +302,27 @@ export class ClientService {
 
       console.error('Error en el backend:', error);
       throw new InternalServerErrorException('Error al actualizar el cliente');
-    }  
+    }
   }
 
   async updateMany(clients: UpdateClientDto[]) {
     if (!Array.isArray(clients) || clients.length === 0) {
-      throw new BadRequestException('No se proporcionaron clientes para actualizar.');
+      throw new BadRequestException(
+        'No se proporcionaron clientes para actualizar.',
+      );
     }
-  
+
     try {
       // Validar que todos los productos tengan un ID válido
-      const invalidClients = clients.filter((client) => !client.id || isNaN(Number(client.id)));
+      const invalidClients = clients.filter(
+        (client) => !client.id || isNaN(Number(client.id)),
+      );
       if (invalidClients.length > 0) {
-        throw new BadRequestException('Todos los clientes deben tener un ID válido.');
+        throw new BadRequestException(
+          'Todos los clientes deben tener un ID válido.',
+        );
       }
-  
+
       // Ejecutar la transacción para actualizar múltiples productos
       const updatedClients = await this.prismaService.$transaction(
         clients.map((client) =>
@@ -320,37 +338,41 @@ export class ClientService {
               status: client.status,
               organizationId: client.organizationId ?? null,
             },
-          })
-        )
+          }),
+        ),
       );
-  
+
       return {
         message: `${updatedClients.length} cliente(s) actualizado(s) correctamente.`,
         updatedClients,
       };
     } catch (error) {
       console.error('Error al actualizar clientes:', error);
-  
+
       // Manejar errores específicos de Prisma
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          throw new NotFoundException('Uno o más clientes no fueron encontrados.');
+          throw new NotFoundException(
+            'Uno o más clientes no fueron encontrados.',
+          );
         }
       }
-  
-      throw new InternalServerErrorException('Hubo un error al actualizar los clientes.');
+
+      throw new InternalServerErrorException(
+        'Hubo un error al actualizar los clientes.',
+      );
     }
   }
 
   async remove(id: number) {
-      const deletedClient = this.prismaService.client.delete({
-      where:{
-        id
-      }
-    })
+    const deletedClient = this.prismaService.client.delete({
+      where: {
+        id,
+      },
+    });
 
-    if(!deletedClient){
-      throw new NotFoundException(`Client with id ${id} not found`)
+    if (!deletedClient) {
+      throw new NotFoundException(`Client with id ${id} not found`);
     }
 
     return deletedClient;
@@ -358,11 +380,12 @@ export class ClientService {
 
   async removes(ids: number[]) {
     if (!Array.isArray(ids) || ids.length === 0) {
-      throw new NotFoundException('No se proporcionaron IDs válidos para eliminar.');
+      throw new NotFoundException(
+        'No se proporcionaron IDs válidos para eliminar.',
+      );
     }
-  
-    try {
 
+    try {
       // Convertir los IDs a números
       const numericIds = ids.map((id) => Number(id));
 
@@ -373,17 +396,21 @@ export class ClientService {
           },
         },
       });
-  
+
       if (deletedClients.count === 0) {
-        throw new NotFoundException('No se encontraron clientes con los IDs proporcionados.');
+        throw new NotFoundException(
+          'No se encontraron clientes con los IDs proporcionados.',
+        );
       }
-        
+
       return {
         message: `${deletedClients.count} cliente(s) eliminado(s) correctamente.`,
       };
     } catch (error) {
-      console.error("Error en el backend:", error);
-      throw new InternalServerErrorException('Hubo un error al eliminar los clientes.');     
+      console.error('Error en el backend:', error);
+      throw new InternalServerErrorException(
+        'Hubo un error al eliminar los clientes.',
+      );
     }
   }
 }

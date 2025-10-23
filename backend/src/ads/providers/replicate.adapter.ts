@@ -1,7 +1,11 @@
 import axios from 'axios';
 import { RateLimiter } from './rate-limiter';
 import { CircuitBreaker } from './circuit-breaker';
-import { GenerationRequest, GenerationResult, ImageGenerationProvider } from './interfaces';
+import {
+  GenerationRequest,
+  GenerationResult,
+  ImageGenerationProvider,
+} from './interfaces';
 
 interface AdapterOptions {
   timeoutMs?: number;
@@ -17,14 +21,16 @@ export class ReplicateAdapter implements ImageGenerationProvider {
   private timeout: number;
   private version: string;
 
-  constructor(private apiKey: string, options: AdapterOptions = {}) {
+  constructor(
+    private apiKey: string,
+    options: AdapterOptions = {},
+  ) {
     this.timeout = options.timeoutMs ?? 10000;
     const rl = options.rateLimit ?? { limit: 1, intervalMs: 1000 };
     this.limiter = new RateLimiter(rl.limit, rl.intervalMs);
     const br = options.breaker ?? { maxFailures: 5, resetTimeoutMs: 10000 };
     this.breaker = new CircuitBreaker(br.maxFailures, br.resetTimeoutMs);
-    this.version =
-      options.version ?? 'stability-ai/sdxl';
+    this.version = options.version ?? 'stability-ai/sdxl';
   }
 
   name(): string {

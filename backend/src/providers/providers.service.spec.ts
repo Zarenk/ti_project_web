@@ -405,12 +405,7 @@ describe('ProvidersService multi-organization support', () => {
     });
 
     await expect(
-      service.update(
-        99,
-        { id: 99, status: 'ACTIVE' } as any,
-        undefined,
-        999,
-      ),
+      service.update(99, { id: 99, status: 'ACTIVE' } as any, undefined, 999),
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -426,14 +421,11 @@ describe('ProvidersService multi-organization support', () => {
       organizationId: 303,
     });
 
-    const updated = await service.update(
-      10,
-      {
-        id: 10,
-        status: 'ACTIVE',
-        organizationId: 303,
-      } as any,
-    );
+    const updated = await service.update(10, {
+      id: 10,
+      status: 'ACTIVE',
+      organizationId: 303,
+    } as any);
 
     expect(prismaMock.provider.update).toHaveBeenCalledWith({
       where: { id: 10 },
@@ -518,8 +510,8 @@ describe('ProvidersService multi-organization support', () => {
       ...baseProvider,
       ...data,
     }));
-    prismaMock.$transaction.mockImplementation(async (operations: Promise<any>[]) =>
-      Promise.all(operations),
+    prismaMock.$transaction.mockImplementation(
+      async (operations: Promise<any>[]) => Promise.all(operations),
     );
 
     await service.updateMany(
@@ -541,7 +533,9 @@ describe('ProvidersService multi-organization support', () => {
       2,
       expect.objectContaining({
         where: { id: 2 },
-        data: expect.not.objectContaining({ organizationId: expect.anything() }),
+        data: expect.not.objectContaining({
+          organizationId: expect.anything(),
+        }),
       }),
     );
 
@@ -565,7 +559,11 @@ describe('ProvidersService multi-organization support', () => {
     prismaMock.provider.findMany.mockResolvedValueOnce([
       { id: 7, organizationId: 55 },
     ]);
-    prismaMock.provider.update.mockResolvedValue({ id: 7, ...baseProvider, organizationId: 55 });
+    prismaMock.provider.update.mockResolvedValue({
+      id: 7,
+      ...baseProvider,
+      organizationId: 55,
+    });
 
     await service.updateMany(
       [{ id: 7, status: 'ACTIVE' } as any],
@@ -577,5 +575,4 @@ describe('ProvidersService multi-organization support', () => {
       where: { id: { in: [7] }, organizationId: 55 },
     });
   });
-  
 });

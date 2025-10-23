@@ -1,4 +1,4 @@
-import path from 'path'
+import path from 'path';
 
 const LOGO_DIR = path.resolve(
   __dirname,
@@ -19,7 +19,7 @@ export const brandAssets = {
     core: path.join(LOGO_DIR, 'intel.svg'),
     amd: path.join(LOGO_DIR, 'amd.svg'),
     ryzen: path.join(LOGO_DIR, 'amd.svg'),
-  }
-}
+  },
+};
 
-export default brandAssets
+export default brandAssets;

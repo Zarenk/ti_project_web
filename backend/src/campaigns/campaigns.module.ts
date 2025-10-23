@@ -1,4 +1,9 @@
-import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
+import {
+  Module,
+  MiddlewareConsumer,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { CampaignsController } from './campaigns.controller';
 import { CampaignsService } from './campaigns.service';
 import { RateLimitMiddleware } from 'src/common/middleware/rate-limit.middleware';

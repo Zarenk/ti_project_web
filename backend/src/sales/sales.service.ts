@@ -6,10 +6,18 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AuditAction, OrderStatus } from '@prisma/client';
-import { zonedTimeToUtc, utcToZonedTime, format as formatTz } from 'date-fns-tz';
+import {
+  zonedTimeToUtc,
+  utcToZonedTime,
+  format as formatTz,
+} from 'date-fns-tz';
 import { subDays, startOfDay, endOfDay } from 'date-fns';
 import { eachDayOfInterval } from 'date-fns';
-import { executeSale, prepareSaleContext, SaleAllocation } from 'src/utils/sales-helper';
+import {
+  executeSale,
+  prepareSaleContext,
+  SaleAllocation,
+} from 'src/utils/sales-helper';
 import { ActivityService } from 'src/activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
@@ -21,10 +29,11 @@ import { InventoryHistoryUncheckedCreateInputWithOrganization } from 'src/tenanc
 
 @Injectable()
 export class SalesService {
-
   private readonly logger = new Logger(SalesService.name);
 
-  private buildSalesWhere(organizationId?: number | null): Prisma.SalesWhereInput {
+  private buildSalesWhere(
+    organizationId?: number | null,
+  ): Prisma.SalesWhereInput {
     return buildOrganizationFilter(organizationId) as Prisma.SalesWhereInput;
   }
 
@@ -32,7 +41,7 @@ export class SalesService {
     private prisma: PrismaService,
     private readonly activityService: ActivityService,
     private readonly accountingHook: AccountingHook,
-  ){}
+  ) {}
 
   // Método para crear una venta
   async createSale(data: {
@@ -41,7 +50,12 @@ export class SalesService {
     clientId?: number;
     total: number;
     description?: string;
-    details: { productId: number; quantity: number; price: number; series?: string[] }[];
+    details: {
+      productId: number;
+      quantity: number;
+      price: number;
+      series?: string[];
+    }[];
     tipoComprobante?: string;
     tipoMoneda: string;
     payments: { paymentMethodId: number; amount: number; currency: string }[];
@@ -65,9 +79,9 @@ export class SalesService {
       clientId,
     );
 
-    const storeOrganizationId = (
-      store as { organizationId?: number | null } | undefined
-    )?.organizationId ?? null;
+    const storeOrganizationId =
+      (store as { organizationId?: number | null } | undefined)
+        ?.organizationId ?? null;
 
     const organizationId = resolveOrganizationId({
       provided: inputOrganizationId ?? null,
@@ -133,9 +147,7 @@ export class SalesService {
       try {
         await this.accountingHook.postPayment(payment.id);
       } catch (err) {
-        this.logger.warn(
-          `Retrying accounting post for payment ${payment.id}`,
-        );
+        this.logger.warn(`Retrying accounting post for payment ${payment.id}`);
       }
     }
 
@@ -251,125 +263,136 @@ export class SalesService {
     organizationId?: number | null,
   ) {
     const organizationFilter = this.buildSalesWhere(organizationId);
-    const { sale, deletedSale } = await this.prisma.$transaction(async (prismaTx) => {
-      const sale = await prismaTx.sales.findFirst({
-        where: { id, ...organizationFilter },
-        include: {
-          user: { select: { id: true, username: true } },
-          store: { select: { id: true, name: true } },
-          client: { select: { id: true, name: true, type: true, typeNumber: true } },
-          salesDetails: {
-            include: {
-              entryDetail: {
-                include: {
-                  product: { select: { id: true, name: true } },
-                },
-              },
-              storeOnInventory: true,
+    const { sale, deletedSale } = await this.prisma.$transaction(
+      async (prismaTx) => {
+        const sale = await prismaTx.sales.findFirst({
+          where: { id, ...organizationFilter },
+          include: {
+            user: { select: { id: true, username: true } },
+            store: { select: { id: true, name: true } },
+            client: {
+              select: { id: true, name: true, type: true, typeNumber: true },
             },
-          },
-          payments: {
-            include: {
-              paymentMethod: { select: { id: true, name: true } },
-              cashTransaction: {
-                select: {
-                  id: true,
-                  cashRegisterId: true,
-                  amount: true,
+            salesDetails: {
+              include: {
+                entryDetail: {
+                  include: {
+                    product: { select: { id: true, name: true } },
+                  },
                 },
+                storeOnInventory: true,
               },
             },
+            payments: {
+              include: {
+                paymentMethod: { select: { id: true, name: true } },
+                cashTransaction: {
+                  select: {
+                    id: true,
+                    cashRegisterId: true,
+                    amount: true,
+                  },
+                },
+              },
+            },
+            shippingGuides: { select: { id: true } },
+            order: { select: { id: true } },
           },
-          shippingGuides: { select: { id: true } },
-          order: { select: { id: true } },
-        },
-      });
-
-      if (!sale) {
-        throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
-      }
-
-      const saleOrganizationId =
-        (sale as { organizationId?: number | null }).organizationId ?? null;
-
-      for (const detail of sale.salesDetails) {
-        const inventoryRecord = await prismaTx.storeOnInventory.findUnique({
-          where: { id: detail.storeOnInventoryId },
         });
 
-        if (!inventoryRecord) {
-          throw new NotFoundException(
-            `No se encontró el inventario para el producto ${detail.entryDetail.product.name} en la tienda asociada.`,
-          );
+        if (!sale) {
+          throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
         }
 
-        await prismaTx.storeOnInventory.update({
-          where: { id: inventoryRecord.id },
-          data: { stock: { increment: detail.quantity } },
-        });
+        const saleOrganizationId =
+          (sale as { organizationId?: number | null }).organizationId ?? null;
 
-        const inventoryHistoryData: InventoryHistoryUncheckedCreateInputWithOrganization = {
-          inventoryId: inventoryRecord.inventoryId,
-          userId: actorId ?? sale.userId,
-          action: 'sale_deleted',
-          description: `Reversión de la venta ${sale.id} en ${sale.store.name}`,
-          stockChange: detail.quantity,
-          previousStock: inventoryRecord.stock,
-          newStock: inventoryRecord.stock + detail.quantity,
-          organizationId: saleOrganizationId,
-        };
+        for (const detail of sale.salesDetails) {
+          const inventoryRecord = await prismaTx.storeOnInventory.findUnique({
+            where: { id: detail.storeOnInventoryId },
+          });
 
-        await prismaTx.inventoryHistory.create({
-          data: inventoryHistoryData,
-        });
+          if (!inventoryRecord) {
+            throw new NotFoundException(
+              `No se encontró el inventario para el producto ${detail.entryDetail.product.name} en la tienda asociada.`,
+            );
+          }
 
-        if (detail.series && detail.series.length > 0) {
-          await prismaTx.entryDetailSeries.updateMany({
-            where: { serial: { in: detail.series } },
-            data: { status: 'active' },
+          await prismaTx.storeOnInventory.update({
+            where: { id: inventoryRecord.id },
+            data: { stock: { increment: detail.quantity } },
+          });
+
+          const inventoryHistoryData: InventoryHistoryUncheckedCreateInputWithOrganization =
+            {
+              inventoryId: inventoryRecord.inventoryId,
+              userId: actorId ?? sale.userId,
+              action: 'sale_deleted',
+              description: `Reversión de la venta ${sale.id} en ${sale.store.name}`,
+              stockChange: detail.quantity,
+              previousStock: inventoryRecord.stock,
+              newStock: inventoryRecord.stock + detail.quantity,
+              organizationId: saleOrganizationId,
+            };
+
+          await prismaTx.inventoryHistory.create({
+            data: inventoryHistoryData,
+          });
+
+          if (detail.series && detail.series.length > 0) {
+            await prismaTx.entryDetailSeries.updateMany({
+              where: { serial: { in: detail.series } },
+              data: { status: 'active' },
+            });
+          }
+        }
+
+        for (const payment of sale.payments) {
+          if (payment.cashTransaction) {
+            await prismaTx.cashTransactionPaymentMethod.deleteMany({
+              where: { cashTransactionId: payment.cashTransaction.id },
+            });
+
+            await prismaTx.cashRegister.update({
+              where: { id: payment.cashTransaction.cashRegisterId },
+              data: {
+                currentBalance: {
+                  decrement: new Prisma.Decimal(payment.amount),
+                },
+              },
+            });
+
+            await prismaTx.cashTransaction.delete({
+              where: { id: payment.cashTransaction.id },
+            });
+          }
+        }
+
+        await prismaTx.salePayment.deleteMany({ where: { salesId: sale.id } });
+
+        if (sale.shippingGuides.length > 0) {
+          await prismaTx.shippingGuide.updateMany({
+            where: { ventaId: sale.id },
+            data: { ventaId: null },
           });
         }
-      }
 
-      for (const payment of sale.payments) {
-        if (payment.cashTransaction) {
-          await prismaTx.cashTransactionPaymentMethod.deleteMany({
-            where: { cashTransactionId: payment.cashTransaction.id },
+        if (sale.order) {
+          await prismaTx.orders.update({
+            where: { id: sale.order.id },
+            data: { salesId: null, status: OrderStatus.PENDING },
           });
-
-          await prismaTx.cashRegister.update({
-            where: { id: payment.cashTransaction.cashRegisterId },
-            data: { currentBalance: { decrement: new Prisma.Decimal(payment.amount) } },
-          });
-
-          await prismaTx.cashTransaction.delete({ where: { id: payment.cashTransaction.id } });
         }
-      }
 
-      await prismaTx.salePayment.deleteMany({ where: { salesId: sale.id } });
+        await prismaTx.invoiceSales.deleteMany({ where: { salesId: sale.id } });
 
-      if (sale.shippingGuides.length > 0) {
-        await prismaTx.shippingGuide.updateMany({
-          where: { ventaId: sale.id },
-          data: { ventaId: null },
+        const deletedSale = await prismaTx.sales.delete({
+          where: { id: sale.id },
         });
-      }
 
-      if (sale.order) {
-        await prismaTx.orders.update({
-          where: { id: sale.order.id },
-          data: { salesId: null, status: OrderStatus.PENDING },
-        });
-      }
-
-      await prismaTx.invoiceSales.deleteMany({ where: { salesId: sale.id } });
-
-      const deletedSale = await prismaTx.sales.delete({
-        where: { id: sale.id },
-      });
-
-      return { sale, deletedSale };
-    });
+        return { sale, deletedSale };
+      },
+    );
 
     const beforeData = {
       id: sale.id,
@@ -420,18 +443,18 @@ export class SalesService {
         },
       },
     });
-  
+
     if (!sale) {
       throw new NotFoundException(`No se encontró la venta con ID ${saleId}.`);
     }
-  
+
     // Formatear los datos para devolver solo las series vendidas
     const soldSeries = sale.salesDetails.map((detail) => ({
       productId: detail.entryDetail.product.id, // Acceder al producto a través de EntryDetail
       productName: detail.entryDetail.product.name,
       series: detail.series ?? [],
     }));
-  
+
     return {
       saleId: sale.id,
       soldSeries,
@@ -441,11 +464,15 @@ export class SalesService {
   async getMonthlySalesTotal(organizationId?: number | null) {
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const startOfPreviousMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      1,
+    );
     const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1); // 1 día antes del inicio del mes actual
 
     const organizationFilter = this.buildSalesWhere(organizationId);
-  
+
     const [currentMonth, previousMonth] = await Promise.all([
       this.prisma.sales.aggregate({
         _sum: { total: true },
@@ -462,20 +489,21 @@ export class SalesService {
         },
       }),
     ]);
-  
+
     const totalCurrent = currentMonth._sum.total || 0;
     const totalPrevious = previousMonth._sum.total || 0;
-  
-    const growthPercentage = totalPrevious > 0
-      ? ((totalCurrent - totalPrevious) / totalPrevious) * 100
-      : null;
-  
+
+    const growthPercentage =
+      totalPrevious > 0
+        ? ((totalCurrent - totalPrevious) / totalPrevious) * 100
+        : null;
+
     return {
       total: totalCurrent,
       growth: growthPercentage, // puede ser null si no hubo ventas el mes pasado
     };
   }
-  
+
   async getRevenueByCategory(
     startDate?: Date,
     endDate?: Date,
@@ -483,42 +511,46 @@ export class SalesService {
   ) {
     const timeZone = 'America/Lima';
     const filters: any = {};
-  
+
     if (startDate && endDate) {
       filters.createdAt = {
         gte: zonedTimeToUtc(startDate, timeZone),
         lte: zonedTimeToUtc(endDate, timeZone),
       };
     }
-  
+
     const sales = await this.prisma.sales.findMany({
       where: { ...filters, ...this.buildSalesWhere(organizationId) },
       select: { id: true },
     });
-  
+
     const salesIds = sales.map((s) => s.id);
-  
+
     const result = await this.prisma.salesDetail.findMany({
       where: { salesId: { in: salesIds } },
     });
-  
+
     const productIds = result.map((r) => r.productId);
-  
+
     const products = await this.prisma.product.findMany({
       where: { id: { in: productIds } },
       include: { category: true },
     });
-  
+
     const revenueByCategory: Record<string, number> = {};
-  
+
     for (const detail of result) {
       const product = products.find((p) => p.id === detail.productId);
       const categoryName = product?.category?.name || 'Sin categoría';
       const revenue = (detail.quantity || 0) * (detail.price || 0);
-      revenueByCategory[categoryName] = (revenueByCategory[categoryName] || 0) + revenue;
+      revenueByCategory[categoryName] =
+        (revenueByCategory[categoryName] || 0) + revenue;
     }
-  
-    return Object.entries(revenueByCategory).map(([name, value]) => ({ name, value }));
+
+    return Object.entries(revenueByCategory).map(([name, value]) => ({
+      name,
+      value,
+    }));
   }
 
   async getDailySalesByDateRange(
@@ -527,10 +559,10 @@ export class SalesService {
     organizationId?: number | null,
   ) {
     const timeZone = 'America/Lima';
-  
+
     const zonedFrom = zonedTimeToUtc(new Date(from), timeZone);
     const zonedTo = zonedTimeToUtc(new Date(to), timeZone);
-  
+
     const sales = await this.prisma.sales.findMany({
       where: {
         ...this.buildSalesWhere(organizationId),
@@ -544,24 +576,26 @@ export class SalesService {
         total: true,
       },
     });
-  
+
     const salesByDate: Record<string, number> = {};
-  
+
     for (const sale of sales) {
       const zonedDate = utcToZonedTime(sale.createdAt, timeZone);
       const dateKey = formatTz(zonedDate, 'yyyy-MM-dd', { timeZone });
       salesByDate[dateKey] = (salesByDate[dateKey] || 0) + sale.total;
     }
-  
+
     const days = eachDayOfInterval({ start: from, end: to });
     const result = days.map((date) => {
-      const dateKey = formatTz(utcToZonedTime(date, timeZone), 'yyyy-MM-dd', { timeZone });
+      const dateKey = formatTz(utcToZonedTime(date, timeZone), 'yyyy-MM-dd', {
+        timeZone,
+      });
       return {
         date: dateKey,
         sales: salesByDate[dateKey] || 0,
       };
     });
-  
+
     return result;
   }
 
@@ -576,11 +610,11 @@ export class SalesService {
       filters.sale = this.buildSalesWhere(organizationId);
     }
     const timeZone = 'America/Lima';
-  
+
     if (startDate && endDate) {
       const zonedFrom = zonedTimeToUtc(new Date(startDate), timeZone);
       const zonedTo = zonedTimeToUtc(new Date(endDate), timeZone);
-  
+
       const salesInRange = await this.prisma.sales.findMany({
         where: {
           ...this.buildSalesWhere(organizationId),
@@ -591,17 +625,20 @@ export class SalesService {
         },
         select: { id: true },
       });
-  
-      const salesIds = salesInRange.map(s => s.id);
+
+      const salesIds = salesInRange.map((s) => s.id);
       filters.salesId = { in: salesIds };
     }
-  
+
     const details = await this.prisma.salesDetail.findMany({
       where: filters,
       include: { sale: true },
     });
-  
-    const statsMap: Record<number, { quantity: number; revenue: number; lastSale: Date }> = {};
+
+    const statsMap: Record<
+      number,
+      { quantity: number; revenue: number; lastSale: Date }
+    > = {};
     for (const detail of details) {
       if (!statsMap[detail.productId]) {
         statsMap[detail.productId] = {
@@ -616,23 +653,23 @@ export class SalesService {
         statsMap[detail.productId].lastSale = detail.sale.createdAt;
       }
     }
-  
+
     const sorted = Object.entries(statsMap)
       .sort((a, b) => b[1].quantity - a[1].quantity)
       .slice(0, limit);
-  
+
     const productIds = sorted.map(([productId]) => Number(productId));
     const products = await this.prisma.product.findMany({
       where: {
         id: { in: productIds },
       },
     });
-  
+
     return sorted.map(([productId, stats]) => {
-      const product = products.find(p => p.id === Number(productId));
+      const product = products.find((p) => p.id === Number(productId));
       return {
         productId: Number(productId),
-        name: product?.name || "Producto desconocido",
+        name: product?.name || 'Producto desconocido',
         sales: stats.quantity,
         revenue: stats.revenue,
         lastSale: stats.lastSale,
@@ -658,14 +695,19 @@ export class SalesService {
     });
 
     if (!product) {
-      throw new NotFoundException(`No se encontró el producto con ID ${productId}.`);
+      throw new NotFoundException(
+        `No se encontró el producto con ID ${productId}.`,
+      );
     }
 
     const timeZone = 'America/Lima';
     const createdAtFilter: Prisma.DateTimeFilter = {};
 
     if (from) {
-      createdAtFilter.gte = zonedTimeToUtc(startOfDay(new Date(from)), timeZone);
+      createdAtFilter.gte = zonedTimeToUtc(
+        startOfDay(new Date(from)),
+        timeZone,
+      );
     }
 
     if (to) {
@@ -673,7 +715,8 @@ export class SalesService {
     }
 
     const where: Prisma.SalesDetailWhereInput = { productId };
-    const saleFilters: Prisma.SalesWhereInput = this.buildSalesWhere(organizationId);
+    const saleFilters: Prisma.SalesWhereInput =
+      this.buildSalesWhere(organizationId);
 
     if (Object.keys(createdAtFilter).length > 0) {
       saleFilters.createdAt = createdAtFilter;
@@ -752,8 +795,10 @@ export class SalesService {
       uniqueSalesIds.add(sale.id);
 
       if (typeof price === 'number') {
-        highestPrice = highestPrice === null ? price : Math.max(highestPrice, price);
-        lowestPrice = lowestPrice === null ? price : Math.min(lowestPrice, price);
+        highestPrice =
+          highestPrice === null ? price : Math.max(highestPrice, price);
+        lowestPrice =
+          lowestPrice === null ? price : Math.min(lowestPrice, price);
       }
 
       const saleDate = sale.createdAt;
@@ -763,25 +808,24 @@ export class SalesService {
 
       const zonedDate = utcToZonedTime(saleDate, timeZone);
       const dateKey = formatTz(zonedDate, 'yyyy-MM-dd', { timeZone });
-      const timelineEntry = timeline.get(dateKey) ?? { quantity: 0, revenue: 0 };
+      const timelineEntry = timeline.get(dateKey) ?? {
+        quantity: 0,
+        revenue: 0,
+      };
       timelineEntry.quantity += quantity;
       timelineEntry.revenue += revenue;
       timeline.set(dateKey, timelineEntry);
 
       if (sale.user) {
         const username =
-          sale.user.username ??
-          sale.user.email ??
-          `Usuario ${sale.user.id}`;
-        const current =
-          sellerStats.get(sale.user.id) ??
-          {
-            userId: sale.user.id,
-            username,
-            totalUnits: 0,
-            totalRevenue: 0,
-            saleIds: new Set<number>(),
-          };
+          sale.user.username ?? sale.user.email ?? `Usuario ${sale.user.id}`;
+        const current = sellerStats.get(sale.user.id) ?? {
+          userId: sale.user.id,
+          username,
+          totalUnits: 0,
+          totalRevenue: 0,
+          saleIds: new Set<number>(),
+        };
         current.totalUnits += quantity;
         current.totalRevenue += revenue;
         current.saleIds.add(sale.id);
@@ -789,16 +833,14 @@ export class SalesService {
       }
 
       if (sale.client) {
-        const current =
-          clientStats.get(sale.client.id) ??
-          {
-            clientId: sale.client.id,
-            name: sale.client.name ?? `Cliente ${sale.client.id}`,
-            totalUnits: 0,
-            totalRevenue: 0,
-            saleIds: new Set<number>(),
-            lastPurchase: saleDate,
-          };
+        const current = clientStats.get(sale.client.id) ?? {
+          clientId: sale.client.id,
+          name: sale.client.name ?? `Cliente ${sale.client.id}`,
+          totalUnits: 0,
+          totalRevenue: 0,
+          saleIds: new Set<number>(),
+          lastPurchase: saleDate,
+        };
         current.totalUnits += quantity;
         current.totalRevenue += revenue;
         current.saleIds.add(sale.id);
@@ -860,7 +902,10 @@ export class SalesService {
       stock: item.stock ?? 0,
     }));
 
-    const totalStock = stockByStore.reduce((sum, record) => sum + (record.stock ?? 0), 0);
+    const totalStock = stockByStore.reduce(
+      (sum, record) => sum + (record.stock ?? 0),
+      0,
+    );
 
     return {
       product,
@@ -887,11 +932,15 @@ export class SalesService {
   async getMonthlySalesCount(organizationId?: number | null) {
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const startOfPreviousMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      1,
+    );
     const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1);
 
     const organizationFilter = this.buildSalesWhere(organizationId);
-  
+
     const [currentCount, previousCount] = await Promise.all([
       this.prisma.sales.count({
         where: {
@@ -906,11 +955,12 @@ export class SalesService {
         },
       }),
     ]);
-  
-    const growth = previousCount > 0
-      ? ((currentCount - previousCount) / previousCount) * 100
-      : null;
-  
+
+    const growth =
+      previousCount > 0
+        ? ((currentCount - previousCount) / previousCount) * 100
+        : null;
+
     return {
       count: currentCount,
       growth,
@@ -920,11 +970,15 @@ export class SalesService {
   async getMonthlyClientStats(organizationId?: number | null) {
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const startOfPreviousMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      1,
+    );
     const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1);
 
     const organizationFilter = this.buildSalesWhere(organizationId);
-  
+
     const [currentClients, previousClients] = await Promise.all([
       this.prisma.sales.findMany({
         where: {
@@ -949,14 +1003,15 @@ export class SalesService {
         distinct: ['clientId'],
       }),
     ]);
-  
+
     const currentTotal = currentClients.length;
     const previousTotal = previousClients.length;
-  
-    const growth = previousTotal > 0
-      ? ((currentTotal - previousTotal) / previousTotal) * 100
-      : null;
-  
+
+    const growth =
+      previousTotal > 0
+        ? ((currentTotal - previousTotal) / previousTotal) * 100
+        : null;
+
     return {
       total: currentTotal,
       growth,
@@ -970,7 +1025,7 @@ export class SalesService {
     organizationId?: number | null,
   ) {
     const timeZone = 'America/Lima';
-  
+
     const organizationFilter = this.buildSalesWhere(organizationId);
 
     const whereClause: Prisma.SalesWhereInput | undefined = (() => {
@@ -985,7 +1040,7 @@ export class SalesService {
 
       return Object.keys(base).length > 0 ? base : undefined;
     })();
-  
+
     const sales = await this.prisma.sales.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
@@ -1007,7 +1062,7 @@ export class SalesService {
         invoices: true,
       },
     });
-  
+
     return sales.map((sale) => {
       const invoice = sale.invoices[0];
       return {
@@ -1177,5 +1232,4 @@ export class SalesService {
       };
     });
   }
-
 }

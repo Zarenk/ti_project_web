@@ -54,7 +54,7 @@ import { TenantContextGuard } from './tenancy/tenant-context.guard';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
-      ProductsModule,
+    ProductsModule,
     UsersModule,
     CategoryModule,
     StoresModule,

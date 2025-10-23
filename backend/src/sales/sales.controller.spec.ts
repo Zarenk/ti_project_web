@@ -159,11 +159,7 @@ describe('SalesController', () => {
   });
 
   it('maps tenant context to sales transactions', async () => {
-    await controller.getSalesTransactions(
-      '2024-01-01',
-      '2024-01-31',
-      null,
-    );
+    await controller.getSalesTransactions('2024-01-01', '2024-01-31', null);
 
     expect(service.getSalesTransactions).toHaveBeenCalledWith(
       new Date('2024-01-01'),

@@ -80,7 +80,11 @@ describe('generatePhase3Report', () => {
     expect(report.totals.populatedRecords).toBe(10);
     expect(report.totals.plannedRecords).toBe(12);
     expect(report.totals.populatedEntities).toBe(3);
-    expect(report.populate?.entitiesWithUpdates).toEqual(['client', 'sales', 'store']);
+    expect(report.populate?.entitiesWithUpdates).toEqual([
+      'client',
+      'sales',
+      'store',
+    ]);
     expect(report.validate?.missingEntities).toEqual(['client']);
     expect(report.validate?.mismatchedEntities).toEqual(['sales']);
     expect(report.warnings.length).toBe(2);
@@ -96,7 +100,11 @@ describe('generatePhase3Report', () => {
     expect(report.totals.hasMissing).toBe(false);
     expect(report.totals.hasMismatched).toBe(false);
     expect(report.warnings).toEqual([]);
-    expect(report.populate?.entitiesWithUpdates).toEqual(['client', 'sales', 'store']);
+    expect(report.populate?.entitiesWithUpdates).toEqual([
+      'client',
+      'sales',
+      'store',
+    ]);
     expect(report.validate).toBeUndefined();
   });
 
@@ -122,8 +130,12 @@ describe('resolvePhase3ReportOptions', () => {
     const resolved = resolvePhase3ReportOptions(cli, {}, cwd);
 
     expect(resolved.directory).toBe(path.resolve(cwd, 'custom'));
-    expect(resolved.populatePath).toBe(path.resolve(cwd, 'input', 'populate.json'));
-    expect(resolved.validatePath).toBe(path.resolve(cwd, 'input', 'validate.json'));
+    expect(resolved.populatePath).toBe(
+      path.resolve(cwd, 'input', 'populate.json'),
+    );
+    expect(resolved.validatePath).toBe(
+      path.resolve(cwd, 'input', 'validate.json'),
+    );
     expect(resolved.outputPath).toBe(path.resolve(cwd, 'out', 'report.json'));
     expect(resolved.summaryStdout).toBe(false);
   });
@@ -140,8 +152,12 @@ describe('resolvePhase3ReportOptions', () => {
     const resolved = resolvePhase3ReportOptions({}, env, cwd);
 
     expect(resolved.directory).toBe(path.resolve(cwd, 'env-dir'));
-    expect(resolved.populatePath).toBe(path.resolve(cwd, 'env', 'populate.json'));
-    expect(resolved.validatePath).toBe(path.resolve(cwd, 'env', 'validate.json'));
+    expect(resolved.populatePath).toBe(
+      path.resolve(cwd, 'env', 'populate.json'),
+    );
+    expect(resolved.validatePath).toBe(
+      path.resolve(cwd, 'env', 'validate.json'),
+    );
     expect(resolved.outputPath).toBe(path.resolve(cwd, 'env', 'report.json'));
     expect(resolved.summaryStdout).toBe(false);
   });

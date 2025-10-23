@@ -141,7 +141,6 @@ export class EntriesController {
       },
     }),
   )
-
   async uploadPdf(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
@@ -154,7 +153,7 @@ export class EntriesController {
     return this.entriesService.updateEntryPdf(Number(id), pdfUrl);
   }
 
-   // Endpoint para actualizar una entrada con un PDF GUIA
+  // Endpoint para actualizar una entrada con un PDF GUIA
   @Post(':id/upload-pdf-guia')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -246,8 +245,8 @@ export class EntriesController {
   }
 
   @Delete(':id')
-    remove(@Param('id') id: string) {
-      return this.entriesService.deleteEntry(+id);
+  remove(@Param('id') id: string) {
+    return this.entriesService.deleteEntry(+id);
   }
 
   @Delete()
@@ -266,5 +265,4 @@ export class EntriesController {
     const take = parseInt(limit, 10);
     return this.entriesService.findRecentEntries(isNaN(take) ? 5 : take);
   }
-  
 }

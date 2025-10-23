@@ -50,7 +50,11 @@ const createPrismaMock = (): PrismaMock => ({
   entryDetail: { update: jest.fn() },
   entryDetailSeries: { createMany: jest.fn(), deleteMany: jest.fn() },
   inventory: { findFirst: jest.fn(), create: jest.fn() },
-  storeOnInventory: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+  storeOnInventory: {
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+  },
   inventoryHistory: { create: jest.fn() },
   invoice: { create: jest.fn() },
   $transaction: jest.fn(),
@@ -74,20 +78,32 @@ describe('EntriesService multi-organization support', () => {
     paymentMethod: 'CASH' as const,
     paymentTerm: 'CASH' as const,
     details: [
-      { productId: 99, name: 'Widget', quantity: 5, price: 100, priceInSoles: 100 },
+      {
+        productId: 99,
+        name: 'Widget',
+        quantity: 5,
+        price: 100,
+        priceInSoles: 100,
+      },
     ],
   };
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    prisma.$transaction.mockImplementation(async (cb: (tx: PrismaMock) => Promise<any>) =>
-      cb(prisma),
+    prisma.$transaction.mockImplementation(
+      async (cb: (tx: PrismaMock) => Promise<any>) => cb(prisma),
     );
 
-    prisma.store.findUnique.mockResolvedValue({ id: baseInput.storeId, organizationId: 777 });
+    prisma.store.findUnique.mockResolvedValue({
+      id: baseInput.storeId,
+      organizationId: 777,
+    });
     prisma.provider.findUnique.mockResolvedValue({ id: baseInput.providerId });
     prisma.user.findUnique.mockResolvedValue({ id: baseInput.userId });
-    prisma.product.findUnique.mockResolvedValue({ id: baseInput.details[0].productId, name: 'Widget' });
+    prisma.product.findUnique.mockResolvedValue({
+      id: baseInput.details[0].productId,
+      name: 'Widget',
+    });
     prisma.entry.create.mockResolvedValue({
       id: 555,
       details: [{ id: 888, productId: baseInput.details[0].productId }],
@@ -101,7 +117,10 @@ describe('EntriesService multi-organization support', () => {
     prisma.inventory.findFirst.mockResolvedValue(null);
     prisma.inventory.create.mockResolvedValue({ id: 444 });
     prisma.storeOnInventory.findFirst.mockResolvedValue(null);
-    prisma.storeOnInventory.create.mockResolvedValue({ id: 333, stock: baseInput.details[0].quantity });
+    prisma.storeOnInventory.create.mockResolvedValue({
+      id: 333,
+      stock: baseInput.details[0].quantity,
+    });
     prisma.storeOnInventory.update.mockResolvedValue(undefined);
     prisma.inventoryHistory.create.mockResolvedValue(undefined);
     prisma.entryDetailSeries.createMany.mockResolvedValue(undefined);
@@ -133,7 +152,10 @@ describe('EntriesService multi-organization support', () => {
   });
 
   it('propagates organizationId when provided explicitly', async () => {
-    prisma.store.findUnique.mockResolvedValue({ id: baseInput.storeId, organizationId: 321 });
+    prisma.store.findUnique.mockResolvedValue({
+      id: baseInput.storeId,
+      organizationId: 321,
+    });
     await service.createEntry({ ...baseInput, organizationId: 321 });
 
     expect(prisma.entry.create).toHaveBeenCalledWith(
@@ -160,7 +182,10 @@ describe('EntriesService multi-organization support', () => {
   });
 
   it('falls back to the store organizationId when not provided', async () => {
-    prisma.store.findUnique.mockResolvedValue({ id: baseInput.storeId, organizationId: 654 });
+    prisma.store.findUnique.mockResolvedValue({
+      id: baseInput.storeId,
+      organizationId: 654,
+    });
 
     await service.createEntry(baseInput);
 
@@ -179,14 +204,18 @@ describe('EntriesService multi-organization support', () => {
     expect(historyCall.data.organizationId).toBe(654);
 
     expect(
-      logOrganizationContextMock.mock.calls.some(([payload]) =>
-        payload.operation === 'createEntry' && payload.organizationId === 654,
+      logOrganizationContextMock.mock.calls.some(
+        ([payload]) =>
+          payload.operation === 'createEntry' && payload.organizationId === 654,
       ),
     ).toBe(true);
   });
 
   it('throws when the provided tenant differs from the store organization', async () => {
-    prisma.store.findUnique.mockResolvedValue({ id: baseInput.storeId, organizationId: 987 });
+    prisma.store.findUnique.mockResolvedValue({
+      id: baseInput.storeId,
+      organizationId: 987,
+    });
 
     await expect(
       service.createEntry({ ...baseInput, organizationId: 555 }),
@@ -197,7 +226,10 @@ describe('EntriesService multi-organization support', () => {
   });
 
   it('defaults organizationId to null when neither payload nor store defines it', async () => {
-    prisma.store.findUnique.mockResolvedValue({ id: baseInput.storeId, organizationId: null });
+    prisma.store.findUnique.mockResolvedValue({
+      id: baseInput.storeId,
+      organizationId: null,
+    });
 
     await service.createEntry(baseInput);
 
@@ -216,13 +248,18 @@ describe('EntriesService multi-organization support', () => {
     expect(historyCall.data.organizationId).toBeNull();
 
     expect(
-      logOrganizationContextMock.mock.calls.some(([payload]) =>
-        payload.operation === 'createEntry' && payload.organizationId === null,
+      logOrganizationContextMock.mock.calls.some(
+        ([payload]) =>
+          payload.operation === 'createEntry' &&
+          payload.organizationId === null,
       ),
     ).toBe(true);
   });
   it('uses the tenant context when provided and the payload omits organizationId', async () => {
-    prisma.store.findUnique.mockResolvedValue({ id: baseInput.storeId, organizationId: null });
+    prisma.store.findUnique.mockResolvedValue({
+      id: baseInput.storeId,
+      organizationId: null,
+    });
 
     await service.createEntry(baseInput, 4321);
 
@@ -237,16 +274,23 @@ describe('EntriesService multi-organization support', () => {
       }),
     );
     expect(
-      logOrganizationContextMock.mock.calls.some(([payload]) =>
-        payload.operation === 'createEntry' && payload.organizationId === 4321,
+      logOrganizationContextMock.mock.calls.some(
+        ([payload]) =>
+          payload.operation === 'createEntry' &&
+          payload.organizationId === 4321,
       ),
     ).toBe(true);
   });
 
   it('throws when the tenant context mismatches the resolved organization', async () => {
-    prisma.store.findUnique.mockResolvedValue({ id: baseInput.storeId, organizationId: 888 });
+    prisma.store.findUnique.mockResolvedValue({
+      id: baseInput.storeId,
+      organizationId: 888,
+    });
 
-    await expect(service.createEntry(baseInput, 999)).rejects.toThrow(BadRequestException);
+    await expect(service.createEntry(baseInput, 999)).rejects.toThrow(
+      BadRequestException,
+    );
 
     expect(prisma.entry.create).not.toHaveBeenCalled();
     expect(prisma.inventory.create).not.toHaveBeenCalled();
@@ -278,9 +322,7 @@ describe('EntriesService multi-organization support', () => {
       );
       expect(result[0].details[0].series).toEqual(['S-1', 'S-2']);
       expect(result[0].details[0].product_name).toBe('Widget');
-      expect(
-        logOrganizationContextMock,
-      ).toHaveBeenCalledWith(
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
         expect.objectContaining({
           operation: 'findAllEntries',
           organizationId: null,
@@ -289,16 +331,16 @@ describe('EntriesService multi-organization support', () => {
     });
 
     it('applies organization filters when provided', async () => {
-      prisma.entry.findMany.mockResolvedValue([{ ...entryTemplate, organizationId: 123 }]);
+      prisma.entry.findMany.mockResolvedValue([
+        { ...entryTemplate, organizationId: 123 },
+      ]);
 
       await service.findAllEntries(123);
 
       expect(prisma.entry.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { organizationId: 123 } }),
       );
-      expect(
-        logOrganizationContextMock,
-      ).toHaveBeenCalledWith(
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
         expect.objectContaining({
           operation: 'findAllEntries',
           organizationId: 123,
@@ -307,16 +349,16 @@ describe('EntriesService multi-organization support', () => {
     });
 
     it('includes legacy rows when organizationId is null', async () => {
-      prisma.entry.findMany.mockResolvedValue([{ ...entryTemplate, organizationId: null }]);
+      prisma.entry.findMany.mockResolvedValue([
+        { ...entryTemplate, organizationId: null },
+      ]);
 
       await service.findAllEntries(null);
 
       expect(prisma.entry.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { organizationId: null } }),
       );
-      expect(
-        logOrganizationContextMock,
-      ).toHaveBeenCalledWith(
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
         expect.objectContaining({
           operation: 'findAllEntries',
           organizationId: null,
@@ -350,9 +392,7 @@ describe('EntriesService multi-organization support', () => {
         expect.objectContaining({ where: { id: 900, organizationId: 321 } }),
       );
       expect(result.details[0].series).toEqual(['AA']);
-      expect(
-        logOrganizationContextMock,
-      ).toHaveBeenCalledWith(
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
         expect.objectContaining({
           operation: 'findEntryById',
           organizationId: 321,
@@ -362,16 +402,17 @@ describe('EntriesService multi-organization support', () => {
     });
 
     it('returns legacy entries when organizationId is null', async () => {
-      prisma.entry.findFirst.mockResolvedValue({ ...baseEntry, organizationId: null });
+      prisma.entry.findFirst.mockResolvedValue({
+        ...baseEntry,
+        organizationId: null,
+      });
 
       await service.findEntryById(900, null);
 
       expect(prisma.entry.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 900, organizationId: null } }),
       );
-      expect(
-        logOrganizationContextMock,
-      ).toHaveBeenCalledWith(
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
         expect.objectContaining({
           operation: 'findEntryById',
           organizationId: null,
@@ -383,7 +424,9 @@ describe('EntriesService multi-organization support', () => {
     it('throws NotFoundException when no entry matches the tenant filter', async () => {
       prisma.entry.findFirst.mockResolvedValue(null);
 
-      await expect(service.findEntryById(123, 999)).rejects.toThrow(NotFoundException);
+      await expect(service.findEntryById(123, 999)).rejects.toThrow(
+        NotFoundException,
+      );
 
       expect(prisma.entry.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 123, organizationId: 999 } }),
@@ -442,7 +485,9 @@ describe('EntriesService multi-organization support', () => {
           organizationId: 55,
         }),
       );
-      expect(prisma.entry.delete).toHaveBeenCalledWith({ where: { id: entryBase.id } });
+      expect(prisma.entry.delete).toHaveBeenCalledWith({
+        where: { id: entryBase.id },
+      });
     });
 
     it('defaults organizationId to null during deletion when entry is legacy', async () => {

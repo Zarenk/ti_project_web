@@ -268,7 +268,7 @@ export class WebSalesService {
     });
 
     const allocations: SaleAllocation[] = [];
-    
+
     let total = 0;
     for (const detail of details) {
       const storeInventory = await this.prisma.storeOnInventory.findFirst({
@@ -324,7 +324,7 @@ export class WebSalesService {
       } catch (err) {
         this.logger.warn(`Retrying accounting post for payment ${payment.id}`);
       }
-    }    
+    }
 
     if (!skipOrder && shippingName && shippingAddress && city && postalCode) {
       const orderData: OrdersUncheckedCreateInputWithOrganization = {
@@ -716,7 +716,8 @@ export class WebSalesService {
 
     const map = new Map<number, string[]>();
     for (const it of items) {
-      if (!it || typeof it.productId !== 'number' || !Array.isArray(it.series)) continue;
+      if (!it || typeof it.productId !== 'number' || !Array.isArray(it.series))
+        continue;
       // Unicos y sin falsy
       const uniq = Array.from(new Set(it.series.filter(Boolean)));
       map.set(it.productId, uniq);
@@ -726,7 +727,10 @@ export class WebSalesService {
       if (map.has(Number(d.productId))) {
         const series = map.get(Number(d.productId))!;
         // Validación opcional: si hay series provistas, deben ser exactamente igual a la cantidad
-        if (typeof d.quantity === 'number' && series.length !== Number(d.quantity)) {
+        if (
+          typeof d.quantity === 'number' &&
+          series.length !== Number(d.quantity)
+        ) {
           throw new BadRequestException(
             `El producto ${d.productId} requiere ${d.quantity} series, se recibieron ${series.length}`,
           );

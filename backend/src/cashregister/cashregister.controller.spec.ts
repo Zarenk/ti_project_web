@@ -21,7 +21,9 @@ describe('CashregisterController (multi-organization)', () => {
       remove: jest.fn(),
     } as any;
 
-    controller = new CashregisterController(serviceMock as unknown as CashregisterService);
+    controller = new CashregisterController(
+      serviceMock as unknown as CashregisterService,
+    );
   });
 
   it('propagates tenant organizationId on create when DTO omits it', async () => {
@@ -48,7 +50,9 @@ describe('CashregisterController (multi-organization)', () => {
       organizationId: 3,
     } as any;
 
-    await expect(controller.create(dto, 5)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(controller.create(dto, 5)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('uses tenant context when listing without explicit query filter', async () => {
@@ -60,7 +64,9 @@ describe('CashregisterController (multi-organization)', () => {
   });
 
   it('throws when query organizationId mismatches tenant context', async () => {
-    await expect(controller.findAll('null', 4)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(controller.findAll('null', 4)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('allows explicit query organizationId when tenant context is null', async () => {
@@ -94,7 +100,9 @@ describe('CashregisterController (multi-organization)', () => {
 
     await controller.findOne(99, undefined, 15);
 
-    expect(serviceMock.findOne).toHaveBeenCalledWith(99, { organizationId: 15 });
+    expect(serviceMock.findOne).toHaveBeenCalledWith(99, {
+      organizationId: 15,
+    });
   });
 
   it('delegates remove with tenant organizationId when query omitted', async () => {
@@ -104,5 +112,4 @@ describe('CashregisterController (multi-organization)', () => {
 
     expect(serviceMock.remove).toHaveBeenCalledWith(5, { organizationId: 12 });
   });
-  
 });

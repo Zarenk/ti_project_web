@@ -5,7 +5,9 @@ import { KmsService } from './kms.service';
  * Prisma middleware that encrypts `credentialsRef` fields before persisting
  * them to the database.
  */
-export function encryptCredentialsMiddleware(kms: KmsService): Prisma.Middleware {
+export function encryptCredentialsMiddleware(
+  kms: KmsService,
+): Prisma.Middleware {
   return async (params, next) => {
     const { args, action } = params as any;
     if (['create', 'update'].includes(action) && args?.data?.credentialsRef) {

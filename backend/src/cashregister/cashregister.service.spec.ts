@@ -54,7 +54,10 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('findOne', () => {
     it('applies organization filter when provided', async () => {
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({ id: 4, organizationId: 22 });
+      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({
+        id: 4,
+        organizationId: 22,
+      });
 
       const result = await service.findOne(4, { organizationId: 22 });
 
@@ -80,7 +83,9 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('create', () => {
     it('propagates provided organizationId and logs context', async () => {
-      (prisma.store.findUnique as jest.Mock).mockResolvedValue({ organizationId: 42 });
+      (prisma.store.findUnique as jest.Mock).mockResolvedValue({
+        organizationId: 42,
+      });
       (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue(null);
       (prisma.cashRegister.create as jest.Mock).mockResolvedValue({ id: 1 });
 
@@ -114,7 +119,9 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('falls back to store organization when not provided', async () => {
-      (prisma.store.findUnique as jest.Mock).mockResolvedValue({ organizationId: 9 });
+      (prisma.store.findUnique as jest.Mock).mockResolvedValue({
+        organizationId: 9,
+      });
       (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue(null);
       (prisma.cashRegister.create as jest.Mock).mockResolvedValue({ id: 10 });
 
@@ -133,7 +140,9 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('throws when store organization mismatches provided', async () => {
-      (prisma.store.findUnique as jest.Mock).mockResolvedValue({ organizationId: 3 });
+      (prisma.store.findUnique as jest.Mock).mockResolvedValue({
+        organizationId: 3,
+      });
 
       await expect(
         service.create({
@@ -211,7 +220,9 @@ describe('CashregisterService (multi-organization)', () => {
     it('returns null when cash register not found', async () => {
       (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue(null);
 
-      const result = await service.getCashRegisterBalance(2, { organizationId: 7 });
+      const result = await service.getCashRegisterBalance(2, {
+        organizationId: 7,
+      });
 
       expect(result).toBeNull();
     });
@@ -256,8 +267,12 @@ describe('CashregisterService (multi-organization)', () => {
   describe('createTransaction', () => {
     beforeEach(() => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 11 });
-      (prisma.paymentMethod.findFirst as jest.Mock).mockResolvedValue({ id: 7 });
-      (prisma.cashTransactionPaymentMethod.create as jest.Mock).mockResolvedValue({});
+      (prisma.paymentMethod.findFirst as jest.Mock).mockResolvedValue({
+        id: 7,
+      });
+      (
+        prisma.cashTransactionPaymentMethod.create as jest.Mock
+      ).mockResolvedValue({});
       (prisma.cashRegister.update as jest.Mock).mockResolvedValue({ id: 15 });
     });
 
@@ -269,7 +284,9 @@ describe('CashregisterService (multi-organization)', () => {
         organizationId: 77,
         store: { organizationId: 77 },
       });
-      (prisma.cashTransaction.create as jest.Mock).mockResolvedValue({ id: 30 });
+      (prisma.cashTransaction.create as jest.Mock).mockResolvedValue({
+        id: 30,
+      });
 
       const result = await service.createTransaction({
         cashRegisterId: 2,
@@ -438,7 +455,9 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('createClosure', () => {
     beforeEach(() => {
-      (prisma.$transaction as jest.Mock).mockImplementation((callback: any) => callback(prisma));
+      (prisma.$transaction as jest.Mock).mockImplementation((callback: any) =>
+        callback(prisma),
+      );
       (prisma.cashRegister.update as jest.Mock).mockResolvedValue({
         id: 1,
         initialBalance: 100,
@@ -554,7 +573,9 @@ describe('CashregisterService (multi-organization)', () => {
       const expectedEnd = new Date(baseDate);
       expectedEnd.setHours(23, 59, 59, 999);
 
-      await service.getClosureByStoreAndDate(9, baseDate, { organizationId: 2 });
+      await service.getClosureByStoreAndDate(9, baseDate, {
+        organizationId: 2,
+      });
 
       expect(prisma.cashClosure.findFirst).toHaveBeenCalledWith({
         where: {
@@ -611,7 +632,10 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('resolves organizationId using existing record', async () => {
-      const result = await service.update(3, { name: 'Caja', organizationId: undefined });
+      const result = await service.update(3, {
+        name: 'Caja',
+        organizationId: undefined,
+      });
 
       expect(prisma.cashRegister.update).toHaveBeenCalledWith({
         where: { id: 3 },
@@ -648,12 +672,13 @@ describe('CashregisterService (multi-organization)', () => {
           closures: true,
         },
       });
-      expect(prisma.cashRegister.delete).toHaveBeenCalledWith({ where: { id: 7 } });
+      expect(prisma.cashRegister.delete).toHaveBeenCalledWith({
+        where: { id: 7 },
+      });
       expect(logOrganizationContextMock).toHaveBeenCalledWith(
         expect.objectContaining({ operation: 'remove', organizationId: 5 }),
       );
       expect(result).toEqual({ id: 7 });
     });
   });
-
 });

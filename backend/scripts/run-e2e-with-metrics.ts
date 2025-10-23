@@ -55,10 +55,12 @@ async function ensureDirectory(filePath: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const { metricsPath, stdout, jestArgs } = parseRunnerArgs(process.argv.slice(2));
+  const { metricsPath, stdout, jestArgs } = parseRunnerArgs(
+    process.argv.slice(2),
+  );
   await ensureDirectory(metricsPath);
 
-  const env = {
+  const env: NodeJS.ProcessEnv = {
     ...process.env,
     MULTI_TENANT_FIXTURES_METRICS_PATH: metricsPath,
   };

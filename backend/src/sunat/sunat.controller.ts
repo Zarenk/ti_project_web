@@ -1,4 +1,15 @@
-import { Controller, Post, Body, BadRequestException, Get, Param, Res, NotFoundException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  BadRequestException,
+  Get,
+  Param,
+  Res,
+  NotFoundException,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
 import { SunatService } from './sunat.service';
 import { Response } from 'express'; // ✅ Asegúrate de importar esto
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -32,22 +43,34 @@ export class SunatController {
    */
   @Post('send-document')
   async sendDocument(@Body() data: any) {
-
     if (!data) {
-      throw new BadRequestException('El cuerpo de la solicitud no puede estar vacío.');
+      throw new BadRequestException(
+        'El cuerpo de la solicitud no puede estar vacío.',
+      );
     }
-  
-    const { documentType, privateKeyPath= "certificates/private_key_pkcs8.pem", 
-      certificatePath="certificates/certificate.crt", ...documentData } = data;
+
+    const {
+      documentType,
+      privateKeyPath = 'certificates/private_key_pkcs8.pem',
+      certificatePath = 'certificates/certificate.crt',
+      ...documentData
+    } = data;
 
     // Validar que el tipo de documento sea válido
-    if (!documentType || !['invoice', 'boleta', 'creditNote'].includes(documentType)) {
-      throw new BadRequestException('Tipo de documento no soportado. Use "invoice", "boleta" o "creditNote".');
+    if (
+      !documentType ||
+      !['invoice', 'boleta', 'creditNote'].includes(documentType)
+    ) {
+      throw new BadRequestException(
+        'Tipo de documento no soportado. Use "invoice", "boleta" o "creditNote".',
+      );
     }
 
     // Validar que las rutas de las claves y certificados sean proporcionadas
     if (!privateKeyPath || !certificatePath) {
-      throw new BadRequestException('Las rutas de la clave privada y el certificado son obligatorias.');
+      throw new BadRequestException(
+        'Las rutas de la clave privada y el certificado son obligatorias.',
+      );
     }
 
     try {
@@ -63,7 +86,7 @@ export class SunatController {
         message: 'Documento enviado a la SUNAT exitosamente.',
         response,
       };
-    } catch (error:any) {
+    } catch (error: any) {
       console.error('Error al enviar el documento a la SUNAT:', error.message);
       throw new BadRequestException('Error al enviar el documento a la SUNAT.');
     }
@@ -76,14 +99,18 @@ export class SunatController {
     }
 
     try {
-      const respuesta = await this.sunatService.generarYEnviarConSerie(data.documentType);
+      const respuesta = await this.sunatService.generarYEnviarConSerie(
+        data.documentType,
+      );
       return {
         mensaje: 'Serie y numero correlativo generado correctamente...',
         respuesta,
       };
     } catch (error: any) {
       console.error('Error en el endpoint /sunat/generar-y-enviar:', error);
-      throw new BadRequestException('Error al extrar la serie y el nro. correlativo...');
+      throw new BadRequestException(
+        'Error al extrar la serie y el nro. correlativo...',
+      );
     }
   }
 
@@ -93,17 +120,17 @@ export class SunatController {
       storage: diskStorage({
         destination: (req, file, cb) => {
           const nombre = file.originalname;
-  
+
           // Detectar tipo desde el nombre del archivo (ej: 20519857538-01-F001-007.pdf)
           const tipo = nombre.includes('-01-') ? 'factura' : 'boleta';
-  
+
           const dir = resolveBackendPath('comprobantes/pdf', tipo);
-  
+
           // Crear la carpeta si no existe
           if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
           }
-  
+
           cb(null, dir);
         },
         filename: (req, file, cb) => {
@@ -116,7 +143,10 @@ export class SunatController {
       }),
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.includes('pdf')) {
-          return cb(new BadRequestException('Solo se permiten archivos PDF.'), false);
+          return cb(
+            new BadRequestException('Solo se permiten archivos PDF.'),
+            false,
+          );
         }
         cb(null, true);
       },
@@ -132,7 +162,7 @@ export class SunatController {
       filename: file.filename,
     };
   }
-  
+
   @Get('pdf/:tipo/:filename')
   getComprobantePdf(
     @Param('tipo') tipo: 'boleta' | 'factura',
@@ -143,7 +173,7 @@ export class SunatController {
       const filePath = this.sunatService.getComprobantePdfPath(tipo, filename);
       res.setHeader('Content-Type', 'application/pdf');
       res.sendFile(filePath);
-    } catch (error:any) {
+    } catch (error: any) {
       throw new NotFoundException(error.message);
     }
   }

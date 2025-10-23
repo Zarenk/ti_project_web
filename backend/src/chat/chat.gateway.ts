@@ -16,7 +16,6 @@ import { Request } from 'express';
     origin: '*',
   },
 })
-
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
@@ -113,7 +112,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       headers: { 'user-agent': client.handshake.headers['user-agent'] },
     } as Request;
     const deleted = await this.chatService.deleteMessage(data, fakeReq);
-    this.server.emit('chat:deleted', { id: deleted.id, deletedAt: deleted.deletedAt });
+    this.server.emit('chat:deleted', {
+      id: deleted.id,
+      deletedAt: deleted.deletedAt,
+    });
   }
 
   @SubscribeMessage('chat:seen')

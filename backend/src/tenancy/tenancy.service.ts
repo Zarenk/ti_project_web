@@ -5,11 +5,20 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateTenancyDto, OrganizationUnitInputDto } from './dto/create-tenancy.dto';
+import {
+  CreateTenancyDto,
+  OrganizationUnitInputDto,
+} from './dto/create-tenancy.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
-import { StoredOrganizationUnit, TenancySnapshot } from './entities/tenancy.entity';
+import {
+  StoredOrganizationUnit,
+  TenancySnapshot,
+} from './entities/tenancy.entity';
 
-type MinimalUnit = Pick<StoredOrganizationUnit, 'id' | 'organizationId' | 'code'>;
+type MinimalUnit = Pick<
+  StoredOrganizationUnit,
+  'id' | 'organizationId' | 'code'
+>;
 
 @Injectable()
 export class TenancyService {
@@ -18,7 +27,7 @@ export class TenancyService {
   async create(createTenancyDto: CreateTenancyDto): Promise<TenancySnapshot> {
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const prisma = (tx as unknown as PrismaService) as any;
+        const prisma = tx as unknown as PrismaService as any;
 
         const organization = await prisma.organization.create({
           data: {
@@ -54,7 +63,7 @@ export class TenancyService {
   }
 
   async findAll(): Promise<TenancySnapshot[]> {
-    const prismaClient = (this.prisma as unknown as PrismaService) as any;
+    const prismaClient = this.prisma as unknown as PrismaService as any;
     const organizations = await prismaClient.organization.findMany({
       include: {
         units: { orderBy: { id: 'asc' } },
@@ -71,7 +80,7 @@ export class TenancyService {
   }
 
   async findOne(id: number): Promise<TenancySnapshot> {
-    const prismaClient = (this.prisma as unknown as PrismaService) as any;
+    const prismaClient = this.prisma as unknown as PrismaService as any;
     const organization = await prismaClient.organization.findUnique({
       where: { id },
       include: {
@@ -98,7 +107,7 @@ export class TenancyService {
   ): Promise<TenancySnapshot> {
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const prisma = (tx as unknown as PrismaService) as any;
+        const prisma = tx as unknown as PrismaService as any;
         const trimmedName = updateTenancyDto.name?.trim();
         const organization = await prisma.organization.update({
           where: { id },
@@ -148,7 +157,7 @@ export class TenancyService {
   async remove(id: number): Promise<TenancySnapshot> {
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const prisma = (tx as unknown as PrismaService) as any;
+        const prisma = tx as unknown as PrismaService as any;
 
         const organization = await prisma.organization.update({
           where: { id },
@@ -187,7 +196,7 @@ export class TenancyService {
     unitsByCode: Map<string, number>,
   ): Promise<StoredOrganizationUnit[]> {
     const createdUnits: StoredOrganizationUnit[] = [];
-    const prisma = (tx as unknown as PrismaService) as any;
+    const prisma = tx as unknown as PrismaService as any;
 
     for (const unit of units) {
       if (!unit.name) {
@@ -222,7 +231,7 @@ export class TenancyService {
     unitsByCode: Map<string, number>,
     existingUnits: MinimalUnit[],
   ) {
-    const prisma = (tx as unknown as PrismaService) as any;
+    const prisma = tx as unknown as PrismaService as any;
 
     if (unitDto.id) {
       const current = existingUnits.find((unit) => unit.id === unitDto.id);
@@ -301,7 +310,10 @@ export class TenancyService {
   }
 
   private handlePrismaError(error: unknown): never {
-    if (error instanceof BadRequestException || error instanceof NotFoundException) {
+    if (
+      error instanceof BadRequestException ||
+      error instanceof NotFoundException
+    ) {
       throw error;
     }
 
@@ -311,14 +323,18 @@ export class TenancyService {
       }
 
       if (error.code === 'P2002') {
-        throw new BadRequestException('Duplicate organization or unit identifier');
+        throw new BadRequestException(
+          'Duplicate organization or unit identifier',
+        );
       }
     }
 
     throw error;
   }
 
-  private normalizeCodeInput(value: string | null | undefined): string | null | undefined {
+  private normalizeCodeInput(
+    value: string | null | undefined,
+  ): string | null | undefined {
     if (value === undefined) {
       return undefined;
     }

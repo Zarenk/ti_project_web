@@ -42,7 +42,9 @@ export class ActivityController {
   findAllByUser(@Param('userId') userId: string) {
     const id = parseInt(userId, 10);
     if (isNaN(id)) {
-      throw new BadRequestException('El ID del usuario debe ser un número válido');
+      throw new BadRequestException(
+        'El ID del usuario debe ser un número válido',
+      );
     }
     return this.activityService.findAllByUser(id);
   }

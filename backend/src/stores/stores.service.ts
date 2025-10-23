@@ -16,7 +16,6 @@ import { buildOrganizationFilter } from 'src/tenancy/organization.utils';
 
 @Injectable()
 export class StoresService {
-  
   constructor(
     private prismaService: PrismaService,
     private activityService: ActivityService,
@@ -32,7 +31,7 @@ export class StoresService {
 
       const resolvedOrganizationId =
         organizationIdFromContext === undefined
-          ? organizationId ?? null
+          ? (organizationId ?? null)
           : organizationIdFromContext;
 
       logOrganizationContext({
@@ -42,9 +41,9 @@ export class StoresService {
         metadata: { storeName: createStoreDto.name },
       });
 
-      const storeCreateData: (Prisma.StoreUncheckedCreateInput & {
+      const storeCreateData: Prisma.StoreUncheckedCreateInput & {
         organizationId?: number | null;
-      }) = {
+      } = {
         ...storePayload,
         organizationId: resolvedOrganizationId ?? null,
       };
@@ -70,10 +69,10 @@ export class StoresService {
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
+        error.code === 'P2002'
       ) {
         throw new ConflictException(
-          `La tienda con el nombre "${createStoreDto.name}" ya existe.`
+          `La tienda con el nombre "${createStoreDto.name}" ya existe.`,
         );
       }
       throw error;
@@ -93,7 +92,6 @@ export class StoresService {
   }
 
   async findOne(id: number, organizationIdFromContext?: number | null) {
-
     if (!id || typeof id !== 'number') {
       throw new Error('El ID proporcionado no es válido.');
     }
@@ -101,12 +99,14 @@ export class StoresService {
     const storeFound = await this.prismaService.store.findFirst({
       where: {
         id,
-        ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
+        ...(buildOrganizationFilter(
+          organizationIdFromContext,
+        ) as Prisma.StoreWhereInput),
       },
     });
 
-    if(!storeFound){
-      throw new NotFoundException(`Store with id ${id} not found`)
+    if (!storeFound) {
+      throw new NotFoundException(`Store with id ${id} not found`);
     }
 
     return storeFound;
@@ -120,7 +120,9 @@ export class StoresService {
     const store = await this.prismaService.store.findFirst({
       where: {
         name,
-        ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
+        ...(buildOrganizationFilter(
+          organizationIdFromContext,
+        ) as Prisma.StoreWhereInput),
       },
     });
     return !!store; // Devuelve true si el proveedor existe, false si no
@@ -136,7 +138,9 @@ export class StoresService {
       const before = await this.prismaService.store.findFirst({
         where: {
           id: Number(id),
-          ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
+          ...(buildOrganizationFilter(
+            organizationIdFromContext,
+          ) as Prisma.StoreWhereInput),
         },
       });
 
@@ -147,7 +151,9 @@ export class StoresService {
       const { id: _id, organizationId, ...storePayload } = updateStoreDto;
 
       const resolvedOrganizationId =
-        organizationIdFromContext === undefined ? organizationId : organizationIdFromContext;
+        organizationIdFromContext === undefined
+          ? organizationId
+          : organizationIdFromContext;
 
       if (resolvedOrganizationId !== undefined) {
         logOrganizationContext({
@@ -158,9 +164,9 @@ export class StoresService {
         });
       }
 
-      const storeUpdateData: (Prisma.StoreUncheckedUpdateInput & {
+      const storeUpdateData: Prisma.StoreUncheckedUpdateInput & {
         organizationId?: number | null;
-      }) = {
+      } = {
         ...storePayload,
       };
 
@@ -187,7 +193,7 @@ export class StoresService {
           diff.after[key] = (updated as any)?.[key];
         }
       }
-    
+
       await this.activityService.log(
         {
           actorId: (req as any)?.user?.userId,
@@ -209,15 +215,15 @@ export class StoresService {
 
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
+        error.code === 'P2002'
       ) {
         throw new ConflictException(
-          `La tienda con el nombre "${updateStoreDto.name}" ya existe.`
+          `La tienda con el nombre "${updateStoreDto.name}" ya existe.`,
         );
       }
-      console.error("Error en el backend:", error);
+      console.error('Error en el backend:', error);
       throw error; // Lanza otros errores no manejados
-    }    
+    }
   }
 
   async updateMany(
@@ -226,65 +232,75 @@ export class StoresService {
     organizationIdFromContext?: number | null,
   ) {
     if (!Array.isArray(stores) || stores.length === 0) {
-      throw new BadRequestException('No se proporcionaron tiendas para actualizar.');
+      throw new BadRequestException(
+        'No se proporcionaron tiendas para actualizar.',
+      );
     }
-  
+
     try {
       // Validar que todos los productos tengan un ID válido
       const invalidProducts = stores.filter(
         (store) => !store.id || isNaN(Number(store.id)),
       );
       if (invalidProducts.length > 0) {
-        throw new BadRequestException('Todas las tiendas deben tener un ID válido.');
+        throw new BadRequestException(
+          'Todas las tiendas deben tener un ID válido.',
+        );
       }
-  
+
       // Ejecutar la transacción para actualizar múltiples productos
-      const updatedStores = await this.prismaService.$transaction(async (tx) => {
-        const results: any[] = [];
+      const updatedStores = await this.prismaService.$transaction(
+        async (tx) => {
+          const results: any[] = [];
 
-        for (const store of stores) {
-          const existing = await tx.store.findFirst({
-            where: {
-              id: Number(store.id),
-              ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
-            },
-          });
+          for (const store of stores) {
+            const existing = await tx.store.findFirst({
+              where: {
+                id: Number(store.id),
+                ...(buildOrganizationFilter(
+                  organizationIdFromContext,
+                ) as Prisma.StoreWhereInput),
+              },
+            });
 
-          if (!existing) {
-            throw new NotFoundException(`Store with id ${store.id} not found`);
+            if (!existing) {
+              throw new NotFoundException(
+                `Store with id ${store.id} not found`,
+              );
+            }
+
+            const resolvedOrganizationId =
+              organizationIdFromContext === undefined
+                ? (store.organizationId ?? null)
+                : organizationIdFromContext;
+            logOrganizationContext({
+              service: StoresService.name,
+              operation: 'updateMany',
+              organizationId: resolvedOrganizationId ?? null,
+              metadata: { storeId: store.id },
+            });
+            const updateData = {
+              name: store.name,
+              description: store.description,
+              ruc: store.ruc,
+              phone: store.phone,
+              adress: store.adress,
+              email: store.email,
+              website: store.website,
+              status: store.status,
+              organizationId: resolvedOrganizationId ?? null,
+            } as Prisma.StoreUncheckedUpdateInput;
+
+            const updated = await tx.store.update({
+              where: { id: Number(store.id) },
+              data: updateData,
+            });
+            results.push(updated);
           }
 
-          const resolvedOrganizationId =
-            organizationIdFromContext === undefined
-              ? store.organizationId ?? null
-              : organizationIdFromContext;
-          logOrganizationContext({
-            service: StoresService.name,
-            operation: 'updateMany',
-            organizationId: resolvedOrganizationId ?? null,
-            metadata: { storeId: store.id },
-          });
-          const updateData = {
-            name: store.name,
-            description: store.description,
-            ruc: store.ruc,
-            phone: store.phone,
-            adress: store.adress,
-            email: store.email,
-            website: store.website,
-            status: store.status,
-            organizationId: resolvedOrganizationId ?? null,
-          } as Prisma.StoreUncheckedUpdateInput;
-
-          const updated = await tx.store.update({
-            where: { id: Number(store.id) },
-            data: updateData,
-          });
-          results.push(updated);
-        }
-
-        return results;
-      });
+          return results;
+        },
+      );
 
       await this.activityService.log(
         {
@@ -297,7 +313,7 @@ export class StoresService {
         },
         req,
       );
-  
+
       return {
         message: `${updatedStores.length} tienda(s) actualizada(s) correctamente.`,
         updatedStores,
@@ -306,15 +322,19 @@ export class StoresService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-  
+
       // Manejar errores específicos de Prisma
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          throw new NotFoundException('Una o más tiendas no fueron encontrados.');
+          throw new NotFoundException(
+            'Una o más tiendas no fueron encontrados.',
+          );
         }
       }
-  
-      throw new InternalServerErrorException('Hubo un error al actualizar los tiendas.');
+
+      throw new InternalServerErrorException(
+        'Hubo un error al actualizar los tiendas.',
+      );
     }
   }
 
@@ -326,7 +346,9 @@ export class StoresService {
     const existing = await this.prismaService.store.findFirst({
       where: {
         id,
-        ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
+        ...(buildOrganizationFilter(
+          organizationIdFromContext,
+        ) as Prisma.StoreWhereInput),
       },
     });
 
@@ -362,11 +384,12 @@ export class StoresService {
     organizationIdFromContext?: number | null,
   ) {
     if (!Array.isArray(ids) || ids.length === 0) {
-      throw new NotFoundException('No se proporcionaron IDs válidos para eliminar.');
+      throw new NotFoundException(
+        'No se proporcionaron IDs válidos para eliminar.',
+      );
     }
-  
-    try {
 
+    try {
       // Convertir los IDs a números
       const numericIds = ids.map((id) => Number(id));
 
@@ -375,12 +398,16 @@ export class StoresService {
           id: {
             in: numericIds, // Elimina todos los productos cuyos IDs estén en este array
           },
-          ...(buildOrganizationFilter(organizationIdFromContext) as Prisma.StoreWhereInput),
+          ...(buildOrganizationFilter(
+            organizationIdFromContext,
+          ) as Prisma.StoreWhereInput),
         },
       });
-  
+
       if (deletedStores.count === 0) {
-        throw new NotFoundException('No se encontraron tiendas con los IDs proporcionados.');
+        throw new NotFoundException(
+          'No se encontraron tiendas con los IDs proporcionados.',
+        );
       }
 
       await this.activityService.log(
@@ -395,7 +422,7 @@ export class StoresService {
         },
         req,
       );
-        
+
       return {
         message: `${deletedStores.count} tienda(s) eliminada(s) correctamente.`,
       };
@@ -404,8 +431,9 @@ export class StoresService {
         throw error;
       }
 
-      throw new InternalServerErrorException('Hubo un error al eliminar los productos.');
+      throw new InternalServerErrorException(
+        'Hubo un error al eliminar los productos.',
+      );
     }
   }
 }
-

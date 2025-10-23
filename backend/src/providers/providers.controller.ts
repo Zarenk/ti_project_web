@@ -44,7 +44,7 @@ export class ProvidersController {
     @CurrentTenant('organizationId') organizationId: number | null,
   ) {
     if (!documentNumber) {
-      throw new BadRequestException("El Nombre y el Ruc son obligatorios.");
+      throw new BadRequestException('El Nombre y el Ruc son obligatorios.');
     }
 
     const exists = await this.providersService.checkIfExists(
@@ -55,12 +55,13 @@ export class ProvidersController {
   }
 
   @Get()
-  @ApiResponse({status: 200, description: 'Return all providers'}) // Swagger
+  @ApiResponse({ status: 200, description: 'Return all providers' }) // Swagger
   findAll(
     @CurrentTenant('organizationId') organizationId: number | null,
     @Query('search') search?: string,
   ) {
-    const trimmedSearch = typeof search === 'string' ? search.trim() : undefined;
+    const trimmedSearch =
+      typeof search === 'string' ? search.trim() : undefined;
     const hasSearch = Boolean(trimmedSearch);
 
     if (organizationId === undefined && !hasSearch) {
@@ -80,7 +81,7 @@ export class ProvidersController {
   ) {
     const numericId = parseInt(id, 10); // Convierte el ID a un número entero
     if (isNaN(numericId)) {
-    throw new BadRequestException('El ID debe ser un número válido.');
+      throw new BadRequestException('El ID debe ser un número válido.');
     }
     return this.providersService.findOne(
       numericId,
@@ -111,9 +112,10 @@ export class ProvidersController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @Req() req: Request,
   ) {
-
     if (!Array.isArray(updateProvidersDto) || updateProvidersDto.length === 0) {
-      throw new BadRequestException('No se proporcionaron proveedores para actualizar.');
+      throw new BadRequestException(
+        'No se proporcionaron proveedores para actualizar.',
+      );
     }
 
     // Delegar la lógica al servicio

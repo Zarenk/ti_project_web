@@ -1,4 +1,12 @@
-import { Controller, Post, Body, Param, Get, Patch, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Param,
+  Get,
+  Patch,
+  BadRequestException,
+} from '@nestjs/common';
 import { ProductspecsService } from './productspecs.service';
 import { CreateProductSpecDto } from './dto/create-productspec.dto';
 import { UpdateProductSpecDto } from './dto/update-productspec.dto';

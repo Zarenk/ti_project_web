@@ -1,10 +1,16 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class CreateCashClosureDto {
   @IsNotEmpty()
   @IsNumber()
   storeId!: number;
-  
+
   @IsNotEmpty()
   @IsNumber()
   cashRegisterId!: number;

@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
@@ -10,12 +15,13 @@ import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
 
 @Injectable()
 export class CashregisterService {
-
   constructor(private readonly prisma: PrismaService) {}
 
   private formatPaymentMethods(
     paymentMethods: Array<
-      Prisma.CashTransactionPaymentMethodGetPayload<{ include: { paymentMethod: true } }>
+      Prisma.CashTransactionPaymentMethodGetPayload<{
+        include: { paymentMethod: true };
+      }>
     >,
     options?: { includeAmounts?: boolean; currencySymbol?: string },
   ) {
@@ -26,18 +32,26 @@ export class CashregisterService {
       .map((paymentMethod) => {
         const methodName = paymentMethod.paymentMethod?.name?.trim();
 
-        if (includeAmounts && paymentMethod.amount !== null && paymentMethod.amount !== undefined) {
+        if (
+          includeAmounts &&
+          paymentMethod.amount !== null &&
+          paymentMethod.amount !== undefined
+        ) {
           const numericAmount = Number(paymentMethod.amount);
 
           if (Number.isFinite(numericAmount)) {
             const formattedAmount = `${currencySymbol} ${numericAmount.toFixed(2)}`;
-            return methodName ? `${methodName}: ${formattedAmount}` : formattedAmount;
+            return methodName
+              ? `${methodName}: ${formattedAmount}`
+              : formattedAmount;
           }
         }
 
         return methodName ?? null;
       })
-      .filter((entry): entry is string => Boolean(entry && entry.trim().length > 0));
+      .filter((entry): entry is string =>
+        Boolean(entry && entry.trim().length > 0),
+      );
   }
 
   private buildOrganizationFilter(organizationId?: number | null) {
@@ -73,14 +87,20 @@ export class CashregisterService {
 
   // Crear una nueva caja
   async create(createCashRegisterDto: CreateCashRegisterDto) {
-    const { storeId, organizationId: providedOrganizationId, ...rest } = createCashRegisterDto;
+    const {
+      storeId,
+      organizationId: providedOrganizationId,
+      ...rest
+    } = createCashRegisterDto;
 
     const store = await this.prisma.store.findUnique({
       where: { id: storeId },
     });
 
     if (!store) {
-      throw new NotFoundException(`No se encontró la tienda con ID ${storeId}.`);
+      throw new NotFoundException(
+        `No se encontró la tienda con ID ${storeId}.`,
+      );
     }
 
     const organizationId = this.resolveOrganizationId({
@@ -101,7 +121,9 @@ export class CashregisterService {
     });
 
     if (existingActiveCash) {
-      throw new BadRequestException('Ya existe una caja activa para esta tienda.');
+      throw new BadRequestException(
+        'Ya existe una caja activa para esta tienda.',
+      );
     }
 
     logOrganizationContext({
@@ -147,7 +169,9 @@ export class CashregisterService {
     endOfDay: Date,
     options?: { organizationId?: number | null },
   ) {
-    const organizationFilter = this.buildOrganizationFilter(options?.organizationId) as any;
+    const organizationFilter = this.buildOrganizationFilter(
+      options?.organizationId,
+    ) as any;
 
     const transactions = await this.prisma.cashTransaction.findMany({
       where: {
@@ -166,137 +190,136 @@ export class CashregisterService {
         user: true,
         paymentMethods: {
           include: {
-              paymentMethod: true,
-            }
+            paymentMethod: true,
           },
-          salePayments: {
-            include: {
-              sale: {
-                include: {
-                  client: true,
-                  invoices: true,
-                },
+        },
+        salePayments: {
+          include: {
+            sale: {
+              include: {
+                client: true,
+                invoices: true,
               },
             },
           },
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
 
-      const closures = await this.prisma.cashClosure.findMany({
-        where: {
-          ...organizationFilter,
-          cashRegister: {
-            storeId,
-            ...organizationFilter,
-          },
-          createdAt: {
-            gte: startOfDay,
-            lte: endOfDay,
-          },
-        },
-        include: {
-          user: true,
-          cashRegister: true,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
-    
-      const formattedTransactions = transactions.map((tx) => {
-        
-        const linkedClient = tx.salePayments[0]?.sale?.client;
-        return {
-          id: tx.id.toString(),
-          cashRegisterId: tx.cashRegisterId,
-          type: tx.type,
-          amount: Number(tx.amount),
-          createdAt: tx.createdAt,
-          timestamp: tx.createdAt,
-          userId: tx.userId,
-          employee: tx.user?.username || "Sistema",
-          description: tx.description,
-          paymentMethods: this.formatPaymentMethods(tx.paymentMethods ?? [], {
-            includeAmounts:
-              (tx.salePayments ?? []).length === 0 &&
-              (tx.paymentMethods ?? []).some((method) => {
-                if (method.amount === null || method.amount === undefined) {
-                  return false;
-                }
-
-                const numericAmount = Number(method.amount);
-                return Number.isFinite(numericAmount) && numericAmount !== 0;
-              }),
-          }),
-          voucher: tx.salePayments[0]?.sale?.invoices[0]
-            ? `${tx.salePayments[0].sale.invoices[0].serie}-${tx.salePayments[0].sale.invoices[0].nroCorrelativo}`
-            : null,
-          clientName: linkedClient?.name ?? tx.clientName ?? null,
-          clientDocument: linkedClient?.typeNumber ?? tx.clientDocument ?? null,
-          clientDocumentType:
-            linkedClient?.type ?? tx.clientDocumentType ?? null,
-        };
-      });
-    
-      const formattedClosures = closures.map((closure) => ({
-        id: `closure-${closure.id}`,
-        cashRegisterId: closure.cashRegisterId,
-        cashRegisterName: closure.cashRegister?.name ?? null,
-        type: "CLOSURE",
-        amount: Number(closure.closingBalance),
-        createdAt: closure.createdAt,
-        timestamp: closure.createdAt,
-        userId: closure.userId,
-        employee: closure.user?.username || "Sistema",
-        description: closure.notes || "Cierre de caja",
-        paymentMethods: [],
-        openingBalance: Number(closure.openingBalance),
-        closingBalance: Number(closure.closingBalance),
-        totalIncome: Number(closure.totalIncome),
-        totalExpense: Number(closure.totalExpense),
-        nextOpeningBalance:
-          (closure as any).nextOpeningBalance !== null &&
-          (closure as any).nextOpeningBalance !== undefined
-            ? Number((closure as any).nextOpeningBalance)
-            : null,
-        notes: closure.notes ?? null,
-        currency: "S/.",
-      }));
-    
-      const allRecords = [...formattedTransactions, ...formattedClosures].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-
-      console.log(`✅ Total registros: ${allRecords.length}`);
-      
-      return allRecords;
-    }
-
-    // Obtener la caja activa de una tienda
-    async getActiveCashRegister(
-      storeId: number,
-      options?: { organizationId?: number | null },
-    ) {
-      return this.prisma.cashRegister.findFirst({
-        where: {
+    const closures = await this.prisma.cashClosure.findMany({
+      where: {
+        ...organizationFilter,
+        cashRegister: {
           storeId,
-          status: 'ACTIVE',
-          ...(this.buildOrganizationFilter(options?.organizationId) as any),
+          ...organizationFilter,
         },
-        select: {
-          id: true,
-          name: true,
-          currentBalance: true,
-          initialBalance: true,
-          organizationId: true,
-        } as any,
-      });
-    }
+        createdAt: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+      },
+      include: {
+        user: true,
+        cashRegister: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
 
-    // Listar todas las cajas
+    const formattedTransactions = transactions.map((tx) => {
+      const linkedClient = tx.salePayments[0]?.sale?.client;
+      return {
+        id: tx.id.toString(),
+        cashRegisterId: tx.cashRegisterId,
+        type: tx.type,
+        amount: Number(tx.amount),
+        createdAt: tx.createdAt,
+        timestamp: tx.createdAt,
+        userId: tx.userId,
+        employee: tx.user?.username || 'Sistema',
+        description: tx.description,
+        paymentMethods: this.formatPaymentMethods(tx.paymentMethods ?? [], {
+          includeAmounts:
+            (tx.salePayments ?? []).length === 0 &&
+            (tx.paymentMethods ?? []).some((method) => {
+              if (method.amount === null || method.amount === undefined) {
+                return false;
+              }
+
+              const numericAmount = Number(method.amount);
+              return Number.isFinite(numericAmount) && numericAmount !== 0;
+            }),
+        }),
+        voucher: tx.salePayments[0]?.sale?.invoices[0]
+          ? `${tx.salePayments[0].sale.invoices[0].serie}-${tx.salePayments[0].sale.invoices[0].nroCorrelativo}`
+          : null,
+        clientName: linkedClient?.name ?? tx.clientName ?? null,
+        clientDocument: linkedClient?.typeNumber ?? tx.clientDocument ?? null,
+        clientDocumentType: linkedClient?.type ?? tx.clientDocumentType ?? null,
+      };
+    });
+
+    const formattedClosures = closures.map((closure) => ({
+      id: `closure-${closure.id}`,
+      cashRegisterId: closure.cashRegisterId,
+      cashRegisterName: closure.cashRegister?.name ?? null,
+      type: 'CLOSURE',
+      amount: Number(closure.closingBalance),
+      createdAt: closure.createdAt,
+      timestamp: closure.createdAt,
+      userId: closure.userId,
+      employee: closure.user?.username || 'Sistema',
+      description: closure.notes || 'Cierre de caja',
+      paymentMethods: [],
+      openingBalance: Number(closure.openingBalance),
+      closingBalance: Number(closure.closingBalance),
+      totalIncome: Number(closure.totalIncome),
+      totalExpense: Number(closure.totalExpense),
+      nextOpeningBalance:
+        (closure as any).nextOpeningBalance !== null &&
+        (closure as any).nextOpeningBalance !== undefined
+          ? Number((closure as any).nextOpeningBalance)
+          : null,
+      notes: closure.notes ?? null,
+      currency: 'S/.',
+    }));
+
+    const allRecords = [...formattedTransactions, ...formattedClosures].sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    console.log(`✅ Total registros: ${allRecords.length}`);
+
+    return allRecords;
+  }
+
+  // Obtener la caja activa de una tienda
+  async getActiveCashRegister(
+    storeId: number,
+    options?: { organizationId?: number | null },
+  ) {
+    return this.prisma.cashRegister.findFirst({
+      where: {
+        storeId,
+        status: 'ACTIVE',
+        ...(this.buildOrganizationFilter(options?.organizationId) as any),
+      },
+      select: {
+        id: true,
+        name: true,
+        currentBalance: true,
+        initialBalance: true,
+        organizationId: true,
+      } as any,
+    });
+  }
+
+  // Listar todas las cajas
   async findAll(options?: { organizationId?: number | null }) {
     return this.prisma.cashRegister.findMany({
       where: this.buildOrganizationFilter(options?.organizationId) as any,
@@ -309,10 +332,7 @@ export class CashregisterService {
   }
 
   // Obtener una caja por ID
-  async findOne(
-    id: number,
-    options?: { organizationId?: number | null },
-  ) {
+  async findOne(id: number, options?: { organizationId?: number | null }) {
     const cashRegister = await this.prisma.cashRegister.findFirst({
       where: {
         id,
@@ -338,7 +358,7 @@ export class CashregisterService {
     return cashRegister;
   }
 
-      // Actualizar una caja
+  // Actualizar una caja
   async update(id: number, updateCashRegisterDto: UpdateCashRegisterDto) {
     const existing = await this.findOne(id, {
       organizationId: updateCashRegisterDto.organizationId,
@@ -374,11 +394,8 @@ export class CashregisterService {
     });
   }
 
-    // Eliminar una caja
-  async remove(
-    id: number,
-    options?: { organizationId?: number | null },
-  ) {
+  // Eliminar una caja
+  async remove(id: number, options?: { organizationId?: number | null }) {
     const existing = await this.findOne(id, options);
 
     const normalizedExisting = existing as { organizationId?: number | null };
@@ -395,9 +412,9 @@ export class CashregisterService {
     });
   }
 
-    /////////////////////////////CASH TRANSFER/////////////////////////////
-    
-    async createTransaction(data: CreateCashTransactionDto) {
+  /////////////////////////////CASH TRANSFER/////////////////////////////
+
+  async createTransaction(data: CreateCashTransactionDto) {
     const {
       cashRegisterId,
       userId,
@@ -411,153 +428,166 @@ export class CashregisterService {
       organizationId: providedOrganizationId,
     } = data;
 
-      // Validaciones básicas
-      if (!['INCOME', 'EXPENSE'].includes(type)) {
-        throw new BadRequestException('El tipo de transacción debe ser INCOME o EXPENSE.');
-      }
-      
-      if (amount <= 0) {
-        throw new BadRequestException('El monto debe ser mayor a 0.');
-      }
-    
-      // Verificar existencia de usuario
-      const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (!user) {
-        throw new NotFoundException(`No se encontró el usuario con ID ${userId}.`);
-      }
-    
-      // Verificar existencia de caja activa
-      const cashRegister = await this.prisma.cashRegister.findUnique({
-        where: { id: cashRegisterId },
-        include: {
-          store: {
-            select: {
-              organizationId: true,
-            },
+    // Validaciones básicas
+    if (!['INCOME', 'EXPENSE'].includes(type)) {
+      throw new BadRequestException(
+        'El tipo de transacción debe ser INCOME o EXPENSE.',
+      );
+    }
+
+    if (amount <= 0) {
+      throw new BadRequestException('El monto debe ser mayor a 0.');
+    }
+
+    // Verificar existencia de usuario
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException(
+        `No se encontró el usuario con ID ${userId}.`,
+      );
+    }
+
+    // Verificar existencia de caja activa
+    const cashRegister = await this.prisma.cashRegister.findUnique({
+      where: { id: cashRegisterId },
+      include: {
+        store: {
+          select: {
+            organizationId: true,
           },
-        } as any,
-      });
-      if (!cashRegister) {
-        throw new NotFoundException(`No se encontró la caja con ID ${cashRegisterId}.`);
-      }
-    
-      if (cashRegister.status !== 'ACTIVE') {
-        throw new BadRequestException('No se puede registrar una transacción en una caja cerrada.');
-      }
+        },
+      } as any,
+    });
+    if (!cashRegister) {
+      throw new NotFoundException(
+        `No se encontró la caja con ID ${cashRegisterId}.`,
+      );
+    }
 
-      const organizationId = this.resolveOrganizationId({
-        provided: providedOrganizationId,
-        fallbacks: [
-          (cashRegister as any).organizationId ?? null,
-          (cashRegister as any).store?.organizationId ?? null,
-        ],
-        mismatchMessage: 'La caja pertenece a otra organización.',
-      });
+    if (cashRegister.status !== 'ACTIVE') {
+      throw new BadRequestException(
+        'No se puede registrar una transacción en una caja cerrada.',
+      );
+    }
 
-      logOrganizationContext({
-        service: CashregisterService.name,
-        operation: 'createTransaction',
-        organizationId,
-        metadata: { cashRegisterId, userId, type },
-      });
-    
-      // Calcular nuevo balance
-      const newBalance = type === 'INCOME'
+    const organizationId = this.resolveOrganizationId({
+      provided: providedOrganizationId,
+      fallbacks: [
+        (cashRegister as any).organizationId ?? null,
+        (cashRegister as any).store?.organizationId ?? null,
+      ],
+      mismatchMessage: 'La caja pertenece a otra organización.',
+    });
+
+    logOrganizationContext({
+      service: CashregisterService.name,
+      operation: 'createTransaction',
+      organizationId,
+      metadata: { cashRegisterId, userId, type },
+    });
+
+    // Calcular nuevo balance
+    const newBalance =
+      type === 'INCOME'
         ? Number(cashRegister.currentBalance) + Number(amount)
         : Number(cashRegister.currentBalance) - Number(amount);
-    
-      if (newBalance < 0) {
-        throw new BadRequestException('El saldo de la caja no puede ser negativo.');
-      }
-    
-      // Crear la transacción de caja
-      const transaction = await this.prisma.cashTransaction.create({
-        data: {
-          cashRegisterId,
-          type,
-          amount,
-          description: description || '',
-          userId,
-          createdAt: new Date(),
-          clientName: clientName || null,
-          clientDocument: clientDocument || null,
-          clientDocumentType: clientDocumentType || null,
-          organizationId,
-        } as Prisma.CashTransactionUncheckedCreateInput,
+
+    if (newBalance < 0) {
+      throw new BadRequestException(
+        'El saldo de la caja no puede ser negativo.',
+      );
+    }
+
+    // Crear la transacción de caja
+    const transaction = await this.prisma.cashTransaction.create({
+      data: {
+        cashRegisterId,
+        type,
+        amount,
+        description: description || '',
+        userId,
+        createdAt: new Date(),
+        clientName: clientName || null,
+        clientDocument: clientDocument || null,
+        clientDocumentType: clientDocumentType || null,
+        organizationId,
+      } as Prisma.CashTransactionUncheckedCreateInput,
+    });
+
+    // Asociar métodos de pago
+    for (const method of paymentMethods) {
+      let paymentMethodRecord = await this.prisma.paymentMethod.findFirst({
+        where: { name: method.method },
       });
-    
-      // Asociar métodos de pago
-      for (const method of paymentMethods) {
-        let paymentMethodRecord = await this.prisma.paymentMethod.findFirst({
-          where: { name: method.method },
-        });
 
-        console.log("Métodos de pago recibidos en backend:", paymentMethods);
+      console.log('Métodos de pago recibidos en backend:', paymentMethods);
 
-        // Si el método no existe, lo CREO automáticamente
-        if (!paymentMethodRecord) {
-          paymentMethodRecord = await this.prisma.paymentMethod.create({
-            data: {
-              name: method.method,
-              isActive: true, // Opcional si tienes este campo en tu modelo
-            },
-          });
-          console.log(`⚡ Método de pago '${method.method}' creado automáticamente.`);
-        }
-
-        // Luego síguelo registrando en cashTransactionPaymentMethod
-        await this.prisma.cashTransactionPaymentMethod.create({
+      // Si el método no existe, lo CREO automáticamente
+      if (!paymentMethodRecord) {
+        paymentMethodRecord = await this.prisma.paymentMethod.create({
           data: {
-            cashTransactionId: transaction.id,
-            paymentMethodId: paymentMethodRecord.id, // ← Ahora seguro que existe
-            amount: new Prisma.Decimal(method.amount),
+            name: method.method,
+            isActive: true, // Opcional si tienes este campo en tu modelo
           },
         });
+        console.log(
+          `⚡ Método de pago '${method.method}' creado automáticamente.`,
+        );
       }
-    
-      // Actualizar el saldo de la caja
-      await this.prisma.cashRegister.update({
-        where: { id: cashRegisterId },
+
+      // Luego síguelo registrando en cashTransactionPaymentMethod
+      await this.prisma.cashTransactionPaymentMethod.create({
         data: {
-          currentBalance: newBalance,
+          cashTransactionId: transaction.id,
+          paymentMethodId: paymentMethodRecord.id, // ← Ahora seguro que existe
+          amount: new Prisma.Decimal(method.amount),
         },
-      });
-    
-      return transaction;
-    }
-
-    async findAllTransaction(options?: { organizationId?: number | null }) {
-      return this.prisma.cashTransaction.findMany({
-        where: this.buildOrganizationFilter(options?.organizationId) as any,
-        include: {
-          cashRegister: true,
-          paymentMethods: true,
-          user: true,
-        },
-        orderBy: { createdAt: 'desc' },
       });
     }
 
-    async findByCashRegister(
+    // Actualizar el saldo de la caja
+    await this.prisma.cashRegister.update({
+      where: { id: cashRegisterId },
+      data: {
+        currentBalance: newBalance,
+      },
+    });
+
+    return transaction;
+  }
+
+  async findAllTransaction(options?: { organizationId?: number | null }) {
+    return this.prisma.cashTransaction.findMany({
+      where: this.buildOrganizationFilter(options?.organizationId) as any,
+      include: {
+        cashRegister: true,
+        paymentMethods: true,
+        user: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findByCashRegister(
     cashRegisterId: number,
     options?: { organizationId?: number | null },
-    ) {
-      return this.prisma.cashTransaction.findMany({
-        where: {
-          cashRegisterId,
-          ...(this.buildOrganizationFilter(options?.organizationId) as any),
-        },
-        include: {
-          paymentMethods: true,
-          user: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-    }
+  ) {
+    return this.prisma.cashTransaction.findMany({
+      where: {
+        cashRegisterId,
+        ...(this.buildOrganizationFilter(options?.organizationId) as any),
+      },
+      include: {
+        paymentMethods: true,
+        user: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
-    /////////////////////////////CASH CLOSURE/////////////////////////////
+  /////////////////////////////CASH CLOSURE/////////////////////////////
 
-    async createClosure(data: CreateCashClosureDto) {
+  async createClosure(data: CreateCashClosureDto) {
     const { organizationId: providedOrganizationId } = data;
 
     return this.prisma.$transaction(async (prisma) => {
@@ -624,7 +654,9 @@ export class CashregisterService {
           : Number(data.closingBalance);
 
       if (requestedNextInitialBalance < 0) {
-        throw new BadRequestException('El saldo inicial de la siguiente caja no puede ser negativo.');
+        throw new BadRequestException(
+          'El saldo inicial de la siguiente caja no puede ser negativo.',
+        );
       }
 
       const closure = await prisma.cashClosure.create({
@@ -641,7 +673,7 @@ export class CashregisterService {
         } as Prisma.CashClosureUncheckedCreateInput,
       });
 
-    const nextCashRegisterName = await this.generateNextCashRegisterName(
+      const nextCashRegisterName = await this.generateNextCashRegisterName(
         prisma,
         cashRegister.name,
       );
@@ -658,7 +690,7 @@ export class CashregisterService {
         } as Prisma.CashRegisterUncheckedCreateInput,
       });
 
-    return {
+      return {
         closure: {
           ...closure,
           openingBalance: Number(closure.openingBalance),
@@ -681,7 +713,7 @@ export class CashregisterService {
           initialBalance: Number(nextCashRegister.initialBalance),
           currentBalance: Number(nextCashRegister.currentBalance),
         },
-      requestedNextInitialBalance,
+        requestedNextInitialBalance,
       };
     });
   }
@@ -690,9 +722,10 @@ export class CashregisterService {
     prisma: Prisma.TransactionClient,
     baseName: string,
   ): Promise<string> {
-    const normalizedBase = baseName
-      .replace(/\s+-\s+Turno\s+.+$/i, '')
-      .trim() || baseName.trim() || 'Caja';
+    const normalizedBase =
+      baseName.replace(/\s+-\s+Turno\s+.+$/i, '').trim() ||
+      baseName.trim() ||
+      'Caja';
 
     const now = new Date();
     const pad = (value: number) => value.toString().padStart(2, '0');
@@ -718,7 +751,9 @@ export class CashregisterService {
     storeId: number,
     options?: { organizationId?: number | null },
   ) {
-    const organizationFilter = this.buildOrganizationFilter(options?.organizationId) as any;
+    const organizationFilter = this.buildOrganizationFilter(
+      options?.organizationId,
+    ) as any;
 
     return this.prisma.cashClosure.findMany({
       where: {
@@ -727,7 +762,7 @@ export class CashregisterService {
           storeId,
           ...organizationFilter,
         },
-        },
+      },
       include: {
         user: true,
         cashRegister: true,
@@ -749,7 +784,9 @@ export class CashregisterService {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const organizationFilter = this.buildOrganizationFilter(options?.organizationId) as any;
+    const organizationFilter = this.buildOrganizationFilter(
+      options?.organizationId,
+    ) as any;
 
     return this.prisma.cashClosure.findFirst({
       where: {
@@ -767,7 +804,7 @@ export class CashregisterService {
     });
   }
 
-  async findAllClosure(options?: { organizationId?: number | null  }) {
+  async findAllClosure(options?: { organizationId?: number | null }) {
     return this.prisma.cashClosure.findMany({
       where: this.buildOrganizationFilter(options?.organizationId) as any,
       include: {
@@ -775,6 +812,6 @@ export class CashregisterService {
         user: true,
       },
       orderBy: { createdAt: 'desc' },
-    });   
+    });
   }
 }

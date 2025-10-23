@@ -9,7 +9,6 @@ const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class FirmadorJavaService {
-
   private readonly JAR_PATH = join(
     process.cwd(),
     'firma-ubl',

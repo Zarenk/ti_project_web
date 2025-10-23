@@ -12,7 +12,7 @@ export const redisEnabled = process.env.REDIS_ENABLED === 'true';
  * `retryStrategy` returning `null` prevents ioredis from endlessly attempting
  * to reconnect when a server is not available, avoiding a flood of
  * `ECONNREFUSED` errors on startup.
-*/
+ */
 
 export const redisConfig: RedisOptions = {
   host: process.env.REDIS_HOST || '127.0.0.1',

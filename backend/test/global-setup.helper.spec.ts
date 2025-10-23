@@ -1,7 +1,7 @@
 import {
   isRecoverablePrismaConnectionError,
   shouldSkipMultiTenantSeed,
-} from "./global-setup";
+} from './global-setup';
 
 describe('isRecoverablePrismaConnectionError', () => {
   it('returns true when Prisma provides error code P1001', () => {
@@ -35,9 +35,7 @@ describe('shouldSkipMultiTenantSeed', () => {
   it.each([undefined, null, '', '  ', 'false', '0', 'no', 'maybe'])(
     'returns false for non-truthy flag value %s',
     (value) => {
-      expect(shouldSkipMultiTenantSeed(value as string | undefined | null)).toBe(
-        false,
-      );
+      expect(shouldSkipMultiTenantSeed(value)).toBe(false);
     },
   );
 });

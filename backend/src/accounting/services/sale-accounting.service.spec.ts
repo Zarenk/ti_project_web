@@ -1,4 +1,8 @@
-import { SaleAccountingService, aggregateSaleLines, SaleEntryLine } from './sale-accounting.service';
+import {
+  SaleAccountingService,
+  aggregateSaleLines,
+  SaleEntryLine,
+} from './sale-accounting.service';
 
 describe('SaleAccountingService', () => {
   it('aggregates duplicate lines by account and description', () => {

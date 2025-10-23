@@ -30,14 +30,21 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
         create: accEntryCreate,
       },
       provider: { findFirst: jest.fn().mockResolvedValue({ id: 1 }) },
-      accPeriod: { findUnique: jest.fn().mockResolvedValue({ id: 1 }), create: jest.fn() },
+      accPeriod: {
+        findUnique: jest.fn().mockResolvedValue({ id: 1 }),
+        create: jest.fn(),
+      },
     } as any;
 
     return { service: new AccountingService(prisma), prisma };
   };
 
   it('handles cash payments', async () => {
-    const { service, prisma } = setup({ paymentTerm: 'CASH', paymentMethod: 'EFECTIVO', totalGross: undefined });
+    const { service, prisma } = setup({
+      paymentTerm: 'CASH',
+      paymentMethod: 'EFECTIVO',
+      totalGross: undefined,
+    });
     await service.createJournalForInventoryEntry(1);
 
     const lines = prisma.accEntry.create.mock.calls[0][0].data.lines.create;
@@ -48,28 +55,42 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
     const netLine = lines.find((l: any) => l.account === '2011');
     expect(netLine.debit).toBe(100);
 
-    const payLine = lines.find((l: any) => !['2011', '4011'].includes(l.account));
+    const payLine = lines.find(
+      (l: any) => !['2011', '4011'].includes(l.account),
+    );
     expect(payLine.account).toBe('1011');
     expect(payLine.credit).toBe(118);
     expect(payLine.description).toBe('Pago Compra F001-1');
   });
 
   it('handles credit payments', async () => {
-    const { service, prisma } = setup({ paymentTerm: 'CREDIT', paymentMethod: 'EFECTIVO', totalGross: undefined });
+    const { service, prisma } = setup({
+      paymentTerm: 'CREDIT',
+      paymentMethod: 'EFECTIVO',
+      totalGross: undefined,
+    });
     await service.createJournalForInventoryEntry(1);
 
     const lines = prisma.accEntry.create.mock.calls[0][0].data.lines.create;
-    const payLine = lines.find((l: any) => !['2011', '4011'].includes(l.account));
+    const payLine = lines.find(
+      (l: any) => !['2011', '4011'].includes(l.account),
+    );
     expect(payLine.account).toBe('4211');
     expect(payLine.description).toBe('Pago Compra F001-1');
   });
 
   it('handles transfer payments', async () => {
-    const { service, prisma } = setup({ paymentTerm: 'CASH', paymentMethod: 'TRANSFERENCIA', totalGross: undefined });
+    const { service, prisma } = setup({
+      paymentTerm: 'CASH',
+      paymentMethod: 'TRANSFERENCIA',
+      totalGross: undefined,
+    });
     await service.createJournalForInventoryEntry(1);
 
     const lines = prisma.accEntry.create.mock.calls[0][0].data.lines.create;
-    const payLine = lines.find((l: any) => !['2011', '4011'].includes(l.account));
+    const payLine = lines.find(
+      (l: any) => !['2011', '4011'].includes(l.account),
+    );
     expect(payLine.account).toBe('1041');
     expect(payLine.description).toBe('Pago Compra F001-1');
 
@@ -86,7 +107,9 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
 
     const lines = prisma.accEntry.create.mock.calls[0][0].data.lines.create;
     const inventoryLine = lines.find((l: any) => l.account === '2011');
-    const paymentLine = lines.find((l: any) => !['2011', '4011'].includes(l.account));
+    const paymentLine = lines.find(
+      (l: any) => !['2011', '4011'].includes(l.account),
+    );
 
     expect(inventoryLine.description).toContain('Registro 2');
     expect(paymentLine.description).toContain('Registro 2');

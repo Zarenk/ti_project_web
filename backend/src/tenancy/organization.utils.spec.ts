@@ -1,5 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
-import { buildOrganizationFilter, resolveOrganizationId } from './organization.utils';
+import {
+  buildOrganizationFilter,
+  resolveOrganizationId,
+} from './organization.utils';
 
 describe('organization.utils', () => {
   describe('resolveOrganizationId', () => {

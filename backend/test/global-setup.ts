@@ -18,14 +18,7 @@ type FixtureMetrics = {
   totals: FixtureTotals | undefined;
 };
 
-const TRUTHY_SKIP_FLAG_VALUES = new Set([
-  '1',
-  'true',
-  'yes',
-  'on',
-  'y',
-  't',
-]);
+const TRUTHY_SKIP_FLAG_VALUES = new Set(['1', 'true', 'yes', 'on', 'y', 't']);
 
 function normalizeSkipMultiTenantSeed(flag?: string | null): string | null {
   if (flag == null) {
@@ -91,13 +84,18 @@ export function isRecoverablePrismaConnectionError(
   return false;
 }
 
-export function formatFixtureTotals(totals?: FixtureTotals | null): string | null {
+export function formatFixtureTotals(
+  totals?: FixtureTotals | null,
+): string | null {
   if (!totals) {
     return null;
   }
 
   const formattedEntries = Object.entries(totals)
-    .filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value > 0)
+    .filter(
+      ([, value]) =>
+        typeof value === 'number' && Number.isFinite(value) && value > 0,
+    )
     .map(([entity, value]) => `${entity}: ${value}`);
 
   if (formattedEntries.length === 0) {
@@ -160,7 +158,8 @@ export default async function globalSetup(): Promise<void> {
       entitiesTotal: summary.totals ? Object.keys(summary.totals).length : 0,
       entitiesCovered: summary.totals
         ? Object.values(summary.totals).filter(
-            (value) => typeof value === 'number' && Number.isFinite(value) && value > 0,
+            (value) =>
+              typeof value === 'number' && Number.isFinite(value) && value > 0,
           ).length
         : 0,
       coverageRatio:
@@ -169,7 +168,9 @@ export default async function globalSetup(): Promise<void> {
               (
                 Object.values(summary.totals).filter(
                   (value) =>
-                    typeof value === 'number' && Number.isFinite(value) && value > 0,
+                    typeof value === 'number' &&
+                    Number.isFinite(value) &&
+                    value > 0,
                 ).length / Object.keys(summary.totals).length
               ).toFixed(4),
             )
@@ -184,7 +185,6 @@ export default async function globalSetup(): Promise<void> {
     if (emitMetricsStdout) {
       console.log('[multi-tenant-seed] Metrics JSON:', JSON.stringify(metrics));
     }
-
   } catch (error) {
     if (isRecoverablePrismaConnectionError(error)) {
       const details = error instanceof Error ? error.message : String(error);

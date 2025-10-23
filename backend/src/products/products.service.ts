@@ -1,5 +1,14 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
-import { CreateProductDto, ProductFeatureInput } from './dto/create-product.dto';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  CreateProductDto,
+  ProductFeatureInput,
+} from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Prisma, Brand } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -8,7 +17,6 @@ import { BrandsService } from 'src/brands/brands.service';
 
 @Injectable()
 export class ProductsService {
-  
   constructor(
     private prismaService: PrismaService,
     private categoryService: CategoryService, // Cambiado a PrismaService
@@ -39,7 +47,7 @@ export class ProductsService {
     return 'Activo';
   }
 
-   private sanitizeFeatureInputs(features?: ProductFeatureInput[] | null) {
+  private sanitizeFeatureInputs(features?: ProductFeatureInput[] | null) {
     if (!Array.isArray(features)) {
       return undefined;
     }
@@ -60,7 +68,12 @@ export class ProductsService {
           ...(description ? { description } : {}),
         };
       })
-      .filter((feature): feature is { title: string; icon?: string; description?: string } => feature !== null);
+      .filter(
+        (
+          feature,
+        ): feature is { title: string; icon?: string; description?: string } =>
+          feature !== null,
+      );
 
     return sanitized;
   }
@@ -84,7 +97,7 @@ export class ProductsService {
         data: {
           ...data,
           status: normalizedStatus,
-          brandId: brandEntity ? brandEntity.id : brandId ?? undefined,
+          brandId: brandEntity ? brandEntity.id : (brandId ?? undefined),
           brandName: brandEntity ? brandEntity.name : undefined,
           images: images ?? [],
           specification: specification ? { create: specification } : undefined,
@@ -96,7 +109,9 @@ export class ProductsService {
         include: {
           specification: true,
           features: true,
-          brand: { select: { id: true, name: true, logoSvg: true, logoPng: true } },
+          brand: {
+            select: { id: true, name: true, logoSvg: true, logoPng: true },
+          },
         },
       });
 
@@ -104,28 +119,27 @@ export class ProductsService {
         ...createdProduct,
         brand: this.mapBrand(createdProduct.brand),
       };
-
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
+        error.code === 'P2002'
       ) {
         throw new ConflictException(
-          `El producto con el nombre "${createProductDto.name}" ya existe.`
+          `El producto con el nombre "${createProductDto.name}" ya existe.`,
         );
       }
-      console.error("Error en el backend:", error);
+      console.error('Error en el backend:', error);
       throw error;
     }
   }
 
   async verifyOrCreateProducts(
     products: {
-      name: string
-      price: number
-      description?: string
-      brandId?: number
-      categoryId?: number
+      name: string;
+      price: number;
+      description?: string;
+      brandId?: number;
+      categoryId?: number;
     }[],
   ) {
     const createdProducts: {
@@ -140,23 +154,25 @@ export class ProductsService {
       updatedAt: Date;
       categoryId: number;
     }[] = [];
-    const defaultCategory = await this.categoryService.verifyOrCreateDefaultCategory();
-  
+    const defaultCategory =
+      await this.categoryService.verifyOrCreateDefaultCategory();
+
     for (const product of products) {
       // Verificar si el producto ya existe
-      let existingProduct = await this.prismaService.product.findUnique({
+      const existingProduct = await this.prismaService.product.findUnique({
         where: { name: product.name },
       });
-  
-      if (!existingProduct) {
 
+      if (!existingProduct) {
         // Verificar que la categoría exista
         const category = await this.prismaService.category.findUnique({
           where: { id: product.categoryId || defaultCategory.id }, // Usa una categoría predeterminada si no se proporciona
         });
 
         if (!category) {
-          throw new NotFoundException(`La categoría con ID ${product.categoryId || defaultCategory.id} no existe.`);
+          throw new NotFoundException(
+            `La categoría con ID ${product.categoryId || defaultCategory.id} no existe.`,
+          );
         }
         // Crear el producto si no existe
         const newProduct = await this.prismaService.product.create({
@@ -171,13 +187,12 @@ export class ProductsService {
           },
         });
         createdProducts.push(newProduct);
-      }
-      else {
+      } else {
         createdProducts.push(existingProduct);
       }
     }
-  
-    console.log("Productos creados/verificados:", createdProducts);
+
+    console.log('Productos creados/verificados:', createdProducts);
     return createdProducts;
   }
 
@@ -204,23 +219,25 @@ export class ProductsService {
   }
 
   async findOne(id: number) {
-
     if (!id || typeof id !== 'number') {
       throw new Error('El ID proporcionado no es válido.');
     }
 
-    const productFound = await this.prismaService.product.findUnique({ // NO OLVIDAR EL AWAIT O ASYNC CON FUNCIONES
-      where: {id: id,},
+    const productFound = await this.prismaService.product.findUnique({
+      // NO OLVIDAR EL AWAIT O ASYNC CON FUNCIONES
+      where: { id: id },
       include: {
         category: true, // Incluye la relación con la categoría
         specification: true,
         features: true,
-        brand: { select: { id: true, name: true, logoSvg: true, logoPng: true } },
+        brand: {
+          select: { id: true, name: true, logoSvg: true, logoPng: true },
+        },
       },
-    })
+    });
 
-    if(!productFound){
-      throw new NotFoundException(`Product with id ${id} not found`)
+    if (!productFound) {
+      throw new NotFoundException(`Product with id ${id} not found`);
     }
 
     return { ...productFound, brand: this.mapBrand(productFound.brand) };
@@ -229,7 +246,8 @@ export class ProductsService {
   async update(id: number, updateProductDto: UpdateProductDto) {
     const { specification, images, features, brandId, brand, status, ...data } =
       updateProductDto as any;
-    const normalizedStatus = status !== undefined ? this.normalizeStatus(status) : undefined;
+    const normalizedStatus =
+      status !== undefined ? this.normalizeStatus(status) : undefined;
     const normalizedFeatures = this.sanitizeFeatureInputs(features);
     try {
       let brandEntity: Brand | null = null;
@@ -241,8 +259,10 @@ export class ProductsService {
           where: { id: Number(id) },
           data: {
             ...data,
-            ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {}),
-            brandId: brandEntity ? brandEntity.id : brandId ?? undefined,
+            ...(normalizedStatus !== undefined
+              ? { status: normalizedStatus }
+              : {}),
+            brandId: brandEntity ? brandEntity.id : (brandId ?? undefined),
             brandName: brandEntity ? brandEntity.name : undefined,
             images: images ?? undefined,
             specification: specification
@@ -252,7 +272,9 @@ export class ProductsService {
         });
 
         if (normalizedFeatures !== undefined) {
-          await tx.productFeature.deleteMany({ where: { productId: updatedProduct.id } });
+          await tx.productFeature.deleteMany({
+            where: { productId: updatedProduct.id },
+          });
 
           if (normalizedFeatures.length) {
             await tx.productFeature.createMany({
@@ -260,7 +282,9 @@ export class ProductsService {
                 productId: updatedProduct.id,
                 title: feature.title,
                 ...(feature.icon ? { icon: feature.icon } : {}),
-                ...(feature.description ? { description: feature.description } : {}),
+                ...(feature.description
+                  ? { description: feature.description }
+                  : {}),
               })),
             });
           }
@@ -271,7 +295,9 @@ export class ProductsService {
           include: {
             specification: true,
             features: true,
-            brand: { select: { id: true, name: true, logoSvg: true, logoPng: true } },
+            brand: {
+              select: { id: true, name: true, logoSvg: true, logoPng: true },
+            },
             category: { select: { name: true } },
           },
         });
@@ -285,32 +311,38 @@ export class ProductsService {
         ...productFound,
         brand: this.mapBrand(productFound.brand),
       };
-    } catch (error){
+    } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
+        error.code === 'P2002'
       ) {
         throw new ConflictException(
-          `El producto con el nombre "${updateProductDto.name}" ya existe.`
+          `El producto con el nombre "${updateProductDto.name}" ya existe.`,
         );
       }
-      console.error("Error en el backend:", error);
+      console.error('Error en el backend:', error);
       throw error; // Lanza otros errores no manejados
-    }    
+    }
   }
 
   async updateMany(products: UpdateProductDto[]) {
     if (!Array.isArray(products) || products.length === 0) {
-      throw new BadRequestException('No se proporcionaron productos para actualizar.');
+      throw new BadRequestException(
+        'No se proporcionaron productos para actualizar.',
+      );
     }
-  
+
     try {
       // Validar que todos los productos tengan un ID válido
-      const invalidProducts = products.filter((product) => !product.id || isNaN(Number(product.id)));
+      const invalidProducts = products.filter(
+        (product) => !product.id || isNaN(Number(product.id)),
+      );
       if (invalidProducts.length > 0) {
-        throw new BadRequestException('Todos los productos deben tener un ID válido.');
+        throw new BadRequestException(
+          'Todos los productos deben tener un ID válido.',
+        );
       }
-  
+
       // Ejecutar la transacción para actualizar múltiples productos
       const updatedProducts = await this.prismaService.$transaction(
         products.map((product) => {
@@ -324,7 +356,9 @@ export class ProductsService {
             data: {
               price: product.price,
               priceSell: product.priceSell,
-              ...(normalizedStatus !== undefined ? { status: normalizedStatus } : {}),
+              ...(normalizedStatus !== undefined
+                ? { status: normalizedStatus }
+                : {}),
               name: product.name,
               description: product.description,
               brandId: product.brandId,
@@ -332,34 +366,38 @@ export class ProductsService {
           });
         }),
       );
-  
+
       return {
         message: `${updatedProducts.length} producto(s) actualizado(s) correctamente.`,
         updatedProducts,
       };
     } catch (error) {
       console.error('Error al actualizar productos:', error);
-  
+
       // Manejar errores específicos de Prisma
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          throw new NotFoundException('Uno o más productos no fueron encontrados.');
+          throw new NotFoundException(
+            'Uno o más productos no fueron encontrados.',
+          );
         }
       }
-  
-      throw new InternalServerErrorException('Hubo un error al actualizar los productos.');
+
+      throw new InternalServerErrorException(
+        'Hubo un error al actualizar los productos.',
+      );
     }
   }
 
   async remove(id: number) {
-      const deletedProduct = this.prismaService.product.delete({
-      where:{
-        id
-      }
-    })
+    const deletedProduct = this.prismaService.product.delete({
+      where: {
+        id,
+      },
+    });
 
-    if(!deletedProduct){
-      throw new NotFoundException(`Product with id ${id} not found`)
+    if (!deletedProduct) {
+      throw new NotFoundException(`Product with id ${id} not found`);
     }
 
     return deletedProduct;
@@ -367,11 +405,12 @@ export class ProductsService {
 
   async removes(ids: number[]) {
     if (!Array.isArray(ids) || ids.length === 0) {
-      throw new NotFoundException('No se proporcionaron IDs válidos para eliminar.');
+      throw new NotFoundException(
+        'No se proporcionaron IDs válidos para eliminar.',
+      );
     }
-  
-    try {
 
+    try {
       // Convertir los IDs a números
       const numericIds = ids.map((id) => Number(id));
 
@@ -382,29 +421,30 @@ export class ProductsService {
           },
         },
       });
-  
+
       if (deletedProducts.count === 0) {
-        throw new NotFoundException('No se encontraron productos con los IDs proporcionados.');
+        throw new NotFoundException(
+          'No se encontraron productos con los IDs proporcionados.',
+        );
       }
-        
+
       return {
         message: `${deletedProducts.count} producto(s) eliminado(s) correctamente.`,
       };
     } catch (error) {
-      console.error("Error en el backend:", error);
-      throw new InternalServerErrorException('Hubo un error al eliminar los productos.');     
+      console.error('Error en el backend:', error);
+      throw new InternalServerErrorException(
+        'Hubo un error al eliminar los productos.',
+      );
     }
   }
 
   async findByBarcode(code: string) {
     return this.prismaService.product.findFirst({
       where: {
-        OR: [
-          { barcode: code },
-          { qrCode: code },
-        ],
+        OR: [{ barcode: code }, { qrCode: code }],
         // Puedes omitir el OR si solo usas uno de esos campos
       },
-    })
+    });
   }
 }

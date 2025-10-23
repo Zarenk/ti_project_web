@@ -86,10 +86,14 @@ const buildMockPrisma = (): MockedPrisma => {
 
   return {
     category: {
-      upsert: jest.fn(async ({ where: { name } }) => ({ id: categoryIds.get(name) ?? 9999 })),
+      upsert: jest.fn(async ({ where: { name } }) => ({
+        id: categoryIds.get(name) ?? 9999,
+      })),
     },
     organization: {
-      upsert: jest.fn(async ({ where: { code } }) => ({ id: organizationIds.get(code) ?? 0 })),
+      upsert: jest.fn(async ({ where: { code } }) => ({
+        id: organizationIds.get(code) ?? 0,
+      })),
     },
     organizationUnit: {
       upsert: jest.fn(async ({ create }) => {
@@ -178,7 +182,9 @@ describe('applyMultiTenantFixtures', () => {
     expect(mkdir).not.toHaveBeenCalled();
     expect(writeFile).not.toHaveBeenCalled();
 
-    const organizationUnitCalls = prisma.organizationUnit.upsert.mock.calls.map(([args]) => args);
+    const organizationUnitCalls = prisma.organizationUnit.upsert.mock.calls.map(
+      ([args]) => args,
+    );
     expect(organizationUnitCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -204,7 +210,9 @@ describe('applyMultiTenantFixtures', () => {
       ]),
     );
 
-    const providerCalls = prisma.provider.upsert.mock.calls.map(([args]) => args);
+    const providerCalls = prisma.provider.upsert.mock.calls.map(
+      ([args]) => args,
+    );
     expect(providerCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -218,7 +226,9 @@ describe('applyMultiTenantFixtures', () => {
       ]),
     );
 
-    const membershipCalls = prisma.organizationMembership.upsert.mock.calls.map(([args]) => args);
+    const membershipCalls = prisma.organizationMembership.upsert.mock.calls.map(
+      ([args]) => args,
+    );
     expect(membershipCalls.length).toBeGreaterThan(0);
     for (const call of membershipCalls) {
       const { where, create } = call;
@@ -229,7 +239,8 @@ describe('applyMultiTenantFixtures', () => {
     }
 
     const membershipOrganizationIds = membershipCalls.map(
-      ({ where }) => where.userId_organizationId_organizationUnitId.organizationId,
+      ({ where }) =>
+        where.userId_organizationId_organizationUnitId.organizationId,
     );
     expect(membershipOrganizationIds).toEqual(expect.arrayContaining([1, 2]));
 
@@ -261,7 +272,9 @@ describe('applyMultiTenantFixtures', () => {
       ]),
     );
 
-    const inventoryCalls = prisma.inventory.upsert.mock.calls.map(([args]) => args);
+    const inventoryCalls = prisma.inventory.upsert.mock.calls.map(
+      ([args]) => args,
+    );
     expect(inventoryCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -280,12 +293,18 @@ describe('applyMultiTenantFixtures', () => {
       expect.arrayContaining([
         expect.arrayContaining([
           expect.objectContaining({
-            data: expect.objectContaining({ organizationId: 1, action: 'seed-fixture' }),
+            data: expect.objectContaining({
+              organizationId: 1,
+              action: 'seed-fixture',
+            }),
           }),
         ]),
         expect.arrayContaining([
           expect.objectContaining({
-            data: expect.objectContaining({ organizationId: 2, action: 'seed-fixture' }),
+            data: expect.objectContaining({
+              organizationId: 2,
+              action: 'seed-fixture',
+            }),
           }),
         ]),
       ]),
@@ -294,8 +313,12 @@ describe('applyMultiTenantFixtures', () => {
     expect(logger).toHaveBeenCalledWith(
       'Multi-tenant fixtures ensured for 2 organization(s).',
     );
-    expect(logger).toHaveBeenCalledWith('Fixture applied for organization tenant-alpha');
-    expect(logger).toHaveBeenCalledWith('Fixture applied for organization tenant-beta');
+    expect(logger).toHaveBeenCalledWith(
+      'Fixture applied for organization tenant-alpha',
+    );
+    expect(logger).toHaveBeenCalledWith(
+      'Fixture applied for organization tenant-beta',
+    );
     expect(prisma.$disconnect).not.toHaveBeenCalled();
   });
 
@@ -344,7 +367,9 @@ describe('applyMultiTenantFixtures', () => {
     expect(logger).toHaveBeenCalledWith(
       'Multi-tenant fixtures ensured for 1 organization(s).',
     );
-    expect(logger).toHaveBeenCalledWith('Fixture applied for organization tenant-alpha');
+    expect(logger).toHaveBeenCalledWith(
+      'Fixture applied for organization tenant-alpha',
+    );
     expect(logger).not.toHaveBeenCalledWith(
       'Fixture applied for organization tenant-beta',
     );

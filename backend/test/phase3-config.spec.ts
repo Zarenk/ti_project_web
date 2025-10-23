@@ -19,9 +19,7 @@ describe('buildPhase3OptionsFromEnv', () => {
     expect(options.populate?.skipEntities).toBeUndefined();
     expect(options.validate?.onlyEntities).toBeUndefined();
     expect(options.validate?.skipEntities).toBeUndefined();
-    expect(config.resolvedSummaryDir).toBe(
-      path.resolve(cwd, 'tmp', 'phase3'),
-    );
+    expect(config.resolvedSummaryDir).toBe(path.resolve(cwd, 'tmp', 'phase3'));
     expect(config.printOptions).toBe(false);
     expect(config.optionsPath).toBeUndefined();
     expect(options.populate?.summaryPath).toBe(
@@ -99,6 +97,8 @@ describe('buildPhase3OptionsFromEnv', () => {
 
     expect(() =>
       buildPhase3OptionsFromEnv({ env, cwd: process.cwd() }),
-    ).toThrow('[phase3] Invalid entity in PHASE3_ONLY_ENTITIES: invalid-entity');
+    ).toThrow(
+      '[phase3] Invalid entity in PHASE3_ONLY_ENTITIES: invalid-entity',
+    );
   });
 });

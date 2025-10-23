@@ -3,7 +3,10 @@ export class CircuitBreaker {
   private failures = 0;
   private nextTry = Date.now();
 
-  constructor(private maxFailures = 5, private resetTimeoutMs = 10000) {}
+  constructor(
+    private maxFailures = 5,
+    private resetTimeoutMs = 10000,
+  ) {}
 
   async exec<T>(action: () => Promise<T>): Promise<T> {
     if (Date.now() < this.nextTry) {

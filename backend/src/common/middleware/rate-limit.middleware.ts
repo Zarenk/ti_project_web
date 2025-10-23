@@ -1,7 +1,10 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 
-interface Entry { count: number; timestamp: number }
+interface Entry {
+  count: number;
+  timestamp: number;
+}
 
 @Injectable()
 export class RateLimitMiddleware implements NestMiddleware {

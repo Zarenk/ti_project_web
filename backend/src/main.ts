@@ -10,14 +10,13 @@ import { TelemetryInterceptor } from './metrics/trace.interceptor';
 import './metrics/tracing';
 
 async function bootstrap() {
-  
   const app = await NestFactory.create(AppModule);
   const metrics = app.get(MetricsService);
   app.useGlobalInterceptors(new TelemetryInterceptor(metrics));
 
-  const allowedOrigins =
-    process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()) ||
-    ['http://localhost:3000'];
+  const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map((o) =>
+    o.trim(),
+  ) || ['http://localhost:3000'];
 
   app.enableCors({
     origin: allowedOrigins,
@@ -32,14 +31,19 @@ async function bootstrap() {
   // PARA COLOCAR PREVIAMENTE EN LA URL /API/
   app.setGlobalPrefix('api');
   // Habilitar la validación global de DTOs
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true, // elimina campos no definidos en DTO
-    forbidNonWhitelisted: true, // lanza error si llegan campos extras
-    transform: true, // transforma automáticamente el payload a la clase
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true, // elimina campos no definidos en DTO
+      forbidNonWhitelisted: true, // lanza error si llegan campos extras
+      transform: true, // transforma automáticamente el payload a la clase
+    }),
+  );
 
   // Servir archivos estáticos desde la carpeta "uploads/sunat"
-  app.use('/sunat.zip/facturas', express.static(join(__dirname, '..', 'sunat.zip', 'facturas')));
+  app.use(
+    '/sunat.zip/facturas',
+    express.static(join(__dirname, '..', 'sunat.zip', 'facturas')),
+  );
 
   //DOCUMENTACION SWAGGER
   const config = new DocumentBuilder()

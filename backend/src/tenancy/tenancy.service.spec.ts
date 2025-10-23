@@ -2,7 +2,10 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from 'src/prisma/prisma.service';
 
-import { CreateTenancyDto, OrganizationUnitInputDto } from './dto/create-tenancy.dto';
+import {
+  CreateTenancyDto,
+  OrganizationUnitInputDto,
+} from './dto/create-tenancy.dto';
 import { TenancyService } from './tenancy.service';
 
 interface MockTransactionClient {
@@ -194,8 +197,26 @@ describe('TenancyService', () => {
     });
 
     tx.organizationUnit.findMany.mockResolvedValueOnce([
-      { id: 21, organizationId: 7, code: 'root', parentUnitId: null, name: 'Root', status: 'ACTIVE', createdAt, updatedAt },
-      { id: 22, organizationId: 7, code: 'sales', parentUnitId: 21, name: 'Sales', status: 'ACTIVE', createdAt, updatedAt },
+      {
+        id: 21,
+        organizationId: 7,
+        code: 'root',
+        parentUnitId: null,
+        name: 'Root',
+        status: 'ACTIVE',
+        createdAt,
+        updatedAt,
+      },
+      {
+        id: 22,
+        organizationId: 7,
+        code: 'sales',
+        parentUnitId: 21,
+        name: 'Sales',
+        status: 'ACTIVE',
+        createdAt,
+        updatedAt,
+      },
     ]);
 
     tx.organizationUnit.update.mockResolvedValue({
@@ -221,7 +242,16 @@ describe('TenancyService', () => {
     });
 
     tx.organizationUnit.findMany.mockResolvedValueOnce([
-      { id: 21, organizationId: 7, code: 'root', parentUnitId: null, name: 'Root', status: 'ACTIVE', createdAt, updatedAt },
+      {
+        id: 21,
+        organizationId: 7,
+        code: 'root',
+        parentUnitId: null,
+        name: 'Root',
+        status: 'ACTIVE',
+        createdAt,
+        updatedAt,
+      },
       {
         id: 22,
         organizationId: 7,
@@ -284,7 +314,18 @@ describe('TenancyService', () => {
     });
 
     tx.organizationUnit.updateMany.mockResolvedValue({ count: 2 });
-    tx.organizationUnit.findMany.mockResolvedValue([{ id: 1, organizationId: 90, code: null, name: 'HQ', parentUnitId: null, status: 'INACTIVE', createdAt, updatedAt }]);
+    tx.organizationUnit.findMany.mockResolvedValue([
+      {
+        id: 1,
+        organizationId: 90,
+        code: null,
+        name: 'HQ',
+        parentUnitId: null,
+        status: 'INACTIVE',
+        createdAt,
+        updatedAt,
+      },
+    ]);
     tx.organizationMembership.count.mockResolvedValue(0);
 
     const result = await service.remove(90);
@@ -314,7 +355,16 @@ describe('TenancyService', () => {
         createdAt,
         updatedAt,
         units: [
-          { id: 1, organizationId: 1, name: 'HQ', code: null, parentUnitId: null, status: 'ACTIVE', createdAt, updatedAt },
+          {
+            id: 1,
+            organizationId: 1,
+            name: 'HQ',
+            code: null,
+            parentUnitId: null,
+            status: 'ACTIVE',
+            createdAt,
+            updatedAt,
+          },
         ],
         _count: { memberships: 3 },
       },
@@ -346,7 +396,16 @@ describe('TenancyService', () => {
       createdAt,
       updatedAt,
       units: [
-        { id: 5, organizationId: 44, code: 'iron', name: 'Iron Division', parentUnitId: null, status: 'ACTIVE', createdAt, updatedAt },
+        {
+          id: 5,
+          organizationId: 44,
+          code: 'iron',
+          name: 'Iron Division',
+          parentUnitId: null,
+          status: 'ACTIVE',
+          createdAt,
+          updatedAt,
+        },
       ],
       _count: { memberships: 12 },
     });
@@ -360,7 +419,9 @@ describe('TenancyService', () => {
   it('throws when requesting an unknown organization', async () => {
     prisma.organization.findUnique.mockResolvedValue(null);
 
-    await expect(service.findOne(123)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.findOne(123)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('validates parent codes for new units', async () => {
@@ -387,7 +448,10 @@ describe('TenancyService', () => {
     await expect(
       service.create({
         name: 'Cyberdyne',
-        units: [{ name: 'Skynet Core', code: 'core' }, { name: 'Factory', parentCode: 'unknown' }],
+        units: [
+          { name: 'Skynet Core', code: 'core' },
+          { name: 'Factory', parentCode: 'unknown' },
+        ],
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });

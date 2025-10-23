@@ -10,12 +10,15 @@ export class PaymentMethodsController {
   @ApiOperation({ summary: 'Obtener todos los métodos de pago activos' })
   @ApiResponse({ status: 200, description: 'Lista de métodos de pago activos' })
   async getAllActivePaymentMethods() {
-    const methods = await this.paymentMethodsService.getAllActivePaymentMethods();
+    const methods =
+      await this.paymentMethodsService.getAllActivePaymentMethods();
     return methods; // 🔥 asegurarte que realmente devuelves los datos
   }
 
   @Post()
-  async createPaymentMethod(@Body() data: { name: string; description?: string }) {
+  async createPaymentMethod(
+    @Body() data: { name: string; description?: string },
+  ) {
     return this.paymentMethodsService.createPaymentMethod(data);
   }
 

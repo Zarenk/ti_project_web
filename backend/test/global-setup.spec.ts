@@ -1,16 +1,16 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { applyMultiTenantFixtures } from "prisma/seed/multi-tenant-fixtures.seed";
+import { mkdir, writeFile } from 'node:fs/promises';
+import { applyMultiTenantFixtures } from 'prisma/seed/multi-tenant-fixtures.seed';
 import globalSetup, {
   formatFixtureTotals,
   isRecoverablePrismaConnectionError,
   shouldSkipMultiTenantSeed,
-} from "./global-setup";
+} from './global-setup';
 
-jest.mock("prisma/seed/multi-tenant-fixtures.seed", () => ({
+jest.mock('prisma/seed/multi-tenant-fixtures.seed', () => ({
   applyMultiTenantFixtures: jest.fn(),
 }));
 
-jest.mock("node:fs/promises", () => ({
+jest.mock('node:fs/promises', () => ({
   mkdir: jest.fn(() => Promise.resolve(undefined)),
   writeFile: jest.fn(() => Promise.resolve(undefined)),
 }));
@@ -72,7 +72,9 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
     'skips fixture application when SKIP_MULTI_TENANT_SEED=%s',
     async (envValue, expectedLoggedValue) => {
       process.env.SKIP_MULTI_TENANT_SEED = envValue;
-      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+      const logSpy = jest
+        .spyOn(console, 'log')
+        .mockImplementation(() => undefined);
 
       await globalSetup();
 
@@ -86,7 +88,9 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
   );
 
   it('warns and skips when DATABASE_URL is missing', async () => {
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warnSpy = jest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
 
     await globalSetup();
 
@@ -133,7 +137,9 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
       },
     });
 
-    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    const logSpy = jest
+      .spyOn(console, 'log')
+      .mockImplementation(() => undefined);
 
     await globalSetup();
 
@@ -142,7 +148,9 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
     expect(callArgs).toBeDefined();
 
     if (!callArgs) {
-      throw new Error('applyMultiTenantFixtures should have been invoked once.');
+      throw new Error(
+        'applyMultiTenantFixtures should have been invoked once.',
+      );
     }
 
     expect(callArgs.logger).toBeInstanceOf(Function);
@@ -162,7 +170,8 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
 
   it('passes summaryPath to the fixture helper when configured via environment variable', async () => {
     process.env.DATABASE_URL = 'postgres://user:pass@localhost:5432/db';
-    process.env.MULTI_TENANT_FIXTURES_SUMMARY_PATH = './tmp/fixtures-summary.json';
+    process.env.MULTI_TENANT_FIXTURES_SUMMARY_PATH =
+      './tmp/fixtures-summary.json';
     mockedApplyFixtures.mockResolvedValueOnce({
       processedAt: '2024-01-02T00:00:00.000Z',
       organizations: [],
@@ -182,7 +191,9 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
       summaryFilePath: './tmp/fixtures-summary.json',
     });
 
-    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    const logSpy = jest
+      .spyOn(console, 'log')
+      .mockImplementation(() => undefined);
 
     await globalSetup();
 
@@ -208,7 +219,9 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
       totals: baseTotals,
     });
 
-    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    const logSpy = jest
+      .spyOn(console, 'log')
+      .mockImplementation(() => undefined);
 
     await globalSetup();
 
@@ -249,7 +262,9 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
       totals: { ...baseTotals, organizations: 2 },
     });
 
-    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    const logSpy = jest
+      .spyOn(console, 'log')
+      .mockImplementation(() => undefined);
 
     await globalSetup();
 
@@ -272,12 +287,16 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
       message: "Can't reach database server",
     });
 
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warnSpy = jest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
 
     await expect(globalSetup()).resolves.toBeUndefined();
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Failed to apply fixtures due to a database connectivity issue'),
+      expect.stringContaining(
+        'Failed to apply fixtures due to a database connectivity issue',
+      ),
     );
 
     warnSpy.mockRestore();
@@ -308,7 +327,18 @@ describe('shouldSkipMultiTenantSeed', () => {
   });
 
   it('returns true for any supported truthy value regardless of case and spacing', () => {
-    const truthyValues = ['true', 'TRUE', '  TrUe  ', '1', 'yes', 'YES', 'on', 'ON', ' y ', 'T'];
+    const truthyValues = [
+      'true',
+      'TRUE',
+      '  TrUe  ',
+      '1',
+      'yes',
+      'YES',
+      'on',
+      'ON',
+      ' y ',
+      'T',
+    ];
     for (const value of truthyValues) {
       expect(shouldSkipMultiTenantSeed(value)).toBe(true);
     }
@@ -323,10 +353,14 @@ describe('shouldSkipMultiTenantSeed', () => {
 
 describe('isRecoverablePrismaConnectionError', () => {
   it('returns true when Prisma error codes indicate connectivity issues', () => {
-    expect(isRecoverablePrismaConnectionError({ errorCode: 'P1001' })).toBe(true);
+    expect(isRecoverablePrismaConnectionError({ errorCode: 'P1001' })).toBe(
+      true,
+    );
     expect(isRecoverablePrismaConnectionError({ code: 'P1001' })).toBe(true);
     expect(
-      isRecoverablePrismaConnectionError(new Error("Can't reach database server")),
+      isRecoverablePrismaConnectionError(
+        new Error("Can't reach database server"),
+      ),
     ).toBe(true);
   });
 
@@ -343,9 +377,9 @@ describe('isRecoverablePrismaConnectionError', () => {
   });
 
   it('returns false for unrelated errors', () => {
-    expect(isRecoverablePrismaConnectionError(new Error('Validation failed'))).toBe(
-      false,
-    );
+    expect(
+      isRecoverablePrismaConnectionError(new Error('Validation failed')),
+    ).toBe(false);
     expect(isRecoverablePrismaConnectionError({})).toBe(false);
     expect(isRecoverablePrismaConnectionError(null)).toBe(false);
     expect(isRecoverablePrismaConnectionError(undefined)).toBe(false);

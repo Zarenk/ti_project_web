@@ -1,4 +1,8 @@
-import { INestApplication, CanActivate, ExecutionContext } from '@nestjs/common';
+import {
+  INestApplication,
+  CanActivate,
+  ExecutionContext,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 
@@ -13,7 +17,10 @@ class HeaderTenantContextGuard implements CanActivate {
     const rawHeader = httpRequest.headers['x-org-id'];
     const headerValue = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
 
-    const parsed = typeof headerValue === 'string' ? Number.parseInt(headerValue, 10) : Number.NaN;
+    const parsed =
+      typeof headerValue === 'string'
+        ? Number.parseInt(headerValue, 10)
+        : Number.NaN;
     const organizationId = Number.isFinite(parsed) ? parsed : null;
 
     const tenantContext: TenantContext = {
@@ -24,7 +31,7 @@ class HeaderTenantContextGuard implements CanActivate {
       allowedOrganizationIds: organizationId ? [organizationId] : [],
     };
 
-    (httpRequest as any).tenantContext = tenantContext;
+    httpRequest.tenantContext = tenantContext;
 
     return true;
   }
@@ -60,15 +67,17 @@ describe('ProvidersController multi-tenant boundaries (e2e)', () => {
 
   const dataset = [providerAlpha, providerBeta, providerLegacy];
 
-  const findManyMock = jest.fn(async ({ where }: { where?: { organizationId?: number | null } }) => {
-    if (!where || typeof where.organizationId === 'undefined') {
-      return dataset.map((item) => ({ ...item }));
-    }
+  const findManyMock = jest.fn(
+    async ({ where }: { where?: { organizationId?: number | null } }) => {
+      if (!where || typeof where.organizationId === 'undefined') {
+        return dataset.map((item) => ({ ...item }));
+      }
 
-    return dataset
-      .filter((provider) => provider.organizationId === where.organizationId)
-      .map((item) => ({ ...item }));
-  });
+      return dataset
+        .filter((provider) => provider.organizationId === where.organizationId)
+        .map((item) => ({ ...item }));
+    },
+  );
 
   const findFirstMock = jest.fn(async ({ where }: { where?: any }) => {
     const { id, documentNumber, organizationId } = where ?? {};
@@ -77,13 +86,14 @@ describe('ProvidersController multi-tenant boundaries (e2e)', () => {
       dataset.find((provider) => {
         const matchesId = typeof id === 'undefined' || provider.id === id;
         const matchesDocument =
-          typeof documentNumber === 'undefined' || provider.documentNumber === documentNumber;
+          typeof documentNumber === 'undefined' ||
+          provider.documentNumber === documentNumber;
         const matchesOrganization =
           typeof organizationId === 'undefined'
             ? true
             : organizationId === null
-            ? provider.organizationId === null
-            : provider.organizationId === organizationId;
+              ? provider.organizationId === null
+              : provider.organizationId === organizationId;
 
         return matchesId && matchesDocument && matchesOrganization;
       }) ?? null
@@ -146,7 +156,9 @@ describe('ProvidersController multi-tenant boundaries (e2e)', () => {
       expect.objectContaining({ id: providerLegacy.id, organizationId: null }),
     ]);
 
-    expect(findManyMock).toHaveBeenCalledWith({ where: { organizationId: null } });
+    expect(findManyMock).toHaveBeenCalledWith({
+      where: { organizationId: null },
+    });
   });
 
   it('rejects cross-tenant provider lookups', async () => {
@@ -166,7 +178,9 @@ describe('ProvidersController multi-tenant boundaries (e2e)', () => {
       .set('x-org-id', '2');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual(expect.objectContaining({ id: providerBeta.id }));
+    expect(response.body).toEqual(
+      expect.objectContaining({ id: providerBeta.id }),
+    );
     expect(findFirstMock).toHaveBeenCalledWith({
       where: { id: providerBeta.id, organizationId: 2 },
     });

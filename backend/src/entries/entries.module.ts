@@ -13,4 +13,3 @@ import { AccountingService } from 'src/accounting/accounting.service';
   providers: [EntriesService, PrismaService, AccountingHook, AccountingService],
 })
 export class EntriesModule {}
-

@@ -105,9 +105,12 @@ export class CashregisterController {
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
-    const cashRegister = await this.cashregisterService.getCashRegisterBalance(storeId, {
-      organizationId,
-    });
+    const cashRegister = await this.cashregisterService.getCashRegisterBalance(
+      storeId,
+      {
+        organizationId,
+      },
+    );
 
     // En lugar de devolver un 404 cuando no existe caja activa, respondemos con
     // null para que el cliente maneje el estado adecuadamente.
@@ -135,12 +138,13 @@ export class CashregisterController {
     const endOfDay = new Date(today);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const transactions = await this.cashregisterService.getTransactionsByStoreAndDate(
-      storeId,
-      startOfDay,
-      endOfDay,
-      { organizationId },
-    );
+    const transactions =
+      await this.cashregisterService.getTransactionsByStoreAndDate(
+        storeId,
+        startOfDay,
+        endOfDay,
+        { organizationId },
+      );
     return transactions;
   }
 
@@ -155,9 +159,12 @@ export class CashregisterController {
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
-    const cashRegister = await this.cashregisterService.getActiveCashRegister(storeId, {
-      organizationId,
-    });
+    const cashRegister = await this.cashregisterService.getActiveCashRegister(
+      storeId,
+      {
+        organizationId,
+      },
+    );
 
     // Si no hay caja activa simplemente devuelve null. El cliente decidirá qué hacer.
     if (!cashRegister) {
@@ -212,7 +219,7 @@ export class CashregisterController {
 
     return this.cashregisterService.remove(id, { organizationId });
   }
-  
+
   //////////////////////////////// TRANSFER //////////////////////////////////
 
   @Post('transaction')
@@ -252,39 +259,46 @@ export class CashregisterController {
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
-    return this.cashregisterService.findByCashRegister(cashRegisterId, { organizationId });
+    return this.cashregisterService.findByCashRegister(cashRegisterId, {
+      organizationId,
+    });
   }
 
   @Get('get-transactions/:storeId/:date')
-    getTransactionsByDate(
-      @Param('storeId') storeIdRaw: string,
-      @Param('date') date: string,
-      @Query('organizationId') organizationIdRaw?: string,
-      @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
-    ) {
-      console.log('[GET] /get-transactions', { storeIdRaw, date });
+  getTransactionsByDate(
+    @Param('storeId') storeIdRaw: string,
+    @Param('date') date: string,
+    @Query('organizationId') organizationIdRaw?: string,
+    @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+  ) {
+    console.log('[GET] /get-transactions', { storeIdRaw, date });
 
-      const storeId = parseInt(storeIdRaw, 10);
-      if (isNaN(storeId)) {
-        throw new BadRequestException('storeId inválido.');
-      }
+    const storeId = parseInt(storeIdRaw, 10);
+    if (isNaN(storeId)) {
+      throw new BadRequestException('storeId inválido.');
+    }
 
-      const organizationId = this.mergeOrganizationId(
-        this.parseOrganizationId(organizationIdRaw),
-        organizationIdFromContext,
-      );
+    const organizationId = this.mergeOrganizationId(
+      this.parseOrganizationId(organizationIdRaw),
+      organizationIdFromContext,
+    );
 
-      const [year, month, day] = date.split('-').map(Number);
-      if (!year || !month || !day) {
-        throw new BadRequestException('Fecha inválida.');
-      }
+    const [year, month, day] = date.split('-').map(Number);
+    if (!year || !month || !day) {
+      throw new BadRequestException('Fecha inválida.');
+    }
 
-      const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
-      const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
+    const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
 
-      return this.cashregisterService.getTransactionsByStoreAndDate(storeId, startOfDay, endOfDay, {
+    return this.cashregisterService.getTransactionsByStoreAndDate(
+      storeId,
+      startOfDay,
+      endOfDay,
+      {
         organizationId,
-      });
+      },
+    );
   }
 
   ///////////////////////////////// CLOSURE //////////////////////////////////
@@ -314,7 +328,9 @@ export class CashregisterController {
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
-    return this.cashregisterService.getClosuresByStore(storeId, { organizationId });
+    return this.cashregisterService.getClosuresByStore(storeId, {
+      organizationId,
+    });
   }
 
   @Get('closure/:storeId/by-date/:date')
@@ -328,7 +344,11 @@ export class CashregisterController {
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
-    return this.cashregisterService.getClosureByStoreAndDate(storeId, new Date(date), { organizationId });
+    return this.cashregisterService.getClosureByStoreAndDate(
+      storeId,
+      new Date(date),
+      { organizationId },
+    );
   }
 
   @Get('closure')
@@ -342,5 +362,4 @@ export class CashregisterController {
     );
     return this.cashregisterService.findAllClosure({ organizationId });
   }
-
 }

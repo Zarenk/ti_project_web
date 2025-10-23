@@ -76,7 +76,11 @@ describe('InventoryService multi-organization support', () => {
 
   beforeEach(() => {
     prisma = {
-      product: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
+      product: {
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        create: jest.fn(),
+      },
       storeOnInventory: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
@@ -171,8 +175,7 @@ describe('InventoryService multi-organization support', () => {
     prisma.entryDetailSeries.create.mockResolvedValue({ id: 707 });
     prisma.salesDetail.findMany.mockResolvedValue([]);
 
-    logOrganizationContextMock =
-      logOrganizationContext as unknown as jest.Mock;
+    logOrganizationContextMock = logOrganizationContext as unknown as jest.Mock;
     logOrganizationContextMock.mockClear();
   });
 
@@ -280,7 +283,11 @@ describe('InventoryService multi-organization support', () => {
       organizationId: id === 1 ? 101 : 202,
     }));
 
-    prisma.storeOnInventory.findFirst.mockResolvedValue({ id: 50, stock: 10, inventoryId: 80 });
+    prisma.storeOnInventory.findFirst.mockResolvedValue({
+      id: 50,
+      stock: 10,
+      inventoryId: 80,
+    });
 
     await expect(
       service.transferProduct({
@@ -528,5 +535,4 @@ describe('InventoryService multi-organization support', () => {
       }),
     );
   });
-  
 });

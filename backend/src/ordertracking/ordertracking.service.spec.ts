@@ -30,7 +30,13 @@ describe('OrderTrackingService multi-tenant behaviour', () => {
     prisma.orders.findFirst.mockResolvedValue({ id: 12, organizationId: 44 });
     const createdAt = new Date();
     prisma.orderTracking.findMany.mockResolvedValue([
-      { id: 1, orderId: 12, status: 'CREATED', description: 'Created', createdAt },
+      {
+        id: 1,
+        orderId: 12,
+        status: 'CREATED',
+        description: 'Created',
+        createdAt,
+      },
     ]);
 
     const result = await service.findByOrderCode('ORD-12', 44);

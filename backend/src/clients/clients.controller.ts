@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException, UseInterceptors, UploadedFile, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  BadRequestException,
+  UseInterceptors,
+  UploadedFile,
+  Req,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -13,7 +25,7 @@ export class ClientController {
   constructor(private readonly clientService: ClientService) {}
 
   @Post()
-  @ApiOperation({summary: 'Create a client'})    // Swagger 
+  @ApiOperation({ summary: 'Create a client' }) // Swagger
   create(@Body() createClientDto: CreateClientDto) {
     const clientData = {
       name: createClientDto.name,
@@ -48,7 +60,14 @@ export class ClientController {
 
   @Post('verify-or-create-products')
   async verifyOrCreateProducts(
-    @Body() clients: { name: string; type?: string; typerNumber?: string; userId: number; organizationId?: number | null }[],
+    @Body()
+    clients: {
+      name: string;
+      type?: string;
+      typerNumber?: string;
+      userId: number;
+      organizationId?: number | null;
+    }[],
   ) {
     // Mapea las propiedades para que coincidan con el tipo esperado
     const formattedClients = clients.map((client) => ({
@@ -62,7 +81,7 @@ export class ClientController {
   }
 
   @Get()
-  @ApiResponse({status: 200, description: 'Return all clients'}) // Swagger
+  @ApiResponse({ status: 200, description: 'Return all clients' }) // Swagger
   findAll() {
     return this.clientService.findAll();
   }
@@ -81,7 +100,7 @@ export class ClientController {
   findOne(@Param('id') id: string) {
     const numericId = parseInt(id, 10); // Convierte el ID a un número entero
     if (isNaN(numericId)) {
-    throw new BadRequestException('El ID debe ser un número válido.');
+      throw new BadRequestException('El ID debe ser un número válido.');
     }
     return this.clientService.findOne(numericId);
   }
@@ -103,7 +122,10 @@ export class ClientController {
       }),
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
-          return cb(new BadRequestException('Solo se permiten imagenes'), false);
+          return cb(
+            new BadRequestException('Solo se permiten imagenes'),
+            false,
+          );
         }
         cb(null, true);
       },
@@ -122,9 +144,10 @@ export class ClientController {
   @ApiOperation({ summary: 'Update multiple client with the same values' }) // Swagger
   @ApiResponse({ status: 200, description: 'Clients updated successfully' }) // Swagger
   async updateMany(@Body() updateClientsDto: UpdateClientDto[]) {
-
     if (!Array.isArray(updateClientsDto) || updateClientsDto.length === 0) {
-      throw new BadRequestException('No se proporcionaron clientes para actualizar.');
+      throw new BadRequestException(
+        'No se proporcionaron clientes para actualizar.',
+      );
     }
 
     // Delegar la lógica al servicio
@@ -132,10 +155,12 @@ export class ClientController {
   }
 
   // clients.controller.ts
-  @Post("check")
-  async checkClient(@Body("typeNumber") name: string) {
+  @Post('check')
+  async checkClient(@Body('typeNumber') name: string) {
     if (!name) {
-      throw new BadRequestException("El Nro de documento del cliente es obligatorio.");
+      throw new BadRequestException(
+        'El Nro de documento del cliente es obligatorio.',
+      );
     }
 
     const exists = await this.clientService.checkIfExists(name);

@@ -179,7 +179,9 @@ export class InventoryController {
   ) {
     const id = parseInt(storeId, 10);
     if (isNaN(id)) {
-      throw new BadRequestException('El ID de la tienda debe ser un número válido');
+      throw new BadRequestException(
+        'El ID de la tienda debe ser un número válido',
+      );
     }
 
     return this.inventoryService.getAllProductsByStore(
@@ -200,7 +202,9 @@ export class InventoryController {
     const productIdNum = parseInt(productId, 10);
 
     if (isNaN(storeIdNum) || isNaN(productIdNum)) {
-      throw new Error('El ID de la tienda y el producto deben ser números válidos');
+      throw new Error(
+        'El ID de la tienda y el producto deben ser números válidos',
+      );
     }
 
     const organizationFilter = organizationId ?? undefined;
@@ -237,7 +241,9 @@ export class InventoryController {
     const productIdNum = parseInt(productId, 10);
 
     if (isNaN(storeIdNum) || isNaN(productIdNum)) {
-      throw new Error('El ID de la tienda y el producto deben ser números válidos');
+      throw new Error(
+        'El ID de la tienda y el producto deben ser números válidos',
+      );
     }
 
     return this.inventoryService.getSeriesByProductAndStore(
@@ -271,7 +277,9 @@ export class InventoryController {
     @CurrentTenant('organizationId') organizationId: number | null,
   ) {
     if (isNaN(inventoryId)) {
-      throw new BadRequestException('El ID de inventario debe ser un número válido');
+      throw new BadRequestException(
+        'El ID de inventario debe ser un número válido',
+      );
     }
 
     return this.inventoryService.getProductByInventoryId(
@@ -326,7 +334,7 @@ export class InventoryController {
       organizationId ?? undefined,
     );
   }
-  
+
   // Endpoint Transferencia de productos entre tiendas
   @Post('/transfer')
   async transferProduct(
@@ -345,7 +353,7 @@ export class InventoryController {
     const resolvedOrganizationId =
       transferDto.organizationId !== undefined
         ? transferDto.organizationId
-        : organizationId ?? undefined;
+        : (organizationId ?? undefined);
 
     return this.inventoryService.transferProduct({
       ...transferDto,
@@ -393,7 +401,7 @@ export class InventoryController {
       body.providerId,
       body.organizationId !== undefined
         ? body.organizationId
-        : organizationId ?? undefined,
+        : (organizationId ?? undefined),
     );
   }
 
@@ -404,7 +412,6 @@ export class InventoryController {
     @Res() res: Response,
     @CurrentTenant('organizationId') organizationId: number | null,
   ) {
-
     const store = await this.prisma.store.findFirst({
       where: {
         id: Number(storeId),
@@ -424,12 +431,17 @@ export class InventoryController {
     const date = format(new Date(), 'yyyyMMdd');
     const fileName = `inventario-${storeSlug}-${date}.xlsx`;
 
-    const buffer = await this.inventoryService.generateInventoryExcel(storeId, categoryId, store.name);
+    const buffer = await this.inventoryService.generateInventoryExcel(
+      storeId,
+      categoryId,
+      store.name,
+    );
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
     res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
     res.send(buffer);
   }
-
 }
-

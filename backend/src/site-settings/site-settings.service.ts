@@ -148,13 +148,12 @@ const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
   },
 };
 
-
 @Injectable()
 export class SiteSettingsService {
   private cachedSettings: SiteSettings | null = null;
   private cacheTimestamp = 0;
   private readonly CACHE_TTL_MS = 30_000;
-  
+
   constructor(private readonly prisma: PrismaService) {}
 
   async findOrCreate(): Promise<SiteSettings> {
@@ -169,7 +168,6 @@ export class SiteSettingsService {
   }
 
   async getSettings(): Promise<SiteSettings> {
-
     if (this.cachedSettings && this.isCacheValid()) {
       return this.cloneSettings(this.cachedSettings);
     }
@@ -194,11 +192,14 @@ export class SiteSettingsService {
       if (existing && dto.expectedUpdatedAt) {
         const expected = new Date(dto.expectedUpdatedAt);
         if (existing.updatedAt.getTime() !== expected.getTime()) {
-          throw new ConflictException('Site settings were modified by another user.');
+          throw new ConflictException(
+            'Site settings were modified by another user.',
+          );
         }
       }
 
-      const payload = (dto.data ?? DEFAULT_SITE_SETTINGS) as Prisma.InputJsonValue;
+      const payload = (dto.data ??
+        DEFAULT_SITE_SETTINGS) as Prisma.InputJsonValue;
 
       if (!existing) {
         return tx.siteSettings.create({
@@ -232,10 +233,7 @@ export class SiteSettingsService {
       return data;
     }
 
-    const merged = deepMergeJson(
-      DEFAULT_SITE_SETTINGS,
-      data as Prisma.JsonObject,
-    );
+    const merged = deepMergeJson(DEFAULT_SITE_SETTINGS, data);
     const integrations = merged.integrations as Prisma.JsonValue;
 
     if (integrations && isPlainObject(integrations)) {
@@ -253,22 +251,21 @@ export class SiteSettingsService {
   }
 
   private isCacheValid(): boolean {
-      return (
-        !!this.cachedSettings &&
-        Date.now() - this.cacheTimestamp < this.CACHE_TTL_MS
-      );
+    return (
+      !!this.cachedSettings &&
+      Date.now() - this.cacheTimestamp < this.CACHE_TTL_MS
+    );
   }
 
   private setCache(settings: SiteSettings): void {
-      this.cachedSettings = settings;
-      this.cacheTimestamp = Date.now();
+    this.cachedSettings = settings;
+    this.cacheTimestamp = Date.now();
   }
 
   private cloneSettings(settings: SiteSettings): SiteSettings {
-      return {
-        ...settings,
-        data: cloneJson(settings.data),
-      };
+    return {
+      ...settings,
+      data: cloneJson(settings.data),
+    };
   }
 }
-

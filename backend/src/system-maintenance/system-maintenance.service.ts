@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { spawn } from 'child_process';
 import { Readable } from 'stream';
@@ -13,7 +17,11 @@ export interface GeneratedBackup {
 @Injectable()
 export class SystemMaintenanceService {
   private readonly logger = new Logger(SystemMaintenanceService.name);
-  private readonly preservedTables = new Set(['User', 'SiteSettings', '_prisma_migrations']);
+  private readonly preservedTables = new Set([
+    'User',
+    'SiteSettings',
+    '_prisma_migrations',
+  ]);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -38,7 +46,10 @@ export class SystemMaintenanceService {
     }
   }
 
-  async purgeNonUserData(): Promise<{ deletedCounts: Record<string, number>; finishedAt: string }> {
+  async purgeNonUserData(): Promise<{
+    deletedCounts: Record<string, number>;
+    finishedAt: string;
+  }> {
     const deletedCounts: Record<string, number> = {};
 
     await this.prisma.$transaction(async (tx) => {
@@ -51,7 +62,10 @@ export class SystemMaintenanceService {
 
       const tablesToPurge = tables
         .map((row) => row.tablename)
-        .filter((name) => name && !this.preservedTables.has(name) && !name.startsWith('_'));
+        .filter(
+          (name) =>
+            name && !this.preservedTables.has(name) && !name.startsWith('_'),
+        );
 
       if (tablesToPurge.length === 0) {
         return;
@@ -78,7 +92,10 @@ export class SystemMaintenanceService {
     };
   }
 
-  private generatePgDumpBackup(databaseUrl: string, timestamp: string): Promise<GeneratedBackup> {
+  private generatePgDumpBackup(
+    databaseUrl: string,
+    timestamp: string,
+  ): Promise<GeneratedBackup> {
     return new Promise<GeneratedBackup>((resolve, reject) => {
       const child = spawn('pg_dump', ['--dbname', databaseUrl], {
         env: { ...process.env, DATABASE_URL: databaseUrl },
@@ -119,7 +136,9 @@ export class SystemMaintenanceService {
     });
   }
 
-  private async generateJsonBackup(timestamp: string): Promise<GeneratedBackup> {
+  private async generateJsonBackup(
+    timestamp: string,
+  ): Promise<GeneratedBackup> {
     try {
       const data = await this.prisma.$transaction(async (tx) => {
         const tableRows = await tx.$queryRaw<Array<{ tablename: string }>>`
@@ -156,7 +175,10 @@ export class SystemMaintenanceService {
         contentType: 'application/json',
       };
     } catch (error) {
-      this.logger.error('Failed to serialize database for backup', error as Error);
+      this.logger.error(
+        'Failed to serialize database for backup',
+        error as Error,
+      );
       throw new InternalServerErrorException('Failed to generate backup');
     }
   }

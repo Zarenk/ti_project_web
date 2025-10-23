@@ -14,15 +14,13 @@ import { FirmadorJavaService } from './firmador-java.service';
 import { firstValueFrom } from 'rxjs';
 import { HttpService } from '@nestjs/axios';
 
-
 @Injectable()
 export class GuideService {
-
   constructor(
-        private prismaService: PrismaService,
-        private readonly firmadorJavaService: FirmadorJavaService,
-        private readonly httpService: HttpService
-      ) {}
+    private prismaService: PrismaService,
+    private readonly firmadorJavaService: FirmadorJavaService,
+    private readonly httpService: HttpService,
+  ) {}
 
   async generarGuia(dto: CreateGuideDto) {
     const serie = 'T001';
@@ -44,7 +42,8 @@ export class GuideService {
     );
     */
 
-    const signedXml = await this.firmadorJavaService.firmarXmlConJava(unsignedXml);
+    const signedXml =
+      await this.firmadorJavaService.firmarXmlConJava(unsignedXml);
 
     // 3. Guardar XML firmado
     const tempDir = path.join(process.cwd(), 'temp');
@@ -68,14 +67,13 @@ export class GuideService {
     if (!originalBuffer.equals(zippedXmlBuffer)) {
       console.warn('[WARN] XML dentro del ZIP no es idéntico al XML firmado.');
     }
-    
+
     // Nombre archivo ZIP
     const zipFileName = `${ruc}-09-${fileNameBase}.zip`;
 
     // Envío a SUNAT REST
     const envioResult = await this.sendGuideToSunatRest(zipBuffer, zipFileName);
 
-    
     const cdrBase64 = envioResult.applicationResponse;
     const cdrBuffer = Buffer.from(cdrBase64, 'base64');
     const cdrInfo = await extractCdrStatus(cdrBuffer);
@@ -115,8 +113,11 @@ export class GuideService {
       shippingGuide: saved,
     };
   }
-  
-  async sendGuideToSunatRest(signedZipBuffer: Buffer, fileName: string): Promise<any> {
+
+  async sendGuideToSunatRest(
+    signedZipBuffer: Buffer,
+    fileName: string,
+  ): Promise<any> {
     const clientId = process.env.SUNAT_CLIENT_ID;
     const clientSecret = process.env.SUNAT_CLIENT_SECRET;
     const username = process.env.SUNAT_USERNAME;
@@ -132,7 +133,9 @@ export class GuideService {
     // Paso 1: Obtener el token OAuth 2.0
     const authResponse = await firstValueFrom(
       this.httpService.post(
-        'https://api-seguridad.sunat.gob.pe/v1/clientessol/' + clientId + '/oauth2/token/',
+        'https://api-seguridad.sunat.gob.pe/v1/clientessol/' +
+          clientId +
+          '/oauth2/token/',
         new URLSearchParams({
           grant_type: 'password',
           scope: 'https://api-cpe.sunat.gob.pe',
@@ -149,40 +152,42 @@ export class GuideService {
       ),
     );
 
-  try {
-    const token = authResponse.data.access_token;
-    console.log('🔑 TOKEN?', token);
+    try {
+      const token = authResponse.data.access_token;
+      console.log('🔑 TOKEN?', token);
 
-    // Paso 2: Enviar el ZIP firmado
-    const response = await firstValueFrom(
-      this.httpService.post(
-        'https://api-cpe.sunat.gob.pe/v1/contribuyente/gem/comprobantes',
-        {
-          archivo: signedZipBuffer.toString('base64'),
-          nombreArchivo: fileName,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
+      // Paso 2: Enviar el ZIP firmado
+      const response = await firstValueFrom(
+        this.httpService.post(
+          'https://api-cpe.sunat.gob.pe/v1/contribuyente/gem/comprobantes',
+          {
+            archivo: signedZipBuffer.toString('base64'),
+            nombreArchivo: fileName,
           },
-        },
-      ),
-    );
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
 
-    return response.data;
+      return response.data;
+    } catch (err: any) {
+      console.error(
+        '❌ Error al enviar a SUNAT:',
+        err.response?.data || err.message,
+      );
+      throw new Error(
+        'Error SUNAT: ' + JSON.stringify(err.response?.data || err.message),
+      );
+    }
   }
-  catch (err: any) {
-    console.error('❌ Error al enviar a SUNAT:', err.response?.data || err.message);
-    throw new Error('Error SUNAT: ' + JSON.stringify(err.response?.data || err.message));
-  }
-}
 
   async findAllShippingGuides() {
     return this.prismaService.shippingGuide.findMany({
       orderBy: { createdAt: 'desc' },
     });
   }
-
-  
 }

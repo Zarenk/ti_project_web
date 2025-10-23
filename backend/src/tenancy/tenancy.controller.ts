@@ -28,9 +28,7 @@ export class TenancyController {
   }
 
   @Get(':id')
-  findOne(
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<TenancySnapshot> {
+  findOne(@Param('id', ParseIntPipe) id: number): Promise<TenancySnapshot> {
     return this.tenancyService.findOne(id);
   }
 

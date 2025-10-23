@@ -35,7 +35,7 @@ export class StoresController {
   }
 
   @Get()
-  @ApiResponse({status: 200, description: 'Return all stores'}) // Swagger
+  @ApiResponse({ status: 200, description: 'Return all stores' }) // Swagger
   findAll(@CurrentTenant('organizationId') organizationId: number | null) {
     return this.storesService.findAll(
       organizationId === undefined ? undefined : organizationId,
@@ -58,13 +58,13 @@ export class StoresController {
   }
 
   // stores.controller.ts
-  @Post("check")
+  @Post('check')
   async checkStore(
-    @Body("name") name: string,
+    @Body('name') name: string,
     @CurrentTenant('organizationId') organizationId: number | null,
   ) {
     if (!name) {
-      throw new BadRequestException("El nombre de la tienda es obligatorio.");
+      throw new BadRequestException('El nombre de la tienda es obligatorio.');
     }
 
     const exists = await this.storesService.checkIfExists(
@@ -97,9 +97,10 @@ export class StoresController {
     @Req() req: Request,
     @CurrentTenant('organizationId') organizationId: number | null,
   ) {
-
     if (!Array.isArray(updateStoresDto) || updateStoresDto.length === 0) {
-      throw new BadRequestException('No se proporcionaron tiendas para actualizar.');
+      throw new BadRequestException(
+        'No se proporcionaron tiendas para actualizar.',
+      );
     }
 
     // Delegar la lógica al servicio

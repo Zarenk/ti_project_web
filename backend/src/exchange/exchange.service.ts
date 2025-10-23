@@ -17,7 +17,7 @@ export class ExchangeService {
   async create(dto: CreateTipoCambioDto, req: Request) {
     const timeZone = 'America/Lima'; // Define la zona horaria deseada
     const fechaUtc = zonedTimeToUtc(dto.fecha, timeZone); // Convierte la fecha a UTC
-  
+
     const user = (
       req as Request & { user?: { userId?: number; username?: string } }
     ).user;
@@ -60,20 +60,38 @@ export class ExchangeService {
           ? {
               before: {
                 ...existing,
-                fecha: existing.fecha instanceof Date ? existing.fecha.toISOString() : existing.fecha,
-                createdAt: existing.createdAt instanceof Date ? existing.createdAt.toISOString() : existing.createdAt,
+                fecha:
+                  existing.fecha instanceof Date
+                    ? existing.fecha.toISOString()
+                    : existing.fecha,
+                createdAt:
+                  existing.createdAt instanceof Date
+                    ? existing.createdAt.toISOString()
+                    : existing.createdAt,
               },
               after: {
                 ...rate,
-                fecha: rate.fecha instanceof Date ? rate.fecha.toISOString() : rate.fecha,
-                createdAt: rate.createdAt instanceof Date ? rate.createdAt.toISOString() : rate.createdAt,
+                fecha:
+                  rate.fecha instanceof Date
+                    ? rate.fecha.toISOString()
+                    : rate.fecha,
+                createdAt:
+                  rate.createdAt instanceof Date
+                    ? rate.createdAt.toISOString()
+                    : rate.createdAt,
               },
             }
           : {
               after: {
                 ...rate,
-                fecha: rate.fecha instanceof Date ? rate.fecha.toISOString() : rate.fecha,
-                createdAt: rate.createdAt instanceof Date ? rate.createdAt.toISOString() : rate.createdAt,
+                fecha:
+                  rate.fecha instanceof Date
+                    ? rate.fecha.toISOString()
+                    : rate.fecha,
+                createdAt:
+                  rate.createdAt instanceof Date
+                    ? rate.createdAt.toISOString()
+                    : rate.createdAt,
               },
             },
       },
@@ -105,14 +123,26 @@ export class ExchangeService {
           before: before
             ? {
                 ...before,
-                fecha: before.fecha instanceof Date ? before.fecha.toISOString() : before.fecha,
-                createdAt: before.createdAt instanceof Date ? before.createdAt.toISOString() : before.createdAt,
+                fecha:
+                  before.fecha instanceof Date
+                    ? before.fecha.toISOString()
+                    : before.fecha,
+                createdAt:
+                  before.createdAt instanceof Date
+                    ? before.createdAt.toISOString()
+                    : before.createdAt,
               }
             : null,
           after: {
             ...updated,
-            fecha: updated.fecha instanceof Date ? updated.fecha.toISOString() : updated.fecha,
-            createdAt: updated.createdAt instanceof Date ? updated.createdAt.toISOString() : updated.createdAt,
+            fecha:
+              updated.fecha instanceof Date
+                ? updated.fecha.toISOString()
+                : updated.fecha,
+            createdAt:
+              updated.createdAt instanceof Date
+                ? updated.createdAt.toISOString()
+                : updated.createdAt,
           },
         },
       },

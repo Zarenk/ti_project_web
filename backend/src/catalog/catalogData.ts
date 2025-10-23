@@ -39,10 +39,7 @@ export async function getCatalogItems(
       specification: { select: { processor: true, graphics: true } },
       category: { select: { name: true } },
     },
-    orderBy: [
-      { category: { name: 'asc' } },
-      { name: 'asc' },
-    ],
+    orderBy: [{ category: { name: 'asc' } }, { name: 'asc' }],
   });
 
   return products.map((p) => ({

@@ -1,4 +1,4 @@
-import { ReviewNote } from "./review-note";
+import { ReviewNote } from './review-note';
 
 /** Simple in-memory queue for review notes requiring manual action. */
 export class ManualReviewQueue {

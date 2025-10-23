@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  BadRequestException,
+} from '@nestjs/common';
 import { SeriesService } from './series.service';
 import { CreateSeriesDto } from './dto/create-series.dto';
 import { UpdateSeriesDto } from './dto/update-series.dto';
@@ -18,5 +27,4 @@ export class SeriesController {
     // Delegar la lógica al servicio
     return this.seriesService.checkSeries(serial);
   }
-
 }

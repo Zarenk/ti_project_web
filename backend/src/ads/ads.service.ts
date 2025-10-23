@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AdsRole } from './roles.enum';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
@@ -43,7 +47,12 @@ export class AdsService {
   private publishWorker: Worker<AdsJobData> | null = null;
 
   // In-memory storage for demo purposes only
-  private campaigns: { id: number; name: string; status: string; organizationId: number }[] = [];
+  private campaigns: {
+    id: number;
+    name: string;
+    status: string;
+    organizationId: number;
+  }[] = [];
   private creatives: {
     id: number;
     name: string;
@@ -151,7 +160,6 @@ export class AdsService {
   }
 
   async enqueueGenerate(data: AdsJobData) {
-
     if (!generateQueue) {
       this.logger.warn('Redis disabled, generate job not enqueued');
       return;
@@ -163,7 +171,6 @@ export class AdsService {
   }
 
   async enqueuePublish(data: AdsJobData) {
-
     if (!publishQueue) {
       this.logger.warn('Redis disabled, publish job not enqueued');
       return;
@@ -195,7 +202,11 @@ export class AdsService {
     return jobs.length;
   }
 
-  private ensureAccess(user: AdsUser, roles: AdsRole[], organizationId?: number) {
+  private ensureAccess(
+    user: AdsUser,
+    roles: AdsRole[],
+    organizationId?: number,
+  ) {
     if (roles.length && !roles.includes(user.role)) {
       throw new ForbiddenException('Forbidden role');
     }
@@ -205,7 +216,9 @@ export class AdsService {
   }
 
   listCampaigns(organizationId: number, page: number, pageSize: number) {
-    const items = this.campaigns.filter((c) => c.organizationId === organizationId);
+    const items = this.campaigns.filter(
+      (c) => c.organizationId === organizationId,
+    );
     const start = (page - 1) * pageSize;
     return { items: items.slice(start, start + pageSize), total: items.length };
   }
@@ -229,15 +242,30 @@ export class AdsService {
     return creative;
   }
 
-  createCampaign(user: AdsUser, dto: CreateCampaignDto & { organizationId: number }) {
-    this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
+  createCampaign(
+    user: AdsUser,
+    dto: CreateCampaignDto & { organizationId: number },
+  ) {
+    this.ensureAccess(
+      user,
+      [AdsRole.ADMIN, AdsRole.MARKETING],
+      dto.organizationId,
+    );
     const campaign = { ...dto, id: Date.now(), status: 'draft' };
     this.campaigns.push(campaign);
     return campaign;
   }
 
-  updateCampaign(id: number, user: AdsUser, dto: UpdateCampaignDto & { organizationId: number }) {
-    this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
+  updateCampaign(
+    id: number,
+    user: AdsUser,
+    dto: UpdateCampaignDto & { organizationId: number },
+  ) {
+    this.ensureAccess(
+      user,
+      [AdsRole.ADMIN, AdsRole.MARKETING],
+      dto.organizationId,
+    );
     const idx = this.campaigns.findIndex(
       (c) => c.id === id && c.organizationId === dto.organizationId,
     );
@@ -246,20 +274,47 @@ export class AdsService {
     return this.campaigns[idx];
   }
 
-  publishCampaign(id: number, user: AdsUser, dto: PublishCampaignDto & { organizationId: number }) {
-    this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
+  publishCampaign(
+    id: number,
+    user: AdsUser,
+    dto: PublishCampaignDto & { organizationId: number },
+  ) {
+    this.ensureAccess(
+      user,
+      [AdsRole.ADMIN, AdsRole.MARKETING],
+      dto.organizationId,
+    );
     return { id, published: dto.publish };
   }
 
-  createCreative(user: AdsUser, dto: CreateCreativeDto & { organizationId: number; campaignId: number }) {
-    this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
-    const creative = { ...dto, id: Date.now(), name: dto.title || 'Untitled Creative' };
+  createCreative(
+    user: AdsUser,
+    dto: CreateCreativeDto & { organizationId: number; campaignId: number },
+  ) {
+    this.ensureAccess(
+      user,
+      [AdsRole.ADMIN, AdsRole.MARKETING],
+      dto.organizationId,
+    );
+    const creative = {
+      ...dto,
+      id: Date.now(),
+      name: dto.title || 'Untitled Creative',
+    };
     this.creatives.push(creative);
     return creative;
   }
 
-  updateCreative(id: number, user: AdsUser, dto: UpdateCreativeDto & { organizationId: number }) {
-    this.ensureAccess(user, [AdsRole.ADMIN, AdsRole.MARKETING], dto.organizationId);
+  updateCreative(
+    id: number,
+    user: AdsUser,
+    dto: UpdateCreativeDto & { organizationId: number },
+  ) {
+    this.ensureAccess(
+      user,
+      [AdsRole.ADMIN, AdsRole.MARKETING],
+      dto.organizationId,
+    );
     const idx = this.creatives.findIndex(
       (cr) => cr.id === id && cr.organizationId === dto.organizationId,
     );
@@ -268,7 +323,11 @@ export class AdsService {
     return this.creatives[idx];
   }
 
-  reviewCreative(id: number, user: AdsUser, dto: ReviewCreativeDto & { organizationId: number }) {
+  reviewCreative(
+    id: number,
+    user: AdsUser,
+    dto: ReviewCreativeDto & { organizationId: number },
+  ) {
     this.ensureAccess(user, [AdsRole.REVIEWER], dto.organizationId);
     return { id, approved: dto.approved, notes: dto.notes };
   }

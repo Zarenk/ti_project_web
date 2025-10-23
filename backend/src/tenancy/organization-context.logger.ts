@@ -21,7 +21,8 @@ interface OrganizationContextMetrics {
 }
 
 let organizationLogger: OrganizationLogger = new Logger('OrganizationContext');
-let metricsRecorder: OrganizationContextMetrics = createDefaultMetricsRecorder();
+let metricsRecorder: OrganizationContextMetrics =
+  createDefaultMetricsRecorder();
 
 export function setOrganizationContextLogger(logger: OrganizationLogger) {
   organizationLogger = logger;
@@ -31,7 +32,9 @@ export function resetOrganizationContextLogger() {
   organizationLogger = new Logger('OrganizationContext');
 }
 
-export function setOrganizationContextMetrics(recorder: OrganizationContextMetrics) {
+export function setOrganizationContextMetrics(
+  recorder: OrganizationContextMetrics,
+) {
   metricsRecorder = recorder;
 }
 
@@ -50,7 +53,9 @@ function createDefaultMetricsRecorder(): OrganizationContextMetrics {
 function getOrCreateOrganizationContextCounter(): Counter<
   'service' | 'operation' | 'hasOrganizationId'
 > {
-  const existing = register.getSingleMetric('organization_context_events_total');
+  const existing = register.getSingleMetric(
+    'organization_context_events_total',
+  );
   if (existing) {
     return existing as Counter<'service' | 'operation' | 'hasOrganizationId'>;
   }

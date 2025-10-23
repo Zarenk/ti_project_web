@@ -40,8 +40,7 @@ describe('ClientService multi-organization support', () => {
     service = new ClientService(prisma as unknown as PrismaService);
     randomUUIDMock = randomUUID as unknown as jest.Mock;
     randomUUIDMock.mockReset();
-    logOrganizationContextMock =
-      logOrganizationContext as unknown as jest.Mock;
+    logOrganizationContextMock = logOrganizationContext as unknown as jest.Mock;
     logOrganizationContextMock.mockClear();
   });
 

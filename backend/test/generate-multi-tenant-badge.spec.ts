@@ -1,4 +1,7 @@
-import { parseBadgeArgs, pickColor } from '../scripts/generate-multi-tenant-badge';
+import {
+  parseBadgeArgs,
+  pickColor,
+} from '../scripts/generate-multi-tenant-badge';
 
 describe('generate-multi-tenant-badge helpers', () => {
   it('parses badge arguments with overrides', () => {

@@ -67,7 +67,11 @@ export async function sendToSunat(
   } catch (error: any) {
     console.error('Error al enviar el archivo a la SUNAT:', error.message);
     if (error.response) {
-      console.error('Respuesta de SUNAT:', error.response.status, error.response.data);
+      console.error(
+        'Respuesta de SUNAT:',
+        error.response.status,
+        error.response.data,
+      );
     }
     throw error;
   }

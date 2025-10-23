@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { zonedTimeToUtc } from 'date-fns-tz';
 import { EntriesRepository } from './services/entries.repository';
 import {
@@ -36,7 +40,7 @@ export class EntriesService {
   constructor(private readonly repo: EntriesRepository) {}
 
   private normalizeInvoiceUrl(value?: string | null): string | undefined {
-    if (typeof value !== "string") {
+    if (typeof value !== 'string') {
       return undefined;
     }
     const trimmed = value.trim();
@@ -47,11 +51,11 @@ export class EntriesService {
     if (!entry) {
       return undefined;
     }
-    const source = (entry as any).source;
-    if (source !== "inventory_entry") {
+    const source = entry.source;
+    if (source !== 'inventory_entry') {
       return undefined;
     }
-    const sourceId = Number((entry as any).sourceId);
+    const sourceId = Number(entry.sourceId);
     return Number.isInteger(sourceId) ? sourceId : undefined;
   }
 
@@ -59,7 +63,7 @@ export class EntriesService {
     entry: any,
     inventoryInvoices?: Map<number, string | undefined>,
   ): string | undefined {
-    const direct = this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined);
+    const direct = this.normalizeInvoiceUrl(entry?.invoiceUrl ?? undefined);
     if (direct) {
       return direct;
     }
@@ -77,159 +81,171 @@ export class EntriesService {
   }
 
   async findAll(params: {
-  period?: string;
-  from?: string;
-  to?: string;
-  tz?: string;
-  page?: number;
-  size?: number;
-}): Promise<{ data: Entry[]; total: number }> {
-  const { period, from, to, tz = 'America/Lima', page = 1, size = 25 } = params;
+    period?: string;
+    from?: string;
+    to?: string;
+    tz?: string;
+    page?: number;
+    size?: number;
+  }): Promise<{ data: Entry[]; total: number }> {
+    const {
+      period,
+      from,
+      to,
+      tz = 'America/Lima',
+      page = 1,
+      size = 25,
+    } = params;
 
-  // Normaliza YYYY-MM-DD a rango del dia en tz; si viene ISO, se usa tal cual
-  const toDayStart = (d: string | undefined) => (d && d.length === 10 ? `${d}T00:00:00` : d);
-  const toDayEnd = (d: string | undefined) => (d && d.length === 10 ? `${d}T23:59:59.999` : d);
+    // Normaliza YYYY-MM-DD a rango del dia en tz; si viene ISO, se usa tal cual
+    const toDayStart = (d: string | undefined) =>
+      d && d.length === 10 ? `${d}T00:00:00` : d;
+    const toDayEnd = (d: string | undefined) =>
+      d && d.length === 10 ? `${d}T23:59:59.999` : d;
 
-  const fromIso = toDayStart(from ?? undefined);
-  const toIso = toDayEnd(to ?? from ?? undefined);
+    const fromIso = toDayStart(from ?? undefined);
+    const toIso = toDayEnd(to ?? from ?? undefined);
 
-  const fromUtc = fromIso ? zonedTimeToUtc(fromIso, tz) : undefined;
-  const toUtc = toIso ? zonedTimeToUtc(toIso, tz) : undefined;
+    const fromUtc = fromIso ? zonedTimeToUtc(fromIso, tz) : undefined;
+    const toUtc = toIso ? zonedTimeToUtc(toIso, tz) : undefined;
 
-  const { data, total } = await this.repo.findAll({
-    period,
-    from: fromUtc,
-    to: toUtc,
-    skip: (page - 1) * size,
-    take: size,
-  });
+    const { data, total } = await this.repo.findAll({
+      period,
+      from: fromUtc,
+      to: toUtc,
+      skip: (page - 1) * size,
+      take: size,
+    });
 
-  const entriesNeedingInvoice = data.filter(
-    (entry) =>
+    const entriesNeedingInvoice = data.filter(
+      (entry) =>
+        !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
+        this.getInventorySourceId(entry) !== undefined,
+    );
+
+    const inventorySourceIds = Array.from(
+      new Set(
+        entriesNeedingInvoice
+          .map((entry) => this.getInventorySourceId(entry))
+          .filter(
+            (id): id is number =>
+              typeof id === 'number' && Number.isInteger(id) && id > 0,
+          ),
+      ),
+    );
+
+    const inventoryInvoices =
+      inventorySourceIds.length > 0
+        ? await this.repo.findInventoryPdfUrls(inventorySourceIds)
+        : undefined;
+
+    return {
+      data: data.map((e) => ({
+        id: e.id,
+        period: e.period.name,
+        date: e.date,
+        description: (e as any).description ?? undefined,
+        provider: (e.provider as any)?.name ?? undefined,
+        serie: (e as any).serie ?? undefined,
+        correlativo: (e as any).correlativo ?? undefined,
+        invoiceUrl: this.buildInvoiceUrlFromEntry(e, inventoryInvoices),
+        source: (e as any).source ?? undefined,
+        sourceId: (e as any).sourceId ?? undefined,
+        status: e.status,
+        totalDebit: e.totalDebit,
+        totalCredit: e.totalCredit,
+        lines: e.lines.map((l) => ({
+          account: l.account,
+          description: l.description ?? undefined,
+          debit: Number((l as any).debit ?? 0),
+          credit: Number((l as any).credit ?? 0),
+          quantity: (l as any).quantity ?? undefined,
+        })),
+      })),
+      total,
+    };
+  }
+
+  async findOne(id: number): Promise<Entry> {
+    const entry = await this.repo.findOne(id);
+    if (!entry) {
+      throw new NotFoundException(`Entry ${id} not found`);
+    }
+
+    const sourceId = this.getInventorySourceId(entry);
+    const needsInventoryLookup =
       !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
-      this.getInventorySourceId(entry) !== undefined,
-  );
+      sourceId !== undefined;
+    const inventoryInvoices =
+      needsInventoryLookup && sourceId !== undefined
+        ? await this.repo.findInventoryPdfUrls([sourceId])
+        : undefined;
+    const invoiceUrl = this.buildInvoiceUrlFromEntry(entry, inventoryInvoices);
 
-  const inventorySourceIds = Array.from(
-    new Set(
-      entriesNeedingInvoice
-        .map((entry) => this.getInventorySourceId(entry))
-        .filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0),
-    ),
-  );
-
-  const inventoryInvoices =
-    inventorySourceIds.length > 0
-      ? await this.repo.findInventoryPdfUrls(inventorySourceIds)
-      : undefined;
-
-  return {
-    data: data.map((e) => ({
-      id: e.id,
-      period: e.period.name,
-      date: e.date,
-      description: (e as any).description ?? undefined,
-      provider: (e.provider as any)?.name ?? undefined,
-      serie: (e as any).serie ?? undefined,
-      correlativo: (e as any).correlativo ?? undefined,
-      invoiceUrl: this.buildInvoiceUrlFromEntry(e, inventoryInvoices),
-      source: (e as any).source ?? undefined,
-      sourceId: (e as any).sourceId ?? undefined,
-      status: e.status,
-      totalDebit: e.totalDebit,
-      totalCredit: e.totalCredit,
-      lines: e.lines.map((l) => ({
+    return {
+      id: entry.id,
+      period: entry.period.name,
+      date: entry.date,
+      description: (entry as any).description ?? undefined,
+      provider: (entry.provider as any)?.name ?? undefined,
+      serie: (entry as any).serie ?? undefined,
+      correlativo: (entry as any).correlativo ?? undefined,
+      invoiceUrl,
+      source: (entry as any).source ?? undefined,
+      sourceId: (entry as any).sourceId ?? undefined,
+      status: entry.status,
+      totalDebit: entry.totalDebit,
+      totalCredit: entry.totalCredit,
+      lines: entry.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
         debit: Number((l as any).debit ?? 0),
         credit: Number((l as any).credit ?? 0),
         quantity: (l as any).quantity ?? undefined,
       })),
-    })),
-    total,
-  };
-}
-
-  async findOne(id: number): Promise<Entry> {
-  const entry = await this.repo.findOne(id);
-  if (!entry) {
-    throw new NotFoundException(`Entry ${id} not found`);
+    };
   }
-
-  const sourceId = this.getInventorySourceId(entry);
-  const needsInventoryLookup =
-    !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
-    sourceId !== undefined;
-  const inventoryInvoices =
-    needsInventoryLookup && sourceId !== undefined
-      ? await this.repo.findInventoryPdfUrls([sourceId])
-      : undefined;
-  const invoiceUrl = this.buildInvoiceUrlFromEntry(entry, inventoryInvoices);
-
-  return {
-    id: entry.id,
-    period: entry.period.name,
-    date: entry.date,
-    description: (entry as any).description ?? undefined,
-    provider: (entry.provider as any)?.name ?? undefined,
-    serie: (entry as any).serie ?? undefined,
-    correlativo: (entry as any).correlativo ?? undefined,
-    invoiceUrl,
-    source: (entry as any).source ?? undefined,
-    sourceId: (entry as any).sourceId ?? undefined,
-    status: entry.status,
-    totalDebit: entry.totalDebit,
-    totalCredit: entry.totalCredit,
-    lines: entry.lines.map((l) => ({
-      account: l.account,
-      description: l.description ?? undefined,
-      debit: Number((l as any).debit ?? 0),
-      credit: Number((l as any).credit ?? 0),
-      quantity: (l as any).quantity ?? undefined,
-    })),
-  };
-}
 
   async findByInvoice(
     serie: string,
     correlativo: string,
-): Promise<Entry | null> {
-  const entry = await this.repo.findByInvoice(serie, correlativo);
-  if (!entry) {
-    return null;
+  ): Promise<Entry | null> {
+    const entry = await this.repo.findByInvoice(serie, correlativo);
+    if (!entry) {
+      return null;
+    }
+
+    const sourceId = this.getInventorySourceId(entry);
+    const needsInventoryLookup =
+      !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
+      sourceId !== undefined;
+    const inventoryInvoices =
+      needsInventoryLookup && sourceId !== undefined
+        ? await this.repo.findInventoryPdfUrls([sourceId])
+        : undefined;
+    const invoiceUrl = this.buildInvoiceUrlFromEntry(entry, inventoryInvoices);
+
+    return {
+      id: entry.id,
+      period: entry.period.name,
+      date: entry.date,
+      description: (entry as any).description ?? undefined,
+      provider: (entry.provider as any)?.name ?? undefined,
+      serie: (entry as any).serie ?? undefined,
+      correlativo: (entry as any).correlativo ?? undefined,
+      invoiceUrl,
+      status: entry.status,
+      totalDebit: entry.totalDebit,
+      totalCredit: entry.totalCredit,
+      lines: entry.lines.map((l) => ({
+        account: l.account,
+        description: l.description ?? undefined,
+        debit: Number((l as any).debit ?? 0),
+        credit: Number((l as any).credit ?? 0),
+        quantity: (l as any).quantity ?? undefined,
+      })),
+    };
   }
-
-  const sourceId = this.getInventorySourceId(entry);
-  const needsInventoryLookup =
-    !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
-    sourceId !== undefined;
-  const inventoryInvoices =
-    needsInventoryLookup && sourceId !== undefined
-      ? await this.repo.findInventoryPdfUrls([sourceId])
-      : undefined;
-  const invoiceUrl = this.buildInvoiceUrlFromEntry(entry, inventoryInvoices);
-
-  return {
-    id: entry.id,
-    period: entry.period.name,
-    date: entry.date,
-    description: (entry as any).description ?? undefined,
-    provider: (entry.provider as any)?.name ?? undefined,
-    serie: (entry as any).serie ?? undefined,
-    correlativo: (entry as any).correlativo ?? undefined,
-    invoiceUrl,
-    status: entry.status,
-    totalDebit: entry.totalDebit,
-    totalCredit: entry.totalCredit,
-    lines: entry.lines.map((l) => ({
-      account: l.account,
-      description: l.description ?? undefined,
-      debit: Number((l as any).debit ?? 0),
-      credit: Number((l as any).credit ?? 0),
-      quantity: (l as any).quantity ?? undefined,
-    })),
-  };
-}
 
   async createDraft(data: {
     period: string;
@@ -258,9 +274,9 @@ export class EntriesService {
       serie: data.serie,
       correlativo: data.correlativo,
       invoiceUrl: data.invoiceUrl,
-      lines: data.lines.map(line => ({
+      lines: data.lines.map((line) => ({
         ...line,
-        quantity: line.quantity ?? undefined
+        quantity: line.quantity ?? undefined,
       })),
     });
     return {

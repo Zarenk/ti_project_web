@@ -31,9 +31,11 @@ export class TenantContextService {
     this.context = {
       ...this.context,
       ...partial,
-      allowedOrganizationIds: partial.allowedOrganizationIds ?? this.context.allowedOrganizationIds,
+      allowedOrganizationIds:
+        partial.allowedOrganizationIds ?? this.context.allowedOrganizationIds,
       allowedOrganizationUnitIds:
-        partial.allowedOrganizationUnitIds ?? this.context.allowedOrganizationUnitIds,
+        partial.allowedOrganizationUnitIds ??
+        this.context.allowedOrganizationUnitIds,
     };
   }
 
@@ -49,15 +51,22 @@ export class TenantContextService {
       user.organizationUnits ?? user.organizationUnitIds ?? [],
     );
 
-    const organizationId = headerOrgId ?? defaultOrgId ?? allowedOrganizationIds[0] ?? null;
+    const organizationId =
+      headerOrgId ?? defaultOrgId ?? allowedOrganizationIds[0] ?? null;
     const organizationUnitId =
-      headerOrgUnitId ?? defaultOrgUnitId ?? allowedOrganizationUnitIds[0] ?? null;
+      headerOrgUnitId ??
+      defaultOrgUnitId ??
+      allowedOrganizationUnitIds[0] ??
+      null;
 
     const context: TenantContext = {
       organizationId,
       organizationUnitId,
       userId: this.normalizeId(user.id),
-      isSuperAdmin: Boolean(user.isSuperAdmin || (user.role && user.role.toLowerCase() === 'super_admin')),
+      isSuperAdmin: Boolean(
+        user.isSuperAdmin ||
+          (user.role && user.role.toLowerCase() === 'super_admin'),
+      ),
       allowedOrganizationIds,
       allowedOrganizationUnitIds,
     };
@@ -65,7 +74,9 @@ export class TenantContextService {
     return context;
   }
 
-  private normalizeId(value: string | number | string[] | undefined | null): number | null {
+  private normalizeId(
+    value: string | number | string[] | undefined | null,
+  ): number | null {
     if (Array.isArray(value)) {
       return this.normalizeId(value[0]);
     }
@@ -74,7 +85,8 @@ export class TenantContextService {
       return null;
     }
 
-    const parsed = typeof value === 'string' ? Number.parseInt(value, 10) : value;
+    const parsed =
+      typeof value === 'string' ? Number.parseInt(value, 10) : value;
     return Number.isFinite(parsed) ? Number(parsed) : null;
   }
 
@@ -87,7 +99,7 @@ export class TenantContextService {
     const normalized: number[] = [];
 
     for (const raw of values) {
-      const id = this.normalizeId(raw as any);
+      const id = this.normalizeId(raw);
       if (id === null || seen.has(id)) {
         continue;
       }

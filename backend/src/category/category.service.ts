@@ -13,7 +13,6 @@ import { ActivityService } from 'src/activity/activity.service';
 
 @Injectable()
 export class CategoryService {
-  
   constructor(
     private prismaService: PrismaService,
     private activityService: ActivityService,
@@ -51,20 +50,20 @@ export class CategoryService {
   }
 
   async verifyOrCreateDefaultCategory() {
-    const defaultCategoryName = "Sin categoria";
-  
+    const defaultCategoryName = 'Sin categoria';
+
     // Verificar si la categoría ya existe
     let category = await this.prismaService.category.findUnique({
       where: { name: defaultCategoryName },
     });
-  
+
     // Si no existe, crearla
     if (!category) {
       category = await this.prismaService.category.create({
         data: { name: defaultCategoryName },
       });
     }
-  
+
     return category;
   }
 
@@ -74,7 +73,7 @@ export class CategoryService {
       const existingCategory = await this.prismaService.category.findUnique({
         where: { name: category.name },
       });
-  
+
       if (existingCategory) {
         verifiedCategories.push(existingCategory);
       }
@@ -83,16 +82,16 @@ export class CategoryService {
   }
 
   findAll() {
-     return this.prismaService.category.findMany({
+    return this.prismaService.category.findMany({
       orderBy: { name: 'asc' },
-    })
+    });
   }
 
   async findAllWithProductCount() {
     const categories = await this.prismaService.category.findMany({
       orderBy: { name: 'asc' },
       include: { _count: { select: { products: true } } },
-    })
+    });
 
     return categories.map((cat) => ({
       id: cat.id,
@@ -101,21 +100,21 @@ export class CategoryService {
       status: cat.status,
       image: cat.image,
       productCount: cat._count.products,
-    }))
+    }));
   }
 
   async findOne(id: number) {
-
     if (!id || typeof id !== 'number') {
       throw new Error('El ID proporcionado no es válido.');
     }
 
-    const productFound = await this.prismaService.category.findUnique({ // NO OLVIDAR EL AWAIT O ASYNC CON FUNCIONES
-      where: {id: id,},
-    })
+    const productFound = await this.prismaService.category.findUnique({
+      // NO OLVIDAR EL AWAIT O ASYNC CON FUNCIONES
+      where: { id: id },
+    });
 
-    if(!productFound){
-      throw new NotFoundException(`Categoria with id ${id} not found`)
+    if (!productFound) {
+      throw new NotFoundException(`Categoria with id ${id} not found`);
     }
 
     return productFound;
@@ -131,8 +130,8 @@ export class CategoryService {
         data: updateCategoryDto,
       });
 
-      if(!categoryFound){
-        throw new NotFoundException(`Category with id ${id} not found`)
+      if (!categoryFound) {
+        throw new NotFoundException(`Category with id ${id} not found`);
       }
 
       await this.activityService.log(
@@ -149,23 +148,21 @@ export class CategoryService {
       );
 
       return categoryFound;
-    }
-    catch (error) {
+    } catch (error) {
       if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === "P2002"
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
       ) {
-          throw new ConflictException(
-          `El producto con el nombre "${updateCategoryDto.name}" ya existe.`
+        throw new ConflictException(
+          `El producto con el nombre "${updateCategoryDto.name}" ya existe.`,
         );
       }
-      console.error("Error en el backend:", error);
+      console.error('Error en el backend:', error);
       throw error; // Lanza otros errores no manejados
     }
   }
 
   async remove(id: number, req: Request) {
-
     // Verificar si la categoría tiene productos relacionados
     const relatedProducts = await this.prismaService.product.findMany({
       where: { categoryId: id },
@@ -178,13 +175,13 @@ export class CategoryService {
     }
     // Proceder con la eliminación si no hay productos relacionados
     const deteledCategory = this.prismaService.category.delete({
-      where:{
+      where: {
         id,
-      }
-    })
+      },
+    });
 
-    if(!deteledCategory){
-      throw new NotFoundException(`Categoria with id ${id} not found`)
+    if (!deteledCategory) {
+      throw new NotFoundException(`Categoria with id ${id} not found`);
     }
 
     await this.activityService.log(
@@ -205,7 +202,9 @@ export class CategoryService {
 
   async removes(ids: number[], req: Request) {
     if (!Array.isArray(ids) || ids.length === 0) {
-      throw new NotFoundException('No se proporcionaron IDs válidos para eliminar.');
+      throw new NotFoundException(
+        'No se proporcionaron IDs válidos para eliminar.',
+      );
     }
 
     // Verificar si alguna de las categorías tiene productos relacionados
@@ -219,10 +218,10 @@ export class CategoryService {
 
     if (relatedProducts.length > 0) {
       throw new ConflictException(
-        `No se pueden eliminar las categorías porque algunas tienen productos relacionados.`
+        `No se pueden eliminar las categorías porque algunas tienen productos relacionados.`,
       );
     }
-  
+
     // Proceder con la eliminación si no hay productos relacionados
     try {
       const deletedCategories = await this.prismaService.category.deleteMany({
@@ -232,9 +231,11 @@ export class CategoryService {
           },
         },
       });
-  
+
       if (deletedCategories.count === 0) {
-        throw new NotFoundException('No se encontraron categorias con los IDs proporcionados.');
+        throw new NotFoundException(
+          'No se encontraron categorias con los IDs proporcionados.',
+        );
       }
 
       await this.activityService.log(
@@ -248,12 +249,14 @@ export class CategoryService {
         },
         req,
       );
-  
+
       return {
         message: `${deletedCategories.count} categoria(s) eliminado(s) correctamente.`,
       };
     } catch (error) {
-      throw new InternalServerErrorException('Hubo un error al eliminar los productos.');
+      throw new InternalServerErrorException(
+        'Hubo un error al eliminar los productos.',
+      );
     }
   }
 }

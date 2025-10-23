@@ -2,7 +2,9 @@ import { TenantContextService } from './tenant-context.service';
 import { Request } from 'express';
 
 describe('TenantContextService', () => {
-  const createService = (requestOverrides: Partial<Request> & { user?: any } = {}) => {
+  const createService = (
+    requestOverrides: Partial<Request> & { user?: any } = {},
+  ) => {
     const request = {
       headers: {},
       user: {},

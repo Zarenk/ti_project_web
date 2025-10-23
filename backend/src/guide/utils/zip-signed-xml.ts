@@ -4,7 +4,7 @@ import AdmZip from 'adm-zip';
 
 /**
  * Comprime un XML firmado en un archivo ZIP con el formato requerido por SUNAT.
- * 
+ *
  * @param xmlFilePath Ruta absoluta al archivo XML firmado
  * @param ruc RUC del emisor (remitente)
  * @param fileNameWithoutExtension Nombre base sin extensión (ej: T001-00012345)
@@ -13,7 +13,7 @@ import AdmZip from 'adm-zip';
 export function zipSignedXmlFromString(
   xmlContent: string,
   ruc: string,
-  fileNameWithoutExtension: string
+  fileNameWithoutExtension: string,
 ): Buffer {
   const tipoCpe = '09'; // guía
   const finalXmlName = `${ruc}-${tipoCpe}-${fileNameWithoutExtension}.xml`;

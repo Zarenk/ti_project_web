@@ -25,7 +25,11 @@ export class UsersController {
     @Request() req: ExpressRequest,
   ) {
     console.log('Solicitud de login recibida:', body);
-    const user = await this.usersService.validateUser(body.email, body.password, req);
+    const user = await this.usersService.validateUser(
+      body.email,
+      body.password,
+      req,
+    );
     const token = await this.usersService.login(user, req);
     console.log('Token generado:', token);
     return token;
@@ -34,7 +38,14 @@ export class UsersController {
   @Post('register')
   async register(
     @Body()
-    body: { email: string; username?: string; password: string; role: string; status?: string; organizationId?: number | null },
+    body: {
+      email: string;
+      username?: string;
+      password: string;
+      role: string;
+      status?: string;
+      organizationId?: number | null;
+    },
   ) {
     return this.usersService.register(body);
   }
@@ -67,18 +78,20 @@ export class UsersController {
   @Get('profileid')
   async getProfileId(@Request() req) {
     const user = await this.usersService.findOne(req.user.userId);
-  
+
     if (!user) {
-      throw new NotFoundException(`No se encontró el usuario con ID ${req.user.userId}`);
+      throw new NotFoundException(
+        `No se encontró el usuario con ID ${req.user.userId}`,
+      );
     }
-  
+
     return { id: user.id, name: user.username }; // Devuelve solo los datos necesarios
   }
 
   @Get()
-  @ApiResponse({status: 200, description: 'Return all users'}) // Swagger
-    findAll() {
-      return this.usersService.findAll();
+  @ApiResponse({ status: 200, description: 'Return all users' }) // Swagger
+  findAll() {
+    return this.usersService.findAll();
   }
 
   @UseGuards(JwtAuthGuard)

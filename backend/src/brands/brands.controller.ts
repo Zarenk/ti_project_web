@@ -14,7 +14,10 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
+import {
+  FileInterceptor,
+  FileFieldsInterceptor,
+} from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
@@ -89,7 +92,9 @@ export class BrandsController {
         fileFilter: (req, file, cb) => {
           if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
             return cb(
-              new BadRequestException('Solo se permiten archivos PNG, JPG o SVG'),
+              new BadRequestException(
+                'Solo se permiten archivos PNG, JPG o SVG',
+              ),
               false,
             );
           }
@@ -98,7 +103,6 @@ export class BrandsController {
       },
     ),
   )
-
   async create(
     @Body() createBrandDto: CreateBrandDto,
     @UploadedFiles()
@@ -120,10 +124,7 @@ export class BrandsController {
   }
 
   @Get()
-  findAll(
-    @Query('page') page = '1',
-    @Query('limit') limit = '10',
-  ) {
+  findAll(@Query('page') page = '1', @Query('limit') limit = '10') {
     return this.brandsService.findAll(+page, +limit);
   }
 
@@ -151,7 +152,9 @@ export class BrandsController {
         fileFilter: (req, file, cb) => {
           if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
             return cb(
-              new BadRequestException('Solo se permiten archivos PNG, JPG o SVG'),
+              new BadRequestException(
+                'Solo se permiten archivos PNG, JPG o SVG',
+              ),
               false,
             );
           }
@@ -160,7 +163,6 @@ export class BrandsController {
       },
     ),
   )
-
   async update(
     @Param('id') id: string,
     @Body() updateBrandDto: UpdateBrandDto,
@@ -236,7 +238,10 @@ export class BrandsController {
     if (!file) {
       throw new BadRequestException('No se proporcionó ningún archivo');
     }
-    if (file.mimetype === 'image/png' || JPEG_MIME_TYPES.includes(file.mimetype)) {
+    if (
+      file.mimetype === 'image/png' ||
+      JPEG_MIME_TYPES.includes(file.mimetype)
+    ) {
       const paths = await this.processImage(file);
       return this.brandsService.update(+id, paths, req);
     }

@@ -1,7 +1,7 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { PrismaService } from "src/prisma/prisma.service";
-import { UserRole } from "@prisma/client";
-import * as bcrypt from "bcrypt";
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { UserRole } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class DefaultAdminService implements OnModuleInit {
@@ -10,9 +10,11 @@ export class DefaultAdminService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit(): Promise<void> {
-    const email = process.env.DEFAULT_ADMIN_EMAIL ?? "jdzare@gmail.com";
-    const rawPassword = process.env.DEFAULT_ADMIN_PASSWORD ?? "chuscasas19911991";
-    const baseUsername = process.env.DEFAULT_ADMIN_USERNAME ?? email.split("@")[0];
+    const email = process.env.DEFAULT_ADMIN_EMAIL ?? 'jdzare@gmail.com';
+    const rawPassword =
+      process.env.DEFAULT_ADMIN_PASSWORD ?? 'chuscasas19911991';
+    const baseUsername =
+      process.env.DEFAULT_ADMIN_USERNAME ?? email.split('@')[0];
 
     const exists = await this.prisma.user.findUnique({ where: { email } });
     if (exists) {
@@ -36,7 +38,7 @@ export class DefaultAdminService implements OnModuleInit {
         username,
         password: hashedPassword,
         role: UserRole.ADMIN,
-        status: "ACTIVO",
+        status: 'ACTIVO',
       },
     });
 

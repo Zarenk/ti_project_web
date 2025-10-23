@@ -7,8 +7,15 @@ interface SunatResponse {
 }
 
 export async function sendDespatchToSunat(zipPath: string, zipName: string) {
-  const wsdlPath = path.join(process.cwd(), 'src', 'guide', 'wsdl', 'guia.wsdl');
-  const endpoint = 'https://e-beta.sunat.gob.pe/ol-ti-itemision-guia-gem-beta/billService';
+  const wsdlPath = path.join(
+    process.cwd(),
+    'src',
+    'guide',
+    'wsdl',
+    'guia.wsdl',
+  );
+  const endpoint =
+    'https://e-beta.sunat.gob.pe/ol-ti-itemision-guia-gem-beta/billService';
 
   if (!fs.existsSync(wsdlPath)) {
     throw new Error(`El archivo WSDL no se encontró en la ruta: ${wsdlPath}`);
@@ -31,12 +38,11 @@ export async function sendDespatchToSunat(zipPath: string, zipName: string) {
   return new Promise<SunatResponse>((resolve, reject) => {
     client.sendBill(args, (err: any, result: SunatResponse, rawResponse) => {
       if (err) {
-            console.error('Error completo:', err);
-            return reject(err);
-        }
-        console.log('Respuesta completa:', rawResponse);
-        resolve(result);
+        console.error('Error completo:', err);
+        return reject(err);
+      }
+      console.log('Respuesta completa:', rawResponse);
+      resolve(result);
     });
   });
 }
-

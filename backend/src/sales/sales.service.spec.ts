@@ -57,14 +57,10 @@ describe('SalesService multi-organization support', () => {
     clientId: 30,
     total: 100,
     description: 'Test sale',
-    details: [
-      { productId: 1, quantity: 2, price: 50 },
-    ],
+    details: [{ productId: 1, quantity: 2, price: 50 }],
     tipoComprobante: 'BOL',
     tipoMoneda: 'PEN',
-    payments: [
-      { paymentMethodId: 1, amount: 100, currency: 'PEN' },
-    ],
+    payments: [{ paymentMethodId: 1, amount: 100, currency: 'PEN' }],
   };
 
   beforeEach(() => {
@@ -79,7 +75,9 @@ describe('SalesService multi-organization support', () => {
         deleteMany: jest.fn(),
       },
       user: {
-        findUnique: jest.fn().mockResolvedValue({ username: 'seller@example.com' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ username: 'seller@example.com' }),
       },
       sales: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -228,7 +226,7 @@ describe('SalesService multi-organization support', () => {
       }),
     );
   });
-  
+
   it('rejects mismatching organizationId between payload and store', async () => {
     (prepareSaleContext as jest.Mock).mockResolvedValue({
       store: { id: baseSaleInput.storeId, name: 'Store', organizationId: 999 },
@@ -241,7 +239,9 @@ describe('SalesService multi-organization support', () => {
         ...baseSaleInput,
         organizationId: 123,
       }),
-    ).rejects.toThrow('La organización proporcionada no coincide con la tienda seleccionada.');
+    ).rejects.toThrow(
+      'La organización proporcionada no coincide con la tienda seleccionada.',
+    );
   });
 
   it('applies organization filters when listing sales', async () => {
@@ -342,7 +342,11 @@ describe('SalesService multi-organization support', () => {
         tipoMoneda: 'PEN',
         client: { name: 'Alpha Cliente' },
         invoices: [
-          { serie: 'F001', nroCorrelativo: '000123', tipoComprobante: 'FACTURA' },
+          {
+            serie: 'F001',
+            nroCorrelativo: '000123',
+            tipoComprobante: 'FACTURA',
+          },
         ],
         payments: [
           {
@@ -391,7 +395,7 @@ describe('SalesService multi-organization support', () => {
       },
     ]);
   });
-  
+
   describe('deleteSale', () => {
     it('propagates the organizationId to the inventory history when deleting a sale with tenant context', async () => {
       const sale = {
@@ -400,7 +404,12 @@ describe('SalesService multi-organization support', () => {
         userId: 42,
         organizationId: 77,
         store: { id: 9, name: 'Tenant Store' },
-        client: { id: 10, name: 'Tenant Client', type: 'PERSON', typeNumber: 'TC-1' },
+        client: {
+          id: 10,
+          name: 'Tenant Client',
+          type: 'PERSON',
+          typeNumber: 'TC-1',
+        },
         salesDetails: [
           {
             storeOnInventoryId: 30,
@@ -434,7 +443,9 @@ describe('SalesService multi-organization support', () => {
             update: jest.fn().mockResolvedValue(undefined),
           },
           inventoryHistory: { create: inventoryHistoryCreate },
-          entryDetailSeries: { updateMany: jest.fn().mockResolvedValue(undefined) },
+          entryDetailSeries: {
+            updateMany: jest.fn().mockResolvedValue(undefined),
+          },
           salePayment: { deleteMany: jest.fn().mockResolvedValue(undefined) },
           shippingGuide: { updateMany: jest.fn().mockResolvedValue(undefined) },
           orders: { update: jest.fn().mockResolvedValue(undefined) },
@@ -461,7 +472,12 @@ describe('SalesService multi-organization support', () => {
         userId: 11,
         organizationId: null,
         store: { id: 1, name: 'Legacy Store' },
-        client: { id: 2, name: 'Legacy Client', type: 'PERSON', typeNumber: 'LC-1' },
+        client: {
+          id: 2,
+          name: 'Legacy Client',
+          type: 'PERSON',
+          typeNumber: 'LC-1',
+        },
         salesDetails: [
           {
             storeOnInventoryId: 15,
@@ -495,7 +511,9 @@ describe('SalesService multi-organization support', () => {
             update: jest.fn().mockResolvedValue(undefined),
           },
           inventoryHistory: { create: inventoryHistoryCreate },
-          entryDetailSeries: { updateMany: jest.fn().mockResolvedValue(undefined) },
+          entryDetailSeries: {
+            updateMany: jest.fn().mockResolvedValue(undefined),
+          },
           salePayment: { deleteMany: jest.fn().mockResolvedValue(undefined) },
           shippingGuide: { updateMany: jest.fn().mockResolvedValue(undefined) },
           orders: { update: jest.fn().mockResolvedValue(undefined) },
@@ -515,5 +533,4 @@ describe('SalesService multi-organization support', () => {
       });
     });
   });
-  
 });

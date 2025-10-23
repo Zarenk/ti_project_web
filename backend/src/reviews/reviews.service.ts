@@ -7,9 +7,16 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class ReviewsService {
   constructor(private prisma: PrismaService) {}
 
-  upsertReview(data: { userId: number; productId: number; rating: number; comment?: string | null }) {
+  upsertReview(data: {
+    userId: number;
+    productId: number;
+    rating: number;
+    comment?: string | null;
+  }) {
     return this.prisma.review.upsert({
-      where: { productId_userId: { productId: data.productId, userId: data.userId } },
+      where: {
+        productId_userId: { productId: data.productId, userId: data.userId },
+      },
       update: { rating: data.rating, comment: data.comment },
       create: {
         rating: data.rating,
@@ -17,7 +24,7 @@ export class ReviewsService {
         product: { connect: { id: data.productId } },
         user: { connect: { id: data.userId } },
       },
-    })
+    });
   }
 
   getReviewsForProduct(productId: number) {
@@ -25,6 +32,6 @@ export class ReviewsService {
       where: { productId },
       include: { user: { select: { id: true, username: true } } },
       orderBy: { createdAt: 'desc' },
-    })
+    });
   }
 }

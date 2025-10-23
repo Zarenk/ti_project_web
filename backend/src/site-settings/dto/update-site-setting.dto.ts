@@ -1,4 +1,9 @@
-import { IsDateString, IsNotEmptyObject, IsObject, IsOptional } from 'class-validator';
+import {
+  IsDateString,
+  IsNotEmptyObject,
+  IsObject,
+  IsOptional,
+} from 'class-validator';
 
 type SettingsPayload = Record<string, unknown>;
 

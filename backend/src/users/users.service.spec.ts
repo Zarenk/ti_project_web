@@ -67,8 +67,7 @@ describe('UsersService multi-organization support', () => {
     (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
-    logOrganizationContextMock =
-      logOrganizationContext as unknown as jest.Mock;
+    logOrganizationContextMock = logOrganizationContext as unknown as jest.Mock;
     logOrganizationContextMock.mockClear();
   });
 
@@ -227,14 +226,12 @@ describe('UsersService multi-organization support', () => {
   });
 
   it('propagates organizationId when syncing profile updates with existing client', async () => {
-    const updateSpy = jest
-      .spyOn(service, 'update')
-      .mockResolvedValue({
-        id: 5,
-        email: 'profile@example.com',
-        username: 'profile',
-        organizationId: 91,
-      } as any);
+    const updateSpy = jest.spyOn(service, 'update').mockResolvedValue({
+      id: 5,
+      email: 'profile@example.com',
+      username: 'profile',
+      organizationId: 91,
+    } as any);
 
     prisma.client.findUnique.mockResolvedValue({ id: 7 });
     prisma.client.update.mockResolvedValue({ id: 7 });
@@ -245,7 +242,10 @@ describe('UsersService multi-organization support', () => {
     });
 
     expect(result).toEqual(
-      expect.objectContaining({ organizationId: 91, email: 'profile@example.com' }),
+      expect.objectContaining({
+        organizationId: 91,
+        email: 'profile@example.com',
+      }),
     );
     expect(updateSpy).toHaveBeenCalledWith(5, { organizationId: 91 });
     expect(prisma.client.update).toHaveBeenCalledWith(
@@ -265,14 +265,12 @@ describe('UsersService multi-organization support', () => {
   });
 
   it('defaults organizationId to null when creating client during profile sync', async () => {
-    const updateSpy = jest
-      .spyOn(service, 'update')
-      .mockResolvedValue({
-        id: 6,
-        email: 'newclient@example.com',
-        username: 'newclient',
-        organizationId: null,
-      } as any);
+    const updateSpy = jest.spyOn(service, 'update').mockResolvedValue({
+      id: 6,
+      email: 'newclient@example.com',
+      username: 'newclient',
+      organizationId: null,
+    } as any);
 
     prisma.client.findUnique.mockResolvedValue(null);
     prisma.client.create.mockResolvedValue({ id: 9 });
@@ -282,7 +280,10 @@ describe('UsersService multi-organization support', () => {
     });
 
     expect(result).toEqual(
-      expect.objectContaining({ organizationId: null, email: 'newclient@example.com' }),
+      expect.objectContaining({
+        organizationId: null,
+        email: 'newclient@example.com',
+      }),
     );
     expect(updateSpy).toHaveBeenCalledWith(6, {});
     expect(prisma.client.create).toHaveBeenCalledWith(

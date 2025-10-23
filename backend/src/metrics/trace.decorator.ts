@@ -5,7 +5,9 @@ export function TraceMethod(name?: string): MethodDecorator {
     const original = descriptor.value;
     descriptor.value = function (...args: any[]) {
       const tracer = trace.getTracer('default');
-      const span = tracer.startSpan(name || `${target.constructor.name}.${String(propertyKey)}`);
+      const span = tracer.startSpan(
+        name || `${target.constructor.name}.${String(propertyKey)}`,
+      );
       try {
         const result = original.apply(this, args);
         if (result && typeof result.then === 'function') {

@@ -41,7 +41,8 @@ export class CatalogCoverController {
     if (!cover) {
       return { cover: null };
     }
-    const baseUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+    const baseUrl =
+      process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
     return {
       cover: {
         ...cover,
@@ -72,14 +73,20 @@ export class CatalogCoverController {
       }),
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/^image\/(jpeg|png)$/)) {
-          return cb(new BadRequestException('Solo se permiten imagenes JPG o PNG'), false);
+          return cb(
+            new BadRequestException('Solo se permiten imagenes JPG o PNG'),
+            false,
+          );
         }
         cb(null, true);
       },
       limits: { fileSize: 5 * 1024 * 1024 },
     }),
   )
-  async uploadCover(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
+  async uploadCover(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+  ) {
     if (!file) {
       throw new BadRequestException('Debes adjuntar una imagen');
     }
@@ -101,7 +108,8 @@ export class CatalogCoverController {
       });
     });
 
-    const baseUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+    const baseUrl =
+      process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
     return {
       cover: {
         ...cover,
@@ -110,6 +118,3 @@ export class CatalogCoverController {
     };
   }
 }
-
-
-

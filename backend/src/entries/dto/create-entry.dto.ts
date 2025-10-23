@@ -2,7 +2,10 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { EntryPaymentMethod, PaymentTerm } from '@prisma/client';
 
 export class CreateEntryDto {
-  @ApiPropertyOptional({ enum: EntryPaymentMethod, default: EntryPaymentMethod.CASH })
+  @ApiPropertyOptional({
+    enum: EntryPaymentMethod,
+    default: EntryPaymentMethod.CASH,
+  })
   paymentMethod?: EntryPaymentMethod;
 
   @ApiPropertyOptional({ enum: PaymentTerm, default: PaymentTerm.CASH })
