@@ -30,6 +30,7 @@
     "test:e2e:metrics": "ts-node scripts/run-e2e-with-metrics.ts",
     "ci:multi-tenant-report": "ts-node scripts/e2e-multi-tenant-report.ts",
     "phase3:report": "ts-node scripts/phase3-report.ts",
+    "phase3:staging": "ts-node scripts/phase3-staging.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
