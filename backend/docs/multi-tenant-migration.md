@@ -85,7 +85,7 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
   - `PHASE3_OPTIONS_PATH=<ruta>` persiste la configuración consumida por `phase3:run` en un JSON auditado.
 - `npm run ci:multi-tenant-report`: automatiza la corrida E2E con métricas multi-tenant; acepta `--phase3` y banderas `--phase3-*` para ejecutar `phase3:run` previo a las pruebas (p. ej. `--phase3-dry-run=false`, `--phase3-summary-dir=...`, `--phase3-print-options`, `--phase3-env PHASE3_DEFAULT_ORG_CODE=tenant-alpha`, `--phase3-env PHASE3_OPTIONS_PATH=tmp/phase3/options.json`).
 - Workflow `Multi-tenant Coverage`: corre `npm run ci:multi-tenant-report -- --phase3`, genera el reporte consolidado con `npm run phase3:report -- --dir tmp/phase3 --output tmp/phase3/report.json` y adjunta los JSON (`populate-summary`, `validate-summary`, `options.json`, `report.json`) junto con los artefactos de métricas/badge.
-- `npm run phase3:report`: genera un reporte consolidado (`totales`, entidades con actualizaciones, hallazgos de validación) a partir de `populate-summary.json` y `validate-summary.json`, imprime el resultado en STDOUT y permite guardarlo con `--output=<ruta>` o delegado vía `PHASE3_OPTIONS_PATH`.
+- `npm run phase3:report`: genera un reporte consolidado (`totales`, entidades con actualizaciones, hallazgos de validación) a partir de `populate-summary.json` y `validate-summary.json`, imprime el resultado en STDOUT (`--summary-stdout`) y permite guardarlo con `--output=<ruta>`. También acepta rutas directas (`--populate`, `--validate`) o un directorio (`--dir`) para descubrir los resúmenes generados por `phase3:run`, y normaliza las ubicaciones relativas antes de persistir el archivo final.
 
 ## Detalle de próximas fases
 
@@ -520,4 +520,16 @@ Este documento detalla el avance táctico del plan por fases para habilitar mult
 - **Contexto:** Luego de habilitar la ejecución automática de `phase3:run`, era necesario conservar los reportes JSON generados (`populate-summary.json`, `validate-summary.json`) junto a las métricas multi-tenant para su análisis posterior.
 - **Implementación:** El workflow `Multi-tenant Coverage` ahora sube el directorio `backend/tmp/phase3` (incluyendo `options.json` cuando se define `PHASE3_OPTIONS_PATH` y el `report.json` generado) como parte del artefacto `multi-tenant-metrics`, garantizando que los resúmenes de Phase 3 queden disponibles tras cada corrida de CI.
 - **Resultado:** Operaciones y QA pueden descargar los reportes de poblado/validación desde los artefactos de la pipeline, manteniendo la trazabilidad requerida para las corridas supervisadas de la Fase 3.
+
+### 2024-06-06 – Consolidación de configuración Phase 3
+
+- **Contexto:** Para simplificar las corridas de `phase3:run` en distintos entornos se requería un parser consistente de variables `PHASE3_*` que validara banderas, rutas y entidades disponibles.
+- **Implementación:** Se fortaleció [`backend/scripts/phase3-config.ts`](../scripts/phase3-config.ts) centralizando la lectura de banderas booleanas, numéricas y listas (`PHASE3_SKIP_*`, `PHASE3_DEFAULT_ORG_CODE`, `PHASE3_ONLY_ENTITIES`, etc.) y calculando rutas absolutas para resúmenes/opciones. La suite [`backend/test/phase3-config.spec.ts`](../test/phase3-config.spec.ts) valida casos por defecto, overrides completos y errores ante entidades inválidas.
+- **Resultado:** Las corridas automatizadas y manuales de Phase 3 comparten ahora un helper único que devuelve opciones normalizadas, directorios listos para usarse y mensajes de validación homogéneos.
+
+### 2024-06-06 – Reporte consolidado `phase3:report`
+
+- **Contexto:** Al preparar la supervisión operativa de la Fase 3 se necesitaba un resumen sintetizado que combinara los resultados de poblamiento y validación para adjuntarlos en reportes y artefactos de CI.
+- **Implementación:** Se añadió [`backend/scripts/phase3-report.ts`](../scripts/phase3-report.ts) junto al comando `npm run phase3:report`, que lee los resúmenes generados por `populate-and-validate`, agrega totales por entidad, alerta sobre hallazgos (`missing`, `mismatched`) y soporta banderas `--dir`, `--populate`, `--validate`, `--output` y `--summary-stdout`. La suite [`backend/test/phase3-report.spec.ts`](../test/phase3-report.spec.ts) asegura la agregación de métricas, el manejo de escenarios parciales y los mensajes de error cuando no se proveen resúmenes.
+- **Resultado:** Operaciones cuenta con un reporte estándar que resume el avance de Phase 3, listo para anexar a dashboards, pipelines y bitácoras sin reprocesar los JSON individuales.
 
