@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   AudioWaveform,
+  Building2,
   Banknote,
   BookOpen,
   Bot,
@@ -64,6 +65,7 @@ type NavItem = {
   icon?: LucideIcon
   isActive?: boolean
   permission?: ModulePermissionKey
+  requiredRoles?: string[]
   items?: NavSubItem[]
 }
 
@@ -202,6 +204,25 @@ const data: SidebarData = {
       ],
     },
     {
+      title: "Organizaciones",
+      url: "#",
+      icon: Building2,
+      permission: "settings",
+      requiredRoles: ["SUPER_ADMIN_GLOBAL"],
+      items: [
+        {
+          title: "Nueva Organización",
+          url: "/dashboard/tenancy/new",
+          permission: "settings",
+        },
+        {
+          title: "Ver Organizaciones",
+          url: "/dashboard/tenancy",
+          permission: "settings",
+        },
+      ],
+    },
+    {
       title: "Tiendas",
       url: "#",
       icon: Store,
@@ -332,31 +353,37 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { totalUnread } = useMessages()
   const { settings } = useSiteSettings()
   const checkPermission = useModulePermission()
+  const normalizedRoleValue = role?.toString().trim().toUpperCase() ?? ""
 
   const roleLabel = React.useMemo(() => {
-    if (!role) {
+    if (!normalizedRoleValue) {
       return "Usuario"
     }
 
-    const normalized = role.toString().trim().toUpperCase()
     const roleMap: Record<string, string> = {
+      SUPER_ADMIN_GLOBAL: "Super Admin Global",
+      SUPER_ADMIN_ORG: "Super Administrador",
       ADMIN: "Administrador",
       EMPLOYEE: "Empleado",
     }
 
-    if (roleMap[normalized]) {
-      return roleMap[normalized]
+    if (roleMap[normalizedRoleValue]) {
+      return roleMap[normalizedRoleValue]
     }
 
-    const formatted = normalized
+    const formatted = normalizedRoleValue
       .toLowerCase()
       .split(/[_\s]+/)
       .filter(Boolean)
       .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
       .join(" ")
 
-    return formatted || normalized.charAt(0) + normalized.slice(1).toLowerCase()
-  }, [role])
+    return (
+      formatted ||
+      normalizedRoleValue.charAt(0) +
+        normalizedRoleValue.slice(1).toLowerCase()
+    )
+  }, [normalizedRoleValue])
 
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
   const canAccessAccounting = useRBAC(["admin", "accountant", "auditor"])
@@ -388,7 +415,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   const filteredNav = data.navMain
-    .filter((item) => checkPermission(item.permission))
+    .filter((item) => {
+      if (!checkPermission(item.permission)) {
+        return false
+      }
+
+      if (item.requiredRoles?.length) {
+        if (!normalizedRoleValue) {
+          return false
+        }
+
+        return item.requiredRoles.some(
+          (required) => required.toUpperCase() === normalizedRoleValue,
+        )
+      }
+
+      return true
+    })
     .map((item) => {
       const items = item.items?.filter((subItem) =>
         checkPermission(subItem.permission ?? item.permission)

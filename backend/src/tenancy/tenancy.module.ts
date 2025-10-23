@@ -4,6 +4,7 @@ import { TenancyController } from './tenancy.controller';
 import { TenancyService } from './tenancy.service';
 import { TenantContextGuard } from './tenant-context.guard';
 import { TenantContextService } from './tenant-context.service';
+import { GlobalSuperAdminGuard } from './global-super-admin.guard';
 
 @Module({
   controllers: [TenancyController],
@@ -12,7 +13,13 @@ import { TenantContextService } from './tenant-context.service';
     PrismaService,
     TenantContextService,
     TenantContextGuard,
+    GlobalSuperAdminGuard,
   ],
-  exports: [TenantContextService, TenantContextGuard, TenancyService],
+  exports: [
+    TenantContextService,
+    TenantContextGuard,
+    TenancyService,
+    GlobalSuperAdminGuard,
+  ],
 })
 export class TenancyModule {}

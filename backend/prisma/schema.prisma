@@ -141,6 +141,8 @@ model Category {
 }
 
 enum UserRole {
+  SUPER_ADMIN_GLOBAL
+  SUPER_ADMIN_ORG
   ADMIN
   EMPLOYEE
   CLIENT
@@ -183,6 +185,7 @@ model User {
 
 enum OrganizationMembershipRole {
   OWNER
+  SUPER_ADMIN
   ADMIN
   MEMBER
   VIEWER

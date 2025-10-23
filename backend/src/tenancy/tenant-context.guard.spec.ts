@@ -9,6 +9,8 @@ describe('TenantContextGuard', () => {
       organizationId: 42,
       organizationUnitId: 7,
       userId: 101,
+      isGlobalSuperAdmin: false,
+      isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [42, 99],
       allowedOrganizationUnitIds: [7, 8],

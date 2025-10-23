@@ -58,7 +58,7 @@ export default function Page() {
         router.replace('/login')
         return
       }
-      if (session.role !== 'ADMIN' && session.role !== 'EMPLOYEE') {
+      if (!['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE'].includes(session.role)) {
         router.push('/unauthorized')
         return
       }

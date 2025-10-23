@@ -7,12 +7,15 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import { TenancyService } from './tenancy.service';
 import { CreateTenancyDto } from './dto/create-tenancy.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import { TenancySnapshot } from './entities/tenancy.entity';
+import { GlobalSuperAdminGuard } from './global-super-admin.guard';
 
+@UseGuards(GlobalSuperAdminGuard)
 @Controller('tenancy')
 export class TenancyController {
   constructor(private readonly tenancyService: TenancyService) {}

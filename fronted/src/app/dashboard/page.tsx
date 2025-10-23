@@ -73,7 +73,7 @@ export default function WelcomeDashboard() {
 useEffect(() => {
     async function fetchData() {
         const data = await getUserDataFromToken();
-        if (!data || !(await isTokenValid()) || (data.role !== 'ADMIN' && data.role !== 'EMPLOYEE')) {
+        if (!data || !(await isTokenValid()) || (!['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE'].includes(data.role))) {
           router.push('/unauthorized');
           return;
         }

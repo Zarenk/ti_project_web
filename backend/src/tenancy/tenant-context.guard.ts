@@ -1,7 +1,7 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, Scope } from '@nestjs/common';
 import { TenantContextService } from './tenant-context.service';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class TenantContextGuard implements CanActivate {
   constructor(private readonly tenantContextService: TenantContextService) {}
 

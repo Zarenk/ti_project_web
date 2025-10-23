@@ -49,7 +49,7 @@ type UserFixture = {
   client?: UserClientFixture;
 };
 
-type MembershipRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
+type MembershipRole = 'OWNER' | 'SUPER_ADMIN' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 
 type PrismaSeedClient = PrismaClient & Record<string, any>;
 
@@ -151,10 +151,10 @@ const seedOrganizations: OrganizationFixture[] = [
         email: 'admin@alpha.example.com',
         username: 'alpha.admin',
         password: 'seeded-password',
-        role: UserRole.ADMIN,
+        role: UserRole.SUPER_ADMIN_ORG,
         status: 'ACTIVO',
         membershipUnitCode: 'alpha-hq',
-        membershipRole: 'ADMIN',
+        membershipRole: 'SUPER_ADMIN',
         membershipDefault: true,
       },
       {
@@ -224,10 +224,10 @@ const seedOrganizations: OrganizationFixture[] = [
         email: 'admin@beta.example.com',
         username: 'beta.admin',
         password: 'seeded-password',
-        role: UserRole.ADMIN,
+        role: UserRole.SUPER_ADMIN_ORG,
         status: 'ACTIVO',
         membershipUnitCode: 'beta-hq',
-        membershipRole: 'ADMIN',
+        membershipRole: 'SUPER_ADMIN',
         membershipDefault: true,
       },
       {
@@ -523,7 +523,10 @@ async function ensureOrganization(
   }
 
   const referenceUser =
-    createdUsers.find(({ user }) => user.role === UserRole.ADMIN)?.user ?? createdUsers[0]?.user;
+    createdUsers.find(
+      ({ user }) =>
+        user.role === UserRole.SUPER_ADMIN_ORG || user.role === UserRole.ADMIN,
+    )?.user ?? createdUsers[0]?.user;
 
   for (const product of fixture.products ?? []) {
     const categoryId = categories.get(product.category);

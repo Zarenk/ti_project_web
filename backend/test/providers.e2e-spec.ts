@@ -27,8 +27,11 @@ class HeaderTenantContextGuard implements CanActivate {
       organizationId,
       organizationUnitId: null,
       userId: null,
+      isGlobalSuperAdmin: false,
+      isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: organizationId ? [organizationId] : [],
+      allowedOrganizationUnitIds: [],
     };
 
     httpRequest.tenantContext = tenantContext;

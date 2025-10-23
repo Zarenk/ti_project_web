@@ -10,6 +10,7 @@ interface RequestUserPayload {
   organizations?: Array<number | string>;
   defaultOrganizationId?: number | string | null;
   isSuperAdmin?: boolean;
+  organizationSuperAdminIds?: Array<number | string>;
   organizationUnits?: Array<number | string>;
   organizationUnitIds?: Array<number | string>;
   defaultOrganizationUnitId?: number | string | null;
@@ -50,6 +51,9 @@ export class TenantContextService {
     const allowedOrganizationUnitIds = this.normalizeIdArray(
       user.organizationUnits ?? user.organizationUnitIds ?? [],
     );
+    const organizationSuperAdminIds = this.normalizeIdArray(
+      user.organizationSuperAdminIds ?? [],
+    );
 
     const organizationId =
       headerOrgId ?? defaultOrgId ?? allowedOrganizationIds[0] ?? null;
@@ -59,14 +63,25 @@ export class TenantContextService {
       allowedOrganizationUnitIds[0] ??
       null;
 
+    const normalizedRole = (user.role ?? '').toString().toUpperCase();
+    const explicitSuperAdmin = Boolean(user.isSuperAdmin);
+    const isGlobalSuperAdmin =
+      normalizedRole === 'SUPER_ADMIN_GLOBAL' ||
+      normalizedRole === 'SUPER_ADMIN' ||
+      explicitSuperAdmin;
+    const isOrganizationRole =
+      normalizedRole === 'SUPER_ADMIN_ORG' || normalizedRole === 'SUPER_ADMIN';
+    const isOrganizationSuperAdmin =
+      organizationId !== null &&
+      (organizationSuperAdminIds.includes(organizationId) || isOrganizationRole);
+
     const context: TenantContext = {
       organizationId,
       organizationUnitId,
       userId: this.normalizeId(user.id),
-      isSuperAdmin: Boolean(
-        user.isSuperAdmin ||
-          (user.role && user.role.toLowerCase() === 'super_admin'),
-      ),
+      isGlobalSuperAdmin,
+      isOrganizationSuperAdmin,
+      isSuperAdmin: isGlobalSuperAdmin || isOrganizationSuperAdmin,
       allowedOrganizationIds,
       allowedOrganizationUnitIds,
     };

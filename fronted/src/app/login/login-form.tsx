@@ -1,4 +1,4 @@
-ï»¿"use client"
+"use client"
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -157,13 +157,13 @@ export default function LoginForm() {
   const lockMessage = useMemo(() => {
     if (!attemptState) return null;
     if (attemptState.forcedReset) {
-      return 'Por seguridad hemos restablecido tu acceso. ComunÃ­cate con soporte para generar una nueva cuenta.';
+      return 'Por seguridad hemos restablecido tu acceso. Comunícate con soporte para generar una nueva cuenta.';
     }
     if (attemptState.lockUntil && (lockRemaining ?? 0) > 0) {
-      return `Tu acceso estÃ¡ bloqueado temporalmente por ${formatRemainingTime(lockRemaining ?? 0)}.`;
+      return `Tu acceso está bloqueado temporalmente por ${formatRemainingTime(lockRemaining ?? 0)}.`;
     }
     if (attemptState.count >= 3) {
-      return 'Has alcanzado el lÃ­mite de intentos. El prÃ³ximo error generarÃ¡ un bloqueo temporal.';
+      return 'Has alcanzado el límite de intentos. El próximo error generará un bloqueo temporal.';
     }
     return null;
   }, [attemptState, lockRemaining]);
@@ -172,11 +172,11 @@ export default function LoginForm() {
     e.preventDefault();
     if (loading) return;
     if (!normalizedEmail) {
-      toast.error('Debes ingresar un correo electrÃ³nico vÃ¡lido.');
+      toast.error('Debes ingresar un correo electrónico válido.');
       return;
     }
     if (!password.trim()) {
-      toast.error('Debes ingresar tu contraseÃ±a.');
+      toast.error('Debes ingresar tu contraseña.');
       return;
     }
 
@@ -216,7 +216,7 @@ export default function LoginForm() {
         if (token) {
           const payload: { role?: string } = jwtDecode(token as string);
           const role = payload?.role;
-          if (role === 'ADMIN' || role === 'EMPLOYEE') {
+          if (['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE'].includes(role)) {
             router.replace('/dashboard');
             setLoading(false);
             return;
@@ -229,7 +229,7 @@ export default function LoginForm() {
         }
       } catch {}
       const data = await getUserDataFromToken();
-      if (data?.role === 'ADMIN' || data?.role === 'EMPLOYEE') {
+      if (data?.role && ['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE'].includes(data.role)) {
         router.replace('/dashboard');
         setLoading(false);
       } else {
@@ -252,11 +252,11 @@ export default function LoginForm() {
       if (nextCount === 4) {
         nextState.lockUntil = Date.now() + TEN_MINUTES_MS;
         feedbackMessage =
-          'Has superado el nÃºmero de intentos permitidos. Tu cuenta quedarÃ¡ bloqueada durante 10 minutos.';
+          'Has superado el número de intentos permitidos. Tu cuenta quedará bloqueada durante 10 minutos.';
       } else if (nextCount === 5) {
         nextState.lockUntil = Date.now() + ONE_HOUR_MS;
         feedbackMessage =
-          'Has excedido nuevamente el lÃ­mite de intentos. Tu cuenta se bloquea durante 1 hora.';
+          'Has excedido nuevamente el límite de intentos. Tu cuenta se bloquea durante 1 hora.';
       } else if (nextCount >= 6) {
         nextState.forcedReset = true;
         nextState.lockUntil = undefined;
@@ -269,7 +269,7 @@ export default function LoginForm() {
           feedbackMessage = `${feedbackMessage}. Te quedan ${remainingAttempts} intentos antes de un bloqueo temporal.`;
         } else {
           feedbackMessage =
-            'Has alcanzado el lÃ­mite de intentos. El prÃ³ximo fallo bloquearÃ¡ tu cuenta durante 10 minutos.';
+            'Has alcanzado el límite de intentos. El próximo fallo bloqueará tu cuenta durante 10 minutos.';
         }
       }
 
@@ -300,7 +300,7 @@ export default function LoginForm() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
-      setRecoveryStatus({ type: 'error', message: 'Ingresa un correo electrÃ³nico vÃ¡lido para continuar.' });
+      setRecoveryStatus({ type: 'error', message: 'Ingresa un correo electrónico válido para continuar.' });
       return;
     }
 
@@ -316,18 +316,18 @@ export default function LoginForm() {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const message = data?.message || 'No pudimos enviar el correo de recuperaciÃ³n.';
+        const message = data?.message || 'No pudimos enviar el correo de recuperación.';
         setRecoveryStatus({ type: 'error', message });
         toast.error(message);
       } else {
         const message =
-          data?.message || 'Te enviamos un correo electrÃ³nico con los pasos para recuperar tu contraseÃ±a.';
+          data?.message || 'Te enviamos un correo electrónico con los pasos para recuperar tu contraseña.';
         setRecoveryStatus({ type: 'success', message });
         toast.success(message);
       }
     } catch (error) {
-      console.error('Error en la solicitud de recuperaciÃ³n:', error);
-      const message = 'OcurriÃ³ un problema al solicitar la recuperaciÃ³n de la contraseÃ±a.';
+      console.error('Error en la solicitud de recuperación:', error);
+      const message = 'Ocurrió un problema al solicitar la recuperación de la contraseña.';
       setRecoveryStatus({ type: 'error', message });
       toast.error(message);
     }
@@ -357,12 +357,12 @@ export default function LoginForm() {
 
       <div>
           <Label htmlFor="password" className="block text-sm font-medium">
-            ContraseÃ±a
+            Contraseña
           </Label>
           <Input
             id="password"
             type="password"
-            placeholder="Ingresa tu contraseÃ±a"
+            placeholder="Ingresa tu contraseña"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -432,7 +432,7 @@ export default function LoginForm() {
         aria-expanded={showRecovery}
         aria-controls="password-recovery-section"
       >
-        {showRecovery ? 'Ocultar opciones de recuperaciÃ³n' : 'Â¿Olvidaste tu contraseÃ±a?'}
+        {showRecovery ? 'Ocultar opciones de recuperación' : '¿Olvidaste tu contraseña?'}
       </button>
       {showRecovery && (
         <section
@@ -440,16 +440,16 @@ export default function LoginForm() {
           className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40"
         >
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-            Â¿Olvidaste tu contraseÃ±a?
+            ¿Olvidaste tu contraseña?
           </h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            Ingresa tu correo electrÃ³nico y te enviaremos los pasos necesarios para recuperar el acceso. Revisa tu
-            bandeja de entrada y sigue las instrucciones para restablecer tu contraseÃ±a.
+            Ingresa tu correo electrónico y te enviaremos los pasos necesarios para recuperar el acceso. Revisa tu
+            bandeja de entrada y sigue las instrucciones para restablecer tu contraseña.
           </p>
           <form onSubmit={handleRecoverySubmit} className="mt-3 flex flex-col gap-3">
             <div>
               <Label htmlFor="recovery-email" className="text-sm font-medium">
-                Correo electrÃ³nico de recuperaciÃ³n
+                Correo electrónico de recuperación
               </Label>
               <Input
                 id="recovery-email"
@@ -476,7 +476,7 @@ export default function LoginForm() {
               disabled={recoveryLoading}
               aria-disabled={recoveryLoading}
             >
-              {recoveryLoading ? 'Enviando instrucciones...' : 'Recuperar contraseÃ±a'}
+              {recoveryLoading ? 'Enviando instrucciones...' : 'Recuperar contraseña'}
             </Button>
           </form>
         </section>

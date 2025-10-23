@@ -37,7 +37,7 @@ export class DefaultAdminService implements OnModuleInit {
         email,
         username,
         password: hashedPassword,
-        role: UserRole.ADMIN,
+        role: UserRole.SUPER_ADMIN_GLOBAL,
         status: 'ACTIVO',
       },
     });

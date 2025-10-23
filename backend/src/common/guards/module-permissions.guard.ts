@@ -122,6 +122,16 @@ export class ModulePermissionsGuard implements CanActivate {
   }
 
   private isAdmin(role?: string): boolean {
-    return role?.toUpperCase() === 'ADMIN';
+    if (!role) {
+      return false;
+    }
+
+    const normalized = role.toUpperCase();
+    return (
+      normalized === 'ADMIN' ||
+      normalized === 'SUPER_ADMIN_GLOBAL' ||
+      normalized === 'SUPER_ADMIN_ORG' ||
+      normalized === 'SUPER_ADMIN'
+    );
   }
 }

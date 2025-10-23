@@ -28,6 +28,8 @@ describe('TenantContextService', () => {
       organizationId: 123,
       organizationUnitId: null,
       userId: 42,
+      isGlobalSuperAdmin: false,
+      isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [789],
       allowedOrganizationUnitIds: [],
@@ -48,6 +50,8 @@ describe('TenantContextService', () => {
       organizationId: 654,
       organizationUnitId: null,
       userId: 99,
+      isGlobalSuperAdmin: false,
+      isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [321],
       allowedOrganizationUnitIds: [],
@@ -65,6 +69,8 @@ describe('TenantContextService', () => {
       organizationId: 888,
       organizationUnitId: null,
       userId: null,
+      isGlobalSuperAdmin: false,
+      isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [888, 777],
       allowedOrganizationUnitIds: [],
@@ -76,7 +82,7 @@ describe('TenantContextService', () => {
       headers: { 'x-org-id': ['501', '502'] as unknown as any },
       user: {
         id: '1',
-        role: 'SUPER_ADMIN',
+        role: 'SUPER_ADMIN_GLOBAL',
       },
     });
 
@@ -84,6 +90,8 @@ describe('TenantContextService', () => {
       organizationId: 501,
       organizationUnitId: null,
       userId: 1,
+      isGlobalSuperAdmin: true,
+      isOrganizationSuperAdmin: false,
       isSuperAdmin: true,
       allowedOrganizationIds: [],
       allowedOrganizationUnitIds: [],
@@ -95,7 +103,25 @@ describe('TenantContextService', () => {
       },
     });
 
-    expect(explicitFlagService.getContext().isSuperAdmin).toBe(true);
+    expect(explicitFlagService.getContext()).toMatchObject({
+      isGlobalSuperAdmin: true,
+      isOrganizationSuperAdmin: false,
+      isSuperAdmin: true,
+    });
+
+    const organizationRoleService = createService({
+      headers: { 'x-org-id': '250' },
+      user: {
+        role: 'SUPER_ADMIN_ORG',
+      },
+    });
+
+    expect(organizationRoleService.getContext()).toMatchObject({
+      organizationId: 250,
+      isGlobalSuperAdmin: false,
+      isOrganizationSuperAdmin: true,
+      isSuperAdmin: true,
+    });
   });
 
   it('prioritizes the x-org-unit-id header when resolving organizationUnitId', () => {
@@ -153,6 +179,8 @@ describe('TenantContextService', () => {
       organizationId: 999,
       organizationUnitId: 30,
       userId: 10,
+      isGlobalSuperAdmin: false,
+      isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [100, 200],
       allowedOrganizationUnitIds: [30, 40],
@@ -168,6 +196,8 @@ describe('TenantContextService', () => {
       organizationId: 999,
       organizationUnitId: 55,
       userId: 10,
+      isGlobalSuperAdmin: false,
+      isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [400],
       allowedOrganizationUnitIds: [60],
