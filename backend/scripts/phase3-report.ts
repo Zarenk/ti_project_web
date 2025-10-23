@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, isAbsolute } from 'node:path';
 
 type EntitySummary = {
   planned: number;
@@ -157,7 +157,7 @@ export function generatePhase3Report(input: Phase3ReportInput): Phase3Report {
   return report;
 }
 
-type CliOptions = {
+export type Phase3ReportCliOptions = {
   populatePath?: string;
   validatePath?: string;
   directory?: string;
@@ -165,8 +165,8 @@ type CliOptions = {
   summaryStdout?: boolean;
 };
 
-function parseCliArgs(argv: string[]): CliOptions {
-  const options: CliOptions = {};
+export function parsePhase3ReportCliArgs(argv: string[]): Phase3ReportCliOptions {
+  const options: Phase3ReportCliOptions = {};
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
 
@@ -219,6 +219,67 @@ function parseCliArgs(argv: string[]): CliOptions {
   return options;
 }
 
+function parseEnvBoolean(value: string | undefined, defaultValue: boolean): boolean {
+  if (value === undefined) {
+    return defaultValue;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) {
+    return true;
+  }
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) {
+    return false;
+  }
+  throw new Error(`[phase3:report] Invalid boolean value: ${value}`);
+}
+
+function normalizePath(cwd: string, target: string): string {
+  return isAbsolute(target) ? target : resolve(cwd, target);
+}
+
+export type Phase3ReportResolvedOptions = {
+  directory: string;
+  populatePath: string;
+  validatePath: string;
+  outputPath?: string;
+  summaryStdout: boolean;
+};
+
+export function resolvePhase3ReportOptions(
+  cli: Phase3ReportCliOptions,
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+): Phase3ReportResolvedOptions {
+  const directory = normalizePath(
+    cwd,
+    cli.directory ?? env.PHASE3_REPORT_DIR ?? 'tmp/phase3',
+  );
+  const populatePath = cli.populatePath
+    ? normalizePath(cwd, cli.populatePath)
+    : env.PHASE3_REPORT_POPULATE
+    ? normalizePath(cwd, env.PHASE3_REPORT_POPULATE)
+    : resolve(directory, 'populate-summary.json');
+
+  const validatePath = cli.validatePath
+    ? normalizePath(cwd, cli.validatePath)
+    : env.PHASE3_REPORT_VALIDATE
+    ? normalizePath(cwd, env.PHASE3_REPORT_VALIDATE)
+    : resolve(directory, 'validate-summary.json');
+
+  const outputRaw = cli.outputPath ?? env.PHASE3_REPORT_OUTPUT ?? env.PHASE3_OPTIONS_PATH;
+  const outputPath = outputRaw ? normalizePath(cwd, outputRaw) : undefined;
+
+  const summaryStdout = cli.summaryStdout ?? parseEnvBoolean(env.PHASE3_REPORT_STDOUT, true);
+
+  return {
+    directory,
+    populatePath,
+    validatePath,
+    outputPath,
+    summaryStdout,
+  };
+}
+
 async function readSummary(path: string | undefined): Promise<unknown | undefined> {
   if (!path) {
     return undefined;
@@ -228,8 +289,12 @@ async function readSummary(path: string | undefined): Promise<unknown | undefine
     const content = await readFile(path, 'utf8');
     return JSON.parse(content);
   } catch (error) {
-    const details = error instanceof Error ? error.message : String(error);
-    throw new Error(`[phase3:report] Failed to load summary at ${path}: ${details}`);
+    const details = error as NodeJS.ErrnoException;
+    if (details?.code === 'ENOENT') {
+      return undefined;
+    }
+    const message = details instanceof Error ? details.message : String(details);
+    throw new Error(`[phase3:report] Failed to load summary at ${path}: ${message}`);
   }
 }
 
@@ -240,26 +305,20 @@ async function persistReport(path: string, report: Phase3Report) {
 
 async function main(): Promise<void> {
   try {
-    const cli = parseCliArgs(process.argv.slice(2));
-    const directory = resolve(process.cwd(), cli.directory ?? 'tmp/phase3');
-    const populatePath = cli.populatePath
-      ? resolve(process.cwd(), cli.populatePath)
-      : resolve(directory, 'populate-summary.json');
-    const validatePath = cli.validatePath
-      ? resolve(process.cwd(), cli.validatePath)
-      : resolve(directory, 'validate-summary.json');
+    const cli = parsePhase3ReportCliArgs(process.argv.slice(2));
+    const resolved = resolvePhase3ReportOptions(cli, process.env, process.cwd());
 
-    const populate = await readSummary(populatePath);
-    const validate = await readSummary(validatePath);
+    const populate = await readSummary(resolved.populatePath);
+    const validate = await readSummary(resolved.validatePath);
 
     const report = generatePhase3Report({
       populate: populate as PopulateSummary | undefined,
       validate: validate as ValidationSummary | undefined,
-      populatePath: populate ? populatePath : undefined,
-      validatePath: validate ? validatePath : undefined,
+      populatePath: populate ? resolved.populatePath : undefined,
+      validatePath: validate ? resolved.validatePath : undefined,
     });
 
-    if (cli.summaryStdout ?? true) {
+    if (resolved.summaryStdout) {
       console.info('[phase3:report] Summary:', JSON.stringify(report, null, 2));
     } else {
       console.info(
@@ -267,10 +326,9 @@ async function main(): Promise<void> {
       );
     }
 
-    if (cli.outputPath) {
-      const outputPath = resolve(process.cwd(), cli.outputPath);
-      await persistReport(outputPath, report);
-      console.info(`[phase3:report] Report written to ${outputPath}.`);
+    if (resolved.outputPath) {
+      await persistReport(resolved.outputPath, report);
+      console.info(`[phase3:report] Report written to ${resolved.outputPath}.`);
     }
   } catch (error) {
     const details = error instanceof Error ? error.message : String(error);

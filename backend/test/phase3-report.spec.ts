@@ -1,4 +1,10 @@
-import { generatePhase3Report } from '../scripts/phase3-report';
+import path from 'node:path';
+
+import {
+  generatePhase3Report,
+  resolvePhase3ReportOptions,
+  type Phase3ReportCliOptions,
+} from '../scripts/phase3-report';
 
 describe('generatePhase3Report', () => {
   const populateSummary = {
@@ -98,5 +104,71 @@ describe('generatePhase3Report', () => {
     expect(() => generatePhase3Report({})).toThrow(
       '[phase3:report] No populate or validate summaries were provided.',
     );
+  });
+});
+
+describe('resolvePhase3ReportOptions', () => {
+  const cwd = path.resolve('repo');
+
+  it('uses CLI overrides when provided', () => {
+    const cli: Phase3ReportCliOptions = {
+      directory: './custom',
+      populatePath: './input/populate.json',
+      validatePath: './input/validate.json',
+      outputPath: './out/report.json',
+      summaryStdout: false,
+    };
+
+    const resolved = resolvePhase3ReportOptions(cli, {}, cwd);
+
+    expect(resolved.directory).toBe(path.resolve(cwd, 'custom'));
+    expect(resolved.populatePath).toBe(path.resolve(cwd, 'input', 'populate.json'));
+    expect(resolved.validatePath).toBe(path.resolve(cwd, 'input', 'validate.json'));
+    expect(resolved.outputPath).toBe(path.resolve(cwd, 'out', 'report.json'));
+    expect(resolved.summaryStdout).toBe(false);
+  });
+
+  it('falls back to environment variables and defaults', () => {
+    const env: NodeJS.ProcessEnv = {
+      PHASE3_REPORT_DIR: './env-dir',
+      PHASE3_REPORT_POPULATE: './env/populate.json',
+      PHASE3_REPORT_VALIDATE: './env/validate.json',
+      PHASE3_REPORT_OUTPUT: './env/report.json',
+      PHASE3_REPORT_STDOUT: 'false',
+    };
+
+    const resolved = resolvePhase3ReportOptions({}, env, cwd);
+
+    expect(resolved.directory).toBe(path.resolve(cwd, 'env-dir'));
+    expect(resolved.populatePath).toBe(path.resolve(cwd, 'env', 'populate.json'));
+    expect(resolved.validatePath).toBe(path.resolve(cwd, 'env', 'validate.json'));
+    expect(resolved.outputPath).toBe(path.resolve(cwd, 'env', 'report.json'));
+    expect(resolved.summaryStdout).toBe(false);
+  });
+
+  it('defaults to tmp/phase3 when no paths provided', () => {
+    const resolved = resolvePhase3ReportOptions({}, {}, cwd);
+
+    expect(resolved.directory).toBe(path.resolve(cwd, 'tmp', 'phase3'));
+    expect(resolved.populatePath).toBe(
+      path.resolve(cwd, 'tmp', 'phase3', 'populate-summary.json'),
+    );
+    expect(resolved.validatePath).toBe(
+      path.resolve(cwd, 'tmp', 'phase3', 'validate-summary.json'),
+    );
+    expect(resolved.outputPath).toBeUndefined();
+    expect(resolved.summaryStdout).toBe(true);
+  });
+
+  it('uses PHASE3_OPTIONS_PATH as output alias', () => {
+    const env: NodeJS.ProcessEnv = {
+      PHASE3_OPTIONS_PATH: './env/options.json',
+      PHASE3_REPORT_STDOUT: 'no',
+    };
+
+    const resolved = resolvePhase3ReportOptions({}, env, cwd);
+
+    expect(resolved.outputPath).toBe(path.resolve(cwd, 'env', 'options.json'));
+    expect(resolved.summaryStdout).toBe(false);
   });
 });
