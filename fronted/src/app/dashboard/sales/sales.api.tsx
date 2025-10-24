@@ -18,7 +18,7 @@ export async function createSale(data: {
 }) {
   const headers = await getAuthHeaders();
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación');
+    throw new Error('No se encontrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ un token de autenticaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n');
   }
   try{
     const response = await fetch(`${BACKEND_URL}/api/sales`, {
@@ -58,7 +58,7 @@ export async function createWebSale(data: {
 }) {
   const headers = await getAuthHeaders();
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación');
+    throw new Error('No se encontrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ un token de autenticaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n');
   }
   const response = await fetch(`${BACKEND_URL}/api/web-sales`, {
     method: 'POST',
@@ -192,7 +192,7 @@ export async function getOrdersByDni(dni: string) {
 export async function getSales() {
   const headers = await getAuthHeaders()
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación')
+    throw new Error('No se encontrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ un token de autenticaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n')
   }
   try {
     const response = await fetch(`${BACKEND_URL}/api/sales`, {
@@ -230,22 +230,19 @@ export async function getMySales() {
 }
 
 export async function getMonthlySalesTotal() {
-  const headers = await getAuthHeaders()
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación')
+  const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-total`, {
+    credentials: "include",
+  });
+
+  if (response.status === 403) {
+    return { total: 0, growth: null };
   }
-  const response = await fetch(`${BACKEND_URL}/api/sales/monthly-total`, {
-    headers,
-  })
 
   if (!response.ok) {
-    if (response.status === 403) {
-      throw new Error('Unauthorized')
-    }
-    throw new Error('Error al obtener ventas mensuales')
+    throw new Error("Error al obtener ventas mensuales");
   }
 
-  return await response.json() // { total, growth }
+  return response.json();
 }
 
 export async function getProductsByStore(storeId: number) {
@@ -346,12 +343,12 @@ export async function getPaymentMethods() {
   try{
     const response = await fetch(`${BACKEND_URL}/api/paymentmethods`);
     if (!response.ok) {
-      throw new Error('Error al obtener los métodos de pago');
+      throw new Error('Error al obtener los mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©todos de pago');
     }
     return await response.json();
   }
   catch(error){
-    console.error('Error al obtener los métodos de pago:', error);
+    console.error('Error al obtener los mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©todos de pago:', error);
     throw error;
   }
 }
@@ -359,14 +356,14 @@ export async function getPaymentMethods() {
 export async function getRevenueByCategoryByRange(from: string, to: string) {
   const headers = await getAuthHeaders()
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación')
+    throw new Error('No se encontrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ un token de autenticaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n')
   }
   const response = await fetch(
     `${BACKEND_URL}/api/sales/revenue-by-category/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`,
     { headers },
     );
   if (!response.ok) {
-    throw new Error("Error al obtener los ingresos por categoría");
+    throw new Error("Error al obtener los ingresos por categorÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a");
   }
   return response.json();
 }
@@ -374,13 +371,13 @@ export async function getRevenueByCategoryByRange(from: string, to: string) {
 export async function getSalesByDateParams(from: string, to: string) {
   const headers = await getAuthHeaders()
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación')
+    throw new Error('No se encontrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ un token de autenticaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n')
   }
   const response = await fetch(
     `${BACKEND_URL}/api/sales/chart/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
     { headers },
   );
-  if (!response.ok) throw new Error('Error al obtener gráfico de ventas');
+  if (!response.ok) throw new Error('Error al obtener grÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡fico de ventas');
   return response.json();
 }
 
@@ -394,12 +391,12 @@ export async function getTopProducts(params: { from?: string; to?: string; type?
     // Ruta: /api/sales/top-products/from/:startDate/to/:endDate
     endpoint = `/api/sales/top-products/from/${encodeURIComponent(params.from)}/to/${encodeURIComponent(params.to)}`;
   } else {
-    throw new Error("Faltan parámetros: se requiere 'type' o 'from' y 'to'");
+    throw new Error("Faltan parÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡metros: se requiere 'type' o 'from' y 'to'");
   }
 
   const headers = await getAuthHeaders()
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación')
+    throw new Error('No se encontrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ un token de autenticaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n')
   }
   const response = await fetch(`${BACKEND_URL}${endpoint}`, { headers });
 
@@ -412,27 +409,32 @@ export async function getTopProducts(params: { from?: string; to?: string; type?
 }
 
 export async function getMonthlySalesCount() {
-  const headers = await getAuthHeaders()
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación')
-  }
-  const response = await fetch(`${BACKEND_URL}/api/sales/monthly-count`, {
-    headers,
+  const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-count`, {
+    credentials: "include",
   });
-  if (!response.ok) throw new Error("Error al obtener el conteo mensual de ventas");
-  return await response.json(); // { count: number, growth: number | null }
+
+  if (response.status === 403) {
+    return { count: 0, growth: null };
+  }
+
+  if (!response.ok) {
+    throw new Error("Error al obtener el conteo mensual de ventas");
+  }
+
+  return response.json();
 }
 
 export async function getMonthlyClientsStats() {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    throw new Error('No se encontró un token de autenticación');
-  }
-  const response = await fetch(`${BACKEND_URL}/api/sales/monthly-clients`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-clients`, {
+    credentials: "include",
   });
-  if (!response.ok) throw new Error("Error al obtener estadísticas de clientes");
-  return response.json(); // { total: number, growth: number | null }
+  if (response.status === 403) {
+    return { newClients: 0, returningClients: 0 };
+  }
+  if (!response.ok) {
+    throw new Error("Error al obtener estadisticas de clientes");
+  }
+  return response.json();
 }
 
 export async function getTopClients(params: { from?: string; to?: string }) {
@@ -442,7 +444,7 @@ export async function getTopClients(params: { from?: string; to?: string }) {
   }
   const headers = await getAuthHeaders()
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación')
+    throw new Error('No se encontrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ un token de autenticaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n')
   }
   const res = await fetch(`${BACKEND_URL}/api/sales/top-clients${query}`, {
     headers,
@@ -457,7 +459,7 @@ export async function getProductSalesReport(
 ) {
   const headers = await getAuthHeaders();
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación');
+    throw new Error('No se encontrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ un token de autenticaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n');
   }
 
   const searchParams = new URLSearchParams();
@@ -494,7 +496,7 @@ export async function getProductSalesReport(
 export async function getRecentSalesByRange(from: string, to: string) {
   const headers = await getAuthHeaders()
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación')
+    throw new Error('No se encontrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ un token de autenticaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n')
   }
   const res = await fetch(
     `${BACKEND_URL}/api/sales/recent/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
@@ -512,7 +514,10 @@ export async function getRecentSales(limit = 10) {
   const res = await authFetch(
     `${BACKEND_URL}/api/sales/recent/${encodeURIComponent(from)}/${encodeURIComponent(to)}`
   )
-  if (!res.ok) throw new Error('Error al obtener ventas recientes')
+  if (res.status === 403) {
+    return []
+  }
+  if (!res.ok) throw new Error("Error al obtener ventas recientes")
   const data = await res.json()
   return Array.isArray(data) ? data.slice(0, limit) : []
 }
@@ -520,7 +525,7 @@ export async function getRecentSales(limit = 10) {
 export async function deleteSale(id: number) {
   const headers = await getAuthHeaders();
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontr� un token de autenticaci�n');
+    throw new Error('No se encontrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ un token de autenticaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½n');
   }
 
   const response = await fetch(`${BACKEND_URL}/api/sales/${id}`, {
@@ -545,7 +550,7 @@ export async function deleteSale(id: number) {
 export async function getSaleById(id: number | string) {
   const headers = await getAuthHeaders()
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación')
+    throw new Error('No se encontrÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ un token de autenticaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n')
   }
   const res = await fetch(`${BACKEND_URL}/api/sales/${id}`, { headers });
   if (!res.ok) throw new Error('Error al obtener la venta');
@@ -570,10 +575,3 @@ export async function getSalesTransactions(from?: string, to?: string) {
   if (!res.ok) throw new Error('Error al obtener las transacciones')
   return res.json()
 }
-
-
-
-
-
-
-

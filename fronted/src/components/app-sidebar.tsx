@@ -57,6 +57,7 @@ type NavSubItem = {
   url: string
   permission?: ModulePermissionKey
   badge?: number
+  requiredRoles?: string[]
 }
 
 type NavItem = {
@@ -200,6 +201,12 @@ const data: SidebarData = {
           title: "Ver Usuarios",
           url: "/dashboard/users",
           permission: "settings",
+        },
+        {
+          title: "Super usuarios",
+          url: "/dashboard/super-users",
+          permission: "settings",
+          requiredRoles: ["SUPER_ADMIN_GLOBAL"],
         },
       ],
     },
@@ -433,9 +440,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       return true
     })
     .map((item) => {
-      const items = item.items?.filter((subItem) =>
-        checkPermission(subItem.permission ?? item.permission)
-      )
+      const items = item.items?.filter((subItem) => {
+        if (!checkPermission(subItem.permission ?? item.permission)) {
+          return false
+        }
+
+        if (subItem.requiredRoles?.length) {
+          if (!normalizedRoleValue) {
+            return false
+          }
+
+          return subItem.requiredRoles.some(
+            (required) => required.toUpperCase() === normalizedRoleValue,
+          )
+        }
+
+        return true
+      })
 
       return {
         ...item,

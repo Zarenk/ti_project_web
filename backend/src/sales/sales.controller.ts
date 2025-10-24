@@ -20,7 +20,7 @@ import { ModulePermission } from 'src/common/decorators/module-permission.decora
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN', 'EMPLOYEE')
+@Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
 @ModulePermission('sales')
 @Controller('sales')
 export class SalesController {
@@ -45,7 +45,7 @@ export class SalesController {
     return this.salesService.findAllSales(organizationId ?? undefined);
   }
 
-  // Endpoint para obtener las series vendidas en una venta específica
+  // Endpoint para obtener las series vendidas en una venta especifica
   @Get(':saleId/sold-series')
   async getSoldSeriesBySale(
     @Param('saleId', ParseIntPipe) saleId: number,
@@ -130,7 +130,7 @@ export class SalesController {
           organizationId ?? undefined,
         );
       default:
-        throw new BadRequestException(`Tipo inválido: ${type}`);
+        throw new BadRequestException(`Tipo invalido: ${type}`);
     }
   }
 

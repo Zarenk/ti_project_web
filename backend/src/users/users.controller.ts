@@ -15,6 +15,9 @@ import { ApiResponse } from '@nestjs/swagger';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { Request as ExpressRequest } from 'express';
+import { GlobalSuperAdminGuard } from 'src/tenancy/global-super-admin.guard';
+import { CreateManagedUserDto } from './dto/create-managed-user.dto';
+import { UserRole } from '@prisma/client';
 
 @Controller('users')
 export class UsersController {
@@ -49,6 +52,19 @@ export class UsersController {
     },
   ) {
     return this.usersService.register(body);
+  }
+
+  @UseGuards(JwtAuthGuard, GlobalSuperAdminGuard)
+  @Post('admin/create')
+  async createManagedUser(@Body() dto: CreateManagedUserDto) {
+    return this.usersService.register({
+      email: dto.email,
+      username: dto.username,
+      password: dto.password,
+      role: dto.role as UserRole,
+      status: dto.status ?? 'ACTIVO',
+      organizationId: dto.organizationId ?? null,
+    });
   }
 
   // Registro público de usuarios desde la web

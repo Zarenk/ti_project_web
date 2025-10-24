@@ -129,7 +129,7 @@ export class WebSalesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
   @Get('orders')
   async getOrders(
     @Query('status') status?: string,
@@ -150,7 +150,7 @@ export class WebSalesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
   @Get('orders/count')
   async getOrdersCount(
     @Query('status') status?: string,
@@ -164,7 +164,7 @@ export class WebSalesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
   @Get('orders/recent')
   async getRecentOrders(
     @Query('from') from?: string,
