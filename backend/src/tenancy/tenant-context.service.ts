@@ -1,4 +1,4 @@
-﻿import { Inject, Injectable, Scope } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Scope } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 
@@ -65,6 +65,15 @@ export class TenantContextService {
       user.organizationSuperAdminIds ?? [],
     );
 
+    const normalizedRole = (user.role ?? '').toString().toUpperCase();
+    const explicitSuperAdmin = Boolean(user.isSuperAdmin);
+    const isGlobalSuperAdmin =
+      normalizedRole === 'SUPER_ADMIN_GLOBAL' ||
+      normalizedRole === 'SUPER_ADMIN' ||
+      explicitSuperAdmin;
+    const isOrganizationRole =
+      normalizedRole === 'SUPER_ADMIN_ORG' || normalizedRole === 'SUPER_ADMIN';
+
     const organizationId =
       headerOrgId ?? defaultOrgId ?? allowedOrganizationIds[0] ?? null;
     const companyId =
@@ -75,17 +84,42 @@ export class TenantContextService {
       allowedOrganizationUnitIds[0] ??
       null;
 
-    const normalizedRole = (user.role ?? '').toString().toUpperCase();
-    const explicitSuperAdmin = Boolean(user.isSuperAdmin);
-    const isGlobalSuperAdmin =
-      normalizedRole === 'SUPER_ADMIN_GLOBAL' ||
-      normalizedRole === 'SUPER_ADMIN' ||
-      explicitSuperAdmin;
-    const isOrganizationRole =
-      normalizedRole === 'SUPER_ADMIN_ORG' || normalizedRole === 'SUPER_ADMIN';
     const isOrganizationSuperAdmin =
       organizationId !== null &&
-      (organizationSuperAdminIds.includes(organizationId) || isOrganizationRole);
+      (organizationSuperAdminIds.includes(organizationId) ||
+        isOrganizationRole);
+
+    if (
+      organizationId !== null &&
+      allowedOrganizationIds.length > 0 &&
+      !allowedOrganizationIds.includes(organizationId) &&
+      !isGlobalSuperAdmin
+    ) {
+      throw new BadRequestException(
+        `La organizacion ${organizationId} no esta autorizada para el usuario actual.`,
+      );
+    }
+
+    if (
+      companyId !== null &&
+      organizationId === null &&
+      !isGlobalSuperAdmin
+    ) {
+      throw new BadRequestException(
+        'Debe especificar una organizacion valida antes de seleccionar una compania.',
+      );
+    }
+
+    if (
+      companyId !== null &&
+      allowedCompanyIds.length > 0 &&
+      !allowedCompanyIds.includes(companyId) &&
+      !isGlobalSuperAdmin
+    ) {
+      throw new BadRequestException(
+        `La compania ${companyId} no esta autorizada para el usuario actual.`,
+      );
+    }
 
     const context: TenantContext = {
       organizationId,
