@@ -8,12 +8,14 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateTenancyDto,
   OrganizationUnitInputDto,
+  CompanyInputDto,
 } from './dto/create-tenancy.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import {
   StoredOrganizationUnit,
   TenancySnapshot,
   OrganizationSuperAdmin,
+  CompanySnapshot,
 } from './entities/tenancy.entity';
 
 type MinimalUnit = Pick<
@@ -48,6 +50,12 @@ export class TenancyService {
           existingUnits,
         );
 
+        const createdCompanies = await this.persistCompanies(
+          tx,
+          organization.id,
+          createTenancyDto.companies ?? [],
+        );
+
         const membershipCount = await prisma.organizationMembership.count({
           where: { organizationId: organization.id },
         });
@@ -60,7 +68,7 @@ export class TenancyService {
         return {
           ...organization,
           units: createdUnits,
-          companies: [],
+          companies: createdCompanies,
           membershipCount,
           superAdmin,
         };
@@ -362,6 +370,58 @@ export class TenancyService {
     }
 
     return createdUnits;
+  }
+
+  private async persistCompanies(
+    tx: Prisma.TransactionClient,
+    organizationId: number,
+    companies: CompanyInputDto[],
+  ): Promise<CompanySnapshot[]> {
+    if (!companies.length) {
+      return [];
+    }
+
+    const prisma = tx as unknown as PrismaService as any;
+    const createdCompanies: CompanySnapshot[] = [];
+    const seenNames = new Set<string>();
+
+    for (const company of companies) {
+      const trimmedName = company.name?.trim();
+      if (!trimmedName) {
+        throw new BadRequestException('Las companias requieren un nombre.');
+      }
+
+      const normalizedName = trimmedName.toLowerCase();
+      if (seenNames.has(normalizedName)) {
+        throw new BadRequestException(
+          `La compania "${trimmedName}" esta duplicada en la solicitud.`,
+        );
+      }
+      seenNames.add(normalizedName);
+
+      const legalName =
+        company.legalName && company.legalName.trim().length > 0
+          ? company.legalName.trim()
+          : null;
+      const taxId =
+        company.taxId && company.taxId.trim().length > 0
+          ? company.taxId.trim()
+          : null;
+
+      const created = await prisma.company.create({
+        data: {
+          organizationId,
+          name: trimmedName,
+          legalName,
+          taxId,
+          status: company.status ?? 'ACTIVE',
+        },
+      });
+
+      createdCompanies.push(created);
+    }
+
+    return createdCompanies;
   }
 
   private async upsertUnit(

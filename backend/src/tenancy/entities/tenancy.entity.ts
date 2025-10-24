@@ -27,8 +27,6 @@ export type CompanySnapshot = {
   updatedAt: Date;
 };
 
-};
-
 export type TenancySnapshot = {
   id: number;
   name: string;

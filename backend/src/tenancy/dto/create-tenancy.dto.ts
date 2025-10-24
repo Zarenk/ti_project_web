@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsIn,
   ValidateNested,
 } from 'class-validator';
 
@@ -38,6 +39,28 @@ export class OrganizationUnitInputDto {
   status?: string;
 }
 
+export class CompanyInputDto {
+  @IsOptional()
+  @IsInt()
+  id?: number;
+
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  legalName?: string | null;
+
+  @IsOptional()
+  @IsString()
+  taxId?: string | null;
+
+  @IsOptional()
+  @IsIn(['ACTIVE', 'INACTIVE'])
+  status?: string;
+}
+
 export class CreateTenancyDto {
   @IsString()
   @IsNotEmpty()
@@ -56,4 +79,10 @@ export class CreateTenancyDto {
   @ValidateNested({ each: true })
   @Type(() => OrganizationUnitInputDto)
   units?: OrganizationUnitInputDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CompanyInputDto)
+  companies?: CompanyInputDto[];
 }
