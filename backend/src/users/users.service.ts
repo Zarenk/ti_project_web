@@ -345,8 +345,31 @@ export class UsersService {
     });
   }
 
-  findAll() {
-    return this.prismaService.user.findMany();
+  findAll(search?: string) {
+    const where =
+      search && search.trim().length > 0
+        ? {
+            OR: [
+              {
+                username: {
+                  contains: search.trim(),
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                email: {
+                  contains: search.trim(),
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+            ],
+          }
+        : undefined;
+
+    return this.prismaService.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async update(id: number, data: UpdateUserDto) {

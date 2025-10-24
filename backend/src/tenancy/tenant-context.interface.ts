@@ -1,4 +1,4 @@
-export interface TenantContext {
+﻿export interface TenantContext {
   organizationId: number | null;
   organizationUnitId: number | null;
   userId: number | null;

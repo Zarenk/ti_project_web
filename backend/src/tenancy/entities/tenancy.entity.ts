@@ -9,6 +9,12 @@ export type StoredOrganizationUnit = {
   updatedAt: Date;
 };
 
+export type OrganizationSuperAdmin = {
+  id: number;
+  username: string;
+  email: string;
+};
+
 export type TenancySnapshot = {
   id: number;
   name: string;
@@ -18,4 +24,5 @@ export type TenancySnapshot = {
   updatedAt: Date;
   units: StoredOrganizationUnit[];
   membershipCount: number;
+  superAdmin: OrganizationSuperAdmin | null;
 };

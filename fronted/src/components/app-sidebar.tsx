@@ -211,7 +211,7 @@ const data: SidebarData = {
       requiredRoles: ["SUPER_ADMIN_GLOBAL"],
       items: [
         {
-          title: "Nueva Organización",
+          title: "Nueva Organizacion",
           url: "/dashboard/tenancy/new",
           permission: "settings",
         },
@@ -259,13 +259,13 @@ const data: SidebarData = {
       ],
     },
     {
-      title: "Catálogo",
+      title: "Catalogo",
       url: "/dashboard/catalog",
       icon: Link,
       permission: "store",
       items: [
         {
-          title: "Exportar Catálogo",
+          title: "Exportar Catalogo",
           url: "/dashboard/catalog",
           permission: "store",
         },
@@ -472,7 +472,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           { title: "Asientos", url: "/dashboard/accounting/entries", permission: "accounting" as const },
           { title: "Libro Mayor", url: "/dashboard/accounting/reports/ledger", permission: "accounting" as const },
           {
-            title: "Balance de Comprobación",
+            title: "Balance de Comprobacion",
             url: "/dashboard/accounting/reports/trial-balance",
             permission: "accounting" as const,
           },

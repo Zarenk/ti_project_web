@@ -14,6 +14,7 @@ import { CreateTenancyDto } from './dto/create-tenancy.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import { TenancySnapshot } from './entities/tenancy.entity';
 import { GlobalSuperAdminGuard } from './global-super-admin.guard';
+import { AssignSuperAdminDto } from './dto/assign-super-admin.dto';
 
 @UseGuards(GlobalSuperAdminGuard)
 @Controller('tenancy')
@@ -41,6 +42,14 @@ export class TenancyController {
     @Body() updateTenancyDto: UpdateTenancyDto,
   ): Promise<TenancySnapshot> {
     return this.tenancyService.update(id, updateTenancyDto);
+  }
+
+  @Patch(':id/super-admin')
+  assignSuperAdmin(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AssignSuperAdminDto,
+  ): Promise<TenancySnapshot> {
+    return this.tenancyService.assignSuperAdmin(id, dto.userId);
   }
 
   @Delete(':id')

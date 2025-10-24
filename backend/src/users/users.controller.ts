@@ -7,6 +7,7 @@ import {
   Get,
   NotFoundException,
   Patch,
+  Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -90,8 +91,8 @@ export class UsersController {
 
   @Get()
   @ApiResponse({ status: 200, description: 'Return all users' }) // Swagger
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query('search') search?: string) {
+    return this.usersService.findAll(search);
   }
 
   @UseGuards(JwtAuthGuard)

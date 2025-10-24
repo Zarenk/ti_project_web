@@ -13,6 +13,7 @@ import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import {
   StoredOrganizationUnit,
   TenancySnapshot,
+  OrganizationSuperAdmin,
 } from './entities/tenancy.entity';
 
 type MinimalUnit = Pick<
@@ -51,10 +52,16 @@ export class TenancyService {
           where: { organizationId: organization.id },
         });
 
+        const superAdmin = await this.resolveSuperAdmin(
+          tx,
+          organization.id,
+        );
+
         return {
           ...organization,
           units: createdUnits,
           membershipCount,
+          superAdmin,
         };
       });
     } catch (error) {
@@ -72,11 +79,17 @@ export class TenancyService {
       orderBy: { id: 'asc' },
     });
 
-    return organizations.map(({ _count, units, ...organization }) => ({
-      ...organization,
-      units,
-      membershipCount: _count.memberships,
-    }));
+    return Promise.all(
+      organizations.map(async ({ _count, units, ...organization }) => ({
+        ...organization,
+        units,
+        membershipCount: _count.memberships,
+        superAdmin: await this.resolveSuperAdmin(
+          prismaClient,
+          organization.id,
+        ),
+      })),
+    );
   }
 
   async findOne(id: number): Promise<TenancySnapshot> {
@@ -94,10 +107,12 @@ export class TenancyService {
     }
 
     const { _count, units, ...rest } = organization;
+    const superAdmin = await this.resolveSuperAdmin(prismaClient, id);
     return {
       ...rest,
       units,
       membershipCount: _count.memberships,
+      superAdmin,
     };
   }
 
@@ -143,10 +158,13 @@ export class TenancyService {
           where: { organizationId: id },
         });
 
+        const superAdmin = await this.resolveSuperAdmin(tx, id);
+
         return {
           ...organization,
           units,
           membershipCount,
+          superAdmin,
         };
       });
     } catch (error) {
@@ -178,10 +196,13 @@ export class TenancyService {
           where: { organizationId: id },
         });
 
+        const superAdmin = await this.resolveSuperAdmin(tx, id);
+
         return {
           ...organization,
           units,
           membershipCount,
+          superAdmin,
         };
       });
     } catch (error) {
@@ -189,6 +210,107 @@ export class TenancyService {
     }
   }
 
+  async assignSuperAdmin(
+    organizationId: number,
+    userId: number,
+  ): Promise<TenancySnapshot> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const prisma = tx as unknown as PrismaService as any;
+
+        const organization = await prisma.organization.findUnique({
+          where: { id: organizationId },
+        });
+
+        if (!organization) {
+          throw new NotFoundException(
+            `Organization ${organizationId} was not found`,
+          );
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+          throw new NotFoundException(`User ${userId} was not found`);
+        }
+
+        await prisma.organizationMembership.updateMany({
+          where: { organizationId, role: 'SUPER_ADMIN' },
+          data: { role: 'ADMIN', isDefault: false },
+        });
+
+        const existingMembership =
+          await prisma.organizationMembership.findFirst({
+            where: { organizationId, userId },
+          });
+
+        if (existingMembership) {
+          await prisma.organizationMembership.update({
+            where: { id: existingMembership.id },
+            data: {
+              role: 'SUPER_ADMIN',
+              isDefault: true,
+            },
+          });
+        } else {
+          await prisma.organizationMembership.create({
+            data: {
+              organizationId,
+              userId,
+              organizationUnitId: null,
+              role: 'SUPER_ADMIN',
+              isDefault: true,
+            },
+          });
+        }
+
+        const units = await prisma.organizationUnit.findMany({
+          where: { organizationId },
+          orderBy: { id: 'asc' },
+        });
+
+        const membershipCount = await prisma.organizationMembership.count({
+          where: { organizationId },
+        });
+
+        const superAdmin = await this.resolveSuperAdmin(tx, organizationId);
+
+        return {
+          ...organization,
+          units,
+          membershipCount,
+          superAdmin,
+        };
+      });
+    } catch (error) {
+      throw this.handlePrismaError(error);
+    }
+  }
+
+  private async resolveSuperAdmin(
+    prisma: Prisma.TransactionClient | PrismaService,
+    organizationId: number,
+  ): Promise<OrganizationSuperAdmin | null> {
+    const membership = await (prisma as any).organizationMembership.findFirst({
+      where: { organizationId, role: 'SUPER_ADMIN' },
+      include: {
+        user: {
+          select: { id: true, username: true, email: true },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    if (!membership?.user) {
+      return null;
+    }
+
+    return {
+      id: membership.user.id,
+      username: membership.user.username,
+      email: membership.user.email,
+    }
+  } 
+    
   private async persistUnits(
     tx: Prisma.TransactionClient,
     organizationId: number,

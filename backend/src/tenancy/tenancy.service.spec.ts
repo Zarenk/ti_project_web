@@ -23,6 +23,13 @@ interface MockTransactionClient {
   };
   organizationMembership: {
     count: jest.Mock;
+    findFirst: jest.Mock;
+    updateMany: jest.Mock;
+    update: jest.Mock;
+    create: jest.Mock;
+  };
+  user: {
+    findUnique: jest.Mock;
   };
 }
 
@@ -32,6 +39,7 @@ describe('TenancyService', () => {
     $transaction: jest.Mock;
     organization: MockTransactionClient['organization'];
     organizationUnit: MockTransactionClient['organizationUnit'];
+    user: MockTransactionClient['user'];
     organizationMembership: MockTransactionClient['organizationMembership'];
   };
   let tx: MockTransactionClient;
@@ -52,14 +60,29 @@ describe('TenancyService', () => {
       },
       organizationMembership: {
         count: jest.fn(),
+        findFirst: jest.fn(),
+        updateMany: jest.fn(),
+        update: jest.fn(),
+        create: jest.fn(),
+      },
+      user: {
+        findUnique: jest.fn(),
       },
     };
+
+    tx.organizationMembership.count.mockResolvedValue(0);
+    tx.organizationMembership.findFirst.mockResolvedValue(null);
+    tx.organizationMembership.updateMany.mockResolvedValue({ count: 0 });
+    tx.organizationMembership.update.mockResolvedValue(undefined);
+    tx.organizationMembership.create.mockResolvedValue(undefined);
+    tx.user.findUnique.mockResolvedValue(null);
 
     prisma = {
       $transaction: jest.fn(async (callback) => callback(tx as unknown as any)),
       organization: tx.organization,
       organizationUnit: tx.organizationUnit,
       organizationMembership: tx.organizationMembership,
+      user: tx.user,
     };
 
     service = new TenancyService(prisma as unknown as PrismaService);
@@ -125,6 +148,7 @@ describe('TenancyService', () => {
         }),
       ],
       membershipCount: 0,
+      superAdmin: null,
     });
   });
 
@@ -181,6 +205,7 @@ describe('TenancyService', () => {
     );
     expect(result.units).toHaveLength(2);
     expect(result.membershipCount).toBe(0);
+    expect(result.superAdmin).toBeNull();
   });
 
   it('updates organization metadata and units in place', async () => {
@@ -298,6 +323,7 @@ describe('TenancyService', () => {
     });
     expect(result.units).toHaveLength(3);
     expect(result.membershipCount).toBe(4);
+    expect(result.superAdmin).toBeNull();
   });
 
   it('deactivates organizations and all units', async () => {
@@ -334,6 +360,7 @@ describe('TenancyService', () => {
       where: { id: 90 },
       data: { status: 'INACTIVE' },
     });
+    expect(result.superAdmin).toBeNull();
     expect(tx.organizationUnit.updateMany).toHaveBeenCalledWith({
       where: { organizationId: 90 },
       data: { status: 'INACTIVE' },
@@ -377,6 +404,7 @@ describe('TenancyService', () => {
         id: 1,
         name: 'Wayne Enterprises',
         membershipCount: 3,
+        superAdmin: null,
         units: expect.arrayContaining([
           expect.objectContaining({ name: 'HQ' }),
         ]),
@@ -414,6 +442,7 @@ describe('TenancyService', () => {
 
     expect(result.id).toBe(44);
     expect(result.membershipCount).toBe(12);
+    expect(result.superAdmin).toBeNull();
   });
 
   it('throws when requesting an unknown organization', async () => {
@@ -456,3 +485,83 @@ describe('TenancyService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
+  it("assigns a super admin to an organization", async () => {
+    const createdAt = new Date("2024-06-01T00:00:00.000Z");
+    const updatedAt = new Date("2024-06-01T01:00:00.000Z");
+
+    tx.organization.findUnique.mockResolvedValue({
+      id: 42,
+      name: "Massive Dynamic",
+      code: "MDYN",
+      status: "ACTIVE",
+      createdAt,
+      updatedAt,
+    });
+
+    tx.user.findUnique.mockResolvedValue({
+      id: 77,
+      username: "olivia.dunham",
+      email: "olivia@mdynamic.example",
+    });
+
+    tx.organizationMembership.updateMany.mockResolvedValue({ count: 1 });
+    tx.organizationMembership.findFirst
+      .mockResolvedValueOnce({
+        id: 900,
+        organizationId: 42,
+        userId: 77,
+        organizationUnitId: null,
+      })
+      .mockResolvedValueOnce({
+        id: 901,
+        organizationId: 42,
+        role: "SUPER_ADMIN",
+        userId: 77,
+        user: {
+          id: 77,
+          username: "olivia.dunham",
+          email: "olivia@mdynamic.example",
+        },
+      });
+
+    tx.organizationMembership.update.mockResolvedValue({
+      id: 900,
+      organizationId: 42,
+      userId: 77,
+      role: "SUPER_ADMIN",
+      isDefault: true,
+    });
+
+    tx.organizationUnit.findMany.mockResolvedValue([
+      {
+        id: 1,
+        organizationId: 42,
+        parentUnitId: null,
+        name: "HQ",
+        code: null,
+        status: "ACTIVE",
+        createdAt,
+        updatedAt,
+      },
+    ]);
+
+    tx.organizationMembership.count.mockResolvedValue(5);
+
+    const result = await service.assignSuperAdmin(42, 77);
+
+    expect(tx.organizationMembership.updateMany).toHaveBeenCalledWith({
+      where: { organizationId: 42, role: "SUPER_ADMIN" },
+      data: { role: "ADMIN", isDefault: false },
+    });
+    expect(tx.organizationMembership.update).toHaveBeenCalledWith({
+      where: { id: 900 },
+      data: { role: "SUPER_ADMIN", isDefault: true },
+    });
+    expect(tx.organizationMembership.create).not.toHaveBeenCalled();
+    expect(result.superAdmin).toEqual({
+      id: 77,
+      username: "olivia.dunham",
+      email: "olivia@mdynamic.example",
+    });
+    expect(result.membershipCount).toBe(5);
+  });

@@ -16,7 +16,7 @@ export default function LoginPage() {
       if (await isTokenValid()) {
         const data = await getUserDataFromToken();
         if (data) {
-          if (['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE'].includes(data.role)) {
+          if (data.role && ['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE'].includes(data.role)) {
             router.replace('/dashboard');
           } else {
             router.replace('/users');
@@ -33,7 +33,7 @@ export default function LoginPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-center">Bienvenido</CardTitle>
           <CardDescription className="text-center">
-            Inicia sesión para acceder a tu cuenta
+            Inicia sesion para acceder a tu cuenta
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -43,7 +43,7 @@ export default function LoginPage() {
           <p className="text-sm">
             Aun no tienes una cuenta?{' '}
             <Link href="/register" className="font-semibold underline">
-              Regístrate aquí
+              Registrate aqui
             </Link>
           </p>
           <Link href="/" className="text-sm font-semibold underline">

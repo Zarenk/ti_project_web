@@ -135,7 +135,7 @@ export default function NewOrganizationPage() {
     try {
       const response = await createOrganization(payload)
       toast.success(`Organización "${response.name}" creada correctamente.`)
-      router.push("/dashboard/tenancy")
+      router.push(`/dashboard/tenancy/${response.id}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo crear la organización"
       toast.error(message)
