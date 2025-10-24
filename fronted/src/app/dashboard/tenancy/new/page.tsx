@@ -99,11 +99,14 @@ export default function NewOrganizationPage() {
     code: organization.code.trim() || undefined,
     status: organization.status,
     units: units
-      .map((unit) => ({
-        name: unit.name.trim(),
-        code: unit.code.trim() ? unit.code.trim() : null,
-        status: unit.status,
-      }))
+      .map((unit) => {
+        const unitCode = unit.code?.trim() ?? ""
+        return {
+          name: unit.name.trim(),
+          code: unitCode ? unitCode : null,
+          status: unit.status,
+        }
+      })
       .filter((unit) => unit.name.length > 0),
   })
 

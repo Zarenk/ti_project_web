@@ -25,6 +25,12 @@ import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
+const ORDERS_ALLOWED_ROLES = [
+  'ADMIN',
+  'SUPER_ADMIN_GLOBAL',
+  'SUPER_ADMIN_ORG',
+] as const;
+
 @Controller('web-sales')
 export class WebSalesController {
   constructor(private readonly webSalesService: WebSalesService) {}
@@ -129,7 +135,7 @@ export class WebSalesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @Roles(...ORDERS_ALLOWED_ROLES)
   @Get('orders')
   async getOrders(
     @Query('status') status?: string,
@@ -150,7 +156,7 @@ export class WebSalesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @Roles(...ORDERS_ALLOWED_ROLES)
   @Get('orders/count')
   async getOrdersCount(
     @Query('status') status?: string,
@@ -164,7 +170,7 @@ export class WebSalesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @Roles(...ORDERS_ALLOWED_ROLES)
   @Get('orders/recent')
   async getRecentOrders(
     @Query('from') from?: string,

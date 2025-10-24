@@ -19,8 +19,15 @@ import { Roles } from 'src/users/roles.decorator';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
+const SALES_ALLOWED_ROLES = [
+  'ADMIN',
+  'EMPLOYEE',
+  'SUPER_ADMIN_GLOBAL',
+  'SUPER_ADMIN_ORG',
+] as const;
+
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+@Roles(...SALES_ALLOWED_ROLES)
 @ModulePermission('sales')
 @Controller('sales')
 export class SalesController {

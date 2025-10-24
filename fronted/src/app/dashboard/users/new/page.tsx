@@ -12,7 +12,7 @@ export default function UserNewPage() {
   useEffect(() => {
     async function check() {
       const data = await getUserDataFromToken();
-      if (!data || !(await isTokenValid()) || !['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN'].includes(data.role)) {
+      if (!data || !(await isTokenValid()) || !['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN'].includes(data?.role ?? '')) {
         router.replace('/dashboard');
       }
     }

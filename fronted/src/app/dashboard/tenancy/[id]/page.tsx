@@ -57,7 +57,7 @@ export default function OrganizationDetailPage({
 
   const loadOrganization = useCallback(async () => {
     if (!Number.isFinite(organizationId)) {
-      setError("Identificador de organizaciÃƒÂ³n invÃƒÂ¡lido")
+      setError("Identificador de organizacion invalido")
       setLoading(false)
       return
     }
@@ -69,7 +69,7 @@ export default function OrganizationDetailPage({
       const data = await getOrganization(organizationId)
       setOrganization(data)
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo cargar la organizaciÃƒÂ³n"
+      const message = err instanceof Error ? err.message : "No se pudo cargar la organizacion"
       setError(message)
       setOrganization(null)
     } finally {
@@ -103,7 +103,7 @@ export default function OrganizationDetailPage({
         .catch(() => {
           if (latestQueryRef.current === currentQuery) {
             setSearchResults([])
-            toast.error("No se pudo realizar la bÃƒÂºsqueda de usuarios")
+            toast.error("No se pudo realizar la busqueda de usuarios")
           }
         })
         .finally(() => {
@@ -119,7 +119,7 @@ export default function OrganizationDetailPage({
   const handleAssign = useCallback(
     async (userId: number) => {
       if (!Number.isFinite(organizationId)) {
-        toast.error("Identificador de organizaciÃƒÂ³n invÃƒÂ¡lido")
+        toast.error("Identificador de organizacion invalido")
         return
       }
 
