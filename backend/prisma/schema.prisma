@@ -198,9 +198,10 @@ model Organization {
   status    String    @default("ACTIVE")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  
+
   orders       Orders[]
   units        OrganizationUnit[]
+  companies    Company[]
   memberships  OrganizationMembership[]
   settings     OrganizationSetting?
   providers    Provider[]
@@ -210,9 +211,32 @@ model Organization {
   @@index([status])
 }
 
+model Company {
+  id             Int           @id @default(autoincrement())
+  organizationId Int
+  name           String
+  legalName      String?
+  taxId          String?       @unique
+  status         String        @default("ACTIVE")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  units          OrganizationUnit[]
+  stores         Store[]
+  sales          Sales[]
+  orders         Orders[]
+  clients        Client[]
+  inventoryHistories InventoryHistory[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+}
+
 model OrganizationUnit {
   id              Int                @id @default(autoincrement())
   organizationId  Int
+  companyId       Int?
   parentUnitId    Int?
   name            String
   code            String?
@@ -221,6 +245,7 @@ model OrganizationUnit {
   updatedAt       DateTime           @updatedAt
 
   organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company         Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
   parent          OrganizationUnit?  @relation("OrganizationUnitHierarchy", fields: [parentUnitId], references: [id])
   children        OrganizationUnit[] @relation("OrganizationUnitHierarchy")
   memberships     OrganizationMembership[]
@@ -228,6 +253,7 @@ model OrganizationUnit {
   @@unique([organizationId, name])
   @@unique([organizationId, code])
   @@index([organizationId])
+  @@index([companyId])
   @@index([parentUnitId])
 }
 
@@ -273,14 +299,17 @@ model Client {
   status         String?
   image          String?
   organizationId Int?
+  companyId      Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   user  User    @relation(fields: [userId], references: [id])
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   // Relación con Sales
   sales Sales[] // Relación con el modelo Sales
 
   @@index([organizationId, name])
+  @@index([companyId])
 }
 
 model Provider {
@@ -438,6 +467,7 @@ model Store {
   status      String?
   image       String?
   organizationId Int?
+  companyId      Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -455,6 +485,8 @@ model Store {
 
   // Relación con la tabla de caja
   CashRegister CashRegister[]
+
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, name])
 }
@@ -486,15 +518,18 @@ model InventoryHistory {
   previousStock Int? // Stock anterior (opcional)
   newStock      Int? // Stock nuevo (opcional)
   organizationId Int?
+  companyId      Int?
   createdAt     DateTime @default(now()) // Fecha del cambio
 
   inventory Inventory @relation(fields: [inventoryId], references: [id])
   user      User      @relation(fields: [userId], references: [id]) // Relación con la tabla de usuarios
+  company   Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([inventoryId])
   @@index([userId])
   @@index([createdAt])
   @@index([organizationId, createdAt])
+  @@index([companyId, createdAt])
 }
 
 model Transfer {
@@ -531,6 +566,7 @@ model Sales {
   description String? // Descripción opcional
   source      SaleSource @default(POS)
   organizationId Int?
+  companyId      Int?
   createdAt   DateTime   @default(now()) // Fecha de la venta
   updatedAt   DateTime   @updatedAt
 
@@ -542,6 +578,7 @@ model Sales {
   payments       SalePayment[] // 👈 Relación con tabla intermedia
   shippingGuides ShippingGuide[]
   order          Orders?
+  company        Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([storeId])
@@ -634,6 +671,7 @@ model Orders {
   carrierId       String?
   carrierName     String?
   organizationId  Int?
+  companyId       Int?
   carrierMode     String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -641,9 +679,11 @@ model Orders {
   sale          Sales?          @relation(fields: [salesId], references: [id])
   OrderTracking OrderTracking[]
   organization  Organization?   @relation(fields: [organizationId], references: [id])
+  company       Company?       @relation(fields: [companyId], references: [id])
 
   @@index([salesId])
   @@index([organizationId, createdAt])
+  @@index([companyId, createdAt])
 }
 
 model OrderTracking {

@@ -12,7 +12,10 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AuditAction } from '@prisma/client';
 import { ActivityService } from '../activity/activity.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
-import { buildOrganizationFilter } from 'src/tenancy/organization.utils';
+import {
+  buildOrganizationFilter,
+  resolveCompanyId,
+} from 'src/tenancy/organization.utils';
 
 @Injectable()
 export class StoresService {
@@ -25,27 +28,44 @@ export class StoresService {
     createStoreDto: CreateStoreDto,
     req: Request,
     organizationIdFromContext?: number | null,
+    companyIdFromContext?: number | null,
   ) {
     try {
-      const { organizationId, ...storePayload } = createStoreDto;
+      const { organizationId, companyId, ...storePayload } = createStoreDto;
 
       const resolvedOrganizationId =
         organizationIdFromContext === undefined
           ? (organizationId ?? null)
           : organizationIdFromContext;
+      const resolvedCompanyId =
+        companyIdFromContext === undefined
+          ? resolveCompanyId({
+              provided: companyId ?? null,
+              mismatchError:
+                'La compania proporcionada no coincide con el contexto.',
+            })
+          : resolveCompanyId({
+              provided: companyId ?? null,
+              fallbacks: [companyIdFromContext],
+              mismatchError:
+                'La compania proporcionada no coincide con el contexto.',
+            });
 
       logOrganizationContext({
         service: StoresService.name,
         operation: 'create',
         organizationId: resolvedOrganizationId ?? null,
+        companyId: resolvedCompanyId ?? null,
         metadata: { storeName: createStoreDto.name },
       });
 
       const storeCreateData: Prisma.StoreUncheckedCreateInput & {
         organizationId?: number | null;
+        companyId?: number | null;
       } = {
         ...storePayload,
         organizationId: resolvedOrganizationId ?? null,
+        companyId: resolvedCompanyId ?? null,
       };
 
       const store = await this.prismaService.store.create({
@@ -79,9 +99,13 @@ export class StoresService {
     }
   }
 
-  findAll(organizationIdFromContext?: number | null) {
+  findAll(
+    organizationIdFromContext?: number | null,
+    companyIdFromContext?: number | null,
+  ) {
     const where = buildOrganizationFilter(
       organizationIdFromContext,
+      companyIdFromContext,
     ) as Prisma.StoreWhereInput;
 
     if (Object.keys(where).length === 0) {

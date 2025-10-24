@@ -36,10 +36,49 @@ export function resolveOrganizationId({
  * Undefined values are ignored (keeping backwards compatibility) while null
  * values are propagated to allow querying legacy rows.
  */
-export function buildOrganizationFilter(organizationId?: number | null) {
-  if (organizationId === undefined) {
-    return {};
+export function resolveCompanyId({
+  provided,
+  fallbacks = [],
+  mismatchError,
+}: {
+  provided?: number | null;
+  fallbacks?: Array<number | null | undefined>;
+  mismatchError: string;
+}): number | null {
+  const definedValues = [provided, ...fallbacks].filter(
+    (value): value is number => value !== undefined && value !== null,
+  );
+
+  if (definedValues.length === 0) {
+    return null;
   }
 
-  return { organizationId };
+  const [first, ...rest] = definedValues;
+  if (rest.some((value) => value !== first)) {
+    throw new BadRequestException(mismatchError);
+  }
+
+  return first;
+}
+
+/**
+ * Helper used to compose Prisma filters based on optional tenant identifiers.
+ * Undefined values are ignored (keeping backwards compatibility) while null
+ * values are propagated to allow querying legacy rows.
+ */
+export function buildOrganizationFilter(
+  organizationId?: number | null,
+  companyId?: number | null,
+) {
+  const filter: Record<string, number | null> = {};
+
+  if (organizationId !== undefined) {
+    filter.organizationId = organizationId;
+  }
+
+  if (companyId !== undefined) {
+    filter.companyId = companyId;
+  }
+
+  return filter;
 }

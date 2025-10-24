@@ -60,6 +60,7 @@ export class TenancyService {
         return {
           ...organization,
           units: createdUnits,
+          companies: [],
           membershipCount,
           superAdmin,
         };
@@ -74,15 +75,17 @@ export class TenancyService {
     const organizations = await prismaClient.organization.findMany({
       include: {
         units: { orderBy: { id: 'asc' } },
+        companies: { orderBy: { id: 'asc' } },
         _count: { select: { memberships: true } },
       },
       orderBy: { id: 'asc' },
     });
 
     return Promise.all(
-      organizations.map(async ({ _count, units, ...organization }) => ({
+      organizations.map(async ({ _count, units, companies, ...organization }) => ({
         ...organization,
         units,
+        companies,
         membershipCount: _count.memberships,
         superAdmin: await this.resolveSuperAdmin(
           prismaClient,
@@ -98,6 +101,7 @@ export class TenancyService {
       where: { id },
       include: {
         units: { orderBy: { id: 'asc' } },
+        companies: { orderBy: { id: 'asc' } },
         _count: { select: { memberships: true } },
       },
     });
@@ -106,11 +110,12 @@ export class TenancyService {
       throw new NotFoundException(`Organization ${id} was not found`);
     }
 
-    const { _count, units, ...rest } = organization;
+    const { _count, units, companies, ...rest } = organization;
     const superAdmin = await this.resolveSuperAdmin(prismaClient, id);
     return {
       ...rest,
       units,
+      companies,
       membershipCount: _count.memberships,
       superAdmin,
     };
@@ -154,6 +159,11 @@ export class TenancyService {
           orderBy: { id: 'asc' },
         });
 
+        const companies = await prisma.company.findMany({
+          where: { organizationId: id },
+          orderBy: { id: 'asc' },
+        });
+
         const membershipCount = await prisma.organizationMembership.count({
           where: { organizationId: id },
         });
@@ -163,6 +173,7 @@ export class TenancyService {
         return {
           ...organization,
           units,
+          companies,
           membershipCount,
           superAdmin,
         };
@@ -268,6 +279,11 @@ export class TenancyService {
           orderBy: { id: 'asc' },
         });
 
+        const companies = await prisma.company.findMany({
+          where: { organizationId },
+          orderBy: { id: 'asc' },
+        });
+
         const membershipCount = await prisma.organizationMembership.count({
           where: { organizationId },
         });
@@ -277,6 +293,7 @@ export class TenancyService {
         return {
           ...organization,
           units,
+          companies,
           membershipCount,
           superAdmin,
         };
@@ -332,6 +349,7 @@ export class TenancyService {
           organizationId,
           name: unit.name.trim(),
           code: this.normalizeCodeInput(unit.code) ?? null,
+          companyId: unit.companyId ?? null,
           parentUnitId: unit.parentUnitId ?? parentId ?? null,
           status: unit.status ?? 'ACTIVE',
         },
@@ -374,6 +392,7 @@ export class TenancyService {
         data: {
           name: unitDto.name?.trim(),
           code: this.normalizeCodeInput(unitDto.code),
+          companyId: unitDto.companyId ?? undefined,
           status: unitDto.status,
           parentUnitId: parentId ?? undefined,
         },

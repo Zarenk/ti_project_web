@@ -30,6 +30,10 @@ export class OrganizationUnitInputDto {
   parentCode?: string;
 
   @IsOptional()
+  @IsInt()
+  companyId?: number | null;
+
+  @IsOptional()
   @IsString()
   status?: string;
 }

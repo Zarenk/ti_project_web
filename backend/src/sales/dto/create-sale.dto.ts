@@ -61,6 +61,11 @@ export class CreateSaleDto {
   @IsOptional()
   @IsNumber()
   @IsPositive()
+  companyId?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
   clientId?: number;
 
   @IsNumber()

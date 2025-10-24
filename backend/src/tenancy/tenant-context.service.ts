@@ -9,6 +9,9 @@ interface RequestUserPayload {
   role?: string;
   organizations?: Array<number | string>;
   defaultOrganizationId?: number | string | null;
+  companies?: Array<number | string>;
+  companyIds?: Array<number | string>;
+  defaultCompanyId?: number | string | null;
   isSuperAdmin?: boolean;
   organizationSuperAdminIds?: Array<number | string>;
   organizationUnits?: Array<number | string>;
@@ -34,6 +37,8 @@ export class TenantContextService {
       ...partial,
       allowedOrganizationIds:
         partial.allowedOrganizationIds ?? this.context.allowedOrganizationIds,
+      allowedCompanyIds:
+        partial.allowedCompanyIds ?? this.context.allowedCompanyIds,
       allowedOrganizationUnitIds:
         partial.allowedOrganizationUnitIds ??
         this.context.allowedOrganizationUnitIds,
@@ -44,10 +49,15 @@ export class TenantContextService {
     const user = (request.user ?? {}) as RequestUserPayload;
     const headerOrgId = this.normalizeId(request.headers['x-org-id']);
     const defaultOrgId = this.normalizeId(user.defaultOrganizationId);
+    const headerCompanyId = this.normalizeId(request.headers['x-company-id']);
+    const defaultCompanyId = this.normalizeId(user.defaultCompanyId);
     const headerOrgUnitId = this.normalizeId(request.headers['x-org-unit-id']);
     const defaultOrgUnitId = this.normalizeId(user.defaultOrganizationUnitId);
 
     const allowedOrganizationIds = this.normalizeIdArray(user.organizations);
+    const allowedCompanyIds = this.normalizeIdArray(
+      user.companies ?? user.companyIds ?? [],
+    );
     const allowedOrganizationUnitIds = this.normalizeIdArray(
       user.organizationUnits ?? user.organizationUnitIds ?? [],
     );
@@ -57,6 +67,8 @@ export class TenantContextService {
 
     const organizationId =
       headerOrgId ?? defaultOrgId ?? allowedOrganizationIds[0] ?? null;
+    const companyId =
+      headerCompanyId ?? defaultCompanyId ?? allowedCompanyIds[0] ?? null;
     const organizationUnitId =
       headerOrgUnitId ??
       defaultOrgUnitId ??
@@ -77,12 +89,14 @@ export class TenantContextService {
 
     const context: TenantContext = {
       organizationId,
+      companyId,
       organizationUnitId,
       userId: this.normalizeId(user.id),
       isGlobalSuperAdmin,
       isOrganizationSuperAdmin,
       isSuperAdmin: isGlobalSuperAdmin || isOrganizationSuperAdmin,
       allowedOrganizationIds,
+      allowedCompanyIds,
       allowedOrganizationUnitIds,
     };
 

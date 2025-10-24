@@ -37,11 +37,13 @@ export class SalesController {
   async createSale(
     @Body() createSaleDto: CreateSaleDto,
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     return this.salesService.createSale({
       ...createSaleDto,
       organizationId:
         createSaleDto.organizationId ?? organizationId ?? undefined,
+      companyId: createSaleDto.companyId ?? companyId ?? undefined,
     });
   }
 

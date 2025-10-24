@@ -23,6 +23,7 @@ import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 import {
   buildOrganizationFilter,
+  resolveCompanyId,
   resolveOrganizationId,
 } from 'src/tenancy/organization.utils';
 import { InventoryHistoryUncheckedCreateInputWithOrganization } from 'src/tenancy/prisma-organization.types';
@@ -33,8 +34,12 @@ export class SalesService {
 
   private buildSalesWhere(
     organizationId?: number | null,
+    companyId?: number | null,
   ): Prisma.SalesWhereInput {
-    return buildOrganizationFilter(organizationId) as Prisma.SalesWhereInput;
+    return buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.SalesWhereInput;
   }
 
   constructor(
@@ -60,6 +65,7 @@ export class SalesService {
     tipoMoneda: string;
     payments: { paymentMethodId: number; amount: number; currency: string }[];
     organizationId?: number | null;
+    companyId?: number | null;
   }) {
     const {
       userId,
@@ -71,6 +77,7 @@ export class SalesService {
       tipoComprobante,
       tipoMoneda,
       organizationId: inputOrganizationId,
+      companyId: inputCompanyId,
     } = data;
 
     const { store, cashRegister, clientIdToUse } = await prepareSaleContext(
@@ -83,6 +90,17 @@ export class SalesService {
       (store as { organizationId?: number | null } | undefined)
         ?.organizationId ?? null;
 
+    const storeCompanyId =
+      (store as { companyId?: number | null } | undefined)?.companyId ?? null;
+
+    const companyId = resolveCompanyId({
+      provided: inputCompanyId ?? null,
+      fallbacks: [storeCompanyId],
+      mismatchError:
+        'La compania proporcionada no coincide con la tienda seleccionada.',
+    });
+
+
     const organizationId = resolveOrganizationId({
       provided: inputOrganizationId ?? null,
       fallbacks: [storeOrganizationId],
@@ -94,6 +112,7 @@ export class SalesService {
       service: SalesService.name,
       operation: 'createSale',
       organizationId,
+      companyId,
       metadata: { storeId, userId, clientId: clientIdToUse ?? clientId },
     });
 
@@ -129,6 +148,7 @@ export class SalesService {
       source: 'POS',
       getStoreName: () => store.name,
       organizationId,
+      companyId,
       onSalePosted: async (id) => {
         try {
           await this.accountingHook.postSale(id);

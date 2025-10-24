@@ -109,6 +109,7 @@ export async function executeSale(
     getStoreName: (alloc: SaleAllocation) => string;
     onSalePosted?: (saleId: number, postedAt: Date) => Promise<void> | void;
     organizationId?: number | null;
+    companyId?: number | null;
   },
 ) {
   const {
@@ -126,6 +127,7 @@ export async function executeSale(
     getStoreName,
     onSalePosted,
     organizationId,
+    companyId,
   } = params;
 
   const sale = await prisma.$transaction(async (prismaTx) => {
@@ -138,6 +140,7 @@ export async function executeSale(
         description,
         source,
         organizationId: organizationId ?? null,
+        companyId: companyId ?? null,
       },
     });
 
@@ -300,6 +303,7 @@ export async function executeSale(
           previousStock: storeInventory.stock,
           newStock: storeInventory.stock - detail.quantity,
           organizationId: organizationId ?? null,
+        companyId: companyId ?? null,
         },
       });
     }

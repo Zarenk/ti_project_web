@@ -4,7 +4,8 @@ import { Store } from '@prisma/client';
 
 export type CreateStoreDto = Omit<
   Store,
-  'id' | 'createdAt' | 'updatedAt' | 'organizationId'
+  'id' | 'createdAt' | 'updatedAt' | 'organizationId' | 'companyId'
 > & {
   organizationId?: number | null;
+  companyId?: number | null;
 };

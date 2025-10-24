@@ -5,6 +5,7 @@ export interface OrganizationContextLogOptions {
   service: string;
   operation: string;
   organizationId?: number | null;
+  companyId?: number | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -71,12 +72,18 @@ export function logOrganizationContext({
   service,
   operation,
   organizationId,
+  companyId,
   metadata,
 }: OrganizationContextLogOptions) {
   const metadataSuffix =
     metadata && Object.keys(metadata).length > 0
       ? ` | metadata=${JSON.stringify(metadata)}`
       : '';
+
+  const companySuffix =
+    companyId === undefined
+      ? ''
+      : ` companyId=${companyId === null ? 'null' : companyId}`;
 
   const hasOrganizationId =
     organizationId === null || organizationId === undefined ? 'no' : 'yes';
@@ -89,12 +96,12 @@ export function logOrganizationContext({
 
   if (organizationId === null || organizationId === undefined) {
     organizationLogger.warn(
-      `[${service}.${operation}] executed without organizationId${metadataSuffix}`,
+      `[${service}.${operation}] executed without organizationId${companySuffix}${metadataSuffix}`,
     );
     return;
   }
 
   organizationLogger.log(
-    `[${service}.${operation}] organizationId=${organizationId}${metadataSuffix}`,
+    `[${service}.${operation}] organizationId=${organizationId}${companySuffix}${metadataSuffix}`,
   );
 }
