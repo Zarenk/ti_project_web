@@ -26,12 +26,14 @@ describe('TenantContextService', () => {
 
     expect(service.getContext()).toEqual({
       organizationId: 123,
+      companyId: null,
       organizationUnitId: null,
       userId: 42,
       isGlobalSuperAdmin: false,
       isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [789],
+      allowedCompanyIds: [],
       allowedOrganizationUnitIds: [],
     });
   });
@@ -48,12 +50,14 @@ describe('TenantContextService', () => {
 
     expect(service.getContext()).toEqual({
       organizationId: 654,
+      companyId: null,
       organizationUnitId: null,
       userId: 99,
       isGlobalSuperAdmin: false,
       isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [321],
+      allowedCompanyIds: [],
       allowedOrganizationUnitIds: [],
     });
   });
@@ -67,12 +71,59 @@ describe('TenantContextService', () => {
 
     expect(service.getContext()).toEqual({
       organizationId: 888,
+      companyId: null,
       organizationUnitId: null,
       userId: null,
       isGlobalSuperAdmin: false,
       isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [888, 777],
+      allowedCompanyIds: [],
+      allowedOrganizationUnitIds: [],
+    });
+  });
+
+  it('prioritizes the x-company-id header when resolving the companyId', () => {
+    const service = createService({
+      headers: { 'x-company-id': '321' },
+      user: {
+        companies: ['654'],
+        defaultCompanyId: '987',
+      },
+    });
+
+    expect(service.getContext()).toEqual({
+      organizationId: null,
+      companyId: 321,
+      organizationUnitId: null,
+      userId: null,
+      isGlobalSuperAdmin: false,
+      isOrganizationSuperAdmin: false,
+      isSuperAdmin: false,
+      allowedOrganizationIds: [],
+      allowedCompanyIds: [654],
+      allowedOrganizationUnitIds: [],
+    });
+  });
+
+  it('falls back to the default company and allowed list when no header is provided', () => {
+    const service = createService({
+      user: {
+        defaultCompanyId: '555',
+        companies: ['777', '888'],
+      },
+    });
+
+    expect(service.getContext()).toEqual({
+      organizationId: null,
+      companyId: 555,
+      organizationUnitId: null,
+      userId: null,
+      isGlobalSuperAdmin: false,
+      isOrganizationSuperAdmin: false,
+      isSuperAdmin: false,
+      allowedOrganizationIds: [],
+      allowedCompanyIds: [777, 888],
       allowedOrganizationUnitIds: [],
     });
   });
@@ -88,12 +139,14 @@ describe('TenantContextService', () => {
 
     expect(headerAsArrayService.getContext()).toEqual({
       organizationId: 501,
+      companyId: null,
       organizationUnitId: null,
       userId: 1,
       isGlobalSuperAdmin: true,
       isOrganizationSuperAdmin: false,
       isSuperAdmin: true,
       allowedOrganizationIds: [],
+      allowedCompanyIds: [],
       allowedOrganizationUnitIds: [],
     });
 
@@ -135,7 +188,9 @@ describe('TenantContextService', () => {
 
     expect(service.getContext()).toMatchObject({
       organizationUnitId: 33,
+      companyId: null,
       allowedOrganizationUnitIds: [55],
+      allowedCompanyIds: [],
     });
   });
 
@@ -150,6 +205,7 @@ describe('TenantContextService', () => {
     expect(serviceWithDefault.getContext()).toMatchObject({
       organizationUnitId: 101,
       allowedOrganizationUnitIds: [202, 303],
+      allowedCompanyIds: [],
     });
 
     const serviceWithAllowedList = createService({
@@ -161,6 +217,7 @@ describe('TenantContextService', () => {
     expect(serviceWithAllowedList.getContext()).toMatchObject({
       organizationUnitId: 707,
       allowedOrganizationUnitIds: [707, 808],
+      allowedCompanyIds: [],
     });
   });
 
@@ -177,12 +234,14 @@ describe('TenantContextService', () => {
 
     expect(service.getContext()).toEqual({
       organizationId: 999,
+      companyId: null,
       organizationUnitId: 30,
       userId: 10,
       isGlobalSuperAdmin: false,
       isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [100, 200],
+      allowedCompanyIds: [],
       allowedOrganizationUnitIds: [30, 40],
     });
 
@@ -194,12 +253,14 @@ describe('TenantContextService', () => {
 
     expect(service.getContext()).toEqual({
       organizationId: 999,
+      companyId: null,
       organizationUnitId: 55,
       userId: 10,
       isGlobalSuperAdmin: false,
       isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [400],
+      allowedCompanyIds: [],
       allowedOrganizationUnitIds: [60],
     });
   });

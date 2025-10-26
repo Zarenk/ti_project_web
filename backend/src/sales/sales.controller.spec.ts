@@ -64,41 +64,45 @@ describe('SalesController', () => {
     jest.clearAllMocks();
   });
 
-  it('propagates explicit organizationId when creating a sale', async () => {
+  it('propagates explicit organization and company when creating a sale', async () => {
     const createSaleDto: CreateSaleDto = {
       ...createSaleBasePayload,
       organizationId: 55,
+      companyId: 66,
     };
 
     service.createSale.mockResolvedValue({ id: 1 } as any);
 
-    await controller.createSale(createSaleDto, 77);
+    await controller.createSale(createSaleDto, 77, 91);
 
     expect(service.createSale).toHaveBeenCalledWith({
       ...createSaleDto,
       organizationId: 55,
+      companyId: 66,
     });
   });
 
-  it('uses organizationId from context when payload omits it', async () => {
+  it('uses tenant context when payload omits organization and company', async () => {
     service.createSale.mockResolvedValue({ id: 2 } as any);
 
-    await controller.createSale({ ...createSaleBasePayload }, 88);
+    await controller.createSale({ ...createSaleBasePayload }, 88, 22);
 
     expect(service.createSale).toHaveBeenCalledWith({
       ...createSaleBasePayload,
       organizationId: 88,
+      companyId: 22,
     });
   });
 
-  it('omits organizationId when both payload and context are null', async () => {
+  it('omits organizationId and companyId when both payload and context are null', async () => {
     service.createSale.mockResolvedValue({ id: 3 } as any);
 
-    await controller.createSale({ ...createSaleBasePayload }, null);
+    await controller.createSale({ ...createSaleBasePayload }, null, null);
 
     expect(service.createSale).toHaveBeenCalledWith({
       ...createSaleBasePayload,
       organizationId: undefined,
+      companyId: undefined,
     });
   });
 
@@ -115,23 +119,25 @@ describe('SalesController', () => {
   });
 
   it('passes organization context to getTopProductsByRange', async () => {
-    await controller.getTopProductsByRange('2024-01-01', '2024-01-31', 12);
+    await controller.getTopProductsByRange('2024-01-01', '2024-01-31', 12, 44);
 
     expect(service.getTopProducts).toHaveBeenCalledWith(
       10,
       '2024-01-01',
       '2024-01-31',
       12,
+      44,
     );
   });
 
-  it('uses undefined organizationId when context is null in getTopProducts', async () => {
-    await controller.getTopProductsByRange('2024-01-01', '2024-01-31', null);
+  it('falls back to undefined for missing tenant identifiers in getTopProducts', async () => {
+    await controller.getTopProductsByRange('2024-01-01', '2024-01-31', null, null);
 
     expect(service.getTopProducts).toHaveBeenCalledWith(
       10,
       '2024-01-01',
       '2024-01-31',
+      undefined,
       undefined,
     );
   });

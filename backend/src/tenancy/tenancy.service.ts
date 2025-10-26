@@ -6,12 +6,14 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
+  CompanyInputDto,
   CreateTenancyDto,
   OrganizationUnitInputDto,
   CompanyInputDto,
 } from './dto/create-tenancy.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import {
+  CompanySnapshot,
   StoredOrganizationUnit,
   TenancySnapshot,
   OrganizationSuperAdmin,
@@ -40,7 +42,16 @@ export class TenancyService {
           },
         });
 
+        const companies = await this.persistCompanies(
+          tx,
+          organization.id,
+          createTenancyDto.companies ?? [],
+        );
+
         const existingUnits = new Map<string, number>();
+        const allowedCompanyIds = new Set<number>(
+          companies.map((company) => company.id),
+        );
         const createdUnits = await this.persistUnits(
           tx,
           organization.id,
@@ -48,6 +59,7 @@ export class TenancyService {
             ? createTenancyDto.units
             : [{ name: 'General' }],
           existingUnits,
+          allowedCompanyIds,
         );
 
         const createdCompanies = await this.persistCompanies(
@@ -68,7 +80,11 @@ export class TenancyService {
         return {
           ...organization,
           units: createdUnits,
+<<<<<<< ours
           companies: createdCompanies,
+=======
+          companies,
+>>>>>>> theirs
           membershipCount,
           superAdmin,
         };
@@ -146,6 +162,18 @@ export class TenancyService {
           },
         });
 
+        if (updateTenancyDto.companies) {
+          await this.syncCompanies(tx, id, updateTenancyDto.companies);
+        }
+
+        const companies = await prisma.company.findMany({
+          where: { organizationId: id },
+          orderBy: { id: 'asc' },
+        });
+        const allowedCompanyIds = new Set<number>(
+          companies.map((company) => company.id),
+        );
+
         const existingUnits = await prisma.organizationUnit.findMany({
           where: { organizationId: id },
         });
@@ -158,16 +186,18 @@ export class TenancyService {
 
         if (updateTenancyDto.units?.length) {
           for (const unitDto of updateTenancyDto.units) {
-            await this.upsertUnit(tx, id, unitDto, unitsByCode, existingUnits);
+            await this.upsertUnit(
+              tx,
+              id,
+              unitDto,
+              unitsByCode,
+              existingUnits,
+              allowedCompanyIds,
+            );
           }
         }
 
         const units = await prisma.organizationUnit.findMany({
-          where: { organizationId: id },
-          orderBy: { id: 'asc' },
-        });
-
-        const companies = await prisma.company.findMany({
           where: { organizationId: id },
           orderBy: { id: 'asc' },
         });
@@ -206,7 +236,17 @@ export class TenancyService {
           data: { status: 'INACTIVE' },
         });
 
+        await prisma.company.updateMany({
+          where: { organizationId: id },
+          data: { status: 'INACTIVE' },
+        });
+
         const units = await prisma.organizationUnit.findMany({
+          where: { organizationId: id },
+          orderBy: { id: 'asc' },
+        });
+
+        const companies = await prisma.company.findMany({
           where: { organizationId: id },
           orderBy: { id: 'asc' },
         });
@@ -220,6 +260,7 @@ export class TenancyService {
         return {
           ...organization,
           units,
+          companies,
           membershipCount,
           superAdmin,
         };
@@ -341,6 +382,7 @@ export class TenancyService {
     organizationId: number,
     units: OrganizationUnitInputDto[],
     unitsByCode: Map<string, number>,
+    allowedCompanyIds?: Set<number>,
   ): Promise<StoredOrganizationUnit[]> {
     const createdUnits: StoredOrganizationUnit[] = [];
     const prisma = tx as unknown as PrismaService as any;
@@ -352,6 +394,7 @@ export class TenancyService {
 
       const parentId = this.resolveParentId(unit, unitsByCode);
 
+<<<<<<< ours
       if (unit.companyId !== undefined && unit.companyId !== null) {
         await this.assertCompanyBelongsToOrganization(
           prisma,
@@ -359,6 +402,13 @@ export class TenancyService {
           unit.companyId,
         );
       }
+=======
+      this.assertCompanyBelongsToOrganization(
+        organizationId,
+        unit.companyId,
+        allowedCompanyIds,
+      );
+>>>>>>> theirs
 
       const created = await prisma.organizationUnit.create({
         data: {
@@ -455,6 +505,7 @@ export class TenancyService {
     unitDto: OrganizationUnitInputDto,
     unitsByCode: Map<string, number>,
     existingUnits: MinimalUnit[],
+    allowedCompanyIds?: Set<number>,
   ) {
     const prisma = tx as unknown as PrismaService as any;
 
@@ -485,7 +536,14 @@ export class TenancyService {
         data: {
           name: unitDto.name?.trim(),
           code: this.normalizeCodeInput(unitDto.code),
-          companyId: unitDto.companyId ?? undefined,
+          companyId: (() => {
+            this.assertCompanyBelongsToOrganization(
+              organizationId,
+              unitDto.companyId,
+              allowedCompanyIds,
+            );
+            return unitDto.companyId ?? undefined;
+          })(),
           status: unitDto.status,
           parentUnitId: parentId ?? undefined,
         },
@@ -516,6 +574,7 @@ export class TenancyService {
       organizationId,
       [unitDto],
       unitsByCode,
+      allowedCompanyIds,
     );
     existingUnits.push(
       ...created.map<MinimalUnit>((unit) => ({
@@ -524,6 +583,191 @@ export class TenancyService {
         code: unit.code,
       })),
     );
+  }
+
+  private async persistCompanies(
+    tx: Prisma.TransactionClient,
+    organizationId: number,
+    companies: CompanyInputDto[],
+  ): Promise<CompanySnapshot[]> {
+    if (!companies.length) {
+      return [];
+    }
+
+    const prisma = tx as unknown as PrismaService as any;
+    const createdCompanies: CompanySnapshot[] = [];
+    const seenNames = new Set<string>();
+
+    for (const company of companies) {
+      if (company.id !== undefined && company.id !== null) {
+        throw new BadRequestException(
+          'New companies cannot reference an existing identifier',
+        );
+      }
+
+      const name = this.normalizeCompanyName(company.name);
+      const nameKey = name.toLowerCase();
+      if (seenNames.has(nameKey)) {
+        throw new BadRequestException(
+          `Duplicate company name "${name}" in payload`,
+        );
+      }
+      seenNames.add(nameKey);
+
+      const legalName = this.normalizeNullableInput(company.legalName);
+      const taxId = this.normalizeNullableInput(company.taxId);
+      const status = this.normalizeCompanyStatus(company.status) ?? 'ACTIVE';
+
+      const created = await prisma.company.create({
+        data: {
+          organizationId,
+          name,
+          legalName: legalName ?? undefined,
+          taxId: taxId ?? undefined,
+          status,
+        },
+      });
+
+      createdCompanies.push(created);
+    }
+
+    return createdCompanies;
+  }
+
+  private async syncCompanies(
+    tx: Prisma.TransactionClient,
+    organizationId: number,
+    companies: CompanyInputDto[],
+  ): Promise<void> {
+    if (!companies.length) {
+      return;
+    }
+
+    const prisma = tx as unknown as PrismaService as any;
+    const seenNames = new Set<string>();
+
+    for (const company of companies) {
+      const normalizedName = this.normalizeCompanyName(company.name);
+      const nameKey = normalizedName.toLowerCase();
+      if (seenNames.has(nameKey)) {
+        throw new BadRequestException(
+          `Duplicate company name "${normalizedName}" in payload`,
+        );
+      }
+      seenNames.add(nameKey);
+
+      const normalizedStatus = this.normalizeCompanyStatus(company.status);
+      const legalName = this.normalizeNullableInput(company.legalName);
+      const taxId = this.normalizeNullableInput(company.taxId);
+
+      if (company.id) {
+        const existing = await prisma.company.findUnique({
+          where: { id: company.id },
+        });
+
+        if (!existing || existing.organizationId !== organizationId) {
+          throw new BadRequestException(
+            `Company ${company.id} does not belong to organization ${organizationId}`,
+          );
+        }
+
+        const updateData: Prisma.CompanyUpdateInput = {};
+
+        if (normalizedName && normalizedName !== existing.name) {
+          updateData.name = normalizedName;
+        }
+        if (company.legalName !== undefined) {
+          updateData.legalName = legalName ?? null;
+        }
+        if (company.taxId !== undefined) {
+          updateData.taxId = taxId ?? null;
+        }
+        if (normalizedStatus !== undefined) {
+          updateData.status = normalizedStatus;
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          await prisma.company.update({
+            where: { id: company.id },
+            data: updateData,
+          });
+        }
+
+        continue;
+      }
+
+      const created = await prisma.company.create({
+        data: {
+          organizationId,
+          name: normalizedName,
+          legalName: legalName ?? undefined,
+          taxId: taxId ?? undefined,
+          status: normalizedStatus ?? 'ACTIVE',
+        },
+      });
+
+      seenNames.add(created.name.toLowerCase());
+    }
+  }
+
+  private assertCompanyBelongsToOrganization(
+    organizationId: number,
+    companyId: number | null | undefined,
+    allowedCompanyIds?: Set<number>,
+  ): void {
+    if (companyId === undefined || companyId === null) {
+      return;
+    }
+
+    if (!allowedCompanyIds?.has(companyId)) {
+      throw new BadRequestException(
+        `Company ${companyId} does not belong to organization ${organizationId}`,
+      );
+    }
+  }
+
+  private normalizeCompanyName(value: string | undefined): string {
+    const trimmed = value?.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Company name is required');
+    }
+    return trimmed;
+  }
+
+  private normalizeNullableInput(
+    value: string | null | undefined,
+  ): string | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    if (value === null) {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private normalizeCompanyStatus(
+    status: string | undefined,
+  ): 'ACTIVE' | 'INACTIVE' | undefined {
+    if (status === undefined) {
+      return undefined;
+    }
+
+    const trimmed = status.trim().toUpperCase();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    if (trimmed !== 'ACTIVE' && trimmed !== 'INACTIVE') {
+      throw new BadRequestException(
+        `Invalid company status "${status}" provided`,
+      );
+    }
+
+    return trimmed as 'ACTIVE' | 'INACTIVE';
   }
 
   private resolveParentId(

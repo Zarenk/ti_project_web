@@ -2,6 +2,7 @@ import { PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsArray, IsOptional, ValidateNested } from 'class-validator';
 import {
+  CompanyInputDto,
   CreateTenancyDto,
   CompanyInputDto,
   OrganizationUnitInputDto,

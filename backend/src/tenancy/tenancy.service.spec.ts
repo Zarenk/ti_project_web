@@ -21,6 +21,13 @@ interface MockTransactionClient {
     updateMany: jest.Mock;
     findMany: jest.Mock;
   };
+  company: {
+    create: jest.Mock;
+    update: jest.Mock;
+    updateMany: jest.Mock;
+    findMany: jest.Mock;
+    findUnique: jest.Mock;
+  };
   organizationMembership: {
     count: jest.Mock;
     findFirst: jest.Mock;
@@ -39,6 +46,7 @@ describe('TenancyService', () => {
     $transaction: jest.Mock;
     organization: MockTransactionClient['organization'];
     organizationUnit: MockTransactionClient['organizationUnit'];
+    company: MockTransactionClient['company'];
     user: MockTransactionClient['user'];
     organizationMembership: MockTransactionClient['organizationMembership'];
   };
@@ -58,6 +66,13 @@ describe('TenancyService', () => {
         updateMany: jest.fn(),
         findMany: jest.fn(),
       },
+      company: {
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+      },
       organizationMembership: {
         count: jest.fn(),
         findFirst: jest.fn(),
@@ -76,11 +91,14 @@ describe('TenancyService', () => {
     tx.organizationMembership.update.mockResolvedValue(undefined);
     tx.organizationMembership.create.mockResolvedValue(undefined);
     tx.user.findUnique.mockResolvedValue(null);
+    tx.company.findMany.mockResolvedValue([]);
+    tx.company.updateMany.mockResolvedValue({ count: 0 });
 
     prisma = {
       $transaction: jest.fn(async (callback) => callback(tx as unknown as any)),
       organization: tx.organization,
       organizationUnit: tx.organizationUnit,
+      company: tx.company,
       organizationMembership: tx.organizationMembership,
       user: tx.user,
     };
@@ -147,9 +165,91 @@ describe('TenancyService', () => {
           organizationId: 10,
         }),
       ],
+      companies: [],
       membershipCount: 0,
       superAdmin: null,
     });
+  });
+
+  it('creates companies when payload includes them', async () => {
+    const createdAt = new Date('2024-01-05T00:00:00.000Z');
+    const updatedAt = new Date('2024-01-05T00:30:00.000Z');
+
+    tx.organization.create.mockResolvedValue({
+      id: 15,
+      name: 'Umbra Corp',
+      code: null,
+      status: 'ACTIVE',
+      createdAt,
+      updatedAt,
+    });
+    tx.organizationUnit.create.mockResolvedValue({
+      id: 25,
+      organizationId: 15,
+      name: 'General',
+      code: null,
+      parentUnitId: null,
+      status: 'ACTIVE',
+      createdAt,
+      updatedAt,
+    });
+
+    tx.company.create
+      .mockResolvedValueOnce({
+        id: 500,
+        organizationId: 15,
+        name: 'Umbra Retail',
+        legalName: 'Umbra Retail SAC',
+        taxId: '12345678901',
+        status: 'ACTIVE',
+        createdAt,
+        updatedAt,
+      })
+      .mockResolvedValueOnce({
+        id: 501,
+        organizationId: 15,
+        name: 'Umbra Labs',
+        legalName: null,
+        taxId: null,
+        status: 'INACTIVE',
+        createdAt,
+        updatedAt,
+      });
+
+    const result = await service.create({
+      name: 'Umbra Corp',
+      companies: [
+        {
+          name: 'Umbra Retail',
+          legalName: 'Umbra Retail SAC',
+          taxId: '12345678901',
+        },
+        { name: 'Umbra Labs', status: 'INACTIVE' },
+      ],
+    });
+
+    expect(tx.company.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          name: 'Umbra Retail',
+          status: 'ACTIVE',
+        }),
+      }),
+    );
+    expect(tx.company.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          name: 'Umbra Labs',
+          status: 'INACTIVE',
+        }),
+      }),
+    );
+    expect(result.companies).toEqual([
+      expect.objectContaining({ id: 500, name: 'Umbra Retail' }),
+      expect.objectContaining({ id: 501, name: 'Umbra Labs' }),
+    ]);
   });
 
   it('creates hierarchical units using parent codes', async () => {
@@ -322,6 +422,7 @@ describe('TenancyService', () => {
       data: expect.objectContaining({ code: 'support', parentUnitId: 21 }),
     });
     expect(result.units).toHaveLength(3);
+    expect(result.companies).toEqual([]);
     expect(result.membershipCount).toBe(4);
     expect(result.superAdmin).toBeNull();
   });
@@ -365,8 +466,13 @@ describe('TenancyService', () => {
       where: { organizationId: 90 },
       data: { status: 'INACTIVE' },
     });
+    expect(tx.company.updateMany).toHaveBeenCalledWith({
+      where: { organizationId: 90 },
+      data: { status: 'INACTIVE' },
+    });
     expect(result.status).toBe('INACTIVE');
     expect(result.units[0].status).toBe('INACTIVE');
+    expect(result.companies).toEqual([]);
   });
 
   it('lists all organizations with unit and membership metadata', async () => {
@@ -393,6 +499,18 @@ describe('TenancyService', () => {
             updatedAt,
           },
         ],
+        companies: [
+          {
+            id: 10,
+            organizationId: 1,
+            name: 'Wayne Tech',
+            legalName: null,
+            taxId: null,
+            status: 'ACTIVE',
+            createdAt,
+            updatedAt,
+          },
+        ],
         _count: { memberships: 3 },
       },
     ]);
@@ -405,6 +523,9 @@ describe('TenancyService', () => {
         name: 'Wayne Enterprises',
         membershipCount: 3,
         superAdmin: null,
+        companies: [
+          expect.objectContaining({ name: 'Wayne Tech' }),
+        ],
         units: expect.arrayContaining([
           expect.objectContaining({ name: 'HQ' }),
         ]),
@@ -435,6 +556,18 @@ describe('TenancyService', () => {
           updatedAt,
         },
       ],
+      companies: [
+        {
+          id: 77,
+          organizationId: 44,
+          name: 'Stark Tech',
+          legalName: null,
+          taxId: null,
+          status: 'ACTIVE',
+          createdAt,
+          updatedAt,
+        },
+      ],
       _count: { memberships: 12 },
     });
 
@@ -443,6 +576,9 @@ describe('TenancyService', () => {
     expect(result.id).toBe(44);
     expect(result.membershipCount).toBe(12);
     expect(result.superAdmin).toBeNull();
+    expect(result.companies).toEqual([
+      expect.objectContaining({ name: 'Stark Tech' }),
+    ]);
   });
 
   it('throws when requesting an unknown organization', async () => {
@@ -484,8 +620,8 @@ describe('TenancyService', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
-});
-  it("assigns a super admin to an organization", async () => {
+
+  it('assigns a super admin to an organization', async () => {
     const createdAt = new Date("2024-06-01T00:00:00.000Z");
     const updatedAt = new Date("2024-06-01T01:00:00.000Z");
 
@@ -545,6 +681,19 @@ describe('TenancyService', () => {
       },
     ]);
 
+    tx.company.findMany.mockResolvedValue([
+      {
+        id: 700,
+        organizationId: 42,
+        name: 'Massive Retail',
+        legalName: null,
+        taxId: null,
+        status: 'ACTIVE',
+        createdAt,
+        updatedAt,
+      },
+    ]);
+
     tx.organizationMembership.count.mockResolvedValue(5);
 
     const result = await service.assignSuperAdmin(42, 77);
@@ -564,4 +713,8 @@ describe('TenancyService', () => {
       email: "olivia@mdynamic.example",
     });
     expect(result.membershipCount).toBe(5);
+    expect(result.companies).toEqual([
+      expect.objectContaining({ name: 'Massive Retail' }),
+    ]);
   });
+});

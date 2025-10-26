@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -8,6 +9,30 @@ import {
   IsIn,
   ValidateNested,
 } from 'class-validator';
+
+const COMPANY_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
+
+export class CompanyInputDto {
+  @IsOptional()
+  @IsInt()
+  id?: number;
+
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  legalName?: string | null;
+
+  @IsOptional()
+  @IsString()
+  taxId?: string | null;
+
+  @IsOptional()
+  @IsIn(COMPANY_STATUSES)
+  status?: (typeof COMPANY_STATUSES)[number];
+}
 
 export class OrganizationUnitInputDto {
   @IsOptional()
