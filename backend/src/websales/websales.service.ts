@@ -23,7 +23,11 @@ import {
   normalizeShippingMethod,
 } from './dto/complete-order.dto';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
-import { buildOrganizationFilter } from 'src/tenancy/organization.utils';
+import {
+  buildOrganizationFilter,
+  resolveCompanyId,
+  resolveOrganizationId,
+} from 'src/tenancy/organization.utils';  
 import {
   ClientUncheckedCreateInputWithOrganization,
   OrdersUncheckedCreateInputWithOrganization,
@@ -40,6 +44,22 @@ export class WebSalesService {
     private readonly accountingHook: AccountingHook,
     private readonly inventoryService: InventoryService,
   ) {}
+
+  /** ---------- helpers ---------- */
+  private async assertCompanyMatchesOrganization(
+    companyId: number,
+    organizationId: number,
+  ): Promise<void> {
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { organizationId: true },
+    });
+    if (!company || company.organizationId !== organizationId) {
+      throw new BadRequestException(
+        `La compañia ${companyId} no pertenece a la organización ${organizationId}.`,
+      );
+    }
+  }
 
   async payWithCulqi(token: string, amount: number, order: CreateWebSaleDto) {
     const secret = process.env.CULQI_SECRET_KEY;
@@ -73,19 +93,64 @@ export class WebSalesService {
       order.payments[0].transactionId = charge.id;
     }
 
-    const createdOrder = await this.createWebOrder(order);
+    const createdOrder = await this.createWebOrder(
+      order,
+      undefined,
+      order.organizationId ?? undefined,
+      order.companyId ?? undefined,
+    );
+
     const sale = await this.completeWebOrder(
       createdOrder.id,
       undefined,
       undefined,
-      order.organizationId ?? null,
+      createdOrder.organizationId ?? null,
+      createdOrder.companyId ?? null,
     );
     return sale;
   }
 
-  async createWebOrder(data: CreateWebSaleDto, req?: Request) {
+  async createWebOrder(
+    data: CreateWebSaleDto,
+    req?: Request,
+    organizationIdFromContext?: number | null,
+    companyIdFromContext?: number | null,
+  ) {
+    // Resolver org/company coherentes con contexto si ambos llegan
+    const resolvedOrganizationId =
+      organizationIdFromContext === undefined
+        ? data.organizationId ?? null
+        : organizationIdFromContext;
+
+    const resolvedCompanyId =
+      companyIdFromContext === undefined
+        ? resolveCompanyId({
+            provided: data.companyId ?? null,
+            mismatchError:
+              'La compañía proporcionada no coincide con el contexto.',
+          })
+        : resolveCompanyId({
+            provided: data.companyId ?? null,
+            fallbacks: [companyIdFromContext],
+            mismatchError:
+              'La compañía proporcionada no coincide con el contexto.',
+          });
+
+    if (resolvedCompanyId !== null) {
+      if (resolvedOrganizationId === null) {
+        throw new BadRequestException(
+          'Debe indicar una organización válida antes de seleccionar una compañía.',
+        );
+      }
+      await this.assertCompanyMatchesOrganization(
+        resolvedCompanyId,
+        resolvedOrganizationId,
+      );
+    }
+
     const { shippingName, shippingAddress, city, postalCode, phone, code } =
       data;
+
     const order = await this.prisma.orders.create({
       data: {
         status: 'PENDING',
@@ -96,28 +161,24 @@ export class WebSalesService {
         phone,
         code: code ?? Math.random().toString(36).substr(2, 9).toUpperCase(),
         payload: data as unknown as Prisma.JsonObject,
-        ...(typeof data.organizationId === 'number'
-          ? { organization: { connect: { id: data.organizationId } } }
-          : {}),
+        organizationId: resolvedOrganizationId ?? null,
+        companyId: resolvedCompanyId ?? null,
       },
     });
-
-    const metadata: Record<string, unknown> = { userId: data.userId };
-    if (typeof data.storeId === 'number') {
-      metadata.storeId = data.storeId;
-    }
-    if (code) {
-      metadata.code = code;
-    }
 
     logOrganizationContext({
       service: WebSalesService.name,
       operation: 'createWebOrder',
-      organizationId: data.organizationId,
-      metadata,
+      organizationId: resolvedOrganizationId,
+      companyId: resolvedCompanyId ?? undefined,
+      metadata: {
+        userId: data.userId,
+        storeId: data.storeId,
+        code: code,
+      },
     });
 
-    // Ensure actor is recorded even when req is not provided
+    // actividad (igual que antes)
     const webEmail =
       (data as any)?.email ??
       (data as any)?.customerEmail ??
@@ -130,9 +191,7 @@ export class WebSalesService {
     const createdActorEmail = isWebSource
       ? webEmail
       : ((req as any)?.user?.username ?? undefined);
-    const createdByLabel =
-      createdActorEmail ??
-      (createdActorId ? `ID ${createdActorId}` : undefined);
+
     await this.activityService.log(
       {
         actorId: createdActorId,
@@ -140,8 +199,8 @@ export class WebSalesService {
         entityType: 'Order',
         entityId: order.id.toString(),
         action: AuditAction.CREATED,
-        summary: createdByLabel
-          ? `Orden ${order.code} creada por ${createdByLabel}`
+        summary: createdActorEmail
+          ? `Orden ${order.code} creada por ${createdActorEmail}`
           : `Orden ${order.code} creada`,
         diff: { after: order } as any,
       },
@@ -174,12 +233,14 @@ export class WebSalesService {
       invoiceName,
       razonSocial,
       organizationId: inputOrganizationId,
+      companyId: inputCompanyId,
     } = data;
 
     logOrganizationContext({
       service: WebSalesService.name,
       operation: 'createWebSale',
       organizationId: inputOrganizationId,
+      companyId: inputCompanyId ?? undefined,
       metadata: { storeId, userId },
     });
 
@@ -253,13 +314,41 @@ export class WebSalesService {
       resolvedClientId,
     );
 
-    const organizationId =
-      inputOrganizationId ?? (store as any).organizationId ?? null;
+    // Usar organización y compañía de la tienda como fallback coherente
+    const storeOrganizationId =
+      (store as { organizationId?: number | null } | undefined)
+        ?.organizationId ?? null;
+    const storeCompanyId =
+      (store as { companyId?: number | null } | undefined)?.companyId ?? null;
+
+    const companyId = resolveCompanyId({
+      provided: inputCompanyId ?? null,
+      fallbacks: [storeCompanyId],
+      mismatchError:
+        'La compañía proporcionada no coincide con la tienda seleccionada.',
+    });
+
+    const organizationId = resolveOrganizationId({
+      provided: inputOrganizationId ?? null,
+      fallbacks: [storeOrganizationId],
+      mismatchError:
+        'La organización proporcionada no coincide con la tienda seleccionada.',
+    });
+
+    if (companyId !== null) {
+      if (organizationId === null) {
+        throw new BadRequestException(
+          'Debe indicar una organización válida para asociar la venta a una compañía.',
+        );
+      }
+      await this.assertCompanyMatchesOrganization(companyId, organizationId);
+    }
 
     logOrganizationContext({
       service: WebSalesService.name,
       operation: 'createWebSale.executeSale',
       organizationId,
+      companyId: companyId ?? undefined,
       metadata: {
         storeId,
         userId,
@@ -303,6 +392,7 @@ export class WebSalesService {
       source: 'WEB',
       getStoreName: ({ storeInventory }) => storeInventory.store.name,
       organizationId,
+      companyId, // 👈 pasar compañía
 
       onSalePosted: async (id) => {
         try {
@@ -337,6 +427,7 @@ export class WebSalesService {
         code: code ?? Math.random().toString(36).substr(2, 9).toUpperCase(),
         status: 'COMPLETED',
         organizationId: organizationId ?? null,
+        companyId: companyId ?? null, // 👈 asociar compañía
       };
 
       await this.prisma.orders.create({
@@ -383,86 +474,44 @@ export class WebSalesService {
     return sale;
   }
 
-  async getWebOrderById(id: number, organizationId?: number | null) {
-    const organizationFilter = buildOrganizationFilter(
-      organizationId,
-    ) as Prisma.OrdersWhereInput;
-    const order = await this.prisma.orders.findFirst({
-      where: { id, ...organizationFilter },
-    });
-    if (!order) {
-      throw new NotFoundException(`No se encontrÃ³ la orden con ID ${id}.`);
-    }
+  async getWebOrderById(id: number, organizationId?: number | null, companyId?: number | null) {
+    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
+    const order = await this.prisma.orders.findFirst({ where: { id, ...where } });
+    if (!order) throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
     return order;
   }
 
-  async getWebOrderByCode(code: string, organizationId?: number | null) {
-    const organizationFilter = buildOrganizationFilter(
-      organizationId,
-    ) as Prisma.OrdersWhereInput;
-    const order = await this.prisma.orders.findFirst({
-      where: { code, ...organizationFilter },
-    });
-    if (!order) {
-      throw new NotFoundException(
-        `No se encontrÃ³ la orden con cÃ³digo ${code}.`,
-      );
-    }
+  async getWebOrderByCode(code: string, organizationId?: number | null, companyId?: number | null) {
+    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
+    const order = await this.prisma.orders.findFirst({ where: { code, ...where } });
+    if (!order) throw new NotFoundException(`No se encontró la orden con código ${code}.`);
     return order;
   }
 
-  async getWebOrdersByUser(userId: number, organizationId?: number | null) {
-    const organizationFilter = buildOrganizationFilter(
-      organizationId,
-    ) as Prisma.OrdersWhereInput;
+  async getWebOrdersByUser(userId: number, organizationId?: number | null, companyId?: number | null) {
+    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
     return this.prisma.orders.findMany({
-      where: {
-        ...organizationFilter,
-        payload: {
-          path: ['userId'],
-          equals: userId,
-        },
-      },
+      where: { ...where, payload: { path: ['userId'], equals: userId } as any },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async getWebOrdersByEmail(email: string, organizationId?: number | null) {
-    const organizationFilter = buildOrganizationFilter(
-      organizationId,
-    ) as Prisma.OrdersWhereInput;
+  async getWebOrdersByEmail(email: string, organizationId?: number | null, companyId?: number | null) {
+    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
     return this.prisma.orders.findMany({
-      where: {
-        ...organizationFilter,
-        payload: {
-          path: ['email'],
-          equals: email,
-        },
-      },
+      where: { ...where, payload: { path: ['email'], equals: email } as any },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async getWebOrdersByDni(dni: string, organizationId?: number | null) {
-    const organizationFilter = buildOrganizationFilter(
-      organizationId,
-    ) as Prisma.OrdersWhereInput;
+  async getWebOrdersByDni(dni: string, organizationId?: number | null, companyId?: number | null) {
+    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
     return this.prisma.orders.findMany({
       where: {
-        ...organizationFilter,
+        ...where,
         OR: [
-          {
-            payload: {
-              path: ['personalDni'],
-              equals: dni,
-            } as any,
-          },
-          {
-            payload: {
-              path: ['dni'],
-              equals: dni,
-            } as any,
-          },
+          { payload: { path: ['personalDni'], equals: dni } as any },
+          { payload: { path: ['dni'], equals: dni } as any },
         ],
       },
       orderBy: { createdAt: 'desc' },
@@ -474,6 +523,7 @@ export class WebSalesService {
     dto?: CompleteOrderDto,
     req?: Request,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
     const organizationFilter = buildOrganizationFilter(
       organizationId,
@@ -483,23 +533,24 @@ export class WebSalesService {
       where: { id, ...organizationFilter },
     });
     if (!order || order.status !== 'PENDING' || !order.payload) {
-      throw new BadRequestException('Orden no vÃ¡lida para completar');
+      throw new BadRequestException('Orden no válida para completar');
     }
 
     const payloadAny = (order.payload as any) || {};
-    const rawOrganizationId = payloadAny?.organizationId as unknown;
+    const payloadOrg = typeof payloadAny?.organizationId === 'number' ? payloadAny.organizationId : null;
+    const payloadCompany = typeof payloadAny?.companyId === 'number' ? payloadAny.companyId : null;
+    const effectiveOrgId = organizationId ?? order.organizationId ?? payloadOrg ?? null;
+    const effectiveCompanyId = companyId ?? order.companyId ?? payloadCompany ?? null;
     let organizationIdForLog: number | null = null;
-    if (typeof rawOrganizationId === 'number') {
-      organizationIdForLog = rawOrganizationId;
-    } else if (typeof rawOrganizationId === 'string') {
-      const parsed = Number(rawOrganizationId);
-      organizationIdForLog = Number.isNaN(parsed) ? null : parsed;
+    if (effectiveCompanyId !== null && effectiveOrgId !== null) {
+      await this.assertCompanyMatchesOrganization(effectiveCompanyId, effectiveOrgId);
     }
 
     logOrganizationContext({
       service: WebSalesService.name,
       operation: 'completeWebOrder',
       organizationId: organizationIdForLog,
+      companyId: effectiveCompanyId ?? undefined,
       metadata: {
         orderId: id,
         storeId: payloadAny?.storeId ?? null,
@@ -610,13 +661,18 @@ export class WebSalesService {
       }
     }
 
-    const sale = await this.createWebSale(order.payload as any, true);
+    const sale = await this.createWebSale(
+      { ...(order.payload as any), organizationId: effectiveOrgId, companyId: effectiveCompanyId },
+      true,
+    );
 
     await this.prisma.orders.update({
-      where: { id },
+      where: { id: order.id },
       data: {
         status: 'COMPLETED',
         salesId: sale.id,
+        organizationId: effectiveOrgId ?? null,
+        companyId: effectiveCompanyId ?? null,
         ...(carrierNameToPersist ? { carrierName: carrierNameToPersist } : {}),
         ...(carrierIdToPersist ? { carrierId: carrierIdToPersist } : {}),
         ...(carrierModeToPersist ? { carrierMode: carrierModeToPersist } : {}),
@@ -693,13 +749,10 @@ export class WebSalesService {
     id: number,
     items: { productId: number; series: string[] }[],
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
-    const organizationFilter = buildOrganizationFilter(
-      organizationId,
-    ) as Prisma.OrdersWhereInput;
-    const order = await this.prisma.orders.findFirst({
-      where: { id, ...organizationFilter },
-    });
+    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
+    const order = await this.prisma.orders.findFirst({ where: { id, ...where } });
     if (!order) {
       throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
     }
@@ -748,20 +801,13 @@ export class WebSalesService {
     return { success: true, order: updated };
   }
 
-  async rejectWebOrder(id: number, organizationId?: number | null) {
-    const organizationFilter = buildOrganizationFilter(
-      organizationId,
-    ) as Prisma.OrdersWhereInput;
-    const order = await this.prisma.orders.findFirst({
-      where: { id, ...organizationFilter },
-    });
+  async rejectWebOrder(id: number, organizationId?: number | null, companyId?: number | null) {
+    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
+    const order = await this.prisma.orders.findFirst({ where: { id, ...where } });
     if (!order || order.status !== 'PENDING') {
-      throw new BadRequestException('Orden no vÃ¡lida para rechazar');
+      throw new BadRequestException('Orden no válida para rechazar');
     }
-    await this.prisma.orders.update({
-      where: { id },
-      data: { status: 'DENIED' },
-    });
+    await this.prisma.orders.update({ where: { id }, data: { status: 'DENIED' } });
     return { success: true };
   }
 
@@ -796,28 +842,13 @@ export class WebSalesService {
     return { success: true };
   }
 
-  async getWebSaleById(id: number, organizationId?: number | null) {
-    const organizationFilter = buildOrganizationFilter(
-      organizationId,
-    ) as Prisma.SalesWhereInput;
+  async getWebSaleById(id: number, organizationId?: number | null, companyId?: number | null) {
+    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.SalesWhereInput;
     const sale = await this.prisma.sales.findFirst({
-      where: { id, ...organizationFilter },
-      include: {
-        client: true,
-        salesDetails: {
-          include: {
-            entryDetail: { include: { product: true } },
-          },
-        },
-        invoices: true,
-        order: true,
-      },
+      where: { id, ...where },
+      include: { client: true, salesDetails: { include: { entryDetail: { include: { product: true } } } }, invoices: true, order: true },
     });
-
-    if (!sale) {
-      throw new NotFoundException(`No se encontrÃ³ la venta con ID ${id}.`);
-    }
-
+    if (!sale) throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
     return sale;
   }
 
@@ -828,46 +859,28 @@ export class WebSalesService {
     clientId?: string;
     code?: string;
     organizationId?: number | null;
+    companyId?: number | null;
   }) {
-    const organizationFilter = buildOrganizationFilter(
-      params.organizationId,
-    ) as Prisma.OrdersWhereInput;
-    const where: Prisma.OrdersWhereInput = { ...organizationFilter };
+    const where: Prisma.OrdersWhereInput =
+      buildOrganizationFilter(params.organizationId, params.companyId) as Prisma.OrdersWhereInput;
 
-    if (params.status) {
-      where.status = params.status as any;
-    }
-    if (params.from && params.to) {
-      where.createdAt = {
-        gte: new Date(params.from),
-        lte: new Date(params.to),
-      };
-    }
+    if (params.status) where.status = params.status as any;
+    if (params.from && params.to) where.createdAt = { gte: new Date(params.from), lte: new Date(params.to) };
     if (params.clientId) {
       const idNum = parseInt(params.clientId, 10);
-      if (!isNaN(idNum)) {
-        where.payload = { path: ['userId'], equals: idNum } as any;
-      }
+      if (!isNaN(idNum)) where.payload = { path: ['userId'], equals: idNum } as any;
     }
-    if (params.code) {
-      where.code = { contains: params.code };
-    }
+    if (params.code) where.code = { contains: params.code };
 
-    return this.prisma.orders.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.prisma.orders.findMany({ where, orderBy: { createdAt: 'desc' } });
   }
 
-  async getOrderCount(status?: string, organizationId?: number | null) {
-    const organizationFilter = buildOrganizationFilter(
-      organizationId,
-    ) as Prisma.OrdersWhereInput;
+  async getOrderCount(status?: string, organizationId?: number | null, companyId?: number | null) {
+    const where: Prisma.OrdersWhereInput =
+      buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
+
     return this.prisma.orders.count({
-      where: {
-        ...(status ? { status: status as any } : {}),
-        ...organizationFilter,
-      },
+      where: { ...(status ? { status: status as any } : {}), ...where },
     });
   }
 
@@ -876,25 +889,14 @@ export class WebSalesService {
     to?: string;
     limit?: number;
     organizationId?: number | null;
+    companyId?: number | null;
   }) {
-    const organizationFilter = buildOrganizationFilter(
-      params.organizationId,
-    ) as Prisma.OrdersWhereInput;
-    const where: Prisma.OrdersWhereInput = { ...organizationFilter };
+    const where: Prisma.OrdersWhereInput =
+      buildOrganizationFilter(params.organizationId, params.companyId) as Prisma.OrdersWhereInput;
 
-    if (params.from && params.to) {
-      where.createdAt = {
-        gte: new Date(params.from),
-        lte: new Date(params.to),
-      };
-    }
+    if (params.from && params.to) where.createdAt = { gte: new Date(params.from), lte: new Date(params.to) };
 
     const take = params.limit ?? 10;
-
-    return this.prisma.orders.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take,
-    });
+    return this.prisma.orders.findMany({ where, orderBy: { createdAt: 'desc' }, take });
   }
 }
