@@ -742,6 +742,7 @@ export class SalesService {
     from?: string,
     to?: string,
     organizationId?: number | null,
+    companyId?: number | null, // ← AÑADIDO
   ) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
