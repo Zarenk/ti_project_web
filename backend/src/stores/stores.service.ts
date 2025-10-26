@@ -125,6 +125,7 @@ export class StoresService {
     }
 
     return this.prismaService.store.findMany({ where });
+  }
 
   async findOne(
     id: number,
@@ -168,7 +169,6 @@ export class StoresService {
     });
     return !!store;
   }
-
 
   async update(
     id: number,
@@ -274,7 +274,7 @@ export class StoresService {
           entityId: updated.id.toString(),
           action: AuditAction.UPDATED,
           summary: `Tienda ${updated.name} actualizada`,
-          diff,
+          diff: diff as unknown as Prisma.JsonValue,
         },
         req,
       );
@@ -308,7 +308,7 @@ export class StoresService {
   ) {
     if (!Array.isArray(stores) || stores.length === 0) {
       throw new BadRequestException(
-        ''No se proporcionaron tiendas para actualizar.'',
+        'No se proporcionaron tiendas para actualizar.',
       );
     }
 
@@ -318,7 +318,7 @@ export class StoresService {
       );
       if (invalidStores.length > 0) {
         throw new BadRequestException(
-          ''Todas las tiendas deben tener un ID valido.'',
+          'Todas las tiendas deben tener un ID valido.',
         );
       }
 
@@ -357,19 +357,19 @@ export class StoresService {
                     provided: companyId ?? null,
                     fallbacks: [existing.companyId ?? null],
                     mismatchError:
-                      ''La compania proporcionada no coincide con el contexto.'',
+                      'La compania proporcionada no coincide con el contexto.',
                   })
                 : resolveCompanyId({
                     provided: companyId ?? null,
                     fallbacks: [companyIdFromContext],
                     mismatchError:
-                      ''La compania proporcionada no coincide con el contexto.'',
+                      'La compania proporcionada no coincide con el contexto.',
                   });
 
             if (resolvedCompanyId !== null) {
               if (resolvedOrganizationId === null) {
                 throw new BadRequestException(
-                  ''Debe indicar una organizacion valida para asociar la tienda a una compania.'',
+                  'Debe indicar una organizacion valida para asociar la tienda a una compania.',
                 );
               }
               const company = await tx.company.findUnique({
@@ -385,7 +385,7 @@ export class StoresService {
 
             logOrganizationContext({
               service: StoresService.name,
-              operation: ''updateMany'',
+              operation: 'updateMany',
               organizationId: resolvedOrganizationId ?? null,
               companyId: resolvedCompanyId ?? null,
               metadata: { storeId },
@@ -419,7 +419,7 @@ export class StoresService {
         {
           actorId: (req as any)?.user?.userId,
           actorEmail: (req as any)?.user?.username,
-          entityType: ''Store'',
+          entityType: 'Store',
           action: AuditAction.UPDATED,
           summary: `${updatedStores.length} tienda(s) actualizada(s)`,
           diff: { after: updatedStores } as any,
@@ -441,18 +441,19 @@ export class StoresService {
 
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === ''P2025''
+        error.code === 'P2025'
       ) {
         throw new NotFoundException(
-          ''Una o mas tiendas no fueron encontradas.'',
+          'Una o mas tiendas no fueron encontradas.',
         );
       }
 
       throw new InternalServerErrorException(
-        ''Hubo un error al actualizar las tiendas.'',
+        'Hubo un error al actualizar las tiendas.',
       );
     }
   }
+
   async remove(
     id: number,
     req: Request,
@@ -483,7 +484,7 @@ export class StoresService {
       {
         actorId: (req as any)?.user?.userId,
         actorEmail: (req as any)?.user?.username,
-        entityType: ''Store'',
+        entityType: 'Store',
         entityId: id.toString(),
         action: AuditAction.DELETED,
         summary: `Tienda ${deletedStore.name} eliminada`,
@@ -502,7 +503,7 @@ export class StoresService {
   ) {
     if (!Array.isArray(ids) || ids.length === 0) {
       throw new NotFoundException(
-        ''No se proporcionaron IDs validos para eliminar.'',
+        'No se proporcionaron IDs validos para eliminar.',
       );
     }
 
@@ -523,7 +524,7 @@ export class StoresService {
 
       if (deletedStores.count === 0) {
         throw new NotFoundException(
-          ''No se encontraron tiendas con los IDs proporcionados.'',
+          'No se encontraron tiendas con los IDs proporcionados.',
         );
       }
 
@@ -531,8 +532,8 @@ export class StoresService {
         {
           actorId: (req as any)?.user?.userId,
           actorEmail: (req as any)?.user?.username,
-          entityType: ''Store'',
-          entityId: numericIds.join('',''),
+          entityType: 'Store',
+          entityId: numericIds.join(','),
           action: AuditAction.DELETED,
           summary: `${deletedStores.count} tienda(s) eliminada(s)`,
           diff: { ids: numericIds } as any,
@@ -549,10 +550,11 @@ export class StoresService {
       }
 
       throw new InternalServerErrorException(
-        ''Hubo un error al eliminar las tiendas.'',
+        'Hubo un error al eliminar las tiendas.',
       );
     }
   }
+
   private async assertCompanyMatchesOrganization(
     companyId: number,
     organizationId: number,
@@ -564,8 +566,9 @@ export class StoresService {
 
     if (!company || company.organizationId !== organizationId) {
       throw new BadRequestException(
-        La compania  no pertenece a la organizacion .,
+        `La compania ${companyId} no pertenece a la organizacion ${organizationId}.`,
       );
     }
   }
 }
+

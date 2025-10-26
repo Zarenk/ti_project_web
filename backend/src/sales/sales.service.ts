@@ -189,8 +189,14 @@ export class SalesService {
     return sale;
   }
 
-  async findAllSales(organizationId?: number | null) {
-    const organizationFilter = this.buildSalesWhere(organizationId);
+  async findAllSales(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const organizationFilter = this.buildSalesWhere(
+      organizationId,
+      companyId,
+    );
 
     return this.prisma.sales.findMany({
       where: organizationFilter,
@@ -220,8 +226,15 @@ export class SalesService {
     });
   }
 
-  async findSalesByUser(userId: number, organizationId?: number | null) {
-    const organizationFilter = this.buildSalesWhere(organizationId);
+  async findSalesByUser(
+    userId: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const organizationFilter = this.buildSalesWhere(
+      organizationId,
+      companyId,
+    );
     return this.prisma.sales.findMany({
       where: { client: { userId }, ...organizationFilter },
       include: {
@@ -252,9 +265,13 @@ export class SalesService {
     });
   }
 
-  async findOne(id: number, organizationId?: number | null) {
+  async findOne(
+    id: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     const sale = await this.prisma.sales.findFirst({
-      where: { id, ...this.buildSalesWhere(organizationId) },
+      where: { id, ...this.buildSalesWhere(organizationId, companyId) },
       include: {
         user: { select: { username: true } },
         store: { select: { name: true } },
@@ -281,8 +298,12 @@ export class SalesService {
     id: number,
     actorId?: number,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
-    const organizationFilter = this.buildSalesWhere(organizationId);
+    const organizationFilter = this.buildSalesWhere(
+      organizationId,
+      companyId,
+    );
     const { sale, deletedSale } = await this.prisma.$transaction(
       async (prismaTx) => {
         const sale = await prismaTx.sales.findFirst({
@@ -447,10 +468,17 @@ export class SalesService {
   }
 
   // Método para obtener las series vendidas en una venta específica
-  async getSoldSeriesBySale(saleId: number, organizationId?: number | null) {
+  async getSoldSeriesBySale(
+    saleId: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     // Buscar la venta con los detalles y las series asociadas
     const sale = await this.prisma.sales.findFirst({
-      where: { id: saleId, ...this.buildSalesWhere(organizationId) },
+      where: {
+        id: saleId,
+        ...this.buildSalesWhere(organizationId, companyId),
+      },
       include: {
         salesDetails: {
           include: {
@@ -481,7 +509,10 @@ export class SalesService {
     };
   }
 
-  async getMonthlySalesTotal(organizationId?: number | null) {
+  async getMonthlySalesTotal(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfPreviousMonth = new Date(
@@ -491,7 +522,10 @@ export class SalesService {
     );
     const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1); // 1 día antes del inicio del mes actual
 
-    const organizationFilter = this.buildSalesWhere(organizationId);
+    const organizationFilter = this.buildSalesWhere(
+      organizationId,
+      companyId,
+    );
 
     const [currentMonth, previousMonth] = await Promise.all([
       this.prisma.sales.aggregate({
@@ -528,6 +562,7 @@ export class SalesService {
     startDate?: Date,
     endDate?: Date,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
     const timeZone = 'America/Lima';
     const filters: any = {};
@@ -540,7 +575,10 @@ export class SalesService {
     }
 
     const sales = await this.prisma.sales.findMany({
-      where: { ...filters, ...this.buildSalesWhere(organizationId) },
+      where: {
+        ...filters,
+        ...this.buildSalesWhere(organizationId, companyId),
+      },
       select: { id: true },
     });
 
@@ -577,6 +615,7 @@ export class SalesService {
     from: Date,
     to: Date,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
     const timeZone = 'America/Lima';
 
@@ -585,7 +624,7 @@ export class SalesService {
 
     const sales = await this.prisma.sales.findMany({
       where: {
-        ...this.buildSalesWhere(organizationId),
+        ...this.buildSalesWhere(organizationId, companyId),
         createdAt: {
           gte: zonedFrom,
           lte: zonedTo,
@@ -624,10 +663,11 @@ export class SalesService {
     startDate?: string,
     endDate?: string,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
     const filters: Prisma.SalesDetailWhereInput = {};
-    if (organizationId !== undefined) {
-      filters.sale = this.buildSalesWhere(organizationId);
+    if (organizationId !== undefined || companyId !== undefined) {
+      filters.sale = this.buildSalesWhere(organizationId, companyId);
     }
     const timeZone = 'America/Lima';
 
@@ -637,7 +677,7 @@ export class SalesService {
 
       const salesInRange = await this.prisma.sales.findMany({
         where: {
-          ...this.buildSalesWhere(organizationId),
+          ...this.buildSalesWhere(organizationId, companyId),
           createdAt: {
             gte: zonedFrom,
             lte: zonedTo,
@@ -735,8 +775,10 @@ export class SalesService {
     }
 
     const where: Prisma.SalesDetailWhereInput = { productId };
-    const saleFilters: Prisma.SalesWhereInput =
-      this.buildSalesWhere(organizationId);
+    const saleFilters: Prisma.SalesWhereInput = this.buildSalesWhere(
+      organizationId,
+      companyId,
+    );
 
     if (Object.keys(createdAtFilter).length > 0) {
       saleFilters.createdAt = createdAtFilter;
@@ -949,7 +991,10 @@ export class SalesService {
     };
   }
 
-  async getMonthlySalesCount(organizationId?: number | null) {
+  async getMonthlySalesCount(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfPreviousMonth = new Date(
@@ -959,7 +1004,10 @@ export class SalesService {
     );
     const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1);
 
-    const organizationFilter = this.buildSalesWhere(organizationId);
+    const organizationFilter = this.buildSalesWhere(
+      organizationId,
+      companyId,
+    );
 
     const [currentCount, previousCount] = await Promise.all([
       this.prisma.sales.count({
@@ -987,7 +1035,10 @@ export class SalesService {
     };
   }
 
-  async getMonthlyClientStats(organizationId?: number | null) {
+  async getMonthlyClientStats(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfPreviousMonth = new Date(
@@ -997,7 +1048,10 @@ export class SalesService {
     );
     const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1);
 
-    const organizationFilter = this.buildSalesWhere(organizationId);
+    const organizationFilter = this.buildSalesWhere(
+      organizationId,
+      companyId,
+    );
 
     const [currentClients, previousClients] = await Promise.all([
       this.prisma.sales.findMany({
@@ -1043,10 +1097,14 @@ export class SalesService {
     to?: string,
     limit: number = 10,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
     const timeZone = 'America/Lima';
 
-    const organizationFilter = this.buildSalesWhere(organizationId);
+    const organizationFilter = this.buildSalesWhere(
+      organizationId,
+      companyId,
+    );
 
     const whereClause: Prisma.SalesWhereInput | undefined = (() => {
       const base: Prisma.SalesWhereInput = { ...organizationFilter };
@@ -1118,9 +1176,13 @@ export class SalesService {
     from?: string,
     to?: string,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
     const timeZone = 'America/Lima';
-    const where: Prisma.SalesWhereInput = this.buildSalesWhere(organizationId);
+    const where: Prisma.SalesWhereInput = this.buildSalesWhere(
+      organizationId,
+      companyId,
+    );
 
     if (from && to) {
       where.createdAt = {
@@ -1191,8 +1253,12 @@ export class SalesService {
     from?: Date,
     to?: Date,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
-    const where: Prisma.SalesWhereInput = this.buildSalesWhere(organizationId);
+    const where: Prisma.SalesWhereInput = this.buildSalesWhere(
+      organizationId,
+      companyId,
+    );
 
     if (from || to) {
       where.createdAt = {};

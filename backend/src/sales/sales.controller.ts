@@ -50,8 +50,12 @@ export class SalesController {
   @Get()
   async findAllSales(
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.salesService.findAllSales(organizationId ?? undefined);
+    return this.salesService.findAllSales(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   // Endpoint para obtener las series vendidas en una venta especifica
@@ -59,18 +63,24 @@ export class SalesController {
   async getSoldSeriesBySale(
     @Param('saleId', ParseIntPipe) saleId: number,
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     return this.salesService.getSoldSeriesBySale(
       saleId,
       organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
   @Get('monthly-total')
   async getMonthlySalesTotal(
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.salesService.getMonthlySalesTotal(organizationId ?? undefined);
+    return this.salesService.getMonthlySalesTotal(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('revenue-by-category/from/:startDate/to/:endDate')
@@ -78,11 +88,13 @@ export class SalesController {
     @Param('startDate') startDate: string,
     @Param('endDate') endDate: string,
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     return this.salesService.getRevenueByCategory(
       new Date(startDate),
       new Date(endDate),
       organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
@@ -91,11 +103,13 @@ export class SalesController {
     @Param('from') from: string,
     @Param('to') to: string,
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     return this.salesService.getDailySalesByDateRange(
       new Date(from),
       new Date(to),
       organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
@@ -105,12 +119,14 @@ export class SalesController {
     @Param('startDate') startDate: string,
     @Param('endDate') endDate: string,
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     return this.salesService.getTopProducts(
       10,
       startDate,
       endDate,
       organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
@@ -118,6 +134,7 @@ export class SalesController {
   getTopProductsByType(
     @Param('type') type: string,
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -130,6 +147,7 @@ export class SalesController {
           startOfMonth.toISOString(),
           endOfMonth.toISOString(),
           organizationId ?? undefined,
+          companyId ?? undefined,
         );
       case 'all':
         return this.salesService.getTopProducts(
@@ -137,6 +155,7 @@ export class SalesController {
           undefined,
           undefined,
           organizationId ?? undefined,
+          companyId ?? undefined,
         );
       default:
         throw new BadRequestException(`Tipo invalido: ${type}`);
@@ -146,15 +165,23 @@ export class SalesController {
   @Get('monthly-count')
   async getMonthlySalesCount(
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.salesService.getMonthlySalesCount(organizationId ?? undefined);
+    return this.salesService.getMonthlySalesCount(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('monthly-clients')
   getMonthlyClientStats(
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.salesService.getMonthlyClientStats(organizationId ?? undefined);
+    return this.salesService.getMonthlyClientStats(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('top-clients')
@@ -162,12 +189,14 @@ export class SalesController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
   ) {
     return this.salesService.getTopClients(
       10,
       from,
       to,
       organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
@@ -177,12 +206,14 @@ export class SalesController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
   ) {
     return this.salesService.getProductSalesReport(
       productId,
       from,
       to,
       organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
@@ -191,11 +222,13 @@ export class SalesController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
   ) {
     return this.salesService.getSalesTransactions(
       from ? new Date(from) : undefined,
       to ? new Date(to) : undefined,
       organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
@@ -204,10 +237,12 @@ export class SalesController {
   async getMySales(
     @Req() req,
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     return this.salesService.findSalesByUser(
       req.user.userId,
       organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
@@ -216,12 +251,14 @@ export class SalesController {
     @Param('from') from: string,
     @Param('to') to: string,
     @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
   ) {
     return this.salesService.getRecentSales(
       from,
       to,
       10,
       organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
@@ -229,8 +266,13 @@ export class SalesController {
   findOne(
     @Param('id', ParseIntPipe) id: number,
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.salesService.findOne(id, organizationId ?? undefined);
+    return this.salesService.findOne(
+      id,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Delete(':id')
@@ -238,12 +280,14 @@ export class SalesController {
     @Param('id', ParseIntPipe) id: number,
     @Req() req,
     @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     const userId = req?.user?.userId;
     return this.salesService.deleteSale(
       id,
       userId,
       organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 }

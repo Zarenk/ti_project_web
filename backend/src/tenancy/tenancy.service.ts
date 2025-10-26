@@ -352,6 +352,14 @@ export class TenancyService {
 
       const parentId = this.resolveParentId(unit, unitsByCode);
 
+      if (unit.companyId !== undefined && unit.companyId !== null) {
+        await this.assertCompanyBelongsToOrganization(
+          prisma,
+          organizationId,
+          unit.companyId,
+        );
+      }
+
       const created = await prisma.organizationUnit.create({
         data: {
           organizationId,
@@ -424,6 +432,23 @@ export class TenancyService {
     return createdCompanies;
   }
 
+  private async assertCompanyBelongsToOrganization(
+    prisma: Prisma.TransactionClient | PrismaService,
+    organizationId: number,
+    companyId: number,
+  ): Promise<void> {
+    const company = await (prisma as any).company.findUnique({
+      where: { id: companyId },
+      select: { organizationId: true },
+    });
+
+    if (!company || company.organizationId !== organizationId) {
+      throw new BadRequestException(
+        `Company ${companyId} does not belong to organization ${organizationId}`,
+      );
+    }
+  }
+
   private async upsertUnit(
     tx: Prisma.TransactionClient,
     organizationId: number,
@@ -446,6 +471,14 @@ export class TenancyService {
         (unitDto.parentCode
           ? this.resolveParentId(unitDto, unitsByCode)
           : undefined);
+
+      if (unitDto.companyId !== undefined && unitDto.companyId !== null) {
+        await this.assertCompanyBelongsToOrganization(
+          prisma,
+          organizationId,
+          unitDto.companyId,
+        );
+      }
 
       const updated = await prisma.organizationUnit.update({
         where: { id: unitDto.id },
