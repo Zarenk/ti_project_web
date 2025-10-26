@@ -356,6 +356,7 @@ model Provider {
   accEntries AccEntry[] // Relación con el modelo AccEntry
 
   @@index([organizationId])
+  @@unique([organizationId, documentNumber]) // 👈 NUEVO: unicidad por organización
 }
 
 enum PaymentTerm {
