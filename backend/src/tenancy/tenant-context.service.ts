@@ -19,6 +19,12 @@ interface RequestUserPayload {
   defaultOrganizationUnitId?: number | string | null;
 }
 
+export interface OrganizationFilter {
+  organizationId?: number | null;
+  companyId?: number | null;
+  organizationUnitId?: number | null;
+}
+
 @Injectable({ scope: Scope.REQUEST })
 export class TenantContextService {
   private context: TenantContext;
@@ -43,6 +49,81 @@ export class TenantContextService {
         partial.allowedOrganizationUnitIds ??
         this.context.allowedOrganizationUnitIds,
     };
+  }
+
+  /**
+   * Construye un filtro de Prisma que incluye organizationId y companyId
+   * según el contexto del tenant actual.
+   * 
+   * @param includeCompany - Si true, incluye companyId en el filtro
+   * @param includeUnit - Si true, incluye organizationUnitId en el filtro
+   * @returns Objeto de filtro compatible con Prisma where clauses
+   */
+  buildOrganizationFilter(
+    includeCompany = true,
+    includeUnit = false,
+  ): OrganizationFilter {
+    const filter: OrganizationFilter = {};
+
+    // Incluir organizationId si existe
+    if (this.context.organizationId !== null) {
+      filter.organizationId = this.context.organizationId;
+    }
+
+    // Incluir companyId si se solicita y existe
+    if (includeCompany && this.context.companyId !== null) {
+      filter.companyId = this.context.companyId;
+    }
+
+    // Incluir organizationUnitId si se solicita y existe
+    if (includeUnit && this.context.organizationUnitId !== null) {
+      filter.organizationUnitId = this.context.organizationUnitId;
+    }
+
+    return filter;
+  }
+
+  /**
+   * Resuelve y valida el companyId desde las cabeceras del request
+   * contra los companyIds autorizados del usuario.
+   * 
+   * @returns companyId validado o null
+   * @throws BadRequestException si el companyId no está autorizado
+   */
+  resolveCompanyId(): number | null {
+    const { companyId, allowedCompanyIds, isGlobalSuperAdmin } = this.context;
+
+    if (companyId === null) {
+      return null;
+    }
+
+    // Super admins globales pueden acceder a cualquier compañía
+    if (isGlobalSuperAdmin) {
+      return companyId;
+    }
+
+    // Validar que el companyId esté en la lista de permitidos
+    if (allowedCompanyIds.length > 0 && !allowedCompanyIds.includes(companyId)) {
+      throw new BadRequestException(
+        `La compañía ${companyId} no está autorizada para el usuario actual.`,
+      );
+    }
+
+    return companyId;
+  }
+
+  /**
+   * Resuelve y valida el organizationId desde las cabeceras del request
+   */
+  resolveOrganizationId(): number | null {
+    return this.context.organizationId;
+  }
+
+  /**
+   * Resuelve y valida el organizationUnitId desde las cabeceras del request
+   */
+  resolveOrganizationUnitId(): number | null {
+    return this.context.organizationUnitId;
   }
 
   private resolveContext(request: Request): TenantContext {
@@ -89,6 +170,7 @@ export class TenantContextService {
       (organizationSuperAdminIds.includes(organizationId) ||
         isOrganizationRole);
 
+    // Validación: organizationId debe estar autorizado
     if (
       organizationId !== null &&
       allowedOrganizationIds.length > 0 &&
@@ -96,20 +178,22 @@ export class TenantContextService {
       !isGlobalSuperAdmin
     ) {
       throw new BadRequestException(
-        `La organizacion ${organizationId} no esta autorizada para el usuario actual.`,
+        `La organización ${organizationId} no está autorizada para el usuario actual.`,
       );
     }
 
+    // Validación: companyId requiere organizationId válido
     if (
       companyId !== null &&
       organizationId === null &&
       !isGlobalSuperAdmin
     ) {
       throw new BadRequestException(
-        'Debe especificar una organizacion valida antes de seleccionar una compania.',
+        'Debe especificar una organización válida antes de seleccionar una compañía.',
       );
     }
 
+    // Validación: companyId debe estar autorizado
     if (
       companyId !== null &&
       allowedCompanyIds.length > 0 &&
@@ -117,7 +201,7 @@ export class TenantContextService {
       !isGlobalSuperAdmin
     ) {
       throw new BadRequestException(
-        `La compania ${companyId} no esta autorizada para el usuario actual.`,
+        `La compañía ${companyId} no está autorizada para el usuario actual.`,
       );
     }
 

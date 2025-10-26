@@ -4,7 +4,6 @@ import { IsArray, IsOptional, ValidateNested } from 'class-validator';
 import {
   CompanyInputDto,
   CreateTenancyDto,
-  CompanyInputDto,
   OrganizationUnitInputDto,
 } from './create-tenancy.dto';
 

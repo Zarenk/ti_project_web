@@ -27,12 +27,19 @@ model Product {
   status      String?
   image       String?
   images      String[]
+  organizationId Int?
+  companyId      Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relación con Brand
   brandId Int?
   brand   Brand? @relation(fields: [brandId], references: [id])
+
+  // NUEVO: relación directa con Organization
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  // 👇 NUEVA RELACIÓN CON COMPANY
+  company     Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   // Relación con Category
   categoryId  Int
@@ -48,9 +55,13 @@ model Product {
   // Relación con Transfer
   transfers Transfer[] // Relación con el modelo Transfer
 
+  @@unique([organizationId, name])
   @@index([categoryId])
   @@index([name])
   @@index([brandId])
+  @@index([organizationId, name])
+  @@index([organizationId, companyId]) // 👈 Índice para filtros eficientes
+  @@index([companyId])
 }
 
 model ProductSpecification {
@@ -133,11 +144,20 @@ model Category {
   description String?
   status      String?
   image       String?
+  organizationId Int?
+  companyId      Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relación con Product
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull) // 👈 NUEVO
   products Product[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, name])
+  @@index([companyId])                          // 👈 Útil para auditoría
+  @@index([organizationId, companyId])          // 👈 (opcional) para informes
 }
 
 enum UserRole {
@@ -205,7 +225,8 @@ model Organization {
   memberships  OrganizationMembership[]
   settings     OrganizationSetting?
   providers    Provider[]
-
+  products     Product[]
+  categories   Category[]
 
   @@unique([name])
   @@index([status])
@@ -228,6 +249,8 @@ model Company {
   orders         Orders[]
   clients        Client[]
   inventoryHistories InventoryHistory[]
+  products           Product[] // 👈 NUEVA RELACIÓN
+  categories         Category[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])

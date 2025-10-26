@@ -173,16 +173,22 @@ export class ProductsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async remove(@Param('id') id: string, @Req() req: Request) {
-    const removed = await this.productsService.remove(+id);
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) {
+      throw new BadRequestException('El ID debe ser un número válido.');
+    }
+
+    const before = await this.productsService.findOne(numericId);
+    const removed = await this.productsService.remove(numericId);
     await this.activityService.log(
       {
         actorId: (req as any)?.user?.userId,
         actorEmail: (req as any)?.user?.username,
         entityType: 'Product',
-        entityId: id,
+        entityId: numericId.toString(),
         action: AuditAction.DELETED,
-        summary: `Producto ${removed.name} eliminado`,
-        diff: { before: removed } as any,
+        summary: `Producto ${before?.name ?? numericId} eliminado`,
+        diff: { before } as any,
       },
       req,
     );

@@ -9,7 +9,6 @@ import {
   CompanyInputDto,
   CreateTenancyDto,
   OrganizationUnitInputDto,
-  CompanyInputDto,
 } from './dto/create-tenancy.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import {
@@ -17,7 +16,6 @@ import {
   StoredOrganizationUnit,
   TenancySnapshot,
   OrganizationSuperAdmin,
-  CompanySnapshot,
 } from './entities/tenancy.entity';
 
 type MinimalUnit = Pick<
@@ -34,6 +32,7 @@ export class TenancyService {
       return await this.prisma.$transaction(async (tx) => {
         const prisma = tx as unknown as PrismaService as any;
 
+        // 1. Crear organización
         const organization = await prisma.organization.create({
           data: {
             name: createTenancyDto.name.trim(),
@@ -42,16 +41,19 @@ export class TenancyService {
           },
         });
 
+        // 2. Crear companies (solo UNA VEZ)
         const companies = await this.persistCompanies(
           tx,
           organization.id,
           createTenancyDto.companies ?? [],
         );
 
+        // 3. Crear units con validación de companyId
         const existingUnits = new Map<string, number>();
         const allowedCompanyIds = new Set<number>(
-          companies.map((company) => company.id),
+          companies.map((c) => c.id),
         );
+        
         const createdUnits = await this.persistUnits(
           tx,
           organization.id,
@@ -62,29 +64,16 @@ export class TenancyService {
           allowedCompanyIds,
         );
 
-        const createdCompanies = await this.persistCompanies(
-          tx,
-          organization.id,
-          createTenancyDto.companies ?? [],
-        );
-
         const membershipCount = await prisma.organizationMembership.count({
           where: { organizationId: organization.id },
         });
 
-        const superAdmin = await this.resolveSuperAdmin(
-          tx,
-          organization.id,
-        );
+        const superAdmin = await this.resolveSuperAdmin(tx, organization.id);
 
         return {
           ...organization,
           units: createdUnits,
-<<<<<<< ours
-          companies: createdCompanies,
-=======
           companies,
->>>>>>> theirs
           membershipCount,
           superAdmin,
         };
@@ -153,6 +142,7 @@ export class TenancyService {
       return await this.prisma.$transaction(async (tx) => {
         const prisma = tx as unknown as PrismaService as any;
         const trimmedName = updateTenancyDto.name?.trim();
+        
         const organization = await prisma.organization.update({
           where: { id },
           data: {
@@ -162,21 +152,26 @@ export class TenancyService {
           },
         });
 
+        // Sincronizar companies si vienen en el DTO
         if (updateTenancyDto.companies) {
           await this.syncCompanies(tx, id, updateTenancyDto.companies);
         }
 
+        // Obtener companies actualizadas
         const companies = await prisma.company.findMany({
           where: { organizationId: id },
           orderBy: { id: 'asc' },
         });
+        
         const allowedCompanyIds = new Set<number>(
-          companies.map((company) => company.id),
+          companies.map((c) => c.id),
         );
 
+        // Preparar mapa de units existentes
         const existingUnits = await prisma.organizationUnit.findMany({
           where: { organizationId: id },
         });
+        
         const unitsByCode = new Map<string, number>();
         for (const unit of existingUnits) {
           if (unit.code) {
@@ -184,6 +179,7 @@ export class TenancyService {
           }
         }
 
+        // Actualizar units si vienen en el DTO
         if (updateTenancyDto.units?.length) {
           for (const unitDto of updateTenancyDto.units) {
             await this.upsertUnit(
@@ -197,6 +193,7 @@ export class TenancyService {
           }
         }
 
+        // Obtener units actualizadas
         const units = await prisma.organizationUnit.findMany({
           where: { organizationId: id },
           orderBy: { id: 'asc' },
@@ -374,9 +371,9 @@ export class TenancyService {
       id: membership.user.id,
       username: membership.user.username,
       email: membership.user.email,
-    }
-  } 
-    
+    };
+  }
+
   private async persistUnits(
     tx: Prisma.TransactionClient,
     organizationId: number,
@@ -394,7 +391,7 @@ export class TenancyService {
 
       const parentId = this.resolveParentId(unit, unitsByCode);
 
-<<<<<<< ours
+      // Validar companyId si está presente
       if (unit.companyId !== undefined && unit.companyId !== null) {
         await this.assertCompanyBelongsToOrganization(
           prisma,
@@ -402,13 +399,6 @@ export class TenancyService {
           unit.companyId,
         );
       }
-=======
-      this.assertCompanyBelongsToOrganization(
-        organizationId,
-        unit.companyId,
-        allowedCompanyIds,
-      );
->>>>>>> theirs
 
       const created = await prisma.organizationUnit.create({
         data: {
@@ -482,23 +472,6 @@ export class TenancyService {
     return createdCompanies;
   }
 
-  private async assertCompanyBelongsToOrganization(
-    prisma: Prisma.TransactionClient | PrismaService,
-    organizationId: number,
-    companyId: number,
-  ): Promise<void> {
-    const company = await (prisma as any).company.findUnique({
-      where: { id: companyId },
-      select: { organizationId: true },
-    });
-
-    if (!company || company.organizationId !== organizationId) {
-      throw new BadRequestException(
-        `Company ${companyId} does not belong to organization ${organizationId}`,
-      );
-    }
-  }
-
   private async upsertUnit(
     tx: Prisma.TransactionClient,
     organizationId: number,
@@ -510,6 +483,7 @@ export class TenancyService {
     const prisma = tx as unknown as PrismaService as any;
 
     if (unitDto.id) {
+      // Actualizar unit existente
       const current = existingUnits.find((unit) => unit.id === unitDto.id);
       if (!current || current.organizationId !== organizationId) {
         throw new BadRequestException(
@@ -523,6 +497,7 @@ export class TenancyService {
           ? this.resolveParentId(unitDto, unitsByCode)
           : undefined);
 
+      // Validar companyId si está presente
       if (unitDto.companyId !== undefined && unitDto.companyId !== null) {
         await this.assertCompanyBelongsToOrganization(
           prisma,
@@ -536,14 +511,7 @@ export class TenancyService {
         data: {
           name: unitDto.name?.trim(),
           code: this.normalizeCodeInput(unitDto.code),
-          companyId: (() => {
-            this.assertCompanyBelongsToOrganization(
-              organizationId,
-              unitDto.companyId,
-              allowedCompanyIds,
-            );
-            return unitDto.companyId ?? undefined;
-          })(),
+          companyId: unitDto.companyId ?? undefined,
           status: unitDto.status,
           parentUnitId: parentId ?? undefined,
         },
@@ -565,6 +533,7 @@ export class TenancyService {
       return;
     }
 
+    // Crear nueva unit
     if (!unitDto.name) {
       throw new BadRequestException('New organization units require a name');
     }
@@ -576,6 +545,7 @@ export class TenancyService {
       unitsByCode,
       allowedCompanyIds,
     );
+    
     existingUnits.push(
       ...created.map<MinimalUnit>((unit) => ({
         id: unit.id,
@@ -583,55 +553,6 @@ export class TenancyService {
         code: unit.code,
       })),
     );
-  }
-
-  private async persistCompanies(
-    tx: Prisma.TransactionClient,
-    organizationId: number,
-    companies: CompanyInputDto[],
-  ): Promise<CompanySnapshot[]> {
-    if (!companies.length) {
-      return [];
-    }
-
-    const prisma = tx as unknown as PrismaService as any;
-    const createdCompanies: CompanySnapshot[] = [];
-    const seenNames = new Set<string>();
-
-    for (const company of companies) {
-      if (company.id !== undefined && company.id !== null) {
-        throw new BadRequestException(
-          'New companies cannot reference an existing identifier',
-        );
-      }
-
-      const name = this.normalizeCompanyName(company.name);
-      const nameKey = name.toLowerCase();
-      if (seenNames.has(nameKey)) {
-        throw new BadRequestException(
-          `Duplicate company name "${name}" in payload`,
-        );
-      }
-      seenNames.add(nameKey);
-
-      const legalName = this.normalizeNullableInput(company.legalName);
-      const taxId = this.normalizeNullableInput(company.taxId);
-      const status = this.normalizeCompanyStatus(company.status) ?? 'ACTIVE';
-
-      const created = await prisma.company.create({
-        data: {
-          organizationId,
-          name,
-          legalName: legalName ?? undefined,
-          taxId: taxId ?? undefined,
-          status,
-        },
-      });
-
-      createdCompanies.push(created);
-    }
-
-    return createdCompanies;
   }
 
   private async syncCompanies(
@@ -661,6 +582,7 @@ export class TenancyService {
       const taxId = this.normalizeNullableInput(company.taxId);
 
       if (company.id) {
+        // Actualizar company existente
         const existing = await prisma.company.findUnique({
           where: { id: company.id },
         });
@@ -696,7 +618,8 @@ export class TenancyService {
         continue;
       }
 
-      const created = await prisma.company.create({
+      // Crear nueva company
+      await prisma.company.create({
         data: {
           organizationId,
           name: normalizedName,
@@ -705,21 +628,28 @@ export class TenancyService {
           status: normalizedStatus ?? 'ACTIVE',
         },
       });
-
-      seenNames.add(created.name.toLowerCase());
     }
   }
 
-  private assertCompanyBelongsToOrganization(
+  /**
+   * Valida que una companyId pertenezca a la organización especificada
+   * mediante consulta a la base de datos
+   */
+  private async assertCompanyBelongsToOrganization(
+    prisma: any,
     organizationId: number,
     companyId: number | null | undefined,
-    allowedCompanyIds?: Set<number>,
-  ): void {
+  ): Promise<void> {
     if (companyId === undefined || companyId === null) {
       return;
     }
 
-    if (!allowedCompanyIds?.has(companyId)) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { organizationId: true },
+    });
+
+    if (!company || company.organizationId !== organizationId) {
       throw new BadRequestException(
         `Company ${companyId} does not belong to organization ${organizationId}`,
       );
