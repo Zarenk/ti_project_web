@@ -8,9 +8,9 @@ Esta guia describe el flujo recomendado para completar la implementacion backend
 - ✅ **Paso 2 – Tipos y entidades:** `CompanySnapshot` y `TenancySnapshot` en `backend/src/tenancy/entities/tenancy.entity.ts` contienen los atributos esperados (`status`, `legalName`, `taxId`, etc.) sin artefactos sobrantes.
 - ✅ **Paso 3 – DTOs:** `CreateTenancyDto` y `UpdateTenancyDto` ya integran `CompanyInputDto` con validaciones para nombre, razon social, RUC y estado, permitiendo cargas anidadas de companias.
 - ✅ **Paso 4 – TenancyService:** Los metodos `create`, `update`, `persistUnits`, `upsertUnit` y `syncCompanies` manejan companias dentro de transacciones, verifican pertenencia por organizacion y normalizan las respuestas.
-- ⚠️ **Paso 5 – TenantContext y servicios dependientes:** `TenantContextService` valida `allowedCompanyIds` y servicios clave (`stores`, `sales`, `clients`, `websales`, `entries`, `inventory`) ya aplican filtros por compañia/organización, registrando eventos con ambos identificadores. Aún resta incorporar la misma lógica en contabilidad y reportes para garantizar consistencia total.
-- ⚠️ **Paso 6 – Pruebas:** Los _specs_ unitarios principales (`TenantContextService`, `TenancyService`, `ClientsService`, `StoresController`, `SalesController`, `EntriesService`, `WebSalesService`, `InventoryService`) cubren escenarios multi-compañía y se ejecutó `npm test` con resultados en verde. Siguen pendientes escenarios negativos (desactivación, compañías externas o RUC duplicado) y pruebas e2e.
-- ⭕ **Paso 7 – Validaciones y documentacion:** Pendiente documentar los nuevos campos en Swagger/OpenAPI y agregar validaciones/pipes especializados (ej. formato de RUC).
+- ⚠️ **Paso 5 – TenantContext y servicios dependientes:** `TenantContextService` valida `allowedCompanyIds` y servicios clave (`stores`, `sales`, `clients`, `websales`, `entries`, `inventory`) ya aplican filtros por compañia/organización, registrando eventos con ambos identificadores. La misma lógica está pendiente en contabilidad y reportes; ambos módulos están en auditoría funcional para extender `resolveCompanyId` y las métricas de `TenantContext`.
+- ⚠️ **Paso 6 – Pruebas:** Los _specs_ unitarios principales (`TenantContextService`, `TenancyService`, `ClientsService`, `StoresController`, `SalesController`, `EntriesService`, `WebSalesService`, `InventoryService`) cubren escenarios multi-compañía y se ejecutó `npm test` con resultados en verde. Se planifica ampliar la cobertura con escenarios negativos (desactivación, compañías externas o RUC duplicado) y con la batería e2e (`npm run test:e2e`) documentando evidencias y matrices de compatibilidad.
+- ⭕ **Paso 7 – Validaciones y documentacion:** Pendiente documentar los nuevos campos en Swagger/OpenAPI y agregar validaciones/pipes especializados (ej. formato de RUC) coordinando criterios con el equipo legal/contable.
 - ⭕ **Paso 8 – Checklist final:** Restan datos de prueba coherentes, ejecucion documentada de la suite completa y sincronizacion final de documentacion antes de habilitar cambios en frontend.
 
 ## 1. Revisar el modelo de datos y migraciones
@@ -36,7 +36,7 @@ Esta guia describe el flujo recomendado para completar la implementacion backend
 - `CreateTenancyDto` y `UpdateTenancyDto` aceptan arreglos opcionales de companias, configurados con `@ValidateNested` y `@Type` para validacion recursiva.
 
 ### Pasos siguientes
-- Añadir reglas adicionales (longitud minima, patrones de RUC, estandarizacion de mayusculas) segun la normativa que defina el equipo legal/contable.ra `status` o validaciones de longitud minima del nombre) en consonancia con la normativa interna.
+- Añadir reglas adicionales (longitud minima, patrones de RUC, estandarizacion de mayusculas) segun la normativa que defina el equipo legal/contable, evitando regresiones en estados permitidos.
 
 ## 4. Implementar persistencia de companias en `TenancyService`
 ### Estado actual
@@ -54,7 +54,7 @@ Esta guia describe el flujo recomendado para completar la implementacion backend
 - Servicios como `stores`, `sales`, `clients`, `websales`, `entries` e `inventory` ya invocan `buildOrganizationFilter`, `resolveCompanyId` y `resolveOrganizationId` para restringir operaciones al contexto seleccionado.
 
 ### Pasos siguientes
-- Auditar módulos restantes (contabilidad, reportes, etc.) y adoptar el mismo patrón de filtrado.
+- Auditar módulos restantes (contabilidad, reportes, etc.) y adoptar el mismo patrón de filtrado, priorizando endpoints de lectura que hoy operan sin `companyId`.
 - Documentar buenas practicas para nuevos servicios que dependan del contexto de tenant.
 
 ## 6. Ampliar las pruebas automatizadas
@@ -65,7 +65,7 @@ Esta guia describe el flujo recomendado para completar la implementacion backend
 
 ### Pasos siguientes
 - Extender las pruebas con escenarios negativos (RUC duplicado, companias externas) y casos de desactivacion.
-- Agregar pruebas de integracion/e2e que verifiquen cabeceras `x-company-id`/`x-org-id` y flujos completos.
+- Agregar pruebas de integracion/e2e que verifiquen cabeceras `x-company-id`/`x-org-id` y flujos completos, dejando evidencia de la corrida.
 - Automatizar la ejecucion de `npm test` y `npm run test:e2e` en CI antes de despliegues.
 
 ## 7. Validaciones adicionales y documentacion
@@ -89,4 +89,10 @@ Esta guia describe el flujo recomendado para completar la implementacion backend
 
 ### Pasos siguientes
 - Preparar una base de datos semilla con organizaciones y companias reales para pruebas funcionales.
-- Cerrar las brechas de los pasos 5 a 7 y coordinar con frontend la exposicion de los nuevos campos tras validar la capa backend.
+- Publicar el acta de pruebas que consolide `npm test`, `npm run test:e2e` y los datasets utilizados para que Operaciones valide la consistencia multi-compañía.
+
+## Próximas acciones priorizadas
+
+1. **Auditar contabilidad y reportes:** confirmar qué consultas Prisma requieren `companyId` y extender `TenantContextService` a los _providers_ faltantes.
+2. **Endurecer validaciones de compañía:** consensuar el formato final de RUC y estados permitidos, añadir pipes dedicados y exhibir la actualización en Swagger.
+3. **Documentar ejecuciones de prueba:** capturar salidas de `npm test` y `npm run test:e2e`, adjuntando fixtures multi-compañía y checklist de QA previo a exponer cambios en frontend.
