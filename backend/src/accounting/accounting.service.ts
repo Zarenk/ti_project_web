@@ -3,6 +3,8 @@ import { AccEntryStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { zonedTimeToUtc } from 'date-fns-tz';
 import { endOfDay, startOfDay, parse, endOfMonth, format } from 'date-fns';
+import { TenantContext } from 'src/tenancy/tenant-context.interface';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 
 export interface AccountNode {
   id: number;
@@ -54,7 +56,31 @@ const formatInventoryQuantity = (value: unknown): string => {
 export class AccountingService {
   constructor(private prisma: PrismaService) {}
 
-  async getAccounts(): Promise<AccountNode[]> {
+  private emitTenantLog(
+    operation: string,
+    tenantContext?: TenantContext | null,
+    metadata?: Record<string, unknown>,
+    overrides?: { organizationId?: number | null; companyId?: number | null },
+  ) {
+    const organizationId =
+      overrides?.organizationId ?? tenantContext?.organizationId ?? null;
+    const companyId =
+      overrides?.companyId ?? tenantContext?.companyId ?? null;
+
+    logOrganizationContext({
+      service: AccountingService.name,
+      operation,
+      organizationId,
+      companyId,
+      metadata,
+    });
+
+    return { organizationId, companyId };
+  }
+
+  async getAccounts(tenantContext?: TenantContext | null): Promise<AccountNode[]> {
+    this.emitTenantLog('getAccounts', tenantContext);
+
     const accounts = await this.prisma.account.findMany({
       orderBy: { code: 'asc' },
     });
@@ -100,7 +126,12 @@ export class AccountingService {
     code: string;
     name: string;
     parentId?: number | null;
-  }): Promise<AccountNode> {
+  }, tenantContext?: TenantContext | null): Promise<AccountNode> {
+    this.emitTenantLog('createAccount', tenantContext, {
+      code: data.code,
+      parentId: data.parentId ?? null,
+    });
+
     const account = await this.prisma.account.create({
       data: {
         code: data.code,
@@ -121,7 +152,14 @@ export class AccountingService {
   async updateAccount(
     id: number,
     data: { code: string; name: string; parentId?: number | null },
+    tenantContext?: TenantContext | null,
   ): Promise<AccountNode> {
+    this.emitTenantLog('updateAccount', tenantContext, {
+      id,
+      code: data.code,
+      parentId: data.parentId ?? null,
+    });
+
     const account = await this.prisma.account.update({
       where: { id },
       data: {
@@ -140,33 +178,78 @@ export class AccountingService {
     };
   }
 
-  async getLedger(params: {
-    accountCode?: string;
-    from?: string;
-    to?: string;
-    page?: number;
-    size?: number;
-  }) {
-    const prisma: any = this.prisma;
+  async getLedger(
+    params: {
+      accountCode?: string;
+      from?: string;
+      to?: string;
+      page?: number;
+      size?: number;
+    },
+    tenantContext?: TenantContext | null,
+  ) {
+    this.emitTenantLog('getLedger.request', tenantContext, {
+      accountCode: params.accountCode ?? null,
+      from: params.from ?? null,
+      to: params.to ?? null,
+      page: params.page ?? 1,
+      size: params.size ?? 20,
+    });
+
     const { accountCode, from, to, page = 1, size = 20 } = params;
 
-    const where: any = {};
-    if (accountCode) where.accountCode = accountCode;
+    const organizationFilter =
+      tenantContext == null ? undefined : tenantContext.organizationId ?? null;
+    const companyFilter =
+      tenantContext == null ? undefined : tenantContext.companyId ?? null;
+
+    const entryWhere: Record<string, unknown> = {};
     if (from || to) {
-      const date: any = {};
-      if (from) date.gte = toUtc(from);
-      if (to) date.lte = toUtc(to, true);
-      where.date = date;
+      entryWhere.date = {};
+      if (from) (entryWhere.date as any).gte = toUtc(from);
+      if (to) (entryWhere.date as any).lte = toUtc(to, true);
+    }
+    if (organizationFilter !== undefined) {
+      entryWhere.organizationId = organizationFilter;
+    }
+    if (companyFilter !== undefined) {
+      entryWhere.companyId = companyFilter;
     }
 
-    let lines: any[] = [];
+    const where: Record<string, unknown> = {};
+    if (accountCode) {
+      where.account = accountCode;
+    }
+    if (Object.keys(entryWhere).length > 0) {
+      where.entry = entryWhere;
+    }
+
+    let lines: {
+      id: number;
+      entryId: number;
+      account: string;
+      description: string | null;
+      debit: any;
+      credit: any;
+      quantity: number | null;
+      entry?: { id: number; date: Date; organizationId: number | null; companyId: number | null };
+    }[] = [];
+
     try {
-      lines = await (prisma.journalLine?.findMany
-        ? prisma.journalLine.findMany({
-            where,
-            orderBy: [{ date: 'asc' }, { id: 'asc' }],
-          })
-        : []);
+      lines = await this.prisma.accEntryLine.findMany({
+        where,
+        include: {
+          entry: {
+            select: {
+              id: true,
+              date: true,
+              organizationId: true,
+              companyId: true,
+            },
+          },
+        },
+        orderBy: [{ entry: { date: 'asc' } }, { id: 'asc' }],
+      });
     } catch (error) {
       console.error('Error retrieving ledger', error);
       return {
@@ -177,9 +260,23 @@ export class AccountingService {
     }
 
     let running = 0;
-    const withBalance = lines.map((l) => {
-      running += (l.debit ?? 0) - (l.credit ?? 0);
-      return { ...l, balance: running };
+    const withBalance = lines.map((line) => {
+      const debit = toNum(line.debit, 0);
+      const credit = toNum(line.credit, 0);
+      running += debit - credit;
+      return {
+        id: line.id,
+        entryId: line.entryId,
+        account: line.account,
+        description: line.description ?? undefined,
+        debit,
+        credit,
+        quantity: line.quantity ?? undefined,
+        date: line.entry?.date ?? null,
+        organizationId: line.entry?.organizationId ?? null,
+        companyId: line.entry?.companyId ?? null,
+        balance: running,
+      };
     });
 
     const offset = (Number(page) - 1) * Number(size);
@@ -188,35 +285,76 @@ export class AccountingService {
     return { data, total: withBalance.length };
   }
 
-  async getTrialBalance(period: string) {
-    const prisma: any = this.prisma;
+  async getTrialBalance(
+    period: string,
+    tenantContext?: TenantContext | null,
+  ) {
+    this.emitTenantLog('getTrialBalance.request', tenantContext, {
+      period,
+    });
+
     if (!period) return [];
+
+    const organizationFilter =
+      tenantContext == null ? undefined : tenantContext.organizationId ?? null;
+    const companyFilter =
+      tenantContext == null ? undefined : tenantContext.companyId ?? null;
 
     const base = parse(`${period}-01`, 'yyyy-MM-dd', new Date());
     const start = zonedTimeToUtc(startOfDay(base), LIMA_TZ);
     const end = zonedTimeToUtc(endOfDay(endOfMonth(base)), LIMA_TZ);
 
-    const accounts: any[] = await (prisma.account?.findMany
-      ? prisma.account.findMany({ orderBy: { code: 'asc' } })
-      : []);
+    const accounts = await this.prisma.account.findMany({
+      orderBy: { code: 'asc' },
+    });
 
-    const results: any[] = [];
+    const entryFilterBase: Record<string, unknown> = {};
+    if (organizationFilter !== undefined) {
+      entryFilterBase.organizationId = organizationFilter;
+    }
+    if (companyFilter !== undefined) {
+      entryFilterBase.companyId = companyFilter;
+    }
+
+    const results: {
+      accountCode: string;
+      accountName: string;
+      opening: number;
+      debit: number;
+      credit: number;
+      closing: number;
+    }[] = [];
     for (const acc of accounts) {
-      const lines: any[] = await prisma.journalLine.findMany({
-        where: { accountCode: acc.code },
+      const lines = await this.prisma.accEntryLine.findMany({
+        where: {
+          account: acc.code,
+          ...(Object.keys(entryFilterBase).length > 0
+            ? { entry: entryFilterBase }
+            : {}),
+        },
+        include: { entry: { select: { date: true } } },
       });
+
       let opening = 0;
       let debit = 0;
       let credit = 0;
-      for (const l of lines) {
-        const d = new Date(l.date);
-        if (d < start) {
-          opening += (l.debit ?? 0) - (l.credit ?? 0);
-        } else if (d <= end) {
-          debit += l.debit ?? 0;
-          credit += l.credit ?? 0;
+
+      for (const line of lines) {
+        const entryDate = line.entry?.date ?? null;
+        if (!entryDate) {
+          continue;
+        }
+        const debitValue = toNum(line.debit, 0);
+        const creditValue = toNum(line.credit, 0);
+
+        if (entryDate < start) {
+          opening += debitValue - creditValue;
+        } else if (entryDate <= end) {
+          debit += debitValue;
+          credit += creditValue;
         }
       }
+
       const closing = opening + debit - credit;
       results.push({
         accountCode: acc.code,
@@ -231,7 +369,14 @@ export class AccountingService {
     return results;
   }
 
-  async createJournalForInventoryEntry(entryId: number) {
+  async createJournalForInventoryEntry(
+    entryId: number,
+    tenantContext?: TenantContext | null,
+  ) {
+    this.emitTenantLog('createJournalForInventoryEntry.start', tenantContext, {
+      entryId,
+    });
+
     await this.prisma.$transaction(async (prisma) => {
       const entry = await prisma.entry.findUnique({
         where: { id: entryId },
@@ -239,9 +384,31 @@ export class AccountingService {
           details: { include: { product: true, series: true } },
           invoice: true,
           provider: true,
+          store: { select: { companyId: true, organizationId: true } },
         },
       });
       if (!entry) return;
+
+      const entryOrganizationId =
+        (entry as any).organizationId ??
+        (entry.store as any)?.organizationId ??
+        null;
+      const entryCompanyId = (entry.store as any)?.companyId ?? null;
+
+      this.emitTenantLog(
+        'createJournalForInventoryEntry.entryLoaded',
+        tenantContext,
+        {
+          entryId,
+          entryOrganizationId,
+          entryCompanyId,
+          providerId: entry.provider?.id ?? null,
+        },
+        {
+          organizationId: entryOrganizationId,
+          companyId: entryCompanyId,
+        },
+      );
 
       const existing = await prisma.accEntry.findFirst({
         where: { source: 'inventory_entry', sourceId: entryId },
@@ -480,6 +647,8 @@ export class AccountingService {
           invoiceUrl: (entry as any).pdfUrl ?? undefined,
           source: 'inventory_entry',
           sourceId: entryId,
+          organizationId: entryOrganizationId,
+          companyId: entryCompanyId,
           lines: { create: linesToCreate as any },
         },
       });

@@ -16,6 +16,8 @@ export class EntriesRepository {
     to?: Date;
     skip: number;
     take: number;
+    organizationId?: number | null;
+    companyId?: number | null;
   }): Promise<{ data: EntryWithRelations[]; total: number }> {
     const where: Prisma.AccEntryWhereInput = {};
     if (params.period) {
@@ -25,6 +27,12 @@ export class EntriesRepository {
       where.date = {};
       if (params.from) (where.date as any).gte = params.from;
       if (params.to) (where.date as any).lte = params.to;
+    }
+    if (params.organizationId !== undefined) {
+      where.organizationId = params.organizationId;
+    }
+    if (params.companyId !== undefined) {
+      where.companyId = params.companyId;
     }
     const [data, total] = await this.prisma.$transaction([
       this.prisma.accEntry.findMany({
@@ -39,9 +47,19 @@ export class EntriesRepository {
     return { data, total };
   }
 
-  async findOne(id: number): Promise<EntryWithRelations | null> {
-    return this.prisma.accEntry.findUnique({
-      where: { id },
+  async findOne(
+    id: number,
+    filters?: { organizationId?: number | null; companyId?: number | null },
+  ): Promise<EntryWithRelations | null> {
+    const where: Prisma.AccEntryWhereInput = { id };
+    if (filters?.organizationId !== undefined) {
+      where.organizationId = filters.organizationId;
+    }
+    if (filters?.companyId !== undefined) {
+      where.companyId = filters.companyId;
+    }
+    return this.prisma.accEntry.findFirst({
+      where,
       include: { lines: true, period: true, provider: true },
     });
   }
@@ -49,9 +67,17 @@ export class EntriesRepository {
   async findByInvoice(
     serie: string,
     correlativo: string,
+    filters?: { organizationId?: number | null; companyId?: number | null },
   ): Promise<EntryWithRelations | null> {
+    const where: Prisma.AccEntryWhereInput = { serie, correlativo };
+    if (filters?.organizationId !== undefined) {
+      where.organizationId = filters.organizationId;
+    }
+    if (filters?.companyId !== undefined) {
+      where.companyId = filters.companyId;
+    }
     return this.prisma.accEntry.findFirst({
-      where: { serie, correlativo },
+      where,
       include: { lines: true, period: true, provider: true },
     });
   }
@@ -84,6 +110,8 @@ export class EntriesRepository {
       credit: number;
       quantity?: number;
     }[];
+    organizationId?: number | null;
+    companyId?: number | null;
   }): Promise<EntryWithRelations> {
     return this.prisma.accEntry.create({
       data: {
@@ -95,6 +123,8 @@ export class EntriesRepository {
         serie: data.serie,
         correlativo: data.correlativo,
         invoiceUrl: data.invoiceUrl,
+        organizationId: data.organizationId ?? null,
+        companyId: data.companyId ?? null,
         lines: {
           create: data.lines.map((l) => ({
             account: l.account,
@@ -111,9 +141,17 @@ export class EntriesRepository {
 
   async findByReferenceId(
     referenceId: string,
+    filters?: { organizationId?: number | null; companyId?: number | null },
   ): Promise<EntryWithRelations | null> {
+    const where: Prisma.AccEntryWhereInput = { referenceId };
+    if (filters?.organizationId !== undefined) {
+      where.organizationId = filters.organizationId;
+    }
+    if (filters?.companyId !== undefined) {
+      where.companyId = filters.companyId;
+    }
     return this.prisma.accEntry.findFirst({
-      where: { referenceId },
+      where,
       include: { lines: true, period: true, provider: true },
     });
   }

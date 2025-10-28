@@ -23,6 +23,7 @@
     "seed:apply-rls": "ts-node prisma/seed/apply-rls-policies.seed.ts",
     "seed:populate-organization-ids": "ts-node prisma/seed/populate-organization-ids.seed.ts",
     "seed:populate-and-validate": "ts-node prisma/seed/populate-and-validate.seed.ts",
+    "seed:populate-accounting-tenancy": "ts-node prisma/seed/populate-accounting-tenancy.seed.ts",
     "phase3:run": "ts-node scripts/run-phase3-populate.ts",
     "seed:validate-organization-ids": "ts-node prisma/seed/validate-organization-ids.seed.ts",
     "report:multi-tenant-coverage": "ts-node scripts/report-multi-tenant-coverage.ts",

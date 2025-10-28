@@ -9,6 +9,7 @@ import {
   AccEntryStatus as EntryStatus,
   AccPeriodStatus as PeriodStatus,
 } from '@prisma/client';
+import { TenantContext } from 'src/tenancy/tenant-context.interface';
 
 export interface EntryLine {
   account: string;
@@ -80,6 +81,18 @@ export class EntriesService {
     return p?.status ?? PeriodStatus.OPEN;
   }
 
+  private resolveOrganizationFilter(
+    tenant?: TenantContext | null,
+  ): number | null | undefined {
+    return tenant == null ? undefined : tenant.organizationId ?? null;
+  }
+
+  private resolveCompanyFilter(
+    tenant?: TenantContext | null,
+  ): number | null | undefined {
+    return tenant == null ? undefined : tenant.companyId ?? null;
+  }
+
   async findAll(params: {
     period?: string;
     from?: string;
@@ -87,7 +100,7 @@ export class EntriesService {
     tz?: string;
     page?: number;
     size?: number;
-  }): Promise<{ data: Entry[]; total: number }> {
+  }, tenant?: TenantContext | null): Promise<{ data: Entry[]; total: number }> {
     const {
       period,
       from,
@@ -96,6 +109,9 @@ export class EntriesService {
       page = 1,
       size = 25,
     } = params;
+
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
 
     // Normaliza YYYY-MM-DD a rango del dia en tz; si viene ISO, se usa tal cual
     const toDayStart = (d: string | undefined) =>
@@ -115,6 +131,8 @@ export class EntriesService {
       to: toUtc,
       skip: (page - 1) * size,
       take: size,
+      organizationId: organizationFilter,
+      companyId: companyFilter,
     });
 
     const entriesNeedingInvoice = data.filter(
@@ -166,8 +184,13 @@ export class EntriesService {
     };
   }
 
-  async findOne(id: number): Promise<Entry> {
-    const entry = await this.repo.findOne(id);
+  async findOne(id: number, tenant?: TenantContext | null): Promise<Entry> {
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
+    const entry = await this.repo.findOne(id, {
+      organizationId: organizationFilter,
+      companyId: companyFilter,
+    });
     if (!entry) {
       throw new NotFoundException(`Entry ${id} not found`);
     }
@@ -209,8 +232,14 @@ export class EntriesService {
   async findByInvoice(
     serie: string,
     correlativo: string,
+    tenant?: TenantContext | null,
   ): Promise<Entry | null> {
-    const entry = await this.repo.findByInvoice(serie, correlativo);
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
+    const entry = await this.repo.findByInvoice(serie, correlativo, {
+      organizationId: organizationFilter,
+      companyId: companyFilter,
+    });
     if (!entry) {
       return null;
     }
@@ -247,7 +276,8 @@ export class EntriesService {
     };
   }
 
-  async createDraft(data: {
+  async createDraft(
+    data: {
     period: string;
     date: Date;
     lines: EntryLine[];
@@ -255,7 +285,11 @@ export class EntriesService {
     serie?: string;
     correlativo?: string;
     invoiceUrl?: string;
-  }): Promise<Entry> {
+  },
+    tenant?: TenantContext | null,
+  ): Promise<Entry> {
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
     const period = await this.repo.ensurePeriod(data.period);
     if (period.status === PeriodStatus.LOCKED) {
       throw new BadRequestException('Period is locked');
@@ -278,6 +312,9 @@ export class EntriesService {
         ...line,
         quantity: line.quantity ?? undefined,
       })),
+      organizationId:
+        organizationFilter !== undefined ? organizationFilter : undefined,
+      companyId: companyFilter !== undefined ? companyFilter : undefined,
     });
     return {
       id: entry.id,
@@ -301,8 +338,13 @@ export class EntriesService {
     };
   }
 
-  async post(id: number): Promise<Entry> {
-    const entry = await this.repo.findOne(id);
+  async post(id: number, tenant?: TenantContext | null): Promise<Entry> {
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
+    const entry = await this.repo.findOne(id, {
+      organizationId: organizationFilter,
+      companyId: companyFilter,
+    });
     if (!entry) {
       throw new NotFoundException(`Entry ${id} not found`);
     }
@@ -336,8 +378,13 @@ export class EntriesService {
     };
   }
 
-  async void(id: number): Promise<Entry> {
-    const entry = await this.repo.findOne(id);
+  async void(id: number, tenant?: TenantContext | null): Promise<Entry> {
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
+    const entry = await this.repo.findOne(id, {
+      organizationId: organizationFilter,
+      companyId: companyFilter,
+    });
     if (!entry) {
       throw new NotFoundException(`Entry ${id} not found`);
     }

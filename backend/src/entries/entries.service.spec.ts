@@ -9,6 +9,7 @@ import { ActivityService } from 'src/activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { AccountingService } from 'src/accounting/accounting.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import { TenantContextService } from 'src/tenancy/tenant-context.service';
 
 interface PrismaMock {
   store: { findUnique: jest.Mock };
@@ -67,6 +68,7 @@ describe('EntriesService multi-organization support', () => {
   let accountingService: { createJournalForInventoryEntry: jest.Mock };
   let service: EntriesService;
   let logOrganizationContextMock: jest.Mock;
+  let tenantContextService: { getContext: jest.Mock };
 
   const baseInput = {
     storeId: 10,
@@ -134,6 +136,20 @@ describe('EntriesService multi-organization support', () => {
     accountingService = {
       createJournalForInventoryEntry: jest.fn().mockResolvedValue(undefined),
     };
+    tenantContextService = {
+      getContext: jest.fn(() => ({
+        organizationId: null,
+        companyId: null,
+        organizationUnitId: null,
+        userId: null,
+        isGlobalSuperAdmin: false,
+        isOrganizationSuperAdmin: false,
+        isSuperAdmin: false,
+        allowedOrganizationIds: [],
+        allowedCompanyIds: [],
+        allowedOrganizationUnitIds: [],
+      })),
+    };
 
     service = new EntriesService(
       prisma as unknown as PrismaService,
@@ -141,6 +157,7 @@ describe('EntriesService multi-organization support', () => {
       activityService as unknown as ActivityService,
       accountingHook as unknown as AccountingHook,
       accountingService as unknown as AccountingService,
+      tenantContextService as unknown as TenantContextService,
     );
 
     logOrganizationContextMock = logOrganizationContext as unknown as jest.Mock;
@@ -178,6 +195,12 @@ describe('EntriesService multi-organization support', () => {
         operation: 'createEntry',
         organizationId: 321,
       }),
+    );
+    expect(
+      accountingService.createJournalForInventoryEntry,
+    ).toHaveBeenCalledWith(
+      expect.any(Number),
+      tenantContextService.getContext.mock.results[0].value,
     );
   });
 

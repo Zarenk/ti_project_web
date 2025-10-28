@@ -17,6 +17,8 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
       invoice: { serie: 'F001', nroCorrelativo: '1' },
       provider: { name: 'Prov' },
       igvRate: 0.18,
+      organizationId: null,
+      store: { companyId: null, organizationId: null },
       ...entryOverrides,
     };
 

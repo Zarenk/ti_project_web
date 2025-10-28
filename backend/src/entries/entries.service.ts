@@ -24,6 +24,7 @@ import {
   buildOrganizationFilter,
   resolveOrganizationId,
 } from 'src/tenancy/organization.utils';
+import { TenantContextService } from 'src/tenancy/tenant-context.service';
 import {
   InventoryUncheckedCreateInputWithOrganization,
   InventoryHistoryCreateInputWithOrganization,
@@ -38,6 +39,7 @@ export class EntriesService {
     private activityService: ActivityService,
     private accountingHook: AccountingHook,
     private accountingService: AccountingService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   private handlePrismaError(error: any): never {
@@ -418,7 +420,11 @@ export class EntriesService {
         return entry;
       });
 
-      await this.accountingService.createJournalForInventoryEntry(entry.id);
+      const tenantContext = this.tenantContext?.getContext?.() ?? null;
+      await this.accountingService.createJournalForInventoryEntry(
+        entry.id,
+        tenantContext,
+      );
 
       logOrganizationContext({
         service: EntriesService.name,

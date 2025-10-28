@@ -227,6 +227,7 @@ model Organization {
   providers    Provider[]
   products     Product[]
   categories   Category[]
+  accEntries   AccEntry[]
 
   @@unique([name])
   @@index([status])
@@ -251,6 +252,7 @@ model Company {
   inventoryHistories InventoryHistory[]
   products           Product[] // 👈 NUEVA RELACIÓN
   categories         Category[]
+  accEntries         AccEntry[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -1283,8 +1285,12 @@ model AccEntry {
   source      String?
   sourceId    Int?
   referenceId String?        @unique
+  organizationId Int?
+  companyId      Int?
   period      AccPeriod      @relation(fields: [periodId], references: [id])
   provider    Provider?      @relation(fields: [providerId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   lines       AccEntryLine[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
@@ -1292,6 +1298,8 @@ model AccEntry {
   @@unique([source, sourceId])
   @@index([periodId])
   @@index([providerId])
+  @@index([organizationId])
+  @@index([organizationId, companyId])
 }
 
 model AccEntryLine {
