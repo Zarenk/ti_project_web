@@ -106,16 +106,16 @@ describe('SalesController', () => {
     });
   });
 
-  it('forwards organizationId to findAllSales', async () => {
-    await controller.findAllSales(45);
+  it('forwards organization and company to findAllSales', async () => {
+    await controller.findAllSales(45, 11);
 
-    expect(service.findAllSales).toHaveBeenCalledWith(45);
+    expect(service.findAllSales).toHaveBeenCalledWith(45, 11);
   });
 
-  it('converts null organizationId to undefined for findAllSales', async () => {
-    await controller.findAllSales(null);
+  it('converts null tenant identifiers to undefined for findAllSales', async () => {
+    await controller.findAllSales(null, null);
 
-    expect(service.findAllSales).toHaveBeenCalledWith(undefined);
+    expect(service.findAllSales).toHaveBeenCalledWith(undefined, undefined);
   });
 
   it('passes organization context to getTopProductsByRange', async () => {
@@ -142,34 +142,45 @@ describe('SalesController', () => {
     );
   });
 
-  it('propagates organizationId in deleteSale', async () => {
+  it('propagates organization and company in deleteSale', async () => {
     const requestMock: any = { user: { userId: 99 } };
 
-    await controller.deleteSale(10, requestMock, 33);
+    await controller.deleteSale(10, requestMock, 33, 7);
 
-    expect(service.deleteSale).toHaveBeenCalledWith(10, 99, 33);
+    expect(service.deleteSale).toHaveBeenCalledWith(10, 99, 33, 7);
   });
 
-  it('propagates undefined organizationId in deleteSale for legacy context', async () => {
+  it('propagates undefined tenant ids in deleteSale for legacy context', async () => {
     const requestMock: any = { user: { userId: 99 } };
 
-    await controller.deleteSale(10, requestMock, null);
+    await controller.deleteSale(10, requestMock, null, null);
 
-    expect(service.deleteSale).toHaveBeenCalledWith(10, 99, undefined);
+    expect(service.deleteSale).toHaveBeenCalledWith(
+      10,
+      99,
+      undefined,
+      undefined,
+    );
   });
 
   it('maps tenant context when finding a sale by id', async () => {
-    await controller.findOne(5, 71);
+    await controller.findOne(5, 71, 19);
 
-    expect(service.findOne).toHaveBeenCalledWith(5, 71);
+    expect(service.findOne).toHaveBeenCalledWith(5, 71, 19);
   });
 
   it('maps tenant context to sales transactions', async () => {
-    await controller.getSalesTransactions('2024-01-01', '2024-01-31', null);
+    await controller.getSalesTransactions(
+      '2024-01-01',
+      '2024-01-31',
+      null,
+      null,
+    );
 
     expect(service.getSalesTransactions).toHaveBeenCalledWith(
       new Date('2024-01-01'),
       new Date('2024-01-31'),
+      undefined,
       undefined,
     );
   });

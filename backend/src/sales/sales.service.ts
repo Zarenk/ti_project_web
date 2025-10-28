@@ -100,7 +100,6 @@ export class SalesService {
         'La compania proporcionada no coincide con la tienda seleccionada.',
     });
 
-
     const organizationId = resolveOrganizationId({
       provided: inputOrganizationId ?? null,
       fallbacks: [storeOrganizationId],
@@ -121,7 +120,16 @@ export class SalesService {
     let total = 0;
     for (const detail of details) {
       const storeInventory = await this.prisma.storeOnInventory.findFirst({
-        where: { storeId, inventory: { productId: detail.productId } },
+        where: { 
+          storeId, 
+          inventory: {
+            productId: detail.productId,
+            ...(buildOrganizationFilter(organizationId, companyId) as Prisma.InventoryWhereInput),
+          },
+          store: {
+            ...(buildOrganizationFilter(organizationId, companyId) as Prisma.StoreWhereInput),
+          },
+        },
       });
 
       if (!storeInventory || storeInventory.stock < detail.quantity) {
@@ -382,7 +390,10 @@ export class SalesService {
 
           if (detail.series && detail.series.length > 0) {
             await prismaTx.entryDetailSeries.updateMany({
-              where: { serial: { in: detail.series } },
+              where: {
+                serial: { in: detail.series },
+                entryDetailId: detail.entryDetailId, // <-- asegura relación exacta
+              },
               data: { status: 'active' },
             });
           }

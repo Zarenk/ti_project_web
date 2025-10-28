@@ -95,6 +95,7 @@ export class EntriesController {
       stockchange: number;
       previousStock: number;
       newStock: number;
+      organizationId?: number | null;
     },
   ) {
     return this.entriesService.createHistory(body);
@@ -219,50 +220,51 @@ export class EntriesController {
   @Get('id/:id')
   async findEntryAlias(
     @Param('id') id: string,
-    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('organizationId') orgId: number | null,
   ) {
     const numericId = parseInt(id, 10);
-    if (isNaN(numericId)) {
-      throw new BadRequestException(
-        'El ID de la entrada debe ser un número válido.',
-      );
-    }
-    return this.entriesService.findEntryById(
-      numericId,
-      organizationId ?? undefined,
-    );
+    if (isNaN(numericId)) throw new BadRequestException('ID inválido.');
+    return this.entriesService.findEntryById(numericId, orgId ?? undefined);
   }
 
   @Get('store/:storeId')
-  findAllByStore(@Param('storeId') storeId: string) {
+  findAllByStore(
+    @Param('storeId') storeId: string,
+    @CurrentTenant('organizationId') orgId: number | null,
+  ) {
     const numericStoreId = parseInt(storeId, 10);
-    if (isNaN(numericStoreId)) {
-      throw new BadRequestException(
-        'El ID de la tienda debe ser un número válido.',
-      );
-    }
-    return this.entriesService.findAllByStore(numericStoreId);
+    if (isNaN(numericStoreId)) throw new BadRequestException('Store ID inválido.');
+    return this.entriesService.findAllByStore(numericStoreId, orgId ?? undefined);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.entriesService.deleteEntry(+id);
+  remove(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') orgId: number | null,
+  ) {
+    return this.entriesService.deleteEntry(+id, orgId ?? undefined);
   }
 
   @Delete()
-  async deleteEntries(@Body('ids') ids: number[]) {
+  async deleteEntries(
+    @Body('ids') ids: number[],
+    @CurrentTenant('organizationId') orgId: number | null,
+  ) {
     if (!Array.isArray(ids) || ids.length === 0) {
       throw new BadRequestException(
         'No se proporcionaron IDs válidos para eliminar.',
       );
     }
 
-    return this.entriesService.deleteEntries(ids);
+    return this.entriesService.deleteEntries(ids, orgId ?? undefined);
   }
 
   @Get('recent')
-  async findRecent(@Query('limit') limit = '5') {
+  async findRecent(
+    @Query('limit') limit = '5',
+    @CurrentTenant('organizationId') orgId: number | null,
+  ) {
     const take = parseInt(limit, 10);
-    return this.entriesService.findRecentEntries(isNaN(take) ? 5 : take);
+    return this.entriesService.findRecentEntries(isNaN(take) ? 5 : take, orgId ?? undefined);
   }
 }

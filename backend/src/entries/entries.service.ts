@@ -571,10 +571,10 @@ export class EntriesService {
   //
 
   //ELIMINAR ENTRADA
-  async deleteEntry(id: number) {
+  async deleteEntry(id: number, organizationId?: number | null) {
     try {
-      const entry = await this.prisma.entry.findUnique({
-        where: { id },
+      const entry = await this.prisma.entry.findFirst({
+        where: { id, ...(buildOrganizationFilter(organizationId) as Prisma.EntryWhereInput) },
         include: { details: { include: { series: true, product: true } } },
       });
 
@@ -582,8 +582,7 @@ export class EntriesService {
         throw new NotFoundException(`La entrada con ID ${id} no existe.`);
       }
 
-      const organizationId =
-        (entry as { organizationId?: number | null }).organizationId ?? null;
+      const orgId = (entry as any).organizationId ?? null;
 
       logOrganizationContext({
         service: EntriesService.name,
@@ -652,7 +651,7 @@ export class EntriesService {
         action: AuditAction.UPDATED,
         summary: `Entrada eliminada afectando: ${summary}`,
       });
-      return this.prisma.entry.delete({ where: { id } });
+      return this.prisma.entry.delete({ where: { id: entry.id } });
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -662,7 +661,7 @@ export class EntriesService {
   }
 
   // ELIMINAR ENTRADAS
-  async deleteEntries(ids: number[]) {
+  async deleteEntries(ids: number[], organizationId?: number | null) {
     try {
       if (!Array.isArray(ids) || ids.length === 0) {
         throw new BadRequestException(
@@ -672,7 +671,7 @@ export class EntriesService {
 
       // Obtener las entradas con sus detalles
       const entries = await this.prisma.entry.findMany({
-        where: { id: { in: ids } },
+        where: { id: { in: ids }, ...(buildOrganizationFilter(organizationId) as Prisma.EntryWhereInput) },
         include: { details: { include: { series: true, product: true } } },
       });
 
@@ -755,7 +754,7 @@ export class EntriesService {
 
       // Eliminar las entradas
       const deletedEntries = await this.prisma.entry.deleteMany({
-        where: { id: { in: ids } },
+        where: { id: { in: entries.map(e => e.id) } },
       });
 
       return {
@@ -770,33 +769,40 @@ export class EntriesService {
   }
 
   // Obtener todas las entradas de una tienda específica
-  async findAllByStore(storeId: number) {
-    try {
-      // Verificar que la tienda exista
-      const store = await this.prisma.store.findUnique({
-        where: { id: storeId },
-      });
-      if (!store) {
-        throw new NotFoundException(`La tienda con ID ${storeId} no existe.`);
-      }
+  async findAllByStore(storeId: number, organizationId?: number | null) {
+  try {
+    const store = await this.prisma.store.findFirst({
+      where: {
+        id: storeId,
+        ...(buildOrganizationFilter(organizationId) as Prisma.StoreWhereInput),
+      },
+    });
+    if (!store) throw new NotFoundException('Tienda no encontrada en esta organización.');
 
-      return this.prisma.entry.findMany({
-        where: { storeId },
-        include: { details: true, provider: true, user: true },
-      });
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      this.handlePrismaError(error);
-    }
+    return this.prisma.entry.findMany({
+      where: {
+        storeId,
+        ...(buildOrganizationFilter(organizationId) as Prisma.EntryWhereInput),
+      },
+      include: { details: true, provider: true, user: true },
+    });
+  } catch (error) {
+    if (error instanceof HttpException) throw error;
+    this.handlePrismaError(error);
+  }
   }
   //
 
-  async findRecentEntries(limit: number) {
+  async findRecentEntries(limit: number, organizationId?: number | null) {
     try {
       const details = await this.prisma.entryDetail.findMany({
-        where: { inventoryId: { not: null } },
+        where: {
+          inventory: {
+            // Inventory tiene organizationId; úsalo para scoping
+            ...(buildOrganizationFilter(organizationId) as Prisma.InventoryWhereInput),
+            // y además, aseguramos que existe relación con store
+          },
+        },
         orderBy: { createdAt: 'desc' },
         take: limit * 3,
         include: {

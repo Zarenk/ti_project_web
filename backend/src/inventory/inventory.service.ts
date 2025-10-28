@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -10,7 +15,10 @@ import { format } from 'date-fns-tz';
 import { Buffer } from 'buffer';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
-import { resolveOrganizationId } from 'src/tenancy/organization.utils';
+import {
+  resolveCompanyId,
+  resolveOrganizationId,
+} from 'src/tenancy/organization.utils';
 import {
   InventoryUncheckedCreateInputWithOrganization,
   InventoryHistoryUncheckedCreateInputWithOrganization,
@@ -29,6 +37,22 @@ export class InventoryService {
     private activityService: ActivityService,
     private readonly accountingHook: AccountingHook,
   ) {}
+
+  private async assertCompanyMatchesOrganization(
+    companyId: number,
+    organizationId: number,
+  ): Promise<void> {
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { organizationId: true },
+    });
+
+    if (!company || company.organizationId !== organizationId) {
+      throw new BadRequestException(
+        `La compania ${companyId} no pertenece a la organizacion ${organizationId}.`,
+      );
+    }
+  }
 
   parseExcel(filePath: string): any[] {
     const workbook = xlsx.readFile(filePath);
@@ -51,19 +75,27 @@ export class InventoryService {
   }
 
   // Listar todas las entradas
-  async findAllInventoryHistory(organizationId?: number | null) {
+  async findAllInventoryHistory(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     const resolvedOrganizationId = organizationId ?? null;
+    const resolvedCompanyId = companyId ?? null;
     const where: Prisma.InventoryHistoryWhereInput = {};
 
     logOrganizationContext({
       service: InventoryService.name,
       operation: 'findAllInventoryHistory',
       organizationId: resolvedOrganizationId,
+      companyId: resolvedCompanyId ?? undefined,
       metadata: { scope: 'inventoryHistory' },
     });
 
     if (organizationId !== undefined) {
       Object.assign(where, { organizationId: resolvedOrganizationId });
+    }
+    if (companyId !== undefined) {
+      Object.assign(where, { companyId: resolvedCompanyId });
     }
     return this.prisma.inventoryHistory.findMany({
       where,
@@ -88,20 +120,29 @@ export class InventoryService {
   //
 
   // Obtener el historial de un inventario específico por ID
-  async findAllHistoryByUser(userId: number, organizationId?: number | null) {
+  async findAllHistoryByUser(
+    userId: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     const where: Prisma.InventoryHistoryWhereInput = { userId };
 
     const resolvedOrganizationId = organizationId ?? null;
+    const resolvedCompanyId = companyId ?? null;
 
     logOrganizationContext({
       service: InventoryService.name,
       operation: 'findAllHistoryByUser',
       organizationId: resolvedOrganizationId,
+      companyId: resolvedCompanyId ?? undefined,
       metadata: { userId },
     });
 
     if (organizationId !== undefined) {
       Object.assign(where, { organizationId: resolvedOrganizationId });
+    }
+    if (companyId !== undefined) {
+      Object.assign(where, { companyId: resolvedCompanyId });
     }
     return this.prisma.inventoryHistory.findMany({
       where, // Filtrar por el ID del usuario
@@ -126,21 +167,33 @@ export class InventoryService {
   //
 
   // Obtener el precio de compra de un producto
-  async getAllPurchasePrices(organizationId?: number | null) {
+  async getAllPurchasePrices(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     const entryWhere: Prisma.EntryDetailWhereInput = {};
     const resolvedOrganizationId = organizationId ?? null;
+    const resolvedCompanyId = companyId ?? null;
 
     logOrganizationContext({
       service: InventoryService.name,
       operation: 'getAllPurchasePrices',
       organizationId: resolvedOrganizationId,
+      companyId: resolvedCompanyId ?? undefined,
       metadata: { scope: 'purchasePrices' },
     });
 
-    if (organizationId !== undefined) {
+    if (organizationId !== undefined || companyId !== undefined) {
       entryWhere.entry = {
-        organizationId: resolvedOrganizationId,
-      } as Prisma.EntryWhereInput;
+        is: {
+          ...(organizationId !== undefined
+            ? { organizationId: resolvedOrganizationId }
+            : {}),
+          ...(companyId !== undefined
+            ? { store: { companyId: resolvedCompanyId } }
+            : {}),
+        },
+      };
     }
     // Obtener todos los detalles de entrada agrupados por producto
     const entryDetails = await this.prisma.entryDetail.findMany({
@@ -205,6 +258,7 @@ export class InventoryService {
     description?: string;
     userId: number; // ID del usuario que realiza la transferencia
     organizationId?: number | null;
+    companyId?: number | null;
   }) {
     const {
       sourceStoreId,
@@ -214,6 +268,7 @@ export class InventoryService {
       description,
       userId,
       organizationId: inputOrganizationId,
+      companyId: inputCompanyId,
     } = transferDto;
     const [sourceStore, destinationStore] = await Promise.all([
       this.prisma.store.findUnique({
@@ -251,13 +306,39 @@ export class InventoryService {
         (destinationStore as { organizationId?: number | null })
           .organizationId ?? null,
       ],
-      mismatchError: 'La tienda de destino pertenece a otra organización.',
+      mismatchError: 'La tienda de destino pertenece a otra organizacion.',
     });
+
+    const companyIdFromSource = resolveCompanyId({
+      provided: inputCompanyId ?? null,
+      fallbacks: [
+        (sourceStore as { companyId?: number | null }).companyId ?? null,
+      ],
+      mismatchError: 'La tienda de origen pertenece a otra compania.',
+    });
+
+    const companyId = resolveCompanyId({
+      provided: companyIdFromSource,
+      fallbacks: [
+        (destinationStore as { companyId?: number | null }).companyId ?? null,
+      ],
+      mismatchError: 'La tienda de destino pertenece a otra compania.',
+    });
+
+    if (companyId !== null) {
+      if (organizationId === null) {
+        throw new BadRequestException(
+          'Debe indicar una organizacion valida para asociar la transferencia a una compania.',
+        );
+      }
+      await this.assertCompanyMatchesOrganization(companyId, organizationId);
+    }
 
     logOrganizationContext({
       service: InventoryService.name,
       operation: 'transferProduct',
       organizationId,
+      companyId: companyId ?? undefined,
       metadata: { sourceStoreId, destinationStoreId, productId, userId },
     });
 
@@ -348,6 +429,7 @@ export class InventoryService {
             newStock: sourceStoreInventory.stock - quantity,
             userId, // Usuario que realizó la acción
             organizationId,
+            companyId: companyId ?? null,
           },
           {
             inventoryId: destinationStoreInventory
@@ -372,6 +454,7 @@ export class InventoryService {
               : quantity,
             userId, // Usuario que realizó la acción
             organizationId,
+            companyId: companyId ?? null,
           },
         ];
 
@@ -407,7 +490,9 @@ export class InventoryService {
     storeId: number,
     productId: number,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
+    const resolvedCompanyId = companyId ?? null;
     // Busca las series asociadas al producto en la tienda seleccionada
     const series = await this.prisma.entryDetailSeries.findMany({
       where: {
@@ -417,6 +502,9 @@ export class InventoryService {
             storeId,
             ...(organizationId !== undefined
               ? { organizationId: organizationId ?? null }
+              : {}),
+            ...(companyId !== undefined
+              ? { store: { companyId: resolvedCompanyId } }
               : {}),
           },
         },
@@ -431,13 +519,26 @@ export class InventoryService {
   }
 
   // Obtener el inventario con detalles de entradas y tiendas
-  async getInventoryWithEntries(organizationId?: number | null) {
+  async getInventoryWithEntries(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     const where: Prisma.InventoryWhereInput = {};
 
     if (organizationId !== undefined) {
       where.organizationId = organizationId ?? null;
     }
-    return this.prisma.inventory.findMany({
+    if (companyId !== undefined) {
+      where.storeOnInventory = {
+        some: {
+          store: {
+            companyId: companyId ?? null,
+          },
+        },
+      };
+    }
+
+    const inventories = await this.prisma.inventory.findMany({
       where,
       include: {
         product: {
@@ -459,11 +560,47 @@ export class InventoryService {
         },
       },
     });
+
+    if (companyId === undefined) {
+      return inventories;
+    }
+
+    const targetCompanyId = companyId ?? null;
+    return inventories
+      .map((item) => {
+        const filteredStoreOnInventory = item.storeOnInventory.filter(
+          (storeInventory) =>
+            (storeInventory.store?.companyId ?? null) === targetCompanyId,
+        );
+        const allowedStoreIds = new Set(
+          filteredStoreOnInventory.map((storeInventory) => storeInventory.storeId),
+        );
+        const filteredEntryDetails = item.entryDetails.filter(
+          (detail) =>
+            detail.entry && allowedStoreIds.has(detail.entry.storeId),
+        );
+
+        return {
+          ...item,
+          storeOnInventory: filteredStoreOnInventory,
+          entryDetails: filteredEntryDetails,
+        };
+      })
+      .filter(
+        (item) =>
+          item.storeOnInventory.length > 0 || item.entryDetails.length > 0,
+      );
   }
 
   // Obtener el inventario con desglose por moneda y tienda
-  async calculateInventoryWithCurrencyByStore(organizationId?: number | null) {
-    const inventory = await this.getInventoryWithEntries(organizationId);
+  async calculateInventoryWithCurrencyByStore(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const inventory = await this.getInventoryWithEntries(
+      organizationId,
+      companyId,
+    );
 
     return inventory.map((item) => {
       // Agrupar los detalles de entrada por tienda
@@ -502,8 +639,14 @@ export class InventoryService {
   }
 
   // Obtener el inventario con desglose por moneda
-  async getStockDetailsByStoreAndCurrency(organizationId?: number | null) {
-    const inventory = await this.getInventoryWithEntries(organizationId);
+  async getStockDetailsByStoreAndCurrency(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const inventory = await this.getInventoryWithEntries(
+      organizationId,
+      companyId,
+    );
 
     // Agrupar los detalles por producto
     const groupedDetails = inventory.reduce((acc: any, item) => {
@@ -571,14 +714,26 @@ export class InventoryService {
   }
 
   // Obtener las entradas de un producto específico
-  async getProductEntries(productId: number, organizationId?: number | null) {
+  async getProductEntries(
+    productId: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const entryFilter: Prisma.EntryWhereInput = {};
+    if (organizationId !== undefined) {
+      entryFilter.organizationId = organizationId ?? null;
+    }
+    if (companyId !== undefined) {
+      entryFilter.store = {
+        companyId: companyId ?? null,
+      };
+    }
+
     const entryWhere: Prisma.EntryDetailWhereInput = {
       productId,
-      entry: {
-        ...(organizationId !== undefined
-          ? { organizationId: organizationId ?? null }
-          : {}),
-      },
+      ...(Object.keys(entryFilter).length > 0
+        ? { entry: { is: entryFilter } }
+        : {}),
     };
     // Obtener todas las entradas del producto
     const entries = await this.prisma.entryDetail.findMany({
@@ -593,6 +748,7 @@ export class InventoryService {
             store: {
               select: {
                 name: true, // Nombre de la tienda
+                companyId: true,
               },
             },
             provider: {
@@ -628,12 +784,20 @@ export class InventoryService {
   async getProductByInventoryId(
     inventoryId: number,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
     const inventory = await this.prisma.inventory.findFirst({
       where: {
         id: inventoryId,
         ...(organizationId !== undefined
           ? { organizationId: organizationId ?? null }
+          : {}),
+        ...(companyId !== undefined
+          ? {
+              storeOnInventory: {
+                some: { store: { companyId: companyId ?? null } },
+              },
+            }
           : {}),
       },
       include: {
@@ -655,15 +819,25 @@ export class InventoryService {
   //
 
   // Obtener las salidas de un producto específico
-  async getProductSales(productId: number, organizationId?: number | null) {
+  async getProductSales(
+    productId: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const saleFilter: Prisma.SalesWhereInput = {};
+    if (organizationId !== undefined) {
+      saleFilter.organizationId = organizationId ?? null;
+    }
+    if (companyId !== undefined) {
+      saleFilter.store = { companyId: companyId ?? null };
+    }
+
     const sales = await this.prisma.salesDetail.findMany({
       where: {
         productId,
-        sale: {
-          ...(organizationId !== undefined
-            ? { organizationId: organizationId ?? null }
-            : {}),
-        },
+        ...(Object.keys(saleFilter).length > 0
+          ? { sale: { is: saleFilter } }
+          : {}),
       },
       include: {
         sale: {
@@ -686,11 +860,19 @@ export class InventoryService {
     }));
   }
 
-  async getCategoriesFromInventory(organizationId?: number | null) {
+  async getCategoriesFromInventory(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     const inventoryFilter: Prisma.InventoryWhereInput = {};
 
     if (organizationId !== undefined) {
       inventoryFilter.organizationId = organizationId ?? null;
+    }
+    if (companyId !== undefined) {
+      inventoryFilter.storeOnInventory = {
+        some: { store: { companyId: companyId ?? null } },
+      };
     }
     const productsWithCategories = await this.prisma.product.findMany({
       where: {
@@ -722,23 +904,45 @@ export class InventoryService {
   }
 
   // Nuevo método para obtener el inventario total agrupado por nombre
-  async getTotalInventoryByName(organizationId?: number | null) {
+  async getTotalInventoryByName(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     const where: Prisma.InventoryWhereInput = {};
 
     if (organizationId !== undefined) {
       where.organizationId = organizationId ?? null;
     }
+    if (companyId !== undefined) {
+      where.storeOnInventory = {
+        some: { store: { companyId: companyId ?? null } },
+      };
+    }
     const inventory = await this.prisma.inventory.findMany({
       where,
       include: {
         product: true, // Incluye información del producto
-        storeOnInventory: true, // Incluye información de las tiendas
+        storeOnInventory: {
+          include: { store: true },
+        }, // Incluye información de las tiendas
       },
     });
 
     // Agrupar por nombre de producto y sumar el stock
     const groupedInventory = inventory.reduce((acc, item) => {
       const productName = item.product.name;
+      const storeInventories =
+        companyId === undefined
+          ? item.storeOnInventory
+          : item.storeOnInventory.filter(
+              (storeInventory) =>
+                (storeInventory.store?.companyId ?? null) ===
+                (companyId ?? null),
+            );
+
+      if (storeInventories.length === 0) {
+        return acc;
+      }
 
       if (!acc[productName]) {
         acc[productName] = {
@@ -748,7 +952,7 @@ export class InventoryService {
       }
 
       // Sumar el stock de todas las tiendas
-      acc[productName].totalStock += item.storeOnInventory.reduce(
+      acc[productName].totalStock += storeInventories.reduce(
         (sum, store) => sum + store.stock,
         0,
       );
@@ -760,18 +964,28 @@ export class InventoryService {
     return Object.values(groupedInventory);
   }
 
-  async getProductsWithLowStockAcrossStores(organizationId?: number | null) {
+  async getProductsWithLowStockAcrossStores(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     const where: Prisma.InventoryWhereInput = {};
 
     if (organizationId !== undefined) {
       where.organizationId = organizationId ?? null;
+    }
+    if (companyId !== undefined) {
+      where.storeOnInventory = {
+        some: { store: { companyId: companyId ?? null } },
+      };
     }
 
     const inventories = await this.prisma.inventory.findMany({
       where,
       include: {
         product: true,
-        storeOnInventory: true,
+        storeOnInventory: {
+          include: { store: true },
+        },
       },
     });
 
@@ -788,7 +1002,14 @@ export class InventoryService {
     for (const inventory of inventories) {
       const productId = inventory.product.id;
       const productName = inventory.product.name;
-      const totalStock = inventory.storeOnInventory.reduce(
+      const storeInventories =
+        companyId === undefined
+          ? inventory.storeOnInventory
+          : inventory.storeOnInventory.filter(
+              (storeInv) =>
+                (storeInv.store?.companyId ?? null) === (companyId ?? null),
+            );
+      const totalStock = storeInventories.reduce(
         (sum, storeInv) => sum + storeInv.stock,
         0,
       );
@@ -817,6 +1038,7 @@ export class InventoryService {
     categoryId?: number,
     search?: string,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
     const categoryFilter: Prisma.ProductWhereInput = categoryId
       ? { categoryId }
@@ -840,8 +1062,17 @@ export class InventoryService {
     return this.prisma.storeOnInventory.findMany({
       where: {
         storeId,
-        ...(organizationId !== undefined
-          ? { store: { organizationId: organizationId ?? null } }
+        ...(organizationId !== undefined || companyId !== undefined
+          ? {
+              store: {
+                ...(organizationId !== undefined
+                  ? { organizationId: organizationId ?? null }
+                  : {}),
+                ...(companyId !== undefined
+                  ? { companyId: companyId ?? null }
+                  : {}),
+              },
+            }
           : {}),
         stock: {
           gt: 0, // Solo productos con stock > 0
@@ -881,6 +1112,7 @@ export class InventoryService {
     storeId: number,
     categoryId?: number,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
     const categoryFilter: Prisma.ProductWhereInput = categoryId
       ? { categoryId }
@@ -897,8 +1129,17 @@ export class InventoryService {
     return this.prisma.storeOnInventory.findMany({
       where: {
         storeId,
-        ...(organizationId !== undefined
-          ? { store: { organizationId: organizationId ?? null } }
+        ...(organizationId !== undefined || companyId !== undefined
+          ? {
+              store: {
+                ...(organizationId !== undefined
+                  ? { organizationId: organizationId ?? null }
+                  : {}),
+                ...(companyId !== undefined
+                  ? { companyId: companyId ?? null }
+                  : {}),
+              },
+            }
           : {}),
         inventory: inventoryFilter,
       },
@@ -937,6 +1178,7 @@ export class InventoryService {
     userId: number,
     providerId: number | null,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
     const store = await this.prisma.store.findUnique({
       where: { id: storeId },
@@ -948,13 +1190,28 @@ export class InventoryService {
 
     const storeOrganizationId = (store as { organizationId?: number | null })
       .organizationId;
+    const storeCompanyId = (store as { companyId?: number | null }).companyId;
     const resolvedOrganizationId =
       organizationId ?? storeOrganizationId ?? null;
+    const resolvedCompanyId = companyId ?? storeCompanyId ?? null;
+
+    if (resolvedCompanyId !== null) {
+      if (resolvedOrganizationId === null) {
+        throw new BadRequestException(
+          'Debe indicar una organizacion valida para asociar la importacion a una compania.',
+        );
+      }
+      await this.assertCompanyMatchesOrganization(
+        resolvedCompanyId,
+        resolvedOrganizationId,
+      );
+    }
 
     logOrganizationContext({
       service: InventoryService.name,
       operation: 'processExcelData',
       organizationId: resolvedOrganizationId,
+      companyId: resolvedCompanyId ?? undefined,
       metadata: { storeId, userId },
     });
 
@@ -1089,6 +1346,7 @@ export class InventoryService {
           previousStock: storeInventory?.stock ?? 0,
           newStock: (storeInventory?.stock ?? 0) + parsedStock,
           organizationId: resolvedOrganizationId,
+          companyId: resolvedCompanyId ?? null,
         };
 
       await this.prisma.inventoryHistory.create({

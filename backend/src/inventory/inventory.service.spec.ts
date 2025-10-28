@@ -15,6 +15,9 @@ type InventoryPrismaMock = {
     findFirst: jest.Mock;
     create: jest.Mock;
   };
+  company: {
+    findUnique: jest.Mock;
+  };
   storeOnInventory: {
     findFirst: jest.Mock;
     findMany: jest.Mock;
@@ -81,6 +84,9 @@ describe('InventoryService multi-organization support', () => {
         findFirst: jest.fn(),
         create: jest.fn(),
       },
+      company: {
+        findUnique: jest.fn(),
+      },
       storeOnInventory: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
@@ -132,6 +138,7 @@ describe('InventoryService multi-organization support', () => {
         findMany: jest.fn(),
       },
     };
+    prisma.company.findUnique.mockResolvedValue(null);
 
     activityService = {
       log: jest.fn().mockResolvedValue(undefined),
@@ -328,7 +335,9 @@ describe('InventoryService multi-organization support', () => {
 
     expect(prisma.entryDetail.findMany).toHaveBeenCalled();
     const args = prisma.entryDetail.findMany.mock.calls[0][0];
-    expect(args.where).toEqual({ entry: { organizationId: 15 } });
+    expect(args.where).toEqual({
+      entry: { is: { organizationId: 15 } },
+    });
     expect(logOrganizationContextMock).toHaveBeenCalledWith({
       service: InventoryService.name,
       operation: 'getAllPurchasePrices',
@@ -447,6 +456,38 @@ describe('InventoryService multi-organization support', () => {
         }),
       );
     });
+    it('propagates company filters when importing inventory', async () => {
+      prisma.store.findUnique.mockResolvedValue({
+        id: 2,
+        organizationId: 777,
+        companyId: 333,
+      });
+      prisma.company.findUnique.mockResolvedValue({
+        organizationId: 777,
+      });
+
+      await service.processExcelData(excelRows, 2, 9, 2, 777, 333);
+
+      expect(prisma.company.findUnique).toHaveBeenCalledWith({
+        where: { id: 333 },
+        select: { organizationId: true },
+      });
+      expect(prisma.inventoryHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            organizationId: 777,
+            companyId: 333,
+          }),
+        }),
+      );
+      expect(logOrganizationContextMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'processExcelData',
+          organizationId: 777,
+          companyId: 333,
+        }),
+      );
+    });
   });
 
   it('filters getInventoryWithEntries by organization when provided', async () => {
@@ -469,6 +510,22 @@ describe('InventoryService multi-organization support', () => {
       2,
       expect.objectContaining({
         where: { organizationId: null },
+      }),
+    );
+  });
+
+  it('filters getInventoryWithEntries by company when provided', async () => {
+    prisma.inventory.findMany.mockResolvedValueOnce([]);
+
+    await service.getInventoryWithEntries(undefined, 321);
+
+    expect(prisma.inventory.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          storeOnInventory: {
+            some: { store: { companyId: 321 } },
+          },
+        }),
       }),
     );
   });
@@ -498,7 +555,28 @@ describe('InventoryService multi-organization support', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           productId: 44,
-          entry: expect.objectContaining({ organizationId: 12 }),
+          entry: expect.objectContaining({
+            is: expect.objectContaining({ organizationId: 12 }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('filters product entries by company when provided', async () => {
+    prisma.entryDetail.findMany.mockResolvedValue([]);
+
+    await service.getProductEntries(55, undefined, 22);
+
+    expect(prisma.entryDetail.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          productId: 55,
+          entry: expect.objectContaining({
+            is: expect.objectContaining({
+              store: { companyId: 22 },
+            }),
+          }),
         }),
       }),
     );
@@ -530,7 +608,28 @@ describe('InventoryService multi-organization support', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           productId: 42,
-          sale: expect.objectContaining({ organizationId: 88 }),
+          sale: expect.objectContaining({
+            is: expect.objectContaining({ organizationId: 88 }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('filters product sales by company when provided', async () => {
+    prisma.salesDetail.findMany.mockResolvedValue([]);
+
+    await service.getProductSales(99, undefined, 77);
+
+    expect(prisma.salesDetail.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          productId: 99,
+          sale: expect.objectContaining({
+            is: expect.objectContaining({
+              store: { companyId: 77 },
+            }),
+          }),
         }),
       }),
     );

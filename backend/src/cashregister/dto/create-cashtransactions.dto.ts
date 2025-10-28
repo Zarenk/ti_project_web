@@ -63,4 +63,7 @@ export class CreateCashTransactionDto {
   @IsOptional()
   @IsNumber()
   organizationId?: number | null;
+
+  @IsOptional() @IsNumber()
+  companyId?: number | null;  
 }

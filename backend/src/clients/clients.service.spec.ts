@@ -76,6 +76,7 @@ describe('ClientService multi-organization support', () => {
         service: ClientService.name,
         operation: 'create',
         organizationId: 77,
+        companyId: null,
       }),
     );
 
@@ -102,7 +103,8 @@ describe('ClientService multi-organization support', () => {
       expect.objectContaining({
         service: ClientService.name,
         operation: 'create',
-        organizationId: undefined,
+        organizationId: null,
+        companyId: null,
       }),
     );
   });
@@ -132,6 +134,7 @@ describe('ClientService multi-organization support', () => {
         service: ClientService.name,
         operation: 'createGuest',
         organizationId: 321,
+        companyId: null,
       }),
     );
 
@@ -157,7 +160,8 @@ describe('ClientService multi-organization support', () => {
       expect.objectContaining({
         service: ClientService.name,
         operation: 'createGuest',
-        organizationId: undefined,
+        organizationId: null,
+        companyId: null,
       }),
     );
 
@@ -200,16 +204,20 @@ describe('ClientService multi-organization support', () => {
         data: expect.objectContaining({ organizationId: null }),
       }),
     );
-    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+    expect(logOrganizationContextMock).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         operation: 'verifyOrCreateClients',
         organizationId: 400,
+        companyId: null,
       }),
     );
-    expect(logOrganizationContextMock).toHaveBeenCalledWith(
+    expect(logOrganizationContextMock).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         operation: 'verifyOrCreateClients',
-        organizationId: undefined,
+        organizationId: null,
+        companyId: null,
       }),
     );
   });
@@ -234,6 +242,7 @@ describe('ClientService multi-organization support', () => {
         service: ClientService.name,
         operation: 'selfRegister',
         organizationId: 654,
+        companyId: null,
       }),
     );
   });
@@ -256,7 +265,8 @@ describe('ClientService multi-organization support', () => {
       expect.objectContaining({
         service: ClientService.name,
         operation: 'selfRegister',
-        organizationId: undefined,
+        organizationId: null,
+        companyId: null,
       }),
     );
   });

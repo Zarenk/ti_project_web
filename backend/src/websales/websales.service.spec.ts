@@ -11,6 +11,7 @@ import { logOrganizationContext } from 'src/tenancy/organization-context.logger'
 type PrismaMock = {
   client: { findUnique: jest.Mock; create: jest.Mock };
   user: { create: jest.Mock; findUnique: jest.Mock };
+  company: { findUnique: jest.Mock };
   storeOnInventory: { findFirst: jest.Mock };
   salePayment: { findMany: jest.Mock };
   sales: { findUnique: jest.Mock; findFirst: jest.Mock };
@@ -63,6 +64,9 @@ describe('WebSalesService multi-organization support', () => {
           .fn()
           .mockResolvedValue({ username: 'seller@example.com' }),
       },
+      company: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
       storeOnInventory: {
         findFirst: jest.fn().mockResolvedValue({
           id: 50,
@@ -71,6 +75,7 @@ describe('WebSalesService multi-organization support', () => {
             id: baseSaleInput.storeId,
             name: 'Main store',
             organizationId: null,
+            companyId: null,
           },
         }),
       },
@@ -158,7 +163,8 @@ describe('WebSalesService multi-organization support', () => {
     expect(prisma.orders.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          organization: { connect: { id: 789 } },
+          organizationId: 789,
+          companyId: null,
         }),
       }),
     );
@@ -168,6 +174,7 @@ describe('WebSalesService multi-organization support', () => {
         service: 'WebSalesService',
         operation: 'createWebOrder',
         organizationId: 789,
+        companyId: undefined,
         metadata: expect.objectContaining({
           userId: baseSaleInput.userId,
           storeId: baseSaleInput.storeId,
@@ -192,20 +199,24 @@ describe('WebSalesService multi-organization support', () => {
     });
 
     const [[createArgs]] = prisma.orders.create.mock.calls;
-    expect(createArgs.data.organization).toBeUndefined();
+    expect(createArgs.data.organizationId).toBeNull();
+    expect(createArgs.data.companyId).toBeNull();
   });
 
-  it('propagates the provided organizationId through logging, user and client creation and sale execution', async () => {
+  it('propagates provided organization and company through logging, user and client creation and sale execution', async () => {
     (prepareSaleContext as jest.Mock).mockResolvedValue({
       store: {
         id: baseSaleInput.storeId,
         name: 'Main store',
-        organizationId: 987,
+        organizationId: 321,
+        companyId: 654,
       },
       cashRegister: { id: 77 },
       clientIdToUse: undefined,
     });
     (executeSale as jest.Mock).mockResolvedValue({ id: 999, total: 100 });
+
+    prisma.company.findUnique.mockResolvedValue({ organizationId: 321 });
 
     await service.createWebSale({
       ...baseSaleInput,
@@ -213,6 +224,7 @@ describe('WebSalesService multi-organization support', () => {
       firstName: 'Jane',
       lastName: 'Doe',
       organizationId: 321,
+      companyId: 654,
     });
 
     expect(prisma.user.create).toHaveBeenCalledWith(
@@ -229,11 +241,11 @@ describe('WebSalesService multi-organization support', () => {
 
     expect(executeSale).toHaveBeenCalledWith(
       prismaService,
-      expect.objectContaining({ organizationId: 321 }),
+      expect.objectContaining({ organizationId: 321, companyId: 654 }),
     );
 
     expect(logOrganizationContext).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: 321 }),
+      expect.objectContaining({ organizationId: 321, companyId: 654 }),
     );
   });
 
@@ -243,11 +255,14 @@ describe('WebSalesService multi-organization support', () => {
         id: baseSaleInput.storeId,
         name: 'Main store',
         organizationId: 654,
+        companyId: 222,
       },
       cashRegister: { id: 88 },
       clientIdToUse: 222,
     });
     (executeSale as jest.Mock).mockResolvedValue({ id: 321, total: 100 });
+
+    prisma.company.findUnique.mockResolvedValue({ organizationId: 654 });
 
     await service.createWebSale({
       ...baseSaleInput,
@@ -256,11 +271,11 @@ describe('WebSalesService multi-organization support', () => {
 
     expect(executeSale).toHaveBeenCalledWith(
       prismaService,
-      expect.objectContaining({ organizationId: 654 }),
+      expect.objectContaining({ organizationId: 654, companyId: 222 }),
     );
 
     expect(logOrganizationContext).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: 654 }),
+      expect.objectContaining({ organizationId: 654, companyId: 222 }),
     );
   });
 
@@ -270,6 +285,7 @@ describe('WebSalesService multi-organization support', () => {
         id: baseSaleInput.storeId,
         name: 'Main store',
         organizationId: null,
+        companyId: null,
       },
       cashRegister: { id: 55 },
       clientIdToUse: 333,
@@ -283,11 +299,11 @@ describe('WebSalesService multi-organization support', () => {
 
     expect(executeSale).toHaveBeenCalledWith(
       prismaService,
-      expect.objectContaining({ organizationId: null }),
+      expect.objectContaining({ organizationId: null, companyId: null }),
     );
 
     expect(logOrganizationContext).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: null }),
+      expect.objectContaining({ organizationId: null, companyId: undefined }),
     );
   });
 
@@ -297,6 +313,7 @@ describe('WebSalesService multi-organization support', () => {
     await service.getOrders({
       status: 'PENDING',
       organizationId: 55,
+      companyId: 88,
     });
 
     expect(prisma.orders.findMany).toHaveBeenCalledWith(
@@ -304,6 +321,7 @@ describe('WebSalesService multi-organization support', () => {
         where: expect.objectContaining({
           status: 'PENDING',
           organizationId: 55,
+          companyId: 88,
         }),
       }),
     );
@@ -312,12 +330,12 @@ describe('WebSalesService multi-organization support', () => {
   it('counts orders within the current organization', async () => {
     prisma.orders.count.mockResolvedValue(5);
 
-    const count = await service.getOrderCount(undefined, 77);
+    const count = await service.getOrderCount(undefined, 77, 33);
 
     expect(count).toBe(5);
     expect(prisma.orders.count).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ organizationId: 77 }),
+        where: expect.objectContaining({ organizationId: 77, companyId: 33 }),
       }),
     );
   });
@@ -325,18 +343,18 @@ describe('WebSalesService multi-organization support', () => {
   it('retrieves a web order by id scoped to the tenant', async () => {
     prisma.orders.findFirst.mockResolvedValue({ id: 101, organizationId: 88 });
 
-    const order = await service.getWebOrderById(101, 88);
+    const order = await service.getWebOrderById(101, 88, 12);
 
     expect(order).toEqual({ id: 101, organizationId: 88 });
     expect(prisma.orders.findFirst).toHaveBeenCalledWith({
-      where: { id: 101, organizationId: 88 },
+      where: { id: 101, organizationId: 88, companyId: 12 },
     });
   });
 
   it('throws when requesting an order from another tenant', async () => {
     prisma.orders.findFirst.mockResolvedValue(null);
 
-    await expect(service.getWebOrderById(202, 999)).rejects.toBeInstanceOf(
+    await expect(service.getWebOrderById(202, 999, 44)).rejects.toBeInstanceOf(
       NotFoundException,
     );
   });
@@ -344,11 +362,11 @@ describe('WebSalesService multi-organization support', () => {
   it('filters web sales by organization when retrieving by id', async () => {
     prisma.sales.findFirst.mockResolvedValue({ id: 303, organizationId: 321 });
 
-    const sale = await service.getWebSaleById(303, 321);
+    const sale = await service.getWebSaleById(303, 321, 15);
 
     expect(sale).toEqual({ id: 303, organizationId: 321 });
     expect(prisma.sales.findFirst).toHaveBeenCalledWith({
-      where: { id: 303, organizationId: 321 },
+      where: { id: 303, organizationId: 321, companyId: 15 },
       include: expect.any(Object),
     });
   });

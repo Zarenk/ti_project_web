@@ -160,6 +160,7 @@ export class WebSalesController {
       urls,
       description,
       organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 

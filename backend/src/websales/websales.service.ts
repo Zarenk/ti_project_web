@@ -525,12 +525,13 @@ export class WebSalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
-    const organizationFilter = buildOrganizationFilter(
+    const tenantFilter = buildOrganizationFilter(
       organizationId,
+      companyId,
     ) as Prisma.OrdersWhereInput;
 
     const order = await this.prisma.orders.findFirst({
-      where: { id, ...organizationFilter },
+      where: { id, ...tenantFilter },
     });
     if (!order || order.status !== 'PENDING' || !order.payload) {
       throw new BadRequestException('Orden no válida para completar');
@@ -541,7 +542,6 @@ export class WebSalesService {
     const payloadCompany = typeof payloadAny?.companyId === 'number' ? payloadAny.companyId : null;
     const effectiveOrgId = organizationId ?? order.organizationId ?? payloadOrg ?? null;
     const effectiveCompanyId = companyId ?? order.companyId ?? payloadCompany ?? null;
-    let organizationIdForLog: number | null = null;
     if (effectiveCompanyId !== null && effectiveOrgId !== null) {
       await this.assertCompanyMatchesOrganization(effectiveCompanyId, effectiveOrgId);
     }
@@ -549,7 +549,7 @@ export class WebSalesService {
     logOrganizationContext({
       service: WebSalesService.name,
       operation: 'completeWebOrder',
-      organizationId: organizationIdForLog,
+      organizationId: effectiveOrgId ?? undefined,
       companyId: effectiveCompanyId ?? undefined,
       metadata: {
         orderId: id,
@@ -637,6 +637,8 @@ export class WebSalesService {
         available = await this.inventoryService.getSeriesByProductAndStore(
           storeId,
           productId,
+          organizationId ?? undefined,
+          companyId ?? undefined,
         );
       } else {
         const storeLinks = await this.prisma.storeOnInventory.findMany({
@@ -648,6 +650,8 @@ export class WebSalesService {
           const sers = await this.inventoryService.getSeriesByProductAndStore(
             link.storeId,
             productId,
+            organizationId ?? undefined,
+            companyId ?? undefined,
           );
           agg.push(...sers);
         }
@@ -816,12 +820,14 @@ export class WebSalesService {
     images: string[],
     description?: string,
     organizationId?: number | null,
+    companyId?: number | null,
   ) {
-    const organizationFilter = buildOrganizationFilter(
+    const tenantFilter = buildOrganizationFilter(
       organizationId,
+      companyId,
     ) as Prisma.OrdersWhereInput;
     const order = await this.prisma.orders.findFirst({
-      where: { id, ...organizationFilter },
+      where: { id, ...tenantFilter },
     });
     if (!order) {
       throw new NotFoundException(`No se encontrÃ³ la orden con ID ${id}.`);

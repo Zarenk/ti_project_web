@@ -7,12 +7,14 @@ describe('TenantContextGuard', () => {
   it('attaches the tenant context to the request', () => {
     const tenantContext: TenantContext = {
       organizationId: 42,
+      companyId: 11,
       organizationUnitId: 7,
       userId: 101,
       isGlobalSuperAdmin: false,
       isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: [42, 99],
+      allowedCompanyIds: [11, 22],
       allowedOrganizationUnitIds: [7, 8],
     };
 

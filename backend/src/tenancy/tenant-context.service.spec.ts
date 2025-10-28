@@ -20,7 +20,7 @@ describe('TenantContextService', () => {
       user: {
         id: '42',
         defaultOrganizationId: '456',
-        organizations: ['789'],
+        organizations: ['123', '789'],
       },
     });
 
@@ -32,7 +32,7 @@ describe('TenantContextService', () => {
       isGlobalSuperAdmin: false,
       isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
-      allowedOrganizationIds: [789],
+      allowedOrganizationIds: [123, 789],
       allowedCompanyIds: [],
       allowedOrganizationUnitIds: [],
     });
@@ -44,7 +44,7 @@ describe('TenantContextService', () => {
       user: {
         id: 99,
         defaultOrganizationId: '654',
-        organizations: ['321', 'not-a-number'],
+        organizations: ['654', '321', 'not-a-number'],
       },
     });
 
@@ -56,7 +56,7 @@ describe('TenantContextService', () => {
       isGlobalSuperAdmin: false,
       isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
-      allowedOrganizationIds: [321],
+      allowedOrganizationIds: [654, 321],
       allowedCompanyIds: [],
       allowedOrganizationUnitIds: [],
     });
@@ -89,6 +89,7 @@ describe('TenantContextService', () => {
       user: {
         companies: ['654'],
         defaultCompanyId: '987',
+        isSuperAdmin: true,
       },
     });
 
@@ -97,9 +98,9 @@ describe('TenantContextService', () => {
       companyId: 321,
       organizationUnitId: null,
       userId: null,
-      isGlobalSuperAdmin: false,
+      isGlobalSuperAdmin: true,
       isOrganizationSuperAdmin: false,
-      isSuperAdmin: false,
+      isSuperAdmin: true,
       allowedOrganizationIds: [],
       allowedCompanyIds: [654],
       allowedOrganizationUnitIds: [],
@@ -111,6 +112,7 @@ describe('TenantContextService', () => {
       user: {
         defaultCompanyId: '555',
         companies: ['777', '888'],
+        isSuperAdmin: true,
       },
     });
 
@@ -119,9 +121,9 @@ describe('TenantContextService', () => {
       companyId: 555,
       organizationUnitId: null,
       userId: null,
-      isGlobalSuperAdmin: false,
+      isGlobalSuperAdmin: true,
       isOrganizationSuperAdmin: false,
-      isSuperAdmin: false,
+      isSuperAdmin: true,
       allowedOrganizationIds: [],
       allowedCompanyIds: [777, 888],
       allowedOrganizationUnitIds: [],

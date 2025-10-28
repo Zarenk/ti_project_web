@@ -460,12 +460,12 @@ describe('EntriesService multi-organization support', () => {
     });
 
     it('propagates organizationId to inventory history and logging when present', async () => {
-      prisma.entry.findUnique.mockResolvedValue({
+      prisma.entry.findFirst.mockResolvedValue({
         ...entryBase,
         organizationId: 55,
       });
 
-      await service.deleteEntry(entryBase.id);
+      await service.deleteEntry(entryBase.id, 55);
 
       expect(prisma.entryDetailSeries.deleteMany).toHaveBeenCalledWith({
         where: { entryDetailId: entryBase.details[0].id },
@@ -491,12 +491,12 @@ describe('EntriesService multi-organization support', () => {
     });
 
     it('defaults organizationId to null during deletion when entry is legacy', async () => {
-      prisma.entry.findUnique.mockResolvedValue({
+      prisma.entry.findFirst.mockResolvedValue({
         ...entryBase,
         organizationId: null,
       });
 
-      await service.deleteEntry(entryBase.id);
+      await service.deleteEntry(entryBase.id, null);
 
       expect(prisma.inventoryHistory.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ organizationId: null }),

@@ -47,4 +47,7 @@ export class CreateCashClosureDto {
   @IsOptional()
   @IsNumber()
   organizationId?: number | null;
+
+  @IsOptional() @IsNumber()
+  companyId?: number | null;  
 }

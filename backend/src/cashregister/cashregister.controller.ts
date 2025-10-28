@@ -67,6 +67,38 @@ export class CashregisterController {
     );
   }
 
+  private parseCompanyId(raw?: string): number | null | undefined {
+  if (raw === undefined) return undefined;
+
+  const normalized = raw.trim().toLowerCase();
+  if (normalized.length === 0 || normalized === 'undefined') return undefined;
+  if (normalized === 'null') return null;
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+    throw new BadRequestException('companyId inválido.');
+  }
+  return parsed;
+  }
+
+private mergeCompanyId(
+  provided?: number | null,
+  context?: number | null,
+): number | null | undefined {
+  if (provided === undefined) {
+    return context === undefined ? undefined : context;
+  }
+  if (context === undefined || context === null) {
+    return provided;
+  }
+  if (provided === context) {
+    return provided;
+  }
+  throw new BadRequestException(
+    'La compañía proporcionada no coincide con el contexto actual.',
+  );
+}
+
   @Post()
   async create(
     @Body() createCashRegisterDto: CreateCashRegisterDto,

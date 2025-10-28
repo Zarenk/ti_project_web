@@ -20,4 +20,7 @@ export class CreateCashRegisterDto {
   @IsOptional()
   @IsNumber()
   organizationId?: number | null;
+
+  @IsOptional() @IsNumber()
+  companyId?: number | null;  
 }
