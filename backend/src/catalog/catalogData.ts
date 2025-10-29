@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -18,6 +18,7 @@ export interface CatalogItem {
 
 export async function getCatalogItems(
   filters: Record<string, any>,
+  options: { organizationId?: number | null; companyId?: number | null } = {},
 ): Promise<CatalogItem[]> {
   const categories = filters.categories
     ? String(filters.categories)
@@ -26,10 +27,20 @@ export async function getCatalogItems(
         .filter(Boolean)
     : undefined;
 
+  const where: Prisma.ProductWhereInput = {
+    categoryId: categories ? { in: categories } : undefined,
+  };
+
+  if (options.organizationId !== undefined) {
+    where.organizationId = options.organizationId ?? null;
+  }
+
+  if (options.companyId !== undefined) {
+    where.companyId = options.companyId ?? null;
+  }
+
   const products = await prisma.product.findMany({
-    where: {
-      categoryId: categories ? { in: categories } : undefined,
-    },
+    where,
     select: {
       name: true,
       price: true,

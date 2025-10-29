@@ -40,7 +40,7 @@ export class CashregisterController {
 
     const parsed = Number(raw);
     if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
-      throw new BadRequestException('organizationId inválido.');
+      throw new BadRequestException('organizationId invalido.');
     }
 
     return parsed;
@@ -63,7 +63,7 @@ export class CashregisterController {
     }
 
     throw new BadRequestException(
-      'La organización proporcionada no coincide con el contexto actual.',
+      'La organizacion proporcionada no coincide con el contexto actual.',
     );
   }
 
@@ -76,7 +76,7 @@ export class CashregisterController {
 
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
-    throw new BadRequestException('companyId inválido.');
+    throw new BadRequestException('companyId invalido.');
   }
   return parsed;
   }
@@ -95,7 +95,7 @@ private mergeCompanyId(
     return provided;
   }
   throw new BadRequestException(
-    'La compañía proporcionada no coincide con el contexto actual.',
+    'La compania proporcionada no coincide con el contexto actual.',
   );
 }
 
@@ -198,7 +198,7 @@ private mergeCompanyId(
       },
     );
 
-    // Si no hay caja activa simplemente devuelve null. El cliente decidirá qué hacer.
+    // Si no hay caja activa simplemente devuelve null. El cliente decidira que hacer.
     if (!cashRegister) {
       return null;
     }
@@ -307,7 +307,7 @@ private mergeCompanyId(
 
     const storeId = parseInt(storeIdRaw, 10);
     if (isNaN(storeId)) {
-      throw new BadRequestException('storeId inválido.');
+      throw new BadRequestException('storeId invalido.');
     }
 
     const organizationId = this.mergeOrganizationId(
@@ -317,7 +317,7 @@ private mergeCompanyId(
 
     const [year, month, day] = date.split('-').map(Number);
     if (!year || !month || !day) {
-      throw new BadRequestException('Fecha inválida.');
+      throw new BadRequestException('Fecha invalida.');
     }
 
     const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);

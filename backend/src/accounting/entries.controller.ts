@@ -39,6 +39,8 @@ export class EntriesController {
         totalDebit: e.totalDebit,
         totalCredit: e.totalCredit,
         lines: e.lines,
+        organizationId: e.organizationId ?? null,
+        companyId: e.companyId ?? null,
       })),
       total,
     };
@@ -63,6 +65,8 @@ export class EntriesController {
       totalDebit: e.totalDebit,
       totalCredit: e.totalCredit,
       lines: e.lines,
+      organizationId: e.organizationId ?? null,
+      companyId: e.companyId ?? null,
     };
   }
 

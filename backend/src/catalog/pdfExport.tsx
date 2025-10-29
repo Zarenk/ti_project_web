@@ -244,9 +244,10 @@ async function itemsToPdf(items: CatalogItem[], options: { coverImagePath?: stri
 
 export async function exportCatalogPdf(
   filters: Record<string, any>,
+  options: { organizationId?: number | null; companyId?: number | null } = {},
 ): Promise<Buffer> {
   const [items, coverImagePath] = await Promise.all([
-    getCatalogItems(filters),
+    getCatalogItems(filters, options),
     getActiveCoverPath(),
   ]);
   return itemsToPdf(items, { coverImagePath });

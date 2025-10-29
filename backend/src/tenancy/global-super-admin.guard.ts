@@ -131,18 +131,8 @@ export class GlobalSuperAdminGuard implements CanActivate {
     tenantContext: TenantContext | undefined,
     role: string,
   ): void {
-    const baseContext =
-      tenantContext ??
-      ({
-        organizationId: null,
-        organizationUnitId: null,
-        userId: null,
-        isGlobalSuperAdmin: false,
-        isOrganizationSuperAdmin: false,
-        isSuperAdmin: false,
-        allowedOrganizationIds: [],
-        allowedOrganizationUnitIds: [],
-      } as TenantContext);
+    const baseContext: TenantContext =
+      tenantContext ?? this.createDefaultTenantContext();
 
     request.tenantContext = {
       ...baseContext,
@@ -150,5 +140,20 @@ export class GlobalSuperAdminGuard implements CanActivate {
       isSuperAdmin: true,
     };
     request.user = { ...(request.user ?? {}), role };
+  }
+
+  private createDefaultTenantContext(): TenantContext {
+    return {
+      organizationId: null,
+      companyId: null,
+      organizationUnitId: null,
+      userId: null,
+      isGlobalSuperAdmin: false,
+      isOrganizationSuperAdmin: false,
+      isSuperAdmin: false,
+      allowedOrganizationIds: [] as number[],
+      allowedCompanyIds: [] as number[],
+      allowedOrganizationUnitIds: [] as number[],
+    };
   }
 }

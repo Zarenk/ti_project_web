@@ -34,6 +34,8 @@ export interface Entry {
   totalCredit: number;
   source?: string;
   sourceId?: number;
+  organizationId?: number | null;
+  companyId?: number | null;
 }
 
 @Injectable()
@@ -172,6 +174,8 @@ export class EntriesService {
         status: e.status,
         totalDebit: e.totalDebit,
         totalCredit: e.totalCredit,
+        organizationId: (e as any).organizationId ?? null,
+        companyId: (e as any).companyId ?? null,
         lines: e.lines.map((l) => ({
           account: l.account,
           description: l.description ?? undefined,
@@ -266,6 +270,8 @@ export class EntriesService {
       status: entry.status,
       totalDebit: entry.totalDebit,
       totalCredit: entry.totalCredit,
+      organizationId: (entry as any).organizationId ?? null,
+      companyId: (entry as any).companyId ?? null,
       lines: entry.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
@@ -328,6 +334,8 @@ export class EntriesService {
       status: entry.status,
       totalDebit: entry.totalDebit,
       totalCredit: entry.totalCredit,
+      organizationId: (entry as any).organizationId ?? null,
+      companyId: (entry as any).companyId ?? null,
       lines: entry.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
@@ -368,6 +376,8 @@ export class EntriesService {
       status: updated.status,
       totalDebit: updated.totalDebit,
       totalCredit: updated.totalCredit,
+      organizationId: (updated as any).organizationId ?? null,
+      companyId: (updated as any).companyId ?? null,
       lines: updated.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
@@ -408,6 +418,8 @@ export class EntriesService {
       status: updated.status,
       totalDebit: updated.totalDebit,
       totalCredit: updated.totalCredit,
+      organizationId: (updated as any).organizationId ?? null,
+      companyId: (updated as any).companyId ?? null,
       lines: updated.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,

@@ -5,6 +5,7 @@ import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { exportCatalogPdf } from '../catalog/pdfExport';
 import { exportCatalogExcel } from '../catalog/excelExport';
+import { CurrentTenant } from '../tenancy/tenant-context.decorator';
 
 @Controller('catalog/export')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -15,10 +16,16 @@ export class CatalogExportController {
     @Query('format') format: string,
     @Query() query: Record<string, any>,
     @Res() res: Response,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     const { format: _format, ...filters } = query;
+    const options = {
+      organizationId: organizationId === undefined ? undefined : organizationId,
+      companyId: companyId === undefined ? undefined : companyId,
+    };
     if (format === 'pdf') {
-      const buffer = await exportCatalogPdf(filters);
+      const buffer = await exportCatalogPdf(filters, options);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader(
         'Content-Disposition',
@@ -26,7 +33,7 @@ export class CatalogExportController {
       );
       res.send(buffer);
     } else if (format === 'excel') {
-      const { buffer } = await exportCatalogExcel(filters);
+      const { buffer } = await exportCatalogExcel(filters, options);
       res.setHeader(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

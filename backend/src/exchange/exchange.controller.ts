@@ -6,30 +6,55 @@ import {
 } from './dto/create-exchange.dto';
 import { UpdateExchangeDto } from './dto/update-exchange.dto';
 import { Request } from 'express';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
 @Controller('exchange')
 export class ExchangeController {
   constructor(private readonly exchangeService: ExchangeService) {}
 
   @Post()
-  create(@Body() createExchangeDto: CreateTipoCambioDto, @Req() req: Request) {
-    return this.exchangeService.create(createExchangeDto, req);
+  create(
+    @Body() createExchangeDto: CreateTipoCambioDto,
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.exchangeService.create(
+      createExchangeDto,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Post('set-rate')
-  setRate(@Body() dto: CreateTipoCambioDto, @Req() req: Request) {
-    return this.exchangeService.setRate(dto, req);
+  setRate(
+    @Body() dto: CreateTipoCambioDto,
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.exchangeService.setRate(
+      dto,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Get()
-  findAll() {
-    return this.exchangeService.findAll();
+  findAll(@CurrentTenant('organizationId') organizationId: number | null) {
+    return this.exchangeService.findAll(
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   // Endpoint para obtener el tipo de cambio más reciente por moneda
   @Get('latest/:moneda')
-  getLatestByMoneda(@Param('moneda') moneda: string) {
-    return this.exchangeService.getLatestByMoneda(moneda);
+  getLatestByMoneda(
+    @Param('moneda') moneda: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.exchangeService.getLatestByMoneda(
+      moneda,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Patch(':id')
@@ -37,7 +62,13 @@ export class ExchangeController {
     @Param('id') id: string,
     @Body() updateExchangeDto: UpdateExchangeDto,
     @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
   ) {
-    return this.exchangeService.update(+id, updateExchangeDto, req);
+    return this.exchangeService.update(
+      +id,
+      updateExchangeDto,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 }

@@ -228,6 +228,7 @@ model Organization {
   products     Product[]
   categories   Category[]
   accEntries   AccEntry[]
+  exchangeRates TipoCambio[]
 
   @@unique([name])
   @@index([status])
@@ -725,16 +726,18 @@ model OrderTracking {
 }
 
 model TipoCambio {
-  id        Int      @id @default(autoincrement())
-  fecha     DateTime // Fecha del tipo de cambio
-  moneda    String // Ej: "USD", "EUR", "CLP"
-  valor     Float // Cuánto vale 1 unidad de esa moneda en soles
-  createdAt DateTime @default(now())
+  id             Int           @id @default(autoincrement())
+  fecha          DateTime      // Fecha del tipo de cambio
+  moneda         String        // Ej: "USD", "EUR", "CLP"
+  valor          Float         // Cuánto vale 1 unidad de esa moneda en soles
+  createdAt      DateTime      @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationId Int?
 
   entries Entry[] // Relación con entradas
 
-  @@unique([fecha, moneda]) // Evita duplicados
-  @@index([fecha, moneda]) // 🚀 índice compuesto
+  @@unique([fecha, moneda, organizationId]) // Evita duplicados por organización
+  @@index([fecha, moneda, organizationId])
 }
 
 model CashRegister {

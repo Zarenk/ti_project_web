@@ -139,8 +139,9 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
  */
 export async function exportCatalogExcel(
   filters: Record<string, any>,
+  options: { organizationId?: number | null; companyId?: number | null } = {},
 ): Promise<{ buffer: Buffer }> {
-  const items: CatalogItem[] = await getCatalogItems(filters);
+  const items: CatalogItem[] = await getCatalogItems(filters, options);
   const workbook = populateWorkbook(items);
   const arrayBuffer = await workbook.xlsx.writeBuffer();
   return { buffer: Buffer.from(arrayBuffer) };
