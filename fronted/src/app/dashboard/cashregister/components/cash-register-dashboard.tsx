@@ -11,7 +11,6 @@ import TransactionHistory from "./transaction-history"
 import { createCashRegister, getActiveCashRegister, getCashRegisterBalance, getClosureByDate, getClosuresByStore, getTodayTransactions, getTransactionsByDate } from "../cashregister.api"
 import { getStores } from "../../stores/stores.api"
 import { TENANT_SELECTION_EVENT } from "@/utils/tenant-preferences"
-import { TENANT_SELECTION_EVENT } from "@/utils/tenant-preferences"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 import { useRouter } from "next/navigation"
@@ -1405,6 +1404,7 @@ export default function CashRegisterDashboard() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const isToday = isSameDay(selectedDate, new Date());
   const [closureNextOpeningLookup, setClosureNextOpeningLookup] = useState<Record<string, number>>({});
+  const [tenantRefreshKey, setTenantRefreshKey] = useState(0);
 
   const selectedStoreName = useMemo(() => {
     if (storeId === null) {
@@ -2026,7 +2026,7 @@ export default function CashRegisterDashboard() {
         setClosureNextOpeningLookup({});
       }
     },
-    [storeId, storeNameLookup],
+    [storeId, storeNameLookup, tenantRefreshKey],
   );
 
   const reinitializeCashRegister = async (): Promise<string | null> => {
@@ -2132,6 +2132,7 @@ export default function CashRegisterDashboard() {
           setInitialBalance(0);
           setTransactions([]);
           setClosures([]);
+          setTenantRefreshKey((prev) => prev + 1);
           return;
         }
 
@@ -2139,8 +2140,15 @@ export default function CashRegisterDashboard() {
           ? storeId ?? sortedStores[0].id
           : sortedStores[0].id;
 
-        setStoreId((prev) => nextStoreId);
-        await refreshCashData(nextStoreId);
+        const nextStoreLookup = sortedStores.reduce<Record<number, string>>((acc, store) => {
+          acc[store.id] = store.name;
+          return acc;
+        }, {});
+
+        setStoreId(() => nextStoreId);
+        setSelectedDate(new Date());
+        await refreshCashData(nextStoreId, nextStoreLookup);
+        setTenantRefreshKey((prev) => prev + 1);
       } catch (error) {
         if (!cancelled) {
           console.error("Error al obtener las tiendas:", error);
@@ -2152,6 +2160,7 @@ export default function CashRegisterDashboard() {
           setInitialBalance(0);
           setTransactions([]);
           setClosures([]);
+          setTenantRefreshKey((prev) => prev + 1);
         }
       }
     }
@@ -2255,7 +2264,7 @@ export default function CashRegisterDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [storeId]);
+  }, [storeId, tenantRefreshKey]);
 
   useEffect(() => {
   if (storeId === null || !selectedDate) return;
@@ -2367,7 +2376,7 @@ export default function CashRegisterDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [storeId, selectedDate, isToday, latestClosureTimestamp, closureNextOpeningLookup, storeNameLookup]);
+  }, [storeId, selectedDate, isToday, latestClosureTimestamp, closureNextOpeningLookup, storeNameLookup, tenantRefreshKey]);
 
 
   useEffect(() => {
@@ -2630,6 +2639,7 @@ export default function CashRegisterDashboard() {
             <CardContent>
             {storeId !== null && userId !== null && activeCashRegisterId !== null && (
               <CashTransferForm
+                key={`transfer-${tenantRefreshKey}-${storeId}-${activeCashRegisterId}`}
                 currentBalance={balance}
                 storeId={storeId}
                 refreshData={refreshCashData} // Ã°Å¸â€˜Ë† nuevo
@@ -2648,6 +2658,7 @@ export default function CashRegisterDashboard() {
             <CardContent>
             {storeId !== null && userId !== null && activeCashRegisterId !== null && (
               <CashClosureForm
+                key={`closure-${tenantRefreshKey}-${storeId}-${activeCashRegisterId}`}
                 storeId={storeId!}
                 cashRegisterId={activeCashRegisterId} // Ã°Å¸â€˜Ë† id de la tienda/caja (nunca serÃƒÂ¡ null porque ya haces validaciÃƒÂ³n arriba)
                 userId={userId} // Ã°Å¸â€˜Ë† tienes que obtener el userId del localStorage o sesiÃƒÂ³n
@@ -2694,8 +2705,9 @@ export default function CashRegisterDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <TransactionHistory 
-                transactions={transactions} 
+              <TransactionHistory
+                key={`history-${tenantRefreshKey}-${storeId ?? "none"}`}
+                transactions={transactions}
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
                 // Ã°Å¸â€˜â€¡ estos dos props solo si estÃƒÂ¡s usando la versiÃƒÂ³n antiflicker del hijo
