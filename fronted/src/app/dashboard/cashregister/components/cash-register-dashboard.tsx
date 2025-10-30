@@ -1,7 +1,7 @@
-﻿﻿"use client"
+"use client"
 
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Transaction } from "../types/cash-register"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -10,6 +10,7 @@ import CashClosureForm from "./cash-closure-form"
 import TransactionHistory from "./transaction-history"
 import { createCashRegister, getActiveCashRegister, getCashRegisterBalance, getClosureByDate, getClosuresByStore, getTodayTransactions, getTransactionsByDate } from "../cashregister.api"
 import { getStores } from "../../stores/stores.api"
+import { TENANT_SELECTION_EVENT } from "@/utils/tenant-preferences"
 import { TENANT_SELECTION_EVENT } from "@/utils/tenant-preferences"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
@@ -350,16 +351,16 @@ const resolveLooseMethodLabel = (value: string) => {
     normalized.includes("visa") ||
     normalized.includes("master") ||
     normalized.includes("tarjeta") ||
-    normalized.includes("crédito") ||
+    normalized.includes("crÃƒÂ©dito") ||
     normalized.includes("credito") ||
-    normalized.includes("débito") ||
+    normalized.includes("dÃƒÂ©bito") ||
     normalized.includes("debito")
   ) {
     return "Tarjeta";
   }
 
   if (normalized.includes("dep")) {
-    return "Depósito";
+    return "DepÃƒÂ³sito";
   }
 
   if (normalized.includes("cheque")) {
@@ -380,11 +381,11 @@ const consolidateLooseTransferEntries = (
 
   const joined = normalizeWhitespace(values.join(" "));
 
-  if (!/m[eé]todos?\s+de\s+pago/i.test(joined)) {
+  if (!/m[eÃƒÂ©]todos?\s+de\s+pago/i.test(joined)) {
     return [];
   }
 
-  const methodPattern = /(en\s+efectivo|efectivo|transferencia|yape|plin|tarjeta|visa|mastercard|amex|american\s+express|dep[oó]sito|deposito|cheque|cheques)/gi;
+  const methodPattern = /(en\s+efectivo|efectivo|transferencia|yape|plin|tarjeta|visa|mastercard|amex|american\s+express|dep[oÃƒÂ³]sito|deposito|cheque|cheques)/gi;
 
   const matches: Array<{ label: string; start: number; end: number }> = [];
   let match: RegExpExecArray | null;
@@ -687,8 +688,8 @@ const extractPaymentMethodsFromText = (value?: string | null) => {
     .trim();
 
   const patterns = [
-    /pago\s+v[ií]a\s+([^.;]+)/gi,
-    /m[eé]todo[s]?\s+de\s+pago[:\s]+([^.;]+)/gi,
+    /pago\s+v[iÃƒÂ­]a\s+([^.;]+)/gi,
+    /m[eÃƒÂ©]todo[s]?\s+de\s+pago[:\s]+([^.;]+)/gi,
   ];
 
   patterns.forEach((pattern) => {
@@ -747,7 +748,7 @@ const identifyPaymentSummaryMethod = (value: string): PaymentSummaryKey | null =
   if (isCashPaymentMethod(normalized)) {
     return "Efectivo";
   }
-  if (/(tarjeta|visa|master|credito|crédito|debito|débito|amex|american express)/.test(normalized)) {
+  if (/(tarjeta|visa|master|credito|crÃƒÂ©dito|debito|dÃƒÂ©bito|amex|american express)/.test(normalized)) {
     return "Tarjeta";
   }
   if (/transfer/.test(normalized)) {
@@ -851,7 +852,7 @@ const REPORT_COLUMNS: { key: keyof CashReportRow; header: string }[] = [
   { key: "amount", header: "Monto" },
   { key: "openingBalance", header: "Saldo Inicial" },
   { key: "cashAvailable", header: "Efectivo Disponible" },
-  { key: "paymentMethods", header: "Métodos de Pago" },
+  { key: "paymentMethods", header: "MÃƒÂ©todos de Pago" },
   { key: "employee", header: "Encargado" },
   { key: "client", header: "Cliente" },
   { key: "document", header: "Documento" },
@@ -1368,7 +1369,7 @@ export default function CashRegisterDashboard() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [userId, setUserId] = useState<number | null>(null);
 
-  // Validar sesión
+  // Validar sesiÃƒÂ³n
   useEffect(() => {
     async function check() {
       const userData = await getUserDataFromToken();
@@ -1389,7 +1390,7 @@ export default function CashRegisterDashboard() {
   const [transactionsForBalance, setTransactionsForBalance] = useState<Transaction[]>([])
   const [storeId, setStoreId] = useState<number | null>(null); // Estado para la tienda seleccionada
   const [stores, setStores] = useState<{ id: number; name: string }[]>([]); // Lista de tiendas
-  const [hasCashRegister, setHasCashRegister] = useState(true); // 👈 Estado nuevo
+  const [hasCashRegister, setHasCashRegister] = useState(true); // Ã°Å¸â€˜Ë† Estado nuevo
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
   const [activeCashRegisterId, setActiveCashRegisterId] = useState<number | null>(null);
@@ -1830,7 +1831,7 @@ export default function CashRegisterDashboard() {
     }
 
     setIsGeneratingPdf(true)
-    try {
+      try {
       const reportDateLabel = format(selectedDate, "dd/MM/yyyy")
       const reportFileDate = format(selectedDate, "yyyy-MM-dd")
       const pdfStyles = StyleSheet.create({
@@ -1891,7 +1892,7 @@ export default function CashRegisterDashboard() {
                   ]}
                 >
                   {REPORT_COLUMNS.map((column) => {
-                    // ⬇⬇⬇ forzamos el tipo del arreglo
+                    // Ã¢Â¬â€¡Ã¢Â¬â€¡Ã¢Â¬â€¡ forzamos el tipo del arreglo
                     const cellStyles: any[] = [pdfStyles.cell];
                     if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
                       cellStyles.push(pdfStyles.cellWide);
@@ -1932,90 +1933,105 @@ export default function CashRegisterDashboard() {
       const blob = await pdf(documentDefinition).toBlob()
       downloadBlob(blob, `reporte-caja-${reportFileDate}.pdf`)
       toast.success("Reporte PDF generado correctamente.")
-    } catch (error) {
+      } catch (error) {
       console.error("Error generando PDF de caja:", error)
-      toast.error("No se pudo generar el PDF. Inténtalo de nuevo.")
+      toast.error("No se pudo generar el PDF. IntÃƒÂ©ntalo de nuevo.")
     } finally {
       setIsGeneratingPdf(false)
     }
   }
   // -------------------- FUNCIONES --------------------
-  // Nueva función para recargar balance y transacciones
-  const refreshCashData = async () => {
-    if (storeId === null) return;
-
-    try {
-      const [activeRegister, newTransactions, closuresResponse] = await Promise.all([
-        getActiveCashRegister(storeId),
-        getTodayTransactions(storeId),
-        getClosuresByStore(storeId),
-      ]);
-
-      if (activeRegister) {
-        setActiveCashRegisterId(activeRegister.id);
-        setBalance(Number(activeRegister.currentBalance));
-        setInitialBalance(Number(activeRegister.initialBalance));
-        setHasCashRegister(true);
-      } else {
-        setActiveCashRegisterId(null);
-        setBalance(0);
-        setInitialBalance(0);
-        setHasCashRegister(false);
+  // Nueva funciÃƒÂ³n para recargar balance y transacciones
+  const refreshCashData = useCallback(
+    async (
+      targetStoreId?: number,
+      storeNameMapOverride?: Record<number, string>,
+    ) => {
+      const effectiveStoreId = targetStoreId ?? storeId;
+      if (effectiveStoreId === null) {
+        return;
       }
 
-      const safeTransactions = Array.isArray(newTransactions) ? newTransactions : [];
-      const validTransactions = safeTransactions.map((transaction: any) => adaptTransaction(transaction));
-      const mergedTransactions = mergeSaleTransactions(validTransactions);
+      try {
+        const [activeRegister, newTransactions, closuresResponse] = await Promise.all([
+          getActiveCashRegister(effectiveStoreId),
+          getTodayTransactions(effectiveStoreId),
+          getClosuresByStore(effectiveStoreId),
+        ]);
 
-      const sortedClosuresRaw = Array.isArray(closuresResponse)
-        ? sortClosuresByDateDesc(closuresResponse)
-        : [];
-      const { amount: latestClosureOverride } =
-        resolveLatestClosureOverride(activeRegister, sortedClosuresRaw);
-      const closuresWithOverride = withLatestClosureOverride(sortedClosuresRaw, latestClosureOverride);
-      const nextOpeningMap = computeClosureNextOpeningMap(closuresWithOverride, latestClosureOverride);
-      const closuresWithNextOpening = applyNextOpeningBalanceToClosures(
-        closuresWithOverride,
-        nextOpeningMap,
-      );
-      const transactionsWithNextOpening = applyNextOpeningBalanceToTransactions(
-        mergedTransactions,
-        nextOpeningMap,
-      );
+        if (activeRegister) {
+          setActiveCashRegisterId(activeRegister.id);
+          setBalance(Number(activeRegister.currentBalance));
+          setInitialBalance(Number(activeRegister.initialBalance));
+          setHasCashRegister(true);
+        } else {
+          setActiveCashRegisterId(null);
+          setBalance(0);
+          setInitialBalance(0);
+          setHasCashRegister(false);
+        }
 
-      const transactionsWithStoreNames = decorateTransactionsWithStoreNames(
-        transactionsWithNextOpening,
-        storeNameLookup,
-      );
+        const safeTransactions = Array.isArray(newTransactions) ? newTransactions : [];
+        const validTransactions = safeTransactions.map((transaction: any) =>
+          adaptTransaction(transaction),
+        );
+        const mergedTransactions = mergeSaleTransactions(validTransactions);
 
-      setClosureNextOpeningLookup(Object.fromEntries(nextOpeningMap.entries()));
-      const income = transactionsWithStoreNames
-        .filter((t: any) => t.internalType === "INCOME")
-        .reduce((sum: any, t: any) => sum + t.amount, 0);
+        const sortedClosuresRaw = Array.isArray(closuresResponse)
+          ? sortClosuresByDateDesc(closuresResponse)
+          : [];
+        const { amount: latestClosureOverride } =
+          resolveLatestClosureOverride(activeRegister, sortedClosuresRaw);
+        const closuresWithOverride = withLatestClosureOverride(
+          sortedClosuresRaw,
+          latestClosureOverride,
+        );
+        const nextOpeningMap = computeClosureNextOpeningMap(
+          closuresWithOverride,
+          latestClosureOverride,
+        );
+        const closuresWithNextOpening = applyNextOpeningBalanceToClosures(
+          closuresWithOverride,
+          nextOpeningMap,
+        );
+        const transactionsWithNextOpening = applyNextOpeningBalanceToTransactions(
+          mergedTransactions,
+          nextOpeningMap,
+        );
 
-      const expense = transactionsWithStoreNames
-        .filter((t: any) => t.internalType === "EXPENSE")
-        .reduce((sum: any, t: any) => sum + t.amount, 0);
+        const storeNamesLookup = storeNameMapOverride ?? storeNameLookup;
+        const transactionsWithStoreNames = decorateTransactionsWithStoreNames(
+          transactionsWithNextOpening,
+          storeNamesLookup,
+        );
 
-      setTransactions(transactionsWithStoreNames);
-      setTotalIncome(income);
-      setTotalExpense(expense);
+        setClosureNextOpeningLookup(Object.fromEntries(nextOpeningMap.entries()));
+        const income = transactionsWithStoreNames
+          .filter((t: any) => t.internalType === "INCOME")
+          .reduce((sum: any, t: any) => sum + t.amount, 0);
 
-      setClosures(closuresWithNextOpening);
+        const expense = transactionsWithStoreNames
+          .filter((t: any) => t.internalType === "EXPENSE")
+          .reduce((sum: any, t: any) => sum + t.amount, 0);
 
-      console.log("✅ Recalculado totalIncome:", income);
-      console.log("✅ Recalculado totalExpense:", expense);
+        setTransactions(transactionsWithStoreNames);
+        setTotalIncome(income);
+        setTotalExpense(expense);
+        setClosures(closuresWithNextOpening);
 
-    } catch (error) {
-      console.error("Error actualizando datos de caja:", error);
-      setClosureNextOpeningLookup({});
-    }
-  };
+        console.log("? Recalculado totalIncome:", income);
+        console.log("? Recalculado totalExpense:", expense);
+      } catch (error) {
+        console.error("Error actualizando datos de caja:", error);
+        setClosureNextOpeningLookup({});
+      }
+    },
+    [storeId, storeNameLookup],
+  );
 
   const reinitializeCashRegister = async (): Promise<string | null> => {
     if (!storeId) return null;
-  
-    try {
+      try {
       const res = await getActiveCashRegister(storeId);
       const userData = await getUserDataFromToken();
   
@@ -2031,8 +2047,8 @@ export default function CashRegisterDashboard() {
         setHasCashRegister(false);
       }
   
-      return userData?.name ?? null; // 👈 garantizamos que es string o null
-    } catch (error) {
+      return userData?.name ?? null; // Ã°Å¸â€˜Ë† garantizamos que es string o null
+      } catch (error) {
       console.error("Error al reiniciar caja:", error);
       setActiveCashRegisterId(null);
       setBalance(0);
@@ -2048,7 +2064,7 @@ export default function CashRegisterDashboard() {
     const lastClosureAmount =
       closures.length > 0 ? Number(closures[0].closingBalance || 0) : 0;
     setInitialAmountToOpen(lastClosureAmount); // pre-fill with last closure or 0
-    setShowOpenCashDialog(true); // abre el diálogo
+    setShowOpenCashDialog(true); // abre el diÃƒÂ¡logo
   };
 
   useEffect(() => {
@@ -2098,19 +2114,44 @@ export default function CashRegisterDashboard() {
           return;
         }
 
-        const sortedStores = data.sort((a: { name: string }, b: { name: string }) =>
-          a.name.localeCompare(b.name)
+        const normalizedStores = (Array.isArray(data) ? data : []).map((store: any) => ({
+          ...store,
+          id: Number(store.id),
+        }));
+
+        const sortedStores = normalizedStores.sort((a: { name: string }, b: { name: string }) =>
+          a.name.localeCompare(b.name),
         );
         setStores(sortedStores);
 
-        if (sortedStores.length > 0) {
-          setStoreId(sortedStores[0].id);
-        } else {
+        if (sortedStores.length === 0) {
           setStoreId(null);
+          setActiveCashRegisterId(null);
+          setHasCashRegister(false);
+          setBalance(0);
+          setInitialBalance(0);
+          setTransactions([]);
+          setClosures([]);
+          return;
         }
+
+        const nextStoreId = sortedStores.some((store) => store.id === storeId)
+          ? storeId ?? sortedStores[0].id
+          : sortedStores[0].id;
+
+        setStoreId((prev) => nextStoreId);
+        await refreshCashData(nextStoreId);
       } catch (error) {
         if (!cancelled) {
           console.error("Error al obtener las tiendas:", error);
+          setStores([]);
+          setStoreId(null);
+          setActiveCashRegisterId(null);
+          setHasCashRegister(false);
+          setBalance(0);
+          setInitialBalance(0);
+          setTransactions([]);
+          setClosures([]);
         }
       }
     }
@@ -2132,7 +2173,7 @@ export default function CashRegisterDashboard() {
       cancelled = true;
       window.removeEventListener(TENANT_SELECTION_EVENT, handler);
     };
-  }, []);
+  }, [refreshCashData, storeId]);
 
   // Obtener el balance de la caja activa al cambiar la tienda seleccionada
   useEffect(() => {
@@ -2188,7 +2229,6 @@ export default function CashRegisterDashboard() {
           setClosures([]);
         }
       }
-
       try {
         const currentBalance = await getCashRegisterBalance(storeId);
         if (cancelled) {
@@ -2224,7 +2264,7 @@ export default function CashRegisterDashboard() {
     setIsFetchingTransactions(true);
 
   const load = async (): Promise<void> => {
-    try {
+      try {
       const datesToFetch = new Set<string>();
 
         const collectDateStrings = (date: Date) => {
@@ -2266,10 +2306,10 @@ export default function CashRegisterDashboard() {
         const fetchDates = Array.from(datesToFetch);
         const responses = await Promise.all(
           fetchDates.map(async (dateString) => {
-            try {
+      try {
               const data = await getTransactionsByDate(storeId, dateString);
               return Array.isArray(data) ? data : [];
-            } catch (error) {
+      } catch (error) {
               console.error(`Error al obtener transacciones para la fecha ${dateString}:`, error);
               return [];
             }
@@ -2331,7 +2371,7 @@ export default function CashRegisterDashboard() {
 
 
   useEffect(() => {
-    // Solo considera transacciones válidas (evita CLOSURE)
+    // Solo considera transacciones vÃƒÂ¡lidas (evita CLOSURE)
     const financialTransactions = transactions.filter(
       (t) => t.internalType === "INCOME" || t.internalType === "EXPENSE"
     );
@@ -2347,8 +2387,8 @@ export default function CashRegisterDashboard() {
     setTotalIncome(income);
     setTotalExpense(expense);
   
-    console.log("✅ Ingresos calculados:", income);
-    console.log("✅ Egresos calculados:", expense);
+    console.log("Ã¢Å“â€¦ Ingresos calculados:", income);
+    console.log("Ã¢Å“â€¦ Egresos calculados:", expense);
   }, [transactions]);
 
   useEffect(() => {
@@ -2369,9 +2409,9 @@ export default function CashRegisterDashboard() {
     (t) => t.internalType === "INCOME" || t.internalType === "EXPENSE"
   );
 
-  // Mostrar loader mientras se revisa sesión
+  // Mostrar loader mientras se revisa sesiÃƒÂ³n
   if (checkingSession) {
-    return <div className="p-8 text-center">Verificando sesión...</div>;
+    return <div className="p-8 text-center">Verificando sesiÃƒÂ³n...</div>;
   }
 
   // -------------------- UI --------------------
@@ -2386,7 +2426,24 @@ export default function CashRegisterDashboard() {
         </label>
         <Select
           value={storeId !== null ? String(storeId) : ""}
-          onValueChange={(value:any) => setStoreId(Number(value))}
+          onValueChange={(value:any) => {
+            const parsed = Number(value);
+            if (Number.isFinite(parsed)) {
+              setStoreId(parsed);
+              refreshCashData(parsed);
+            } else {
+              setStoreId(null);
+              setTransactions([]);
+              setClosures([]);
+              setTotalIncome(0);
+              setTotalExpense(0);
+              setBalance(0);
+              setInitialBalance(0);
+              setHasCashRegister(false);
+              setActiveCashRegisterId(null);
+              setClosureNextOpeningLookup({});
+            }
+          }}
         >
           <SelectTrigger id="store-select" className="w-full">
             <SelectValue placeholder="Seleccione una tienda" />
@@ -2423,7 +2480,7 @@ export default function CashRegisterDashboard() {
             <AlertDialogHeader>
               <AlertDialogTitle>Abrir nueva caja</AlertDialogTitle>
               <AlertDialogDescription>
-                El saldo inicial sugerido es el del último cierre: 
+                El saldo inicial sugerido es el del ÃƒÂºltimo cierre: 
                 <strong className="text-green-600"> S/. {initialAmountToOpen.toFixed(2)}</strong>.
                 Puedes modificarlo si es necesario.
               </AlertDialogDescription>
@@ -2442,7 +2499,7 @@ export default function CashRegisterDashboard() {
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction
                 onClick={async () => {
-                  try {
+      try {
                     const newName = `Caja Principal - Tienda ${storeId} - ${Date.now()}`;
                     await createCashRegister({
                       storeId,
@@ -2451,7 +2508,7 @@ export default function CashRegisterDashboard() {
                     });
                     toast.success("Caja creada exitosamente");
                     await refreshCashData();
-                  } catch (error: any) {
+      } catch (error: any) {
                     console.error("Error al abrir nueva caja:", error);
                     toast.error("No se pudo crear la caja.");
                   } finally {
@@ -2484,7 +2541,7 @@ export default function CashRegisterDashboard() {
               ) : dailyClosureInfo ? (
                 `S/.${Number(dailyClosureInfo.closingBalance).toFixed(2)}`
               ) : (
-                "Sin cierre ese día"
+                "Sin cierre ese dÃƒÂ­a"
               )}
             </div>
             {isSameDay(selectedDate, new Date()) && (
@@ -2503,8 +2560,8 @@ export default function CashRegisterDashboard() {
           <CardHeader className="pb-2">
           <CardTitle>
             {isToday
-              ? "Transacciones del día de hoy"
-              : `Transacciones del día ${selectedDate.toLocaleDateString("es-PE", {
+              ? "Transacciones del dÃƒÂ­a de hoy"
+              : `Transacciones del dÃƒÂ­a ${selectedDate.toLocaleDateString("es-PE", {
                   weekday: "long",
                   day: "2-digit",
                   month: "long",
@@ -2515,13 +2572,13 @@ export default function CashRegisterDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {financialTransactions.length > 0 ? financialTransactions.length : '0'} {/* Mostrar el número total de transacciones */}
+              {financialTransactions.length > 0 ? financialTransactions.length : '0'} {/* Mostrar el nÃƒÂºmero total de transacciones */}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle>Último Cierre</CardTitle>
+            <CardTitle>ÃƒÅ¡ltimo Cierre</CardTitle>
             <CardDescription>Historial de cierres de caja</CardDescription>
           </CardHeader>
           <CardContent>
@@ -2575,7 +2632,7 @@ export default function CashRegisterDashboard() {
               <CashTransferForm
                 currentBalance={balance}
                 storeId={storeId}
-                refreshData={refreshCashData} // 👈 nuevo
+                refreshData={refreshCashData} // Ã°Å¸â€˜Ë† nuevo
               />
             )}
             </CardContent>
@@ -2586,18 +2643,18 @@ export default function CashRegisterDashboard() {
             <CardHeader>
               <CardTitle>Cierre de Efectivo</CardTitle>
               <CardDescription>
-              Registrar depósitos y retiros de la caja registradora</CardDescription>
+              Registrar depÃƒÂ³sitos y retiros de la caja registradora</CardDescription>
             </CardHeader>
             <CardContent>
             {storeId !== null && userId !== null && activeCashRegisterId !== null && (
               <CashClosureForm
                 storeId={storeId!}
-                cashRegisterId={activeCashRegisterId} // 👈 id de la tienda/caja (nunca será null porque ya haces validación arriba)
-                userId={userId} // 👈 tienes que obtener el userId del localStorage o sesión
+                cashRegisterId={activeCashRegisterId} // Ã°Å¸â€˜Ë† id de la tienda/caja (nunca serÃƒÂ¡ null porque ya haces validaciÃƒÂ³n arriba)
+                userId={userId} // Ã°Å¸â€˜Ë† tienes que obtener el userId del localStorage o sesiÃƒÂ³n
                 currentBalance={balance}
-                openingBalance={closureFormOpeningBalance} // 👈 tienes que calcularlo
-                totalIncome={totalIncome} // 👈 tienes que calcularlo
-                totalExpense={totalExpense} // 👈 tienes que calcularlo
+                openingBalance={closureFormOpeningBalance} // Ã°Å¸â€˜Ë† tienes que calcularlo
+                totalIncome={totalIncome} // Ã°Å¸â€˜Ë† tienes que calcularlo
+                totalExpense={totalExpense} // Ã°Å¸â€˜Ë† tienes que calcularlo
                 onClosureCompleted={refreshCashData}
                 reinitializeCashRegister={reinitializeCashRegister}
                 currencySymbol={paymentMethodSummary.currencySymbol}
@@ -2641,7 +2698,7 @@ export default function CashRegisterDashboard() {
                 transactions={transactions} 
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
-                // 👇 estos dos props solo si estás usando la versión antiflicker del hijo
+                // Ã°Å¸â€˜â€¡ estos dos props solo si estÃƒÂ¡s usando la versiÃƒÂ³n antiflicker del hijo
                 isFetching={isFetchingTransactions}
                 keepPrevious
               />

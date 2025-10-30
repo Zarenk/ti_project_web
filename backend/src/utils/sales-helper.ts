@@ -19,13 +19,30 @@ export async function prepareSaleContext(
   storeId: number,
   clientId?: number,
 ) {
-  const store = await prisma.store.findUnique({ where: { id: storeId } });
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: {
+      id: true,
+      name: true,
+      organizationId: true,
+      companyId: true,
+    },
+  });
   if (!store) {
     throw new NotFoundException(`La tienda con ID ${storeId} no existe.`);
   }
 
   let cashRegister = await prisma.cashRegister.findFirst({
     where: { storeId, status: 'ACTIVE' },
+    select: {
+      id: true,
+      name: true,
+      currentBalance: true,
+      initialBalance: true,
+      status: true,
+      organizationId: true,
+      storeId: true,
+    },
   });
 
   if (!cashRegister) {
@@ -33,12 +50,21 @@ export async function prepareSaleContext(
       data: {
         storeId,
         name: `Caja Principal - Tienda ${storeId} - ${Date.now()}`,
-        initialBalance: 0,
-        currentBalance: 0,
+        initialBalance: new Prisma.Decimal(0),
+        currentBalance: new Prisma.Decimal(0),
         status: 'ACTIVE',
+        organizationId: store.organizationId ?? null,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
+    });
+  } else if (
+    store.organizationId !== undefined &&
+    cashRegister.organizationId !== store.organizationId
+  ) {
+    cashRegister = await prisma.cashRegister.update({
+      where: { id: cashRegister.id },
+      data: { organizationId: store.organizationId ?? null },
     });
   }
 
@@ -269,6 +295,7 @@ export async function executeSale(
             clientName: client?.name ?? null,
             clientDocument: client?.typeNumber ?? null,
             clientDocumentType: client?.type ?? null,
+            organizationId: saleOrganizationId,
           },
         });
 
