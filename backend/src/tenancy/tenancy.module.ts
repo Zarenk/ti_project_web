@@ -5,9 +5,10 @@ import { TenancyService } from './tenancy.service';
 import { TenantContextGuard } from './tenant-context.guard';
 import { TenantContextService } from './tenant-context.service';
 import { GlobalSuperAdminGuard } from './global-super-admin.guard';
+import { CompaniesController } from './companies.controller';
 
 @Module({
-  controllers: [TenancyController],
+  controllers: [TenancyController, CompaniesController],
   providers: [
     TenancyService,
     PrismaService,

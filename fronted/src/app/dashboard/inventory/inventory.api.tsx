@@ -13,7 +13,7 @@ export interface InventoryApiItem {
 
 // Obtener todo el inventario
 export async function getInventory(): Promise<InventoryApiItem[]> {
-  const response = await fetch(`${BACKEND_URL}/api/inventory`, {
+  const response = await authFetch(`${BACKEND_URL}/api/inventory`, {
     cache: 'no-store',
     method: 'GET',
     headers: {
@@ -29,7 +29,7 @@ export async function getInventory(): Promise<InventoryApiItem[]> {
 }
 
 export async function getAllPurchasePrices() {
-  const response = await fetch(`${BACKEND_URL}/api/inventory/purchase-prices`, {
+  const response = await authFetch(`${BACKEND_URL}/api/inventory/purchase-prices`, {
     method: 'GET',
     cache: 'no-store',
     headers: {
@@ -54,7 +54,7 @@ export async function transferProduct(data: {
   userId: number;
 }) {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/inventory/transfer`, {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/transfer`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -77,7 +77,7 @@ export async function transferProduct(data: {
 // Obtener las tiendas con stock del producto
 export async function getStoresWithProduct(productId: number) {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/inventory/stores-with-product/${productId}`, {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/stores-with-product/${productId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -98,7 +98,7 @@ export async function getStoresWithProduct(productId: number) {
 // Obtener todas las tiendas
 export async function getAllStores() {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/stores`, {
+    const response = await authFetch(`${BACKEND_URL}/api/stores`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -119,7 +119,7 @@ export async function getAllStores() {
 // Obtener el inventario con desglose por moneda
 export async function getInventoryWithCurrency(): Promise<InventoryApiItem[]> {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/inventory/with-currency`, {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/with-currency`, {
       method: 'GET',
       cache: 'no-store',
       headers: {
@@ -140,7 +140,7 @@ export async function getInventoryWithCurrency(): Promise<InventoryApiItem[]> {
 
 export async function getStockDetailsByStoreAndCurrency() {
   try {
-    const response = await fetch(
+    const response = await authFetch(
       `${BACKEND_URL}/api/inventory/stock-details-by-store-and-currency`,
       { cache: 'no-store' }
     );
@@ -157,7 +157,7 @@ export async function getStockDetailsByStoreAndCurrency() {
 
 export async function getProductEntries(productId: number) {
   try {
-    const response = await fetch(
+    const response = await authFetch(
       `${BACKEND_URL}/api/inventory/product-entries/${productId}`,
       { cache: 'no-store' }
     );
@@ -173,7 +173,7 @@ export async function getProductEntries(productId: number) {
 
 export async function getSeriesByProductAndStore(storeId: number, productId: number) {
   try {
-    const response = await fetch(
+    const response = await authFetch(
       `${BACKEND_URL}/api/inventory/series-by-product-and-store/${storeId}/${productId}`,
       { cache: "no-store" }
     );
@@ -232,7 +232,7 @@ export async function updateProductCategory(productId: number, categoryId: numbe
 
 export async function getProductByInventoryId(inventoryId: number) {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/inventory/product-by-inventory/${inventoryId}`);
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/product-by-inventory/${inventoryId}`);
     if (!response.ok) {
       throw new Error(`Error al obtener el producto por inventoryId: ${response.statusText}`);
     }
@@ -245,7 +245,7 @@ export async function getProductByInventoryId(inventoryId: number) {
 } 
 
 export async function getProductSales(productId: number) {
-  const response = await fetch(`${BACKEND_URL}/api/inventory/product-sales/${productId}`);
+  const response = await authFetch(`${BACKEND_URL}/api/inventory/product-sales/${productId}`);
   if (!response.ok) {
     throw new Error('Error al obtener las salidas del producto');
   }
@@ -254,7 +254,7 @@ export async function getProductSales(productId: number) {
 
 export async function getCategoriesFromInventory(): Promise<string[]> {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/inventory/categories`);
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/categories`);
     if (!response.ok) {
       throw new Error('Error al obtener las categorías');
     }
@@ -267,7 +267,7 @@ export async function getCategoriesFromInventory(): Promise<string[]> {
 
 export async function getProductsByStore(storeId: number, queryParams: string = "") {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/inventory/products-by-store/${storeId}?${queryParams}`);
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/products-by-store/${storeId}?${queryParams}`);
     if (!response.ok) {
       throw new Error("Error al obtener los productos por tienda");
     }
@@ -280,7 +280,7 @@ export async function getProductsByStore(storeId: number, queryParams: string = 
 
 export async function getAllProductsByStore(storeId: number, queryParams: string = "") {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/inventory/all-products-by-store/${storeId}?${queryParams}`);
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/all-products-by-store/${storeId}?${queryParams}`);
     if (!response.ok) {
       throw new Error("Error al obtener los productos por tienda");
     }
@@ -336,7 +336,7 @@ export async function importExcelFile(file: File) {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${BACKEND_URL}/api/inventory/import-excel`, {
+  const response = await authFetch(`${BACKEND_URL}/api/inventory/import-excel`, {
     method: 'POST',
     body: formData,
   });
@@ -349,7 +349,7 @@ export async function importExcelFile(file: File) {
 }
 
 export async function commitImportedExcelData(previewData: any[], storeId: number, userId: number, providerId: number | null) {
-  const response = await fetch(`${BACKEND_URL}/api/inventory/import-excel/commit`, {
+  const response = await authFetch(`${BACKEND_URL}/api/inventory/import-excel/commit`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

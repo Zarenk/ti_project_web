@@ -17,7 +17,7 @@ datasource db {
 
 model Product {
   id          Int      @id @default(autoincrement())
-  name        String   @unique
+  name        String
   barcode     String?  @unique // Opcional pero único
   qrCode      String?  @unique // Opcional pero único
   description String?
@@ -140,7 +140,7 @@ model CatalogCover {
 
 model Category {
   id          Int      @id @default(autoincrement())
-  name        String   @unique
+  name        String
   description String?
   status      String?
   image       String?
@@ -229,6 +229,7 @@ model Organization {
   categories   Category[]
   accEntries   AccEntry[]
   exchangeRates TipoCambio[]
+  entrySeries  EntryDetailSeries[]
 
   @@unique([name])
   @@index([status])
@@ -475,11 +476,16 @@ model EntryDetail {
 model EntryDetailSeries {
   id            Int         @id @default(autoincrement())
   entryDetailId Int
-  serial        String      @unique
+  serial        String
   status        String      @default("active") // Nuevo campo
+  organizationId Int?
   entryDetail   EntryDetail @relation(fields: [entryDetailId], references: [id], onDelete: Cascade)
+  organization  Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+
+  @@unique([organizationId, serial])
+  @@index([organizationId, serial])
 }
 
 model Store {

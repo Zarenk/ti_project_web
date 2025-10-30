@@ -1,5 +1,19 @@
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 import { getAuthHeaders } from '@/utils/auth-token';
+
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+
+async function authorizedFetch(url: string, init: RequestInit = {}) {
+  const auth = await getAuthHeaders();
+  const headers = new Headers(init.headers ?? {});
+
+  for (const [key, value] of Object.entries(auth)) {
+    if (value != null && value !== '') {
+      headers.set(key, value);
+    }
+  }
+
+  return fetch(url, { ...init, headers });
+}
 
 // Función para realizar el login
 export async function loginUser(email: string, password: string) {
@@ -102,7 +116,7 @@ export interface DashboardUser {
 }
 
 export async function getUsers(): Promise<DashboardUser[]> {
-  const res = await fetch(`${BACKEND_URL}/api/users`, {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/users`, {
     cache: 'no-store',
   });
 
@@ -121,7 +135,7 @@ export async function createUser(
   role: string,
   status: string,
 ) {
-  const res = await fetch(`${BACKEND_URL}/api/users/register`, {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/users/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, username, password, role, status }),
@@ -141,12 +155,13 @@ export async function updateUser(data: { email?: string; username?: string; pass
     throw new Error('No se encontró un token de autenticación');
   }
 
-  const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/users/profile`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-if (!res.ok) {
+
+  if (!res.ok) {
     const errorData = await res.json();
     throw new Error(errorData.message || 'Error al actualizar usuario');
   }

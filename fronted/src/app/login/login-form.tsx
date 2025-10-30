@@ -252,7 +252,7 @@ export default function LoginForm() {
       if (nextCount === 4) {
         nextState.lockUntil = Date.now() + TEN_MINUTES_MS;
         feedbackMessage =
-          'Has superado el numero de intentos permitidos. Tu cuenta quedar� bloqueada durante 10 minutos.';
+          'Has superado el numero de intentos permitidos. Tu cuenta quedara bloqueada durante 10 minutos.';
       } else if (nextCount === 5) {
         nextState.lockUntil = Date.now() + ONE_HOUR_MS;
         feedbackMessage =
@@ -355,14 +355,14 @@ export default function LoginForm() {
           />
         </div>
 
-      <div>
+        <div>
           <Label htmlFor="password" className="block text-sm font-medium">
-            Contraseña
+            Contrasena
           </Label>
           <Input
             id="password"
             type="password"
-            placeholder="Ingresa tu contraseña"
+            placeholder="Ingresa tu contrasena"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -432,7 +432,7 @@ export default function LoginForm() {
         aria-expanded={showRecovery}
         aria-controls="password-recovery-section"
       >
-        {showRecovery ? 'Ocultar opciones de recuperacion' : '¿Olvidaste tu contraseña?'}
+        {showRecovery ? 'Ocultar opciones de recuperacion' : 'Olvidaste tu contrasena?'}
       </button>
       {showRecovery && (
         <section
@@ -440,11 +440,11 @@ export default function LoginForm() {
           className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40"
         >
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-            ¿Olvidaste tu contraseña?
+            Olvidaste tu contrasena?
           </h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
             Ingresa tu correo electronico y te enviaremos los pasos necesarios para recuperar el acceso. Revisa tu
-            bandeja de entrada y sigue las instrucciones para restablecer tu contraseña.
+            bandeja de entrada y sigue las instrucciones para restablecer tu contrasena.
           </p>
           <form onSubmit={handleRecoverySubmit} className="mt-3 flex flex-col gap-3">
             <div>
@@ -476,7 +476,7 @@ export default function LoginForm() {
               disabled={recoveryLoading}
               aria-disabled={recoveryLoading}
             >
-              {recoveryLoading ? 'Enviando instrucciones...' : 'Recuperar contraseña'}
+              {recoveryLoading ? 'Enviando instrucciones...' : 'Recuperar contrasena'}
             </Button>
           </form>
         </section>

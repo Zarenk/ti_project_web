@@ -1,0 +1,95 @@
+﻿"use client";
+
+import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
+
+import { useSiteSettings } from "@/context/site-settings-context";
+import { getOrganization } from "@/app/dashboard/tenancy/tenancy.api";
+import {
+  TENANT_SELECTION_EVENT,
+  getTenantSelection,
+  type TenantSelection,
+} from "@/utils/tenant-preferences";
+
+export function DashboardCompanyName(): ReactElement {
+  const { settings } = useSiteSettings();
+  const [organizationName, setOrganizationName] = useState<string | null>(null);
+
+  const lastResolvedOrgIdRef = useRef<number | null>(null);
+  const lastRequestIdRef = useRef(0);
+  const isMountedRef = useRef(true);
+
+  useEffect(
+    () => () => {
+      isMountedRef.current = false;
+    },
+    [],
+  );
+
+  const resolveOrganizationName = useCallback(
+    async (providedSelection?: TenantSelection) => {
+      lastRequestIdRef.current += 1;
+      const requestId = lastRequestIdRef.current;
+
+      try {
+        const selection = providedSelection ?? (await getTenantSelection());
+        const orgId = selection.orgId ?? null;
+
+        if (orgId === null) {
+          lastResolvedOrgIdRef.current = null;
+          if (isMountedRef.current && requestId === lastRequestIdRef.current) {
+            setOrganizationName(null);
+          }
+          return;
+        }
+
+        const organization = await getOrganization(orgId);
+
+        if (!isMountedRef.current || requestId !== lastRequestIdRef.current) {
+          return;
+        }
+
+        lastResolvedOrgIdRef.current = orgId;
+        setOrganizationName(organization?.name?.trim() ?? null);
+      } catch {
+        if (!isMountedRef.current || requestId !== lastRequestIdRef.current) {
+          return;
+        }
+
+        lastResolvedOrgIdRef.current = null;
+        setOrganizationName(null);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    void resolveOrganizationName();
+
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<TenantSelection>).detail;
+      void resolveOrganizationName(detail);
+    };
+
+    window.addEventListener(TENANT_SELECTION_EVENT, handler as EventListener);
+    return () => {
+      window.removeEventListener(TENANT_SELECTION_EVENT, handler as EventListener);
+    };
+  }, [resolveOrganizationName]);
+
+  const companyName = settings.company?.name?.trim();
+  const fallbackCompanyName =
+    companyName && companyName.length > 0 ? companyName : "Nombre de la empresa";
+
+  const normalizedOrganizationName =
+    organizationName && organizationName.length > 0 ? organizationName : null;
+
+  const displayName = normalizedOrganizationName
+    ? `${normalizedOrganizationName} â€¢ ${fallbackCompanyName}`
+    : fallbackCompanyName;
+
+  return <span title={displayName}>{displayName}</span>;
+}

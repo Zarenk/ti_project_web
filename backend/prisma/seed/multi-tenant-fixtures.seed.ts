@@ -268,42 +268,10 @@ const FIXTURE_ORGANIZATION_CODES = new Set(
   seedOrganizations.map((organization) => organization.code),
 );
 
-async function ensureCategories(
-  prisma: PrismaSeedClient,
-  fixtures: OrganizationFixture[],
-) {
-  const categoryNames = new Set<string>();
-  for (const org of fixtures) {
-    for (const product of org.products ?? []) {
-      categoryNames.add(product.category);
-    }
-  }
-
-  const categories = new Map<string, number>();
-  for (const name of categoryNames) {
-    const category = await prisma.category.upsert({
-      where: { name },
-      update: {
-        description: `Categoría de prueba multi-tenant para ${name}`,
-        status: 'ACTIVE',
-      },
-      create: {
-        name,
-        description: `Categoría de prueba multi-tenant para ${name}`,
-        status: 'ACTIVE',
-        image: null,
-      },
-    });
-    categories.set(name, category.id);
-  }
-
-  return categories;
-}
-
 async function ensureOrganization(
   prisma: PrismaSeedClient,
   fixture: OrganizationFixture,
-  categories: Map<string, number>,
+  categoriesByOrganization: Map<string, Map<string, number>>,
   logger: (message: string) => void,
 ) {
   const organization = await prisma.organization.upsert({
@@ -528,14 +496,54 @@ async function ensureOrganization(
         user.role === UserRole.SUPER_ADMIN_ORG || user.role === UserRole.ADMIN,
     )?.user ?? createdUsers[0]?.user;
 
-  for (const product of fixture.products ?? []) {
-    const categoryId = categories.get(product.category);
-    if (!categoryId) {
-      throw new Error(`Category ${product.category} not resolved for product ${product.name}`);
+  const orgId = organization.id;
+
+  let categoryCache = categoriesByOrganization.get(fixture.code);
+  if (!categoryCache) {
+    categoryCache = new Map<string, number>();
+    categoriesByOrganization.set(fixture.code, categoryCache);
+  }
+
+  const resolveCategoryId = async (categoryName: string): Promise<number> => {
+    if (categoryCache!.has(categoryName)) {
+      return categoryCache!.get(categoryName)!;
     }
 
+    const category = await prisma.category.upsert({
+      where: {
+        organizationId_name: {
+          organizationId: orgId,
+          name: categoryName,
+        },
+      },
+      update: {
+        description: `Categoría de prueba multi-tenant para ${categoryName}`,
+        status: 'ACTIVE',
+        companyId: null,
+      },
+      create: {
+        name: categoryName,
+        description: `Categoría de prueba multi-tenant para ${categoryName}`,
+        status: 'ACTIVE',
+        organizationId: orgId,
+        companyId: null,
+      },
+    });
+
+    categoryCache!.set(categoryName, category.id);
+    return category.id;
+  };
+
+  for (const product of fixture.products ?? []) {
+    const categoryId = await resolveCategoryId(product.category);
+
     const savedProduct = await prisma.product.upsert({
-      where: { name: product.name },
+      where: {
+        organizationId_name: {
+          organizationId: orgId,
+          name: product.name,
+        },
+      },
       update: {
         description: product.description ?? null,
         price: product.price,
@@ -786,7 +794,7 @@ export async function applyMultiTenantFixtures(
       return emptySummary;
     }
 
-    const categories = await ensureCategories(prisma, selected);
+    const categories = new Map<string, Map<string, number>>();
     const organizationSummaries: OrganizationFixtureSummary[] = [];
     for (const organization of selected) {
       const summary = await ensureOrganization(

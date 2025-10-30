@@ -1,201 +1,221 @@
 import { getAuthHeaders } from '@/utils/auth-token'
 import { isProductActive, normalizeProductStatus } from './status.utils'
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
-export async function getProducts(){
-  const response = await fetch(`${BACKEND_URL}/api/products`, {
-      'cache': 'no-store',
-  });
-  const raw = await response.json();
-  const products = Array.isArray(raw) ? raw : [];
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
+
+async function authorizedFetch(url: string, init: RequestInit = {}) {
+  const auth = await getAuthHeaders()
+  const headers = new Headers(init.headers ?? {})
+
+  for (const [key, value] of Object.entries(auth)) {
+    if (value != null && value !== '') {
+      headers.set(key, value)
+    }
+  }
+
+  return fetch(url, { ...init, headers })
+}
+
+export async function getProducts() {
+  const response = await authorizedFetch(`${BACKEND_URL}/api/products`, {
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Error al obtener productos: ${response.status}`)
+  }
+
+  const raw = await response.json()
+  const products = Array.isArray(raw) ? raw : []
 
   return products
     .map((product: any) => ({
       ...product,
       status: normalizeProductStatus(product?.status ?? null),
     }))
-    .filter((product: any) => isProductActive(product.status));
+    .filter((product: any) => isProductActive(product.status))
 }
 
-export async function getProduct(id: string){
-  const data = await fetch(`${BACKEND_URL}/api/products/${id}`, {
-      'cache': 'no-store',
-  });
+export async function getProduct(id: string) {
+  const response = await authorizedFetch(`${BACKEND_URL}/api/products/${id}`, {
+    cache: 'no-store',
+  })
 
-  const json = await data.json();
+  if (!response.ok) {
+    throw new Error(`Error al obtener el producto ${id}: ${response.status}`)
+  }
 
-  // Convierte `createdAt` a un objeto `Date`
+  const json = await response.json()
+
   const formattedProduct = {
-      ...json,
-      status: normalizeProductStatus(json.status),
-      createAt: new Date(json.createdAt), // Convierte la fecha
-  };
+    ...json,
+    status: normalizeProductStatus(json.status),
+    createAt: new Date(json.createdAt),
+  }
 
-  console.log("Producto formateado:", formattedProduct);
-  return formattedProduct;
-
-  //return data.json()
+  console.log('Producto formateado:', formattedProduct)
+  return formattedProduct
 }
 
-export async function createProduct(productData: any){
-    const auth = await getAuthHeaders()
-    const res = await fetch(`${BACKEND_URL}/api/products`,{
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',         
-            ...auth,
-        },
-        body: JSON.stringify(productData)
-    }) 
+export async function createProduct(productData: any) {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/products`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(productData),
+  })
 
-    if (!res.ok) {
-        let errorData: any = null
-        try {
-            errorData = await res.json()
-        } catch (err) {
-            // Si la respuesta no es JSON, mantenemos errorData como null
-        }
-        const message = errorData?.message || 'Error al crear el producto'
-        throw { message, response: { status: res.status, data: errorData } }
+  if (!res.ok) {
+    let errorData: any = null
+    try {
+      errorData = await res.json()
+    } catch (err) {
+      /* ignore */
     }
+    const message = errorData?.message || 'Error al crear el producto'
+    throw { message, response: { status: res.status, data: errorData } }
+  }
 
-    const data = await res.json();
-    const normalized = {
-      ...data,
-      status: normalizeProductStatus(data?.status ?? null),
-    };
-    console.log(normalized);
-    return normalized; // Asegúrate de que el backend devuelva un objeto con `id`, `name`, y `price`
+  const data = await res.json()
+  const normalized = {
+    ...data,
+    status: normalizeProductStatus(data?.status ?? null),
+  }
+  console.log(normalized)
+  return normalized
 }
 
-export async function verifyOrCreateProducts(products: { name: string; price: number; description?: string; brand?: string; categoryId?: number }[]){
-  try{ 
-    const res = await fetch(`${BACKEND_URL}/api/products/verify-or-create-products`,{
+export async function verifyOrCreateProducts(products: { name: string; price: number; description?: string; brand?: string; categoryId?: number }[]) {
+  try {
+    const res = await authorizedFetch(`${BACKEND_URL}/api/products/verify-or-create-products`, {
       method: 'POST',
       headers: {
-          'Content-Type': 'application/json',         
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(products)
-    }) 
+      body: JSON.stringify(products),
+    })
 
     if (!res.ok) {
-        const errorData = await res.json();
-        throw { response: { status: res.status, data: errorData } }; // Lanza un error con la estructura esperada
+      const errorData = await res.json()
+      throw { response: { status: res.status, data: errorData } }
     }
 
     const data = await res.json()
-    console.log("Respuesta del backend:", data);
-    return data; // Asegúrate de que el backend devuelva los productos creados/verificados
-  }
-  catch(error){
-    console.error('Error al verificar o crear productos:', error);
-    throw error;
+    console.log('Respuesta del backend:', data)
+    return data
+  } catch (error) {
+    console.error('Error al verificar o crear productos:', error)
+    throw error
   }
 }
 
-export async function deleteProduct(id: string){
-    const auth = await getAuthHeaders()
-    const res = await fetch(`${BACKEND_URL}/api/products/${id}`, {
-        method: 'DELETE',
-        headers: {
-            ...auth,
-        },
-    });
-    return res.json()
+export async function deleteProduct(id: string) {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/products/${id}`, {
+    method: 'DELETE',
+  })
+
+  if (!res.ok) {
+    const errorData = await res.json()
+    throw new Error(errorData?.message || 'Error al eliminar el producto')
+  }
+
+  return res.json()
 }
 
-export async function updateProduct(id: string, newProduct: any){
-    const auth = await getAuthHeaders()
-    const res = await fetch(`${BACKEND_URL}/api/products/${id}`, {
-        method: 'PATCH',
-        headers: {
-            'Content-Type': 'application/json',
-            ...auth,
-        },
-        body: JSON.stringify(newProduct),
-        cache: 'no-store',
-    });
+export async function updateProduct(id: string, newProduct: any) {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/products/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(newProduct),
+    cache: 'no-store',
+  })
 
-    if (!res.ok) {
-        const errorData = await res.json();
-        throw { response: { status: res.status, data: errorData } }; // Lanza un error con la estructura esperada
+  if (!res.ok) {
+    let errorData: any = null
+    try {
+      errorData = await res.json()
+    } catch {
+      /* ignore */
     }
+    throw { response: { status: res.status, data: errorData } }
+  }
 
-    const data = await res.json()
-    return {
-        ...data,
-        status: normalizeProductStatus(data?.status ?? null),
-    }
+  const data = await res.json()
+  return {
+    ...data,
+    status: normalizeProductStatus(data?.status ?? null),
+  }
 }
 
 export async function updateManyProducts(products: any[]) {
-    console.log("Enviando productos al backend para actualización masiva:", products); // Log para depuración
-  
-    try {
-      const auth = await getAuthHeaders()
-      const response = await fetch(`${BACKEND_URL}/api/products`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...auth,
-        },
-        body: JSON.stringify(products), // Enviar el array de productos al backend
-      });
-  
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Error al actualizar productos:", errorData);
-        throw { response: { status: response.status, data: errorData } }; // Lanza un error con la estructura esperada
-      }
-  
-      const data = await response.json();
-      console.log("Respuesta del backend:", data);
-      return data; // Devuelve la respuesta del backend
-    } catch (error) {
-      console.error("Error en updateManyProducts:", error);
-      throw error; // Lanza el error para que pueda ser manejado en el frontend
+  console.log('Enviando productos al backend para actualización masiva:', products)
+
+  try {
+    const response = await authorizedFetch(`${BACKEND_URL}/api/products`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(products),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error('Error al actualizar productos:', errorData)
+      throw { response: { status: response.status, data: errorData } }
     }
+
+    const data = await response.json()
+    console.log('Respuesta del backend:', data)
+    return data
+  } catch (error) {
+    console.error('Error en updateManyProducts:', error)
+    throw error
+  }
 }
 
 export const deleteProducts = async (ids: string[]) => {
-  console.log("Enviando IDs al backend:", ids); // Verifica los datos enviados al backend
+  console.log('Enviando IDs al backend:', ids)
 
   try {
-
-    // Convertir los IDs a números antes de enviarlos
     const numericIds = ids.map((id) => Number(id))
 
-    const response = await fetch(`${BACKEND_URL}/api/products/`, {
+    const response = await authorizedFetch(`${BACKEND_URL}/api/products/`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ ids: numericIds }), // Asegúrate de que el backend espera un objeto con `ids`
-    });
+      body: JSON.stringify({ ids: numericIds }),
+    })
 
     if (!response.ok) {
-      throw new Error('Error eliminando productos');
+      const errorData = await response.json()
+      throw new Error(errorData?.message || 'Error eliminando productos')
     }
 
-    return await response.json();
+    return await response.json()
   } catch (error) {
-    console.error("Error en deleteProducts:", error);
-    throw error;
+    console.error('Error en deleteProducts:', error)
+    throw error
   }
-};
+}
 
 export async function uploadProductImage(file: File) {
-  const formData = new FormData();
-  formData.append('file', file);
+  const formData = new FormData()
+  formData.append('file', file)
 
-  const res = await fetch(`${BACKEND_URL}/api/products/upload-image`, {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/products/upload-image`, {
     method: 'POST',
     body: formData,
-  });
+  })
 
   if (!res.ok) {
-    throw new Error('Error al subir la imagen');
+    const errorData = await res.json().catch(() => null)
+    throw new Error(errorData?.message || 'Error al subir la imagen')
   }
 
-  return res.json() as Promise<{ url: string }>;
+  return res.json() as Promise<{ url: string }>
 }

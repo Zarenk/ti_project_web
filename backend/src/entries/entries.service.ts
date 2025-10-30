@@ -313,6 +313,7 @@ export class EntriesService {
                 data: uniqueSeries.map((serial) => ({
                   entryDetailId: detail.id,
                   serial: String(serial),
+                  organizationId,
                 })),
                 skipDuplicates: true, // Ignorar duplicados en la base de datos
               });
@@ -483,7 +484,10 @@ export class EntriesService {
   // Listar todas las entradas
   async findAllEntries(organizationId?: number | null) {
     try {
-      const resolvedOrganizationId = organizationId ?? null;
+      const ctx = this.tenantContext.getContext();
+      const resolvedOrganizationId =
+        organizationId ?? ctx.organizationId ?? null;
+      const resolvedCompanyId = ctx.companyId ?? null;
 
       logOrganizationContext({
         service: EntriesService.name,
@@ -493,8 +497,12 @@ export class EntriesService {
       });
 
       const where = buildOrganizationFilter(
-        organizationId,
+        resolvedOrganizationId,
       ) as Prisma.EntryWhereInput;
+
+      if (resolvedCompanyId !== null) {
+        where.store = { companyId: resolvedCompanyId } as Prisma.StoreWhereInput;
+      }
 
       const entries = await this.prisma.entry.findMany({
         where,
@@ -528,7 +536,10 @@ export class EntriesService {
   // Obtener una entrada específica por ID
   async findEntryById(id: number, organizationId?: number | null) {
     try {
-      const resolvedOrganizationId = organizationId ?? null;
+      const ctx = this.tenantContext.getContext();
+      const resolvedOrganizationId =
+        organizationId ?? ctx.organizationId ?? null;
+      const resolvedCompanyId = ctx.companyId ?? null;
 
       logOrganizationContext({
         service: EntriesService.name,
@@ -539,8 +550,14 @@ export class EntriesService {
 
       const where: Prisma.EntryWhereInput = {
         id,
-        ...(buildOrganizationFilter(organizationId) as Prisma.EntryWhereInput),
+        ...(buildOrganizationFilter(
+          resolvedOrganizationId,
+        ) as Prisma.EntryWhereInput),
       };
+
+      if (resolvedCompanyId !== null) {
+        where.store = { companyId: resolvedCompanyId } as Prisma.StoreWhereInput;
+      }
 
       const entry = await this.prisma.entry.findFirst({
         where,
@@ -579,8 +596,22 @@ export class EntriesService {
   //ELIMINAR ENTRADA
   async deleteEntry(id: number, organizationId?: number | null) {
     try {
+      const ctx = this.tenantContext.getContext();
+      const resolvedOrganizationId =
+        organizationId ?? ctx.organizationId ?? null;
+      const resolvedCompanyId = ctx.companyId ?? null;
+
+      const organizationFilter = buildOrganizationFilter(
+        resolvedOrganizationId,
+      ) as Prisma.EntryWhereInput;
+
+      const where: Prisma.EntryWhereInput = { id, ...organizationFilter };
+      if (resolvedCompanyId !== null) {
+        where.store = { companyId: resolvedCompanyId } as Prisma.StoreWhereInput;
+      }
+
       const entry = await this.prisma.entry.findFirst({
-        where: { id, ...(buildOrganizationFilter(organizationId) as Prisma.EntryWhereInput) },
+        where,
         include: { details: { include: { series: true, product: true } } },
       });
 
@@ -593,7 +624,7 @@ export class EntriesService {
       logOrganizationContext({
         service: EntriesService.name,
         operation: 'deleteEntry',
-        organizationId,
+        organizationId: orgId,
         metadata: {
           entryId: entry.id,
           storeId: entry.storeId,
@@ -637,7 +668,7 @@ export class EntriesService {
           stockChange: -detail.quantity,
           previousStock: storeInventory.stock,
           newStock: storeInventory.stock - detail.quantity,
-          organizationId,
+          organizationId: orgId,
         };
 
         // Registrar el cambio en el historial
@@ -669,15 +700,29 @@ export class EntriesService {
   // ELIMINAR ENTRADAS
   async deleteEntries(ids: number[], organizationId?: number | null) {
     try {
+      const ctx = this.tenantContext.getContext();
+      const resolvedOrganizationId =
+        organizationId ?? ctx.organizationId ?? null;
+      const resolvedCompanyId = ctx.companyId ?? null;
+
       if (!Array.isArray(ids) || ids.length === 0) {
         throw new BadRequestException(
           'No se proporcionaron IDs válidos para eliminar.',
         );
       }
 
-      // Obtener las entradas con sus detalles
+      const where: Prisma.EntryWhereInput = {
+        id: { in: ids },
+        ...(buildOrganizationFilter(
+          resolvedOrganizationId,
+        ) as Prisma.EntryWhereInput),
+      };
+      if (resolvedCompanyId !== null) {
+        where.store = { companyId: resolvedCompanyId } as Prisma.StoreWhereInput;
+      }
+
       const entries = await this.prisma.entry.findMany({
-        where: { id: { in: ids }, ...(buildOrganizationFilter(organizationId) as Prisma.EntryWhereInput) },
+        where,
         include: { details: { include: { series: true, product: true } } },
       });
 
@@ -687,22 +732,22 @@ export class EntriesService {
         );
       }
 
-      // Actualizar el inventario restando las cantidades de los productos
       for (const entry of entries) {
-        const organizationId =
+        const entryOrgId =
           (entry as { organizationId?: number | null }).organizationId ?? null;
 
         logOrganizationContext({
           service: EntriesService.name,
           operation: 'deleteEntries.entry',
-          organizationId,
+          organizationId: entryOrgId,
           metadata: {
             entryId: entry.id,
             storeId: entry.storeId,
             userId: entry.userId,
+            companyId: resolvedCompanyId ?? undefined,
           },
         });
-        // Eliminar series asociadas
+
         for (const detail of entry.details) {
           await this.prisma.entryDetailSeries.deleteMany({
             where: { entryDetailId: detail.id },
@@ -710,7 +755,6 @@ export class EntriesService {
         }
 
         for (const detail of entry.details) {
-          // Verificar si el producto existe en el inventario de la tienda
           const storeInventory = await this.prisma.storeOnInventory.findFirst({
             where: {
               storeId: entry.storeId,
@@ -724,22 +768,20 @@ export class EntriesService {
             );
           }
 
-          // Actualizar el stock en StoreOnInventory
           await this.prisma.storeOnInventory.update({
             where: { id: storeInventory.id },
             data: { stock: { decrement: detail.quantity } },
           });
-          // Registrar el cambio en el historial
-          const historyCreateData: InventoryHistoryCreateInputWithOrganization =
-            {
-              inventory: { connect: { id: storeInventory.inventoryId } },
-              user: { connect: { id: entry.userId } },
-              action: 'delete',
-              stockChange: -detail.quantity,
-              previousStock: storeInventory.stock,
-              newStock: storeInventory.stock - detail.quantity,
-              organizationId,
-            };
+
+          const historyCreateData: InventoryHistoryCreateInputWithOrganization = {
+            inventory: { connect: { id: storeInventory.inventoryId } },
+            user: { connect: { id: entry.userId } },
+            action: 'delete',
+            stockChange: -detail.quantity,
+            previousStock: storeInventory.stock,
+            newStock: storeInventory.stock - detail.quantity,
+            organizationId: entryOrgId,
+          };
 
           await this.prisma.inventoryHistory.create({
             data: historyCreateData,
@@ -758,9 +800,8 @@ export class EntriesService {
         });
       }
 
-      // Eliminar las entradas
       const deletedEntries = await this.prisma.entry.deleteMany({
-        where: { id: { in: entries.map(e => e.id) } },
+        where: { id: { in: entries.map((e) => e.id) } },
       });
 
       return {
@@ -776,37 +817,64 @@ export class EntriesService {
 
   // Obtener todas las entradas de una tienda específica
   async findAllByStore(storeId: number, organizationId?: number | null) {
-  try {
-    const store = await this.prisma.store.findFirst({
-      where: {
-        id: storeId,
-        ...(buildOrganizationFilter(organizationId) as Prisma.StoreWhereInput),
-      },
-    });
-    if (!store) throw new NotFoundException('Tienda no encontrada en esta organización.');
+    try {
+      const ctx = this.tenantContext.getContext();
+      const resolvedOrganizationId =
+        organizationId ?? ctx.organizationId ?? null;
+      const resolvedCompanyId = ctx.companyId ?? null;
 
-    return this.prisma.entry.findMany({
-      where: {
-        storeId,
-        ...(buildOrganizationFilter(organizationId) as Prisma.EntryWhereInput),
-      },
-      include: { details: true, provider: true, user: true },
-    });
-  } catch (error) {
-    if (error instanceof HttpException) throw error;
-    this.handlePrismaError(error);
-  }
-  }
-  //
+      const store = await this.prisma.store.findFirst({
+        where: {
+          id: storeId,
+          ...(buildOrganizationFilter(
+            resolvedOrganizationId,
+          ) as Prisma.StoreWhereInput),
+          ...(resolvedCompanyId !== null ? { companyId: resolvedCompanyId } : {}),
+        },
+      });
+      if (!store) {
+        throw new NotFoundException('Tienda no encontrada en esta organización.');
+      }
 
+      return this.prisma.entry.findMany({
+        where: {
+          storeId,
+          ...(buildOrganizationFilter(
+            resolvedOrganizationId,
+          ) as Prisma.EntryWhereInput),
+          ...(resolvedCompanyId !== null
+            ? { store: { companyId: resolvedCompanyId } }
+            : {}),
+        },
+        include: { details: true, provider: true, user: true },
+      });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      this.handlePrismaError(error);
+    }
+  }
   async findRecentEntries(limit: number, organizationId?: number | null) {
     try {
+      const ctx = this.tenantContext.getContext();
+      const resolvedOrganizationId =
+        organizationId ?? ctx.organizationId ?? null;
+      const resolvedCompanyId = ctx.companyId ?? null;
+
+      const inventoryFilter = buildOrganizationFilter(
+        resolvedOrganizationId,
+      ) as Prisma.InventoryWhereInput;
+
       const details = await this.prisma.entryDetail.findMany({
         where: {
           inventory: {
-            // Inventory tiene organizationId; úsalo para scoping
-            ...(buildOrganizationFilter(organizationId) as Prisma.InventoryWhereInput),
-            // y además, aseguramos que existe relación con store
+            ...inventoryFilter,
+            ...(resolvedCompanyId !== null
+              ? {
+                  storeOnInventory: {
+                    some: { store: { companyId: resolvedCompanyId } },
+                  },
+                }
+              : {}),
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -846,7 +914,6 @@ export class EntriesService {
       throw new Error('Failed to fetch recent entries');
     }
   }
-
   // Actualizar una entrada con un PDF
   async updateEntryPdf(entryId: number, pdfUrl: string) {
     try {

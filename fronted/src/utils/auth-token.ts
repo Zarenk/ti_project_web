@@ -35,7 +35,27 @@ export async function getAuthToken(): Promise<string | null> {
   }
 }
 
+import { getTenantSelection } from "./tenant-preferences"
+
 export async function getAuthHeaders(): Promise<Record<string, string>> {
   const token = await getAuthToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  const headers: Record<string, string> = {}
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  try {
+    const { orgId, companyId } = await getTenantSelection()
+    if (orgId != null) {
+      headers["x-org-id"] = String(orgId)
+    }
+    if (companyId != null) {
+      headers["x-company-id"] = String(companyId)
+    }
+  } catch {
+    /* ignore tenant header failures */
+  }
+
+  return headers
 }

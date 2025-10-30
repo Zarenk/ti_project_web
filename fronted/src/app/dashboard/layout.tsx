@@ -14,6 +14,7 @@ import { getCurrentUser } from "@/lib/current.user";
 import DashboardLoading from "./loading";
 import LogoutOverlay from "@/components/logout-overlay";
 import { DashboardCompanyName } from "./dashboard-company-name";
+import { TenantSelectionProvider } from "@/context/tenant-selection-context";
 
 export const revalidate = 0;
 
@@ -30,30 +31,30 @@ export default async function Page({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <LogoutOverlay />
-        <div className="flex items-center gap-2 px-4 py-4">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <SidebarTrigger className="-ml-1" />
-              </TooltipTrigger>
-              <TooltipContent>
-                Abrir/Cerrar Sidebar
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <Separator
-            orientation="vertical"
-            className="mr-2 data-[orientation=vertical]:h-4"
-          />
-          <DashboardCompanyName />
-        </div>
-        <Suspense fallback={<DashboardLoading />}>
-          {children}
-        </Suspense>   
-      </SidebarInset>
+      <TenantSelectionProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <LogoutOverlay />
+          <div className="flex items-center gap-2 px-4 py-4">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <SidebarTrigger className="-ml-1" />
+                </TooltipTrigger>
+                <TooltipContent>Abrir/Cerrar Sidebar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Separator
+              orientation="vertical"
+              className="mr-2 data-[orientation=vertical]:h-4"
+            />
+            <DashboardCompanyName />
+          </div>
+          <Suspense fallback={<DashboardLoading />}>
+            {children}
+          </Suspense>
+        </SidebarInset>
+      </TenantSelectionProvider>
     </SidebarProvider>
   );
 }

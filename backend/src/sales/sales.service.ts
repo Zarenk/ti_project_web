@@ -119,16 +119,28 @@ export class SalesService {
     const allocations: SaleAllocation[] = [];
     let total = 0;
     for (const detail of details) {
+      const inventoryFilter = {
+        productId: detail.productId,
+        ...(buildOrganizationFilter(
+          organizationId,
+        ) as Prisma.InventoryWhereInput),
+      } as Prisma.InventoryWhereInput;
+
+      const storeFilter = {
+        ...(buildOrganizationFilter(
+          organizationId,
+        ) as Prisma.StoreWhereInput),
+      } as Prisma.StoreWhereInput;
+
+      if (companyId !== null) {
+        storeFilter.companyId = companyId;
+      }
+
       const storeInventory = await this.prisma.storeOnInventory.findFirst({
-        where: { 
-          storeId, 
-          inventory: {
-            productId: detail.productId,
-            ...(buildOrganizationFilter(organizationId, companyId) as Prisma.InventoryWhereInput),
-          },
-          store: {
-            ...(buildOrganizationFilter(organizationId, companyId) as Prisma.StoreWhereInput),
-          },
+        where: {
+          storeId,
+          inventory: inventoryFilter,
+          store: storeFilter,
         },
       });
 
@@ -392,7 +404,8 @@ export class SalesService {
             await prismaTx.entryDetailSeries.updateMany({
               where: {
                 serial: { in: detail.series },
-                entryDetailId: detail.entryDetailId, // <-- asegura relación exacta
+                entryDetailId: detail.entryDetailId, // ensures the exact relation
+                organizationId: saleOrganizationId,
               },
               data: { status: 'active' },
             });
@@ -1331,3 +1344,10 @@ export class SalesService {
     });
   }
 }
+
+
+
+
+
+
+

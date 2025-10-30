@@ -1,164 +1,182 @@
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { getAuthHeaders } from "@/utils/auth-token";
 
-export async function createCategory(categoryData: any){
-    const res = await fetch(`${BACKEND_URL}/api/category`,{
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',         
-        },
-        body: JSON.stringify(categoryData)
-    }) 
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
-    if (!res.ok) {
-        const errorData = await res.json();
-        throw { response: { status: res.status, data: errorData } }; // Lanza un error con la estructura esperada
+async function authorizedFetch(url: string, init: RequestInit = {}) {
+  const auth = await getAuthHeaders();
+  const headers = new Headers(init.headers ?? {});
+
+  for (const [key, value] of Object.entries(auth)) {
+    if (value != null && value !== "") {
+      headers.set(key, value);
     }
+  }
 
-    return await res.json(); // Asegúrate de que el backend devuelva un objeto con `id`
+  return fetch(url, { ...init, headers });
 }
 
-export async function createCategoryDefault(){
+export async function createCategory(categoryData: any) {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/category`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(categoryData),
+  });
+
+  if (!res.ok) {
+    let errorData: any = null;
     try {
-        const response = await fetch(`${BACKEND_URL}/api/categories/verify-or-create-default`, {
-          method: 'POST',
-        });
-  
-        if (!response.ok) {
-          throw new Error('Error al verificar o crear la categoría "Sin categoría".');
-        }
-  
-        const defaultCategory = await response.json();
-        console.log("Categoría predeterminada:", defaultCategory);
-      } catch (error) {
-        console.error("Error al verificar o crear la categoría predeterminada:", error);
+      errorData = await res.json();
+    } catch {
+      /* ignore */
     }
+    throw { response: { status: res.status, data: errorData } };
+  }
+
+  return res.json();
+}
+
+export async function createCategoryDefault() {
+  try {
+    const response = await authorizedFetch(`${BACKEND_URL}/api/categories/verify-or-create-default`, {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al verificar o crear la categoria "Sin categoria".');
+    }
+
+    const defaultCategory = await response.json();
+    console.log("Categoria predeterminada:", defaultCategory);
+  } catch (error) {
+    console.error("Error al verificar o crear la categoria predeterminada:", error);
+  }
 }
 
 export async function getCategories() {
   try {
-      const response = await fetch(`${BACKEND_URL}/api/category`, {
-          cache: 'no-store',
-      });
+    const response = await authorizedFetch(`${BACKEND_URL}/api/category`, {
+      cache: "no-store",
+    });
 
-      // Validar si la respuesta fue exitosa (código 2xx)
-      if (!response.ok) {
-        // Puedes manejar diferentes códigos si deseas
-        if (response.status === 404) {
-          console.warn('No se encontraron categorías.');
-          return []; // o null, según tu caso
-        }
-
-        throw new Error(`Error al obtener categorías: ${response.status}`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn("No se encontraron categorias.");
+        return [];
       }
 
-      const data = await response.json();
-      return data;
+      throw new Error(`Error al obtener categorias: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
   } catch (error) {
-      // Manejar errores de red u otros
-      console.error('Error al obtener categorías:', error);
-      return []; // Devuelve un array vacío si ocurre un error
+    console.error("Error al obtener categorias:", error);
+    return [];
   }
 }
 
-export async function getCategory(id: string){
-    const data = await fetch(`${BACKEND_URL}/api/category/${id}`, {
-        'cache': 'no-store',
-    });
+export async function getCategory(id: string) {
+  const data = await authorizedFetch(`${BACKEND_URL}/api/category/${id}`, {
+    cache: "no-store",
+  });
 
-    const json = await data.json();
+  const json = await data.json();
 
-    // Convierte `createdAt` a un objeto `Date`
-    const formattedProduct = {
-        ...json,
-        createAt: new Date(json.createdAt), // Convierte la fecha
-    };
+  const formattedProduct = {
+    ...json,
+    createAt: new Date(json.createdAt),
+  };
 
-    console.log("Categoria formateado:", formattedProduct);
-    return formattedProduct;
-
-    //return data.json()
+  console.log("Categoria formateada:", formattedProduct);
+  return formattedProduct;
 }
 
-// Verifica o crea una categoría
 export async function verifyCategories(categories: { name: string }[]) {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/category/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(categories),
-      });
-  
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Error al verificar categorías');
-      }
-  
-      return await response.json();
-    } catch (error) {
-      console.error('Error en verifyCategories:', error);
-      throw error;
-    }
-  }
-//
-
-export async function deleteCategory(id: string){
-    const res = await fetch(`${BACKEND_URL}/api/category/${id}`, {
-        method: 'DELETE',
+  try {
+    const response = await authorizedFetch(`${BACKEND_URL}/api/category/verify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(categories),
     });
 
-    if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Error al eliminar la categoría.");
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Error al verificar categorias");
     }
 
-    return res.json()
+    return await response.json();
+  } catch (error) {
+    console.error("Error en verifyCategories:", error);
+    throw error;
+  }
+}
+
+export async function deleteCategory(id: string) {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/category/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.message || "Error al eliminar la categoria.");
+  }
+
+  return res.json();
 }
 
 export async function deleteCategories(ids: string[]) {
-    const res = await fetch(`${BACKEND_URL}/api/category/`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ ids }),
-    });
-    
-    if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Error eliminando categorias.");
-    }
+  const res = await authorizedFetch(`${BACKEND_URL}/api/category/`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ids }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.message || "Error eliminando categorias.");
+  }
 }
 
-export async function updateCategory(id: string, newCategory: any){
-    const res = await fetch(`${BACKEND_URL}/api/category/${id}`, {
-        method: 'PATCH',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newCategory),
-        cache: 'no-store',
-    });
-    if (!res.ok) {
-        const errorData = await res.json();
-        throw { response: { status: res.status, data: errorData } }; // Lanza un error con la estructura esperada
-    }
+export async function updateCategory(id: string, newCategory: any) {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/category/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(newCategory),
+    cache: "no-store",
+  });
 
-    return await res.json()
+  if (!res.ok) {
+    let errorData: any = null;
+    try {
+      errorData = await res.json();
+    } catch {
+      /* ignore */
+    }
+    throw { response: { status: res.status, data: errorData } };
+  }
+
+  return res.json();
 }
 
 export async function getCategoriesWithCount() {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/category/with-count`, {
-      cache: 'no-store',
-    })
+    const response = await authorizedFetch(`${BACKEND_URL}/api/category/with-count`, {
+      cache: "no-store",
+    });
     if (!response.ok) {
-      throw new Error('Error al obtener las categorías con conteo')
+      throw new Error("Error al obtener las categorias con conteo");
     }
-    return await response.json()
+    return await response.json();
   } catch (error) {
-    console.error('Error al obtener las categorías con conteo:', error)
-    return []
+    console.error("Error al obtener las categorias con conteo:", error);
+    return [];
   }
 }

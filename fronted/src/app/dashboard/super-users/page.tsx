@@ -18,6 +18,7 @@ import {
 
 import { isTokenValid, getUserDataFromToken } from "@/lib/auth"
 import { createManagedUser } from "./super-users.api"
+import { listOrganizations, type OrganizationResponse } from "../tenancy/tenancy.api"
 
 const ROLE_OPTIONS = [
   { value: "ADMIN", label: "Administrador" },
@@ -31,26 +32,80 @@ export default function SuperUsersAdminPage() {
   const [password, setPassword] = useState("")
   const [role, setRole] = useState<typeof ROLE_OPTIONS[number]["value"]>("ADMIN")
   const [organizationId, setOrganizationId] = useState("")
+  const [organizations, setOrganizations] = useState<OrganizationResponse[]>([])
+  const [organizationsLoading, setOrganizationsLoading] = useState(false)
   const [status, setStatus] = useState("ACTIVO")
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
+    if (role !== "SUPER_ADMIN_ORG") {
+      if (organizationId !== "") {
+        setOrganizationId("")
+      }
+      return
+    }
+
+    if (organizationId.trim().length === 0 && organizations.length === 1) {
+      setOrganizationId(String(organizations[0].id))
+    }
+  }, [role, organizations, organizationId])
+
+  useEffect(() => {
+    let cancelled = false
+
     async function checkAccess() {
       const session = await getUserDataFromToken()
       if (!session || !(await isTokenValid())) {
         router.replace("/login?returnTo=/dashboard/super-users")
         return
       }
+
       if (session.role !== "SUPER_ADMIN_GLOBAL") {
         router.replace("/unauthorized")
+        return
+      }
+
+      setOrganizationsLoading(true)
+      try {
+        const list = await listOrganizations()
+        if (!cancelled) {
+          setOrganizations(list)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error cargando organizaciones", error)
+          toast.error("No se pudieron cargar las organizaciones disponibles.")
+          setOrganizations([])
+        }
+      } finally {
+        if (!cancelled) {
+          setOrganizationsLoading(false)
+        }
       }
     }
+
     void checkAccess()
+
+    return () => {
+      cancelled = true
+    }
   }, [router])
 
+  const requiresOrganizationSelection = role === "SUPER_ADMIN_ORG"
+  const normalizedOrganizationId = organizationId.trim()
+  const organizationSelectValue =
+    normalizedOrganizationId.length > 0
+      ? normalizedOrganizationId
+      : requiresOrganizationSelection
+        ? ""
+        : "none"
+
   const canSubmit = useMemo(() => {
-    return email.trim().length > 0 && password.trim().length >= 8
-  }, [email, password])
+    const basicValid = email.trim().length > 0 && password.trim().length >= 8
+    const organizationValid =
+      !requiresOrganizationSelection || normalizedOrganizationId.length > 0
+    return basicValid && organizationValid
+  }, [email, password, normalizedOrganizationId, requiresOrganizationSelection])
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault()
@@ -66,13 +121,19 @@ export default function SuperUsersAdminPage() {
         password,
         role,
         status: status.trim() || undefined,
-        organizationId: organizationId.trim()
-          ? Number.parseInt(organizationId.trim(), 10)
+        organizationId: normalizedOrganizationId.length > 0
+          ? Number.parseInt(normalizedOrganizationId, 10)
           : undefined,
       }
 
       if (payload.organizationId !== undefined && Number.isNaN(payload.organizationId)) {
         toast.error("El identificador de organizacion debe ser numerico")
+        setSubmitting(false)
+        return
+      }
+
+      if (requiresOrganizationSelection && payload.organizationId == null) {
+        toast.error("Selecciona una organizacion para este usuario")
         setSubmitting(false)
         return
       }
@@ -155,13 +216,45 @@ export default function SuperUsersAdminPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="organizationId">Organizacion (opcional)</Label>
-                <Input
-                  id="organizationId"
-                  value={organizationId}
-                  onChange={(event) => setOrganizationId(event.target.value)}
-                  placeholder="ID numerico"
-                />
+                <Label htmlFor="organizationId">
+                  {requiresOrganizationSelection ? "Organizacion" : "Organizacion (opcional)"}
+                </Label>
+                <Select
+                  value={organizationSelectValue === "" ? undefined : organizationSelectValue}
+                  onValueChange={(value) => setOrganizationId(value === "none" ? "" : value)}
+                  disabled={organizationsLoading || (requiresOrganizationSelection && organizations.length === 0)}
+                >
+                  <SelectTrigger id="organizationId">
+                    <SelectValue
+                      placeholder={
+                        organizationsLoading
+                          ? "Cargando organizaciones..."
+                          : organizations.length === 0
+                            ? "No hay organizaciones disponibles"
+                            : "Selecciona una organizacion"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!requiresOrganizationSelection ? (
+                      <SelectItem value="none">Sin organizacion</SelectItem>
+                    ) : null}
+                    {organizations.length === 0 ? (
+                      <SelectItem value="__empty" disabled>
+                        No hay organizaciones
+                      </SelectItem>
+                    ) : (
+                      organizations.map((org) => (
+                        <SelectItem key={org.id} value={String(org.id)}>
+                          {org.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {requiresOrganizationSelection && !organizationsLoading && organizations.length === 0 ? (
+                  <p className="text-xs text-red-600">Crea una organizacion antes de asignarla.</p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Estado (opcional)</Label>

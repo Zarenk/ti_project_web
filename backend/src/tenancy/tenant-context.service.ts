@@ -6,6 +6,8 @@ import { TenantContext } from './tenant-context.interface';
 
 interface RequestUserPayload {
   id?: number;
+  userId?: number;
+  sub?: number;
   role?: string;
   organizations?: Array<number | string>;
   defaultOrganizationId?: number | string | null;
@@ -27,27 +29,50 @@ export interface OrganizationFilter {
 
 @Injectable({ scope: Scope.REQUEST })
 export class TenantContextService {
-  private context: TenantContext;
+  private context: TenantContext | null = null;
 
   constructor(@Inject(REQUEST) private readonly request: Request) {
-    this.context = this.resolveContext(request);
+    // context se calcula perezosamente mediante getContext()
   }
 
   getContext(): TenantContext {
-    return this.context;
+    const requestUser = (this.request.user ?? {}) as RequestUserPayload;
+    const requestUserId = this.normalizeId(
+      requestUser.id ?? requestUser.userId ?? requestUser.sub,
+    );
+    const current = this.context;
+
+    let shouldRecompute = false;
+    if (current === null) {
+      shouldRecompute = true;
+    } else if (requestUserId !== null && current.userId === null) {
+      shouldRecompute = true;
+    } else if (
+      requestUserId !== null &&
+      current.userId !== null &&
+      current.userId !== requestUserId
+    ) {
+      shouldRecompute = true;
+    }
+
+    if (shouldRecompute) {
+      this.context = this.resolveContext(this.request);
+    }
+    return this.context!;
   }
 
   updateContext(partial: Partial<TenantContext>): void {
+    const current = this.getContext();
     this.context = {
-      ...this.context,
+      ...current,
       ...partial,
       allowedOrganizationIds:
-        partial.allowedOrganizationIds ?? this.context.allowedOrganizationIds,
+        partial.allowedOrganizationIds ?? current.allowedOrganizationIds,
       allowedCompanyIds:
-        partial.allowedCompanyIds ?? this.context.allowedCompanyIds,
+        partial.allowedCompanyIds ?? current.allowedCompanyIds,
       allowedOrganizationUnitIds:
         partial.allowedOrganizationUnitIds ??
-        this.context.allowedOrganizationUnitIds,
+        current.allowedOrganizationUnitIds,
     };
   }
 
@@ -63,21 +88,22 @@ export class TenantContextService {
     includeCompany = true,
     includeUnit = false,
   ): OrganizationFilter {
+    const context = this.getContext();
     const filter: OrganizationFilter = {};
 
     // Incluir organizationId si existe
-    if (this.context.organizationId !== null) {
-      filter.organizationId = this.context.organizationId;
+    if (context.organizationId !== null) {
+      filter.organizationId = context.organizationId;
     }
 
     // Incluir companyId si se solicita y existe
-    if (includeCompany && this.context.companyId !== null) {
-      filter.companyId = this.context.companyId;
+    if (includeCompany && context.companyId !== null) {
+      filter.companyId = context.companyId;
     }
 
     // Incluir organizationUnitId si se solicita y existe
-    if (includeUnit && this.context.organizationUnitId !== null) {
-      filter.organizationUnitId = this.context.organizationUnitId;
+    if (includeUnit && context.organizationUnitId !== null) {
+      filter.organizationUnitId = context.organizationUnitId;
     }
 
     return filter;
@@ -91,7 +117,8 @@ export class TenantContextService {
    * @throws BadRequestException si el companyId no está autorizado
    */
   resolveCompanyId(): number | null {
-    const { companyId, allowedCompanyIds, isGlobalSuperAdmin } = this.context;
+    const { companyId, allowedCompanyIds, isGlobalSuperAdmin } =
+      this.getContext();
 
     if (companyId === null) {
       return null;
@@ -116,14 +143,14 @@ export class TenantContextService {
    * Resuelve y valida el organizationId desde las cabeceras del request
    */
   resolveOrganizationId(): number | null {
-    return this.context.organizationId;
+    return this.getContext().organizationId;
   }
 
   /**
    * Resuelve y valida el organizationUnitId desde las cabeceras del request
    */
   resolveOrganizationUnitId(): number | null {
-    return this.context.organizationUnitId;
+    return this.getContext().organizationUnitId;
   }
 
   private resolveContext(request: Request): TenantContext {

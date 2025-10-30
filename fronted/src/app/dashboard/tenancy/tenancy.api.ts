@@ -22,6 +22,17 @@ export interface OrganizationSuperAdmin {
   email: string
 }
 
+export interface CompanyResponse {
+  id: number
+  organizationId: number
+  name: string
+  legalName: string | null
+  taxId: string | null
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface OrganizationResponse {
   id: number
   name: string
@@ -39,6 +50,7 @@ export interface OrganizationResponse {
     createdAt: string
     updatedAt: string
   }>
+  companies?: CompanyResponse[]
   membershipCount: number
   superAdmin: OrganizationSuperAdmin | null
 }
@@ -49,7 +61,7 @@ export async function createOrganization(
   const headers = await getAuthHeaders()
 
   if (!headers.Authorization) {
-    throw new Error("No se encontró un token de autenticación")
+    throw new Error("No se encontro un token de autenticacion")
   }
 
   const response = await fetch(`${BACKEND_URL}/api/tenancy`, {
@@ -69,7 +81,7 @@ export async function createOrganization(
     const message =
       (typeof data === "object" && data && "message" in data
         ? (data as { message?: string }).message
-        : undefined) || "No se pudo crear la organización"
+        : undefined) || "No se pudo crear la organizacion"
     throw new Error(message)
   }
 
@@ -89,7 +101,7 @@ export async function getOrganization(
   const headers = await getAuthHeaders()
 
   if (!headers.Authorization) {
-    throw new Error("No se encontró un token de autenticación")
+    throw new Error("No se encontro un token de autenticacion")
   }
 
   const response = await fetch(`${BACKEND_URL}/api/tenancy/${id}`, {
@@ -105,7 +117,7 @@ export async function getOrganization(
     const message =
       (typeof data === "object" && data && "message" in data
         ? (data as { message?: string }).message
-        : undefined) || "No se pudo obtener la organización"
+        : undefined) || "No se pudo obtener la organizacion"
     throw new Error(message)
   }
 
@@ -119,7 +131,7 @@ export async function assignOrganizationSuperAdmin(
   const headers = await getAuthHeaders()
 
   if (!headers.Authorization) {
-    throw new Error("No se encontró un token de autenticación")
+    throw new Error("No se encontro un token de autenticacion")
   }
 
   const response = await fetch(`${BACKEND_URL}/api/tenancy/${organizationId}/super-admin`, {
@@ -144,6 +156,37 @@ export async function assignOrganizationSuperAdmin(
   }
 
   return data as OrganizationResponse
+}
+
+export async function listOrganizations(): Promise<OrganizationResponse[]> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/tenancy`, {
+    headers,
+    cache: "no-store",
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo obtener la lista de organizaciones"
+    throw new Error(message)
+  }
+
+  if (!Array.isArray(data)) {
+    return []
+  }
+
+  return data as OrganizationResponse[]
 }
 
 export async function searchUsers(search: string): Promise<UserSummary[]> {
@@ -189,3 +232,48 @@ export async function searchUsers(search: string): Promise<UserSummary[]> {
       return !isGenericUser && !isGuestEmail
     })
 }
+
+export interface CreateCompanyPayload {
+  name: string
+  legalName?: string | null
+  taxId?: string | null
+  status?: string
+  organizationId?: number
+}
+
+export async function createCompany(
+  payload: CreateCompanyPayload,
+): Promise<CompanyResponse> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo crear la empresa"
+    throw new Error(message)
+  }
+
+  return data as CompanyResponse
+}
+
+
+
+

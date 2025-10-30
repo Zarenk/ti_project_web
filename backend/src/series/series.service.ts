@@ -1,18 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import { CreateSeriesDto } from './dto/create-series.dto';
-import { UpdateSeriesDto } from './dto/update-series.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { TenantContextService } from 'src/tenancy/tenant-context.service';
 
 @Injectable()
 export class SeriesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   async checkSeries(serial: string): Promise<{ exists: boolean }> {
-    // Verificar si la serie ya existe en la base de datos
+    const context = this.tenantContext.getContext();
+    const organizationId = context.organizationId ?? null;
+
+    const where =
+      organizationId === null
+        ? { serial, organizationId: null }
+        : { serial, organizationId };
+
     const existingSeries = await this.prisma.entryDetailSeries.findFirst({
-      where: { serial },
+      where,
     });
 
-    return { exists: !!existingSeries }; // Retornar true si existe, false si no
+    return { exists: !!existingSeries };
   }
 }

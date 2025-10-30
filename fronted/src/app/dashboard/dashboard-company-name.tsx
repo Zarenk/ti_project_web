@@ -1,14 +1,114 @@
-"use client";
+"use client"
 
-import type { ReactElement } from "react";
-import { useSiteSettings } from "@/context/site-settings-context";
+import { useCallback, useEffect, useRef, useState, type ReactElement } from "react"
+
+import { useSiteSettings } from "@/context/site-settings-context"
+import { getOrganization } from "@/app/dashboard/tenancy/tenancy.api"
+import {
+  TENANT_SELECTION_EVENT,
+  getTenantSelection,
+  type TenantSelection,
+} from "@/utils/tenant-preferences"
 
 export function DashboardCompanyName(): ReactElement {
-  const { settings } = useSiteSettings();
+  const { settings } = useSiteSettings()
+  const [organizationName, setOrganizationName] = useState<string | null>(null)
+  const [companyName, setCompanyName] = useState<string | null>(null)
 
-  const companyName = settings.company?.name?.trim();
-  const displayName =
-    companyName && companyName.length > 0 ? companyName : "Nombre de la empresa";
+  const lastResolvedOrgIdRef = useRef<number | null>(null)
+  const lastResolvedCompanyIdRef = useRef<number | null>(null)
+  const lastRequestIdRef = useRef(0)
+  const isMountedRef = useRef(true)
 
-  return <span>{displayName}</span>;
+  useEffect(
+    () => () => {
+      isMountedRef.current = false
+    },
+    [],
+  )
+
+  const resolveTenantDisplay = useCallback(
+    async (providedSelection?: TenantSelection) => {
+      lastRequestIdRef.current += 1
+      const requestId = lastRequestIdRef.current
+
+      try {
+        const selection = providedSelection ?? (await getTenantSelection())
+        const orgId = selection.orgId ?? null
+        const selectedCompanyId = selection.companyId ?? null
+
+        if (orgId === null) {
+          lastResolvedOrgIdRef.current = null
+          lastResolvedCompanyIdRef.current = null
+          if (isMountedRef.current && requestId === lastRequestIdRef.current) {
+            setOrganizationName(null)
+            setCompanyName(null)
+          }
+          return
+        }
+
+        const organization = await getOrganization(orgId)
+
+        if (!isMountedRef.current || requestId !== lastRequestIdRef.current) {
+          return
+        }
+
+        lastResolvedOrgIdRef.current = orgId
+        setOrganizationName(organization?.name?.trim() ?? null)
+
+        const resolvedCompany =
+          organization?.companies?.find((company) => company.id === selectedCompanyId) ??
+          organization?.companies?.[0] ??
+          null
+
+        lastResolvedCompanyIdRef.current = resolvedCompany?.id ?? null
+        setCompanyName(resolvedCompany?.name?.trim() ?? null)
+      } catch {
+        if (!isMountedRef.current || requestId !== lastRequestIdRef.current) {
+          return
+        }
+
+        lastResolvedOrgIdRef.current = null
+        lastResolvedCompanyIdRef.current = null
+        setOrganizationName(null)
+        setCompanyName(null)
+      }
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    void resolveTenantDisplay()
+
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<TenantSelection>).detail
+      void resolveTenantDisplay(detail)
+    }
+
+    window.addEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
+    return () => {
+      window.removeEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
+    }
+  }, [resolveTenantDisplay])
+
+  const siteCompanyName = settings.company?.name?.trim() ?? null
+  const displayCompanyName =
+    companyName && companyName.length > 0
+      ? companyName
+      : siteCompanyName && siteCompanyName.length > 0
+        ? siteCompanyName
+        : "Nombre de la empresa"
+
+  const displayOrganizationName =
+    organizationName && organizationName.length > 0 ? organizationName : null
+
+  const displayName = displayOrganizationName
+    ? `${displayOrganizationName} - ${displayCompanyName}`
+    : displayCompanyName
+
+  return <span title={displayName}>{displayName}</span>
 }

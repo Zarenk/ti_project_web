@@ -1421,7 +1421,10 @@ export class InventoryService {
           seenInExcel.add(serial);
 
           const exists = await this.prisma.entryDetailSeries.findFirst({
-            where: { serial },
+            where: {
+              serial,
+              organizationId: resolvedOrganizationId ?? null,
+            },
           });
           if (exists) {
             duplicatedSeriesGlobal.push(serial);
@@ -1433,6 +1436,7 @@ export class InventoryService {
               entryDetailId: entryDetail.id,
               serial,
               status: 'active',
+              organizationId: resolvedOrganizationId ?? null,
             },
           });
         }

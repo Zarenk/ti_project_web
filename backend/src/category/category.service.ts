@@ -66,26 +66,70 @@ export class CategoryService {
 
   async verifyOrCreateDefaultCategory() {
     const orgId = this.orgId();
-    const defaultCategoryName = 'Sin categoria';
+    if (orgId === null) {
+      throw new BadRequestException(
+        'No se puede resolver la organizacion para la categoria por defecto.',
+      );
+    }
 
-    // Buscar por organización + nombre
-    let category = await this.prismaService.category.findFirst({
-      where: { organizationId: orgId, name: defaultCategoryName },
+    const defaultCategoryName = 'Sin categoria';
+    const companyId = this.tenant.getContext().companyId ?? null;
+
+    const existing = await this.prismaService.category.findUnique({
+      where: {
+        organizationId_name: {
+          organizationId: orgId,
+          name: defaultCategoryName,
+        },
+      },
     });
 
-    // Si no existe, crearla con trazabilidad de la compañía actual
-    if (!category) {
-      const companyId = this.tenant.getContext().companyId ?? null;
-      category = await this.prismaService.category.create({
+    if (existing) {
+      if (existing.companyId !== companyId || existing.status !== 'ACTIVE') {
+        return this.prismaService.category.update({
+          where: {
+            organizationId_name: {
+              organizationId: orgId,
+              name: defaultCategoryName,
+            },
+          },
+          data: {
+            companyId,
+            status: 'ACTIVE',
+          },
+        });
+      }
+      return existing;
+    }
+
+    try {
+      return await this.prismaService.category.create({
         data: {
           name: defaultCategoryName,
           organizationId: orgId,
-          companyId, // trazabilidad
+          companyId,
+          status: 'ACTIVE',
         },
       });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const resolved = await this.prismaService.category.findUnique({
+          where: {
+            organizationId_name: {
+              organizationId: orgId,
+              name: defaultCategoryName,
+            },
+          },
+        });
+        if (resolved) {
+          return resolved;
+        }
+      }
+      throw error;
     }
-
-    return category;
   }
 
   async verifyCategories(categories: { name: string }[]): Promise<Category[]> {

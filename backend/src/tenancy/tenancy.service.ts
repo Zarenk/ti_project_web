@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,6 +12,7 @@ import {
   CreateTenancyDto,
   OrganizationUnitInputDto,
 } from './dto/create-tenancy.dto';
+import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import {
   CompanySnapshot,
@@ -17,6 +20,8 @@ import {
   TenancySnapshot,
   OrganizationSuperAdmin,
 } from './entities/tenancy.entity';
+import { TenantContext } from './tenant-context.interface';
+import { resolveOrganizationId } from './organization.utils';
 
 type MinimalUnit = Pick<
   StoredOrganizationUnit,
@@ -215,6 +220,83 @@ export class TenancyService {
       });
     } catch (error) {
       throw this.handlePrismaError(error);
+    }
+  }
+
+  async createCompany(
+    dto: CreateCompanyDto,
+    tenant: TenantContext,
+  ): Promise<CompanySnapshot> {
+    if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
+      throw new ForbiddenException(
+        'Solo los super administradores pueden crear empresas.',
+      );
+    }
+
+    const trimmedName = dto.name?.trim();
+    if (!trimmedName) {
+      throw new BadRequestException('El nombre de la empresa es obligatorio.');
+    }
+
+    const organizationId = resolveOrganizationId({
+      provided: dto.organizationId ?? null,
+      fallbacks: [tenant.organizationId ?? null],
+      mismatchError:
+        'La organizacion proporcionada no coincide con el contexto actual.',
+    });
+
+    if (organizationId === null) {
+      throw new BadRequestException(
+        'Debes seleccionar una organizacion antes de crear empresas.',
+      );
+    }
+
+    const allowedOrganizations = tenant.allowedOrganizationIds ?? [];
+    if (
+      allowedOrganizations.length > 0 &&
+      !allowedOrganizations.includes(organizationId)
+    ) {
+      throw new ForbiddenException(
+        'No tienes permisos para gestionar empresas de esta organizacion.',
+      );
+    }
+
+    const legalName = dto.legalName?.trim();
+    const taxId = dto.taxId?.trim();
+    const status = dto.status?.trim() || 'ACTIVE';
+
+    try {
+      const company = await this.prisma.company.create({
+        data: {
+          organizationId,
+          name: trimmedName,
+          legalName: legalName?.length ? legalName : null,
+          taxId: taxId?.length ? taxId : null,
+          status,
+        },
+      });
+
+      return company;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          const target = (error.meta?.target ?? []) as string[];
+          if (target.includes('organizationId_name')) {
+            throw new ConflictException(
+              'Ya existe una empresa con ese nombre en la organizacion.',
+            );
+          }
+          if (target.includes('taxId')) {
+            throw new ConflictException(
+              'Ya existe una empresa con ese RUC/NIT.',
+            );
+          }
+          throw new ConflictException(
+            'Ya existe una empresa con los mismos datos.',
+          );
+        }
+      }
+      throw error;
     }
   }
 

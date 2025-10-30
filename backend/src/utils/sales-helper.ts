@@ -130,6 +130,8 @@ export async function executeSale(
     companyId,
   } = params;
 
+  const saleOrganizationId = organizationId ?? null;
+
   const sale = await prisma.$transaction(async (prismaTx) => {
     const sale = await prismaTx.sales.create({
       data: {
@@ -200,6 +202,7 @@ export async function executeSale(
           const series = await prismaTx.entryDetailSeries.findFirst({
             where: {
               serial,
+              organizationId: saleOrganizationId,
               entryDetail: {
                 productId: detail.productId,
                 entry: { storeId: storeInventory.storeId },
