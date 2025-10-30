@@ -10,6 +10,7 @@ import CashClosureForm from "./cash-closure-form"
 import TransactionHistory from "./transaction-history"
 import { createCashRegister, getActiveCashRegister, getCashRegisterBalance, getClosureByDate, getClosuresByStore, getTodayTransactions, getTransactionsByDate } from "../cashregister.api"
 import { getStores } from "../../stores/stores.api"
+import { TENANT_SELECTION_EVENT } from "@/utils/tenant-preferences"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 import { useRouter } from "next/navigation"
@@ -2088,23 +2089,49 @@ export default function CashRegisterDashboard() {
    // -------------------- USE EFFECTS --------------------
 
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchStores() {
       try {
         const data = await getStores();
+        if (cancelled) {
+          return;
+        }
+
         const sortedStores = data.sort((a: { name: string }, b: { name: string }) =>
           a.name.localeCompare(b.name)
         );
         setStores(sortedStores);
-    
+
         if (sortedStores.length > 0) {
           setStoreId(sortedStores[0].id);
+        } else {
+          setStoreId(null);
         }
       } catch (error) {
-        console.error("Error al obtener las tiendas:", error);
+        if (!cancelled) {
+          console.error("Error al obtener las tiendas:", error);
+        }
       }
     }
-  
+
     fetchStores();
+
+    if (typeof window === "undefined") {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const handler = () => {
+      fetchStores();
+    };
+
+    window.addEventListener(TENANT_SELECTION_EVENT, handler);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(TENANT_SELECTION_EVENT, handler);
+    };
   }, []);
 
   // Obtener el balance de la caja activa al cambiar la tienda seleccionada

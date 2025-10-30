@@ -103,15 +103,21 @@ private mergeCompanyId(
   async create(
     @Body() createCashRegisterDto: CreateCashRegisterDto,
     @CurrentTenant('organizationId') organizationIdFromContext: number | null,
+    @CurrentTenant('companyId') companyIdFromContext: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       createCashRegisterDto.organizationId,
       organizationIdFromContext,
     );
+    const companyId = this.mergeCompanyId(
+      createCashRegisterDto.companyId,
+      companyIdFromContext,
+    );
 
     return this.cashregisterService.create({
       ...createCashRegisterDto,
       organizationId,
+      companyId,
     });
   }
 
@@ -119,12 +125,18 @@ private mergeCompanyId(
   async findAll(
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
-    return this.cashregisterService.findAll({ organizationId });
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
+    );
+    return this.cashregisterService.findAll({ organizationId, companyId });
   }
 
   @Get('balance/:storeId')
@@ -132,15 +144,22 @@ private mergeCompanyId(
     @Param('storeId', ParseIntPipe) storeId: number,
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
+    );
     const cashRegister = await this.cashregisterService.getCashRegisterBalance(
       storeId,
       {
         organizationId,
+        companyId,
       },
     );
 
@@ -158,10 +177,16 @@ private mergeCompanyId(
     @Param('storeId', ParseIntPipe) storeId: number,
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
+    );
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
     );
     const today = new Date();
     const startOfDay = new Date(today);
@@ -175,7 +200,7 @@ private mergeCompanyId(
         storeId,
         startOfDay,
         endOfDay,
-        { organizationId },
+        { organizationId, companyId },
       );
     return transactions;
   }
@@ -186,15 +211,22 @@ private mergeCompanyId(
     @Param('storeId') storeId: number,
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
+    );
     const cashRegister = await this.cashregisterService.getActiveCashRegister(
       storeId,
       {
         organizationId,
+        companyId,
       },
     );
 
@@ -212,13 +244,19 @@ private mergeCompanyId(
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId')
     organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
+    );
 
-    return this.cashregisterService.findOne(id, { organizationId });
+    return this.cashregisterService.findOne(id, { organizationId, companyId });
   }
 
   @Patch(':id')
@@ -226,14 +264,20 @@ private mergeCompanyId(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCashRegisterDto: UpdateCashRegisterDto,
     @CurrentTenant('organizationId') organizationIdFromContext: number | null,
+    @CurrentTenant('companyId') companyIdFromContext: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       updateCashRegisterDto.organizationId,
       organizationIdFromContext,
     );
+    const companyId = this.mergeCompanyId(
+      updateCashRegisterDto.companyId,
+      companyIdFromContext,
+    );
     return this.cashregisterService.update(id, {
       ...updateCashRegisterDto,
       organizationId,
+      companyId,
     });
   }
 
@@ -243,13 +287,19 @@ private mergeCompanyId(
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId')
     organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
+    );
 
-    return this.cashregisterService.remove(id, { organizationId });
+    return this.cashregisterService.remove(id, { organizationId, companyId });
   }
 
   //////////////////////////////// TRANSFER //////////////////////////////////
@@ -258,14 +308,20 @@ private mergeCompanyId(
   async createTransaction(
     @Body() createCashTransactionDto: CreateCashTransactionDto,
     @CurrentTenant('organizationId') organizationIdFromContext: number | null,
+    @CurrentTenant('companyId') companyIdFromContext: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       createCashTransactionDto.organizationId,
       organizationIdFromContext,
     );
+    const companyId = this.mergeCompanyId(
+      createCashTransactionDto.companyId,
+      companyIdFromContext,
+    );
     return this.cashregisterService.createTransaction({
       ...createCashTransactionDto,
       organizationId,
+      companyId,
     });
   }
 
@@ -273,12 +329,21 @@ private mergeCompanyId(
   async findAllTransaction(
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
-    return this.cashregisterService.findAllTransaction({ organizationId });
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
+    );
+    return this.cashregisterService.findAllTransaction({
+      organizationId,
+      companyId,
+    });
   }
 
   @Get('transaction/cashregister/:cashRegisterId')
@@ -286,13 +351,20 @@ private mergeCompanyId(
     @Param('cashRegisterId', ParseIntPipe) cashRegisterId: number,
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
+    );
     return this.cashregisterService.findByCashRegister(cashRegisterId, {
       organizationId,
+      companyId,
     });
   }
 
@@ -302,6 +374,8 @@ private mergeCompanyId(
     @Param('date') date: string,
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     console.log('[GET] /get-transactions', { storeIdRaw, date });
 
@@ -313,6 +387,10 @@ private mergeCompanyId(
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
+    );
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
     );
 
     const [year, month, day] = date.split('-').map(Number);
@@ -329,6 +407,7 @@ private mergeCompanyId(
       endOfDay,
       {
         organizationId,
+        companyId,
       },
     );
   }
@@ -339,14 +418,20 @@ private mergeCompanyId(
   async createClosure(
     @Body() createCashClosureDto: CreateCashClosureDto,
     @CurrentTenant('organizationId') organizationIdFromContext: number | null,
+    @CurrentTenant('companyId') companyIdFromContext: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       createCashClosureDto.organizationId,
       organizationIdFromContext,
     );
+    const companyId = this.mergeCompanyId(
+      createCashClosureDto.companyId,
+      companyIdFromContext,
+    );
     return this.cashregisterService.createClosure({
       ...createCashClosureDto,
       organizationId,
+      companyId,
     });
   }
 
@@ -355,13 +440,20 @@ private mergeCompanyId(
     @Param('storeId', ParseIntPipe) storeId: number,
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
+    );
     return this.cashregisterService.getClosuresByStore(storeId, {
       organizationId,
+      companyId,
     });
   }
 
@@ -371,15 +463,21 @@ private mergeCompanyId(
     @Param('date') date: string,
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
+    );
     return this.cashregisterService.getClosureByStoreAndDate(
       storeId,
       new Date(date),
-      { organizationId },
+      { organizationId, companyId },
     );
   }
 
@@ -387,11 +485,17 @@ private mergeCompanyId(
   async findAllClosure(
     @Query('organizationId') organizationIdRaw?: string,
     @CurrentTenant('organizationId') organizationIdFromContext?: number | null,
+    @Query('companyId') companyIdRaw?: string,
+    @CurrentTenant('companyId') companyIdFromContext?: number | null,
   ) {
     const organizationId = this.mergeOrganizationId(
       this.parseOrganizationId(organizationIdRaw),
       organizationIdFromContext,
     );
-    return this.cashregisterService.findAllClosure({ organizationId });
+    const companyId = this.mergeCompanyId(
+      this.parseCompanyId(companyIdRaw),
+      companyIdFromContext,
+    );
+    return this.cashregisterService.findAllClosure({ organizationId, companyId });
   }
 }
