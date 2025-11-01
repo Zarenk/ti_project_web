@@ -501,7 +501,9 @@ export class EntriesService {
       ) as Prisma.EntryWhereInput;
 
       if (resolvedCompanyId !== null) {
-        where.store = { companyId: resolvedCompanyId } as Prisma.StoreWhereInput;
+        where.store = {
+          companyId: resolvedCompanyId,
+        } as Prisma.StoreWhereInput;
       }
 
       const entries = await this.prisma.entry.findMany({
@@ -556,7 +558,9 @@ export class EntriesService {
       };
 
       if (resolvedCompanyId !== null) {
-        where.store = { companyId: resolvedCompanyId } as Prisma.StoreWhereInput;
+        where.store = {
+          companyId: resolvedCompanyId,
+        } as Prisma.StoreWhereInput;
       }
 
       const entry = await this.prisma.entry.findFirst({
@@ -607,7 +611,9 @@ export class EntriesService {
 
       const where: Prisma.EntryWhereInput = { id, ...organizationFilter };
       if (resolvedCompanyId !== null) {
-        where.store = { companyId: resolvedCompanyId } as Prisma.StoreWhereInput;
+        where.store = {
+          companyId: resolvedCompanyId,
+        } as Prisma.StoreWhereInput;
       }
 
       const entry = await this.prisma.entry.findFirst({
@@ -718,7 +724,9 @@ export class EntriesService {
         ) as Prisma.EntryWhereInput),
       };
       if (resolvedCompanyId !== null) {
-        where.store = { companyId: resolvedCompanyId } as Prisma.StoreWhereInput;
+        where.store = {
+          companyId: resolvedCompanyId,
+        } as Prisma.StoreWhereInput;
       }
 
       const entries = await this.prisma.entry.findMany({
@@ -773,15 +781,16 @@ export class EntriesService {
             data: { stock: { decrement: detail.quantity } },
           });
 
-          const historyCreateData: InventoryHistoryCreateInputWithOrganization = {
-            inventory: { connect: { id: storeInventory.inventoryId } },
-            user: { connect: { id: entry.userId } },
-            action: 'delete',
-            stockChange: -detail.quantity,
-            previousStock: storeInventory.stock,
-            newStock: storeInventory.stock - detail.quantity,
-            organizationId: entryOrgId,
-          };
+          const historyCreateData: InventoryHistoryCreateInputWithOrganization =
+            {
+              inventory: { connect: { id: storeInventory.inventoryId } },
+              user: { connect: { id: entry.userId } },
+              action: 'delete',
+              stockChange: -detail.quantity,
+              previousStock: storeInventory.stock,
+              newStock: storeInventory.stock - detail.quantity,
+              organizationId: entryOrgId,
+            };
 
           await this.prisma.inventoryHistory.create({
             data: historyCreateData,
@@ -829,11 +838,15 @@ export class EntriesService {
           ...(buildOrganizationFilter(
             resolvedOrganizationId,
           ) as Prisma.StoreWhereInput),
-          ...(resolvedCompanyId !== null ? { companyId: resolvedCompanyId } : {}),
+          ...(resolvedCompanyId !== null
+            ? { companyId: resolvedCompanyId }
+            : {}),
         },
       });
       if (!store) {
-        throw new NotFoundException('Tienda no encontrada en esta organización.');
+        throw new NotFoundException(
+          'Tienda no encontrada en esta organización.',
+        );
       }
 
       return this.prisma.entry.findMany({

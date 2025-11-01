@@ -66,10 +66,8 @@ export class TenancyService {
 
         // 3. Crear units con validación de companyId
         const existingUnits = new Map<string, number>();
-        const allowedCompanyIds = new Set<number>(
-          companies.map((c) => c.id),
-        );
-        
+        const allowedCompanyIds = new Set<number>(companies.map((c) => c.id));
+
         const createdUnits = await this.persistUnits(
           tx,
           organization.id,
@@ -111,16 +109,18 @@ export class TenancyService {
     });
 
     return Promise.all(
-      organizations.map(async ({ _count, units, companies, ...organization }) => ({
-        ...organization,
-        units,
-        companies,
-        membershipCount: _count.memberships,
-        superAdmin: await this.resolveSuperAdmin(
-          prismaClient,
-          organization.id,
-        ),
-      })),
+      organizations.map(
+        async ({ _count, units, companies, ...organization }) => ({
+          ...organization,
+          units,
+          companies,
+          membershipCount: _count.memberships,
+          superAdmin: await this.resolveSuperAdmin(
+            prismaClient,
+            organization.id,
+          ),
+        }),
+      ),
     );
   }
 
@@ -158,7 +158,7 @@ export class TenancyService {
       return await this.prisma.$transaction(async (tx) => {
         const prisma = tx as unknown as PrismaService as any;
         const trimmedName = updateTenancyDto.name?.trim();
-        
+
         const organization = await prisma.organization.update({
           where: { id },
           data: {
@@ -178,16 +178,14 @@ export class TenancyService {
           where: { organizationId: id },
           orderBy: { id: 'asc' },
         });
-        
-        const allowedCompanyIds = new Set<number>(
-          companies.map((c) => c.id),
-        );
+
+        const allowedCompanyIds = new Set<number>(companies.map((c) => c.id));
 
         // Preparar mapa de units existentes
         const existingUnits = await prisma.organizationUnit.findMany({
           where: { organizationId: id },
         });
-        
+
         const unitsByCode = new Map<string, number>();
         for (const unit of existingUnits) {
           if (unit.code) {
@@ -690,7 +688,7 @@ export class TenancyService {
       unitsByCode,
       allowedCompanyIds,
     );
-    
+
     existingUnits.push(
       ...created.map<MinimalUnit>((unit) => ({
         id: unit.id,
@@ -842,7 +840,7 @@ export class TenancyService {
       );
     }
 
-    return trimmed as 'ACTIVE' | 'INACTIVE';
+    return trimmed;
   }
 
   private resolveParentId(

@@ -1,27 +1,25 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 
-import { CurrentTenant } from './tenant-context.decorator';
-import { TenantContext } from './tenant-context.interface';
-import { TenantContextGuard } from './tenant-context.guard';
-import {
-  TenancyService,
-  TenantSelectionSummary,
-} from './tenancy.service';
+import { TenantContextService } from './tenant-context.service';
+import { TenancyService, TenantSelectionSummary } from './tenancy.service';
+import type { Request } from 'express';
 
-@UseGuards(JwtAuthGuard, TenantContextGuard)
+@UseGuards(JwtAuthGuard)
 @Controller('tenancy/current')
 export class TenantCurrentController {
-  constructor(private readonly tenancyService: TenancyService) {}
+  constructor(
+    private readonly tenancyService: TenancyService,
+    private readonly tenantContextService: TenantContextService,
+  ) {}
 
   @Get()
   async getCurrentTenant(
-    @CurrentTenant() tenant: TenantContext | null,
+    @Req() request: Request,
   ): Promise<TenantSelectionSummary> {
-    if (!tenant) {
-      return { organization: null, company: null, companies: [] };
-    }
-    return this.tenancyService.resolveTenantSelection(tenant);
+    const context = this.tenantContextService.getContextWithFallback();
+    (request as any).tenantContext = context;
+    return this.tenancyService.resolveTenantSelection(context);
   }
 }

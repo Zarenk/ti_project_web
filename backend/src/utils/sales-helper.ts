@@ -333,7 +333,7 @@ export async function executeSale(
           previousStock: storeInventory.stock,
           newStock: storeInventory.stock - detail.quantity,
           organizationId: organizationId ?? null,
-        companyId: companyId ?? null,
+          companyId: companyId ?? null,
         },
       });
     }

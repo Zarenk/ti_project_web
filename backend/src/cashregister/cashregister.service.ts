@@ -461,7 +461,10 @@ export class CashregisterService {
     const normalizedExisting = existing as {
       organizationId?: number | null;
       storeId?: number | null;
-      store?: { organizationId?: number | null; companyId?: number | null } | null;
+      store?: {
+        organizationId?: number | null;
+        companyId?: number | null;
+      } | null;
     };
 
     const organizationId = this.resolveOrganizationId({
@@ -479,7 +482,8 @@ export class CashregisterService {
       mismatchMessage: 'La caja pertenece a otra compania.',
     });
 
-    const targetStoreId = updatePayload.storeId ?? normalizedExisting.storeId ?? null;
+    const targetStoreId =
+      updatePayload.storeId ?? normalizedExisting.storeId ?? null;
     if (targetStoreId !== null) {
       const targetStore = await this.prisma.store.findUnique({
         where: { id: targetStoreId },
@@ -538,8 +542,8 @@ export class CashregisterService {
     };
     const companyId =
       options?.companyId !== undefined
-        ? options.companyId ?? null
-        : normalizedExisting.store?.companyId ?? null;
+        ? (options.companyId ?? null)
+        : (normalizedExisting.store?.companyId ?? null);
     logOrganizationContext({
       service: CashregisterService.name,
       operation: 'remove',
@@ -771,7 +775,9 @@ export class CashregisterService {
         } as any,
       });
       if (!cashRegister) {
-        throw new NotFoundException('No se encontro la caja activa solicitada.');
+        throw new NotFoundException(
+          'No se encontro la caja activa solicitada.',
+        );
       }
       if (cashRegister.status !== 'ACTIVE') {
         throw new BadRequestException('La caja ya ha sido cerrada.');
@@ -1001,7 +1007,3 @@ export class CashregisterService {
     });
   }
 }
-
-
-
-

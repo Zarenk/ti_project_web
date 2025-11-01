@@ -523,9 +523,7 @@ describe('TenancyService', () => {
         name: 'Wayne Enterprises',
         membershipCount: 3,
         superAdmin: null,
-        companies: [
-          expect.objectContaining({ name: 'Wayne Tech' }),
-        ],
+        companies: [expect.objectContaining({ name: 'Wayne Tech' })],
         units: expect.arrayContaining([
           expect.objectContaining({ name: 'HQ' }),
         ]),
@@ -622,22 +620,22 @@ describe('TenancyService', () => {
   });
 
   it('assigns a super admin to an organization', async () => {
-    const createdAt = new Date("2024-06-01T00:00:00.000Z");
-    const updatedAt = new Date("2024-06-01T01:00:00.000Z");
+    const createdAt = new Date('2024-06-01T00:00:00.000Z');
+    const updatedAt = new Date('2024-06-01T01:00:00.000Z');
 
     tx.organization.findUnique.mockResolvedValue({
       id: 42,
-      name: "Massive Dynamic",
-      code: "MDYN",
-      status: "ACTIVE",
+      name: 'Massive Dynamic',
+      code: 'MDYN',
+      status: 'ACTIVE',
       createdAt,
       updatedAt,
     });
 
     tx.user.findUnique.mockResolvedValue({
       id: 77,
-      username: "olivia.dunham",
-      email: "olivia@mdynamic.example",
+      username: 'olivia.dunham',
+      email: 'olivia@mdynamic.example',
     });
 
     tx.organizationMembership.updateMany.mockResolvedValue({ count: 1 });
@@ -651,12 +649,12 @@ describe('TenancyService', () => {
       .mockResolvedValueOnce({
         id: 901,
         organizationId: 42,
-        role: "SUPER_ADMIN",
+        role: 'SUPER_ADMIN',
         userId: 77,
         user: {
           id: 77,
-          username: "olivia.dunham",
-          email: "olivia@mdynamic.example",
+          username: 'olivia.dunham',
+          email: 'olivia@mdynamic.example',
         },
       });
 
@@ -664,7 +662,7 @@ describe('TenancyService', () => {
       id: 900,
       organizationId: 42,
       userId: 77,
-      role: "SUPER_ADMIN",
+      role: 'SUPER_ADMIN',
       isDefault: true,
     });
 
@@ -673,9 +671,9 @@ describe('TenancyService', () => {
         id: 1,
         organizationId: 42,
         parentUnitId: null,
-        name: "HQ",
+        name: 'HQ',
         code: null,
-        status: "ACTIVE",
+        status: 'ACTIVE',
         createdAt,
         updatedAt,
       },
@@ -699,18 +697,18 @@ describe('TenancyService', () => {
     const result = await service.assignSuperAdmin(42, 77);
 
     expect(tx.organizationMembership.updateMany).toHaveBeenCalledWith({
-      where: { organizationId: 42, role: "SUPER_ADMIN" },
-      data: { role: "ADMIN", isDefault: false },
+      where: { organizationId: 42, role: 'SUPER_ADMIN' },
+      data: { role: 'ADMIN', isDefault: false },
     });
     expect(tx.organizationMembership.update).toHaveBeenCalledWith({
       where: { id: 900 },
-      data: { role: "SUPER_ADMIN", isDefault: true },
+      data: { role: 'SUPER_ADMIN', isDefault: true },
     });
     expect(tx.organizationMembership.create).not.toHaveBeenCalled();
     expect(result.superAdmin).toEqual({
       id: 77,
-      username: "olivia.dunham",
-      email: "olivia@mdynamic.example",
+      username: 'olivia.dunham',
+      email: 'olivia@mdynamic.example',
     });
     expect(result.membershipCount).toBe(5);
     expect(result.companies).toEqual([

@@ -131,7 +131,12 @@ describe('SalesController', () => {
   });
 
   it('falls back to undefined for missing tenant identifiers in getTopProducts', async () => {
-    await controller.getTopProductsByRange('2024-01-01', '2024-01-31', null, null);
+    await controller.getTopProductsByRange(
+      '2024-01-01',
+      '2024-01-31',
+      null,
+      null,
+    );
 
     expect(service.getTopProducts).toHaveBeenCalledWith(
       10,

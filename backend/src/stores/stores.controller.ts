@@ -110,7 +110,9 @@ export class StoresController {
     @CurrentTenant('companyId') companyId: number | null,
   ) {
     if (!Array.isArray(updateStoresDto) || updateStoresDto.length === 0) {
-      throw new BadRequestException('No se proporcionaron tiendas para actualizar.');
+      throw new BadRequestException(
+        'No se proporcionaron tiendas para actualizar.',
+      );
     }
 
     return this.storesService.updateMany(

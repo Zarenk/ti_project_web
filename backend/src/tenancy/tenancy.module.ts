@@ -9,7 +9,11 @@ import { CompaniesController } from './companies.controller';
 import { TenantCurrentController } from './tenant-current.controller';
 
 @Module({
-  controllers: [TenancyController, CompaniesController, TenantCurrentController],
+  controllers: [
+    TenancyController,
+    CompaniesController,
+    TenantCurrentController,
+  ],
   providers: [
     TenancyService,
     PrismaService,

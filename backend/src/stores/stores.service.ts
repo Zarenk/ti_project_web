@@ -192,12 +192,16 @@ export class StoresService {
         throw new NotFoundException(`Store with id ${id} not found`);
       }
 
-      const { id: _id, organizationId, companyId, ...storePayload } =
-        updateStoreDto;
+      const {
+        id: _id,
+        organizationId,
+        companyId,
+        ...storePayload
+      } = updateStoreDto;
 
       const resolvedOrganizationId =
         organizationIdFromContext === undefined
-          ? organizationId ?? before.organizationId ?? null
+          ? (organizationId ?? before.organizationId ?? null)
           : organizationIdFromContext;
 
       const resolvedCompanyId =
@@ -343,12 +347,16 @@ export class StoresService {
               );
             }
 
-            const { id: storeId, organizationId, companyId, ...storePayload } =
-              store;
+            const {
+              id: storeId,
+              organizationId,
+              companyId,
+              ...storePayload
+            } = store;
 
             const resolvedOrganizationId =
               organizationIdFromContext === undefined
-                ? organizationId ?? existing.organizationId ?? null
+                ? (organizationId ?? existing.organizationId ?? null)
                 : organizationIdFromContext;
 
             const resolvedCompanyId =
@@ -376,7 +384,10 @@ export class StoresService {
                 where: { id: resolvedCompanyId },
                 select: { organizationId: true },
               });
-              if (!company || company.organizationId !== resolvedOrganizationId) {
+              if (
+                !company ||
+                company.organizationId !== resolvedOrganizationId
+              ) {
                 throw new BadRequestException(
                   `La compania ${resolvedCompanyId} no pertenece a la organizacion ${resolvedOrganizationId}.`,
                 );
@@ -443,9 +454,7 @@ export class StoresService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025'
       ) {
-        throw new NotFoundException(
-          'Una o mas tiendas no fueron encontradas.',
-        );
+        throw new NotFoundException('Una o mas tiendas no fueron encontradas.');
       }
 
       throw new InternalServerErrorException(
@@ -571,4 +580,3 @@ export class StoresService {
     }
   }
 }
-

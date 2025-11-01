@@ -85,9 +85,7 @@ export class InventoryController {
         ...(organizationId !== null && organizationId !== undefined
           ? { organizationId }
           : {}),
-        ...(companyId !== null && companyId !== undefined
-          ? { companyId }
-          : {}),
+        ...(companyId !== null && companyId !== undefined ? { companyId } : {}),
       },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -489,9 +487,7 @@ export class InventoryController {
         ...(organizationId !== null && organizationId !== undefined
           ? { organizationId }
           : {}),
-        ...(companyId !== null && companyId !== undefined
-          ? { companyId }
-          : {}),
+        ...(companyId !== null && companyId !== undefined ? { companyId } : {}),
       },
     });
 

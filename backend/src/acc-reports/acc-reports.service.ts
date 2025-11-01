@@ -116,7 +116,10 @@ export class AccReportsService {
       payload.cache = data.cache;
     }
 
-    if (tenant?.organizationId !== null && tenant?.organizationId !== undefined) {
+    if (
+      tenant?.organizationId !== null &&
+      tenant?.organizationId !== undefined
+    ) {
       payload.organizationId = tenant.organizationId;
     }
 

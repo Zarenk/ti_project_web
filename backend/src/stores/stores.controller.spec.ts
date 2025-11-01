@@ -57,7 +57,9 @@ describe('StoresController multi-tenant mapping', () => {
   });
 
   it('throws BadRequestException when the store id is not numeric', () => {
-    expect(() => controller.findOne('abc', 77, 91)).toThrow(BadRequestException);
+    expect(() => controller.findOne('abc', 77, 91)).toThrow(
+      BadRequestException,
+    );
     expect(service.findOne).not.toHaveBeenCalled();
   });
 

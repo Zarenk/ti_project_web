@@ -33,7 +33,7 @@ export class CategoryService {
         data: {
           ...createCategoryDto,
           organizationId: ctx.organizationId ?? null, // 👈 identidad
-          companyId: ctx.companyId ?? null,           // 👈 trazabilidad
+          companyId: ctx.companyId ?? null, // 👈 trazabilidad
         },
       });
 

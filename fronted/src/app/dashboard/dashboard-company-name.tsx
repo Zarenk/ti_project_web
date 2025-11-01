@@ -7,6 +7,7 @@ import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
 import {
   TENANT_SELECTION_EVENT,
   getTenantSelection,
+  setTenantSelection,
   type TenantSelection,
 } from "@/utils/tenant-preferences"
 
@@ -63,6 +64,15 @@ export function DashboardCompanyName(): ReactElement {
 
         setOrganizationName(normalizedOrgName.length > 0 ? normalizedOrgName : null)
         setCompanyName(normalizedCompanyName.length > 0 ? normalizedCompanyName : null)
+
+        const resolvedOrgId = resolvedOrg?.id ?? null
+        const resolvedCompanyId = resolvedCompany?.id ?? null
+        if (
+          selection.orgId !== resolvedOrgId ||
+          selection.companyId !== resolvedCompanyId
+        ) {
+          setTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
+        }
       } catch {
         if (!isMountedRef.current || requestId !== lastRequestIdRef.current) {
           return

@@ -93,8 +93,8 @@ export class ExchangeService {
         action: existing ? AuditAction.UPDATED : AuditAction.CREATED,
         summary: `Tipo de cambio ${dto.moneda} ${existing ? 'actualizado' : 'creado'} a ${dto.valor}`,
         diff: existing
-        ? toJsonSafe({ before: existing, after: rate })
-        : toJsonSafe({ after: rate }),
+          ? toJsonSafe({ before: existing, after: rate })
+          : toJsonSafe({ after: rate }),
       },
       req,
     );
@@ -195,7 +195,7 @@ export class ExchangeService {
       service: ExchangeService.name,
       operation: 'findAll',
       organizationId:
-        organizationId === undefined ? undefined : organizationId ?? null,
+        organizationId === undefined ? undefined : (organizationId ?? null),
     });
 
     return this.prisma.tipoCambio.findMany({
@@ -215,7 +215,7 @@ export class ExchangeService {
       service: ExchangeService.name,
       operation: 'getLatestByMoneda',
       organizationId:
-        organizationId === undefined ? undefined : organizationId ?? null,
+        organizationId === undefined ? undefined : (organizationId ?? null),
       metadata: { currency: moneda },
     });
 

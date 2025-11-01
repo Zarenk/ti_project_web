@@ -27,7 +27,7 @@ import {
   buildOrganizationFilter,
   resolveCompanyId,
   resolveOrganizationId,
-} from 'src/tenancy/organization.utils';  
+} from 'src/tenancy/organization.utils';
 import {
   ClientUncheckedCreateInputWithOrganization,
   OrdersUncheckedCreateInputWithOrganization,
@@ -119,7 +119,7 @@ export class WebSalesService {
     // Resolver org/company coherentes con contexto si ambos llegan
     const resolvedOrganizationId =
       organizationIdFromContext === undefined
-        ? data.organizationId ?? null
+        ? (data.organizationId ?? null)
         : organizationIdFromContext;
 
     const resolvedCompanyId =
@@ -474,38 +474,81 @@ export class WebSalesService {
     return sale;
   }
 
-  async getWebOrderById(id: number, organizationId?: number | null, companyId?: number | null) {
-    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
-    const order = await this.prisma.orders.findFirst({ where: { id, ...where } });
-    if (!order) throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
+  async getWebOrderById(
+    id: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const where = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.OrdersWhereInput;
+    const order = await this.prisma.orders.findFirst({
+      where: { id, ...where },
+    });
+    if (!order)
+      throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
     return order;
   }
 
-  async getWebOrderByCode(code: string, organizationId?: number | null, companyId?: number | null) {
-    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
-    const order = await this.prisma.orders.findFirst({ where: { code, ...where } });
-    if (!order) throw new NotFoundException(`No se encontró la orden con código ${code}.`);
+  async getWebOrderByCode(
+    code: string,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const where = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.OrdersWhereInput;
+    const order = await this.prisma.orders.findFirst({
+      where: { code, ...where },
+    });
+    if (!order)
+      throw new NotFoundException(
+        `No se encontró la orden con código ${code}.`,
+      );
     return order;
   }
 
-  async getWebOrdersByUser(userId: number, organizationId?: number | null, companyId?: number | null) {
-    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
+  async getWebOrdersByUser(
+    userId: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const where = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.OrdersWhereInput;
     return this.prisma.orders.findMany({
       where: { ...where, payload: { path: ['userId'], equals: userId } as any },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async getWebOrdersByEmail(email: string, organizationId?: number | null, companyId?: number | null) {
-    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
+  async getWebOrdersByEmail(
+    email: string,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const where = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.OrdersWhereInput;
     return this.prisma.orders.findMany({
       where: { ...where, payload: { path: ['email'], equals: email } as any },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async getWebOrdersByDni(dni: string, organizationId?: number | null, companyId?: number | null) {
-    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
+  async getWebOrdersByDni(
+    dni: string,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const where = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.OrdersWhereInput;
     return this.prisma.orders.findMany({
       where: {
         ...where,
@@ -538,12 +581,21 @@ export class WebSalesService {
     }
 
     const payloadAny = (order.payload as any) || {};
-    const payloadOrg = typeof payloadAny?.organizationId === 'number' ? payloadAny.organizationId : null;
-    const payloadCompany = typeof payloadAny?.companyId === 'number' ? payloadAny.companyId : null;
-    const effectiveOrgId = organizationId ?? order.organizationId ?? payloadOrg ?? null;
-    const effectiveCompanyId = companyId ?? order.companyId ?? payloadCompany ?? null;
+    const payloadOrg =
+      typeof payloadAny?.organizationId === 'number'
+        ? payloadAny.organizationId
+        : null;
+    const payloadCompany =
+      typeof payloadAny?.companyId === 'number' ? payloadAny.companyId : null;
+    const effectiveOrgId =
+      organizationId ?? order.organizationId ?? payloadOrg ?? null;
+    const effectiveCompanyId =
+      companyId ?? order.companyId ?? payloadCompany ?? null;
     if (effectiveCompanyId !== null && effectiveOrgId !== null) {
-      await this.assertCompanyMatchesOrganization(effectiveCompanyId, effectiveOrgId);
+      await this.assertCompanyMatchesOrganization(
+        effectiveCompanyId,
+        effectiveOrgId,
+      );
     }
 
     logOrganizationContext({
@@ -666,7 +718,11 @@ export class WebSalesService {
     }
 
     const sale = await this.createWebSale(
-      { ...(order.payload as any), organizationId: effectiveOrgId, companyId: effectiveCompanyId },
+      {
+        ...(order.payload as any),
+        organizationId: effectiveOrgId,
+        companyId: effectiveCompanyId,
+      },
       true,
     );
 
@@ -755,8 +811,13 @@ export class WebSalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
-    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
-    const order = await this.prisma.orders.findFirst({ where: { id, ...where } });
+    const where = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.OrdersWhereInput;
+    const order = await this.prisma.orders.findFirst({
+      where: { id, ...where },
+    });
     if (!order) {
       throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
     }
@@ -805,13 +866,25 @@ export class WebSalesService {
     return { success: true, order: updated };
   }
 
-  async rejectWebOrder(id: number, organizationId?: number | null, companyId?: number | null) {
-    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
-    const order = await this.prisma.orders.findFirst({ where: { id, ...where } });
+  async rejectWebOrder(
+    id: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const where = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.OrdersWhereInput;
+    const order = await this.prisma.orders.findFirst({
+      where: { id, ...where },
+    });
     if (!order || order.status !== 'PENDING') {
       throw new BadRequestException('Orden no válida para rechazar');
     }
-    await this.prisma.orders.update({ where: { id }, data: { status: 'DENIED' } });
+    await this.prisma.orders.update({
+      where: { id },
+      data: { status: 'DENIED' },
+    });
     return { success: true };
   }
 
@@ -848,13 +921,28 @@ export class WebSalesService {
     return { success: true };
   }
 
-  async getWebSaleById(id: number, organizationId?: number | null, companyId?: number | null) {
-    const where = buildOrganizationFilter(organizationId, companyId) as Prisma.SalesWhereInput;
+  async getWebSaleById(
+    id: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const where = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.SalesWhereInput;
     const sale = await this.prisma.sales.findFirst({
       where: { id, ...where },
-      include: { client: true, salesDetails: { include: { entryDetail: { include: { product: true } } } }, invoices: true, order: true },
+      include: {
+        client: true,
+        salesDetails: {
+          include: { entryDetail: { include: { product: true } } },
+        },
+        invoices: true,
+        order: true,
+      },
     });
-    if (!sale) throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
+    if (!sale)
+      throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
     return sale;
   }
 
@@ -867,23 +955,39 @@ export class WebSalesService {
     organizationId?: number | null;
     companyId?: number | null;
   }) {
-    const where: Prisma.OrdersWhereInput =
-      buildOrganizationFilter(params.organizationId, params.companyId) as Prisma.OrdersWhereInput;
+    const where: Prisma.OrdersWhereInput = buildOrganizationFilter(
+      params.organizationId,
+      params.companyId,
+    ) as Prisma.OrdersWhereInput;
 
     if (params.status) where.status = params.status as any;
-    if (params.from && params.to) where.createdAt = { gte: new Date(params.from), lte: new Date(params.to) };
+    if (params.from && params.to)
+      where.createdAt = {
+        gte: new Date(params.from),
+        lte: new Date(params.to),
+      };
     if (params.clientId) {
       const idNum = parseInt(params.clientId, 10);
-      if (!isNaN(idNum)) where.payload = { path: ['userId'], equals: idNum } as any;
+      if (!isNaN(idNum))
+        where.payload = { path: ['userId'], equals: idNum } as any;
     }
     if (params.code) where.code = { contains: params.code };
 
-    return this.prisma.orders.findMany({ where, orderBy: { createdAt: 'desc' } });
+    return this.prisma.orders.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  async getOrderCount(status?: string, organizationId?: number | null, companyId?: number | null) {
-    const where: Prisma.OrdersWhereInput =
-      buildOrganizationFilter(organizationId, companyId) as Prisma.OrdersWhereInput;
+  async getOrderCount(
+    status?: string,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const where: Prisma.OrdersWhereInput = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.OrdersWhereInput;
 
     return this.prisma.orders.count({
       where: { ...(status ? { status: status as any } : {}), ...where },
@@ -897,12 +1001,22 @@ export class WebSalesService {
     organizationId?: number | null;
     companyId?: number | null;
   }) {
-    const where: Prisma.OrdersWhereInput =
-      buildOrganizationFilter(params.organizationId, params.companyId) as Prisma.OrdersWhereInput;
+    const where: Prisma.OrdersWhereInput = buildOrganizationFilter(
+      params.organizationId,
+      params.companyId,
+    ) as Prisma.OrdersWhereInput;
 
-    if (params.from && params.to) where.createdAt = { gte: new Date(params.from), lte: new Date(params.to) };
+    if (params.from && params.to)
+      where.createdAt = {
+        gte: new Date(params.from),
+        lte: new Date(params.to),
+      };
 
     const take = params.limit ?? 10;
-    return this.prisma.orders.findMany({ where, orderBy: { createdAt: 'desc' }, take });
+    return this.prisma.orders.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take,
+    });
   }
 }

@@ -1,7 +1,16 @@
 // backend/src/clients/clients.controller.ts
 import {
-  Controller, Get, Post, Body, Patch, Param, Delete,
-  BadRequestException, UseInterceptors, UploadedFile, Req
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  BadRequestException,
+  UseInterceptors,
+  UploadedFile,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -77,7 +86,8 @@ export class ClientController {
 
   @Post('verify-or-create-products')
   async verifyOrCreateProducts(
-    @Body() clients: {
+    @Body()
+    clients: {
       name: string;
       type?: string;
       typerNumber?: string;
@@ -109,7 +119,10 @@ export class ClientController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.clientService.findAll(organizationId ?? undefined, companyId ?? undefined);
+    return this.clientService.findAll(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('registered')
@@ -117,7 +130,10 @@ export class ClientController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.clientService.findRegistered(organizationId ?? undefined, companyId ?? undefined);
+    return this.clientService.findRegistered(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('chat')
@@ -125,7 +141,10 @@ export class ClientController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.clientService.findAllForChat(organizationId ?? undefined, companyId ?? undefined);
+    return this.clientService.findAllForChat(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get(':id')
@@ -138,7 +157,11 @@ export class ClientController {
     if (isNaN(numericId)) {
       throw new BadRequestException('El ID debe ser un número válido.');
     }
-    return this.clientService.findOne(numericId, organizationId ?? undefined, companyId ?? undefined);
+    return this.clientService.findOne(
+      numericId,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Patch(':id')
@@ -148,7 +171,12 @@ export class ClientController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.clientService.update(+id, updateClientDto, organizationId ?? undefined, companyId ?? undefined);
+    return this.clientService.update(
+      +id,
+      updateClientDto,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Post('upload-image')
@@ -163,15 +191,20 @@ export class ClientController {
       }),
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
-          return cb(new BadRequestException('Solo se permiten imagenes'), false);
+          return cb(
+            new BadRequestException('Solo se permiten imagenes'),
+            false,
+          );
         }
         cb(null, true);
       },
     }),
   )
   uploadImage(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
-    if (!file) throw new BadRequestException('No se proporcionó ninguna imagen');
-    const baseUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+    if (!file)
+      throw new BadRequestException('No se proporcionó ninguna imagen');
+    const baseUrl =
+      process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
     return { url: `${baseUrl}/uploads/clients/${file.filename}` };
   }
 
@@ -184,14 +217,23 @@ export class ClientController {
     @CurrentTenant('companyId') companyId: number | null,
   ) {
     if (!Array.isArray(updateClientsDto) || updateClientsDto.length === 0) {
-      throw new BadRequestException('No se proporcionaron clientes para actualizar.');
+      throw new BadRequestException(
+        'No se proporcionaron clientes para actualizar.',
+      );
     }
-    return this.clientService.updateMany(updateClientsDto, organizationId ?? undefined, companyId ?? undefined);
+    return this.clientService.updateMany(
+      updateClientsDto,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Post('check')
   async checkClient(@Body('typeNumber') typeNumber: string) {
-    if (!typeNumber) throw new BadRequestException('El Nro de documento del cliente es obligatorio.');
+    if (!typeNumber)
+      throw new BadRequestException(
+        'El Nro de documento del cliente es obligatorio.',
+      );
     const exists = await this.clientService.checkIfExists(typeNumber);
     return { exists };
   }
@@ -202,7 +244,11 @@ export class ClientController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.clientService.remove(+id, organizationId ?? undefined, companyId ?? undefined);
+    return this.clientService.remove(
+      +id,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Delete()
@@ -211,6 +257,10 @@ export class ClientController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.clientService.removes(ids, organizationId ?? undefined, companyId ?? undefined);
+    return this.clientService.removes(
+      ids,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 }

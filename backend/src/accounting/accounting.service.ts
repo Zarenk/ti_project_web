@@ -64,8 +64,7 @@ export class AccountingService {
   ) {
     const organizationId =
       overrides?.organizationId ?? tenantContext?.organizationId ?? null;
-    const companyId =
-      overrides?.companyId ?? tenantContext?.companyId ?? null;
+    const companyId = overrides?.companyId ?? tenantContext?.companyId ?? null;
 
     logOrganizationContext({
       service: AccountingService.name,
@@ -78,7 +77,9 @@ export class AccountingService {
     return { organizationId, companyId };
   }
 
-  async getAccounts(tenantContext?: TenantContext | null): Promise<AccountNode[]> {
+  async getAccounts(
+    tenantContext?: TenantContext | null,
+  ): Promise<AccountNode[]> {
     this.emitTenantLog('getAccounts', tenantContext);
 
     const accounts = await this.prisma.account.findMany({
@@ -122,11 +123,14 @@ export class AccountingService {
     return roots;
   }
 
-  async createAccount(data: {
-    code: string;
-    name: string;
-    parentId?: number | null;
-  }, tenantContext?: TenantContext | null): Promise<AccountNode> {
+  async createAccount(
+    data: {
+      code: string;
+      name: string;
+      parentId?: number | null;
+    },
+    tenantContext?: TenantContext | null,
+  ): Promise<AccountNode> {
     this.emitTenantLog('createAccount', tenantContext, {
       code: data.code,
       parentId: data.parentId ?? null,
@@ -199,9 +203,11 @@ export class AccountingService {
     const { accountCode, from, to, page = 1, size = 20 } = params;
 
     const organizationFilter =
-      tenantContext == null ? undefined : tenantContext.organizationId ?? null;
+      tenantContext == null
+        ? undefined
+        : (tenantContext.organizationId ?? null);
     const companyFilter =
-      tenantContext == null ? undefined : tenantContext.companyId ?? null;
+      tenantContext == null ? undefined : (tenantContext.companyId ?? null);
 
     const entryWhere: Record<string, unknown> = {};
     if (from || to) {
@@ -232,7 +238,12 @@ export class AccountingService {
       debit: any;
       credit: any;
       quantity: number | null;
-      entry?: { id: number; date: Date; organizationId: number | null; companyId: number | null };
+      entry?: {
+        id: number;
+        date: Date;
+        organizationId: number | null;
+        companyId: number | null;
+      };
     }[] = [];
 
     try {
@@ -285,10 +296,7 @@ export class AccountingService {
     return { data, total: withBalance.length };
   }
 
-  async getTrialBalance(
-    period: string,
-    tenantContext?: TenantContext | null,
-  ) {
+  async getTrialBalance(period: string, tenantContext?: TenantContext | null) {
     this.emitTenantLog('getTrialBalance.request', tenantContext, {
       period,
     });
@@ -296,9 +304,11 @@ export class AccountingService {
     if (!period) return [];
 
     const organizationFilter =
-      tenantContext == null ? undefined : tenantContext.organizationId ?? null;
+      tenantContext == null
+        ? undefined
+        : (tenantContext.organizationId ?? null);
     const companyFilter =
-      tenantContext == null ? undefined : tenantContext.companyId ?? null;
+      tenantContext == null ? undefined : (tenantContext.companyId ?? null);
 
     const base = parse(`${period}-01`, 'yyyy-MM-dd', new Date());
     const start = zonedTimeToUtc(startOfDay(base), LIMA_TZ);

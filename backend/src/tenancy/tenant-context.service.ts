@@ -61,6 +61,21 @@ export class TenantContextService {
     return this.context!;
   }
 
+  getContextWithFallback(): TenantContext {
+    try {
+      return this.getContext();
+    } catch (error) {
+      if (!(error instanceof BadRequestException)) {
+        throw error;
+      }
+      const fallback = this.resolveContext(this.request, {
+        allowFallback: true,
+      });
+      this.context = fallback;
+      return fallback;
+    }
+  }
+
   updateContext(partial: Partial<TenantContext>): void {
     const current = this.getContext();
     this.context = {
@@ -68,8 +83,7 @@ export class TenantContextService {
       ...partial,
       allowedOrganizationIds:
         partial.allowedOrganizationIds ?? current.allowedOrganizationIds,
-      allowedCompanyIds:
-        partial.allowedCompanyIds ?? current.allowedCompanyIds,
+      allowedCompanyIds: partial.allowedCompanyIds ?? current.allowedCompanyIds,
       allowedOrganizationUnitIds:
         partial.allowedOrganizationUnitIds ??
         current.allowedOrganizationUnitIds,
@@ -79,7 +93,7 @@ export class TenantContextService {
   /**
    * Construye un filtro de Prisma que incluye organizationId y companyId
    * según el contexto del tenant actual.
-   * 
+   *
    * @param includeCompany - Si true, incluye companyId en el filtro
    * @param includeUnit - Si true, incluye organizationUnitId en el filtro
    * @returns Objeto de filtro compatible con Prisma where clauses
@@ -112,7 +126,7 @@ export class TenantContextService {
   /**
    * Resuelve y valida el companyId desde las cabeceras del request
    * contra los companyIds autorizados del usuario.
-   * 
+   *
    * @returns companyId validado o null
    * @throws BadRequestException si el companyId no está autorizado
    */
@@ -130,7 +144,10 @@ export class TenantContextService {
     }
 
     // Validar que el companyId esté en la lista de permitidos
-    if (allowedCompanyIds.length > 0 && !allowedCompanyIds.includes(companyId)) {
+    if (
+      allowedCompanyIds.length > 0 &&
+      !allowedCompanyIds.includes(companyId)
+    ) {
       throw new BadRequestException(
         `La compañía ${companyId} no está autorizada para el usuario actual.`,
       );
@@ -153,7 +170,11 @@ export class TenantContextService {
     return this.getContext().organizationUnitId;
   }
 
-  private resolveContext(request: Request): TenantContext {
+  private resolveContext(
+    request: Request,
+    options?: { allowFallback?: boolean },
+  ): TenantContext {
+    const allowFallback = options?.allowFallback ?? false;
     const user = (request.user ?? {}) as RequestUserPayload;
     const headerOrgId = this.normalizeId(request.headers['x-org-id']);
     const defaultOrgId = this.normalizeId(user.defaultOrganizationId);
@@ -182,9 +203,10 @@ export class TenantContextService {
     const isOrganizationRole =
       normalizedRole === 'SUPER_ADMIN_ORG' || normalizedRole === 'SUPER_ADMIN';
 
-    const organizationId =
+    let organizationId: number | null =
       headerOrgId ?? defaultOrgId ?? allowedOrganizationIds[0] ?? null;
-    const companyId =
+
+    let companyId: number | null =
       headerCompanyId ?? defaultCompanyId ?? allowedCompanyIds[0] ?? null;
     const organizationUnitId =
       headerOrgUnitId ??
@@ -197,39 +219,48 @@ export class TenantContextService {
       (organizationSuperAdminIds.includes(organizationId) ||
         isOrganizationRole);
 
-    // Validación: organizationId debe estar autorizado
-    if (
-      organizationId !== null &&
-      allowedOrganizationIds.length > 0 &&
-      !allowedOrganizationIds.includes(organizationId) &&
-      !isGlobalSuperAdmin
-    ) {
-      throw new BadRequestException(
-        `La organización ${organizationId} no está autorizada para el usuario actual.`,
-      );
-    }
+    if (!isGlobalSuperAdmin) {
+      if (
+        organizationId !== null &&
+        allowedOrganizationIds.length > 0 &&
+        !allowedOrganizationIds.includes(organizationId)
+      ) {
+        if (allowFallback) {
+          organizationId = allowedOrganizationIds[0] ?? null;
+        } else {
+          throw new BadRequestException(
+            `La organización ${organizationId} no está autorizada para el usuario actual.`,
+          );
+        }
+      }
 
-    // Validación: companyId requiere organizationId válido
-    if (
-      companyId !== null &&
-      organizationId === null &&
-      !isGlobalSuperAdmin
-    ) {
-      throw new BadRequestException(
-        'Debe especificar una organización válida antes de seleccionar una compañía.',
-      );
-    }
+      if (organizationId === null && allowedOrganizationIds.length > 0) {
+        organizationId = allowedOrganizationIds[0] ?? null;
+      }
 
-    // Validación: companyId debe estar autorizado
-    if (
-      companyId !== null &&
-      allowedCompanyIds.length > 0 &&
-      !allowedCompanyIds.includes(companyId) &&
-      !isGlobalSuperAdmin
-    ) {
-      throw new BadRequestException(
-        `La compañía ${companyId} no está autorizada para el usuario actual.`,
-      );
+      if (
+        companyId !== null &&
+        allowedCompanyIds.length > 0 &&
+        !allowedCompanyIds.includes(companyId)
+      ) {
+        if (allowFallback) {
+          companyId = allowedCompanyIds[0] ?? null;
+        } else {
+          throw new BadRequestException(
+            `La compañía ${companyId} no está autorizada para el usuario actual.`,
+          );
+        }
+      }
+
+      if (companyId !== null && organizationId === null) {
+        if (allowFallback) {
+          companyId = null;
+        } else {
+          throw new BadRequestException(
+            'Debe especificar una organización válida antes de seleccionar una compañía.',
+          );
+        }
+      }
     }
 
     const context: TenantContext = {

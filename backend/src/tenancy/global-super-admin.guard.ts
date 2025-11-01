@@ -26,7 +26,9 @@ export class GlobalSuperAdminGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<RequestWithTenantContext>();
+    const request = context
+      .switchToHttp()
+      .getRequest<RequestWithTenantContext>();
 
     if (!request) {
       throw new ForbiddenException('Global super admin privileges required.');
@@ -72,11 +74,7 @@ export class GlobalSuperAdminGuard implements CanActivate {
         (payload as Record<string, unknown>)?.['isSuperAdmin'],
       );
       if (explicitFlag) {
-        this.ensureTenantContext(
-          request,
-          tenantContext,
-          'SUPER_ADMIN_GLOBAL',
-        );
+        this.ensureTenantContext(request, tenantContext, 'SUPER_ADMIN_GLOBAL');
         return true;
       }
     } catch {

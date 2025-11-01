@@ -233,8 +233,12 @@ export class EntriesController {
     @CurrentTenant('organizationId') orgId: number | null,
   ) {
     const numericStoreId = parseInt(storeId, 10);
-    if (isNaN(numericStoreId)) throw new BadRequestException('Store ID inválido.');
-    return this.entriesService.findAllByStore(numericStoreId, orgId ?? undefined);
+    if (isNaN(numericStoreId))
+      throw new BadRequestException('Store ID inválido.');
+    return this.entriesService.findAllByStore(
+      numericStoreId,
+      orgId ?? undefined,
+    );
   }
 
   @Delete(':id')
@@ -265,6 +269,9 @@ export class EntriesController {
     @CurrentTenant('organizationId') orgId: number | null,
   ) {
     const take = parseInt(limit, 10);
-    return this.entriesService.findRecentEntries(isNaN(take) ? 5 : take, orgId ?? undefined);
+    return this.entriesService.findRecentEntries(
+      isNaN(take) ? 5 : take,
+      orgId ?? undefined,
+    );
   }
 }

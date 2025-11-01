@@ -41,9 +41,11 @@ export class WebSalesController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.webSalesService.createWebSale(
-      { ...dto, organizationId: dto.organizationId ?? organizationId ?? undefined, companyId: dto.companyId ?? companyId ?? undefined },
-    );
+    return this.webSalesService.createWebSale({
+      ...dto,
+      organizationId: dto.organizationId ?? organizationId ?? undefined,
+      companyId: dto.companyId ?? companyId ?? undefined,
+    });
   }
 
   @Post('order')
@@ -54,7 +56,11 @@ export class WebSalesController {
     @CurrentTenant('companyId') companyId: number | null,
   ) {
     return this.webSalesService.createWebOrder(
-      { ...dto, organizationId: dto.organizationId ?? organizationId ?? undefined, companyId: dto.companyId ?? companyId ?? undefined },
+      {
+        ...dto,
+        organizationId: dto.organizationId ?? organizationId ?? undefined,
+        companyId: dto.companyId ?? companyId ?? undefined,
+      },
       req,
       organizationId ?? undefined,
       companyId ?? undefined,
@@ -102,7 +108,9 @@ export class WebSalesController {
     @CurrentTenant('companyId') companyId: number | null,
   ) {
     if (!Array.isArray(items)) {
-      throw new BadRequestException('Formato inválido: items debe ser un arreglo');
+      throw new BadRequestException(
+        'Formato inválido: items debe ser un arreglo',
+      );
     }
     return this.webSalesService.updateOrderSeries(
       id,
@@ -153,7 +161,8 @@ export class WebSalesController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    if (!files?.length) throw new BadRequestException('No se proporcionaron imagenes');
+    if (!files?.length)
+      throw new BadRequestException('No se proporcionaron imagenes');
     const urls = files.map((f) => `/uploads/order-proofs/${f.filename}`);
     return this.webSalesService.addOrderProofs(
       id,
@@ -165,7 +174,7 @@ export class WebSalesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN','SUPER_ADMIN_GLOBAL','SUPER_ADMIN_ORG')
+  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
   @Get('orders')
   async getOrders(
     @Query('status') status?: string,
@@ -177,14 +186,18 @@ export class WebSalesController {
     @CurrentTenant('companyId') companyId?: number | null,
   ) {
     return this.webSalesService.getOrders({
-      status, from, to, clientId, code,
+      status,
+      from,
+      to,
+      clientId,
+      code,
       organizationId: organizationId ?? undefined,
       companyId: companyId ?? undefined,
     });
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN','SUPER_ADMIN_GLOBAL','SUPER_ADMIN_ORG')
+  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
   @Get('orders/count')
   async getOrdersCount(
     @Query('status') status?: string,
@@ -200,7 +213,7 @@ export class WebSalesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN','SUPER_ADMIN_GLOBAL','SUPER_ADMIN_ORG')
+  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
   @Get('orders/recent')
   async getRecentOrders(
     @Query('from') from?: string,
@@ -211,7 +224,9 @@ export class WebSalesController {
   ) {
     const lim = limit ? parseInt(limit, 10) : undefined;
     return this.webSalesService.getRecentOrders({
-      from, to, limit: lim,
+      from,
+      to,
+      limit: lim,
       organizationId: organizationId ?? undefined,
       companyId: companyId ?? undefined,
     });
@@ -223,7 +238,11 @@ export class WebSalesController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.webSalesService.getWebSaleById(id, organizationId ?? undefined, companyId ?? undefined);
+    return this.webSalesService.getWebSaleById(
+      id,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('order/:id')
@@ -232,7 +251,11 @@ export class WebSalesController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.webSalesService.getWebOrderById(id, organizationId ?? undefined, companyId ?? undefined);
+    return this.webSalesService.getWebOrderById(
+      id,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('order/by-code/:code')
@@ -241,7 +264,11 @@ export class WebSalesController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.webSalesService.getWebOrderByCode(code, organizationId ?? undefined, companyId ?? undefined);
+    return this.webSalesService.getWebOrderByCode(
+      code,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('order/by-user/:id')
@@ -250,7 +277,11 @@ export class WebSalesController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.webSalesService.getWebOrdersByUser(id, organizationId ?? undefined, companyId ?? undefined);
+    return this.webSalesService.getWebOrdersByUser(
+      id,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('order/by-email/:email')
@@ -259,7 +290,11 @@ export class WebSalesController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.webSalesService.getWebOrdersByEmail(email, organizationId ?? undefined, companyId ?? undefined);
+    return this.webSalesService.getWebOrdersByEmail(
+      email,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('order/by-dni/:dni')
@@ -268,6 +303,10 @@ export class WebSalesController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.webSalesService.getWebOrdersByDni(dni, organizationId ?? undefined, companyId ?? undefined);
+    return this.webSalesService.getWebOrdersByDni(
+      dni,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 }

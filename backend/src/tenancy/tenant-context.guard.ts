@@ -1,4 +1,10 @@
-import { CanActivate, ExecutionContext, Injectable, Scope } from '@nestjs/common';
+import {
+  BadRequestException,
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  Scope,
+} from '@nestjs/common';
 import { TenantContextService } from './tenant-context.service';
 
 @Injectable({ scope: Scope.REQUEST })
@@ -7,7 +13,16 @@ export class TenantContextGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
-    request.tenantContext = this.tenantContextService.getContext();
+    try {
+      request.tenantContext = this.tenantContextService.getContext();
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        request.tenantContext =
+          this.tenantContextService.getContextWithFallback();
+      } else {
+        throw error;
+      }
+    }
     return true;
   }
 }

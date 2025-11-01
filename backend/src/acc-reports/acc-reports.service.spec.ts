@@ -16,7 +16,9 @@ const baseTenant: TenantContext = {
   allowedOrganizationUnitIds: [],
 };
 
-const buildTenant = (overrides: Partial<TenantContext> = {}): TenantContext => ({
+const buildTenant = (
+  overrides: Partial<TenantContext> = {},
+): TenantContext => ({
   ...baseTenant,
   ...overrides,
 });
@@ -63,9 +65,9 @@ describe('AccReportsService – multi-tenant filtering', () => {
   it('filters cash transactions by organization/company when processing a job', async () => {
     const prisma = {
       cashTransaction: {
-        groupBy: jest.fn().mockResolvedValue([
-          { type: 'INCOME', _sum: { amount: 150 } },
-        ]),
+        groupBy: jest
+          .fn()
+          .mockResolvedValue([{ type: 'INCOME', _sum: { amount: 150 } }]),
       },
       trialBalanceCache: { create: jest.fn().mockResolvedValue(undefined) },
     };

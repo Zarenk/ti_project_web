@@ -3,14 +3,14 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
-} from "@nestjs/common";
-import { Reflector } from "@nestjs/core";
-import { ROLES_KEY } from "./roles.decorator";
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { ROLES_KEY } from './roles.decorator';
 
 const SUPER_ADMIN_ROLES = new Set([
-  "SUPER_ADMIN_GLOBAL",
-  "SUPER_ADMIN_ORG",
-  "SUPER_ADMIN",
+  'SUPER_ADMIN_GLOBAL',
+  'SUPER_ADMIN_ORG',
+  'SUPER_ADMIN',
 ]);
 
 @Injectable()
@@ -30,10 +30,10 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request?.user;
     const normalizedRole =
-      typeof user?.role === "string" ? user.role.toUpperCase() : undefined;
+      typeof user?.role === 'string' ? user.role.toUpperCase() : undefined;
 
     if (!normalizedRole) {
-      throw new ForbiddenException("Forbidden resource");
+      throw new ForbiddenException('Forbidden resource');
     }
 
     if (SUPER_ADMIN_ROLES.has(normalizedRole)) {
@@ -43,7 +43,7 @@ export class RolesGuard implements CanActivate {
     const normalizedRequired = requiredRoles.map((role) => role.toUpperCase());
 
     if (!normalizedRequired.includes(normalizedRole)) {
-      throw new ForbiddenException("Forbidden resource");
+      throw new ForbiddenException('Forbidden resource');
     }
 
     return true;

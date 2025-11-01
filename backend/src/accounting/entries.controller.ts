@@ -17,14 +17,17 @@ export class EntriesController {
     @Query('size') size = '25',
     @CurrentTenant() tenant: TenantContext | null = null,
   ): Promise<{ data: Entry[]; total: number }> {
-    const { data, total } = await this.service.findAll({
-      period,
-      from,
-      to,
-      tz,
-      page: Number(page),
-      size: Number(size),
-    }, tenant);
+    const { data, total } = await this.service.findAll(
+      {
+        period,
+        from,
+        to,
+        tz,
+        page: Number(page),
+        size: Number(size),
+      },
+      tenant,
+    );
     return {
       data: data.map((e) => ({
         id: e.id,
@@ -84,15 +87,18 @@ export class EntriesController {
     },
     @CurrentTenant() tenant: TenantContext | null = null,
   ): Promise<Entry> {
-    return this.service.createDraft({
-      period: body.period,
-      date: new Date(body.date),
-      lines: body.lines,
-      providerId: body.providerId,
-      serie: body.serie,
-      correlativo: body.correlativo,
-      invoiceUrl: body.invoiceUrl,
-    }, tenant);
+    return this.service.createDraft(
+      {
+        period: body.period,
+        date: new Date(body.date),
+        lines: body.lines,
+        providerId: body.providerId,
+        serie: body.serie,
+        correlativo: body.correlativo,
+        invoiceUrl: body.invoiceUrl,
+      },
+      tenant,
+    );
   }
 
   @Post(':id/post')

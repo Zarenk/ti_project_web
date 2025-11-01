@@ -573,11 +573,12 @@ export class InventoryService {
             (storeInventory.store?.companyId ?? null) === targetCompanyId,
         );
         const allowedStoreIds = new Set(
-          filteredStoreOnInventory.map((storeInventory) => storeInventory.storeId),
+          filteredStoreOnInventory.map(
+            (storeInventory) => storeInventory.storeId,
+          ),
         );
         const filteredEntryDetails = item.entryDetails.filter(
-          (detail) =>
-            detail.entry && allowedStoreIds.has(detail.entry.storeId),
+          (detail) => detail.entry && allowedStoreIds.has(detail.entry.storeId),
         );
 
         return {

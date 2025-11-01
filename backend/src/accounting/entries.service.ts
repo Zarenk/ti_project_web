@@ -86,23 +86,26 @@ export class EntriesService {
   private resolveOrganizationFilter(
     tenant?: TenantContext | null,
   ): number | null | undefined {
-    return tenant == null ? undefined : tenant.organizationId ?? null;
+    return tenant == null ? undefined : (tenant.organizationId ?? null);
   }
 
   private resolveCompanyFilter(
     tenant?: TenantContext | null,
   ): number | null | undefined {
-    return tenant == null ? undefined : tenant.companyId ?? null;
+    return tenant == null ? undefined : (tenant.companyId ?? null);
   }
 
-  async findAll(params: {
-    period?: string;
-    from?: string;
-    to?: string;
-    tz?: string;
-    page?: number;
-    size?: number;
-  }, tenant?: TenantContext | null): Promise<{ data: Entry[]; total: number }> {
+  async findAll(
+    params: {
+      period?: string;
+      from?: string;
+      to?: string;
+      tz?: string;
+      page?: number;
+      size?: number;
+    },
+    tenant?: TenantContext | null,
+  ): Promise<{ data: Entry[]; total: number }> {
     const {
       period,
       from,
@@ -284,14 +287,14 @@ export class EntriesService {
 
   async createDraft(
     data: {
-    period: string;
-    date: Date;
-    lines: EntryLine[];
-    providerId?: number;
-    serie?: string;
-    correlativo?: string;
-    invoiceUrl?: string;
-  },
+      period: string;
+      date: Date;
+      lines: EntryLine[];
+      providerId?: number;
+      serie?: string;
+      correlativo?: string;
+      invoiceUrl?: string;
+    },
     tenant?: TenantContext | null,
   ): Promise<Entry> {
     const organizationFilter = this.resolveOrganizationFilter(tenant);

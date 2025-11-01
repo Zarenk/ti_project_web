@@ -1,4 +1,5 @@
 import { getAuthHeaders } from "@/utils/auth-token"
+import { clearTenantSelection, setTenantSelection } from "@/utils/tenant-preferences"
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") || "http://localhost:4000"
@@ -131,30 +132,59 @@ export async function getOrganization(
 }
 
 export async function getCurrentTenant(): Promise<CurrentTenantResponse> {
-  const headers = await getAuthHeaders()
+  const performRequest = async () => {
+    const headers = await getAuthHeaders()
 
-  if (!headers.Authorization) {
-    throw new Error("No se encontro un token de autenticacion")
+    if (!headers.Authorization) {
+      throw new Error("No se encontro un token de autenticacion")
+    }
+
+    const response = await fetch(`${BACKEND_URL}/api/tenancy/current`, {
+      headers,
+      cache: "no-store",
+    })
+
+    const contentType = response.headers.get("content-type") || ""
+    const isJson = contentType.includes("application/json")
+    const data = isJson ? await response.json() : await response.text()
+    return { response, data }
   }
 
-  const response = await fetch(`${BACKEND_URL}/api/tenancy/current`, {
-    headers,
-    cache: "no-store",
-  })
-
-  const contentType = response.headers.get("content-type") || ""
-  const isJson = contentType.includes("application/json")
-  const data = isJson ? await response.json() : await response.text()
-
-  if (!response.ok) {
-    const message =
-      (typeof data === "object" && data && "message" in data
-        ? (data as { message?: string }).message
-        : undefined) || "No se pudo obtener la seleccion de tenant"
-    throw new Error(message)
+  const asMessage = (data: unknown, fallback: string) => {
+    if (typeof data === "object" && data && "message" in data) {
+      const message = (data as { message?: string }).message
+      if (typeof message === "string" && message.trim().length > 0) {
+        return message
+      }
+    }
+    if (typeof data === "string" && data.trim().length > 0) {
+      return data
+    }
+    return fallback
   }
 
-  return data as CurrentTenantResponse
+  let { response, data } = await performRequest()
+
+  if (response.ok) {
+    return data as CurrentTenantResponse
+  }
+
+  if (response.status === 400) {
+    clearTenantSelection()
+    ;({ response, data } = await performRequest())
+
+    if (response.ok) {
+      const payload = data as CurrentTenantResponse
+      setTenantSelection({
+        orgId: payload.organization?.id ?? null,
+        companyId: payload.company?.id ?? null,
+      })
+      return payload
+    }
+  }
+
+  const message = asMessage(data, "No se pudo obtener la seleccion de tenant")
+  throw new Error(message)
 }
 
 export async function assignOrganizationSuperAdmin(
