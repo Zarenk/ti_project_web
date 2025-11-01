@@ -1,7 +1,7 @@
 "use client"
 
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Transaction } from "../types/cash-register"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -350,16 +350,14 @@ const resolveLooseMethodLabel = (value: string) => {
     normalized.includes("visa") ||
     normalized.includes("master") ||
     normalized.includes("tarjeta") ||
-    normalized.includes("crÃƒÂ©dito") ||
     normalized.includes("credito") ||
-    normalized.includes("dÃƒÂ©bito") ||
     normalized.includes("debito")
   ) {
     return "Tarjeta";
   }
 
   if (normalized.includes("dep")) {
-    return "DepÃƒÂ³sito";
+    return "Deposito";
   }
 
   if (normalized.includes("cheque")) {
@@ -380,11 +378,11 @@ const consolidateLooseTransferEntries = (
 
   const joined = normalizeWhitespace(values.join(" "));
 
-  if (!/m[eÃƒÂ©]todos?\s+de\s+pago/i.test(joined)) {
+  if (!/m[e]todos?\s+de\s+pago/i.test(joined)) {
     return [];
   }
 
-  const methodPattern = /(en\s+efectivo|efectivo|transferencia|yape|plin|tarjeta|visa|mastercard|amex|american\s+express|dep[oÃƒÂ³]sito|deposito|cheque|cheques)/gi;
+  const methodPattern = /(en\s+efectivo|efectivo|transferencia|yape|plin|tarjeta|visa|mastercard|amex|american\s+express|dep[o]sito|deposito|cheque|cheques)/gi;
 
   const matches: Array<{ label: string; start: number; end: number }> = [];
   let match: RegExpExecArray | null;
@@ -687,8 +685,8 @@ const extractPaymentMethodsFromText = (value?: string | null) => {
     .trim();
 
   const patterns = [
-    /pago\s+v[iÃƒÂ­]a\s+([^.;]+)/gi,
-    /m[eÃƒÂ©]todo[s]?\s+de\s+pago[:\s]+([^.;]+)/gi,
+    /pago\s+v[isa­]a\s+([^.;]+)/gi,
+    /m[e]todo[s]?\s+de\s+pago[:\s]+([^.;]+)/gi,
   ];
 
   patterns.forEach((pattern) => {
@@ -747,7 +745,7 @@ const identifyPaymentSummaryMethod = (value: string): PaymentSummaryKey | null =
   if (isCashPaymentMethod(normalized)) {
     return "Efectivo";
   }
-  if (/(tarjeta|visa|master|credito|crÃƒÂ©dito|debito|dÃƒÂ©bito|amex|american express)/.test(normalized)) {
+  if (/(tarjeta|visa|master|credito|debito|amex|american express)/.test(normalized)) {
     return "Tarjeta";
   }
   if (/transfer/.test(normalized)) {
@@ -851,7 +849,7 @@ const REPORT_COLUMNS: { key: keyof CashReportRow; header: string }[] = [
   { key: "amount", header: "Monto" },
   { key: "openingBalance", header: "Saldo Inicial" },
   { key: "cashAvailable", header: "Efectivo Disponible" },
-  { key: "paymentMethods", header: "MÃƒÂ©todos de Pago" },
+  { key: "paymentMethods", header: "Metodos de Pago" },
   { key: "employee", header: "Encargado" },
   { key: "client", header: "Cliente" },
   { key: "document", header: "Documento" },
@@ -1388,6 +1386,7 @@ export default function CashRegisterDashboard() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [transactionsForBalance, setTransactionsForBalance] = useState<Transaction[]>([])
   const [storeId, setStoreId] = useState<number | null>(null); // Estado para la tienda seleccionada
+  const storeIdRef = useRef<number | null>(null);
   const [stores, setStores] = useState<{ id: number; name: string }[]>([]); // Lista de tiendas
   const [hasCashRegister, setHasCashRegister] = useState(true); // Ã°Å¸â€˜Ë† Estado nuevo
   const [totalIncome, setTotalIncome] = useState(0);
@@ -1420,6 +1419,10 @@ export default function CashRegisterDashboard() {
       return accumulator
     }, {})
   }, [stores])
+
+  useEffect(() => {
+    storeIdRef.current = storeId;
+  }, [storeId]);
 
   const reportRows = useMemo<CashReportRow[]>(() => {
     return transactions.map((transaction) => {
@@ -1892,7 +1895,7 @@ export default function CashRegisterDashboard() {
                   ]}
                 >
                   {REPORT_COLUMNS.map((column) => {
-                    // Ã¢Â¬â€¡Ã¢Â¬â€¡Ã¢Â¬â€¡ forzamos el tipo del arreglo
+                    //forzamos el tipo del arreglo
                     const cellStyles: any[] = [pdfStyles.cell];
                     if (["timestamp", "paymentMethods", "notes"].includes(column.key)) {
                       cellStyles.push(pdfStyles.cellWide);
@@ -1935,7 +1938,7 @@ export default function CashRegisterDashboard() {
       toast.success("Reporte PDF generado correctamente.")
       } catch (error) {
       console.error("Error generando PDF de caja:", error)
-      toast.error("No se pudo generar el PDF. IntÃƒÂ©ntalo de nuevo.")
+      toast.error("No se pudo generar el PDF. Intentalo de nuevo.")
     } finally {
       setIsGeneratingPdf(false)
     }
@@ -1947,7 +1950,7 @@ export default function CashRegisterDashboard() {
       targetStoreId?: number,
       storeNameMapOverride?: Record<number, string>,
     ) => {
-      const effectiveStoreId = targetStoreId ?? storeId;
+      const effectiveStoreId = targetStoreId ?? storeIdRef.current;
       if (effectiveStoreId === null) {
         return;
       }
@@ -2026,8 +2029,13 @@ export default function CashRegisterDashboard() {
         setClosureNextOpeningLookup({});
       }
     },
-    [storeId, storeNameLookup, tenantRefreshKey],
+    [storeNameLookup],
   );
+
+  const refreshCashDataRef = useRef(refreshCashData);
+  useEffect(() => {
+    refreshCashDataRef.current = refreshCashData;
+  }, [refreshCashData]);
 
   const reinitializeCashRegister = async (): Promise<string | null> => {
     if (!storeId) return null;
@@ -2136,8 +2144,9 @@ export default function CashRegisterDashboard() {
           return;
         }
 
-        const nextStoreId = sortedStores.some((store) => store.id === storeId)
-          ? storeId ?? sortedStores[0].id
+        const currentStoreId = storeIdRef.current;
+        const nextStoreId = sortedStores.some((store) => store.id === currentStoreId)
+          ? currentStoreId ?? sortedStores[0].id
           : sortedStores[0].id;
 
         const nextStoreLookup = sortedStores.reduce<Record<number, string>>((acc, store) => {
@@ -2145,9 +2154,14 @@ export default function CashRegisterDashboard() {
           return acc;
         }, {});
 
-        setStoreId(() => nextStoreId);
+        if (storeIdRef.current !== nextStoreId) {
+          setStoreId(nextStoreId);
+        }
         setSelectedDate(new Date());
-        await refreshCashData(nextStoreId, nextStoreLookup);
+        const refreshFn = refreshCashDataRef.current;
+        if (typeof refreshFn === "function") {
+          await refreshFn(nextStoreId, nextStoreLookup);
+        }
         setTenantRefreshKey((prev) => prev + 1);
       } catch (error) {
         if (!cancelled) {
@@ -2182,7 +2196,7 @@ export default function CashRegisterDashboard() {
       cancelled = true;
       window.removeEventListener(TENANT_SELECTION_EVENT, handler);
     };
-  }, [refreshCashData, storeId]);
+  }, []);
 
   // Obtener el balance de la caja activa al cambiar la tienda seleccionada
   useEffect(() => {
@@ -2396,8 +2410,8 @@ export default function CashRegisterDashboard() {
     setTotalIncome(income);
     setTotalExpense(expense);
   
-    console.log("Ã¢Å“â€¦ Ingresos calculados:", income);
-    console.log("Ã¢Å“â€¦ Egresos calculados:", expense);
+    console.log("Ingresos calculados:", income);
+    console.log("Egresos calculados:", expense);
   }, [transactions]);
 
   useEffect(() => {
@@ -2420,7 +2434,7 @@ export default function CashRegisterDashboard() {
 
   // Mostrar loader mientras se revisa sesiÃƒÂ³n
   if (checkingSession) {
-    return <div className="p-8 text-center">Verificando sesiÃƒÂ³n...</div>;
+    return <div className="p-8 text-center">Verificando sesion...</div>;
   }
 
   // -------------------- UI --------------------
@@ -2489,7 +2503,7 @@ export default function CashRegisterDashboard() {
             <AlertDialogHeader>
               <AlertDialogTitle>Abrir nueva caja</AlertDialogTitle>
               <AlertDialogDescription>
-                El saldo inicial sugerido es el del ÃƒÂºltimo cierre: 
+                El saldo inicial sugerido es el del Ultimo cierre: 
                 <strong className="text-green-600"> S/. {initialAmountToOpen.toFixed(2)}</strong>.
                 Puedes modificarlo si es necesario.
               </AlertDialogDescription>
@@ -2550,7 +2564,7 @@ export default function CashRegisterDashboard() {
               ) : dailyClosureInfo ? (
                 `S/.${Number(dailyClosureInfo.closingBalance).toFixed(2)}`
               ) : (
-                "Sin cierre ese dÃƒÂ­a"
+                "Sin cierre ese di­a"
               )}
             </div>
             {isSameDay(selectedDate, new Date()) && (
@@ -2569,8 +2583,8 @@ export default function CashRegisterDashboard() {
           <CardHeader className="pb-2">
           <CardTitle>
             {isToday
-              ? "Transacciones del dÃƒÂ­a de hoy"
-              : `Transacciones del dÃƒÂ­a ${selectedDate.toLocaleDateString("es-PE", {
+              ? "Transacciones del dia de hoy"
+              : `Transacciones del dia ${selectedDate.toLocaleDateString("es-PE", {
                   weekday: "long",
                   day: "2-digit",
                   month: "long",
@@ -2587,7 +2601,7 @@ export default function CashRegisterDashboard() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle>ÃƒÅ¡ltimo Cierre</CardTitle>
+            <CardTitle>Ultimo Cierre</CardTitle>
             <CardDescription>Historial de cierres de caja</CardDescription>
           </CardHeader>
           <CardContent>
@@ -2653,7 +2667,7 @@ export default function CashRegisterDashboard() {
             <CardHeader>
               <CardTitle>Cierre de Efectivo</CardTitle>
               <CardDescription>
-              Registrar depÃƒÂ³sitos y retiros de la caja registradora</CardDescription>
+              Registrar depositos y retiros de la caja registradora</CardDescription>
             </CardHeader>
             <CardContent>
             {storeId !== null && userId !== null && activeCashRegisterId !== null && (

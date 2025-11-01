@@ -6,9 +6,10 @@ import { TenantContextGuard } from './tenant-context.guard';
 import { TenantContextService } from './tenant-context.service';
 import { GlobalSuperAdminGuard } from './global-super-admin.guard';
 import { CompaniesController } from './companies.controller';
+import { TenantCurrentController } from './tenant-current.controller';
 
 @Module({
-  controllers: [TenancyController, CompaniesController],
+  controllers: [TenancyController, CompaniesController, TenantCurrentController],
   providers: [
     TenancyService,
     PrismaService,

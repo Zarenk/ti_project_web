@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react"
 
 import { useSiteSettings } from "@/context/site-settings-context"
-import { getOrganization } from "@/app/dashboard/tenancy/tenancy.api"
+import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
 import {
   TENANT_SELECTION_EVENT,
   getTenantSelection,
@@ -35,7 +35,6 @@ export function DashboardCompanyName(): ReactElement {
       try {
         const selection = providedSelection ?? (await getTenantSelection())
         const orgId = selection.orgId ?? null
-        const selectedCompanyId = selection.companyId ?? null
 
         if (orgId === null) {
           lastResolvedOrgIdRef.current = null
@@ -47,22 +46,23 @@ export function DashboardCompanyName(): ReactElement {
           return
         }
 
-        const organization = await getOrganization(orgId)
+        const summary = await getCurrentTenant()
 
         if (!isMountedRef.current || requestId !== lastRequestIdRef.current) {
           return
         }
 
-        lastResolvedOrgIdRef.current = orgId
-        setOrganizationName(organization?.name?.trim() ?? null)
+        const resolvedOrg = summary.organization ?? null
+        const resolvedCompany = summary.company ?? null
 
-        const resolvedCompany =
-          organization?.companies?.find((company) => company.id === selectedCompanyId) ??
-          organization?.companies?.[0] ??
-          null
-
+        lastResolvedOrgIdRef.current = resolvedOrg?.id ?? null
         lastResolvedCompanyIdRef.current = resolvedCompany?.id ?? null
-        setCompanyName(resolvedCompany?.name?.trim() ?? null)
+
+        const normalizedOrgName = resolvedOrg?.name?.trim() ?? ""
+        const normalizedCompanyName = resolvedCompany?.name?.trim() ?? ""
+
+        setOrganizationName(normalizedOrgName.length > 0 ? normalizedOrgName : null)
+        setCompanyName(normalizedCompanyName.length > 0 ? normalizedCompanyName : null)
       } catch {
         if (!isMountedRef.current || requestId !== lastRequestIdRef.current) {
           return

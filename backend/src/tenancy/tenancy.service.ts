@@ -28,6 +28,17 @@ type MinimalUnit = Pick<
   'id' | 'organizationId' | 'code'
 >;
 
+export interface TenantSelectionCompany {
+  id: number;
+  name: string;
+}
+
+export interface TenantSelectionSummary {
+  organization: { id: number; name: string } | null;
+  company: TenantSelectionCompany | null;
+  companies: TenantSelectionCompany[];
+}
+
 @Injectable()
 export class TenancyService {
   constructor(private readonly prisma: PrismaService) {}
@@ -429,6 +440,58 @@ export class TenancyService {
     } catch (error) {
       throw this.handlePrismaError(error);
     }
+  }
+
+  async resolveTenantSelection(
+    context: TenantContext,
+  ): Promise<TenantSelectionSummary> {
+    if (!context || context.organizationId === null) {
+      return { organization: null, company: null, companies: [] };
+    }
+
+    const prismaClient = this.prisma as unknown as PrismaService as any;
+    const organization = await prismaClient.organization.findUnique({
+      where: { id: context.organizationId },
+      select: {
+        id: true,
+        name: true,
+        companies: {
+          orderBy: { id: 'asc' },
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    if (!organization) {
+      return { organization: null, company: null, companies: [] };
+    }
+
+    const allowedCompanyIds = context.allowedCompanyIds ?? [];
+    const filteredCompanies = organization.companies.filter((company) => {
+      if (allowedCompanyIds.length === 0) {
+        return true;
+      }
+      return allowedCompanyIds.includes(company.id);
+    });
+
+    const companies = filteredCompanies.map((company) => ({
+      id: company.id,
+      name: (company.name ?? '').trim(),
+    }));
+
+    const selectedCompany =
+      companies.find((company) => company.id === context.companyId) ??
+      companies[0] ??
+      null;
+
+    return {
+      organization: {
+        id: organization.id,
+        name: (organization.name ?? '').trim(),
+      },
+      company: selectedCompany,
+      companies,
+    };
   }
 
   private async resolveSuperAdmin(

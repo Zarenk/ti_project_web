@@ -55,6 +55,12 @@ export interface OrganizationResponse {
   superAdmin: OrganizationSuperAdmin | null
 }
 
+export interface CurrentTenantResponse {
+  organization: { id: number; name: string } | null
+  company: { id: number; name: string } | null
+  companies: Array<{ id: number; name: string }>
+}
+
 export async function createOrganization(
   payload: CreateOrganizationPayload,
 ): Promise<OrganizationResponse> {
@@ -122,6 +128,33 @@ export async function getOrganization(
   }
 
   return data as OrganizationResponse
+}
+
+export async function getCurrentTenant(): Promise<CurrentTenantResponse> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/tenancy/current`, {
+    headers,
+    cache: "no-store",
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo obtener la seleccion de tenant"
+    throw new Error(message)
+  }
+
+  return data as CurrentTenantResponse
 }
 
 export async function assignOrganizationSuperAdmin(
