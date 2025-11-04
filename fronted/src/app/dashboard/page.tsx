@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { listOrganizations, type OrganizationResponse } from "./tenancy/tenancy.api"
 import { clearTenantSelection, getTenantSelection, setTenantSelection } from "@/utils/tenant-preferences"
+import { wasManualLogoutRecently } from "@/utils/manual-logout"
 
 type ActivityItem = {
   id: number | string
@@ -61,6 +62,10 @@ export default function WelcomeDashboard() {
   const handleAuthError = useCallback(async (err: unknown) => {
     if (authErrorShown.current) return true
     if (err instanceof UnauthenticatedError) {
+      if (wasManualLogoutRecently()) {
+        authErrorShown.current = true
+        return true
+      }
       authErrorShown.current = true
       if (await isTokenValid()) {
         router.push("/unauthorized")

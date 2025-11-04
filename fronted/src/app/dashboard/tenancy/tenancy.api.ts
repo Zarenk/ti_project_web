@@ -1,5 +1,5 @@
 import { getAuthHeaders } from "@/utils/auth-token"
-import { clearTenantSelection, setTenantSelection } from "@/utils/tenant-preferences"
+import { clearTenantSelection, getTenantSelection, setTenantSelection } from "@/utils/tenant-preferences"
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") || "http://localhost:4000"
@@ -180,6 +180,50 @@ export async function getCurrentTenant(): Promise<CurrentTenantResponse> {
         companyId: payload.company?.id ?? null,
       })
       return payload
+    }
+
+    try {
+      const organizations = await listOrganizations()
+      const firstOrg =
+        organizations.find((org) => org.companies && org.companies.length > 0) ??
+        organizations[0] ??
+        null
+
+      if (firstOrg) {
+        const firstCompany = firstOrg.companies?.[0] ?? null
+        const nextSelection = {
+          orgId: firstOrg.id ?? null,
+          companyId: firstCompany?.id ?? null,
+        }
+        const currentSelection = await getTenantSelection()
+        if (
+          currentSelection.orgId !== nextSelection.orgId ||
+          currentSelection.companyId !== nextSelection.companyId
+        ) {
+          setTenantSelection(nextSelection)
+        }
+        return {
+          organization: firstOrg
+            ? {
+                id: firstOrg.id,
+                name: firstOrg.name,
+              }
+            : null,
+          company: firstCompany
+            ? {
+                id: firstCompany.id,
+                name: firstCompany.name,
+              }
+            : null,
+          companies:
+            (firstOrg.companies ?? []).map((company) => ({
+              id: company.id,
+              name: company.name,
+            })) ?? [],
+        }
+      }
+    } catch {
+      /* ignore fallback failure */
     }
   }
 

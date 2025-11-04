@@ -25,12 +25,14 @@ class HeaderTenantContextGuard implements CanActivate {
 
     const tenantContext: TenantContext = {
       organizationId,
+      companyId: null,
       organizationUnitId: null,
       userId: null,
       isGlobalSuperAdmin: false,
       isOrganizationSuperAdmin: false,
       isSuperAdmin: false,
       allowedOrganizationIds: organizationId ? [organizationId] : [],
+      allowedCompanyIds: [],
       allowedOrganizationUnitIds: [],
     };
 

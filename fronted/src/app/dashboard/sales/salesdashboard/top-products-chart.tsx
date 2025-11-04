@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useTenantSelection } from "@/context/tenant-selection-context"
+import { useEffect, useMemo, useState } from "react"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
 import { getTopProducts } from "../sales.api"
 import { DateRange } from "react-day-picker"
@@ -16,6 +17,11 @@ export function TopProductsChart({ dateRange }: Props) {
   const [yAxisFontSize, setYAxisFontSize] = useState<number>(12);
   const { theme } = useTheme()
   const textColor = theme === "dark" ? "#FFFFFF" : "#000000"
+  const { selection, version } = useTenantSelection()
+  const selectionKey = useMemo(
+    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
+    [selection.orgId, selection.companyId, version],
+  )
 
   useEffect(() => {
     // Solo se ejecuta en cliente
@@ -50,7 +56,7 @@ export function TopProductsChart({ dateRange }: Props) {
     }
 
     fetchData()
-  }, [dateRange])
+  }, [dateRange, selectionKey])
 
   useEffect(() => {
     const handleResize = () => {
@@ -152,3 +158,5 @@ export function TopProductsChart({ dateRange }: Props) {
     </ResponsiveContainer>
   )
 }
+
+

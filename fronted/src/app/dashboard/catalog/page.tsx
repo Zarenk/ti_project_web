@@ -11,6 +11,8 @@ import { getStoresWithProduct } from "../inventory/inventory.api";
 import CategoryFilter from "./category-filter";
 import CatalogPreview from "./catalog-preview";
 import { toast } from "sonner";
+import { useTenantSelection } from "@/context/tenant-selection-context";
+import { getCategories } from "./catalog.api";
 
 export default function CatalogPage() {
   const [downloading, setDownloading] = useState<"pdf" | "excel" | null>(null);
@@ -19,6 +21,8 @@ export default function CatalogPage() {
   const [cover, setCover] = useState<CatalogCover | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { version } = useTenantSelection();
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
 
   useEffect(() => {
     async function fetchProducts() {
@@ -51,16 +55,44 @@ export default function CatalogPage() {
   }, [selectedCategories]);
 
   useEffect(() => {
-    async function fetchCover() {
+    let cancelled = false;
+
+    async function fetchCategoriesAndCover() {
       try {
-        const current = await getCatalogCover();
-        setCover(current);
+        setCategories([]);
+        setCover(null);
+        setSelectedCategories([]);
+        setProducts([]);
+        const [fetchedCategories, currentCover] = await Promise.all([
+          getCategories(),
+          getCatalogCover().catch(() => null),
+        ]);
+        if (cancelled) return;
+        setCategories(fetchedCategories);
+        setCover(currentCover);
+        setSelectedCategories((prev) =>
+          prev.filter((id) => fetchedCategories.some((cat) => cat.id === id)),
+        );
+        setProducts((prev) =>
+          prev.filter((product) =>
+            fetchedCategories.some((cat) => cat.id === product.categoryId),
+          ),
+        );
       } catch (error) {
-        console.error('Error fetching catalog cover:', error);
+        if (!cancelled) {
+          console.error("Error fetching catalog data:", error);
+          setCategories([]);
+          setCover(null);
+        }
       }
     }
-    fetchCover();
-  }, []);
+
+    fetchCategoriesAndCover();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
 
   function handleSelectCover() {
     fileInputRef.current?.click();
@@ -131,6 +163,7 @@ export default function CatalogPage() {
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-bold">Exportar Catálogo</h1>
       <CategoryFilter
+        categories={categories}
         selected={selectedCategories}
         onChange={setSelectedCategories}
       />

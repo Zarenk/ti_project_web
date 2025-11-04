@@ -195,6 +195,8 @@ export default function LoginForm() {
     try {
       await loginUser(normalizedEmail, password);
       await refreshUser();
+      setAttemptState(null);
+      persistAttemptState(normalizedEmail, null);
       toast.success('Inicio de sesion exitoso');
 
       // Redireccion por returnTo si esta presente y es segura (misma app)
@@ -236,8 +238,6 @@ export default function LoginForm() {
         router.replace('/users');
         setLoading(false);
       }
-      setAttemptState(null);
-      persistAttemptState(normalizedEmail, null);
     } catch (error: any) {
       const nextCount = (attemptState?.count ?? 0) + 1;
       const nextState: AttemptState = {

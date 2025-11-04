@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner'
 import { signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { clearManualLogout, markManualLogout } from "@/utils/manual-logout"
 
 type AuthContextType = {
   userId: number | null
@@ -55,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserId(data.id ?? null)
       setRole(data.role ?? null)
       autoLogoutTriggeredRef.current = false
+      clearManualLogout()
     } else {
       setUserName(null)
       setUserId(null)
@@ -69,6 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearSessionTimer()
       setAuthPending(true)
       try {
+        if (!silent) {
+          markManualLogout()
+        }
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 5000)
         const logoutReq = fetch('/api/logout', {

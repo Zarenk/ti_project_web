@@ -43,14 +43,18 @@ export async function getAllEntries() {
     const response = await authFetch(`${BACKEND_URL}/api/entries`, {
       method: 'GET',
     });
-  
+
     if (!response.ok) {
       throw new Error('Error al obtener las entradas');
     }
-  
+
     return await response.json();
   }catch(error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
     console.error("Error al obtener las entradas:", error); 
+    throw error;
   } 
 }
 

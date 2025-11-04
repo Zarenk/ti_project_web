@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react";
+import { useTenantSelection } from "@/context/tenant-selection-context";
+import { useEffect, useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DateRange } from "react-day-picker";
 import { getTopProducts } from "../sales.api";
@@ -21,6 +22,8 @@ interface TopProduct {
 export function TopProductsTable({ dateRange }: Props) {
   const [data, setData] = useState<TopProduct[]>([]);
   const [totalUnits, setTotalUnits] = useState(0);
+  const { selection, version } = useTenantSelection();
+  const selectionKey = useMemo(() => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`, [selection.orgId, selection.companyId, version]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -42,7 +45,7 @@ export function TopProductsTable({ dateRange }: Props) {
     };
 
     fetchData();
-  }, [dateRange]);
+  }, [dateRange, selectionKey]);
 
   return (
     <div className="rounded-xl border bg-card shadow-md overflow-x-auto">
@@ -92,3 +95,5 @@ export function TopProductsTable({ dateRange }: Props) {
     </div>
   );
 }
+
+

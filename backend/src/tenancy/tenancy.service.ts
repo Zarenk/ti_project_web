@@ -443,34 +443,75 @@ export class TenancyService {
   async resolveTenantSelection(
     context: TenantContext,
   ): Promise<TenantSelectionSummary> {
-    if (!context || context.organizationId === null) {
-      return { organization: null, company: null, companies: [] };
+    const prismaClient = this.prisma as unknown as PrismaService as any;
+    const allowedOrganizationIds = context.allowedOrganizationIds ?? [];
+    const allowedCompanyIds = context.allowedCompanyIds ?? [];
+
+    const organizationInclude = {
+      companies: {
+        orderBy: { id: 'asc' },
+        select: { id: true, name: true },
+      },
+    };
+
+    let organization: Awaited<
+      ReturnType<(typeof prismaClient.organization)['findFirst']>
+    > | null = null;
+
+    if (context.organizationId !== null) {
+      organization = await prismaClient.organization.findUnique({
+        where: { id: context.organizationId },
+        include: organizationInclude,
+      });
+    } else {
+      organization = await prismaClient.organization.findFirst({
+        where:
+          allowedOrganizationIds.length > 0
+            ? { id: { in: allowedOrganizationIds } }
+            : undefined,
+        include: organizationInclude,
+        orderBy: { id: 'asc' },
+      });
     }
 
-    const prismaClient = this.prisma as unknown as PrismaService as any;
-    const organization = await prismaClient.organization.findUnique({
-      where: { id: context.organizationId },
-      select: {
-        id: true,
-        name: true,
-        companies: {
-          orderBy: { id: 'asc' },
-          select: { id: true, name: true },
-        },
-      },
-    });
+    if (!organization && allowedOrganizationIds.length > 0) {
+      organization = await prismaClient.organization.findFirst({
+        include: organizationInclude,
+        orderBy: { id: 'asc' },
+        where: { id: { in: allowedOrganizationIds } },
+      });
+    }
+
+    if (!organization) {
+      organization = await prismaClient.organization.findFirst({
+        include: organizationInclude,
+        orderBy: { id: 'asc' },
+      });
+    }
 
     if (!organization) {
       return { organization: null, company: null, companies: [] };
     }
 
-    const allowedCompanyIds = context.allowedCompanyIds ?? [];
-    const filteredCompanies = organization.companies.filter((company) => {
-      if (allowedCompanyIds.length === 0) {
-        return true;
-      }
-      return allowedCompanyIds.includes(company.id);
-    });
+    const allowedCompanySet =
+      allowedCompanyIds.length > 0 ? new Set(allowedCompanyIds) : null;
+
+    const organizationCompanies = organization.companies ?? [];
+
+    let filteredCompanies = organizationCompanies;
+    if (
+      !context.isGlobalSuperAdmin &&
+      allowedCompanySet !== null &&
+      allowedCompanySet.size > 0
+    ) {
+      filteredCompanies = filteredCompanies.filter((company) =>
+        allowedCompanySet.has(company.id),
+      );
+    }
+
+    if (filteredCompanies.length === 0) {
+      filteredCompanies = organizationCompanies;
+    }
 
     const companies = filteredCompanies.map((company) => ({
       id: company.id,

@@ -1,7 +1,8 @@
 // sales-chart.tsx
 "use client"
 
-import { useEffect, useState } from "react"
+import { useTenantSelection } from "@/context/tenant-selection-context"
+import { useEffect, useMemo, useState } from "react"
 import { Area, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { format, eachDayOfInterval } from "date-fns"
 import { formatInTimeZone } from "date-fns-tz"
@@ -20,6 +21,11 @@ function endOfDayInLima(date: Date) {
 
 export function SalesChart({ dateRange }: Props) {
   const [data, setData] = useState<{ date: string; displayDate: string; sales: number }[]>([])
+  const { selection, version } = useTenantSelection()
+  const selectionKey = useMemo(
+    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
+    [selection.orgId, selection.companyId, version],
+  )
 
   useEffect(() => {
     if (!dateRange.from || !dateRange.to) return
@@ -57,7 +63,7 @@ export function SalesChart({ dateRange }: Props) {
     }
   
     fetchSales()
-  }, [dateRange])
+  }, [dateRange, selectionKey])
 
   return (
     <div className="w-full h-[350px] flex items-center justify-center">

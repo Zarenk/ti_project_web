@@ -11,6 +11,8 @@ import { Request } from 'express';
 import { ChatService } from './chat.service';
 import { CreateChatDto } from './dto/create-chat.dto';
 import { ChatGateway } from './chat.gateway';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { TenantContext } from 'src/tenancy/tenant-context.interface';
 
 @Controller('chat')
 export class ChatController {
@@ -20,19 +22,33 @@ export class ChatController {
   ) {}
 
   @Post()
-  async create(@Body() dto: CreateChatDto, @Req() req: Request) {
-    const message = await this.chatService.addMessage(dto, req);
+  async create(
+    @Body() dto: CreateChatDto,
+    @Req() req: Request,
+    @CurrentTenant() tenant: TenantContext | null,
+    @CurrentTenant('userId') userId: number | null,
+  ) {
+    const message = await this.chatService.addMessage(
+      { ...dto, senderId: userId ?? dto.senderId },
+      req,
+      tenant ?? undefined,
+    );
     this.chatGateway.server.emit('chat:receive', message);
     return message;
   }
 
   @Get('unanswered')
-  async findUnanswered(): Promise<{ clientId: number; count: number }[]> {
-    return this.chatService.getUnansweredMessages();
+  async findUnanswered(
+    @CurrentTenant() tenant: TenantContext | null,
+  ): Promise<{ clientId: number; count: number }[]> {
+    return this.chatService.getUnansweredMessages(tenant ?? undefined);
   }
 
   @Get(':clientId')
-  findAll(@Param('clientId', ParseIntPipe) clientId: number) {
-    return this.chatService.getMessages(clientId);
+  findAll(
+    @Param('clientId', ParseIntPipe) clientId: number,
+    @CurrentTenant() tenant: TenantContext | null,
+  ) {
+    return this.chatService.getMessages(clientId, tenant ?? undefined);
   }
 }

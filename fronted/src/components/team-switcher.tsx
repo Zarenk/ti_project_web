@@ -373,20 +373,23 @@ export function TeamSwitcher(): React.ReactElement | null {
                         Sin empresas registradas
                       </DropdownMenuItem>
                     )}
+                    {canAddCompanies ? (
+                      <DropdownMenuItem
+                        className="gap-2 p-2"
+                        onClick={() => {
+                          setActiveOrgId(organization.id)
+                          setDialogOpen(true)
+                        }}
+                      >
+                        <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
+                          <Plus className="size-4" />
+                        </div>
+                        <div className="text-muted-foreground font-medium">Agregar empresa</div>
+                      </DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuSeparator />
                   </React.Fragment>
                 ))}
-                {canAddCompanies ? (
-                  <DropdownMenuItem
-                    className="gap-2 p-2"
-                    onClick={() => setDialogOpen(true)}
-                  >
-                    <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
-                      <Plus className="size-4" />
-                    </div>
-                    <div className="text-muted-foreground font-medium">Agregar empresa</div>
-                  </DropdownMenuItem>
-                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
             <ModeToggle />

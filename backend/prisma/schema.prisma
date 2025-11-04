@@ -132,10 +132,15 @@ model CatalogCover {
   originalName String?
   mimeType     String?
   isActive     Boolean  @default(true)
+  organizationId  Int?
+  companyId       Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@index([isActive])
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company         Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, companyId, isActive])
 }
 
 model Category {
@@ -230,6 +235,7 @@ model Organization {
   accEntries   AccEntry[]
   exchangeRates TipoCambio[]
   entrySeries  EntryDetailSeries[]
+  catalogCover CatalogCover[]
 
   @@unique([name])
   @@index([status])
@@ -255,6 +261,7 @@ model Company {
   products           Product[] // 👈 NUEVA RELACIÓN
   categories         Category[]
   accEntries         AccEntry[]
+  catalogCover CatalogCover[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])

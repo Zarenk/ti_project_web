@@ -18,6 +18,7 @@ import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveBackendPath } from '../utils/path-utils';
+import { CurrentTenant } from '../tenancy/tenant-context.decorator';
 
 function ensureCatalogDir(): string {
   const dir = resolveBackendPath('uploads', 'catalog');
@@ -33,9 +34,21 @@ export class CatalogCoverController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
-  async getActiveCover(@Req() req: Request) {
+  async getActiveCover(
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    if (organizationId === null) {
+      return { cover: null };
+    }
+
     const cover = await this.prisma.catalogCover.findFirst({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        organizationId,
+        companyId: companyId ?? null,
+      },
       orderBy: { createdAt: 'desc' },
     });
     if (!cover) {
@@ -86,16 +99,27 @@ export class CatalogCoverController {
   async uploadCover(
     @UploadedFile() file: Express.Multer.File,
     @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     if (!file) {
       throw new BadRequestException('Debes adjuntar una imagen');
+    }
+    if (organizationId === null) {
+      throw new BadRequestException(
+        'Debes seleccionar una organizacion valida antes de actualizar la caratula.',
+      );
     }
 
     const relativePath = `/uploads/catalog/${file.filename}`;
 
     const cover = await this.prisma.$transaction(async (tx) => {
       await tx.catalogCover.updateMany({
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          organizationId,
+          companyId: companyId ?? null,
+        },
         data: { isActive: false },
       });
       return tx.catalogCover.create({
@@ -104,6 +128,8 @@ export class CatalogCoverController {
           originalName: file.originalname,
           mimeType: file.mimetype,
           isActive: true,
+          organizationId,
+          companyId: companyId ?? null,
         },
       });
     });

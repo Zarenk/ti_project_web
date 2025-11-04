@@ -219,23 +219,20 @@ export class TenantContextService {
       (organizationSuperAdminIds.includes(organizationId) ||
         isOrganizationRole);
 
-    if (!isGlobalSuperAdmin) {
+    if (!isGlobalSuperAdmin && !isOrganizationSuperAdmin) {
+      const fallbackOrganizationId = allowedOrganizationIds[0] ?? null;
+      const fallbackCompanyId = allowedCompanyIds[0] ?? null;
+
       if (
         organizationId !== null &&
         allowedOrganizationIds.length > 0 &&
         !allowedOrganizationIds.includes(organizationId)
       ) {
-        if (allowFallback) {
-          organizationId = allowedOrganizationIds[0] ?? null;
-        } else {
-          throw new BadRequestException(
-            `La organización ${organizationId} no está autorizada para el usuario actual.`,
-          );
-        }
+        organizationId = fallbackOrganizationId;
       }
 
       if (organizationId === null && allowedOrganizationIds.length > 0) {
-        organizationId = allowedOrganizationIds[0] ?? null;
+        organizationId = fallbackOrganizationId;
       }
 
       if (
@@ -243,22 +240,32 @@ export class TenantContextService {
         allowedCompanyIds.length > 0 &&
         !allowedCompanyIds.includes(companyId)
       ) {
-        if (allowFallback) {
-          companyId = allowedCompanyIds[0] ?? null;
-        } else {
-          throw new BadRequestException(
-            `La compañía ${companyId} no está autorizada para el usuario actual.`,
-          );
-        }
+        companyId = fallbackCompanyId;
       }
 
       if (companyId !== null && organizationId === null) {
-        if (allowFallback) {
-          companyId = null;
+        if (fallbackOrganizationId !== null) {
+          organizationId = fallbackOrganizationId;
         } else {
-          throw new BadRequestException(
-            'Debe especificar una organización válida antes de seleccionar una compañía.',
-          );
+          companyId = null;
+        }
+      }
+
+      if (
+        (organizationId === null && allowedOrganizationIds.length === 0) ||
+        (companyId === null && allowedCompanyIds.length === 0)
+      ) {
+        if (allowFallback) {
+          organizationId = fallbackOrganizationId ?? null;
+          companyId = fallbackCompanyId ?? null;
+        } else if (
+          organizationId === null &&
+          companyId !== null &&
+          allowedCompanyIds.length > 0
+        ) {
+          companyId = allowedCompanyIds.includes(companyId)
+            ? companyId
+            : allowedCompanyIds[0] ?? null;
         }
       }
     }

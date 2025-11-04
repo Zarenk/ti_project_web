@@ -16,9 +16,13 @@ import { getMonthlyClientsStats, getMonthlySalesCount, getMonthlySalesTotal, get
 import { TopProductsTable } from "./top-products-table"
 import { TopClientsTable } from "./top-clients-table"
 import { endOfDay } from "date-fns"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 import TransactionHistoryTable from "../components/TransactionHistoryTable"
 
 export default function SalesDashboard() {
+    const { selection, version, loading: tenantLoading } = useTenantSelection();
+    const selectionKey = `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`;
+
     const [dateRange, setDateRange] = useState<DateRange>({
         from: new Date(new Date().setDate(new Date().getDate() - 30)),
         to: new Date(),
@@ -33,6 +37,7 @@ export default function SalesDashboard() {
     const [transactions, setTransactions] = useState<any[]>([]);
 
     useEffect(() => {
+      if (tenantLoading) return
       const fetchMonthlySales = async () => {
         try {
          const { total, growth } = await getMonthlySalesTotal();
@@ -44,9 +49,10 @@ export default function SalesDashboard() {
       };
     
       fetchMonthlySales();
-    }, []);
+    }, [selectionKey, tenantLoading]);
 
     useEffect(() => {
+        if (tenantLoading) return
         const fetchSalesCount = async () => {
           try {
             const { count, growth } = await getMonthlySalesCount();
@@ -56,20 +62,21 @@ export default function SalesDashboard() {
             console.error("Error al obtener número de ventas:", error);
           }
         };
-      
         fetchSalesCount();
-      }, []);
+      }, [selectionKey, tenantLoading]);
 
       useEffect(() => {
+        if (tenantLoading) return
         getMonthlyClientsStats()
           .then(data => {
             setMonthlyClients(data.total);
             setClientGrowth(data.growth);
           })
           .catch(console.error);
-      }, []);
+      }, [selectionKey, tenantLoading]);
 
       useEffect(() => {
+        if (tenantLoading) return
         if (dateRange?.from && dateRange?.to) {
           const from = dateRange.from.toISOString();
           const to = endOfDay(dateRange.to).toISOString();
@@ -77,7 +84,7 @@ export default function SalesDashboard() {
             .then(setTransactions)
             .catch(console.error);
         }
-      }, [dateRange]);
+      }, [dateRange, selectionKey, tenantLoading]);
 
   return (
     <div className="flex flex-col gap-5 p-6">

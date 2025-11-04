@@ -1,5 +1,6 @@
 "use client";
 
+import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createSalesColumns, Sale } from "./columns";
 import { DataTable } from "./data-table";
@@ -274,6 +275,11 @@ export default function Page() {
   const [maxTotal, setMaxTotal] = useState("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("ALL");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const { selection, version } = useTenantSelection();
+  const selectionKey = useMemo(
+    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
+    [selection.orgId, selection.companyId, version],
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -291,7 +297,7 @@ export default function Page() {
       }
     };
     fetchData();
-  }, []);
+  }, [selectionKey]);
 
   const handleDeleted = useCallback((id: number) => {
     setSales((prev) => prev.filter((sale) => sale.id !== id));

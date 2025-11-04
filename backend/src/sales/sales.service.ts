@@ -1157,10 +1157,9 @@ export class SalesService {
           name: detail.entryDetail.product.name,
           quantity: detail.quantity,
           price: detail.price,
-          series:
-            (detail.series?.length
-              ? detail.series
-              : detail.entryDetail.series?.map((s) => s.serial)) ?? [],
+          series: Array.isArray(detail.series)
+            ? detail.series.filter((value): value is string => typeof value === 'string' && value.length > 0)
+            : [],
         })),
         invoice: invoice
           ? {
@@ -1312,10 +1311,9 @@ export class SalesService {
           unitPrice: detail.price,
           costUnit: detail.entryDetail.price,
           productName: detail.entryDetail.product.name,
-          series:
-            (detail.series?.length
-              ? detail.series
-              : detail.entryDetail.series?.map((s) => s.serial)) ?? [],
+          series: Array.isArray(detail.series)
+            ? detail.series.filter((value): value is string => typeof value === 'string' && value.length > 0)
+            : [],
         })),
       };
     });

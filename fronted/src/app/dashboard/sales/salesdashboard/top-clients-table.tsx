@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react";
+import { useTenantSelection } from "@/context/tenant-selection-context";
+import { useEffect, useMemo, useState } from "react";
 import {
   Table,
   TableBody,
@@ -20,6 +21,11 @@ interface Props {
 export function TopClientsTable({ dateRange }: Props) {
   const [data, setData] = useState<any[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
+  const { selection, version } = useTenantSelection();
+  const selectionKey = useMemo(
+    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
+    [selection.orgId, selection.companyId, version],
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -39,7 +45,7 @@ export function TopClientsTable({ dateRange }: Props) {
     };
 
     fetchData();
-  }, [dateRange]);
+  }, [dateRange, selectionKey]);
 
   return (
     <div className="rounded-xl border bg-card shadow-md overflow-x-auto">

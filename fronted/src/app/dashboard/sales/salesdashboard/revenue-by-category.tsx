@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useTenantSelection } from "@/context/tenant-selection-context"
+import { useEffect, useMemo, useState } from "react"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import { getRevenueByCategoryByRange } from "../sales.api"
 import { DateRange } from "react-day-picker"
@@ -11,6 +12,11 @@ const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"]
 export function RevenueByCategory({ dateRange }: { dateRange: DateRange }) {
   const [data, setData] = useState<{ name: string; value: number; percent: string; }[]>([])
   const [radius, setRadius] = useState(90);
+  const { selection, version } = useTenantSelection()
+  const selectionKey = useMemo(
+    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
+    [selection.orgId, selection.companyId, version],
+  )
 
   const calculateDataWithPercentage = (data: { name: string; value: number }[]) => {
     const total = data.reduce((acc, item) => acc + item.value, 0)
@@ -39,7 +45,7 @@ export function RevenueByCategory({ dateRange }: { dateRange: DateRange }) {
     }
   
     fetchData();
-  }, [dateRange]);
+  }, [dateRange, selectionKey]);
 
   useEffect(() => {
     const handleResize = () => {

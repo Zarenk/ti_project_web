@@ -1,5 +1,6 @@
 import { refreshAuthToken } from "@/utils/auth-refresh"
 import { getAuthHeaders } from "@/utils/auth-token"
+import { wasManualLogoutRecently } from "@/utils/manual-logout"
 
 export class UnauthenticatedError extends Error {
   constructor(message = 'Unauthenticated') {
@@ -26,6 +27,9 @@ export async function authFetch(
   input: RequestInfo | URL,
   init: RequestInit = {}
 ): Promise<Response> {
+  if (wasManualLogoutRecently()) {
+    throw new UnauthenticatedError()
+  }
   const url = resolveUrl(input)
   const headers = new Headers(init.headers || {})
   const auth = await getAuthHeaders()
@@ -36,6 +40,10 @@ export async function authFetch(
 
   let res = await fetch(url, { ...init, headers })
   if (res.status !== 401) return res
+
+  if (wasManualLogoutRecently()) {
+    throw new UnauthenticatedError()
+  }
 
   const refreshed = await refreshAuthToken()
   if (!refreshed) {
