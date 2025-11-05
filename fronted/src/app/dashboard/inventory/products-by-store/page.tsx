@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getBrands } from "../../brands/brands.api";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 
 type SortKey =
   | "product"
@@ -110,6 +111,7 @@ export default function ProductsByStorePage() {
   // Dentro del componente:
   const [open, setOpen] = useState(false)
   const [brandOpen, setBrandOpen] = useState(false)
+  const { version } = useTenantSelection();
   const selectedCategoryName =
     selectedCategory === 0
       ? "Todas las categorías"
@@ -288,6 +290,10 @@ export default function ProductsByStorePage() {
   }, []);
 
   useEffect(() => {
+    handleClearFilters();
+  }, [version, handleClearFilters]);
+
+  useEffect(() => {
     async function fetchGlobalInventoryValue() {
       try {
         const data = await getInventory();
@@ -316,8 +322,9 @@ export default function ProductsByStorePage() {
       }
     }
 
+    setGlobalInventoryValue(0);
     fetchGlobalInventoryValue();
-  }, []);
+  }, [version]);
 
   useEffect(() => {
     async function fetchStores() {
@@ -328,8 +335,9 @@ export default function ProductsByStorePage() {
         console.error("Error al obtener las tiendas:", error);
       }
     }
+    setStores([]);
     fetchStores();
-  }, []);
+  }, [version]);
 
   useEffect(() => {
     let isMounted = true;
@@ -394,11 +402,11 @@ export default function ProductsByStorePage() {
     return () => {
       isMounted = false;
     };
-  }, [debouncedSelectedStore, filtersQuery, withStockOnly, stores]);
+  }, [debouncedSelectedStore, filtersQuery, withStockOnly, stores, version]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtersQuery, debouncedSelectedStore]);
+  }, [filtersQuery, debouncedSelectedStore, version]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -423,14 +431,16 @@ export default function ProductsByStorePage() {
     async function fetchCategories() {
       try {
         const data = await getCategories();
-        console.log("Categorías obtenidas:", data); // Verifica los datos obtenidos
         setCategories(data);
       } catch (error) {
         console.error("Error al obtener las categorías:", error);
+        setCategories([]);
       }
     }
+
+    setCategories([]);
     fetchCategories();
-  }, []);
+  }, [version]);
 
   useEffect(() => {
     async function fetchBrands() {
@@ -442,11 +452,13 @@ export default function ProductsByStorePage() {
         setBrands(normalizedBrands);
       } catch (error) {
         console.error("Error al obtener las marcas:", error);
+        setBrands([]);
       }
     }
 
+    setBrands([]);
     fetchBrands();
-  }, []);
+  }, [version]);
 
   // Filtrar productos por término de búsqueda
   useEffect(() => {
@@ -946,3 +958,11 @@ export default function ProductsByStorePage() {
     </Card>
   );
 }
+
+
+
+
+
+
+
+

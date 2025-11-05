@@ -40,23 +40,6 @@ function handleDashboardGuard(request: NextRequest): NextResponse {
     return NextResponse.redirect(new URL('/unauthorized', request.url))
   }
 
-  try {
-    const payload: any = decodeJwt(token)
-    const role = String(payload?.role || '').trim().toUpperCase()
-    const isSuperAdmin = role.includes('SUPER_ADMIN')
-    const allowedRoles = new Set([
-      'ADMIN',
-      'EMPLOYEE',
-      'ACCOUNTANT',
-      'AUDITOR',
-    ])
-    if (!isSuperAdmin && !allowedRoles.has(role)) {
-      return NextResponse.redirect(new URL('/unauthorized', request.url))
-    }
-  } catch {
-    // Si el token no es valido, permitimos que el backend realice la verificacion final.
-  }
-
   const response = NextResponse.next()
   response.headers.set('Cache-Control', 'no-store, max-age=0')
   return response

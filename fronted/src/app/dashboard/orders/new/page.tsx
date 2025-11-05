@@ -24,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import ProductsSection from "./ProductsSection";
 import SummaryCard from "./SummaryCard";
 import ClientCombobox from "./ClientCombobox";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 
 // (Combos de búsqueda se aislaron en componentes)
 
@@ -283,6 +284,7 @@ type OrderItem = {
 
 export default function NewOrderPage() {
   const router = useRouter();
+  const { version } = useTenantSelection();
   const [authChecked, setAuthChecked] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -388,7 +390,12 @@ export default function NewOrderPage() {
     async function guard() {
       const user = await getUserDataFromToken();
       const valid = await isTokenValid();
-      if (!user || !valid || (user.role !== "ADMIN" && user.role !== "EMPLOYEE")) {
+      const normalizedRole = user?.role ? user.role.trim().toUpperCase().replace(/\s+/g, "_") : null;
+      const isSuperAdmin = normalizedRole ? normalizedRole.includes("SUPER_ADMIN") : false;
+      const allowedRoles = new Set(["ADMIN", "EMPLOYEE", "ACCOUNTANT", "AUDITOR"]);
+      const roleAllowed = normalizedRole ? (isSuperAdmin || allowedRoles.has(normalizedRole)) : false;
+
+      if (!user || !valid || !roleAllowed) {
         router.replace("/unauthorized");
         return;
       }
@@ -397,7 +404,7 @@ export default function NewOrderPage() {
       setAuthChecked(true);
     }
     guard();
-  }, [router]);
+  }, [router, version]);
 
   useEffect(() => {
     async function loadStores() {
@@ -415,7 +422,7 @@ export default function NewOrderPage() {
       }
     }
     loadStores();
-  }, []);
+  }, [version]);
 
   // Load categories once
   useEffect(() => {
@@ -435,7 +442,7 @@ export default function NewOrderPage() {
       }
     }
     loadCats();
-  }, []);
+  }, [version]);
 
   // Keep popover logic inside child components now
 
@@ -451,7 +458,7 @@ export default function NewOrderPage() {
     setShippingName(name);
     setSelectedClientId(c.id ?? null);
     setSelectedClientLabel(name);
-  }, []);
+  }, [version]);
 
   const handleProductPick = useCallback((p: { id: number; name: string; price: number }) => {
     setSelectedProductId(p.id);
@@ -531,7 +538,7 @@ export default function NewOrderPage() {
     setSelectedProductId(null);
     setSelectedPrice(0);
     setQuantity(1);
-  }, [storeId]);
+  }, [storeId, version]);
 
   useEffect(() => {
     async function loadClients() {
@@ -558,7 +565,7 @@ export default function NewOrderPage() {
       }
     }
     loadClients();
-  }, []);
+  }, [version]);
 
   const subtotal = useMemo(() => items.reduce((s, it) => s + it.quantity * it.price, 0), [items]);
   const shipping = 0;
@@ -1018,3 +1025,4 @@ export default function NewOrderPage() {
     </div>
   );
 }
+

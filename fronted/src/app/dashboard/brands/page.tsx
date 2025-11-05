@@ -17,6 +17,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTenantSelection } from '@/context/tenant-selection-context';
 
 const JPEG_MIME_TYPES = new Set(['image/jpeg', 'image/jpg']);
 
@@ -96,10 +97,15 @@ export default function BrandsPage() {
       }),
     [],
   );
+  const { version } = useTenantSelection();
 
   useEffect(() => {
+    setPage(1);
+    setAllBrands([]);
+    setBrands([]);
+    setTotal(0);
     fetchBrands();
-  }, []);
+  }, [version]);
 
   useEffect(() => {
     const handler = window.setTimeout(() => {

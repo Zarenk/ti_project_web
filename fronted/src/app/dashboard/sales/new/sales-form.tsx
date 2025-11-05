@@ -1361,6 +1361,11 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                     setActiveProductIndex(index);
                                   }
                                 }}
+                                onDoubleClick={() => {
+                                  if (typeof window !== 'undefined' && window.innerWidth >= 640) {
+                                    setActiveProductIndex(index);
+                                  }
+                                }}
                               >
                                 <TableCell className="font-semibold w-[92px] sm:w-[140px] truncate whitespace-nowrap overflow-hidden text-[11px] sm:text-xs">
                                   {product.name}
@@ -1384,6 +1389,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                           );
                                         }
                                       }}
+                                      onDoubleClick={(e) => e.stopPropagation()}
                                       className="h-8 sm:h-9 w-full text-xs sm:text-sm"
                                     />
                                   </div>
@@ -1409,6 +1415,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                           );
                                         }
                                       }}
+                                      onDoubleClick={(e) => e.stopPropagation()}
                                       className="h-8 sm:h-9 w-full text-xs sm:text-sm"
                                     />
                                   </div>
@@ -1430,6 +1437,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                         toast.error("Este producto no tiene series asociadas.");
                                       }
                                     }}
+                                    onDoubleClick={(e) => e.stopPropagation()}
                                   >
                                     {product.series && product.series.length > 0
                                       ? `${product.series.length} series`
@@ -1444,6 +1452,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                       e.stopPropagation();
                                       removeProduct(product.id);
                                     }}
+                                    onDoubleClick={(e) => e.stopPropagation()}
                                     title="Eliminar este producto de la venta"
                                   >
                                     <X className="w-4 h-4" color="red" />
