@@ -8,12 +8,19 @@ import { useRBAC } from "@/app/hooks/use-rbac"
 import { MODULE_PERMISSION_LABELS, useEnforcedModulePermission } from "@/hooks/use-enforced-module-permission"
 
 const MODULE_KEY = "accounting"
+const RBAC_ALLOWED_ROLES = [
+  "SUPER_ADMIN_GLOBAL",
+  "SUPER_ADMIN_ORG",
+  "ADMIN",
+  "ACCOUNTANT",
+  "AUDITOR",
+]
 
 export default function AccountingLayout({ children }: { children: ReactNode }) {
   const router = useRouter()
   const { allowed: moduleAllowed, loading } = useEnforcedModulePermission(MODULE_KEY)
   const enabled = useFeatureFlag("ACCOUNTING_ENABLED")
-  const canRead = useRBAC(["admin", "accountant", "auditor"])
+  const canRead = useRBAC(RBAC_ALLOWED_ROLES)
   const hasWarnedRef = useRef(false)
 
   const isPending = loading || canRead === undefined

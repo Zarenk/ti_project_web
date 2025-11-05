@@ -1,14 +1,14 @@
-'use client'
+"use client"
 
-import React, { useEffect, useState } from 'react'
-import { CalendarDatePicker } from '@/components/calendar-date-picker'
-import { DateRange } from 'react-day-picker'
+import React, { useCallback, useEffect, useState } from "react"
+import { CalendarDatePicker } from "@/components/calendar-date-picker"
+import { DateRange } from "react-day-picker"
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -16,8 +16,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
-import { BACKEND_URL } from '@/lib/utils'
+} from "@/components/ui/table"
+import { authFetch } from "@/utils/auth-fetch"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 
 interface LedgerRow {
   date: string
@@ -36,35 +37,41 @@ export default function LedgerReportPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { version } = useTenantSelection()
 
-  const load = async (range?: DateRange) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const params = new URLSearchParams()
-      if (range?.from) params.set('start', range.from.toISOString().split('T')[0])
-      if (range?.to) params.set('end', range.to.toISOString().split('T')[0])
-      const url = `${BACKEND_URL}/api/accounting/reports/ledger${params.toString() ? `?${params.toString()}` : ''}`
-      const res = await fetch(url)
-      if (!res.ok) throw new Error('Request failed')
-      const data: LedgerResponse = await res.json()
-      setRows(Array.isArray(data.data) ? data.data : [])
-    } catch (err) {
-      console.error('Failed to load ledger', err)
-      setError('Failed to load ledger')
-      setRows([])
-    } finally {
-      setLoading(false)
-    }
-  }
+  const load = useCallback(
+    async (range?: DateRange) => {
+      setLoading(true)
+      setError(null)
+      try {
+        const params = new URLSearchParams()
+        if (range?.from) params.set("start", range.from.toISOString().split("T")[0])
+        if (range?.to) params.set("end", range.to.toISOString().split("T")[0])
+        const query = params.toString()
+        const res = await authFetch(`/api/accounting/reports/ledger${query ? `?${query}` : ""}`, {
+          cache: "no-store",
+        })
+        if (!res.ok) throw new Error("Request failed")
+        const data: LedgerResponse = await res.json()
+        setRows(Array.isArray(data.data) ? data.data : [])
+      } catch (err) {
+        console.error("Failed to load ledger", err)
+        setError("Failed to load ledger")
+        setRows([])
+      } finally {
+        setLoading(false)
+      }
+    },
+    [version],
+  )
 
   useEffect(() => {
     load(dateRange)
-  }, [dateRange])
+  }, [dateRange, load])
 
   return (
-    <Card className='shadow-sm'>
-      <CardHeader className='flex flex-col sm:flex-row sm:items-center justify-between gap-2'>
+    <Card className="shadow-sm">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <CardTitle>Ledger</CardTitle>
         <CalendarDatePicker
           className='h-9 w-[250px]'

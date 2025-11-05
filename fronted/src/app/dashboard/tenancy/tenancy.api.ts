@@ -62,6 +62,30 @@ export interface CurrentTenantResponse {
   companies: Array<{ id: number; name: string }>
 }
 
+export interface OrganizationCompaniesOverview {
+  id: number
+  name: string
+  code: string | null
+  status: string
+  createdAt: string
+  updatedAt: string
+  membershipCount: number
+  superAdmin: OrganizationSuperAdmin | null
+  units: OrganizationResponse["units"]
+  companies: CompanyResponse[]
+}
+
+export interface CompanyDetail extends CompanyResponse {
+  organization: { id: number; name: string; code: string | null; status: string }
+}
+
+export interface UpdateCompanyPayload {
+  name?: string
+  legalName?: string | null
+  taxId?: string | null
+  status?: string
+}
+
 export async function createOrganization(
   payload: CreateOrganizationPayload,
 ): Promise<OrganizationResponse> {
@@ -378,9 +402,137 @@ export async function createCompany(
     throw new Error(message)
   }
 
-  return data as CompanyResponse
+  const company = data as any
+  return {
+    id: Number(company.id),
+    organizationId: Number(company.organizationId),
+    name: String(company.name ?? ""),
+    legalName: company.legalName ?? null,
+    taxId: company.taxId ?? null,
+    status: String(company.status ?? ""),
+    createdAt: new Date(company.createdAt).toISOString(),
+    updatedAt: new Date(company.updatedAt).toISOString(),
+  }
 }
 
+export async function listOrganizationsWithCompanies(): Promise<OrganizationCompaniesOverview[]> {
+  const headers = await getAuthHeaders()
 
+  if (!headers.Authorization) {
+    return []
+  }
 
+  const response = await fetch(`${BACKEND_URL}/api/companies`, {
+    headers,
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      return []
+    }
+    throw new Error("No se pudieron obtener las empresas")
+  }
+
+  const data = (await response.json()) as unknown
+  if (!Array.isArray(data)) {
+    return []
+  }
+
+  return data.map((item: any) => ({
+    id: Number(item.id),
+    name: String(item.name ?? ""),
+    code: item.code ?? null,
+    status: String(item.status ?? ""),
+    createdAt: new Date(item.createdAt).toISOString(),
+    updatedAt: new Date(item.updatedAt).toISOString(),
+    membershipCount: Number(item.membershipCount ?? 0),
+    superAdmin: item.superAdmin ?? null,
+    units: Array.isArray(item.units) ? item.units : [],
+    companies: Array.isArray(item.companies)
+      ? item.companies.map((company: any) => ({
+          id: Number(company.id),
+          organizationId: Number(company.organizationId),
+          name: String(company.name ?? ""),
+          legalName: company.legalName ?? null,
+          taxId: company.taxId ?? null,
+          status: String(company.status ?? ""),
+          createdAt: new Date(company.createdAt).toISOString(),
+          updatedAt: new Date(company.updatedAt).toISOString(),
+        }))
+      : [],
+  }))
+}
+
+export async function getCompanyDetail(id: number): Promise<CompanyDetail | null> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    return null
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${id}`, {
+    headers,
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      return null
+    }
+    throw new Error("No se pudo obtener la empresa")
+  }
+
+  const data = (await response.json()) as CompanyDetail
+  return {
+    id: Number(data.id),
+    organizationId: Number(data.organizationId),
+    name: String(data.name ?? ""),
+    legalName: data.legalName ?? null,
+    taxId: data.taxId ?? null,
+    status: String(data.status ?? ""),
+    createdAt: new Date(data.createdAt).toISOString(),
+    updatedAt: new Date(data.updatedAt).toISOString(),
+    organization: {
+      id: Number(data.organization.id),
+      name: String(data.organization.name ?? ""),
+      code: data.organization.code ?? null,
+      status: String(data.organization.status ?? ""),
+    },
+  }
+}
+
+export async function updateCompany(
+  id: number,
+  payload: UpdateCompanyPayload,
+): Promise<CompanyResponse> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo actualizar la empresa"
+    throw new Error(message)
+  }
+
+  return data as CompanyResponse
+}
 

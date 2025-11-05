@@ -30,6 +30,7 @@ export type CompanySnapshot = {
 export type TenancySnapshot = {
   id: number;
   name: string;
+  slug: string | null;
   code: string | null;
   status: string;
   createdAt: Date;

@@ -101,6 +101,11 @@ export class TenancyController {
     return this.tenancyService.findOne(id);
   }
 
+  @Get('resolve/slug/:slug')
+  resolveBySlug(@Param('slug') slug: string): Promise<TenancySnapshot> {
+    return this.tenancyService.findBySlug(slug);
+  }
+
   @UseGuards(GlobalSuperAdminGuard)
   @Patch(':id')
   update(
@@ -125,3 +130,6 @@ export class TenancyController {
     return this.tenancyService.remove(id);
   }
 }
+
+
+

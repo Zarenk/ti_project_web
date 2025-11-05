@@ -9,6 +9,7 @@ import {
   siteSettingsWithMetaSchema,
   type SiteSettings,
 } from "@/context/site-settings-schema";
+import { getRequestTenant } from "@/lib/server/tenant-context";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 const SITE_SETTINGS_URL = `${BACKEND_URL}/api/site-settings`;
@@ -21,21 +22,35 @@ export interface SiteSettingsFetchResult {
 
 async function resolveAuthHeaders(): Promise<Record<string, string>> {
   const resolvedHeaders = await headers();
+  const tenant = await getRequestTenant();
+
   const authorizationHeader = resolvedHeaders.get("authorization");
+  const headersToSend: Record<string, string> = {};
+
   if (authorizationHeader) {
-    return { Authorization: authorizationHeader };
+    headersToSend.Authorization = authorizationHeader;
   }
 
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
-  if (token) {
-    return { Authorization: `Bearer ${token}` };
+  if (!headersToSend.Authorization) {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
+    if (token) {
+      headersToSend.Authorization = `Bearer ${token}`;
+    }
   }
 
-  return {};
+  if (tenant.organizationId) {
+    headersToSend["x-org-id"] = String(tenant.organizationId);
+  }
+
+  if (tenant.slug) {
+    headersToSend["x-tenant-slug"] = tenant.slug;
+  }
+
+  return headersToSend;
 }
 
-async function fetchSiteSettings(): Promise<SiteSettingsFetchResult> {
+async function fetchSiteSettingsInternal(): Promise<SiteSettingsFetchResult> {
   try {
     const response = await fetch(SITE_SETTINGS_URL, {
       cache: "no-store",
@@ -90,4 +105,12 @@ async function fetchSiteSettings(): Promise<SiteSettingsFetchResult> {
   }
 }
 
-export const getSiteSettings = cache(fetchSiteSettings);
+const cachedGetSiteSettings = cache(async (_cacheKey: string) => {
+  return fetchSiteSettingsInternal();
+});
+
+export async function getSiteSettings(): Promise<SiteSettingsFetchResult> {
+  const tenant = await getRequestTenant();
+  const cacheKey = `${tenant.organizationId ?? "anon"}::${tenant.slug ?? "default"}`;
+  return cachedGetSiteSettings(cacheKey);
+}

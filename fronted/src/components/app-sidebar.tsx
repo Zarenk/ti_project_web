@@ -215,17 +215,25 @@ const data: SidebarData = {
       url: "#",
       icon: Building2,
       permission: "settings",
-      requiredRoles: ["SUPER_ADMIN_GLOBAL"],
+      requiredRoles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
       items: [
         {
           title: "Nueva Organizacion",
           url: "/dashboard/tenancy/new",
           permission: "settings",
+          requiredRoles: ["SUPER_ADMIN_GLOBAL"],
         },
         {
           title: "Ver Organizaciones",
           url: "/dashboard/tenancy",
           permission: "settings",
+          requiredRoles: ["SUPER_ADMIN_GLOBAL"],
+        },
+        {
+          title: "Empresas",
+          url: "/dashboard/tenancy/companies",
+          permission: "settings",
+          requiredRoles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
         },
       ],
     },
@@ -393,7 +401,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [normalizedRoleValue])
 
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
-  const canAccessAccounting = useRBAC(["admin", "accountant", "auditor"])
+  const canAccessAccounting = useRBAC([
+    "admin",
+    "accountant",
+    "auditor",
+    "SUPER_ADMIN_GLOBAL",
+    "SUPER_ADMIN_ORG",
+  ])
 
   const adsEnabled = useFeatureFlag("ads")
   const canManageAds = useRBAC(["admin", "marketing"])

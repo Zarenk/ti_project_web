@@ -44,6 +44,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getAuthHeaders } from "@/utils/auth-token";
 import { formatGlosa } from "./formatGlosa";
 import { formatDisplayGlosa } from "./formatDisplayGlosa";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 
 const sortByDateDesc = <T extends { date: string }>(arr: T[]) =>
   arr
@@ -573,12 +574,25 @@ export default function JournalsPage() {
   const [selectedLine, setSelectedLine] = useState<DailyLine | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Journal | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const { version } = useTenantSelection();
 
   useEffect(() => {
+    let cancelled = false;
     fetchJournals()
-      .then((js) => setJournals(sortByDateDesc(js)))
-      .catch(() => setJournals([]));
-  }, []);
+      .then((js) => {
+        if (!cancelled) {
+          setJournals(sortByDateDesc(js));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setJournals([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
 
   useEffect(() => {
     const loadDaily = async () => {
@@ -786,7 +800,7 @@ export default function JournalsPage() {
       }
     };
     loadDaily();
-  }, [selectedDate]);
+  }, [selectedDate, version]);
 
   const totals = useMemo(() => {
     return dailyLines.reduce(
@@ -1379,4 +1393,3 @@ export default function JournalsPage() {
     </div>
   );
 }
-

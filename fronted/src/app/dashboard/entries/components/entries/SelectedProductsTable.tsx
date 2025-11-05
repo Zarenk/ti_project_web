@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronsUpDown, X } from "lucide-react"
 import { EditSeriesModal } from "../EditSeriesModal"
-import { useState } from "react"
+import { useState, type MouseEvent } from "react"
 import { MobileProductModal } from "../MobileProductModal"
 import { cn } from "@/lib/utils"
 
@@ -122,6 +122,26 @@ export const SelectedProductsTable = ({
 
   const activeProduct = activeProductIndex !== null ? selectedProducts[activeProductIndex] ?? null : null
 
+  const openProductDetails = (index: number) => {
+    setCategoryPopoverIndex(null)
+    setActiveProductIndex(index)
+  }
+
+  const handleRowDoubleClick = (
+    event: MouseEvent<HTMLTableRowElement>,
+    index: number,
+  ) => {
+    const target = event.target as Element | null
+    if (
+      target?.closest(
+        "button, input, select, textarea, a[href], [role='button'], [contenteditable='true']",
+      )
+    ) {
+      return
+    }
+    openProductDetails(index)
+  }
+
   return (
     <div className='border px-1 sm:px-2 overflow-x-auto max-w-full'>
       <Table className={cn("w-full min-w-[340px] sm:min-w-[640px] text-[11px] sm:text-xs table-fixed")}>
@@ -212,7 +232,12 @@ export const SelectedProductsTable = ({
           {selectedProducts.map((product, index) => (
             <TableRow
               key={product.id}
-              onClick={() => window.innerWidth < 640 && setActiveProductIndex(index)} // abre el modal
+              onClick={() => {
+                if (typeof window !== "undefined" && window.innerWidth < 640) {
+                  openProductDetails(index)
+                }
+              }}
+              onDoubleClick={(event) => handleRowDoubleClick(event, index)}
               className="cursor-pointer sm:cursor-default"
             >
               <TableCell className={cn("w-[120px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2")}>

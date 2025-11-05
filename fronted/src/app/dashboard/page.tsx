@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { listOrganizations, type OrganizationResponse } from "./tenancy/tenancy.api"
 import { clearTenantSelection, getTenantSelection, setTenantSelection } from "@/utils/tenant-preferences"
 import { wasManualLogoutRecently } from "@/utils/manual-logout"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 
 type ActivityItem = {
   id: number | string
@@ -58,6 +59,7 @@ export default function WelcomeDashboard() {
   const checkPermission = useModulePermission()
   const router = useRouter()
   const authErrorShown = useRef(false)
+  const { selection, version } = useTenantSelection()
 
   const handleAuthError = useCallback(async (err: unknown) => {
     if (authErrorShown.current) return true
@@ -178,6 +180,13 @@ export default function WelcomeDashboard() {
       cancelled = true
     }
   }, [router])
+
+  useEffect(() => {
+    if (!bootstrapReady) return
+    if (selection.orgId !== selectedOrgId) {
+      setSelectedOrgId(selection.orgId ?? null)
+    }
+  }, [bootstrapReady, selection.orgId, selectedOrgId])
 
   useEffect(() => {
     if (!bootstrapReady) return
@@ -364,6 +373,7 @@ export default function WelcomeDashboard() {
     checkPermission,
     handleAuthError,
     router,
+    version,
   ])
 
   const showOrganizationSelector =

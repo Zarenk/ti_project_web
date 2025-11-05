@@ -219,6 +219,7 @@ enum OrganizationMembershipRole {
 model Organization {
   id        Int       @id @default(autoincrement())
   name      String
+  slug      String?   @unique
   code      String?   @unique
   status    String    @default("ACTIVE")
   createdAt DateTime  @default(now())

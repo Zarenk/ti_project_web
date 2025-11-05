@@ -70,6 +70,10 @@ export class CreateTenancyDto {
 
   @IsOptional()
   @IsString()
+  slug?: string;
+
+  @IsOptional()
+  @IsString()
   code?: string;
 
   @IsOptional()

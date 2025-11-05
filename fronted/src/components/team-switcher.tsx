@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Building2, ChevronsUpDown, Plus } from "lucide-react"
 import { toast } from "sonner"
@@ -96,18 +96,17 @@ export function TeamSwitcher(): React.ReactElement | null {
   const [companyStatus, setCompanyStatus] = useState("ACTIVE")
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
+  const cancelRef = useRef(false)
 
-    async function bootstrap() {
+  const fetchOrganizations = useCallback(
+    async (providedSelection?: TenantSelection) => {
       try {
         setLoading(true)
-        const [orgs, selection] = await Promise.all([
-          listOrganizations(),
-          getTenantSelection(),
-        ])
+        const selection =
+          providedSelection ?? (await getTenantSelection())
 
-        if (cancelled) return
+        const orgs = await listOrganizations()
+        if (cancelRef.current) return
 
         const normalized = normalizeOrganizations(orgs)
         setOrganizations(normalized)
@@ -133,31 +132,39 @@ export function TeamSwitcher(): React.ReactElement | null {
           setTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
         }
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelRef.current) {
           console.error(error)
           toast.error("No se pudieron cargar las empresas disponibles.")
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelRef.current) {
           setLoading(false)
         }
       }
-    }
+    },
+    [],
+  )
 
-    bootstrap()
+  useEffect(() => {
+    cancelRef.current = false
+    void fetchOrganizations()
 
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<TenantSelection>).detail
-      setActiveOrgId(detail.orgId ?? null)
-      setActiveCompanyId(detail.companyId ?? null)
+      void fetchOrganizations(detail)
     }
 
-    window.addEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
-    return () => {
-      cancelled = true
-      window.removeEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
+    if (typeof window !== "undefined") {
+      window.addEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
     }
-  }, [])
+
+    return () => {
+      cancelRef.current = true
+      if (typeof window !== "undefined") {
+        window.removeEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
+      }
+    }
+  }, [fetchOrganizations])
 
   useEffect(() => {
     if (organizations.length === 0) {

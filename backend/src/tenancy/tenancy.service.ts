@@ -13,6 +13,7 @@ import {
   OrganizationUnitInputDto,
 } from './dto/create-tenancy.dto';
 import { CreateCompanyDto } from './dto/create-company.dto';
+import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import {
   CompanySnapshot,
@@ -43,15 +44,127 @@ export interface TenantSelectionSummary {
 export class TenancyService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async mapToSnapshot(
+    prisma: PrismaService,
+    organization: {
+      id: number;
+      name: string;
+      slug: string | null;
+      code: string | null;
+      status: string;
+      createdAt: Date;
+      updatedAt: Date;
+      units: StoredOrganizationUnit[];
+      companies: CompanySnapshot[];
+      _count: { memberships: number };
+    },
+  ): Promise<TenancySnapshot> {
+    const { _count, units, companies, ...rest } = organization;
+    const superAdmin = await this.resolveSuperAdmin(prisma, organization.id);
+    return {
+      ...rest,
+      units,
+      companies,
+      membershipCount: _count.memberships,
+      superAdmin,
+    };
+  }
+
+  private buildOrganizationFilter(
+    tenant: TenantContext,
+  ): Prisma.OrganizationWhereInput {
+    if (tenant.isGlobalSuperAdmin) {
+      const allowed = new Set<number>();
+      for (const id of tenant.allowedOrganizationIds ?? []) {
+        if (typeof id === 'number' && Number.isFinite(id)) {
+          allowed.add(id);
+        }
+      }
+      if (allowed.size === 0) {
+        return {};
+      }
+      return { id: { in: Array.from(allowed) } };
+    }
+
+    if (tenant.isOrganizationSuperAdmin) {
+      const allowed = new Set<number>();
+      if (tenant.organizationId !== null) {
+        allowed.add(tenant.organizationId);
+      }
+      for (const id of tenant.allowedOrganizationIds ?? []) {
+        if (typeof id === 'number' && Number.isFinite(id)) {
+          allowed.add(id);
+        }
+      }
+      if (allowed.size === 0) {
+        throw new ForbiddenException(
+          'No tienes organizaciones asignadas para gestionar.',
+        );
+      }
+      return { id: { in: Array.from(allowed) } };
+    }
+
+    throw new ForbiddenException(
+      'Solo los super administradores pueden gestionar empresas.',
+    );
+  }
+
+  private ensureOrganizationAccess(
+    organizationId: number,
+    tenant: TenantContext,
+  ): void {
+    if (tenant.isGlobalSuperAdmin) {
+      const allowed = tenant.allowedOrganizationIds ?? [];
+      if (
+        allowed.length > 0 &&
+        !allowed.includes(organizationId)
+      ) {
+        throw new ForbiddenException(
+          'No tienes permisos para gestionar empresas de esta organizacion.',
+        );
+      }
+      return;
+    }
+
+    if (tenant.isOrganizationSuperAdmin) {
+      const allowed = new Set<number>();
+      if (tenant.organizationId !== null) {
+        allowed.add(tenant.organizationId);
+      }
+      for (const id of tenant.allowedOrganizationIds ?? []) {
+        if (typeof id === 'number') {
+          allowed.add(id);
+        }
+      }
+      if (!allowed.has(organizationId)) {
+        throw new ForbiddenException(
+          'No tienes permisos para gestionar empresas de esta organizacion.',
+        );
+      }
+      return;
+    }
+
+    throw new ForbiddenException(
+      'Solo los super administradores pueden gestionar empresas.',
+    );
+  }
+
   async create(createTenancyDto: CreateTenancyDto): Promise<TenancySnapshot> {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const prisma = tx as unknown as PrismaService as any;
 
-        // 1. Crear organización
+        const organizationSlug = await this.ensureOrganizationSlug(
+          prisma,
+          createTenancyDto.slug,
+          createTenancyDto.name,
+        );
+
+        // 1. Crear organizacion
         const organization = await prisma.organization.create({
           data: {
             name: createTenancyDto.name.trim(),
+            slug: organizationSlug,
             code: this.normalizeCodeInput(createTenancyDto.code) ?? null,
             status: createTenancyDto.status ?? 'ACTIVE',
           },
@@ -64,7 +177,7 @@ export class TenancyService {
           createTenancyDto.companies ?? [],
         );
 
-        // 3. Crear units con validación de companyId
+        // 3. Crear units con validacion de companyId
         const existingUnits = new Map<string, number>();
         const allowedCompanyIds = new Set<number>(companies.map((c) => c.id));
 
@@ -96,7 +209,6 @@ export class TenancyService {
       throw this.handlePrismaError(error);
     }
   }
-
   async findAll(): Promise<TenancySnapshot[]> {
     const prismaClient = this.prisma as unknown as PrismaService as any;
     const organizations = await prismaClient.organization.findMany({
@@ -109,17 +221,11 @@ export class TenancyService {
     });
 
     return Promise.all(
-      organizations.map(
-        async ({ _count, units, companies, ...organization }) => ({
-          ...organization,
-          units,
-          companies,
-          membershipCount: _count.memberships,
-          superAdmin: await this.resolveSuperAdmin(
-            prismaClient,
-            organization.id,
-          ),
-        }),
+      organizations.map((organization) =>
+        this.mapToSnapshot(
+          prismaClient as PrismaService,
+          organization as any,
+        ),
       ),
     );
   }
@@ -139,17 +245,37 @@ export class TenancyService {
       throw new NotFoundException(`Organization ${id} was not found`);
     }
 
-    const { _count, units, companies, ...rest } = organization;
-    const superAdmin = await this.resolveSuperAdmin(prismaClient, id);
-    return {
-      ...rest,
-      units,
-      companies,
-      membershipCount: _count.memberships,
-      superAdmin,
-    };
+    return this.mapToSnapshot(
+      prismaClient as PrismaService,
+      organization as any,
+    );
   }
 
+  async findBySlug(slug: string): Promise<TenancySnapshot> {
+    const normalizedSlug = this.slugify(slug);
+    if (!normalizedSlug) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const prismaClient = this.prisma as unknown as PrismaService as any;
+    const organization = await prismaClient.organization.findFirst({
+      where: { slug: normalizedSlug },
+      include: {
+        units: { orderBy: { id: 'asc' } },
+        companies: { orderBy: { id: 'asc' } },
+        _count: { select: { memberships: true } },
+      },
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    return this.mapToSnapshot(
+      prismaClient as PrismaService,
+      organization as any,
+    );
+  }
   async update(
     id: number,
     updateTenancyDto: UpdateTenancyDto,
@@ -159,10 +285,31 @@ export class TenancyService {
         const prisma = tx as unknown as PrismaService as any;
         const trimmedName = updateTenancyDto.name?.trim();
 
+        const currentOrganization = await prisma.organization.findUnique({
+          where: { id },
+          select: { name: true, slug: true },
+        });
+        if (!currentOrganization) {
+          throw new NotFoundException('Organization not found');
+        }
+
+        const effectiveName = trimmedName?.length ? trimmedName : currentOrganization.name;
+
+        let slugValue: string | undefined;
+        if (updateTenancyDto.slug !== undefined || !currentOrganization.slug) {
+          slugValue = await this.ensureOrganizationSlug(
+            prisma,
+            updateTenancyDto.slug ?? currentOrganization.slug ?? undefined,
+            effectiveName,
+            id,
+          );
+        }
+
         const organization = await prisma.organization.update({
           where: { id },
           data: {
             name: trimmedName?.length ? trimmedName : undefined,
+            slug: slugValue,
             code: this.normalizeCodeInput(updateTenancyDto.code),
             status: updateTenancyDto.status,
           },
@@ -231,7 +378,6 @@ export class TenancyService {
       throw this.handlePrismaError(error);
     }
   }
-
   async createCompany(
     dto: CreateCompanyDto,
     tenant: TenantContext,
@@ -303,6 +449,151 @@ export class TenancyService {
           throw new ConflictException(
             'Ya existe una empresa con los mismos datos.',
           );
+        }
+      }
+      throw error;
+    }
+  }
+
+  async listCompanies(tenant: TenantContext): Promise<TenancySnapshot[]> {
+    if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
+      throw new ForbiddenException(
+        'Solo los super administradores pueden consultar empresas.',
+      );
+    }
+
+    const prismaClient = this.prisma as unknown as PrismaService as any;
+    const where = this.buildOrganizationFilter(tenant);
+
+    const organizations = await prismaClient.organization.findMany({
+      where,
+      include: {
+        units: { orderBy: { id: 'asc' } },
+        companies: { orderBy: { id: 'asc' } },
+        _count: { select: { memberships: true } },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    return Promise.all(
+      organizations.map((organization) =>
+        this.mapToSnapshot(
+          prismaClient as PrismaService,
+          organization as any,
+        ),
+      ),
+    );
+  }
+
+  async getCompanyById(
+    id: number,
+    tenant: TenantContext,
+  ): Promise<
+    CompanySnapshot & {
+      organization: { id: number; name: string; code: string | null; status: string };
+    }
+  > {
+    if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
+      throw new ForbiddenException(
+        'Solo los super administradores pueden consultar empresas.',
+      );
+    }
+
+    const company = await this.prisma.company.findUnique({
+      where: { id },
+      include: {
+        organization: {
+          select: { id: true, name: true, code: true, status: true },
+        },
+      },
+    });
+
+    if (!company) {
+      throw new NotFoundException(`La empresa ${id} no existe.`);
+    }
+
+    if (!company.organization) {
+      throw new NotFoundException(
+        'La empresa no esta asociada a una organizacion valida.',
+      );
+    }
+
+    this.ensureOrganizationAccess(company.organizationId, tenant);
+
+    const { organization, ...snapshot } = company;
+    return {
+      ...(snapshot as CompanySnapshot),
+      organization,
+    };
+  }
+
+  async updateCompany(
+    id: number,
+    dto: UpdateCompanyDto,
+    tenant: TenantContext,
+  ): Promise<CompanySnapshot> {
+    if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
+      throw new ForbiddenException(
+        'Solo los super administradores pueden actualizar empresas.',
+      );
+    }
+
+    const existing = await this.prisma.company.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`La empresa ${id} no existe.`);
+    }
+
+    this.ensureOrganizationAccess(existing.organizationId, tenant);
+
+    const data: Prisma.CompanyUpdateInput = {};
+
+    if (dto.name !== undefined) {
+      const trimmed = dto.name.trim();
+      if (!trimmed) {
+        throw new BadRequestException(
+          'El nombre de la empresa no puede estar vacio.',
+        );
+      }
+      data.name = trimmed;
+    }
+
+    if (dto.legalName !== undefined) {
+      const trimmed = dto.legalName?.trim() ?? '';
+      data.legalName = trimmed.length ? trimmed : null;
+    }
+
+    if (dto.taxId !== undefined) {
+      const trimmed = dto.taxId?.trim() ?? '';
+      data.taxId = trimmed.length ? trimmed : null;
+    }
+
+    if (dto.status !== undefined) {
+      const trimmed = dto.status.trim();
+      data.status = trimmed.length ? trimmed : existing.status;
+    }
+
+    try {
+      return await this.prisma.company.update({
+        where: { id },
+        data,
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          const target = (error.meta?.target ?? []) as string[];
+          if (target.includes('organizationId_name')) {
+            throw new ConflictException(
+              'Ya existe una empresa con ese nombre en la organizacion.',
+            );
+          }
+          if (target.includes('taxId')) {
+            throw new ConflictException(
+              'Ya existe una empresa con ese RUC/NIT.',
+            );
+          }
         }
       }
       throw error;
@@ -924,6 +1215,66 @@ export class TenancyService {
     throw error;
   }
 
+  private normalizeSlugInput(
+    value: string | null | undefined,
+  ): string | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    if (value === null) {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private slugify(input: string): string {
+    return input
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-');
+  }
+
+  private async ensureOrganizationSlug(
+    prisma: PrismaService,
+    slugInput: string | null | undefined,
+    fallbackName: string,
+    excludeId?: number,
+  ): Promise<string> {
+    const normalizedInput = this.normalizeSlugInput(slugInput);
+    const baseSource = normalizedInput ?? fallbackName;
+
+    let base = this.slugify(baseSource);
+    if (!base) {
+      base = 'org';
+    }
+
+    let candidate = base;
+    let counter = 1;
+
+    while (true) {
+      const existing = await prisma.organization.findFirst({
+        where: {
+          slug: candidate,
+          ...(excludeId ? { id: { not: excludeId } } : {}),
+        },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        return candidate;
+      }
+
+      counter += 1;
+      const nextCandidate = this.slugify(`${base}-${counter}`);
+      candidate = nextCandidate || `${base}-${counter}`;
+    }
+  }
   private normalizeCodeInput(
     value: string | null | undefined,
   ): string | null | undefined {
@@ -939,3 +1290,14 @@ export class TenancyService {
     return trimmed.length > 0 ? trimmed : null;
   }
 }
+
+
+
+
+
+
+
+
+
+
+
