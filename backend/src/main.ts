@@ -22,6 +22,18 @@ async function bootstrap() {
     origin: allowedOrigins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-org-id',
+      'x-company-id',
+      'x-org-unit-id',
+      'x-tenant-slug',
+    ],
+    exposedHeaders: [
+      'x-site-settings-updated-at',
+      'x-site-settings-created-at',
+    ],
   });
 
   // Serve static files before applying the global prefix so they remain

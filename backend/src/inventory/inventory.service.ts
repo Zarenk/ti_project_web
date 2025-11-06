@@ -760,7 +760,6 @@ export class InventoryService {
             user: {
               select: {
                 id: true,
-                name: true,
                 username: true,
                 email: true,
               },
@@ -785,10 +784,9 @@ export class InventoryService {
       storeName: entry.entry.store?.name || 'Sin tienda',
       supplierName: entry.entry.provider?.name || 'Sin proveedor',
       quantity: entry.quantity, // Asegurarse de incluir la cantidad
-      series: entry.series.map((s) => s.serial), // Extraer los números de serie
+      series: entry.series?.map((s) => s.serial) ?? [], // Extraer los números de serie
       responsibleId: entry.entry.user?.id ?? null,
       responsibleName:
-        entry.entry.user?.name ||
         entry.entry.user?.username ||
         entry.entry.user?.email ||
         null,
@@ -862,7 +860,6 @@ export class InventoryService {
             user: {
               select: {
                 id: true,
-                name: true,
                 username: true,
                 email: true,
               },
@@ -882,7 +879,6 @@ export class InventoryService {
       clientName: sale.sale.client?.name || 'Sin cliente',
       responsibleId: sale.sale.user?.id ?? null,
       responsibleName:
-        sale.sale.user?.name ||
         sale.sale.user?.username ||
         sale.sale.user?.email ||
         null,

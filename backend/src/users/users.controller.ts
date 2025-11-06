@@ -106,6 +106,7 @@ export class UsersController {
     return { id: user.id, name: user.username }; // Devuelve solo los datos necesarios
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
   @ApiResponse({ status: 200, description: 'Return all users' }) // Swagger
   findAll(
