@@ -18,6 +18,7 @@ import { Request as ExpressRequest } from 'express';
 import { GlobalSuperAdminGuard } from 'src/tenancy/global-super-admin.guard';
 import { CreateManagedUserDto } from './dto/create-managed-user.dto';
 import { UserRole } from '@prisma/client';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
 @Controller('users')
 export class UsersController {
@@ -107,8 +108,14 @@ export class UsersController {
 
   @Get()
   @ApiResponse({ status: 200, description: 'Return all users' }) // Swagger
-  findAll(@Query('search') search?: string) {
-    return this.usersService.findAll(search);
+  findAll(
+    @Query('search') search?: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+  ) {
+    return this.usersService.findAll(
+      search,
+      organizationId ?? undefined,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

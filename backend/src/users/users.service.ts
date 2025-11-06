@@ -345,26 +345,29 @@ export class UsersService {
     });
   }
 
-  findAll(search?: string) {
-    const where =
-      search && search.trim().length > 0
-        ? {
-            OR: [
-              {
-                username: {
-                  contains: search.trim(),
-                  mode: Prisma.QueryMode.insensitive,
-                },
-              },
-              {
-                email: {
-                  contains: search.trim(),
-                  mode: Prisma.QueryMode.insensitive,
-                },
-              },
-            ],
-          }
-        : undefined;
+  findAll(search?: string, organizationId?: number | null) {
+    const where: Prisma.UserWhereInput = {};
+
+    if (search && search.trim().length > 0) {
+      where.OR = [
+        {
+          username: {
+            contains: search.trim(),
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
+        {
+          email: {
+            contains: search.trim(),
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
+      ];
+    }
+
+    if (organizationId !== undefined) {
+      where.organizationId = organizationId ?? null;
+    }
 
     return this.prismaService.user.findMany({
       where,

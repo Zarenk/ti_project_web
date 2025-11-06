@@ -134,11 +134,12 @@ export async function createUser(
   password: string,
   role: string,
   status: string,
+  organizationId?: number | null,
 ) {
   const res = await authorizedFetch(`${BACKEND_URL}/api/users/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, username, password, role, status }),
+    body: JSON.stringify({ email, username, password, role, status, organizationId }),
   });
 
   if (!res.ok) {

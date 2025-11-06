@@ -94,3 +94,7 @@ export function useTenantSelection(): TenantSelectionContextValue {
   }
   return context
 }
+
+export function useOptionalTenantSelection(): TenantSelectionContextValue | null {
+  return useContext(TenantSelectionContext)
+}

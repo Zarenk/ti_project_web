@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   ColumnDef,
   getCoreRowModel,
@@ -26,6 +26,8 @@ import { DataTablePagination } from '@/components/data-table-pagination';
 import { ReactNode } from 'react';
 import { CalendarDatePicker } from '@/components/calendar-date-picker';
 import { DateRange } from 'react-day-picker';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useTenantSelection } from '@/context/tenant-selection-context';
 
 interface TipoCambio {
   id: number;
@@ -37,8 +39,10 @@ interface TipoCambio {
 export default function TipoCambioTable() {
   const [data, setData] = useState<TipoCambio[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [globalFilter, setGlobalFilter] = useState('');
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
+  const { version } = useTenantSelection();
 
   const filteredData = useMemo(() => {
     if (!selectedDateRange?.from || !selectedDateRange?.to) return data;
@@ -85,18 +89,29 @@ export default function TipoCambioTable() {
   });
 
   useEffect(() => {
-    async function fetchTipoCambio() {
-      try {
-        const json = await getAllTipoCambio();
-        setData(json);
-      } catch (error) {
-        console.error('Error cargando datos de tipo de cambio:', error);
-      } finally {
-        setLoading(false);
-      }
+    setGlobalFilter('');
+    setSelectedDateRange(undefined);
+  }, [version]);
+
+  const fetchTipoCambio = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const json = await getAllTipoCambio();
+      setData(Array.isArray(json) ? json : []);
+    } catch (err) {
+      console.error('Error cargando datos de tipo de cambio:', err);
+      const message = err instanceof Error ? err.message : 'No se pudo cargar el historial de tipos de cambio.';
+      setError(message);
+      setData([]);
+    } finally {
+      setLoading(false);
     }
-    fetchTipoCambio();
   }, []);
+
+  useEffect(() => {
+    void fetchTipoCambio();
+  }, [fetchTipoCambio, version]);
 
   return (
     <div className="max-w-4xl mx-auto mt-10 px-4">
@@ -123,7 +138,13 @@ export default function TipoCambioTable() {
           </div>
 
           {loading ? (
-            <p className="text-muted-foreground">Cargando...</p>
+            <div className="space-y-3">
+              {[...Array(5)].map((_, index) => (
+                <Skeleton key={index} className="h-10 w-full rounded-md" />
+              ))}
+            </div>
+          ) : error ? (
+            <p className="text-sm text-destructive">{error}</p>
           ) : (
             <div className="rounded-md border overflow-x-auto">
               <Table>

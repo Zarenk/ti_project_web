@@ -19,6 +19,8 @@ import {
   TYPOGRAPHY_FONT_CLASSES,
   getTypographyFont,
 } from "@/lib/typography-fonts";
+import { useOptionalTenantSelection } from "@/context/tenant-selection-context";
+import { getAuthHeaders } from "@/utils/auth-token";
 
 const API_ENDPOINT = "/api/site-settings";
 
@@ -374,6 +376,8 @@ export function SiteSettingsProvider({
   initialUpdatedAt = null,
   initialCreatedAt = null,
 }: SiteSettingsProviderProps) {
+  const tenantSelection = useOptionalTenantSelection();
+  const version = tenantSelection?.version ?? null;
   const [settings, setSettings] = useState<SiteSettings>(() =>
     withDefaultSettings(initialSettings),
   );
@@ -387,10 +391,23 @@ export function SiteSettingsProvider({
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(false);
 
+  const tenantAwareFetch = useCallback(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const headers = new Headers(init.headers ?? {});
+    const authHeaders = await getAuthHeaders();
+    for (const [key, value] of Object.entries(authHeaders)) {
+      if (value != null && value !== "") {
+        headers.set(key, value);
+      }
+    }
+
+    return fetch(input, { ...init, headers });
+  }, []);
+
   const refresh = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(API_ENDPOINT, { cache: "no-store" });
+      const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}&ts=${Date.now()}`;
+      const response = await tenantAwareFetch(url, { cache: "no-store" });
 
       if (!response.ok) {
         const message = await readErrorMessage(response);
@@ -418,7 +435,7 @@ export function SiteSettingsProvider({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [tenantAwareFetch, version]);
 
   useEffect(() => {
     if (initialSettings) {
@@ -429,6 +446,22 @@ export function SiteSettingsProvider({
       console.error("Error initializing site settings", err);
     });
   }, [initialSettings, refresh]);
+
+  const previousVersionRef = useRef(version);
+  useEffect(() => {
+    if (previousVersionRef.current === version) {
+      return;
+    }
+    previousVersionRef.current = version;
+    setPersistedSettings(withDefaultSettings(null));
+    setSettings(withDefaultSettings(null));
+    setPersistedUpdatedAt(null);
+    setPersistedCreatedAt(null);
+    setError(null);
+    refresh().catch((err) => {
+      console.error("Error loading site settings for tenant", err);
+    });
+  }, [version, refresh]);
 
   useIsomorphicLayoutEffect(() => {
     if (typeof document !== "undefined") {
@@ -478,7 +511,8 @@ export function SiteSettingsProvider({
       setSettings(clone(validated));
 
       try {
-        const response = await fetch(API_ENDPOINT, {
+        const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}`;
+        const response = await tenantAwareFetch(url, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -487,6 +521,7 @@ export function SiteSettingsProvider({
             data: validated,
             expectedUpdatedAt: persistedUpdatedAt,
           }),
+          cache: "no-store",
         });
 
         if (!response.ok) {
@@ -532,7 +567,7 @@ export function SiteSettingsProvider({
         setIsSaving(false);
       }
     },
-    [persistedSettings, persistedUpdatedAt, persistedCreatedAt],
+    [persistedSettings, persistedUpdatedAt, persistedCreatedAt, tenantAwareFetch, version],
   );
 
   const updateSettings = useCallback(

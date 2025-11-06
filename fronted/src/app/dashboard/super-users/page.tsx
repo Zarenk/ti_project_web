@@ -19,6 +19,7 @@ import {
 import { isTokenValid, getUserDataFromToken } from "@/lib/auth"
 import { createManagedUser } from "./super-users.api"
 import { listOrganizations, type OrganizationResponse } from "../tenancy/tenancy.api"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 
 const ROLE_OPTIONS = [
   { value: "ADMIN", label: "Administrador" },
@@ -27,6 +28,7 @@ const ROLE_OPTIONS = [
 
 export default function SuperUsersAdminPage() {
   const router = useRouter()
+  const { version } = useTenantSelection()
   const [email, setEmail] = useState("")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -51,9 +53,24 @@ export default function SuperUsersAdminPage() {
   }, [role, organizations, organizationId])
 
   useEffect(() => {
+    setEmail("")
+    setUsername("")
+    setPassword("")
+    setRole("ADMIN")
+    setStatus("ACTIVO")
+    setOrganizationId("")
+    setSubmitting(false)
+  }, [version])
+
+  useEffect(() => {
     let cancelled = false
 
     async function checkAccess() {
+      if (!cancelled) {
+        setOrganizations([])
+        setOrganizationsLoading(true)
+      }
+
       const session = await getUserDataFromToken()
       if (!session || !(await isTokenValid())) {
         router.replace("/login?returnTo=/dashboard/super-users")
@@ -65,7 +82,6 @@ export default function SuperUsersAdminPage() {
         return
       }
 
-      setOrganizationsLoading(true)
       try {
         const list = await listOrganizations()
         if (!cancelled) {
@@ -89,7 +105,7 @@ export default function SuperUsersAdminPage() {
     return () => {
       cancelled = true
     }
-  }, [router])
+  }, [router, version])
 
   const requiresOrganizationSelection = role === "SUPER_ADMIN_ORG"
   const normalizedOrganizationId = organizationId.trim()

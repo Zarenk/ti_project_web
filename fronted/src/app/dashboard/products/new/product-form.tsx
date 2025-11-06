@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,14 +7,14 @@ import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { createProduct, updateProduct } from '../products.api'
 import { uploadProductImage } from '../products.api'
 import { getBrands } from '../../brands/brands.api'
-import { createCategory } from '../../categories/categories.api'
+import { createCategory, getCategories } from '../../categories/categories.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select'
 import { z } from 'zod'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { IconName, icons } from '@/lib/icons'
 import { Loader2 } from 'lucide-react'
@@ -27,6 +27,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { useTenantSelection } from '@/context/tenant-selection-context'
 
 interface ProductFormProps {
   product: any
@@ -51,7 +52,7 @@ export function ProductForm({
           val.length === 0 ||
           /^https?:\/\//.test(val) ||
           val.startsWith('/uploads'),
-        'La imagen debe ser una URL válida, una ruta relativa o puede quedar vacía',
+        'La imagen debe ser una URL valida, una ruta relativa o puede quedar vacia',
       )
 
     const productSchema = z.object({
@@ -59,25 +60,25 @@ export function ProductForm({
       required_error: "Se requiere el nombre del producto",
     })
       .min(3, "El nombre del producto debe tener al menos 3 caracteres")
-      .max(200, "El nombre del producto no puede tener más de 200 caracteres")
+      .max(200, "El nombre del producto no puede tener mas de 200 caracteres")
       .regex(
         /^[\p{L}0-9\s]+$/u,
-        "El nombre solo puede contener letras, números y espacios",
+        "El nombre solo puede contener letras, numeros y espacios",
       ),
     description: z.string({
     }),
     brand: z.string().optional(),
     price: z.number({
       required_error: "Se requiere el precio del producto",
-      }).min(0, "El precio debe ser un número positivo")
+      }).min(0, "El precio debe ser un numero positivo")
       .max(99999999.99, "El precio no puede exceder 99999999.99"),
     priceSell: z.number({
       required_error: "Se requiere el precio de venta del producto",
-      }).min(0, "El precio de venta debe ser un número positivo")
+      }).min(0, "El precio de venta debe ser un numero positivo")
       .max(99999999.99, "El precio no puede exceder 99999999.99"),
     images: z.array(imageSchema).optional(),
     status: z.enum(["Activo", "Inactivo"]).optional(),
-    categoryId: z.string().nonempty("Debe seleccionar una categoría"), // Validar categoría
+    categoryId: z.string().nonempty("Debe seleccionar una categoria"), // Validar categoria
     processor: z.string().optional(),
     ram: z.string().optional(),
     storage: z.string().optional(),
@@ -90,7 +91,7 @@ export function ProductForm({
       .array(
         z.object({
           icon: z.string().optional(),
-          title: z.string().min(1, 'Ingrese un título'),
+          title: z.string().min(1, 'Ingrese un titulo'),
           description: z.string().optional(),
         })
       )
@@ -157,6 +158,7 @@ export function ProductForm({
     }
 
     const defaultValues = useMemo(() => buildFormValues(product), [product])
+    const emptyProductValues = useMemo(() => buildFormValues(undefined), [])
 
     //hook de react-hook-form
     const form = useForm<ProductType>({
@@ -198,6 +200,11 @@ export function ProductForm({
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryDescription, setNewCategoryDescription] = useState('');
   const [categoryError, setCategoryError] = useState<string | null>(null);
+  const { version } = useTenantSelection();
+  const tenantFetchRef = useRef(true);
+  const versionResetRef = useRef(true);
+  const [isLoadingBrands, setIsLoadingBrands] = useState(false);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   // Estado para manejar el error del nombre si se repite
   const [nameError, setNameError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -208,22 +215,91 @@ export function ProductForm({
 
   useEffect(() => {
     setCategoryOptions(categories ?? [])
+    setIsLoadingCategories(false)
   }, [categories])
 
   useEffect(() => {
-    getBrands(1, 1000)
-      .then((res) =>
-        setBrands(res.data.map((b: any) => ({ ...b, name: b.name.toUpperCase() }))),
-      )
-      .catch(() => {});
-  }, []);
+    let cancelled = false
+    const skipClear = tenantFetchRef.current
+    tenantFetchRef.current = false
+
+    const loadCategories = async () => {
+      if (!skipClear) {
+        setCategoryOptions([])
+      }
+      setIsLoadingCategories(true)
+      try {
+        const freshCategories = await getCategories()
+        if (!cancelled) {
+          setCategoryOptions(
+            Array.isArray(freshCategories) ? freshCategories : [],
+          )
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setCategoryOptions([])
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingCategories(false)
+        }
+      }
+    }
+
+    const loadBrands = async () => {
+      if (!skipClear) {
+        setBrands([])
+      }
+      setIsLoadingBrands(true)
+      try {
+        const res = await getBrands(1, 1000)
+        if (!cancelled) {
+          setBrands(
+            Array.isArray(res?.data)
+              ? res.data.map((b: any) => ({ ...b, name: b.name.toUpperCase() }))
+              : [],
+          )
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setBrands([])
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingBrands(false)
+        }
+      }
+    }
+
+    void loadCategories()
+    void loadBrands()
+
+    return () => {
+      cancelled = true
+    }
+  }, [version])
+
+  useEffect(() => {
+    if (versionResetRef.current) {
+      versionResetRef.current = false
+      return
+    }
+
+    setNameError(null)
+    setIsCategoryDialogOpen(false)
+    setNewCategoryName('')
+    setNewCategoryDescription('')
+    setCategoryError(null)
+    form.reset(emptyProductValues)
+    router.refresh()
+  }, [version, emptyProductValues, form, router])
 
   const handleCreateCategory = async () => {
     const trimmedName = newCategoryName.trim()
     const trimmedDescription = newCategoryDescription.trim()
 
     if (trimmedName.length === 0) {
-      setCategoryError('Ingrese el nombre de la categoría')
+      setCategoryError('Ingrese el nombre de la categoria')
       return
     }
 
@@ -253,13 +329,13 @@ export function ProductForm({
         clearErrors('categoryId')
         await form.trigger('categoryId')
       }
-      toast.success('Categoría creada correctamente.')
+      toast.success('Categoria creada correctamente.')
       setIsCategoryDialogOpen(false)
       setNewCategoryName('')
       setNewCategoryDescription('')
       setCategoryError(null)
     } catch (error: any) {
-      const message = error?.response?.data?.message || error?.message || 'Error al crear la categoría'
+      const message = error?.response?.data?.message || error?.message || 'Error al crear la categoria'
       if (error?.response?.status === 409 || message.includes('ya existe')) {
         setCategoryError(message)
       } else {
@@ -416,6 +492,7 @@ export function ProductForm({
                             Marca
                         </Label>
                         <Input
+                        disabled={isProcessing || isLoadingBrands}
                         list="brand-options"
                         maxLength={50}
                         {...register('brand')}></Input>
@@ -424,6 +501,11 @@ export function ProductForm({
                             <option key={b.id} value={b.name} />
                           ))}
                         </datalist>
+                        {isLoadingBrands && (
+                          <p className="pt-1 text-xs text-muted-foreground">
+                            Cargando marcas...
+                          </p>
+                        )}
                         {form.formState.errors.brand && (
                             <p className="text-red-500 text-sm">{form.formState.errors.brand.message}</p>
                         )}
@@ -435,8 +517,8 @@ export function ProductForm({
                         </Label>
                         <Input 
                         step="0.01" // Permite valores con dos decimales
-                        min={0.00} // Valor mínimo permitido
-                        max={99999999.99} // Valor máximo permitido
+                        min={0} // Valor minimo permitido
+                        max={99999999.99} // Valor maximo permitido
                         type="number" 
                         {...register('price', {valueAsNumber: true})}></Input>
                         {form.formState.errors.price && (
@@ -450,8 +532,8 @@ export function ProductForm({
                         </Label>
                         <Input 
                         step="0.01" // Permite valores con dos decimales
-                        min={0.00} // Valor mínimo permitido
-                        max={99999999.99} // Valor máximo permitido
+                        min={0} // Valor minimo permitido
+                        max={99999999.99} // Valor maximo permitido
                         type="number"
                         {...register('priceSell', {valueAsNumber: true})}></Input>
                         {form.formState.errors.priceSell && (
@@ -460,32 +542,8 @@ export function ProductForm({
                     </div>
 
                     <div className="flex flex-col">
-                        <Label className='py-3'>Imagenes</Label>
-                        {imageFields.map((field, index) => (
-                          <div key={field.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-2">
-                            <Input
-                              maxLength={200}
-                              {...register(`images.${index}` as const)}
-                            />
-                            <Input
-                              type="file"
-                              accept="image/png,image/jpeg,image/jpg,image/gif"
-                              onChange={(e) => handleImageFile(e, index)}
-                            />
-                            {index > 0 && (
-                              <Button type="button" variant="destructive" onClick={() => removeImage(index)}>-</Button>
-                            )}
-                          </div>
-                        ))}
-                        {form.formState.errors.images && (
-                          <p className="text-red-500 text-sm">{(form.formState.errors.images as any).message}</p>
-                        )}
-                        <Button type="button" variant="outline" onClick={() => appendImage("")}>Agregar imagen</Button>
-                    </div>
-                    
-                    <div className="flex flex-col">
                         {/* CATEGORIA */}
-                        <Label className='py-3'>Categoría</Label>
+                        <Label className='py-3'>Categoria</Label>
                         <div className="flex items-start gap-2">
                           <div className="flex-1">
                             {categoryOptions.length > 0 ? (
@@ -495,12 +553,12 @@ export function ProductForm({
                                 render={({ field, fieldState }) => (
                                   <>
                                     <Select
-                                      disabled={isProcessing}
-                                      value={field.value ?? ''}                         // ← valor controlado
+                                      disabled={isProcessing || isLoadingCategories}
+                                      value={field.value ?? ''}                         // valor controlado
                                       onValueChange={(val) => { field.onChange(val); clearErrors('categoryId') }}
                                     >
                                       <SelectTrigger className="w-full border border-border rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                        <SelectValue placeholder="Seleccione una categoría" />
+                                        <SelectValue placeholder="Seleccione una categoria" />
                                       </SelectTrigger>
                                       <SelectContent className="bg-card text-foreground border border-border rounded-lg max-h-60 overflow-y-auto">
                                         {categoryOptions.map((category: any) => (
@@ -520,9 +578,13 @@ export function ProductForm({
                                   </>
                                 )}
                               />
+                            ) : isLoadingCategories ? (
+                              <div className="flex h-10 items-center justify-center rounded-md border border-dashed border-border px-4 text-sm text-muted-foreground">
+                                Cargando categorias...
+                              </div>
                             ) : (
                               <div className="flex h-10 items-center justify-center rounded-md border border-dashed border-border px-4 text-sm text-muted-foreground">
-                                No hay categorías disponibles
+                                No hay categorias disponibles
                               </div>
                             )}
                           </div>
@@ -544,7 +606,7 @@ export function ProductForm({
                             </DialogTrigger>
                             <DialogContent>
                               <DialogHeader>
-                                <DialogTitle>Nueva categoría</DialogTitle>
+                                <DialogTitle>Nueva categoria</DialogTitle>
                               </DialogHeader>
                               <div className="flex flex-col gap-3">
                                 <div className="flex flex-col gap-1">
@@ -553,16 +615,16 @@ export function ProductForm({
                                     id="new-category-name"
                                     value={newCategoryName}
                                     onChange={(event) => setNewCategoryName(event.target.value)}
-                                    placeholder="Nombre de la categoría"
+                                    placeholder="Nombre de la categoria"
                                   />
                                 </div>
                                 <div className="flex flex-col gap-1">
-                                  <Label htmlFor="new-category-description">Descripción (opcional)</Label>
+                                  <Label htmlFor="new-category-description">Descripcion (opcional)</Label>
                                   <Input
                                     id="new-category-description"
                                     value={newCategoryDescription}
                                     onChange={(event) => setNewCategoryDescription(event.target.value)}
-                                    placeholder="Descripción de la categoría"
+                                    placeholder="Descripcion de la categoria"
                                   />
                                 </div>
                                 {categoryError && (
@@ -593,9 +655,9 @@ export function ProductForm({
                             </DialogContent>
                           </Dialog>
                         </div>
-                        {categoryOptions.length === 0 && (
+                        {categoryOptions.length === 0 && !isLoadingCategories && (
                           <p className="pt-2 text-sm text-muted-foreground">
-                            Crea una categoría para continuar.
+                            Crea una categoria para continuar.
                           </p>
                         )}
                         {form.formState.errors.categoryId && (
@@ -610,15 +672,15 @@ export function ProductForm({
                         <Input placeholder='Procesador' {...register('processor')} className='mb-2'></Input>
                         <Input placeholder='RAM' {...register('ram')} className='mb-2'></Input>
                         <Input placeholder='Almacenamiento' {...register('storage')} className='mb-2'></Input>
-                        <Input placeholder='Gráficos' {...register('graphics')} className='mb-2'></Input>
+                        <Input placeholder='Graficos' {...register('graphics')} className='mb-2'></Input>
                         <Input placeholder='Pantalla' {...register('screen')} className='mb-2'></Input>
-                        <Input placeholder='Resolución' {...register('resolution')} className='mb-2'></Input>
+                        <Input placeholder='Resolucion' {...register('resolution')} className='mb-2'></Input>
                         <Input placeholder='Tasa de refresco' {...register('refreshRate')} className='mb-2'></Input>
                         <Input placeholder='Conectividad' {...register('connectivity')}></Input>
                     </div>
 
                     <div className="flex flex-col pt-4">
-                        <Label className='py-3 font-semibold'>Características (opcional)</Label>
+                        <Label className='py-3 font-semibold'>Caracteristicas (opcional)</Label>
                         {featureFields.map((field, index) => (
                           <div key={field.id} className="flex flex-col md:flex-row gap-2 mb-2">
                             <Select
@@ -642,14 +704,14 @@ export function ProductForm({
                                 })}
                               </SelectContent>
                             </Select>
-                            <Input placeholder='Título' {...register(`features.${index}.title` as const)} className='flex-1'/>
-                            <Input placeholder='Descripción' {...register(`features.${index}.description` as const)} className='flex-1'/>
+                            <Input placeholder='Titulo' {...register(`features.${index}.title` as const)} className='flex-1'/>
+                            <Input placeholder='Descripcion' {...register(`features.${index}.description` as const)} className='flex-1'/>
                             {index > 0 && (
                               <Button type='button' variant='destructive' onClick={() => removeFeature(index)}>-</Button>
                             )}
                           </div>
                         ))}
-                        <Button type='button' variant='outline' onClick={() => appendFeature({ icon: '', title: '', description: '' })}>Agregar característica</Button>
+                        <Button type='button' variant='outline' onClick={() => appendFeature({ icon: '', title: '', description: '' })}>Agregar caracteristica</Button>
                     </div>
 
                     <div className="flex flex-col">
@@ -673,7 +735,7 @@ export function ProductForm({
                         }
                     </Button>
                     <Button className=''
-                    type="button" // Evita que el botón envíe el formulario
+                    type="button" // Evita que el boton envie el formulario
                     onClick={() => 
                         form.reset({
                             name: "",
@@ -700,14 +762,14 @@ export function ProductForm({
                     </Button>
                     <Button 
                     className=""
-                    type="button" // Evita que el botón envíe el formulario
+                    type="button" // Evita que el boton envie el formulario
                     onClick={() => {
                         if (onCancel) {
                             onCancel()
                         } else {
                             router.back()
                         }
-                    }} // Regresa a la página anterior o ejecuta onCancel
+                    }} // Regresa a la pagina anterior o ejecuta onCancel
                     >
                         Volver
                     </Button>
@@ -718,3 +780,27 @@ export function ProductForm({
 }
 
 export default ProductForm
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

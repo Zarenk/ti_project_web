@@ -10,8 +10,9 @@ import { useParams, useRouter } from 'next/navigation'
 import { SelectTrigger, SelectValue } from '@radix-ui/react-select'
 import { Select, SelectContent, SelectItem } from '@/components/ui/select'
 import { z } from 'zod'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { useTenantSelection } from '@/context/tenant-selection-context'
 
 
 export function ProviderForm({provider}: {provider: any}) {
@@ -50,21 +51,38 @@ export function ProviderForm({provider}: {provider: any}) {
     //inferir el tipo de dato
     type ProviderType = z.infer<typeof providerSchema>;
 
+    const mapProviderToFormValues = useMemo(() => ({
+      name: provider?.name ?? '',
+      document: (provider?.document ?? 'Sin Documento') as ProviderType['document'],
+      documentNumber: provider?.documentNumber ?? '',
+      description: provider?.description ?? '',
+      phone: provider?.phone ?? '',
+      adress: provider?.adress ?? '',
+      email: provider?.email ?? '',
+      website: provider?.website ?? '',
+      status: (provider?.status ?? 'Activo') as ProviderType['status'],
+      image: provider?.image ?? '',
+    }), [provider]);
+
+    const emptyFormValues = useMemo(() => ({
+      name: '',
+      document: 'Sin Documento' as ProviderType['document'],
+      documentNumber: '',
+      description: '',
+      phone: '',
+      adress: '',
+      email: '',
+      website: '',
+      status: 'Activo' as ProviderType['status'],
+      image: '',
+    }), []);
+
+    const { version } = useTenantSelection();
+
     //hook de react-hook-form
     const form = useForm<ProviderType>({
     resolver: zodResolver(providerSchema),
-    defaultValues: {
-        name: provider?.name || '',
-        document: provider?.document || "Sin Documento",
-        documentNumber: provider?.documentNumber || '', 
-        description: provider?.description || '',
-        phone: provider?.phone || '',
-        adress: provider?.adress || '',
-        email: provider?.email || '',
-        website: provider?.website || '',
-        status: provider?.status || "Activo" , // Valor predeterminado
-        image: provider?.image || '',       
-    }
+    defaultValues: mapProviderToFormValues,
     });
 
   const { handleSubmit, register, setValue } = form;
@@ -74,6 +92,23 @@ export function ProviderForm({provider}: {provider: any}) {
 
   // Estado para manejar el error del nombre si se repite
   const [nameError, setNameError] = useState<string | null>(null);
+  const initializedVersion = useRef(false);
+
+  useEffect(() => {
+    form.reset(mapProviderToFormValues);
+    setNameError(null);
+  }, [form, mapProviderToFormValues]);
+
+  useEffect(() => {
+    if (!initializedVersion.current) {
+      initializedVersion.current = true;
+      return;
+    }
+
+    setNameError(null);
+    form.reset(emptyFormValues);
+    router.refresh();
+  }, [version, form, emptyFormValues, router]);
 
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {

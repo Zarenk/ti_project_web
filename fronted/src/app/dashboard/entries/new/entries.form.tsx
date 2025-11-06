@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import React from 'react'
 import { getProducts } from '../../products/products.api'
+import { getCategories } from '../../categories/categories.api'
 import { getProviders } from '../../providers/providers.api'
 import {jwtDecode} from 'jwt-decode';
 import { getAuthToken } from "@/utils/auth-token";
@@ -35,6 +36,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useTenantSelection } from '@/context/tenant-selection-context'
 
 // Función para obtener el userId del token JWT almacenado en localStorage
 async function getUserIdFromToken(): Promise<number | null> {
@@ -121,12 +123,44 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [loadingStores, setLoadingStores] = useState(true);
+  const [loadingCategories, setLoadingCategories] = useState(!categories?.length);
+  const { version } = useTenantSelection();
 
   // MODAL DE PRODUCTOS
   const [categoriesState, setCategories] = useState<{ id: number; name: string }[]>(categories ?? []);
   useEffect(() => {
     setCategories(categories ?? []);
   }, [categories]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function fetchCategoriesByTenant() {
+      try {
+        setLoadingCategories(true);
+        setCategories([]);
+        const nextCategories = await getCategories();
+        if (isActive) {
+          setCategories(Array.isArray(nextCategories) ? nextCategories : []);
+        }
+      } catch (error) {
+        console.error('Error al obtener las categorias:', error);
+        if (isActive) {
+          setCategories([]);
+        }
+      } finally {
+        if (isActive) {
+          setLoadingCategories(false);
+        }
+      }
+    }
+
+    fetchCategoriesByTenant();
+
+    return () => {
+      isActive = false;
+    };
+  }, [version]);
   const [isDialogOpenProduct, setIsDialogOpenProduct] = useState(false);
   // Estado adicional para manejar el checkbox
   const [isNewCategoryBoolean, setIsNewCategoryBoolean] = useState(false);
@@ -735,53 +769,106 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // Cargar los productos al montar el componente
   useEffect(() => {
+    let isActive = true;
+
     async function fetchProducts() {
       try {
-        const products = await getProducts();
-        setProducts(products); // Guarda los productos en el estado
+        const productsResponse = await getProducts();
+        if (isActive) {
+          setProducts(productsResponse);
+        }
       } catch (error) {
         console.error('Error al obtener los productos:', error);
+        if (isActive) {
+          setProducts([]);
+        }
       } finally {
-        setLoadingProducts(false);
+        if (isActive) {
+          setLoadingProducts(false);
+        }
       }
      }
 
+    setLoadingProducts(true);
+    setProducts([]);
     fetchProducts();
-  }, []);
+
+    return () => {
+      isActive = false;
+    };
+  }, [version]);
   //
 
   // Cargar los proveedores al montar el componente
   useEffect(() => {
+    let isActive = true;
+
     async function fetchProviders() {
       try {
-          const providers = await getProviders();
-          setProviders(providers); // Guarda los proveedores en el estado
+          const providersResponse = await getProviders();
+          if (isActive) {
+            setProviders(providersResponse);
+          }
       } catch (error) {
           console.error('Error al obtener los proveedores:', error);
+          if (isActive) {
+            setProviders([]);
+          }
         } finally {
-          setLoadingProviders(false);
+          if (isActive) {
+            setLoadingProviders(false);
+          }
         }
       }
   
-      fetchProviders();
-  }, []);
+    setLoadingProviders(true);
+    setProviders([]);
+    fetchProviders();
+
+    return () => {
+      isActive = false;
+    };
+  }, [version]);
   //
 
     // Cargar lass tiendas al montar el componente
   useEffect(() => {
+    let isActive = true;
+
     async function fetchStores() {
       try {
-          const stores = await getStores();
-          setStores(stores); // Guarda las tiendas en el estado
+          const storesResponse = await getStores();
+          if (isActive) {
+            setStores(storesResponse);
+          }
       } catch (error) {
           console.error('Error al obtener las tiendas:', error);
+          if (isActive) {
+            setStores([]);
+          }
         } finally {
-          setLoadingStores(false);
+          if (isActive) {
+            setLoadingStores(false);
+          }
         }
       }
   
-      fetchStores();
-  }, []);
+    setLoadingStores(true);
+    setStores([]);
+    fetchStores();
+
+    return () => {
+      isActive = false;
+    };
+  }, [version]);
+
+  useEffect(() => {
+    setSelectedProducts([]);
+    setSeries([]);
+    setCurrentProduct(null);
+    setValueProduct('');
+    setValueStore('');
+  }, [version]);
   //
 
   // Efecto para ajustar las series cuando cambia la cantidad
@@ -793,7 +880,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     }
   }, [quantity]);
 
-  const isLoading = loadingProducts || loadingProviders || loadingStores;
+  const isLoading = loadingProducts || loadingProviders || loadingStores || loadingCategories;
 
   if (isLoading) {
     return (
