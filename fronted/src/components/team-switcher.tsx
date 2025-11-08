@@ -35,8 +35,10 @@ import { ModeToggle } from "./mode-toggle"
 import {
   createCompany,
   listOrganizations,
+  getCurrentTenant,
   type CompanyResponse,
   type OrganizationResponse,
+  type CurrentTenantResponse,
 } from "@/app/dashboard/tenancy/tenancy.api"
 import {
   TENANT_SELECTION_EVENT,
@@ -45,6 +47,7 @@ import {
   type TenantSelection,
 } from "@/utils/tenant-preferences"
 import { useAuth } from "@/context/auth-context"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 
 type ExtendedOrganization = OrganizationResponse & {
   companies: CompanyResponse[]
@@ -62,6 +65,7 @@ function normalizeOrganizations(orgs: OrganizationResponse[]): ExtendedOrganizat
 export function TeamSwitcher(): React.ReactElement | null {
   const { isMobile } = useSidebar()
   const { role } = useAuth()
+  const { selection } = useTenantSelection()
   const router = useRouter()
   const normalizedRole = role ? role.toUpperCase() : null
   const isSuperUser = normalizedRole ? SUPER_ROLES.has(normalizedRole) : false
@@ -95,11 +99,13 @@ export function TeamSwitcher(): React.ReactElement | null {
   const [companyTaxId, setCompanyTaxId] = useState("")
   const [companyStatus, setCompanyStatus] = useState("ACTIVE")
   const [submitting, setSubmitting] = useState(false)
+  const [tenantSummary, setTenantSummary] = useState<CurrentTenantResponse | null>(null)
 
   const cancelRef = useRef(false)
 
   const fetchOrganizations = useCallback(
     async (providedSelection?: TenantSelection) => {
+      if (!isSuperUser) return
       try {
         setLoading(true)
         const selection =
@@ -142,16 +148,27 @@ export function TeamSwitcher(): React.ReactElement | null {
         }
       }
     },
-    [],
+    [isSuperUser],
   )
 
   useEffect(() => {
     cancelRef.current = false
-    void fetchOrganizations()
+
+    if (isSuperUser) {
+      void fetchOrganizations()
+    } else {
+      setActiveOrgId(selection.orgId ?? null)
+      setActiveCompanyId(selection.companyId ?? null)
+    }
 
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<TenantSelection>).detail
-      void fetchOrganizations(detail)
+      if (isSuperUser) {
+        void fetchOrganizations(detail)
+      } else if (detail) {
+        setActiveOrgId(detail.orgId ?? null)
+        setActiveCompanyId(detail.companyId ?? null)
+      }
     }
 
     if (typeof window !== "undefined") {
@@ -164,9 +181,46 @@ export function TeamSwitcher(): React.ReactElement | null {
         window.removeEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
       }
     }
-  }, [fetchOrganizations])
+  }, [fetchOrganizations, isSuperUser, selection.orgId, selection.companyId])
 
   useEffect(() => {
+    if (isSuperUser || role === null) return
+    let cancelled = false
+    setLoading(true)
+    ;(async () => {
+      try {
+        const summary = await getCurrentTenant()
+        if (cancelled) return
+        setTenantSummary(summary)
+        const resolvedOrgId = summary.organization?.id ?? null
+        const resolvedCompanyId = summary.company?.id ?? null
+        setActiveOrgId(resolvedOrgId)
+        setActiveCompanyId(resolvedCompanyId)
+        if (
+          selection.orgId !== resolvedOrgId ||
+          selection.companyId !== resolvedCompanyId
+        ) {
+          setTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("No se pudo obtener la organizacion actual", error)
+          setTenantSummary(null)
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isSuperUser, role, selection.orgId, selection.companyId])
+
+  useEffect(() => {
+    if (!isSuperUser) return
+
     if (organizations.length === 0) {
       setActiveOrgId(null)
       setActiveCompanyId(null)
@@ -197,7 +251,7 @@ export function TeamSwitcher(): React.ReactElement | null {
       setActiveCompanyId(fallbackCompanyId)
       setTenantSelection({ orgId: org.id, companyId: fallbackCompanyId })
     }
-  }, [organizations, activeOrgId, activeCompanyId])
+  }, [organizations, activeOrgId, activeCompanyId, isSuperUser])
 
   const activeOrganization = useMemo(() => {
     if (organizations.length === 0) return null
@@ -224,7 +278,10 @@ export function TeamSwitcher(): React.ReactElement | null {
   }, [activeOrganization, activeCompanyId])
 
   const handleSelectCompany = useCallback(
-    (organizationId: number, companyId: number | null) => {
+    (organizationId: number | null, companyId: number | null) => {
+      if (organizationId == null) {
+        return
+      }
       setActiveOrgId(organizationId)
       setActiveCompanyId(companyId)
       setTenantSelection({ orgId: organizationId, companyId })
@@ -297,7 +354,141 @@ export function TeamSwitcher(): React.ReactElement | null {
 
   const canAddCompanies = isSuperUser && Boolean(activeOrganization)
 
-  if (loading && organizations.length === 0) {
+  const resolvedNonSuperOrgId = tenantSummary?.organization?.id ?? activeOrgId
+  const employeeCompanies = tenantSummary?.companies ?? []
+
+  const handleEmployeeCompanySelect = useCallback(
+    (companyId: number) => {
+      if (resolvedNonSuperOrgId == null) {
+        toast.error("No se pudo identificar la organizacion actual.")
+        return
+      }
+      if (companyId === activeCompanyId) {
+        return
+      }
+      handleSelectCompany(resolvedNonSuperOrgId, companyId)
+      setTenantSummary((previous) => {
+        if (!previous) return previous
+        const nextCompany =
+          previous.companies.find((company) => company.id === companyId) ??
+          previous.company ??
+          null
+        return {
+          ...previous,
+          company: nextCompany,
+        }
+      })
+    },
+    [activeCompanyId, handleSelectCompany, resolvedNonSuperOrgId],
+  )
+
+  if (!isSuperUser) {
+    if (loading && !tenantSummary) {
+      return (
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <div className="flex w-full items-center gap-2">
+              <SidebarMenuButton size="lg" className="flex-1 justify-between">
+                <span className="text-sm font-medium">Cargando organizacion...</span>
+              </SidebarMenuButton>
+              <ModeToggle />
+            </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      )
+    }
+
+    if (!tenantSummary?.organization) {
+      return (
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <div className="flex w-full items-center gap-2">
+              <SidebarMenuButton size="lg" className="flex-1 justify-between">
+                <span className="text-sm font-medium">
+                  No se pudo cargar la organizacion activa
+                </span>
+              </SidebarMenuButton>
+              <ModeToggle />
+            </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      )
+    }
+
+    const organizationLabel =
+      tenantSummary.organization.name ??
+      (selection.orgId != null ? `Organizacion ID ${selection.orgId}` : "Sin organizacion")
+
+    const resolvedEmployeeCompany =
+      employeeCompanies.find((company) => company.id === activeCompanyId) ??
+      tenantSummary.company ??
+      null
+
+    const companyLabel =
+      resolvedEmployeeCompany?.name ??
+      (selection.companyId != null ? `Empresa ID ${selection.companyId}` : "Sin empresa asociada")
+
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className="flex-1 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                  <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                    <Building2 className="size-4" />
+                  </div>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-medium">{companyLabel}</span>
+                    <span className="truncate text-xs">{organizationLabel}</span>
+                    <span className="truncate text-[11px] text-muted-foreground">{roleLabel}</span>
+                  </div>
+                  <ChevronsUpDown className="ml-auto" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                align="start"
+                side={isMobile ? "bottom" : "right"}
+                sideOffset={4}
+              >
+                <DropdownMenuLabel className="text-muted-foreground text-xs">
+                  {organizationLabel}
+                </DropdownMenuLabel>
+                {employeeCompanies.length > 0 ? (
+                  employeeCompanies.map((company) => (
+                    <DropdownMenuItem
+                      key={company.id}
+                      onClick={() => handleEmployeeCompanySelect(company.id)}
+                      className="gap-2 p-2"
+                    >
+                      <div className="flex size-6 items-center justify-center rounded-md border">
+                        <Building2 className="size-3.5 shrink-0" />
+                      </div>
+                      <div className="flex-1 truncate">{company.name}</div>
+                      {company.id === activeCompanyId ? (
+                        <span className="text-[11px] text-muted-foreground">Actual</span>
+                      ) : null}
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <DropdownMenuItem disabled className="text-muted-foreground">
+                    Sin empresas disponibles
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <ModeToggle />
+          </div>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    )
+  }
+
+  if (isSuperUser && loading && organizations.length === 0) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
@@ -312,7 +503,7 @@ export function TeamSwitcher(): React.ReactElement | null {
     )
   }
 
-  if (!activeOrganization) {
+  if (isSuperUser && !activeOrganization) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>

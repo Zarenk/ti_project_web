@@ -161,8 +161,8 @@ export default function WelcomeDashboard() {
             }
           }
         } else {
-          clearTenantSelection()
-          setSelectedOrgId(null)
+          const stored = await getTenantSelection()
+          setSelectedOrgId(stored.orgId ?? null)
         }
       } catch (error) {
         console.error("Error inicializando el dashboard", error)
@@ -182,14 +182,24 @@ export default function WelcomeDashboard() {
   }, [router])
 
   useEffect(() => {
-    if (!bootstrapReady) return
+    if (!bootstrapReady || userRole === null) return
     if (selection.orgId !== selectedOrgId) {
       setSelectedOrgId(selection.orgId ?? null)
     }
-  }, [bootstrapReady, selection.orgId, selectedOrgId])
+  }, [bootstrapReady, selection.orgId, selectedOrgId, userRole])
 
   useEffect(() => {
-    if (!bootstrapReady) return
+    if (!bootstrapReady || userRole === null) return
+
+    if (userRole === "EMPLOYEE") {
+      setLoading(false)
+      setTotalInventory([])
+      setMonthlySales(null)
+      setPendingOrders(0)
+      setLowStockItems([])
+      setRecentActivity([])
+      return
+    }
 
     if (isGlobalSuperAdmin) {
       if (organizationsLoading) return
@@ -374,6 +384,7 @@ export default function WelcomeDashboard() {
     handleAuthError,
     router,
     version,
+    userRole,
   ])
 
   const showOrganizationSelector =
