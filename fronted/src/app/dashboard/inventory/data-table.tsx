@@ -15,7 +15,7 @@ import {
     useReactTable,
     FilterFn,
   } from "@tanstack/react-table"
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import InventoryModal from "./data-table-components/InventoryModal";
 import { DataTablePagination } from "@/components/data-table-pagination";
 import TransferModal from "./data-table-components/TransferModal";
@@ -31,6 +31,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useSiteSettings } from "@/context/site-settings-context"
+import { useAuth } from "@/context/auth-context"
 
 
 interface DataTableProps<TData, TValue> {
@@ -70,6 +72,30 @@ const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
         setIsOutOfStockDialogOpen(true);
       }
     }, [searchParams]);
+
+    const { settings } = useSiteSettings()
+    const { role } = useAuth()
+    const normalizedRole = role ? role.toUpperCase() : null
+    const canViewCosts =
+      normalizedRole === "SUPER_ADMIN_GLOBAL" ||
+      normalizedRole === "SUPER_ADMIN_ORG" ||
+      normalizedRole === "ADMIN"
+    const hidePurchaseCost = (settings.permissions?.hidePurchaseCost ?? false) && !canViewCosts
+    const effectiveColumns = useMemo(() => {
+      if (!hidePurchaseCost) {
+        return columns
+      }
+      return columns.filter((column) => {
+        const accessorKey =
+          typeof (column as { accessorKey?: string | number }).accessorKey === "string"
+            ? ((column as { accessorKey?: string | number }).accessorKey as string)
+            : undefined
+        if (accessorKey === "lowestPurchasePrice" || accessorKey === "highestPurchasePrice") {
+          return false
+        }
+        return true
+      })
+    }, [columns, hidePurchaseCost])
 
     // ESTADO PARA MANEJAR FILTROS DE LA COLUMNA
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -113,8 +139,8 @@ const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
     }, [data, selectedStore, inStockOnly]);
 
     const table = useReactTable({
-        data: filteredData,
-        columns,
+      data: filteredData,
+      columns: effectiveColumns,
         globalFilterFn,
         onColumnFiltersChange: setColumnFilters,
         onSortingChange: setSorting,

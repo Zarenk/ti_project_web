@@ -22,6 +22,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { useSiteSettings } from "@/context/site-settings-context";
+import { useAuth } from "@/context/auth-context";
 
 type ProductFeature = {
   title?: string | null
@@ -214,6 +216,14 @@ export const columns: ColumnDef<Products>[] = [
       cell: ({ row }) => {
 
         const products = row.original
+        const { settings } = useSiteSettings()
+        const { role } = useAuth()
+        const normalizedRole = role ? role.toUpperCase() : null
+        const canViewCosts =
+          normalizedRole === "SUPER_ADMIN_GLOBAL" ||
+          normalizedRole === "SUPER_ADMIN_ORG" ||
+          normalizedRole === "ADMIN"
+        const hidePurchaseCost = (settings.permissions?.hidePurchaseCost ?? false) && !canViewCosts
 
         const router = useRouter(); // Usa useRouter dentro del componente React
         const handleRemoveProduct = async (id: string) => {
@@ -324,7 +334,9 @@ export const columns: ColumnDef<Products>[] = [
                   <div className="space-y-2">
                     <div><strong>Nombre:</strong> {products.name}</div>
                     <div><strong>Descripción:</strong> {products.description}</div>
-                    <div><strong>Precio Compra:</strong> S/. {products.price}</div>
+                    {!hidePurchaseCost && (
+                      <div><strong>Precio Compra:</strong> S/. {products.price}</div>
+                    )}
                     <div><strong>Precio Venta:</strong> S/. {products.priceSell}</div>
                     <div><strong>Estado:</strong> {products.status}</div>
                     <div><strong>Fecha de Creación:</strong> {new Date(products.createdAt).toLocaleDateString()}</div>

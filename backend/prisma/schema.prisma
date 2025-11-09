@@ -120,10 +120,19 @@ model Keyword {
 }
 
 model SiteSettings {
-  id        Int      @id @default(1)
-  data      Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  tenantKey      String   @unique @default("org:0|company:0")
+  organizationId Int?
+  companyId      Int?
+  data           Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([companyId])
 }
 
 model CatalogCover {
@@ -237,6 +246,7 @@ model Organization {
   exchangeRates TipoCambio[]
   entrySeries  EntryDetailSeries[]
   catalogCover CatalogCover[]
+  siteSettings SiteSettings[]
 
   @@unique([name])
   @@index([status])
@@ -263,6 +273,7 @@ model Company {
   categories         Category[]
   accEntries         AccEntry[]
   catalogCover CatalogCover[]
+  siteSettings SiteSettings[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])

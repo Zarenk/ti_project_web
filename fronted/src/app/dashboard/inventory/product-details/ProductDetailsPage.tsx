@@ -7,6 +7,8 @@ import { getProductByInventoryId, getProductSales } from "../inventory.api";
 import { Book, DollarSign, LayoutGrid, Table } from "lucide-react";
 import UpdateCategoryDialog from "./inventory-product-details-components/UpdateCategoryModal";
 import { QRCodeCanvas } from "qrcode.react";
+import { useSiteSettings } from "@/context/site-settings-context";
+import { useAuth } from "@/context/auth-context";
 
 const CODE39_PATTERNS: Record<string, string> = {
   "0": "nnnwwnwnn",
@@ -71,6 +73,15 @@ interface ProductDetailsPageProps {
 }
 
 export default function ProductDetailsPage({ product, stockDetails, entries, series, searchParams }: ProductDetailsPageProps) {
+  const { settings } = useSiteSettings();
+  const { role } = useAuth();
+  const normalizedRole = role ? role.toUpperCase() : null;
+  const canViewCosts =
+    normalizedRole === "SUPER_ADMIN_GLOBAL" ||
+    normalizedRole === "SUPER_ADMIN_ORG" ||
+    normalizedRole === "ADMIN";
+  const hidePurchaseCost = (settings.permissions?.hidePurchaseCost ?? false) && !canViewCosts;
+  const entryTableColSpan = hidePurchaseCost ? 5 : 6;
 
   // Lógica para mostrar el modal de actualización de precio al cargar la página
   const [isLoading, setIsLoading] = useState(true);
@@ -323,8 +334,12 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <p><strong>Nombre:</strong> {product.name}</p>
                 <p><strong>Categoría:</strong> {product.category}</p>
-                <p><strong>Precio Compra Mínimo:</strong> S/. {product.lowestPurchasePrice}</p>
-                <p><strong>Precio Compra Máximo:</strong> S/. {product.highestPurchasePrice}</p>
+                {!hidePurchaseCost && (
+                  <>
+                    <p><strong>Precio Compra Mínimo:</strong> S/. {product.lowestPurchasePrice}</p>
+                    <p><strong>Precio Compra Máximo:</strong> S/. {product.highestPurchasePrice}</p>
+                  </>
+                )}
                 <p><strong>Precio de Venta:</strong> S/. {product.priceSell}</p>
                 <p><strong>Stock General:</strong>{" "}
                   <span className={totalStock === 0 ? "text-red-600 font-bold" : ""}>
@@ -402,7 +417,9 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
                   .map((entry, index) => (
                     <div key={index} className="border rounded-md p-4 shadow-sm space-y-1 text-sm">
                       <p><strong>Fecha y hora:</strong> {formatDateTime(entry.createdAt)}</p>
-                      <p><strong>Precio de Compra:</strong> S/. {(entry.price || 0).toFixed(2)}</p>
+                      {!hidePurchaseCost && (
+                        <p><strong>Precio de Compra:</strong> S/. {(entry.price || 0).toFixed(2)}</p>
+                      )}
                       <p><strong>Moneda:</strong> {entry.tipoMoneda}</p>
                       <p><strong>Tienda:</strong> {entry.storeName}</p>
                       <p><strong>Proveedor:</strong> {entry.supplierName}</p>
@@ -428,7 +445,9 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
                         <th className="px-3 py-2 text-left font-semibold">Proveedor</th>
                         <th className="px-3 py-2 text-left font-semibold">Responsable</th>
                         <th className="px-3 py-2 text-right font-semibold">Cantidad</th>
-                        <th className="px-3 py-2 text-right font-semibold">Precio</th>
+                        {!hidePurchaseCost && (
+                          <th className="px-3 py-2 text-right font-semibold">Precio</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -442,12 +461,14 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
                               <td className="px-3 py-2">{entry.supplierName}</td>
                               <td className="px-3 py-2">{resolveResponsibleName(entry)}</td>
                               <td className="px-3 py-2 text-right">{entry.quantity || 0}</td>
-                              <td className="px-3 py-2 text-right">S/. {(entry.price || 0).toFixed(2)}</td>
+                              {!hidePurchaseCost && (
+                                <td className="px-3 py-2 text-right">S/. {(entry.price || 0).toFixed(2)}</td>
+                              )}
                             </tr>
                           ))
                       ) : (
                         <tr>
-                          <td colSpan={6} className="px-3 py-4 text-center text-muted-foreground">No hay entradas registradas.</td>
+                          <td colSpan={entryTableColSpan} className="px-3 py-4 text-center text-muted-foreground">No hay entradas registradas.</td>
                         </tr>
                       )}
                     </tbody>

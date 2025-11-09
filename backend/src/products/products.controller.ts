@@ -37,7 +37,7 @@ export class ProductsController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
   @ApiOperation({ summary: 'Create a product' }) // Swagger
   async create(
     @Body() createProductDto: CreateProductDto,

@@ -20,6 +20,7 @@ import {
   getTypographyFont,
 } from "@/lib/typography-fonts";
 import { useOptionalTenantSelection } from "@/context/tenant-selection-context";
+import { TENANT_SELECTION_EVENT } from "@/utils/tenant-preferences";
 import { getAuthHeaders } from "@/utils/auth-token";
 
 const API_ENDPOINT = "/api/site-settings";
@@ -377,7 +378,8 @@ export function SiteSettingsProvider({
   initialCreatedAt = null,
 }: SiteSettingsProviderProps) {
   const tenantSelection = useOptionalTenantSelection();
-  const version = tenantSelection?.version ?? null;
+  const [manualTenantVersion, setManualTenantVersion] = useState(0);
+  const version = tenantSelection?.version ?? manualTenantVersion;
   const [settings, setSettings] = useState<SiteSettings>(() =>
     withDefaultSettings(initialSettings),
   );
@@ -446,6 +448,25 @@ export function SiteSettingsProvider({
       console.error("Error initializing site settings", err);
     });
   }, [initialSettings, refresh]);
+
+  useEffect(() => {
+    if (tenantSelection) {
+      return;
+    }
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handler = () => {
+      setManualTenantVersion((current) => current + 1);
+    };
+
+    window.addEventListener(TENANT_SELECTION_EVENT, handler as EventListener);
+    return () => {
+      window.removeEventListener(TENANT_SELECTION_EVENT, handler as EventListener);
+    };
+  }, [tenantSelection]);
 
   const previousVersionRef = useRef(version);
   useEffect(() => {

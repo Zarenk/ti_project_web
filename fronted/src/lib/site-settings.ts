@@ -8,6 +8,7 @@ import {
   siteSettingsSchema,
   siteSettingsWithMetaSchema,
   type SiteSettings,
+  type SiteSettingsWithMeta,
 } from "@/context/site-settings-schema";
 import { getRequestTenant } from "@/lib/server/tenant-context";
 
@@ -43,11 +44,55 @@ async function resolveAuthHeaders(): Promise<Record<string, string>> {
     headersToSend["x-org-id"] = String(tenant.organizationId);
   }
 
+  if (tenant.companyId) {
+    headersToSend["x-company-id"] = String(tenant.companyId);
+  }
+
   if (tenant.slug) {
     headersToSend["x-tenant-slug"] = tenant.slug;
   }
 
   return headersToSend;
+}
+
+function normalizeSiteSettingsPayload(payload: unknown): SiteSettingsWithMeta | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  const rawSettings = record.settings;
+  if (rawSettings !== null && typeof rawSettings === "object") {
+    return {
+      settings: rawSettings,
+      updatedAt:
+        typeof record.updatedAt === "string" || record.updatedAt === null
+          ? (record.updatedAt as string | null)
+          : null,
+      createdAt:
+        typeof record.createdAt === "string" || record.createdAt === null
+          ? (record.createdAt as string | null)
+          : null,
+    } as SiteSettingsWithMeta;
+  }
+
+  const rawData = record.data;
+  if (rawData !== null && typeof rawData === "object") {
+    return {
+      settings: rawData,
+      updatedAt:
+        typeof record.updatedAt === "string" || record.updatedAt === null
+          ? (record.updatedAt as string | null)
+          : null,
+      createdAt:
+        typeof record.createdAt === "string" || record.createdAt === null
+          ? (record.createdAt as string | null)
+          : null,
+    } as SiteSettingsWithMeta;
+  }
+
+  return null;
 }
 
 async function fetchSiteSettingsInternal(): Promise<SiteSettingsFetchResult> {
@@ -79,7 +124,15 @@ async function fetchSiteSettingsInternal(): Promise<SiteSettingsFetchResult> {
     }
 
     const payload = await response.json();
-    const parsedWithMeta = siteSettingsWithMetaSchema.safeParse(payload);
+    if (!payload || typeof payload !== "object") {
+      return {
+        settings: defaultSiteSettings,
+        updatedAt: null,
+        createdAt: null,
+      };
+    }
+    const normalized = normalizeSiteSettingsPayload(payload);
+    const parsedWithMeta = siteSettingsWithMetaSchema.safeParse(normalized ?? payload);
 
     if (parsedWithMeta.success) {
       return {
@@ -89,11 +142,19 @@ async function fetchSiteSettingsInternal(): Promise<SiteSettingsFetchResult> {
       };
     }
 
-    const parsed = siteSettingsSchema.parse(payload);
+    const fallback = siteSettingsSchema.safeParse(payload);
+    if (fallback.success) {
+      return {
+        settings: fallback.data,
+        updatedAt: response.headers.get("x-site-settings-updated-at"),
+        createdAt: response.headers.get("x-site-settings-created-at"),
+      };
+    }
+
     return {
-      settings: parsed,
-      updatedAt: response.headers.get("x-site-settings-updated-at"),
-      createdAt: response.headers.get("x-site-settings-created-at"),
+      settings: defaultSiteSettings,
+      updatedAt: null,
+      createdAt: null,
     };
   } catch (error) {
     console.error("Failed to read site settings", error);
@@ -111,6 +172,6 @@ const cachedGetSiteSettings = cache(async (_cacheKey: string) => {
 
 export async function getSiteSettings(): Promise<SiteSettingsFetchResult> {
   const tenant = await getRequestTenant();
-  const cacheKey = `${tenant.organizationId ?? "anon"}::${tenant.slug ?? "default"}`;
+  const cacheKey = `${tenant.organizationId ?? "anon"}::${tenant.companyId ?? "company"}::${tenant.slug ?? "default"}`;
   return cachedGetSiteSettings(cacheKey);
 }

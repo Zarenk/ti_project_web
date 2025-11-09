@@ -105,6 +105,7 @@ export const siteSettingsSchema = z.object({
     marketing: z.boolean(),
     ads: z.boolean(),
     settings: z.boolean(),
+    hidePurchaseCost: z.boolean(),
   }),
 });
 
@@ -208,7 +209,7 @@ export const defaultSiteSettings: SiteSettings = {
     x: "",
   },
   privacy: {
-    cookieBanner: true,
+    cookieBanner: false,
     cookieText: "Este sitio utiliza cookies para mejorar tu experiencia.",
     acceptText: "Aceptar",
   },
@@ -227,6 +228,7 @@ export const defaultSiteSettings: SiteSettings = {
     marketing: true,
     ads: true,
     settings: true,
+    hidePurchaseCost: false,
   },
 };
 

@@ -109,6 +109,22 @@ type SectionId =
   | "system";
 
 const defaultValues: SettingsFormData = defaultSiteSettings;
+const ACTIVE_SECTION_STORAGE_KEY = "dashboard.options.active-section";
+
+function getStoredActiveSection(): SectionId {
+  if (typeof window === "undefined") {
+    return "company";
+  }
+  try {
+    const stored = window.sessionStorage.getItem(ACTIVE_SECTION_STORAGE_KEY);
+    if (!stored) return "company";
+    return sections.some((section) => section.id === stored)
+      ? (stored as SectionId)
+      : "company";
+  } catch {
+    return "company";
+  }
+}
 
 const sections: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "company", label: "Empresa", icon: Building2 },
@@ -128,8 +144,10 @@ const sections: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "system", label: "Datos del Sistema", icon: Database },
 ];
 
+type PermissionModuleKey = Exclude<keyof SiteSettings["permissions"], "hidePurchaseCost">;
+
 const permissionModules: {
-  key: keyof SiteSettings["permissions"];
+  key: PermissionModuleKey;
   label: string;
   description: string;
 }[] = [
@@ -270,7 +288,7 @@ function mergeSettingsDeep<T extends Record<string, unknown>>(
 }
 
 export default function SettingsPage() {
-  const [activeSection, setActiveSection] = useState<SectionId>("company");
+  const [activeSection, setActiveSection] = useState<SectionId>(getStoredActiveSection);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importJson, setImportJson] = useState("");
   const [firstSave, setFirstSave] = useState(true);
@@ -316,6 +334,17 @@ export default function SettingsPage() {
   useEffect(() => {
     reset(persistedSettings);
   }, [persistedSettings, reset]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(ACTIVE_SECTION_STORAGE_KEY, activeSection);
+    } catch {
+      /* ignore */
+    }
+  }, [activeSection]);
 
   const watchedValues = useWatch<SettingsFormData>({ control });
   const skipPreviewUpdateRef = useRef(false);
@@ -2264,6 +2293,31 @@ function PermissionsSection({ watch, setValue }: PermissionsSectionProps) {
             </div>
           );
         })}
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-border/60 bg-card/40 p-4">
+          <div className="space-y-1">
+            <Label htmlFor="permissions-hidePurchaseCost" className="text-base font-medium">
+              Ocultar precios de compra
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Evita mostrar el costo de compra en Productos e Inventario para mejorar la confidencialidad.
+            </p>
+          </div>
+          <Checkbox
+            id="permissions-hidePurchaseCost"
+            checked={currentPermissions.hidePurchaseCost ?? false}
+            onCheckedChange={(checked) =>
+              setValue(
+                "permissions",
+                {
+                  ...currentPermissions,
+                  hidePurchaseCost: checked === true,
+                },
+                { shouldDirty: true },
+              )
+            }
+            aria-label="Activar ocultamiento de precios de compra"
+          />
+        </div>
       </CardContent>
     </Card>
   );

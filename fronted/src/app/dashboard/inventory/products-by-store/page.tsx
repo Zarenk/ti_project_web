@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { cn, formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useSiteSettings } from "@/context/site-settings-context";
+import { useAuth } from "@/context/auth-context";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getBrands } from "../../brands/brands.api";
 import { useTenantSelection } from "@/context/tenant-selection-context";
@@ -107,6 +109,14 @@ export default function ProductsByStorePage() {
   const [globalInventoryValue, setGlobalInventoryValue] = useState(0);
   const [filteredInventoryValue, setFilteredInventoryValue] = useState(0);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: "asc" | "desc" } | null>(null);
+  const { settings } = useSiteSettings();
+  const { role } = useAuth();
+  const normalizedRole = role ? role.toUpperCase() : null;
+  const canViewCosts =
+    normalizedRole === "SUPER_ADMIN_GLOBAL" ||
+    normalizedRole === "SUPER_ADMIN_ORG" ||
+    normalizedRole === "ADMIN";
+  const showPurchaseCost = !(settings.permissions?.hidePurchaseCost ?? false) || canViewCosts;
 
   // Dentro del componente:
   const [open, setOpen] = useState(false)
@@ -229,18 +239,24 @@ export default function ProductsByStorePage() {
       .localeCompare(valueB.toString(), "es", { sensitivity: "base" });
   };
 
-  const handleSort = useCallback((key: SortKey) => {
-    setSortConfig((prev) => {
-      if (prev?.key === key) {
-        return {
-          key,
-          direction: prev.direction === "asc" ? "desc" : "asc",
-        };
+  const handleSort = useCallback(
+    (key: SortKey) => {
+      if (!showPurchaseCost && key === "purchasePrice") {
+        return;
       }
+      setSortConfig((prev) => {
+        if (prev?.key === key) {
+          return {
+            key,
+            direction: prev.direction === "asc" ? "desc" : "asc",
+          };
+        }
 
-      return { key, direction: "asc" };
-    });
-  }, []);
+        return { key, direction: "asc" };
+      });
+    },
+    [showPurchaseCost],
+  );
 
   const renderSortIcon = (key: SortKey) => {
     if (sortConfig?.key !== key) {
@@ -790,28 +806,30 @@ export default function ProductsByStorePage() {
         </div>
       </div>
 
-      <div className="mb-6 flex flex-col gap-4 md:flex-row">
-        <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 
-        via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 
-          dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
-          <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real del inventario</p>
-          <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
-            {formatCurrency(globalInventoryValue, "PEN")}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
-            Sumatoria del precio de compra por stock de todos los productos en todas las tiendas.
-          </p>
+      {showPurchaseCost && (
+        <div className="mb-6 flex flex-col gap-4 md:flex-row">
+          <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 
+          via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 
+            dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
+            <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real del inventario</p>
+            <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
+              {formatCurrency(globalInventoryValue, "PEN")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
+              Sumatoria del precio de compra por stock de todos los productos en todas las tiendas.
+            </p>
+          </div>
+          <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
+            <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real según filtros activos</p>
+            <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
+              {formatCurrency(filteredInventoryValue, "PEN")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
+              Actualizado automáticamente al filtrar por categoría, marca, tienda, producto o stock.
+            </p>
+          </div>
         </div>
-        <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
-          <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real según filtros activos</p>
-          <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
-            {formatCurrency(filteredInventoryValue, "PEN")}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
-            Actualizado automáticamente al filtrar por categoría, marca, tienda, producto o stock.
-          </p>
-        </div>
-      </div>
+      )}
 
       <div className="overflow-x-auto">
         <Table>
@@ -837,16 +855,18 @@ export default function ProductsByStorePage() {
                   {renderSortIcon("category")}
                 </button>
               </TableHead>
-              <TableHead className="text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleSort("purchasePrice")}
-                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
-                >
-                  Precio de Compra
-                  {renderSortIcon("purchasePrice")}
-                </button>
-              </TableHead>
+              {showPurchaseCost && (
+                <TableHead className="text-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("purchasePrice")}
+                    className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                  >
+                    Precio de Compra
+                    {renderSortIcon("purchasePrice")}
+                  </button>
+                </TableHead>
+              )}
               <TableHead className="text-xs">
                 <button
                   type="button"
@@ -896,7 +916,9 @@ export default function ProductsByStorePage() {
                 <TableCell className="text-sm">
                   {item.inventory.product.category?.name || "Sin categoría"}
                 </TableCell>
-                <TableCell className="text-sm">{item.inventory.product.price}</TableCell>
+                {showPurchaseCost && (
+                  <TableCell className="text-sm">{item.inventory.product.price}</TableCell>
+                )}
                 <TableCell className="text-sm">{item.inventory.product.priceSell}</TableCell>
                 <TableCell className="text-sm">{item.stock}</TableCell>
                 <TableCell className="text-sm">

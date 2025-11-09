@@ -7,15 +7,34 @@ import { ModulePermission } from 'src/common/decorators/module-permission.decora
 import { plainToInstance } from 'class-transformer';
 import { CreateSiteSettingDto } from './dto/create-site-setting.dto';
 import { UpdateSiteSettingsDto } from './dto/update-site-setting.dto';
+import { TenantContextService } from 'src/tenancy/tenant-context.service';
 
 @ModulePermission('settings')
 @Controller('site-settings')
 export class SiteSettingsController {
-  constructor(private readonly siteSettingsService: SiteSettingsService) {}
+  constructor(
+    private readonly siteSettingsService: SiteSettingsService,
+    private readonly tenantContextService: TenantContextService,
+  ) {}
+
+  private resolveTenantScope(): {
+    organizationId: number | null;
+    companyId: number | null;
+  } {
+    const context = this.tenantContextService.getContextWithFallback();
+    return {
+      organizationId: context.organizationId,
+      companyId: context.companyId,
+    };
+  }
 
   @Get()
   async getSettings(): Promise<CreateSiteSettingDto> {
-    const settings = await this.siteSettingsService.getSettings();
+    const { organizationId, companyId } = this.resolveTenantScope();
+    const settings = await this.siteSettingsService.getSettings(
+      organizationId,
+      companyId,
+    );
     return plainToInstance(CreateSiteSettingDto, {
       settings: settings.data,
       updatedAt: settings.updatedAt.toISOString(),
@@ -29,7 +48,12 @@ export class SiteSettingsController {
   async updateSettings(
     @Body() dto: UpdateSiteSettingsDto,
   ): Promise<CreateSiteSettingDto> {
-    const settings = await this.siteSettingsService.updateSettings(dto);
+    const { organizationId, companyId } = this.resolveTenantScope();
+    const settings = await this.siteSettingsService.updateSettings(
+      dto,
+      organizationId,
+      companyId,
+    );
     return plainToInstance(CreateSiteSettingDto, {
       settings: settings.data,
       updatedAt: settings.updatedAt.toISOString(),

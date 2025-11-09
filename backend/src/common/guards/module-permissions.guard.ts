@@ -10,11 +10,13 @@ import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { MODULE_PERMISSION_KEY } from '../decorators/module-permission.decorator';
 import { SiteSettingsService } from 'src/site-settings/site-settings.service';
+import type { TenantContext } from 'src/tenancy/tenant-context.interface';
 
 interface RequestWithUser extends Request {
   user?: {
     role?: string;
   };
+  tenantContext?: TenantContext;
 }
 
 @Injectable()
@@ -59,7 +61,11 @@ export class ModulePermissionsGuard implements CanActivate {
       return true;
     }
 
-    const settings = await this.siteSettingsService.getSettings();
+    const { organizationId, companyId } = this.resolveTenantIds(request);
+    const settings = await this.siteSettingsService.getSettings(
+      organizationId,
+      companyId,
+    );
     const permissions = (settings.data as Record<string, any>)?.permissions as
       | Record<string, boolean>
       | undefined;
@@ -119,6 +125,47 @@ export class ModulePermissionsGuard implements CanActivate {
     }
 
     return undefined;
+  }
+
+  private resolveTenantIds(request: RequestWithUser): {
+    organizationId: number | null;
+    companyId: number | null;
+  } {
+    const organizationId =
+      request.tenantContext?.organizationId ??
+      this.parseNumericHeader(request.headers?.['x-org-id']);
+    const companyId =
+      request.tenantContext?.companyId ??
+      this.parseNumericHeader(request.headers?.['x-company-id']);
+
+    return {
+      organizationId,
+      companyId,
+    };
+  }
+
+  private parseNumericHeader(
+    value: string | string[] | number | undefined,
+  ): number | null {
+    if (Array.isArray(value)) {
+      return this.parseNumericHeader(value[0]);
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   private isAdmin(role?: string): boolean {
