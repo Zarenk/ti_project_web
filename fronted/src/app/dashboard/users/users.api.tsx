@@ -115,6 +115,14 @@ export interface DashboardUser {
   createdAt: string;
 }
 
+export type UserRole =
+  | "SUPER_ADMIN_GLOBAL"
+  | "SUPER_ADMIN_ORG"
+  | "ADMIN"
+  | "EMPLOYEE"
+  | "CLIENT"
+  | "GUEST";
+
 export async function getUsers(): Promise<DashboardUser[]> {
   const res = await authorizedFetch(`${BACKEND_URL}/api/users`, {
     cache: 'no-store',
@@ -168,4 +176,22 @@ export async function updateUser(data: { email?: string; username?: string; pass
   }
 
   return res.json();
+}
+
+export async function updateUserAdmin(
+  userId: number,
+  payload: { role?: UserRole; status?: 'ACTIVO' | 'INACTIVO' },
+) {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/users/${userId}/manage`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    throw new Error(errorData?.message || 'Error al actualizar usuario');
+  }
+
+  return res.json() as Promise<DashboardUser>;
 }

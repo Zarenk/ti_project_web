@@ -1,9 +1,11 @@
 import {
-  Injectable,
-  UnauthorizedException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  Injectable,
   InternalServerErrorException,
+  NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole, AuditAction, User } from '@prisma/client';
@@ -15,6 +17,8 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { Request } from 'express';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { TenantContext } from 'src/tenancy/tenant-context.interface';
 
 @Injectable()
 export class UsersService {
@@ -512,5 +516,90 @@ export class UsersService {
     });
 
     return { message: 'Password updated successfully' };
+  }
+
+  async updateUserRoleAndStatus(
+    userId: number,
+    dto: UpdateUserRoleDto,
+    tenant: TenantContext | null,
+    actor: { actorId: number | null; actorEmail: string | null },
+  ) {
+    if (!dto.role && !dto.status) {
+      throw new BadRequestException(
+        'Debes proporcionar al menos un campo para actualizar.',
+      );
+    }
+
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    const isGlobalAdmin = tenant?.isGlobalSuperAdmin ?? false;
+    const isOrgAdmin = tenant?.isOrganizationSuperAdmin ?? false;
+
+    if (!isGlobalAdmin) {
+      if (!isOrgAdmin) {
+        throw new ForbiddenException(
+          'No cuentas con permisos para actualizar usuarios.',
+        );
+      }
+
+      if (
+        tenant?.organizationId == null ||
+        user.organizationId !== tenant.organizationId
+      ) {
+        throw new ForbiddenException(
+          'Solo puedes actualizar usuarios de tu organizacion.',
+        );
+      }
+
+      if (dto.role === UserRole.SUPER_ADMIN_GLOBAL) {
+        throw new ForbiddenException(
+          'No puedes asignar el rol de super administrador global.',
+        );
+      }
+    }
+
+    const updatePayload: Prisma.UserUpdateInput = {};
+    if (dto.role) {
+      updatePayload.role = dto.role;
+    }
+    if (dto.status) {
+      updatePayload.status = dto.status;
+    }
+
+    const updated = await this.prismaService.user.update({
+      where: { id: userId },
+      data: updatePayload,
+    });
+
+    await this.activityService.log(
+      {
+        actorId: actor.actorId ?? undefined,
+        actorEmail: actor.actorEmail ?? undefined,
+        entityType: 'User',
+        entityId: userId.toString(),
+        action: AuditAction.UPDATED,
+        summary: `Actualización de rol/estado para ${updated.email}`,
+        diff: {
+          before: { role: user.role, status: user.status },
+          after: { role: updated.role, status: updated.status },
+        } as any,
+      },
+      undefined,
+    );
+
+    return {
+      id: updated.id,
+      email: updated.email,
+      username: updated.username,
+      role: updated.role,
+      status: updated.status,
+      createdAt: updated.createdAt,
+    };
   }
 }

@@ -18,7 +18,7 @@ import { Request } from 'express';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
-@ModulePermission(['inventory', 'purchases'])
+@ModulePermission(['inventory', 'purchases', 'providers'])
 @Controller('providers')
 export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}

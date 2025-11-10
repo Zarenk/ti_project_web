@@ -190,16 +190,18 @@ export function createSalesColumns(
             >
               Ver Detalles
             </Button>
-            <Button
-              variant="destructive"
-              onClick={(event) => {
-                event.stopPropagation();
-                setIsDialogOpen(true);
-              }}
-              disabled={isDeleting}
-            >
-              {isDeleting ? "Eliminando..." : "Eliminar"}
-            </Button>
+            <DeleteActionsGuard>
+              <Button
+                variant="destructive"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsDialogOpen(true);
+                }}
+                disabled={isDeleting}
+              >
+                {isDeleting ? "Eliminando..." : "Eliminar"}
+              </Button>
+            </DeleteActionsGuard>
           </div>
 
           <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -230,3 +232,5 @@ export function createSalesColumns(
   },
  ];
 }
+
+

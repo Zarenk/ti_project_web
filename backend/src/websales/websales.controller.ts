@@ -24,6 +24,7 @@ import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 
 const ORDERS_ALLOWED_ROLES = [
   'ADMIN',
@@ -174,7 +175,8 @@ export class WebSalesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @ModulePermission('sales')
   @Get('orders')
   async getOrders(
     @Query('status') status?: string,
@@ -197,7 +199,8 @@ export class WebSalesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @ModulePermission('sales')
   @Get('orders/count')
   async getOrdersCount(
     @Query('status') status?: string,
@@ -213,7 +216,8 @@ export class WebSalesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @ModulePermission('sales')
   @Get('orders/recent')
   async getRecentOrders(
     @Query('from') from?: string,

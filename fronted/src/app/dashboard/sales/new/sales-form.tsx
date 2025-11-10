@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from '@/components/ui/button'
+import { DeleteActionsGuard } from '@/components/delete-actions-guard'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useForm } from 'react-hook-form'
@@ -18,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {jwtDecode} from 'jwt-decode';
 import { getAuthToken } from "@/utils/auth-token";
 import {  getStores } from '../../stores/stores.api'
+import { getCategories } from '../../categories/categories.api'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Calendar } from '@/components/ui/calendar'
@@ -35,6 +37,7 @@ import { numeroALetrasCustom } from '../components/utils/numeros-a-letras'
 import { pdf } from '@react-pdf/renderer';
 import { PaymentMethodsModal } from '../components/PaymentMethodsSelector'
 import { ProductDetailModal } from '../components/ProductDetailModal'
+import { useTenantSelection } from '@/context/tenant-selection-context'
 // @ts-ignore
 const Numalet = require('numalet');
 
@@ -87,39 +90,57 @@ const salesSchema = z.object({
 //inferir el tipo de dato
 export type SalesType = z.infer<typeof salesSchema>;
 
+function buildDefaultSaleValues(sale?: any): SalesType {
+  return {
+    name: sale?.name ?? "",
+    description: sale?.description ?? "",
+    createdAt: sale?.createdAt ?? "",
+    price: sale?.price ?? 1,
+    quantity: sale?.quantity ?? 1,
+    category_name: sale?.category_name ?? "",
+    client_name: sale?.client_name ?? "",
+    client_type: sale?.client_type ?? "",
+    client_typeNumber: sale?.client_typeNumber ?? "",
+    store_name: sale?.store_name ?? "",
+    store_adress: sale?.store_adress ?? "",
+    serie: sale?.serie ?? "",
+    nroCorrelativo: sale?.nroCorrelativo ?? "",
+    ruc: sale?.ruc ?? "",
+    fecha_emision_comprobante: sale?.fecha_emision_comprobante ?? "",
+    tipoComprobante: sale?.tipoComprobante ?? "",
+    total_comprobante: sale?.total_comprobante ?? "",
+    tipo_moneda: sale?.tipo_moneda ?? "PEN",
+    stock: sale?.stock ?? 0,
+  };
+}
+
 export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
-  //hook de react-hook-form
+  const initialValues = useMemo(() => buildDefaultSaleValues(sales), [sales]);
   const form = useForm<SalesType>({
-  resolver: zodResolver(salesSchema),
-  defaultValues: {
-      name: sales?.name || '',
-      description: sales?.description || '',    
-      createdAt: sales?.createAt || '',   
-      price: sales?.price || 1, // Valor predeterminado para quantity
-      quantity: sales?.quantity || 1, // Valor predeterminado para quantity
-      category_name: sales?.category_name || '', // Valor predeterminado para category_name
-      client_name: sales?.client_name || '', 
-      client_type: sales?.client_type || '', 
-      client_typeNumber: sales?.client_typeNumber || '', 
-      store_name: sales?.store_name || '', 
-      store_adress: sales?.store_adress || '', 
-      ruc: sales?.ruc || '', // Valor predeterminado para ruc
-      serie: sales?.serie || '', // Valor predeterminado para serie
-      nroCorrelativo: sales?.nroCorrelativo || '', // Valor predeterminado para serie
-      fecha_emision_comprobante: sales?.fecha_emision_comprobante || '', // Valor predeterminado 
-      tipoComprobante: sales?.tipoComprobante || '', // Valor predeterminado
-      total_comprobante: sales?.total_comprobante || '', // Valor predeterminado
-      tipo_moneda: sales?.total_comprobante || '', // Valor predeterminado
-      stock: sales?.stock || 0,
-    }
+    resolver: zodResolver(salesSchema),
+    defaultValues: initialValues,
   });
+  useEffect(() => {
+    form.reset(initialValues);
+  }, [form, initialValues]);
+  const { version } = useTenantSelection();
 
   // Extraer funciones y estados del formulario
   const { handleSubmit, register, setValue, formState: {errors} } = form;
   useEffect(() => {
     console.log("Errores del formulario:", errors);
   }, [errors]);
+
+  useEffect(() => {
+    setCurrency(initialValues.tipo_moneda || "PEN");
+    setSelectedDate(
+      initialValues.fecha_emision_comprobante
+        ? new Date(initialValues.fecha_emision_comprobante)
+        : new Date(),
+    );
+    setCreatedAt(initialValues.createdAt ? new Date(initialValues.createdAt) : null);
+  }, [initialValues]);
 
   // Estado para manejar el archivo PDF
   const router = useRouter();
@@ -183,7 +204,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   const [pendingStore, setPendingStore] = useState<string | null>(null); // Almacena la tienda seleccionada temporalmente
 
   // CONTROLAR LA MONEDA
-  const [currency, setCurrency] = useState<string>(form.getValues("tipo_moneda") || "PEN");
+  const [currency, setCurrency] = useState<string>(initialValues.tipo_moneda || "PEN");
 
   // COMBOBOX DE COMPROBANTE
   const [openInvoice, setOpenInvoice] = useState(false); // Controla si el combobox está abierto
@@ -248,9 +269,15 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   }, [normalizedCurrency, selectedProducts.length, totalAmount]);
 
   // VARIABLES DE CALENDAR
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(
+    initialValues.fecha_emision_comprobante
+      ? new Date(initialValues.fecha_emision_comprobante)
+      : new Date(),
+  );
   const [openCalendar, setOpenCalendar] = useState(false);
-  const [createdAt, setCreatedAt] = useState<Date | null>(null);
+  const [createdAt, setCreatedAt] = useState<Date | null>(
+    initialValues.createdAt ? new Date(initialValues.createdAt) : null,
+  );
 
   // COMBOBOX DE TIENDAS
   const [stores, setStores] = useState<{ id: number; 
@@ -265,6 +292,31 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   // Cargar los clientes al montar el componente
   const [openClient, setOpenClient] = React.useState(false)
   const [valueClient, setValueClient] = React.useState("")
+  const [categoriesState, setCategoriesState] = useState(categories ?? []);
+  useEffect(() => {
+    setCategoriesState(categories ?? []);
+  }, [categories]);
+  useEffect(() => {
+    let cancelled = false;
+    setCategoriesState([]);
+    async function fetchCategoriesByTenant() {
+      try {
+        const nextCategories = await getCategories();
+        if (!cancelled) {
+          setCategoriesState(Array.isArray(nextCategories) ? nextCategories : []);
+        }
+      } catch (error) {
+        console.error("Error al obtener las categorías:", error);
+        if (!cancelled) {
+          setCategoriesState([]);
+        }
+      }
+    }
+    fetchCategoriesByTenant();
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
 
   const getCommandValue = (raw: unknown) =>
     typeof raw === "string" ? raw.trim() : raw != null ? String(raw) : "";
@@ -728,18 +780,23 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
   // Cargar los productos cuando se selecciona una tienda
   useEffect(() => {
+    let cancelled = false;
 
     async function fetchProductsByStore() {
-      if (!selectedStoreId) return
+      if (!selectedStoreId) {
+        setProducts([]);
+        return;
+      }
 
       try {
-        const products = await getProductsByStore(selectedStoreId)
+        const products = await getProductsByStore(selectedStoreId);
+        if (cancelled) return;
         const formattedProducts = products
           .map((item: any) => {
-            const product = item?.inventory?.product
-            if (!product) return null
+            const product = item?.inventory?.product;
+            if (!product) return null;
 
-            const category = product.category
+            const category = product.category;
             return {
               id: product.id,
               name: product.name,
@@ -748,53 +805,127 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
               categoryId: product.categoryId ?? null,
               category_name: category?.name ?? 'Sin categoría',
               stock: item?.stock ?? product.stock ?? 0,
-            }
+            };
           })
-          .filter(Boolean)
+          .filter(Boolean);
 
-        setProducts(formattedProducts)
+        setProducts(formattedProducts);
       } catch (error) {
-        console.error('Error al obtener los productos por tienda:', error)
+        console.error('Error al obtener los productos por tienda:', error);
+        if (!cancelled) {
+          setProducts([]);
+        }
       }
     }
 
-      fetchProductsByStore();
-    }, [selectedStoreId]); // Ejecutar cuando cambie la tienda seleccionada    
+    fetchProductsByStore();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedStoreId, version]); // Ejecutar cuando cambie la tienda seleccionada    
   //
 
-  // Cargar los proveedores al montar el componente
+  // Cargar los clientes según el tenant
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchClients() {
       try {
-          const clients = await getRegisteredClients();
-          setClients(clients); // Guarda los proveedores en el estado
+        const response = await getRegisteredClients();
+        if (!cancelled) {
+          setClients(Array.isArray(response) ? response : []);
+        }
       } catch (error) {
-          console.error('Error al obtener los clientes:', error);
+        console.error('Error al obtener los clientes:', error);
+        if (!cancelled) {
+          setClients([]);
         }
       }
-      fetchClients();
-  }, []);
+    }
+
+    setClients([]);
+    setValueClient('');
+    fetchClients();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
   //
 
-  // Cargar lass tiendas al montar el componente
+  // Cargar tiendas según el tenant
   useEffect(() => {
-      async function fetchStores() {
-        try {
-          const stores = await getStores();
-          setStores(stores); // Guarda las tiendas en el estado
-        } catch (error) {
-          console.error('Error al obtener las tiendas:', error);
+    let cancelled = false;
+
+    async function fetchStoresData() {
+      try {
+        const storesResponse = await getStores();
+        if (!cancelled) {
+          setStores(Array.isArray(storesResponse) ? storesResponse : []);
+        }
+      } catch (error) {
+        console.error('Error al obtener las tiendas:', error);
+        if (!cancelled) {
+          setStores([]);
         }
       }
-  
-      fetchStores();
-  }, []);
+    }
+
+    setStores([]);
+    setValueStore('');
+    setSelectedStoreId(null);
+    fetchStoresData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
 
   // Actualizar el valor del formulario cuando cambie el estado local
   useEffect(() => {
     form.setValue("tipo_moneda", currency, { shouldValidate: true });
   }, [currency, form]);
   //
+
+  useEffect(() => {
+    setShowPDF(false);
+    setPdfData(null);
+    setPayments([]);
+    setForceOpenPaymentModal(false);
+    setIsDialogOpen(false);
+    setIsDialogOpenSeries(false);
+    setIsSeriesModalOpen(false);
+    setSeries([]);
+    setAvailableSeries([]);
+    setSelectedSeries([]);
+    setCurrentSeries([]);
+    setCurrentProduct(null);
+    setSelectedProducts([]);
+    setQuantity(1);
+    setStock(0);
+    setActiveProductIndex(null);
+    setProductWithZeroPrice(null);
+    setIsPriceAlertOpen(false);
+    setOpen(false);
+    setOpenStore(false);
+    setOpenClient(false);
+    setOpenInvoice(false);
+    setValueProduct('');
+    setValueStore('');
+    setValueClient('');
+    setSelectedStoreId(null);
+    setPendingStore(null);
+    setIsStoreChangeDialogOpen(false);
+    setCurrency('PEN');
+    setValueInvoice('');
+    setIsClientDisabled(true);
+    setSelectedDate(new Date());
+    setCreatedAt(null);
+    setStores([]);
+    setProducts([]);
+    setClients([]);
+    form.reset(buildDefaultSaleValues());
+  }, [version, form]);
 
   return (
     <div className="container mx-auto w-full max-w-4xl grid sm:max-w-md md:max-w-lg lg:max-w-4xl">
@@ -1217,7 +1348,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                                 setStock(0);
                                               }
 
-                                              const category = categories.find(
+                                              const category = categoriesState.find(
                                                 (cat: any) => cat.id === selectedProduct.categoryId,
                                               );
 
@@ -1445,18 +1576,20 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   </div>
                                 </TableCell>
                                 <TableCell className="w-[44px] sm:w-[60px] py-1.5">
-                                  <Button
-                                    variant="outline"
-                                    className="h-8 sm:h-9 px-1 cursor-pointer"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      removeProduct(product.id);
-                                    }}
-                                    onDoubleClick={(e) => e.stopPropagation()}
-                                    title="Eliminar este producto de la venta"
-                                  >
-                                    <X className="w-4 h-4" color="red" />
-                                  </Button>
+                                  <DeleteActionsGuard>
+                                    <Button
+                                      variant="outline"
+                                      className="h-8 sm:h-9 px-1 cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        removeProduct(product.id);
+                                      }}
+                                      onDoubleClick={(e) => e.stopPropagation()}
+                                      title="Eliminar este producto de la venta"
+                                    >
+                                      <X className="w-4 h-4" color="red" />
+                                    </Button>
+                                  </DeleteActionsGuard>
                                 </TableCell>
                               </TableRow>
                             );
@@ -1691,3 +1824,4 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 }
 
 export default SalesForm
+

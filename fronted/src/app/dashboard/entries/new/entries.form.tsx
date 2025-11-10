@@ -82,35 +82,43 @@ const entriesSchema = z.object({
 //inferir el tipo de dato
 export type EntriesType = z.infer<typeof entriesSchema>;
 
+function buildDefaultEntryValues(entry?: any): EntriesType {
+  return {
+    name: entry?.name ?? "",
+    description: entry?.description ?? "",
+    price: entry?.price ?? 1,
+    priceSell: entry?.priceSell ?? 1,
+    quantity: entry?.quantity ?? 1,
+    category_name: entry?.category_name ?? "",
+    provider_name: entry?.provider_name ?? "",
+    provider_adress: entry?.provider_adress ?? "",
+    provider_documentNumber: entry?.provider_documentNumber ?? "",
+    store_name: entry?.store_name ?? "",
+    store_adress: entry?.store_adress ?? "",
+    entry_date: entry?.entry_date ? new Date(entry.entry_date) : new Date(),
+    entry_description: entry?.entry_description ?? "",
+    ruc: entry?.ruc ?? "",
+    serie: entry?.serie ?? "",
+    nroCorrelativo: entry?.nroCorrelativo ?? "",
+    fecha_emision_comprobante: entry?.fecha_emision_comprobante ?? "",
+    comprobante: entry?.comprobante ?? "",
+    total_comprobante: entry?.total_comprobante ?? "",
+    tipo_moneda: entry?.tipo_moneda ?? "PEN",
+    payment_method: entry?.payment_method ?? "CASH",
+  };
+}
+
 export function EntriesForm({entries, categories}: {entries: any; categories: any}) {
 
-    //hook de react-hook-form
+    const initialValues = useMemo<EntriesType>(() => buildDefaultEntryValues(entries), [entries]);
     const form = useForm<EntriesType>({
-    resolver: zodResolver(entriesSchema),
-    defaultValues: {
-        name: entries?.name || '',
-        description: entries?.description || '',      
-        price: entries?.price || 1, // Valor predeterminado para quantity
-        priceSell: entries?.priceSell || 1, // Valor predeterminado para quantity
-        quantity: entries?.quantity || 1, // Valor predeterminado para quantity
-        category_name: entries?.category_name || '', // Valor predeterminado para category_name
-        provider_name: entries?.provider_name || '', // Valor predeterminado para provider_name
-        provider_adress: entries?.provider_adress || '', // Valor predeterminado para provider_adress
-        provider_documentNumber: entries?.provider_documentNumber || '', // Valor predeterminado para provider_documentNumber
-        store_name: entries?.store_name || '', // Valor predeterminado para store_name
-        store_adress: entries?.store_adress || '', // Valor predeterminado para store_adress
-        entry_date: entries?.entry_date ? new Date(entries.entry_date) : new Date(), // Valor predeterminado para entry_date
-        entry_description: entries?.entry_description || '', // Valor predeterminado para entry_description
-        ruc: entries?.ruc || '', // Valor predeterminado para ruc
-        serie: entries?.serie || '', // Valor predeterminado para serie
-        nroCorrelativo: entries?.nroCorrelativo || '', // Valor predeterminado para serie
-        fecha_emision_comprobante: entries?.fecha_emision_comprobante || '', // Valor predeterminado 
-        comprobante: entries?.comprobante || '', // Valor predeterminado
-        total_comprobante: entries?.total_comprobante || '', // Valor predeterminado
-        tipo_moneda: entries?.total_comprobante || '', // Valor predeterminado
-        payment_method: entries?.payment_method || 'CASH',
-    }
+      resolver: zodResolver(entriesSchema),
+      defaultValues: initialValues,
     });
+
+    useEffect(() => {
+      form.reset(initialValues);
+    }, [form, initialValues]);
 
   // Extraer funciones y estados del formulario
   const { handleSubmit, register, setValue, formState: {errors} } = form;
@@ -868,7 +876,12 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     setCurrentProduct(null);
     setValueProduct('');
     setValueStore('');
-  }, [version]);
+    setValueProvider('');
+    setPdfGuiaFile(null);
+    setTipoMoneda('PEN');
+    setTipoCambioActual(null);
+    form.reset(buildDefaultEntryValues());
+  }, [version, form]);
   //
 
   // Efecto para ajustar las series cuando cambia la cantidad

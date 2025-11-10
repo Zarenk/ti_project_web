@@ -86,6 +86,7 @@ import {
   TYPOGRAPHY_FONT_OPTIONS,
   getTypographyFont,
 } from "@/lib/typography-fonts";
+import { DeleteActionsGuard } from "@/components/delete-actions-guard";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
@@ -144,7 +145,10 @@ const sections: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "system", label: "Datos del Sistema", icon: Database },
 ];
 
-type PermissionModuleKey = Exclude<keyof SiteSettings["permissions"], "hidePurchaseCost">;
+type PermissionModuleKey = Exclude<
+  keyof SiteSettings["permissions"],
+  "hidePurchaseCost" | "hideDeleteActions"
+>;
 
 const permissionModules: {
   key: PermissionModuleKey;
@@ -192,9 +196,9 @@ const permissionModules: {
     description: "Gestionar campañas y automatizaciones.",
   },
   {
-    key: "ads",
-    label: "Publicidad",
-    description: "Administrar anuncios y audiencias.",
+    key: "providers",
+    label: "Proveedores",
+    description: "Permitir que los usuarios accedan a la gestión de proveedores.",
   },
   {
     key: "settings",
@@ -229,6 +233,8 @@ type SystemDataSectionProps = {
   isBackupPending: boolean;
   isPurgeDialogOpen: boolean;
   onPurgeDialogOpenChange: (open: boolean) => void;
+  watch: Watch;
+  setValue: SetValue;
 };
 
 type BrandSectionProps = Pick<SectionProps, "register" | "errors" | "setValue" | "watch">;
@@ -873,6 +879,8 @@ export default function SettingsPage() {
                       isBackupPending={isBackupPending}
                       isPurgeDialogOpen={isPurgeDialogOpen}
                       onPurgeDialogOpenChange={setIsPurgeDialogOpen}
+                      watch={watch}
+                      setValue={setValue}
                     />
                   )}
                 </motion.div>
@@ -995,9 +1003,21 @@ function SystemDataSection({
   isBackupPending,
   isPurgeDialogOpen,
   onPurgeDialogOpenChange,
+  watch,
+  setValue,
 }: SystemDataSectionProps) {
   const [confirmationText, setConfirmationText] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
+  const systemSettings = watch("system") ?? defaultValues.system;
+  const autoBackupFrequency = systemSettings.autoBackupFrequency ?? defaultValues.system.autoBackupFrequency;
+  const lastAutoBackupAt = systemSettings.lastAutoBackupAt ?? null;
+  const formattedLastBackup =
+    lastAutoBackupAt != null
+      ? new Intl.DateTimeFormat("es-PE", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(new Date(lastAutoBackupAt))
+      : "Nunca se ha ejecutado";
 
   useEffect(() => {
     if (!isPurgeDialogOpen) {
@@ -1011,6 +1031,14 @@ function SystemDataSection({
     confirmationText.trim().toUpperCase() === confirmationPhrase;
   const canConfirmPurge = isConfirmationTextValid && acknowledged;
 
+  const backupOptions: { value: SiteSettings["system"]["autoBackupFrequency"]; label: string }[] = [
+    { value: "manual", label: "Manual" },
+    { value: "daily", label: "Diario" },
+    { value: "weekly", label: "Semanal" },
+    { value: "biweekly", label: "Cada 15 días" },
+    { value: "monthly", label: "Mensual" },
+  ];
+
   const handleConfirmPurge = () => {
     if (!canConfirmPurge) {
       return;
@@ -1020,6 +1048,54 @@ function SystemDataSection({
 
   return (
     <div className="space-y-6">
+      <Card className="border-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <RotateCcw className="h-5 w-5" />
+            Programación automática
+          </CardTitle>
+          <CardDescription>
+            Define cada cuánto tiempo los administradores obtendrán una copia de seguridad de esta
+            organización.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Label htmlFor="auto-backup-frequency">Frecuencia</Label>
+              <p className="text-xs text-muted-foreground">
+                Los respaldos se generan en segundo plano y se guardan en el servidor.
+              </p>
+            </div>
+            <Select
+              value={autoBackupFrequency}
+              onValueChange={(value) =>
+                setValue(
+                  "system.autoBackupFrequency",
+                  value as SiteSettings["system"]["autoBackupFrequency"],
+                  { shouldDirty: true },
+                )
+              }
+            >
+              <SelectTrigger id="auto-backup-frequency" className="w-full sm:w-60">
+                <SelectValue placeholder="Selecciona frecuencia" />
+              </SelectTrigger>
+              <SelectContent>
+                {backupOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+            <p className="font-medium text-muted-foreground">Último respaldo automático</p>
+            <p className="text-foreground">{formattedLastBackup}</p>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="border-2">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1270,18 +1346,20 @@ function BrandSection({ register, errors, setValue, watch }: BrandSectionProps) 
               accept="image/*"
               onChange={(event) => handleFileUpload(event, "logoUrl")}
             />
-            {logoUrl && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="gap-2"
-                onClick={() => setValue("brand.logoUrl", "", { shouldDirty: true, shouldValidate: true })}
-              >
-                <X className="h-4 w-4" />
-                Eliminar imagen
-              </Button>
-            )}
+            <DeleteActionsGuard>
+              {logoUrl && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setValue("brand.logoUrl", "", { shouldDirty: true, shouldValidate: true })}
+                >
+                  <X className="h-4 w-4" />
+                  Eliminar imagen
+                </Button>
+              )}
+            </DeleteActionsGuard>
             <p className="text-xs text-muted-foreground">
               PNG o SVG recomendado. Puedes subir un archivo o proporcionar una URL.
             </p>
@@ -1296,18 +1374,20 @@ function BrandSection({ register, errors, setValue, watch }: BrandSectionProps) 
               accept="image/*"
               onChange={(event) => handleFileUpload(event, "faviconUrl")}
             />
-            {faviconUrl && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="gap-2"
-                onClick={() => setValue("brand.faviconUrl", "", { shouldDirty: true, shouldValidate: true })}
-              >
-                <X className="h-4 w-4" />
-                Eliminar imagen
-              </Button>
-            )}
+            <DeleteActionsGuard>
+              {faviconUrl && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setValue("brand.faviconUrl", "", { shouldDirty: true, shouldValidate: true })}
+                >
+                  <X className="h-4 w-4" />
+                  Eliminar imagen
+                </Button>
+              )}
+            </DeleteActionsGuard>
             <p className="text-xs text-muted-foreground">
               ICO, PNG o SVG. Puedes subir un archivo o proporcionar una URL.
             </p>
@@ -2316,6 +2396,32 @@ function PermissionsSection({ watch, setValue }: PermissionsSectionProps) {
               )
             }
             aria-label="Activar ocultamiento de precios de compra"
+          />
+        </div>
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-border/60 bg-card/40 p-4">
+          <div className="space-y-1">
+            <Label htmlFor="permissions-hideDeleteActions" className="text-base font-medium">
+              Ocultar acciones de eliminar
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Quita los botones de eliminado para usuarios y administradores. Los super administradores globales
+              y de organización siempre los verán.
+            </p>
+          </div>
+          <Checkbox
+            id="permissions-hideDeleteActions"
+            checked={currentPermissions.hideDeleteActions ?? false}
+            onCheckedChange={(checked) =>
+              setValue(
+                "permissions",
+                {
+                  ...currentPermissions,
+                  hideDeleteActions: checked === true,
+                },
+                { shouldDirty: true },
+              )
+            }
+            aria-label="Ocultar acciones de eliminar"
           />
         </div>
       </CardContent>

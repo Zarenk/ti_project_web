@@ -16,22 +16,25 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 
-@ModulePermission(['inventory', 'catalog'])
+@ModulePermission(['inventory', 'catalog', 'sales'])
 @Controller('category')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
+  @ModulePermission(['inventory', 'catalog'])
   @Post()
   @ApiOperation({ summary: 'Create a category' }) // Swagger
   create(@Body() createCategoryDto: CreateCategoryDto, @Req() req: Request) {
     return this.categoryService.create(createCategoryDto, req);
   }
 
+  @ModulePermission(['inventory', 'catalog'])
   @Post('verify-or-create-default')
   async verifyOrCreateDefaultCategory() {
     return this.categoryService.verifyOrCreateDefaultCategory();
   }
 
+  @ModulePermission(['inventory', 'catalog'])
   @Post('verify')
   async verifyCategories(@Body() categories: { name: string }[]) {
     return this.categoryService.verifyCategories(categories);
@@ -57,6 +60,7 @@ export class CategoryController {
     return this.categoryService.findOne(numericId);
   }
 
+  @ModulePermission(['inventory', 'catalog'])
   @Patch(':id')
   update(
     @Param('id') id: string,
@@ -66,11 +70,13 @@ export class CategoryController {
     return this.categoryService.update(+id, updateCategoryDto, req);
   }
 
+  @ModulePermission(['inventory', 'catalog'])
   @Delete(':id')
   remove(@Param('id') id: string, @Req() req: Request) {
     return this.categoryService.remove(+id, req);
   }
 
+  @ModulePermission(['inventory', 'catalog'])
   @Delete()
   async removes(@Body('ids') ids: number[], @Req() req: Request) {
     return this.categoryService.removes(ids, req);

@@ -35,6 +35,7 @@ import { toast } from "sonner"
 import { Cross2Icon, TrashIcon } from "@radix-ui/react-icons"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent } from "@/components/ui/dropdown-menu"
 import { DropdownMenuTrigger } from "@radix-ui/react-dropdown-menu"
+import { DeleteActionsGuard } from "@/components/delete-actions-guard"
 
  
 interface DataTableProps<TData extends {id:string, createdAt:Date, name:string, description:string, status:string}, TValue> {
@@ -246,49 +247,57 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
             {table.getFilteredRowModel().rows.length} fila(s) seleccionadas.
           </label>
           {/* Mostrar el botón solo si hay filas seleccionadas */}
-          {table.getFilteredSelectedRowModel().rows.length > 0 && (
-            <Button
-              onClick={() => setIsDialogOpen(true)}
-              className="bg-red-500 hover:bg-red-600 text-white cursor-pointer
+          <DeleteActionsGuard>
+            {table.getFilteredSelectedRowModel().rows.length > 0 && (
+              <Button
+                onClick={() => setIsDialogOpen(true)}
+                className="bg-red-500 hover:bg-red-600 text-white cursor-pointer
               text-xs sm:text-sm h-7 sm:h-8 px-2 sm:px-4"
-              disabled={table.getFilteredSelectedRowModel().rows.length === 0}
-              >          
-              Eliminar seleccionado(s) ({table.getFilteredSelectedRowModel().rows.length})
-              <TrashIcon className="size-6" aria-hidden="true" />
-            </Button>
-          )}
+                disabled={table.getFilteredSelectedRowModel().rows.length === 0}
+              >
+                Eliminar seleccionado(s) ({table.getFilteredSelectedRowModel().rows.length})
+                <TrashIcon className="size-6" aria-hidden="true" />
+              </Button>
+            )}
+          </DeleteActionsGuard>
 
           {/* AlertDialog fuera del DropdownMenu */}
-          <AlertDialog open={isDialogOpen} onOpenChange={(open) => {
-            // Solo actualiza el estado si el usuario cierra el diálogo manualmente
-            if (!open) {
-              setIsDialogOpen(false);
-            }
-          }}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta acción no se puede deshacer. Esto eliminará permanentemente el/los producto(s).
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => {
-                  // Cierra el diálogo al hacer clic en "Cancelar"
+          <DeleteActionsGuard>
+            <AlertDialog
+              open={isDialogOpen}
+              onOpenChange={(open) => {
+                if (!open) {
                   setIsDialogOpen(false);
-                }}>Cancelar
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={async () => {
-                    await handleDeleteSelected()
-                    setIsDialogOpen(false)
-                  }}
-                >
-                  Continuar
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>         
+                }
+              }}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta acción no se puede deshacer. Esto eliminará permanentemente el/los producto(s).
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel
+                    onClick={() => {
+                      setIsDialogOpen(false);
+                    }}
+                  >
+                    Cancelar
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={async () => {
+                      await handleDeleteSelected();
+                      setIsDialogOpen(false);
+                    }}
+                  >
+                    Continuar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </DeleteActionsGuard>         
 
       </div>
       <div className="rounded-md border px-4">

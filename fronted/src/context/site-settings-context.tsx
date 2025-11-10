@@ -527,63 +527,116 @@ export function SiteSettingsProvider({
       const previousPersistedUpdatedAt = persistedUpdatedAt;
       const previousPersistedCreatedAt = persistedCreatedAt;
 
-      setIsSaving(true);
-      setPersistedSettings(clone(validated));
-      setSettings(clone(validated));
-
-      try {
-        const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}`;
-        const response = await tenantAwareFetch(url, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            data: validated,
-            expectedUpdatedAt: persistedUpdatedAt,
-          }),
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          const message = await readErrorMessage(response);
-          throw new Error(message);
-        }
-
-        let parsed: SiteSettings | null = null;
-        if (response.headers.get("content-type")?.includes("application/json")) {
+      const syncLatestSettings = async (): Promise<{
+        updatedAt: string | null;
+        createdAt: string | null;
+      } | null> => {
+        try {
+          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}&ts=${Date.now()}`;
+          const response = await tenantAwareFetch(url, { cache: "no-store" });
+          if (!response.ok) {
+            return null;
+          }
           const payload = (await response.json()) as DeepPartial<SiteSettings>;
-          parsed = siteSettingsSchema.parse(withDefaultSettings(payload));
-        }
+          const parsedLatest = siteSettingsSchema.parse(withDefaultSettings(payload));
+          const latestUpdatedAt = response.headers.get("x-site-settings-updated-at");
+          const latestCreatedAt = response.headers.get("x-site-settings-created-at");
 
-        const nextUpdatedAt = response.headers.get("x-site-settings-updated-at");
-        const nextCreatedAt = response.headers.get("x-site-settings-created-at");
-
-        if (parsed) {
-          setPersistedSettings(clone(parsed));
-          setSettings(clone(parsed));
-          setPersistedUpdatedAt(nextUpdatedAt);
-          setPersistedCreatedAt(nextCreatedAt);
-          applyCssVariables(parsed);
+          setPersistedSettings(clone(parsedLatest));
+          setSettings(clone(parsedLatest));
+          setPersistedUpdatedAt(latestUpdatedAt);
+          setPersistedCreatedAt(latestCreatedAt);
+          if (mountedRef.current) {
+            applyCssVariables(parsedLatest);
+          }
           setError(null);
-          return parsed;
+          return { updatedAt: latestUpdatedAt, createdAt: latestCreatedAt };
+        } catch {
+          return null;
         }
+      };
 
-        setPersistedUpdatedAt(nextUpdatedAt);
-        setPersistedCreatedAt(nextCreatedAt);
+      const applyValidated = () => {
+        setPersistedSettings(clone(validated));
+        setSettings(clone(validated));
+      };
 
-        applyCssVariables(validated);
-        setError(null);
-        return validated;
-      } catch (err) {
+      const revertToPrevious = () => {
         setPersistedSettings(clone(previousPersisted));
         setSettings(clone(previousPersisted));
         setPersistedUpdatedAt(previousPersistedUpdatedAt);
         setPersistedCreatedAt(previousPersistedCreatedAt);
         applyCssVariables(previousPersisted);
-        const message = err instanceof Error ? err.message : "No se pudieron guardar los ajustes.";
-        setError(message);
-        throw err instanceof Error ? err : new Error(message);
+      };
+
+      let currentExpectedUpdatedAt = persistedUpdatedAt;
+
+      setIsSaving(true);
+
+      try {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          applyValidated();
+
+          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}`;
+          const response = await tenantAwareFetch(url, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              data: validated,
+              expectedUpdatedAt: currentExpectedUpdatedAt,
+            }),
+            cache: "no-store",
+          });
+
+          if (response.status === 409) {
+            const latestMeta = await syncLatestSettings();
+            currentExpectedUpdatedAt =
+              latestMeta?.updatedAt ?? persistedUpdatedAt ?? null;
+            if (attempt === 1) {
+              revertToPrevious();
+              throw new Error(
+                "No se pudieron guardar los ajustes. Vuelve a intentarlo en unos segundos.",
+              );
+            }
+            continue;
+          }
+
+          if (!response.ok) {
+            const message = await readErrorMessage(response);
+            revertToPrevious();
+            throw new Error(message);
+          }
+
+          let parsed: SiteSettings | null = null;
+          if (response.headers.get("content-type")?.includes("application/json")) {
+            const payload = (await response.json()) as DeepPartial<SiteSettings>;
+            parsed = siteSettingsSchema.parse(withDefaultSettings(payload));
+          }
+
+          const nextUpdatedAt = response.headers.get("x-site-settings-updated-at");
+          const nextCreatedAt = response.headers.get("x-site-settings-created-at");
+
+          if (parsed) {
+            setPersistedSettings(clone(parsed));
+            setSettings(clone(parsed));
+            setPersistedUpdatedAt(nextUpdatedAt);
+            setPersistedCreatedAt(nextCreatedAt);
+            applyCssVariables(parsed);
+            setError(null);
+            return parsed;
+          }
+
+          setPersistedUpdatedAt(nextUpdatedAt);
+          setPersistedCreatedAt(nextCreatedAt);
+          applyCssVariables(validated);
+          setError(null);
+          return validated;
+        }
+
+        revertToPrevious();
+        throw new Error("No se pudieron guardar los ajustes.");
       } finally {
         setIsSaving(false);
       }

@@ -1,13 +1,16 @@
 import {
-  Controller,
-  Post,
   Body,
-  Request,
-  UseGuards,
+  Controller,
+  ForbiddenException,
   Get,
   NotFoundException,
+  Param,
+  ParseIntPipe,
   Patch,
+  Post,
   Query,
+  Request,
+  UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -19,6 +22,8 @@ import { GlobalSuperAdminGuard } from 'src/tenancy/global-super-admin.guard';
 import { CreateManagedUserDto } from './dto/create-managed-user.dto';
 import { UserRole } from '@prisma/client';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { TenantContext } from 'src/tenancy/tenant-context.interface';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
 @Controller('users')
 export class UsersController {
@@ -132,6 +137,52 @@ export class UsersController {
       req.user.userId,
       body.currentPassword,
       body.newPassword,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/manage')
+  async updateUserByAdmin(
+    @Param('id', ParseIntPipe) userId: number,
+    @Body() dto: UpdateUserRoleDto,
+    @CurrentTenant() tenant: TenantContext | null,
+    @Request() req,
+  ) {
+    const normalizedRole = req.user?.role?.toUpperCase?.() ?? '';
+    const isGlobal =
+      tenant?.isGlobalSuperAdmin ?? normalizedRole === 'SUPER_ADMIN_GLOBAL';
+    const isOrg =
+      tenant?.isOrganizationSuperAdmin ?? normalizedRole === 'SUPER_ADMIN_ORG';
+
+    if (!isGlobal && !isOrg) {
+      throw new ForbiddenException(
+        'Solo los super administradores pueden actualizar usuarios.',
+      );
+    }
+
+    const effectiveTenant: TenantContext =
+      tenant ??
+      ({
+        organizationId: null,
+        companyId: null,
+        organizationUnitId: null,
+        userId: req.user?.userId ?? null,
+        isGlobalSuperAdmin: isGlobal,
+        isOrganizationSuperAdmin: isOrg,
+        isSuperAdmin: isGlobal || isOrg,
+        allowedOrganizationIds: [],
+        allowedCompanyIds: [],
+        allowedOrganizationUnitIds: [],
+      } as TenantContext);
+
+    return this.usersService.updateUserRoleAndStatus(
+      userId,
+      dto,
+      effectiveTenant,
+      {
+        actorId: req.user?.userId ?? null,
+        actorEmail: req.user?.email ?? req.user?.username ?? null,
+      },
     );
   }
 }

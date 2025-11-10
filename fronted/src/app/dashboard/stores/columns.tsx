@@ -18,6 +18,7 @@ import Link from "next/link"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { DeleteActionsGuard } from '@/components/delete-actions-guard';
 import { toast } from 'sonner';
 
 
@@ -252,10 +253,11 @@ export const columns: ColumnDef<Stores>[] = [
                 <DropdownMenuItem onClick={handleViewClick}>
                 Visualizar
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsDialogOpen(true)}
-                >
-                Eliminar
-              </DropdownMenuItem>             
+                <DeleteActionsGuard>
+                  <DropdownMenuItem onClick={() => setIsDialogOpen(true)}>
+                    Eliminar
+                  </DropdownMenuItem>
+                </DeleteActionsGuard>             
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -321,3 +323,4 @@ export const columns: ColumnDef<Stores>[] = [
     },
    
 ]
+

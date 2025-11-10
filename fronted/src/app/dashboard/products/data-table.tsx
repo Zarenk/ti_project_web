@@ -55,6 +55,7 @@ import { useRouter } from "next/navigation"
 import { IconName, icons } from "@/lib/icons"
 import { useSiteSettings } from "@/context/site-settings-context"
 import { useAuth } from "@/context/auth-context"
+import { DeleteActionsGuard } from "@/components/delete-actions-guard"
 
 type ProductSpecification = {
   processor?: string | null
@@ -895,17 +896,19 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
             <>
             {totalSelectedRows > 0 && (
               <div className="flex flex-wrap gap-2">
-              <Button
-                key="button-1"
-                onClick={() => setIsDialogOpen(true)}
-                className="bg-red-500 hover:bg-red-600 text-white cursor-pointer
+              <DeleteActionsGuard>
+                <Button
+                  key="button-1"
+                  onClick={() => setIsDialogOpen(true)}
+                  className="bg-red-500 hover:bg-red-600 text-white cursor-pointer
                 text-xs sm:text-sm h-7 sm:h-8 px-2 sm:px-4"
-                disabled={totalSelectedRows === 0}
-                title="Eliminar seleccionado(s)" // Tooltip al pasar el mouse
+                  disabled={totalSelectedRows === 0}
+                  title="Eliminar seleccionado(s)" // Tooltip al pasar el mouse
                 >          
-                <span className="hidden md:inline">Eliminar Seleccionado(s)</span> ({totalSelectedRows})
-                <TrashIcon className="size-6" aria-hidden="true" />
-              </Button>
+                  <span className="hidden md:inline">Eliminar Seleccionado(s)</span> ({totalSelectedRows})
+                  <TrashIcon className="size-6" aria-hidden="true" />
+                </Button>
+              </DeleteActionsGuard>
 
               <Button
                 key="button-2"
@@ -1365,3 +1368,4 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
       
   )
 }
+

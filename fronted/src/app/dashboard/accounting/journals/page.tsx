@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { Journal, fetchJournals, deleteJournal } from "./journals.api";
 import { JournalForm } from "./journal-form";
+import { DeleteActionsGuard } from "@/components/delete-actions-guard";
 import { Input } from "@/components/ui/input";
 import { BACKEND_URL } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1116,20 +1117,22 @@ export default function JournalsPage() {
                           Editar
                         </span>
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeleteTarget(j)}
-                        aria-label="Eliminar"
-                        className="group relative cursor-pointer"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span
-                          className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-destructive px-2 py-1 text-xs text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                      <DeleteActionsGuard>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteTarget(j)}
+                          aria-label="Eliminar"
+                          className="group relative cursor-pointer"
                         >
-                          Eliminar
-                        </span>
-                      </Button>
+                          <Trash2 className="h-4 w-4" />
+                          <span
+                            className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-destructive px-2 py-1 text-xs text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                          >
+                            Eliminar
+                          </span>
+                        </Button>
+                      </DeleteActionsGuard>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1139,26 +1142,33 @@ export default function JournalsPage() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => {
-        if (!open && !isDeleting) {
-          setDeleteTarget(null);
-        }
-      }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar asiento</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta accion borrara el asiento seleccionado. Esta operacion no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteTarget(null)} disabled={isDeleting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm} disabled={isDeleting}>
-              {isDeleting ? 'Eliminando...' : 'Eliminar'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteActionsGuard>
+        <AlertDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => {
+            if (!open && !isDeleting) {
+              setDeleteTarget(null);
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Eliminar asiento</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta accion borrara el asiento seleccionado. Esta operacion no se puede deshacer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteConfirm} disabled={isDeleting}>
+                {isDeleting ? "Eliminando..." : "Eliminar"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </DeleteActionsGuard>
       <JournalForm
         open={createOpen}
         onOpenChange={setCreateOpen}

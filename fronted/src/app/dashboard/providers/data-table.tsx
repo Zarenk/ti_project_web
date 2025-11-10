@@ -35,6 +35,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { deleteProviders, updateManyProviders } from "./providers.api"
 import { Button } from "@/components/ui/button"
+import { DeleteActionsGuard } from "@/components/delete-actions-guard"
 import { DataTablePagination } from "../../../components/data-table-pagination"
 
 import { useMemo, useRef, useState } from "react";
@@ -505,17 +506,19 @@ export function DataTable<TData extends {id:string, name:string, document:string
           {/* Mostrar el botón solo si hay filas seleccionadas */}
             {table.getFilteredSelectedRowModel().rows.length > 0 && (
               <div className="flex flex-wrap gap-2">
-              <Button
-                key="button-1"
-                onClick={() => setIsDialogOpen(true)}
-                className="bg-red-500 hover:bg-red-600 text-white cursor-pointer
+              <DeleteActionsGuard>
+                <Button
+                  key="button-1"
+                  onClick={() => setIsDialogOpen(true)}
+                  className="bg-red-500 hover:bg-red-600 text-white cursor-pointer
                 text-xs sm:text-sm h-7 sm:h-8 px-2 sm:px-4"
-                disabled={table.getFilteredSelectedRowModel().rows.length === 0}
-                title="Eliminar seleccionado(s)" // Tooltip al pasar el mouse
+                  disabled={table.getFilteredSelectedRowModel().rows.length === 0}
+                  title="Eliminar seleccionado(s)" // Tooltip al pasar el mouse
                 >          
-                Eliminar seleccionado(s) ({table.getFilteredSelectedRowModel().rows.length})
-                <TrashIcon className="size-6" aria-hidden="true" />
-              </Button>
+                  Eliminar seleccionado(s) ({table.getFilteredSelectedRowModel().rows.length})
+                  <TrashIcon className="size-6" aria-hidden="true" />
+                </Button>
+              </DeleteActionsGuard>
 
               <Button
                 key="button-2"
@@ -830,3 +833,4 @@ export function DataTable<TData extends {id:string, name:string, document:string
       
   )
 }
+

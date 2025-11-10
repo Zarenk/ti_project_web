@@ -168,17 +168,17 @@ const data: SidebarData = {
       url: "/dashboard/providers",
       icon: Globe,
       isActive: true,
-      permission: "purchases",
+      permission: "providers",
       items: [
         {
           title: "Nuevo Proveedor",
           url: "/dashboard/providers/new",
-          permission: "purchases",
+          permission: "providers",
         },
         {
           title: "Ver Proveedores",
           url: "/dashboard/providers",
-          permission: "purchases",
+          permission: "providers",
         },
       ],
     },

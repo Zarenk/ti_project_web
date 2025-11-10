@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { checkSeries } from "../entries.api";
+import { DeleteActionsGuard } from "@/components/delete-actions-guard";
 
 interface AddSeriesDialogProps {
   isOpen: boolean;
@@ -112,14 +113,16 @@ export function AddSeriesDialog({ isOpen, onClose, series, setSeries, quantity, 
                     className="flex justify-between items-center p-2 rounded-md shadow-sm border"
                   >
                     <span className="text-sm font-medium">{serial}</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRemoveSeries(serial)}
-                      className="bg-red-600 hover:bg-red-700 text-white"
-                    >
-                      Eliminar
-                    </Button>
+                    <DeleteActionsGuard>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRemoveSeries(serial)}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        Eliminar
+                      </Button>
+                    </DeleteActionsGuard>
                   </li>
                 ))}
               </ul>

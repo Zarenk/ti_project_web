@@ -136,6 +136,10 @@ const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
     enabled: false,
     message: 'Estamos realizando mantenimiento programado.',
   },
+  system: {
+    autoBackupFrequency: 'manual',
+    lastAutoBackupAt: null,
+  },
   permissions: {
     dashboard: true,
     catalog: true,
@@ -145,9 +149,10 @@ const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
     purchases: true,
     accounting: true,
     marketing: true,
-    ads: true,
+    providers: true,
     settings: true,
     hidePurchaseCost: false,
+    hideDeleteActions: false,
   },
 };
 
@@ -279,6 +284,7 @@ export class SiteSettingsService {
         await this.propagatePermissionsToOrganization(
           organizationId,
           sanitizedPermissions as Prisma.JsonObject,
+          sanitized.id,
         );
       }
     }
@@ -339,6 +345,7 @@ export class SiteSettingsService {
   private async propagatePermissionsToOrganization(
     organizationId: number,
     permissions: Prisma.JsonObject,
+    skipSiteSettingsId?: number,
   ): Promise<void> {
     const entries = await this.prisma.siteSettings.findMany({
       where: { organizationId },
@@ -346,6 +353,9 @@ export class SiteSettingsService {
 
     await Promise.all(
       entries.map((entry) => {
+        if (skipSiteSettingsId && entry.id === skipSiteSettingsId) {
+          return Promise.resolve();
+        }
         const currentData = (entry.data as Prisma.JsonObject) ?? {};
         const nextData: Prisma.JsonObject = {
           ...currentData,

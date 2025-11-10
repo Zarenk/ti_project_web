@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { UsersDataTable } from "./data-table";
 import { getUsers, type DashboardUser } from "./users.api";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { useAuth } from "@/context/auth-context";
 
 type UsersState = {
   data: DashboardUser[];
@@ -15,6 +16,7 @@ type UsersState = {
 
 export default function UsersPage(): React.ReactElement {
   const { version } = useTenantSelection();
+  const { role } = useAuth();
   const [{ data, loading, error }, setState] = useState<UsersState>({
     data: [],
     loading: true,
@@ -48,6 +50,23 @@ export default function UsersPage(): React.ReactElement {
     };
   }, [version]);
 
+  const handleUserUpdated = useCallback(
+    (updatedUser: DashboardUser) => {
+      setState((prev) => ({
+        ...prev,
+        data: prev.data.map((user) =>
+          user.id === updatedUser.id ? { ...user, role: updatedUser.role, status: updatedUser.status } : user,
+        ),
+      }));
+    },
+    [],
+  );
+
+  const normalizedRole = role?.trim().toUpperCase() ?? "";
+  const isGlobalSuperAdmin = normalizedRole === "SUPER_ADMIN_GLOBAL";
+  const isOrganizationSuperAdmin = normalizedRole === "SUPER_ADMIN_ORG";
+  const canManageUsers = isGlobalSuperAdmin || isOrganizationSuperAdmin;
+
   const filteredUsers = useMemo(() => {
     return data
       .filter((user) => {
@@ -79,7 +98,12 @@ export default function UsersPage(): React.ReactElement {
               Cargando usuarios...
             </div>
           ) : (
-            <UsersDataTable data={filteredUsers} />
+            <UsersDataTable
+              data={filteredUsers}
+              canManageUsers={canManageUsers}
+              isGlobalSuperAdmin={isGlobalSuperAdmin}
+              onUserUpdated={handleUserUpdated}
+            />
           )}
         </div>
       </div>

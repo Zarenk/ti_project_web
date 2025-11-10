@@ -50,6 +50,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useRouter } from "next/navigation"
 import { DataTableToolbar } from "./data-table-components/data-table-toolbar"
 import { deleteEntries, getPdfGuiaUrl, getPdfUrl } from "./entries.api"
+import { DeleteActionsGuard } from "@/components/delete-actions-guard"
  
 interface DataTableProps<TData extends {
 id:string,
@@ -790,3 +791,4 @@ details: { product_name: string; quantity: number; price: number; series?: strin
       
   )
 }
+

@@ -24,6 +24,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useSiteSettings } from "@/context/site-settings-context";
 import { useAuth } from "@/context/auth-context";
+import { DeleteActionsGuard } from "@/components/delete-actions-guard";
 
 type ProductFeature = {
   title?: string | null
@@ -283,10 +284,11 @@ export const columns: ColumnDef<Products>[] = [
                 <DropdownMenuItem onClick={handleViewClick}>
                 Visualizar
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsDialogOpen(true)}
-                >
-                Eliminar
-              </DropdownMenuItem>             
+                <DeleteActionsGuard>
+                  <DropdownMenuItem onClick={() => setIsDialogOpen(true)}>
+                    Eliminar
+                  </DropdownMenuItem>
+                </DeleteActionsGuard>             
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -389,3 +391,4 @@ export const columns: ColumnDef<Products>[] = [
     },
    
 ]
+
