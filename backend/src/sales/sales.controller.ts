@@ -200,6 +200,17 @@ export class SalesController {
     );
   }
 
+  @Get('product-report-options')
+  getProductReportOptions(
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+  ) {
+    return this.salesService.getProductReportOptions(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
   @Get('product-report/:productId')
   getProductReport(
     @Param('productId', ParseIntPipe) productId: number,

@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -27,6 +27,7 @@ import {
   resolveOrganizationId,
 } from 'src/tenancy/organization.utils';
 import { InventoryHistoryUncheckedCreateInputWithOrganization } from 'src/tenancy/prisma-organization.types';
+import { SunatService } from 'src/sunat/sunat.service';
 
 @Injectable()
 export class SalesService {
@@ -46,9 +47,10 @@ export class SalesService {
     private prisma: PrismaService,
     private readonly activityService: ActivityService,
     private readonly accountingHook: AccountingHook,
+    private readonly sunatService: SunatService,
   ) {}
 
-  // Método para crear una venta
+  // MÃ©todo para crear una venta
   async createSale(data: {
     userId: number;
     storeId: number;
@@ -104,7 +106,7 @@ export class SalesService {
       provided: inputOrganizationId ?? null,
       fallbacks: [storeOrganizationId],
       mismatchError:
-        'La organización proporcionada no coincide con la tienda seleccionada.',
+        'La organizaciÃ³n proporcionada no coincide con la tienda seleccionada.',
     });
 
     logOrganizationContext({
@@ -176,6 +178,12 @@ export class SalesService {
       },
     });
 
+    const invoice = await this.prisma.invoiceSales.findFirst({
+      where: { salesId: sale.id },
+      orderBy: { createdAt: 'desc' },
+      select: { serie: true, nroCorrelativo: true, tipoComprobante: true },
+    });
+
     const salePayments = await this.prisma.salePayment.findMany({
       where: { salesId: sale.id },
       select: { id: true },
@@ -204,7 +212,59 @@ export class SalesService {
       diff: { after: sale } as any,
     });
 
+    await this.triggerSunatIfNeeded({
+      saleId: sale.id,
+      invoice,
+      companyId,
+      storeName: store.name,
+      tipoComprobante,
+    });
+
     return sale;
+  }
+
+  private async triggerSunatIfNeeded(params: {
+    saleId: number;
+    invoice?: {
+      serie: string | null | undefined;
+      nroCorrelativo: string | null | undefined;
+      tipoComprobante: string | null | undefined;
+    } | null;
+    tipoComprobante?: string;
+    companyId: number | null;
+    storeName: string;
+  }) {
+    const { saleId, companyId, tipoComprobante, invoice } = params;
+
+    const shouldSend =
+      (invoice?.tipoComprobante || tipoComprobante)?.toUpperCase() ===
+        'FACTURA' ||
+      (invoice?.tipoComprobante || tipoComprobante)?.toUpperCase() === 'BOLETA';
+
+    if (!shouldSend || !companyId) {
+      return;
+    }
+
+    try {
+      await this.sunatService.sendDocument({
+        companyId,
+        documentType:
+          (invoice?.tipoComprobante || tipoComprobante)?.toUpperCase() ===
+          'FACTURA'
+            ? 'invoice'
+            : 'boleta',
+        documentData: {
+          serie: invoice?.serie,
+          correlativo: invoice?.nroCorrelativo,
+          emisor: { razonSocial: params.storeName },
+        },
+        saleId,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `No se pudo enviar la venta ${saleId} a SUNAT: ${error?.message ?? 'Error desconocido'}`,
+      );
+    }
   }
 
   async findAllSales(
@@ -213,7 +273,7 @@ export class SalesService {
   ) {
     const organizationFilter = this.buildSalesWhere(organizationId, companyId);
 
-    return this.prisma.sales.findMany({
+    const sales = await this.prisma.sales.findMany({
       where: organizationFilter,
       include: {
         user: true,
@@ -223,22 +283,39 @@ export class SalesService {
           include: {
             entryDetail: {
               include: {
-                product: true, // Incluir el producto a través de EntryDetail
+                product: true, // Incluir el producto a travÃ©s de EntryDetail
               },
             },
             storeOnInventory: {
               include: {
                 inventory: {
                   include: {
-                    product: true, // Incluir el producto a través de StoreOnInventory
+                    product: true, // Incluir el producto a travÃ©s de StoreOnInventory
                   },
                 },
               },
             },
           },
         },
+        sunatTransmissions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+            ticket: true,
+            environment: true,
+            errorMessage: true,
+            updatedAt: true,
+            createdAt: true,
+          },
+        },
       },
     });
+
+    return sales.map((sale) =>
+      this.mapSaleWithSunatStatus(sale, { includeHistory: false }),
+    );
   }
 
   async findSalesByUser(
@@ -296,16 +373,18 @@ export class SalesService {
         },
         payments: { include: { paymentMethod: true } },
         invoices: true,
+        sunatTransmissions: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
     if (!sale) {
-      throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
+      throw new NotFoundException(`No se encontr�� la venta con ID ${id}.`);
     }
 
-    return sale;
+    return this.mapSaleWithSunatStatus(sale, { includeHistory: true });
   }
-
   async deleteSale(
     id: number,
     actorId?: number,
@@ -351,7 +430,7 @@ export class SalesService {
         });
 
         if (!sale) {
-          throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
+          throw new NotFoundException(`No se encontro la venta con ID ${id}.`);
         }
 
         const saleOrganizationId =
@@ -363,9 +442,7 @@ export class SalesService {
           });
 
           if (!inventoryRecord) {
-            throw new NotFoundException(
-              `No se encontró el inventario para el producto ${detail.entryDetail.product.name} en la tienda asociada.`,
-            );
+            throw new NotFoundException(`No se encontro la venta con ID ${id}.`);
           }
 
           await prismaTx.storeOnInventory.update({
@@ -378,7 +455,7 @@ export class SalesService {
               inventoryId: inventoryRecord.inventoryId,
               userId: actorId ?? sale.userId,
               action: 'sale_deleted',
-              description: `Reversión de la venta ${sale.id} en ${sale.store.name}`,
+              description: `ReversiÃ³n de la venta ${sale.id} en ${sale.store.name}`,
               stockChange: detail.quantity,
               previousStock: inventoryRecord.stock,
               newStock: inventoryRecord.stock + detail.quantity,
@@ -480,7 +557,7 @@ export class SalesService {
     return deletedSale;
   }
 
-  // Método para obtener las series vendidas en una venta específica
+  // MÃ©todo para obtener las series vendidas en una venta especÃ­fica
   async getSoldSeriesBySale(
     saleId: number,
     organizationId?: number | null,
@@ -506,12 +583,14 @@ export class SalesService {
     });
 
     if (!sale) {
-      throw new NotFoundException(`No se encontró la venta con ID ${saleId}.`);
+      throw new NotFoundException(
+        `No se encontro la venta con ID ${saleId}.`,
+      );
     }
 
     // Formatear los datos para devolver solo las series vendidas
     const soldSeries = sale.salesDetails.map((detail) => ({
-      productId: detail.entryDetail.product.id, // Acceder al producto a través de EntryDetail
+      productId: detail.entryDetail.product.id, // Acceder al producto a travÃ©s de EntryDetail
       productName: detail.entryDetail.product.name,
       series: detail.series ?? [],
     }));
@@ -533,7 +612,7 @@ export class SalesService {
       now.getMonth() - 1,
       1,
     );
-    const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1); // 1 día antes del inicio del mes actual
+    const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1); // 1 dÃ­a antes del inicio del mes actual
 
     const organizationFilter = this.buildSalesWhere(organizationId, companyId);
 
@@ -609,7 +688,7 @@ export class SalesService {
 
     for (const detail of result) {
       const product = products.find((p) => p.id === detail.productId);
-      const categoryName = product?.category?.name || 'Sin categoría';
+      const categoryName = product?.category?.name || 'Sin categorÃ­a';
       const revenue = (detail.quantity || 0) * (detail.price || 0);
       revenueByCategory[categoryName] =
         (revenueByCategory[categoryName] || 0) + revenue;
@@ -747,12 +826,88 @@ export class SalesService {
     });
   }
 
+  async getProductReportOptions(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const where = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.ProductWhereInput;
+
+    const products = await this.prisma.product.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        priceSell: true,
+        barcode: true,
+        qrCode: true,
+        category: { select: { name: true } },
+        inventory: {
+          select: {
+            storeOnInventory: {
+              select: { stock: true },
+            },
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return products.map((product) => {
+      const resolvedPrice =
+        typeof product.priceSell === 'number' && product.priceSell > 0
+          ? product.priceSell
+          : (product.price ?? 0);
+
+      const aggregatedStock = product.inventory.reduce((total, inventory) => {
+        if (!inventory.storeOnInventory) {
+          return total;
+        }
+        const storeStock = inventory.storeOnInventory.reduce(
+          (sum, store) =>
+            sum + (typeof store.stock === 'number' ? store.stock : 0),
+          0,
+        );
+        return total + storeStock;
+      }, 0);
+
+      const searchPieces = [
+        product.name ?? '',
+        product.category?.name ?? '',
+        product.barcode ?? '',
+        product.qrCode ?? '',
+      ]
+        .filter(
+          (value): value is string =>
+            typeof value === 'string' && value.trim().length > 0,
+        )
+        .map((value) =>
+          value
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/\p{Diacritic}/gu, ''),
+        );
+
+      return {
+        id: product.id,
+        name: product.name,
+        price: resolvedPrice,
+        stock: aggregatedStock,
+        categoryName: product.category?.name ?? null,
+        searchKey: searchPieces.join(' ').trim(),
+      };
+    });
+  }
+
   async getProductSalesReport(
     productId: number,
     from?: string,
     to?: string,
     organizationId?: number | null,
-    companyId?: number | null, // ← AÑADIDO
+    companyId?: number | null, // â† AÃ‘ADIDO
   ) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -767,7 +922,7 @@ export class SalesService {
 
     if (!product) {
       throw new NotFoundException(
-        `No se encontró el producto con ID ${productId}.`,
+        `No se encontro el producto con ID ${productId}.`,
       );
     }
 
@@ -1114,7 +1269,7 @@ export class SalesService {
       if (from && to) {
         base.createdAt = {
           gte: zonedTimeToUtc(new Date(from), timeZone),
-          lte: zonedTimeToUtc(endOfDay(new Date(to)), timeZone), // 👈 Asegura fin del día
+          lte: zonedTimeToUtc(endOfDay(new Date(to)), timeZone), // ðŸ‘ˆ Asegura fin del dÃ­a
         };
       }
 
@@ -1158,7 +1313,10 @@ export class SalesService {
           quantity: detail.quantity,
           price: detail.price,
           series: Array.isArray(detail.series)
-            ? detail.series.filter((value): value is string => typeof value === 'string' && value.length > 0)
+            ? detail.series.filter(
+                (value): value is string =>
+                  typeof value === 'string' && value.length > 0,
+              )
             : [],
         })),
         invoice: invoice
@@ -1290,18 +1448,29 @@ export class SalesService {
             },
           },
         },
+        sunatTransmissions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
     });
 
     return sales.map((sale) => {
       const invoice = sale.invoices?.[0];
+      const sunatStatus = this.extractSunatStatus(
+        sale.sunatTransmissions?.[0] ?? null,
+      );
+      const { sunatTransmissions, ...rest } = sale as any;
+
       return {
+        ...rest,
         date: sale.createdAt,
         serie: invoice?.serie ?? null,
         correlativo: invoice?.nroCorrelativo ?? null,
         tipoComprobante: invoice?.tipoComprobante ?? null,
         customerName: sale.client?.name ?? null,
         total: sale.total,
+        sunatStatus,
         payments: sale.payments.map((p) => ({
           method: p.paymentMethod?.name,
           amount: p.amount,
@@ -1312,10 +1481,68 @@ export class SalesService {
           costUnit: detail.entryDetail.price,
           productName: detail.entryDetail.product.name,
           series: Array.isArray(detail.series)
-            ? detail.series.filter((value): value is string => typeof value === 'string' && value.length > 0)
+            ? detail.series.filter(
+                (value): value is string =>
+                  typeof value === 'string' && value.length > 0,
+              )
             : [],
         })),
       };
     });
   }
+
+  private mapSaleWithSunatStatus<T extends { sunatTransmissions?: any[] }>(
+    sale: T,
+    options: { includeHistory: boolean },
+  ) {
+    const transmissions = sale.sunatTransmissions ?? [];
+    const latest = transmissions[0] ?? null;
+    const sunatStatus = this.extractSunatStatus(latest);
+
+    if (options.includeHistory) {
+      return {
+        ...sale,
+        sunatStatus,
+      };
+    }
+
+    const { sunatTransmissions, ...rest } = sale as any;
+    return {
+      ...rest,
+      sunatStatus,
+    };
+  }
+
+  private extractSunatStatus(
+    transmission?:
+      | {
+          id: number;
+          status: string;
+          ticket: string | null;
+          environment?: string | null;
+          errorMessage?: string | null;
+          updatedAt?: Date;
+          createdAt?: Date;
+        }
+      | null,
+  ) {
+    if (!transmission) {
+      return null;
+    }
+
+    return {
+      id: transmission.id,
+      status: transmission.status,
+      ticket: transmission.ticket ?? null,
+      environment: transmission.environment ?? null,
+      errorMessage: transmission.errorMessage ?? null,
+      updatedAt: transmission.updatedAt ?? transmission.createdAt ?? null,
+    };
+  }
 }
+
+
+
+
+
+

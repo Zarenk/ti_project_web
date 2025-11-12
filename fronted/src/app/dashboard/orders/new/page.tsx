@@ -26,7 +26,7 @@ import SummaryCard from "./SummaryCard";
 import ClientCombobox from "./ClientCombobox";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 
-// (Combos de búsqueda se aislaron en componentes)
+// (Combos de bÃƒÂºsqueda se aislaron en componentes)
 
 // Memoized section: Datos del Cliente
 const ClientFields = React.memo(function ClientFields({
@@ -82,7 +82,7 @@ const ClientFields = React.memo(function ClientFields({
   );
 });
 
-// Memoized section: Env�o (checkboxes + direcci�n condicional)
+// Memoized section: EnvÃ¯Â¿Â½o (checkboxes + direcciÃ¯Â¿Â½n condicional)
 const ShippingFields = React.memo(function ShippingFields({
   pickupInStore,
   setPickupInStore,
@@ -122,18 +122,18 @@ const ShippingFields = React.memo(function ShippingFields({
           <Label htmlFor="delivery">Envio a domicilio</Label>
         </div>
       </div>
-      <div className="md:col-span-2 space-y-2">
-        <Label>Nombre para envio</Label>
-        <Input className="mt-1" value={shippingName} onChange={(e) => setShippingName(e.target.value)} placeholder="Nombre de receptor" />
-      </div>
       {!pickupInStore && (
         <>
+          <div className="md:col-span-2 space-y-2">
+            <Label>Nombre para envio</Label>
+            <Input className="mt-1" value={shippingName} onChange={(e) => setShippingName(e.target.value)} placeholder="Nombre de receptor" />
+          </div>
           <div className="md:col-span-2 space-y-2">
             <Label>Direccion</Label>
             <Input className="mt-1" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} placeholder="Calle 123" />
           </div>
           <div className="space-y-2">
-            <Label>Región</Label>
+            <Label>Region</Label>
             <Select
               value={region}
               onValueChange={(v) => {
@@ -144,7 +144,7 @@ const ShippingFields = React.memo(function ShippingFields({
               }}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecciona región" />
+                <SelectValue placeholder="Selecciona regiÃƒÂ³n" />
               </SelectTrigger>
               <SelectContent side="bottom" align="start">
                 {regions.map((r) => (
@@ -176,7 +176,7 @@ const ShippingFields = React.memo(function ShippingFields({
   );
 });
 
-// Memoized section: Facturaci�n
+// Memoized section: FacturaciÃ¯Â¿Â½n
 const BillingFields = React.memo(function BillingFields({
   invoiceType,
   setInvoiceType,
@@ -249,14 +249,14 @@ const BillingFields = React.memo(function BillingFields({
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label className="block">Razon Social</Label>
-              <Input value={billingRazonSocial} onChange={(e) => setBillingRazonSocial(e.target.value)} placeholder="Raz�n social" />
+              <Input value={billingRazonSocial} onChange={(e) => setBillingRazonSocial(e.target.value)} placeholder="RazÃ¯Â¿Â½n social" />
             </div>
           </>
         )}
         {invoiceType !== 'SIN COMPROBANTE' && (
           <div className="space-y-2 md:col-span-3">
             <Label className="block">Direccion de facturacion</Label>
-            <Input value={billingAddress} onChange={(e) => setBillingAddress(e.target.value)} placeholder="Direcci�n fiscal" />
+            <Input value={billingAddress} onChange={(e) => setBillingAddress(e.target.value)} placeholder="DirecciÃ¯Â¿Â½n fiscal" />
           </div>
         )}
       </div>
@@ -355,34 +355,34 @@ export default function NewOrderPage() {
   }), []);
 
   const formSchema = useMemo(() => z.object({
-    email: z.string().email({ message: 'Ingresa un correo v�lido.' }),
-    items: z.array(itemSchema).min(1, { message: 'Debes agregar al menos un producto.' }),
+    email: z.string().email({ message: 'Ingresa un correo vÃ¯Â¿Â½lido.' }),
     shippingMethod: z.enum(['PICKUP', 'DELIVERY']),
-    shippingName: z.string().min(2, { message: 'Ingresa el nombre para env�o.' }),
-    shippingAddress: z.string().min(3, { message: 'Ingresa la direcci�n de env�o.' }).optional(),
+    shippingName: z.string().min(2, { message: 'Ingresa el nombre para envio.' }).optional(),
+    shippingAddress: z.string().min(3, { message: 'Ingresa la direccion de envio.' }).optional(),
     city: z.string().min(2, { message: 'Ingresa la ciudad.' }).optional(),
-    postalCode: z.string().min(3, { message: 'Ingresa el c�digo postal.' }).optional(),
+    postalCode: z.string().min(3, { message: 'Ingresa el codigo postal.' }).optional(),
     invoiceType: z.enum(['SIN COMPROBANTE', 'BOLETA', 'FACTURA']),
-    billingDni: z.string().regex(/^\d{8}$/,{ message: 'DNI debe tener 8 d�gitos.' }).optional(),
+    billingDni: z.string().regex(/^\d{8}$/,{ message: 'DNI debe tener 8 dÃ¯Â¿Â½gitos.' }).optional(),
     billingName: z.string().min(3, { message: 'Ingresa el nombre para la boleta.' }).optional(),
-    billingRuc: z.string().regex(/^\d{11}$/,{ message: 'RUC debe tener 11 d�gitos.' }).optional(),
-    billingRazonSocial: z.string().min(3, { message: 'Ingresa la raz�n social.' }).optional(),
-    billingAddress: z.string().min(3, { message: 'Ingresa la direcci�n de facturaci�n.' }).optional(),
+    billingRuc: z.string().regex(/^\d{11}$/,{ message: 'RUC debe tener 11 dÃ¯Â¿Â½gitos.' }).optional(),
+    billingRazonSocial: z.string().min(3, { message: 'Ingresa la razÃ¯Â¿Â½n social.' }).optional(),
+    billingAddress: z.string().min(3, { message: 'Ingresa la direcciÃ¯Â¿Â½n de facturaciÃ¯Â¿Â½n.' }).optional(),
   }).superRefine((val, ctx) => {
     if (val.shippingMethod === 'DELIVERY') {
-      if (!val.shippingAddress) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa la direcci�n de env�o.' });
+      if (!val.shippingName || val.shippingName.trim().length < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa el nombre para envio.' });
+      if (!val.shippingAddress) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa la direccion de envio.' });
       if (!val.city) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa la ciudad.' });
-      if (!val.postalCode) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa el c�digo postal.' });
+      if (!val.postalCode) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa el codigo postal.' });
     }
     if (val.invoiceType === 'BOLETA') {
-      if (!val.billingDni) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'DNI debe tener 8 d�gitos.' });
+      if (!val.billingDni) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'DNI debe tener 8 dÃ¯Â¿Â½gitos.' });
       if (!val.billingName) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa el nombre para la boleta.' });
-      if (!val.billingAddress) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa la direcci�n de facturaci�n.' });
+      if (!val.billingAddress) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa la direcciÃ¯Â¿Â½n de facturaciÃ¯Â¿Â½n.' });
     }
     if (val.invoiceType === 'FACTURA') {
-      if (!val.billingRuc) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'RUC debe tener 11 d�gitos.' });
-      if (!val.billingRazonSocial) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa la raz�n social.' });
-      if (!val.billingAddress) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa la direcci�n de facturaci�n.' });
+      if (!val.billingRuc) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'RUC debe tener 11 dÃ¯Â¿Â½gitos.' });
+      if (!val.billingRazonSocial) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa la razÃ¯Â¿Â½n social.' });
+      if (!val.billingAddress) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Ingresa la direcciÃ¯Â¿Â½n de facturaciÃ¯Â¿Â½n.' });
     }
   }), [itemSchema]);
 
@@ -544,7 +544,7 @@ export default function NewOrderPage() {
     async function loadClients() {
       try {
         const data = await getClients();
-        // Backend ya excluye gen�ricos; cortes�a: descartar nombres/usuarios con prefijo generic_
+        // Backend ya excluye genÃ¯Â¿Â½ricos; cortesÃ¯Â¿Â½a: descartar nombres/usuarios con prefijo generic_
         const safe = Array.isArray(data)
           ? data.filter((c: any) => {
               const name = String(c?.name ?? '').toLowerCase();
@@ -594,12 +594,12 @@ export default function NewOrderPage() {
     const product = products.find((p) => p.id === selectedProductId);
     if (!product) return;
     if (quantity <= 0) {
-      toast.error("Cantidad invÃ¡lida");
+      toast.error("Cantidad invÃƒÆ’Ã‚Â¡lida");
       return;
     }
     const unitPrice = selectedPrice > 0 ? selectedPrice : product.price;
     if (unitPrice <= 0) {
-      toast.error("Precio invÃ¡lido");
+      toast.error("Precio invÃƒÆ’Ã‚Â¡lido");
       return;
     }
     try {
@@ -609,10 +609,10 @@ export default function NewOrderPage() {
       if (available < inCart + quantity) {
         const canAdd = Math.max(0, available - inCart);
         if (canAdd <= 0) {
-          toast.error(`No puedes agregar m�s. Stock disponible: ${available}. Ya tienes ${inCart} en la orden.`);
+          toast.error(`No puedes agregar mÃ¯Â¿Â½s. Stock disponible: ${available}. Ya tienes ${inCart} en la orden.`);
           return;
         }
-        toast.error(`Solo puedes agregar ${canAdd} unidad(es) m�s. Stock disponible: ${available}.`);
+        toast.error(`Solo puedes agregar ${canAdd} unidad(es) mÃ¯Â¿Â½s. Stock disponible: ${available}.`);
         return;
       }
     } catch (err) {
@@ -644,7 +644,7 @@ export default function NewOrderPage() {
       email,
       items,
       shippingMethod: pickupInStore ? 'PICKUP' as const : 'DELIVERY' as const,
-      shippingName,
+      shippingName: pickupInStore ? undefined : (shippingName || undefined),
       shippingAddress: pickupInStore ? undefined : (shippingAddress || undefined),
       city: pickupInStore ? undefined : (city || undefined),
       postalCode: pickupInStore ? undefined : (postalCode || undefined),
@@ -691,7 +691,7 @@ export default function NewOrderPage() {
       email,
       phone: phone || undefined,
       personalDni: personalDni || undefined,
-      shippingName: parsed.data.shippingName,
+      shippingName: pickupInStore ? undefined : parsed.data.shippingName,
       shippingAddress: parsed.data.shippingMethod === 'PICKUP' ? '' : (parsed.data.shippingAddress || ''),
       city: parsed.data.city || "",
       postalCode: parsed.data.postalCode || "",
@@ -924,12 +924,12 @@ export default function NewOrderPage() {
                   )}
                   {invoiceType !== 'SIN COMPROBANTE' && (
                     <div className="space-y-2 md:col-span-3">
-                      <Label className="block">Dirección de facturación</Label>
-                      <Input value={billingAddress} onChange={(e) => setBillingAddress(e.target.value)} placeholder="Dirección fiscal" />
+                      <Label className="block">DirecciÃƒÂ³n de facturaciÃƒÂ³n</Label>
+                      <Input value={billingAddress} onChange={(e) => setBillingAddress(e.target.value)} placeholder="DirecciÃƒÂ³n fiscal" />
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">Estos datos se usarán para emitir el comprobante cuando se complete la orden.</p>
+                <p className="text-xs text-muted-foreground">Estos datos se usarÃƒÂ¡n para emitir el comprobante cuando se complete la orden.</p>
               </CardContent>
             </Card>
 
@@ -957,7 +957,7 @@ export default function NewOrderPage() {
                     <Label htmlFor="pm-card">Tarjeta (Credito/Debito)</Label>
                   </div>
                 </RadioGroup>
-                <p className="text-xs text-muted-foreground">Se registrará el método elegido para el pago del cliente.</p>
+                <p className="text-xs text-muted-foreground">Se registrarÃƒÂ¡ el mÃƒÂ©todo elegido para el pago del cliente.</p>
               </CardContent>
             </Card>
 

@@ -23,6 +23,16 @@ export type CompanySnapshot = {
   legalName: string | null;
   taxId: string | null;
   status: string;
+  sunatEnvironment: string;
+  sunatRuc: string | null;
+  sunatSolUserBeta: string | null;
+  sunatSolPasswordBeta: string | null;
+  sunatCertPathBeta: string | null;
+  sunatKeyPathBeta: string | null;
+  sunatSolUserProd: string | null;
+  sunatSolPasswordProd: string | null;
+  sunatCertPathProd: string | null;
+  sunatKeyPathProd: string | null;
   createdAt: Date;
   updatedAt: Date;
 };

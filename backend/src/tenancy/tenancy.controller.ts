@@ -44,8 +44,7 @@ export class TenancyController {
           organizationId: summary.organization?.id ?? context.organizationId,
           companyId: summary.company?.id ?? context.companyId,
         });
-        (request as any).tenantContext =
-          this.tenantContextService.getContext();
+        (request as any).tenantContext = this.tenantContextService.getContext();
       }
 
       return summary;
@@ -130,6 +129,3 @@ export class TenancyController {
     return this.tenancyService.remove(id);
   }
 }
-
-
-

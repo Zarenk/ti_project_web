@@ -485,12 +485,38 @@ export class WebSalesService {
     ) as Prisma.OrdersWhereInput;
     const order = await this.prisma.orders.findFirst({
       where: { id, ...where },
+      include: {
+        sale: {
+          include: {
+            sunatTransmissions: {
+              orderBy: { createdAt: 'desc' },
+            },
+          },
+        },
+      },
     });
     if (!order)
-      throw new NotFoundException(`No se encontró la orden con ID ${id}.`);
-    return order;
-  }
+      throw new NotFoundException(`No se encontr� la orden con ID ${id}.`);
+    const sunatStatus = this.buildSunatStatus(
+      order.sale?.sunatTransmissions?.[0] ?? null,
+    );
+    const cleanedSale = order.sale
+      ? {
+          ...order.sale,
+          sunatStatus,
+        }
+      : null;
 
+    if (cleanedSale && 'sunatTransmissions' in cleanedSale) {
+      delete (cleanedSale as any).sunatTransmissions;
+    }
+
+    return {
+      ...order,
+      sale: cleanedSale,
+      sunatStatus,
+    };
+  }
   async getWebOrderByCode(
     code: string,
     organizationId?: number | null,
@@ -939,13 +965,19 @@ export class WebSalesService {
         },
         invoices: true,
         order: true,
+        sunatTransmissions: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
     if (!sale)
-      throw new NotFoundException(`No se encontró la venta con ID ${id}.`);
-    return sale;
+      throw new NotFoundException(`No se encontr� la venta con ID ${id}.`);
+    const { sunatTransmissions, ...rest } = sale as any;
+    return {
+      ...rest,
+      sunatStatus: this.buildSunatStatus(sunatTransmissions?.[0] ?? null),
+    };
   }
-
   async getOrders(params: {
     status?: string;
     from?: string;
@@ -973,9 +1005,41 @@ export class WebSalesService {
     }
     if (params.code) where.code = { contains: params.code };
 
-    return this.prisma.orders.findMany({
+    const orders = await this.prisma.orders.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      include: {
+        sale: {
+          include: {
+            sunatTransmissions: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    return orders.map((order) => {
+      const latest = order.sale?.sunatTransmissions?.[0] ?? null;
+      const sunatStatus = this.buildSunatStatus(latest);
+      const { sale, ...rest } = order as any;
+      const cleanedSale = sale
+        ? {
+            ...sale,
+            sunatStatus,
+          }
+        : null;
+
+      if (cleanedSale && 'sunatTransmissions' in cleanedSale) {
+        delete (cleanedSale as any).sunatTransmissions;
+      }
+
+      return {
+        ...rest,
+        sale: cleanedSale,
+        sunatStatus,
+      };
     });
   }
 
@@ -1019,4 +1083,33 @@ export class WebSalesService {
       take,
     });
   }
+
+  private buildSunatStatus(
+    transmission?:
+      | {
+          id: number;
+          status: string;
+          ticket: string | null;
+          environment?: string | null;
+          errorMessage?: string | null;
+          updatedAt?: Date;
+          createdAt?: Date;
+        }
+      | null,
+  ) {
+    if (!transmission) {
+      return null;
+    }
+
+    return {
+      id: transmission.id,
+      status: transmission.status,
+      ticket: transmission.ticket ?? null,
+      environment: transmission.environment ?? null,
+      errorMessage: transmission.errorMessage ?? null,
+      updatedAt: transmission.updatedAt ?? transmission.createdAt ?? null,
+    };
+  }
 }
+
+

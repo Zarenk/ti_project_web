@@ -76,10 +76,8 @@ export class SystemMaintenanceService {
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const dataset = await this.prisma.$transaction(async (tx) => {
-      const {
-        tables,
-        columnsByTable,
-      } = await this.loadTenantAwareTableMetadata(tx);
+      const { tables, columnsByTable } =
+        await this.loadTenantAwareTableMetadata(tx);
 
       const snapshot: Record<string, unknown[]> = {};
 
@@ -110,8 +108,7 @@ export class SystemMaintenanceService {
             ? clauses[0]
             : clauses.map((clause) => `(${clause})`).join(' OR ');
 
-        const rows =
-          await tx.$queryRawUnsafe<Record<string, unknown>[]>(`
+        const rows = await tx.$queryRawUnsafe<Record<string, unknown>[]>(`
             SELECT * FROM "${table}" WHERE ${whereClause}
           `);
 
@@ -156,10 +153,8 @@ export class SystemMaintenanceService {
     const deletedCounts: Record<string, number> = {};
 
     await this.prisma.$transaction(async (tx) => {
-      const {
-        tables,
-        columnsByTable,
-      } = await this.loadTenantAwareTableMetadata(tx);
+      const { tables, columnsByTable } =
+        await this.loadTenantAwareTableMetadata(tx);
 
       if (tables.length === 0) {
         return;

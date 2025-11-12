@@ -115,10 +115,7 @@ export class TenancyService {
   ): void {
     if (tenant.isGlobalSuperAdmin) {
       const allowed = tenant.allowedOrganizationIds ?? [];
-      if (
-        allowed.length > 0 &&
-        !allowed.includes(organizationId)
-      ) {
+      if (allowed.length > 0 && !allowed.includes(organizationId)) {
         throw new ForbiddenException(
           'No tienes permisos para gestionar empresas de esta organizacion.',
         );
@@ -222,10 +219,7 @@ export class TenancyService {
 
     return Promise.all(
       organizations.map((organization) =>
-        this.mapToSnapshot(
-          prismaClient as PrismaService,
-          organization as any,
-        ),
+        this.mapToSnapshot(prismaClient as PrismaService, organization),
       ),
     );
   }
@@ -245,10 +239,7 @@ export class TenancyService {
       throw new NotFoundException(`Organization ${id} was not found`);
     }
 
-    return this.mapToSnapshot(
-      prismaClient as PrismaService,
-      organization as any,
-    );
+    return this.mapToSnapshot(prismaClient as PrismaService, organization);
   }
 
   async findBySlug(slug: string): Promise<TenancySnapshot> {
@@ -271,10 +262,7 @@ export class TenancyService {
       throw new NotFoundException('Organization not found');
     }
 
-    return this.mapToSnapshot(
-      prismaClient as PrismaService,
-      organization as any,
-    );
+    return this.mapToSnapshot(prismaClient as PrismaService, organization);
   }
   async update(
     id: number,
@@ -293,7 +281,9 @@ export class TenancyService {
           throw new NotFoundException('Organization not found');
         }
 
-        const effectiveName = trimmedName?.length ? trimmedName : currentOrganization.name;
+        const effectiveName = trimmedName?.length
+          ? trimmedName
+          : currentOrganization.name;
 
         let slugValue: string | undefined;
         if (updateTenancyDto.slug !== undefined || !currentOrganization.slug) {
@@ -419,6 +409,25 @@ export class TenancyService {
     const legalName = dto.legalName?.trim();
     const taxId = dto.taxId?.trim();
     const status = dto.status?.trim() || 'ACTIVE';
+    const sunatEnvironment =
+      this.normalizeSunatEnvironment(dto.sunatEnvironment) ?? 'BETA';
+    const sunatRuc = this.normalizeNullableInput(dto.sunatRuc);
+    const sunatSolUserBeta = this.normalizeNullableInput(dto.sunatSolUserBeta);
+    const sunatSolPasswordBeta = this.normalizeNullableInput(
+      dto.sunatSolPasswordBeta,
+    );
+    const sunatCertPathBeta = this.normalizeNullableInput(
+      dto.sunatCertPathBeta,
+    );
+    const sunatKeyPathBeta = this.normalizeNullableInput(dto.sunatKeyPathBeta);
+    const sunatSolUserProd = this.normalizeNullableInput(dto.sunatSolUserProd);
+    const sunatSolPasswordProd = this.normalizeNullableInput(
+      dto.sunatSolPasswordProd,
+    );
+    const sunatCertPathProd = this.normalizeNullableInput(
+      dto.sunatCertPathProd,
+    );
+    const sunatKeyPathProd = this.normalizeNullableInput(dto.sunatKeyPathProd);
 
     try {
       const company = await this.prisma.company.create({
@@ -428,6 +437,16 @@ export class TenancyService {
           legalName: legalName?.length ? legalName : null,
           taxId: taxId?.length ? taxId : null,
           status,
+          sunatEnvironment,
+          sunatRuc: sunatRuc ?? null,
+          sunatSolUserBeta: sunatSolUserBeta ?? null,
+          sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
+          sunatCertPathBeta: sunatCertPathBeta ?? null,
+          sunatKeyPathBeta: sunatKeyPathBeta ?? null,
+          sunatSolUserProd: sunatSolUserProd ?? null,
+          sunatSolPasswordProd: sunatSolPasswordProd ?? null,
+          sunatCertPathProd: sunatCertPathProd ?? null,
+          sunatKeyPathProd: sunatKeyPathProd ?? null,
         },
       });
 
@@ -477,10 +496,7 @@ export class TenancyService {
 
     return Promise.all(
       organizations.map((organization) =>
-        this.mapToSnapshot(
-          prismaClient as PrismaService,
-          organization as any,
-        ),
+        this.mapToSnapshot(prismaClient as PrismaService, organization),
       ),
     );
   }
@@ -490,7 +506,12 @@ export class TenancyService {
     tenant: TenantContext,
   ): Promise<
     CompanySnapshot & {
-      organization: { id: number; name: string; code: string | null; status: string };
+      organization: {
+        id: number;
+        name: string;
+        code: string | null;
+        status: string;
+      };
     }
   > {
     if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
@@ -550,6 +571,27 @@ export class TenancyService {
 
     const data: Prisma.CompanyUpdateInput = {};
 
+    const sunatEnvironment = this.normalizeSunatEnvironment(
+      dto.sunatEnvironment,
+    );
+    const sunatRuc = this.normalizeNullableInput(dto.sunatRuc);
+    const sunatSolUserBeta = this.normalizeNullableInput(dto.sunatSolUserBeta);
+    const sunatSolPasswordBeta = this.normalizeNullableInput(
+      dto.sunatSolPasswordBeta,
+    );
+    const sunatCertPathBeta = this.normalizeNullableInput(
+      dto.sunatCertPathBeta,
+    );
+    const sunatKeyPathBeta = this.normalizeNullableInput(dto.sunatKeyPathBeta);
+    const sunatSolUserProd = this.normalizeNullableInput(dto.sunatSolUserProd);
+    const sunatSolPasswordProd = this.normalizeNullableInput(
+      dto.sunatSolPasswordProd,
+    );
+    const sunatCertPathProd = this.normalizeNullableInput(
+      dto.sunatCertPathProd,
+    );
+    const sunatKeyPathProd = this.normalizeNullableInput(dto.sunatKeyPathProd);
+
     if (dto.name !== undefined) {
       const trimmed = dto.name.trim();
       if (!trimmed) {
@@ -575,6 +617,37 @@ export class TenancyService {
       data.status = trimmed.length ? trimmed : existing.status;
     }
 
+    if (sunatEnvironment !== undefined) {
+      data.sunatEnvironment = sunatEnvironment;
+    }
+    if (dto.sunatRuc !== undefined) {
+      data.sunatRuc = sunatRuc ?? null;
+    }
+    if (dto.sunatSolUserBeta !== undefined) {
+      data.sunatSolUserBeta = sunatSolUserBeta ?? null;
+    }
+    if (dto.sunatSolPasswordBeta !== undefined) {
+      data.sunatSolPasswordBeta = sunatSolPasswordBeta ?? null;
+    }
+    if (dto.sunatCertPathBeta !== undefined) {
+      data.sunatCertPathBeta = sunatCertPathBeta ?? null;
+    }
+    if (dto.sunatKeyPathBeta !== undefined) {
+      data.sunatKeyPathBeta = sunatKeyPathBeta ?? null;
+    }
+    if (dto.sunatSolUserProd !== undefined) {
+      data.sunatSolUserProd = sunatSolUserProd ?? null;
+    }
+    if (dto.sunatSolPasswordProd !== undefined) {
+      data.sunatSolPasswordProd = sunatSolPasswordProd ?? null;
+    }
+    if (dto.sunatCertPathProd !== undefined) {
+      data.sunatCertPathProd = sunatCertPathProd ?? null;
+    }
+    if (dto.sunatKeyPathProd !== undefined) {
+      data.sunatKeyPathProd = sunatKeyPathProd ?? null;
+    }
+
     try {
       return await this.prisma.company.update({
         where: { id },
@@ -598,6 +671,81 @@ export class TenancyService {
       }
       throw error;
     }
+  }
+
+  async updateCompanySunatFile(
+    id: number,
+    input: {
+      tenant: TenantContext;
+      environment: 'BETA' | 'PROD';
+      kind: 'cert' | 'key';
+      filePath: string;
+      originalName: string;
+    },
+  ): Promise<CompanySnapshot> {
+    const { tenant, environment, kind, filePath } = input;
+
+    if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
+      throw new ForbiddenException(
+        'Solo los super administradores pueden actualizar empresas.',
+      );
+    }
+
+    const existing = await this.prisma.company.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`La empresa ${id} no existe.`);
+    }
+
+    this.ensureOrganizationAccess(existing.organizationId, tenant);
+
+    const data: Prisma.CompanyUpdateInput = {};
+
+    if (environment === 'BETA') {
+      if (kind === 'cert') {
+        data.sunatCertPathBeta = filePath;
+      } else {
+        data.sunatKeyPathBeta = filePath;
+      }
+    } else {
+      if (kind === 'cert') {
+        data.sunatCertPathProd = filePath;
+      } else {
+        data.sunatKeyPathProd = filePath;
+      }
+    }
+
+    return this.prisma.company.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async listCompanySunatTransmissions(id: number, tenant: TenantContext) {
+    if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
+      throw new ForbiddenException(
+        'Solo los super administradores pueden consultar envíos SUNAT.',
+      );
+    }
+
+    const company = await this.prisma.company.findUnique({
+      where: { id },
+      select: { id: true, organizationId: true },
+    });
+
+    if (!company) {
+      throw new NotFoundException(`La empresa ${id} no existe.`);
+    }
+
+    this.ensureOrganizationAccess(company.organizationId, tenant);
+
+    return this.prisma.sunatTransmission.findMany({
+      where: { companyId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
   }
 
   async remove(id: number): Promise<TenancySnapshot> {
@@ -930,6 +1078,33 @@ export class TenancyService {
         company.taxId && company.taxId.trim().length > 0
           ? company.taxId.trim()
           : null;
+      const sunatEnvironment =
+        this.normalizeSunatEnvironment(company.sunatEnvironment) ?? 'BETA';
+      const sunatRuc = this.normalizeNullableInput(company.sunatRuc);
+      const sunatSolUserBeta = this.normalizeNullableInput(
+        company.sunatSolUserBeta,
+      );
+      const sunatSolPasswordBeta = this.normalizeNullableInput(
+        company.sunatSolPasswordBeta,
+      );
+      const sunatCertPathBeta = this.normalizeNullableInput(
+        company.sunatCertPathBeta,
+      );
+      const sunatKeyPathBeta = this.normalizeNullableInput(
+        company.sunatKeyPathBeta,
+      );
+      const sunatSolUserProd = this.normalizeNullableInput(
+        company.sunatSolUserProd,
+      );
+      const sunatSolPasswordProd = this.normalizeNullableInput(
+        company.sunatSolPasswordProd,
+      );
+      const sunatCertPathProd = this.normalizeNullableInput(
+        company.sunatCertPathProd,
+      );
+      const sunatKeyPathProd = this.normalizeNullableInput(
+        company.sunatKeyPathProd,
+      );
 
       const created = await prisma.company.create({
         data: {
@@ -938,6 +1113,16 @@ export class TenancyService {
           legalName,
           taxId,
           status: company.status ?? 'ACTIVE',
+          sunatEnvironment,
+          sunatRuc: sunatRuc ?? null,
+          sunatSolUserBeta: sunatSolUserBeta ?? null,
+          sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
+          sunatCertPathBeta: sunatCertPathBeta ?? null,
+          sunatKeyPathBeta: sunatKeyPathBeta ?? null,
+          sunatSolUserProd: sunatSolUserProd ?? null,
+          sunatSolPasswordProd: sunatSolPasswordProd ?? null,
+          sunatCertPathProd: sunatCertPathProd ?? null,
+          sunatKeyPathProd: sunatKeyPathProd ?? null,
         },
       });
 
@@ -1055,6 +1240,34 @@ export class TenancyService {
       const normalizedStatus = this.normalizeCompanyStatus(company.status);
       const legalName = this.normalizeNullableInput(company.legalName);
       const taxId = this.normalizeNullableInput(company.taxId);
+      const sunatEnvironment = this.normalizeSunatEnvironment(
+        company.sunatEnvironment,
+      );
+      const sunatRuc = this.normalizeNullableInput(company.sunatRuc);
+      const sunatSolUserBeta = this.normalizeNullableInput(
+        company.sunatSolUserBeta,
+      );
+      const sunatSolPasswordBeta = this.normalizeNullableInput(
+        company.sunatSolPasswordBeta,
+      );
+      const sunatCertPathBeta = this.normalizeNullableInput(
+        company.sunatCertPathBeta,
+      );
+      const sunatKeyPathBeta = this.normalizeNullableInput(
+        company.sunatKeyPathBeta,
+      );
+      const sunatSolUserProd = this.normalizeNullableInput(
+        company.sunatSolUserProd,
+      );
+      const sunatSolPasswordProd = this.normalizeNullableInput(
+        company.sunatSolPasswordProd,
+      );
+      const sunatCertPathProd = this.normalizeNullableInput(
+        company.sunatCertPathProd,
+      );
+      const sunatKeyPathProd = this.normalizeNullableInput(
+        company.sunatKeyPathProd,
+      );
 
       if (company.id) {
         // Actualizar company existente
@@ -1082,6 +1295,36 @@ export class TenancyService {
         if (normalizedStatus !== undefined) {
           updateData.status = normalizedStatus;
         }
+        if (sunatEnvironment !== undefined) {
+          updateData.sunatEnvironment = sunatEnvironment;
+        }
+        if (company.sunatRuc !== undefined) {
+          updateData.sunatRuc = sunatRuc ?? null;
+        }
+        if (company.sunatSolUserBeta !== undefined) {
+          updateData.sunatSolUserBeta = sunatSolUserBeta ?? null;
+        }
+        if (company.sunatSolPasswordBeta !== undefined) {
+          updateData.sunatSolPasswordBeta = sunatSolPasswordBeta ?? null;
+        }
+        if (company.sunatCertPathBeta !== undefined) {
+          updateData.sunatCertPathBeta = sunatCertPathBeta ?? null;
+        }
+        if (company.sunatKeyPathBeta !== undefined) {
+          updateData.sunatKeyPathBeta = sunatKeyPathBeta ?? null;
+        }
+        if (company.sunatSolUserProd !== undefined) {
+          updateData.sunatSolUserProd = sunatSolUserProd ?? null;
+        }
+        if (company.sunatSolPasswordProd !== undefined) {
+          updateData.sunatSolPasswordProd = sunatSolPasswordProd ?? null;
+        }
+        if (company.sunatCertPathProd !== undefined) {
+          updateData.sunatCertPathProd = sunatCertPathProd ?? null;
+        }
+        if (company.sunatKeyPathProd !== undefined) {
+          updateData.sunatKeyPathProd = sunatKeyPathProd ?? null;
+        }
 
         if (Object.keys(updateData).length > 0) {
           await prisma.company.update({
@@ -1101,6 +1344,16 @@ export class TenancyService {
           legalName: legalName ?? undefined,
           taxId: taxId ?? undefined,
           status: normalizedStatus ?? 'ACTIVE',
+          sunatEnvironment: sunatEnvironment ?? 'BETA',
+          sunatRuc: sunatRuc ?? null,
+          sunatSolUserBeta: sunatSolUserBeta ?? null,
+          sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
+          sunatCertPathBeta: sunatCertPathBeta ?? null,
+          sunatKeyPathBeta: sunatKeyPathBeta ?? null,
+          sunatSolUserProd: sunatSolUserProd ?? null,
+          sunatSolPasswordProd: sunatSolPasswordProd ?? null,
+          sunatCertPathProd: sunatCertPathProd ?? null,
+          sunatKeyPathProd: sunatKeyPathProd ?? null,
         },
       });
     }
@@ -1169,6 +1422,27 @@ export class TenancyService {
     if (trimmed !== 'ACTIVE' && trimmed !== 'INACTIVE') {
       throw new BadRequestException(
         `Invalid company status "${status}" provided`,
+      );
+    }
+
+    return trimmed;
+  }
+
+  private normalizeSunatEnvironment(
+    environment: string | null | undefined,
+  ): 'BETA' | 'PROD' | undefined {
+    if (environment === undefined || environment === null) {
+      return undefined;
+    }
+
+    const trimmed = environment.trim().toUpperCase();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    if (trimmed !== 'BETA' && trimmed !== 'PROD') {
+      throw new BadRequestException(
+        `Invalid SUNAT environment "${environment}" provided`,
       );
     }
 
@@ -1290,14 +1564,3 @@ export class TenancyService {
     return trimmed.length > 0 ? trimmed : null;
   }
 }
-
-
-
-
-
-
-
-
-
-
-

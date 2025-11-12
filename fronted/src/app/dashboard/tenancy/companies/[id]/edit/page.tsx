@@ -9,13 +9,12 @@ import { CompanyEditForm } from "./company-edit-form";
 export const dynamic = "force-dynamic";
 
 interface EditCompanyPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export default async function EditCompanyPage({
-  params,
-}: EditCompanyPageProps) {
-  const companyId = Number(params.id);
+export default async function EditCompanyPage({ params }: EditCompanyPageProps) {
+  const { id } = await params;
+  const companyId = Number(id);
   if (!Number.isFinite(companyId)) {
     notFound();
   }

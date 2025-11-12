@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -127,6 +128,11 @@ export function SaleDetailDialog({
 
     return paymentFormatterResolver(currencyCode).format(numericValue);
   };
+
+  const sunatStatus = sale?.sunatStatus ?? null;
+  const sunatLogs = Array.isArray(sale?.sunatTransmissions)
+    ? sale!.sunatTransmissions
+    : [];
 
   const formattedDateTime = useMemo(() => {
     if (!sale?.createdAt) {
@@ -400,6 +406,57 @@ export function SaleDetailDialog({
               </div>
             </div>
 
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold">Envíos SUNAT</h3>
+              {sunatStatus ? (
+                <div className="rounded-md border border-dashed p-3 text-sm">
+                  <div className="mb-2">{renderSunatStatusBadge(sunatStatus)}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {sunatStatus.updatedAt
+                      ? `Actualizado el ${formatSunatDate(sunatStatus.updatedAt)}`
+                      : "Estado más reciente registrado."}
+                  </p>
+                  {sunatStatus.ticket ? (
+                    <p className="text-xs text-muted-foreground">Ticket: {sunatStatus.ticket}</p>
+                  ) : null}
+                  {sunatStatus.errorMessage ? (
+                    <p className="text-xs text-destructive">Error: {sunatStatus.errorMessage}</p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Aún no se han registrado envíos automáticos para esta venta.
+                </p>
+              )}
+              {sunatLogs.length > 0 && (
+                <div className="max-h-48 overflow-auto rounded-md border text-xs">
+                  <table className="w-full text-left">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Fecha</th>
+                        <th className="px-3 py-2 font-medium">Estado</th>
+                        <th className="px-3 py-2 font-medium">Ticket</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sunatLogs.map((log, index) => (
+                        <tr
+                          key={log.id ?? `${log.status}-${log.updatedAt ?? log.createdAt ?? index}`}
+                          className="border-t"
+                        >
+                          <td className="px-3 py-2">
+                            {formatSunatDate(log.updatedAt ?? log.createdAt)}
+                          </td>
+                          <td className="px-3 py-2">{renderSunatStatusBadge(log)}</td>
+                          <td className="px-3 py-2">{log.ticket ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             {Array.isArray(detailRows) && detailRows.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Productos vendidos</h3>
@@ -475,4 +532,48 @@ export function SaleDetailDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  SENT: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  SENDING: "bg-blue-100 text-blue-800 border-blue-200",
+  PENDING: "bg-amber-100 text-amber-800 border-amber-200",
+  FAILED: "bg-red-100 text-red-800 border-red-200",
+  ERROR: "bg-red-100 text-red-800 border-red-200",
+  RETRYING: "bg-indigo-100 text-indigo-800 border-indigo-200",
+};
+
+function renderSunatStatusBadge(
+  status?: Sale["sunatStatus"] | Sale["sunatTransmissions"]?.[number] | null,
+) {
+  if (!status) {
+    return <span className="text-xs text-muted-foreground">Sin envíos</span>;
+  }
+  const normalized = status.status?.toUpperCase() ?? "DESCONOCIDO";
+  const colorClass = STATUS_COLORS[normalized] ?? "bg-slate-100 text-slate-800 border-slate-200";
+  const tooltipParts: string[] = [];
+  if (status.environment) tooltipParts.push(`Ambiente: ${status.environment}`);
+  if (status.ticket) tooltipParts.push(`Ticket: ${status.ticket}`);
+  if ("errorMessage" in status && status.errorMessage) {
+    tooltipParts.push(`Error: ${status.errorMessage}`);
+  }
+
+  return (
+    <Badge
+      variant="outline"
+      className={`text-xs font-medium ${colorClass}`}
+      title={tooltipParts.join(" • ") || undefined}
+    >
+      {normalized}
+    </Badge>
+  );
+}
+
+function formatSunatDate(value?: string | Date | null) {
+  if (!value) return "—";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return format(date, "dd/MM/yyyy HH:mm");
 }

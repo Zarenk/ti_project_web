@@ -36,7 +36,6 @@ class WebSaleDetailDto {
 
 class WebPaymentDto {
   @IsInt()
-  @Min(1)
   paymentMethodId!: number;
 
   @IsNumber()

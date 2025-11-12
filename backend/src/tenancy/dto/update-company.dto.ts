@@ -1,4 +1,6 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+
+const SUNAT_ENVIRONMENTS = ['BETA', 'PROD'] as const;
 
 export class UpdateCompanyDto {
   @IsOptional()
@@ -20,4 +22,53 @@ export class UpdateCompanyDto {
   @IsString()
   @MaxLength(40)
   status?: string;
+
+  @IsOptional()
+  @IsIn(SUNAT_ENVIRONMENTS)
+  sunatEnvironment?: (typeof SUNAT_ENVIRONMENTS)[number];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  sunatRuc?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatSolUserBeta?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatSolPasswordBeta?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatCertPathBeta?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatKeyPathBeta?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatSolUserProd?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatSolPasswordProd?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatCertPathProd?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatKeyPathProd?: string | null;
 }

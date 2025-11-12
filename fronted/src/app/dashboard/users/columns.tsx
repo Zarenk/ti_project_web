@@ -31,16 +31,13 @@ export type UserRow = DashboardUser & { createdAt: string };
 type ColumnOptions = {
   canManageUsers: boolean;
   isGlobalSuperAdmin: boolean;
+  organizationId: number | null;
   onUserUpdated: (user: DashboardUser) => void;
 };
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
-  { value: "SUPER_ADMIN_GLOBAL", label: "Super admin global" },
-  { value: "SUPER_ADMIN_ORG", label: "Super admin organización" },
   { value: "ADMIN", label: "Administrador" },
   { value: "EMPLOYEE", label: "Empleado" },
-  { value: "CLIENT", label: "Cliente" },
-  { value: "GUEST", label: "Invitado" },
 ];
 
 const STATUS_OPTIONS: { value: "ACTIVO" | "INACTIVO"; label: string }[] = [
@@ -65,6 +62,7 @@ const formatDate = (value: string) => {
 export function buildUserColumns({
   canManageUsers,
   isGlobalSuperAdmin,
+  organizationId,
   onUserUpdated,
 }: ColumnOptions): ColumnDef<UserRow>[] {
   const baseColumns: ColumnDef<UserRow>[] = [
@@ -149,6 +147,7 @@ export function buildUserColumns({
         <ManageUserActions
           row={row}
           isGlobalSuperAdmin={isGlobalSuperAdmin}
+          organizationId={organizationId}
           onUserUpdated={onUserUpdated}
         />
       ),
@@ -159,10 +158,12 @@ export function buildUserColumns({
 function ManageUserActions({
   row,
   isGlobalSuperAdmin,
+  organizationId,
   onUserUpdated,
 }: {
   row: Row<UserRow>;
   isGlobalSuperAdmin: boolean;
+  organizationId: number | null;
   onUserUpdated: (user: DashboardUser) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -174,9 +175,7 @@ function ManageUserActions({
     (row.original.status as "ACTIVO" | "INACTIVO") ?? "ACTIVO",
   );
 
-  const availableRoles = isGlobalSuperAdmin
-    ? ROLE_OPTIONS
-    : ROLE_OPTIONS.filter((option) => option.value !== "SUPER_ADMIN_GLOBAL");
+  const availableRoles = ROLE_OPTIONS;
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
@@ -204,7 +203,11 @@ function ManageUserActions({
 
     try {
       setIsSaving(true);
-      const updated = await updateUserAdmin(row.original.id, payload);
+      const updated = await updateUserAdmin(
+        row.original.id,
+        payload,
+        organizationId,
+      );
       onUserUpdated(updated);
       toast.success("Usuario actualizado.");
       setIsOpen(false);

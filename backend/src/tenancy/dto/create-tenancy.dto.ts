@@ -6,10 +6,12 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 
 const COMPANY_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
+const SUNAT_ENVIRONMENTS = ['BETA', 'PROD'] as const;
 
 export class CompanyInputDto {
   @IsOptional()
@@ -31,6 +33,55 @@ export class CompanyInputDto {
   @IsOptional()
   @IsIn(COMPANY_STATUSES)
   status?: (typeof COMPANY_STATUSES)[number];
+
+  @IsOptional()
+  @IsIn(SUNAT_ENVIRONMENTS)
+  sunatEnvironment?: (typeof SUNAT_ENVIRONMENTS)[number];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  sunatRuc?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatSolUserBeta?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatSolPasswordBeta?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatCertPathBeta?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatKeyPathBeta?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatSolUserProd?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatSolPasswordProd?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatCertPathProd?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatKeyPathProd?: string | null;
 }
 
 export class OrganizationUnitInputDto {

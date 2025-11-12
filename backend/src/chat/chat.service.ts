@@ -63,10 +63,7 @@ export class ChatService {
           'El cliente no pertenece a la organización seleccionada.',
         );
       }
-      if (
-        tenant.companyId !== null &&
-        client.companyId !== tenant.companyId
-      ) {
+      if (tenant.companyId !== null && client.companyId !== tenant.companyId) {
         throw new ForbiddenException(
           'El cliente no pertenece a la empresa seleccionada.',
         );
@@ -307,9 +304,7 @@ export class ChatService {
 
   async getUnansweredMessages(
     tenant?: TenantContext,
-  ): Promise<
-    { clientId: number; count: number }[]
-  > {
+  ): Promise<{ clientId: number; count: number }[]> {
     const clientFilter = this.buildClientTenantFilter(tenant);
     const scopedClients = await this.prisma.client.findMany({
       ...(clientFilter ? { where: clientFilter } : {}),

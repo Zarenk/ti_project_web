@@ -564,6 +564,16 @@ export class UsersService {
       }
     }
 
+    if (
+      dto.role &&
+      dto.role !== UserRole.ADMIN &&
+      dto.role !== UserRole.EMPLOYEE
+    ) {
+      throw new BadRequestException(
+        'Solo se permiten los roles Administrador o Empleado.',
+      );
+    }
+
     const updatePayload: Prisma.UserUpdateInput = {};
     if (dto.role) {
       updatePayload.role = dto.role;

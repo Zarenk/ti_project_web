@@ -7,6 +7,7 @@ import {
   OrganizationUnitInputDto,
 } from './dto/create-tenancy.dto';
 import { TenancyService } from './tenancy.service';
+import { TenantContext } from './tenant-context.interface';
 
 interface MockTransactionClient {
   organization: {
@@ -14,6 +15,7 @@ interface MockTransactionClient {
     update: jest.Mock;
     findMany: jest.Mock;
     findUnique: jest.Mock;
+    findFirst: jest.Mock;
   };
   organizationUnit: {
     create: jest.Mock;
@@ -51,6 +53,18 @@ describe('TenancyService', () => {
     organizationMembership: MockTransactionClient['organizationMembership'];
   };
   let tx: MockTransactionClient;
+  const baseTenant: TenantContext = {
+    organizationId: 5,
+    companyId: null,
+    organizationUnitId: null,
+    userId: 1,
+    isGlobalSuperAdmin: true,
+    isOrganizationSuperAdmin: true,
+    isSuperAdmin: true,
+    allowedOrganizationIds: [5],
+    allowedCompanyIds: [],
+    allowedOrganizationUnitIds: [],
+  };
 
   beforeEach(() => {
     tx = {
@@ -59,6 +73,7 @@ describe('TenancyService', () => {
         update: jest.fn(),
         findMany: jest.fn(),
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
       },
       organizationUnit: {
         create: jest.fn(),
@@ -93,6 +108,7 @@ describe('TenancyService', () => {
     tx.user.findUnique.mockResolvedValue(null);
     tx.company.findMany.mockResolvedValue([]);
     tx.company.updateMany.mockResolvedValue({ count: 0 });
+    tx.organization.findFirst.mockResolvedValue(null);
 
     prisma = {
       $transaction: jest.fn(async (callback) => callback(tx as unknown as any)),
@@ -140,6 +156,7 @@ describe('TenancyService', () => {
     expect(tx.organization.create).toHaveBeenCalledWith({
       data: {
         name: 'Acme Corp',
+        slug: 'acme-corp',
         code: null,
         status: 'ACTIVE',
       },
@@ -311,6 +328,12 @@ describe('TenancyService', () => {
   it('updates organization metadata and units in place', async () => {
     const createdAt = new Date('2024-03-01T00:00:00.000Z');
     const updatedAt = new Date('2024-03-01T01:00:00.000Z');
+
+    tx.organization.findUnique.mockResolvedValueOnce({
+      id: 7,
+      name: 'Initech',
+      slug: 'initech',
+    });
 
     tx.organization.update.mockResolvedValue({
       id: 7,
@@ -714,5 +737,184 @@ describe('TenancyService', () => {
     expect(result.companies).toEqual([
       expect.objectContaining({ name: 'Massive Retail' }),
     ]);
+  });
+
+  it('persists SUNAT credentials when creating a company', async () => {
+    const now = new Date('2025-05-11T12:34:00.000Z');
+    prisma.company.create.mockResolvedValue({
+      id: 99,
+      organizationId: 5,
+      name: 'Megacorp',
+      legalName: null,
+      taxId: null,
+      status: 'ACTIVE',
+      sunatEnvironment: 'PROD',
+      sunatRuc: '20123456789',
+      sunatSolUserBeta: 'betaUser',
+      sunatSolPasswordBeta: 'betaPass',
+      sunatCertPathBeta: 'beta.crt',
+      sunatKeyPathBeta: 'beta.key',
+      sunatSolUserProd: 'prodUser',
+      sunatSolPasswordProd: 'prodPass',
+      sunatCertPathProd: 'prod.crt',
+      sunatKeyPathProd: 'prod.key',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const dto = {
+      organizationId: 5,
+      name: '  Megacorp ',
+      sunatEnvironment: 'prod',
+      sunatRuc: ' 20123456789 ',
+      sunatSolUserBeta: 'betaUser',
+      sunatSolPasswordBeta: 'betaPass',
+      sunatCertPathBeta: 'beta.crt',
+      sunatKeyPathBeta: 'beta.key',
+      sunatSolUserProd: 'prodUser',
+      sunatSolPasswordProd: 'prodPass',
+      sunatCertPathProd: 'prod.crt',
+      sunatKeyPathProd: 'prod.key',
+    };
+
+    const result = await service.createCompany(dto as any, baseTenant);
+
+    expect(prisma.company.create).toHaveBeenCalledWith({
+      data: {
+        organizationId: 5,
+        name: 'Megacorp',
+        legalName: null,
+        taxId: null,
+        status: 'ACTIVE',
+        sunatEnvironment: 'PROD',
+        sunatRuc: '20123456789',
+        sunatSolUserBeta: 'betaUser',
+        sunatSolPasswordBeta: 'betaPass',
+        sunatCertPathBeta: 'beta.crt',
+        sunatKeyPathBeta: 'beta.key',
+        sunatSolUserProd: 'prodUser',
+        sunatSolPasswordProd: 'prodPass',
+        sunatCertPathProd: 'prod.crt',
+        sunatKeyPathProd: 'prod.key',
+      },
+    });
+    expect(result.sunatEnvironment).toBe('PROD');
+    expect(result.sunatRuc).toBe('20123456789');
+  });
+
+  it('updates SUNAT credentials when updating a company', async () => {
+    prisma.company.findUnique.mockResolvedValue({
+      id: 77,
+      organizationId: 5,
+      name: 'OldCo',
+      legalName: null,
+      taxId: null,
+      status: 'ACTIVE',
+      sunatEnvironment: 'BETA',
+      sunatRuc: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const updatedAt = new Date('2025-05-11T12:45:00.000Z');
+    prisma.company.update.mockResolvedValue({
+      id: 77,
+      organizationId: 5,
+      name: 'NewCo',
+      legalName: null,
+      taxId: null,
+      status: 'ACTIVE',
+      sunatEnvironment: 'PROD',
+      sunatRuc: '20987654321',
+      sunatSolUserBeta: null,
+      sunatSolPasswordBeta: null,
+      sunatCertPathBeta: null,
+      sunatKeyPathBeta: null,
+      sunatSolUserProd: 'prodUser',
+      sunatSolPasswordProd: 'prodPass',
+      sunatCertPathProd: 'prod.crt',
+      sunatKeyPathProd: 'prod.key',
+      createdAt: updatedAt,
+      updatedAt,
+    } as any);
+
+    const dto = {
+      name: ' NewCo ',
+      sunatEnvironment: 'prod',
+      sunatRuc: '20987654321',
+      sunatSolUserProd: 'prodUser',
+      sunatSolPasswordProd: 'prodPass',
+      sunatCertPathProd: 'prod.crt',
+      sunatKeyPathProd: 'prod.key',
+    };
+
+    const result = await service.updateCompany(77, dto as any, baseTenant);
+
+    expect(prisma.company.update).toHaveBeenCalledWith({
+      where: { id: 77 },
+      data: expect.objectContaining({
+        name: 'NewCo',
+        sunatEnvironment: 'PROD',
+        sunatRuc: '20987654321',
+        sunatSolUserProd: 'prodUser',
+        sunatSolPasswordProd: 'prodPass',
+        sunatCertPathProd: 'prod.crt',
+        sunatKeyPathProd: 'prod.key',
+      }),
+    });
+    expect(result.sunatEnvironment).toBe('PROD');
+    expect(result.sunatSolUserProd).toBe('prodUser');
+  });
+
+  it('updates SUNAT file paths for beta', async () => {
+    prisma.company.findUnique.mockResolvedValue({
+      id: 55,
+      organizationId: 5,
+    });
+    prisma.company.update.mockResolvedValue({
+      id: 55,
+      organizationId: 5,
+      sunatKeyPathBeta: 'uploads/sunat/55/beta/key-1.key',
+    } as any);
+
+    const result = await service.updateCompanySunatFile(55, {
+      tenant: baseTenant,
+      environment: 'BETA',
+      kind: 'key',
+      filePath: 'uploads/sunat/55/beta/key-1.key',
+      originalName: 'private.key',
+    });
+
+    expect(prisma.company.update).toHaveBeenCalledWith({
+      where: { id: 55 },
+      data: { sunatKeyPathBeta: 'uploads/sunat/55/beta/key-1.key' },
+    });
+    expect(result.sunatKeyPathBeta).toBe('uploads/sunat/55/beta/key-1.key');
+  });
+
+  it('updates SUNAT file paths for production cert', async () => {
+    prisma.company.findUnique.mockResolvedValue({
+      id: 56,
+      organizationId: 5,
+    });
+    prisma.company.update.mockResolvedValue({
+      id: 56,
+      organizationId: 5,
+      sunatCertPathProd: 'uploads/sunat/56/prod/cert.pem',
+    } as any);
+
+    const result = await service.updateCompanySunatFile(56, {
+      tenant: baseTenant,
+      environment: 'PROD',
+      kind: 'cert',
+      filePath: 'uploads/sunat/56/prod/cert.pem',
+      originalName: 'cert.pem',
+    });
+
+    expect(prisma.company.update).toHaveBeenCalledWith({
+      where: { id: 56 },
+      data: { sunatCertPathProd: 'uploads/sunat/56/prod/cert.pem' },
+    });
+    expect(result.sunatCertPathProd).toBe('uploads/sunat/56/prod/cert.pem');
   });
 });

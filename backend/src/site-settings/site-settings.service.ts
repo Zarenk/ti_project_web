@@ -277,9 +277,8 @@ export class SiteSettingsService {
     this.setCache(tenantKey, sanitized);
 
     if (organizationId !== null) {
-      const sanitizedPermissions = (
-        sanitized.data as Prisma.JsonObject
-      )?.permissions;
+      const sanitizedPermissions = (sanitized.data as Prisma.JsonObject)
+        ?.permissions;
       if (sanitizedPermissions && typeof sanitizedPermissions === 'object') {
         await this.propagatePermissionsToOrganization(
           organizationId,

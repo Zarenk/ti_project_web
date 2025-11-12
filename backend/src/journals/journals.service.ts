@@ -55,13 +55,11 @@ export class JournalsService {
       context.organizationId !== null
         ? { equals: context.organizationId }
         : context.allowedOrganizationIds.length > 0
-        ? { in: context.allowedOrganizationIds }
-        : undefined;
+          ? { in: context.allowedOrganizationIds }
+          : undefined;
 
     const companyFilter =
-      context.companyId !== null
-        ? { equals: context.companyId }
-        : undefined;
+      context.companyId !== null ? { equals: context.companyId } : undefined;
 
     return { organizationFilter, companyFilter };
   }
@@ -97,7 +95,8 @@ export class JournalsService {
   async findAll(context: TenantContext): Promise<Journal[]> {
     const start = startOfDay(new Date());
     const end = endOfDay(new Date());
-    const { organizationFilter, companyFilter } = this.buildTenantFilters(context);
+    const { organizationFilter, companyFilter } =
+      this.buildTenantFilters(context);
 
     const sharedFilters: Record<string, unknown> = {
       ...(organizationFilter ? { organizationId: organizationFilter } : {}),
@@ -125,7 +124,9 @@ export class JournalsService {
           ...(organizationFilter || companyFilter
             ? {
                 entry: {
-                  ...(organizationFilter ? { organizationId: organizationFilter } : {}),
+                  ...(organizationFilter
+                    ? { organizationId: organizationFilter }
+                    : {}),
                   ...(companyFilter
                     ? {
                         store: {

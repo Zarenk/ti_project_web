@@ -787,9 +787,7 @@ export class InventoryService {
       series: entry.series?.map((s) => s.serial) ?? [], // Extraer los números de serie
       responsibleId: entry.entry.user?.id ?? null,
       responsibleName:
-        entry.entry.user?.username ||
-        entry.entry.user?.email ||
-        null,
+        entry.entry.user?.username || entry.entry.user?.email || null,
     }));
   }
 
@@ -879,9 +877,7 @@ export class InventoryService {
       clientName: sale.sale.client?.name || 'Sin cliente',
       responsibleId: sale.sale.user?.id ?? null,
       responsibleName:
-        sale.sale.user?.username ||
-        sale.sale.user?.email ||
-        null,
+        sale.sale.user?.username || sale.sale.user?.email || null,
     }));
   }
 

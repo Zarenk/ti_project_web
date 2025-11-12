@@ -194,7 +194,11 @@ export class TenantContextService {
       user.organizationSuperAdminIds ?? [],
     );
 
-    const normalizedRole = (user.role ?? '').toString().toUpperCase();
+    const normalizedRole = (user.role ?? '')
+      .toString()
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '_');
     const explicitSuperAdmin = Boolean(user.isSuperAdmin);
     const isGlobalSuperAdmin =
       normalizedRole === 'SUPER_ADMIN_GLOBAL' ||
@@ -265,7 +269,7 @@ export class TenantContextService {
         ) {
           companyId = allowedCompanyIds.includes(companyId)
             ? companyId
-            : allowedCompanyIds[0] ?? null;
+            : (allowedCompanyIds[0] ?? null);
         }
       }
     }

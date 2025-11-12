@@ -23,6 +23,8 @@ export interface OrganizationSuperAdmin {
   email: string
 }
 
+export type SunatEnvironment = "BETA" | "PROD"
+
 export interface CompanyResponse {
   id: number
   organizationId: number
@@ -30,6 +32,16 @@ export interface CompanyResponse {
   legalName: string | null
   taxId: string | null
   status: string
+  sunatEnvironment: SunatEnvironment
+  sunatRuc: string | null
+  sunatSolUserBeta: string | null
+  sunatSolPasswordBeta: string | null
+  sunatCertPathBeta: string | null
+  sunatKeyPathBeta: string | null
+  sunatSolUserProd: string | null
+  sunatSolPasswordProd: string | null
+  sunatCertPathProd: string | null
+  sunatKeyPathProd: string | null
   createdAt: string
   updatedAt: string
 }
@@ -84,6 +96,53 @@ export interface UpdateCompanyPayload {
   legalName?: string | null
   taxId?: string | null
   status?: string
+  sunatEnvironment?: SunatEnvironment
+  sunatRuc?: string | null
+  sunatSolUserBeta?: string | null
+  sunatSolPasswordBeta?: string | null
+  sunatSolUserProd?: string | null
+  sunatSolPasswordProd?: string | null
+}
+
+export interface SunatTransmission {
+  id: number
+  companyId: number
+  organizationId: number | null
+  saleId: number | null
+  environment: SunatEnvironment
+  documentType: string
+  serie: string | null
+  correlativo: string | null
+  zipFilePath: string | null
+  ticket: string | null
+  status: string
+  response: unknown
+  errorMessage: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+function mapCompanyResponse(data: any): CompanyResponse {
+  return {
+    id: Number(data.id),
+    organizationId: Number(data.organizationId),
+    name: String(data.name ?? ""),
+    legalName: data.legalName ?? null,
+    taxId: data.taxId ?? null,
+    status: String(data.status ?? ""),
+    sunatEnvironment: (data.sunatEnvironment === "PROD" ? "PROD" : "BETA") as SunatEnvironment,
+    sunatRuc: data.sunatRuc ?? null,
+    sunatSolUserBeta: data.sunatSolUserBeta ?? null,
+    sunatSolPasswordBeta: data.sunatSolPasswordBeta ?? null,
+    sunatCertPathBeta: data.sunatCertPathBeta ?? null,
+    sunatKeyPathBeta: data.sunatKeyPathBeta ?? null,
+    sunatSolUserProd: data.sunatSolUserProd ?? null,
+    sunatSolPasswordProd: data.sunatSolPasswordProd ?? null,
+    sunatCertPathProd: data.sunatCertPathProd ?? null,
+    sunatKeyPathProd: data.sunatKeyPathProd ?? null,
+    createdAt: new Date(data.createdAt).toISOString(),
+    updatedAt: new Date(data.updatedAt).toISOString(),
+  }
 }
 
 export async function createOrganization(
@@ -450,16 +509,7 @@ export async function listOrganizationsWithCompanies(): Promise<OrganizationComp
     superAdmin: item.superAdmin ?? null,
     units: Array.isArray(item.units) ? item.units : [],
     companies: Array.isArray(item.companies)
-      ? item.companies.map((company: any) => ({
-          id: Number(company.id),
-          organizationId: Number(company.organizationId),
-          name: String(company.name ?? ""),
-          legalName: company.legalName ?? null,
-          taxId: company.taxId ?? null,
-          status: String(company.status ?? ""),
-          createdAt: new Date(company.createdAt).toISOString(),
-          updatedAt: new Date(company.updatedAt).toISOString(),
-        }))
+      ? item.companies.map((company: any) => mapCompanyResponse(company))
       : [],
   }))
 }
@@ -483,16 +533,10 @@ export async function getCompanyDetail(id: number): Promise<CompanyDetail | null
     throw new Error("No se pudo obtener la empresa")
   }
 
-  const data = (await response.json()) as CompanyDetail
+  const data = await response.json()
+  const normalized = mapCompanyResponse(data)
   return {
-    id: Number(data.id),
-    organizationId: Number(data.organizationId),
-    name: String(data.name ?? ""),
-    legalName: data.legalName ?? null,
-    taxId: data.taxId ?? null,
-    status: String(data.status ?? ""),
-    createdAt: new Date(data.createdAt).toISOString(),
-    updatedAt: new Date(data.updatedAt).toISOString(),
+    ...normalized,
     organization: {
       id: Number(data.organization.id),
       name: String(data.organization.name ?? ""),
@@ -533,6 +577,123 @@ export async function updateCompany(
     throw new Error(message)
   }
 
-  return data as CompanyResponse
+  return mapCompanyResponse(data)
+}
+
+export type SunatUploadEnv = "beta" | "prod"
+export type SunatUploadType = "cert" | "key"
+
+export async function uploadCompanySunatFile(
+  companyId: number,
+  params: { env: SunatUploadEnv; type: SunatUploadType; file: File },
+): Promise<CompanyResponse> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const formData = new FormData()
+  formData.append("file", params.file)
+
+  const uploadHeaders: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (value) {
+      uploadHeaders[key] = value
+    }
+  }
+  delete uploadHeaders["Content-Type"]
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/companies/${companyId}/sunat/upload?env=${params.env}&type=${params.type}`,
+    {
+      method: "POST",
+      headers: uploadHeaders,
+      body: formData,
+    },
+  )
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo subir el archivo"
+    throw new Error(message)
+  }
+
+  return mapCompanyResponse(data)
+}
+
+export async function getCompanySunatTransmissions(
+  id: number,
+): Promise<SunatTransmission[]> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/companies/${id}/sunat/transmissions`,
+    {
+      headers,
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    throw new Error("No se pudieron obtener los envios SUNAT")
+  }
+
+  const data = await response.json()
+  if (!Array.isArray(data)) {
+    return []
+  }
+
+  return data.map((item: any) => ({
+    id: Number(item.id),
+    companyId: Number(item.companyId),
+    organizationId: item.organizationId ? Number(item.organizationId) : null,
+    saleId: item.saleId ? Number(item.saleId) : null,
+    environment: (item.environment === "PROD" ? "PROD" : "BETA") as SunatEnvironment,
+    documentType: String(item.documentType ?? ""),
+    serie: item.serie ?? null,
+    correlativo: item.correlativo ?? null,
+    zipFilePath: item.zipFilePath ?? null,
+    ticket: item.ticket ?? null,
+    status: String(item.status ?? "PENDING"),
+    response: item.response ?? null,
+    errorMessage: item.errorMessage ?? null,
+    createdAt: new Date(item.createdAt).toISOString(),
+    updatedAt: new Date(item.updatedAt).toISOString(),
+  }))
+}
+
+export async function retrySunatTransmission(transmissionId: number) {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/sunat/transmissions/${transmissionId}/retry`,
+    {
+      method: "POST",
+      headers,
+    },
+  )
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    const message = typeof data === "object" && data && "message" in data ? (data as any).message : null
+    throw new Error(message || "No se pudo reintentar el envío")
+  }
+
+  return response.json().catch(() => ({}))
 }
 

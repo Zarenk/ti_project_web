@@ -115,13 +115,7 @@ export interface DashboardUser {
   createdAt: string;
 }
 
-export type UserRole =
-  | "SUPER_ADMIN_GLOBAL"
-  | "SUPER_ADMIN_ORG"
-  | "ADMIN"
-  | "EMPLOYEE"
-  | "CLIENT"
-  | "GUEST";
+export type UserRole = "ADMIN" | "EMPLOYEE";
 
 export async function getUsers(): Promise<DashboardUser[]> {
   const res = await authorizedFetch(`${BACKEND_URL}/api/users`, {
@@ -180,18 +174,25 @@ export async function updateUser(data: { email?: string; username?: string; pass
 
 export async function updateUserAdmin(
   userId: number,
-  payload: { role?: UserRole; status?: 'ACTIVO' | 'INACTIVO' },
+  payload: { role?: UserRole; status?: "ACTIVO" | "INACTIVO" },
+  organizationId?: number | null,
 ) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/users/${userId}/manage`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+  const headers = await getAuthHeaders();
+  headers["Content-Type"] = "application/json";
+  if (organizationId != null) {
+    headers["x-org-id"] = String(organizationId);
+  }
+
+  const res = await fetch(`${BACKEND_URL}/api/users/${userId}/manage`, {
+    method: "PATCH",
+    headers,
     body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => null);
-    throw new Error(errorData?.message || 'Error al actualizar usuario');
+    throw new Error(errorData?.message || "Error al actualizar usuario");
   }
 
-  return res.json() as Promise<DashboardUser>;
+  return (await res.json()) as DashboardUser;
 }

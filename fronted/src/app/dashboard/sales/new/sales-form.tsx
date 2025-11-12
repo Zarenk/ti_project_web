@@ -1,7 +1,6 @@
 "use client"
 
 import { Button } from '@/components/ui/button'
-import { DeleteActionsGuard } from '@/components/delete-actions-guard'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useForm } from 'react-hook-form'
@@ -1576,20 +1575,18 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   </div>
                                 </TableCell>
                                 <TableCell className="w-[44px] sm:w-[60px] py-1.5">
-                                  <DeleteActionsGuard>
-                                    <Button
-                                      variant="outline"
-                                      className="h-8 sm:h-9 px-1 cursor-pointer"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        removeProduct(product.id);
-                                      }}
-                                      onDoubleClick={(e) => e.stopPropagation()}
-                                      title="Eliminar este producto de la venta"
-                                    >
-                                      <X className="w-4 h-4" color="red" />
-                                    </Button>
-                                  </DeleteActionsGuard>
+                                  <Button
+                                    variant="outline"
+                                    className="h-8 sm:h-9 px-1 cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeProduct(product.id);
+                                    }}
+                                    onDoubleClick={(e) => e.stopPropagation()}
+                                    title="Eliminar este producto de la venta"
+                                  >
+                                    <X className="w-4 h-4" color="red" />
+                                  </Button>
                                 </TableCell>
                               </TableRow>
                             );

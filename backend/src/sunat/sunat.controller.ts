@@ -9,92 +9,99 @@ import {
   NotFoundException,
   UseInterceptors,
   UploadedFile,
+  UseGuards,
+  ParseIntPipe,
 } from '@nestjs/common';
-import { SunatService } from './sunat.service';
-import { Response } from 'express'; // ✅ Asegúrate de importar esto
+import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
+
+import { SunatService } from './sunat.service';
 import { resolveBackendPath } from 'src/utils/path-utils';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantContextGuard } from 'src/tenancy/tenant-context.guard';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { TenantContext } from 'src/tenancy/tenant-context.interface';
 
-function generarNombreUnico(destino: string, original: string): string {
-  const nombreSinExtension = path.parse(original).name;
-  const extension = path.extname(original);
-  let nombreFinal = original;
-  let contador = 1;
+const SUPPORTED_DOCUMENT_TYPES = ['invoice', 'boleta', 'creditNote'] as const;
+type SunatDocumentType = (typeof SUPPORTED_DOCUMENT_TYPES)[number];
 
-  while (fs.existsSync(path.join(destino, nombreFinal))) {
-    nombreFinal = `${nombreSinExtension}(${contador})${extension}`;
-    contador++;
-  }
-
-  return nombreFinal;
+interface SendDocumentBody {
+  documentType?: SunatDocumentType | string;
+  companyId?: number;
+  sunatEnvironment?: string;
+  privateKeyPath?: string;
+  certificatePath?: string;
+  [key: string]: unknown;
 }
 
+@UseGuards(JwtAuthGuard, TenantContextGuard)
 @Controller('sunat')
 export class SunatController {
   constructor(private readonly sunatService: SunatService) {}
 
-  /**
-   * Endpoint para enviar documentos a la SUNAT.
-   * @param data Datos del documento (factura, boleta, nota de crédito).
-   * @returns Respuesta de la SUNAT.
-   */
   @Post('send-document')
-  async sendDocument(@Body() data: any) {
-    if (!data) {
+  async sendDocument(
+    @Body() body: SendDocumentBody,
+    @CurrentTenant() tenant: TenantContext | null,
+  ) {
+    if (!body) {
       throw new BadRequestException(
-        'El cuerpo de la solicitud no puede estar vacío.',
+        'El cuerpo de la solicitud no puede estar vacio.',
       );
     }
 
     const {
       documentType,
-      privateKeyPath = 'certificates/private_key_pkcs8.pem',
-      certificatePath = 'certificates/certificate.crt',
+      companyId,
+      sunatEnvironment,
+      privateKeyPath,
+      certificatePath,
       ...documentData
-    } = data;
+    } = body;
 
-    // Validar que el tipo de documento sea válido
+    const normalizedType =
+      typeof documentType === 'string' ? documentType.trim() : '';
     if (
-      !documentType ||
-      !['invoice', 'boleta', 'creditNote'].includes(documentType)
+      !SUPPORTED_DOCUMENT_TYPES.includes(normalizedType as SunatDocumentType)
     ) {
       throw new BadRequestException(
         'Tipo de documento no soportado. Use "invoice", "boleta" o "creditNote".',
       );
     }
 
-    // Validar que las rutas de las claves y certificados sean proporcionadas
-    if (!privateKeyPath || !certificatePath) {
-      throw new BadRequestException(
-        'Las rutas de la clave privada y el certificado son obligatorias.',
-      );
-    }
+    const resolvedCompanyId = this.resolveCompanyId(companyId, tenant);
 
     try {
-      // Llamar al servicio para enviar el documento
-      const response = await this.sunatService.sendDocument(
+      const response = await this.sunatService.sendDocument({
         documentData,
-        documentType,
-        privateKeyPath,
-        certificatePath,
-      );
+        documentType: normalizedType as SunatDocumentType,
+        companyId: resolvedCompanyId,
+        privateKeyPathOverride:
+          typeof privateKeyPath === 'string' ? privateKeyPath : undefined,
+        certificatePathOverride:
+          typeof certificatePath === 'string' ? certificatePath : undefined,
+        environmentOverride:
+          typeof sunatEnvironment === 'string'
+            ? sunatEnvironment.toUpperCase()
+            : undefined,
+      });
 
       return {
         message: 'Documento enviado a la SUNAT exitosamente.',
         response,
       };
     } catch (error: any) {
-      console.error('Error al enviar el documento a la SUNAT:', error.message);
+      console.error('Error al enviar el documento a la SUNAT:', error?.message);
       throw new BadRequestException('Error al enviar el documento a la SUNAT.');
     }
   }
 
   @Post('generar-y-enviar')
-  async generarYEnviarDocumento(@Body() data: any) {
-    if (!data || !data.documentType) {
+  async generarYEnviarDocumento(@Body() data: { documentType?: string }) {
+    if (!data?.documentType) {
       throw new BadRequestException('El campo "documentType" es obligatorio.');
     }
 
@@ -103,13 +110,13 @@ export class SunatController {
         data.documentType,
       );
       return {
-        mensaje: 'Serie y numero correlativo generado correctamente...',
+        mensaje: 'Serie y numero correlativo generado correctamente.',
         respuesta,
       };
     } catch (error: any) {
       console.error('Error en el endpoint /sunat/generar-y-enviar:', error);
       throw new BadRequestException(
-        'Error al extrar la serie y el nro. correlativo...',
+        'Error al extraer la serie y el nro. correlativo.',
       );
     }
   }
@@ -118,30 +125,19 @@ export class SunatController {
   @UseInterceptors(
     FileInterceptor('pdf', {
       storage: diskStorage({
-        destination: (req, file, cb) => {
-          const nombre = file.originalname;
-
-          // Detectar tipo desde el nombre del archivo (ej: 20519857538-01-F001-007.pdf)
+        destination: (_req, file, cb) => {
+          const nombre = file.originalname ?? 'documento.pdf';
           const tipo = nombre.includes('-01-') ? 'factura' : 'boleta';
-
-          const dir = resolveBackendPath('comprobantes/pdf', tipo);
-
-          // Crear la carpeta si no existe
-          if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-          }
-
+          const dir = resolveBackendPath('comprobantes', 'pdf', tipo);
+          fs.mkdirSync(dir, { recursive: true });
           cb(null, dir);
         },
-        filename: (req, file, cb) => {
-          const nombre = file.originalname;
-          const tipo = nombre.includes('-01-') ? 'factura' : 'boleta';
-          const dir = resolveBackendPath('comprobantes/pdf', tipo);
-          // Mantener el nombre original para que coincida con {ruc}-{tipo}-{serie}-{correlativo}.pdf
+        filename: (_req, file, cb) => {
+          const nombre = file.originalname ?? 'documento.pdf';
           cb(null, nombre);
         },
       }),
-      fileFilter: (req, file, cb) => {
+      fileFilter: (_req, file, cb) => {
         if (!file.mimetype.includes('pdf')) {
           return cb(
             new BadRequestException('Solo se permiten archivos PDF.'),
@@ -154,7 +150,7 @@ export class SunatController {
   )
   async uploadPdf(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException('No se subió ningún archivo PDF.');
+      throw new BadRequestException('No se subio ningun archivo PDF.');
     }
 
     return {
@@ -174,7 +170,43 @@ export class SunatController {
       res.setHeader('Content-Type', 'application/pdf');
       res.sendFile(filePath);
     } catch (error: any) {
-      throw new NotFoundException(error.message);
+      throw new NotFoundException(error?.message ?? 'Archivo no encontrado');
     }
+  }
+
+  @Post('transmissions/:id/retry')
+  async retryTransmission(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentTenant() tenant: TenantContext | null,
+  ) {
+    const response = await this.sunatService.retryTransmission(
+      id,
+      tenant ?? null,
+    );
+    return {
+      message: 'Reintento iniciado.',
+      response,
+    };
+  }
+
+  private resolveCompanyId(
+    input: unknown,
+    tenant: TenantContext | null,
+  ): number {
+    if (typeof input === 'number' && Number.isFinite(input)) {
+      return input;
+    }
+    if (typeof input === 'string' && input.trim().length > 0) {
+      const parsed = Number(input);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    if (tenant?.companyId && Number.isFinite(tenant.companyId)) {
+      return tenant.companyId;
+    }
+    throw new BadRequestException(
+      'Debes indicar una empresa valida para enviar documentos a la SUNAT.',
+    );
   }
 }

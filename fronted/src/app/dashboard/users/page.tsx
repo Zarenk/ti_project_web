@@ -15,7 +15,7 @@ type UsersState = {
 };
 
 export default function UsersPage(): React.ReactElement {
-  const { version } = useTenantSelection();
+  const { version, selection } = useTenantSelection();
   const { role } = useAuth();
   const [{ data, loading, error }, setState] = useState<UsersState>({
     data: [],
@@ -102,6 +102,7 @@ export default function UsersPage(): React.ReactElement {
               data={filteredUsers}
               canManageUsers={canManageUsers}
               isGlobalSuperAdmin={isGlobalSuperAdmin}
+              organizationId={selection.orgId}
               onUserUpdated={handleUserUpdated}
             />
           )}

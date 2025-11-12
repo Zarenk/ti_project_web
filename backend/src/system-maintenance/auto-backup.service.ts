@@ -21,13 +21,15 @@ type AutoBackupFrequency =
   | 'biweekly'
   | 'monthly';
 
-const FREQUENCY_TO_MS: Record<Exclude<AutoBackupFrequency, 'manual'>, number> =
-  {
-    daily: 24 * 60 * 60 * 1000,
-    weekly: 7 * 24 * 60 * 60 * 1000,
-    biweekly: 15 * 24 * 60 * 60 * 1000,
-    monthly: 30 * 24 * 60 * 60 * 1000,
-  };
+const FREQUENCY_TO_MS: Record<
+  Exclude<AutoBackupFrequency, 'manual'>,
+  number
+> = {
+  daily: 24 * 60 * 60 * 1000,
+  weekly: 7 * 24 * 60 * 60 * 1000,
+  biweekly: 15 * 24 * 60 * 60 * 1000,
+  monthly: 30 * 24 * 60 * 60 * 1000,
+};
 
 @Injectable()
 export class AutoBackupService implements OnModuleInit, OnModuleDestroy {
@@ -183,13 +185,13 @@ export class AutoBackupService implements OnModuleInit, OnModuleDestroy {
       return { autoBackupFrequency: 'manual', lastAutoBackupAt: null };
     }
 
-    const system = data.system;
-    if (!this.isJsonObject(system)) {
+    const rawSystem = data?.['system'];
+    if (!this.isJsonObject(rawSystem)) {
       return { autoBackupFrequency: 'manual', lastAutoBackupAt: null };
     }
 
-    const rawFrequency = system.autoBackupFrequency;
-    const rawLast = system.lastAutoBackupAt;
+    const rawFrequency = rawSystem.autoBackupFrequency;
+    const rawLast = rawSystem.lastAutoBackupAt;
 
     const frequency: AutoBackupFrequency =
       rawFrequency === 'daily' ||
@@ -214,8 +216,9 @@ export class AutoBackupService implements OnModuleInit, OnModuleDestroy {
       ? { ...originalData }
       : {};
 
-    const system: Prisma.JsonObject = this.isJsonObject(baseObject.system)
-      ? { ...(baseObject.system as Prisma.JsonObject) }
+    const rawSystem = baseObject?.['system'];
+    const system: Prisma.JsonObject = this.isJsonObject(rawSystem)
+      ? { ...rawSystem }
       : {};
 
     const currentFrequency =
@@ -240,7 +243,9 @@ export class AutoBackupService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private isJsonObject(value: Prisma.JsonValue): value is Prisma.JsonObject {
+  private isJsonObject(
+    value: Prisma.JsonValue | undefined,
+  ): value is Prisma.JsonObject {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 }

@@ -23,6 +23,7 @@ import { CreateManagedUserDto } from './dto/create-managed-user.dto';
 import { UserRole } from '@prisma/client';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
+import { TenantContextGuard } from 'src/tenancy/tenant-context.guard';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
 @Controller('users')
@@ -118,10 +119,7 @@ export class UsersController {
     @Query('search') search?: string,
     @CurrentTenant('organizationId') organizationId?: number | null,
   ) {
-    return this.usersService.findAll(
-      search,
-      organizationId ?? undefined,
-    );
+    return this.usersService.findAll(search, organizationId ?? undefined);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -140,7 +138,7 @@ export class UsersController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TenantContextGuard)
   @Patch(':id/manage')
   async updateUserByAdmin(
     @Param('id', ParseIntPipe) userId: number,
@@ -148,11 +146,19 @@ export class UsersController {
     @CurrentTenant() tenant: TenantContext | null,
     @Request() req,
   ) {
-    const normalizedRole = req.user?.role?.toUpperCase?.() ?? '';
+    const normalizedRole = (req.user?.role ?? '')
+      .toString()
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '_');
     const isGlobal =
-      tenant?.isGlobalSuperAdmin ?? normalizedRole === 'SUPER_ADMIN_GLOBAL';
+      (tenant?.isGlobalSuperAdmin ?? false) ||
+      normalizedRole === 'SUPER_ADMIN_GLOBAL' ||
+      normalizedRole === 'SUPER_ADMIN';
     const isOrg =
-      tenant?.isOrganizationSuperAdmin ?? normalizedRole === 'SUPER_ADMIN_ORG';
+      (tenant?.isOrganizationSuperAdmin ?? false) ||
+      normalizedRole === 'SUPER_ADMIN_ORG' ||
+      normalizedRole === 'SUPER_ADMIN';
 
     if (!isGlobal && !isOrg) {
       throw new ForbiddenException(

@@ -276,11 +276,13 @@ export function UsersDataTable({
   data,
   canManageUsers,
   isGlobalSuperAdmin,
+  organizationId,
   onUserUpdated,
 }: {
   data: UserRow[];
   canManageUsers: boolean;
   isGlobalSuperAdmin: boolean;
+  organizationId: number | null;
   onUserUpdated: (user: DashboardUser) => void;
 }) {
   const columns = React.useMemo(
@@ -288,9 +290,10 @@ export function UsersDataTable({
       buildUserColumns({
         canManageUsers,
         isGlobalSuperAdmin,
+        organizationId,
         onUserUpdated,
       }),
-    [canManageUsers, isGlobalSuperAdmin, onUserUpdated],
+    [canManageUsers, isGlobalSuperAdmin, organizationId, onUserUpdated],
   );
 
   return <DataTable columns={columns} data={data} />;

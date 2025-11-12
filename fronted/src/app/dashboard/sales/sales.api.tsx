@@ -554,6 +554,25 @@ export async function getProductSalesReport(
   return res.json();
 }
 
+export async function getProductReportOptions() {
+  const headers = await getAuthHeaders();
+  if (!('Authorization' in headers)) {
+    throw new Error('No se encontro un token de autenticacion');
+  }
+
+  const res = await fetch(`${BACKEND_URL}/api/sales/product-report-options`, {
+    headers,
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    throw new Error(`Error al obtener productos: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
 export async function getRecentSalesByRange(from: string, to: string) {
   const headers = await getAuthHeaders()
   if (!('Authorization' in headers)) {

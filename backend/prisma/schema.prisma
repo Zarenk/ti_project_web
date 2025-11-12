@@ -247,6 +247,7 @@ model Organization {
   entrySeries  EntryDetailSeries[]
   catalogCover CatalogCover[]
   siteSettings SiteSettings[]
+  sunatTransmissions SunatTransmission[]
 
   @@unique([name])
   @@index([status])
@@ -259,6 +260,16 @@ model Company {
   legalName      String?
   taxId          String?       @unique
   status         String        @default("ACTIVE")
+  sunatEnvironment     String        @default("BETA")
+  sunatRuc             String?
+  sunatSolUserBeta     String?
+  sunatSolPasswordBeta String?
+  sunatCertPathBeta    String?
+  sunatKeyPathBeta     String?
+  sunatSolUserProd     String?
+  sunatSolPasswordProd String?
+  sunatCertPathProd    String?
+  sunatKeyPathProd     String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -274,9 +285,37 @@ model Company {
   accEntries         AccEntry[]
   catalogCover CatalogCover[]
   siteSettings SiteSettings[]
+  sunatTransmissions SunatTransmission[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
+}
+
+model SunatTransmission {
+  id             Int      @id @default(autoincrement())
+  companyId      Int
+  organizationId Int?
+  saleId         Int?
+  environment    String   @default("BETA")
+  documentType   String
+  serie          String?
+  correlativo    String?
+  zipFilePath    String?
+  ticket         String?
+  status         String   @default("PENDING")
+  response       Json?
+  payload        Json?
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  sale         Sales?        @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status])
+  @@index([organizationId])
+  @@index([saleId])
 }
 
 model OrganizationUnit {
@@ -628,9 +667,10 @@ model Sales {
   salesDetails   SalesDetail[] // Relación con los detalles de la venta
   invoices       InvoiceSales[] // Relación con las facturas de venta
   payments       SalePayment[] // 👈 Relación con tabla intermedia
-  shippingGuides ShippingGuide[]
-  order          Orders?
-  company        Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  shippingGuides     ShippingGuide[]
+  order              Orders?
+  company            Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  sunatTransmissions SunatTransmission[]
 
   @@index([userId])
   @@index([storeId])

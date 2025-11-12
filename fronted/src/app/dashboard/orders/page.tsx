@@ -11,6 +11,25 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 
+const normalizeOrderSunatStatus = (value: any) => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const statusRaw = typeof value.status === "string" ? value.status.trim() : "";
+  if (!statusRaw) {
+    return null;
+  }
+
+  return {
+    status: statusRaw.toUpperCase(),
+    ticket: value.ticket ?? null,
+    environment: typeof value.environment === "string" ? value.environment : null,
+    errorMessage: value.errorMessage ?? null,
+    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : value.updated_at ?? null,
+  };
+};
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,6 +100,7 @@ export default function OrdersPage() {
             carrierName: o.carrierName ?? undefined,
             carrierId: o.carrierId ?? undefined,
             carrierMode: o.carrierMode ?? undefined,
+            sunatStatus: normalizeOrderSunatStatus(o.sunatStatus ?? o.sunat_status ?? null),
           };
         });
         setOrders(mapped);
