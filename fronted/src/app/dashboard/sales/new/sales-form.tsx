@@ -37,6 +37,7 @@ import { pdf } from '@react-pdf/renderer';
 import { PaymentMethodsModal } from '../components/PaymentMethodsSelector'
 import { ProductDetailModal } from '../components/ProductDetailModal'
 import { useTenantSelection } from '@/context/tenant-selection-context'
+import { getCompanyDetail, type CompanyDetail } from '../../tenancy/tenancy.api'
 // @ts-ignore
 const Numalet = require('numalet');
 
@@ -123,7 +124,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   useEffect(() => {
     form.reset(initialValues);
   }, [form, initialValues]);
-  const { version } = useTenantSelection();
+  const { selection, version } = useTenantSelection();
 
   // Extraer funciones y estados del formulario
   const { handleSubmit, register, setValue, formState: {errors} } = form;
@@ -192,6 +193,8 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   const [value, setValueProduct] = React.useState("")
   // Estado para manejar la tienda seleccionada
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
+  const [activeCompany, setActiveCompany] = useState<CompanyDetail | null>(null);
+  const [isCompanyLoading, setIsCompanyLoading] = useState(false);
 
   // Estado para los productos
   const [products, setProducts] = useState<
@@ -316,6 +319,41 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
       cancelled = true;
     };
   }, [version]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadActiveCompany() {
+      if (!selection?.companyId) {
+        setActiveCompany(null);
+        setIsCompanyLoading(false);
+        return;
+      }
+
+      setIsCompanyLoading(true);
+      try {
+        const details = await getCompanyDetail(selection.companyId);
+        if (!cancelled) {
+          setActiveCompany(details);
+        }
+      } catch (error) {
+        console.error("Error al obtener la empresa seleccionada:", error);
+        if (!cancelled) {
+          setActiveCompany(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsCompanyLoading(false);
+        }
+      }
+    }
+
+    loadActiveCompany();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selection?.companyId, version]);
 
   const getCommandValue = (raw: unknown) =>
     typeof raw === "string" ? raw.trim() : raw != null ? String(raw) : "";
@@ -525,8 +563,25 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
         if(data.tipoComprobante != "SIN COMPROBANTE"){
           // Llamar al endpoint para enviar la factura a la SUNAT
+          const emitterBusinessName =
+            activeCompany?.sunatBusinessName?.trim() ||
+            activeCompany?.legalName?.trim() ||
+            activeCompany?.name?.trim() ||
+            data.store_name;
+
+          const emitterAddress =
+            activeCompany?.sunatAddress?.trim() || data.store_adress || "";
+
+          const emitterPhone = activeCompany?.sunatPhone?.trim() || null;
+
+          const emitterRuc =
+            activeCompany?.sunatRuc?.trim() ||
+            activeCompany?.taxId?.trim() ||
+            "";
+
           const invoicePayload = {
             saleId: createdSale.id,
+            companyId: activeCompany?.id ?? selection?.companyId ?? null,
             serie: serieInvoice,
             correlativo: correlativoInvoice,
             documentType: comprobante,
@@ -539,12 +594,14 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
               dni: data.client_typeNumber,
               nombre: data.client_name,
               tipoDocumento: tipoDocumentoFormatted,
-            },
-            emisor: {
-              razonSocial: data.store_name,
-              adress: data.store_adress,
-              ruc: 20519857538,
-            },
+              },
+              emisor: {
+                razonSocial: emitterBusinessName,
+                address: emitterAddress,
+                adress: emitterAddress,
+                phone: emitterPhone,
+                ruc: emitterRuc,
+              },
             items: selectedProducts.map((product) => ({
               cantidad: Number(product.quantity),
               descripcion: product.name,

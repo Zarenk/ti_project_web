@@ -11,11 +11,77 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import type { CompanyDetail, SunatEnvironment, SunatTransmission, UpdateCompanyPayload } from "../../../tenancy.api";
-import { getCompanySunatTransmissions, retrySunatTransmission, updateCompany, uploadCompanySunatFile } from "../../../tenancy.api";
+import type {
+  CompanyDetail,
+  SunatEnvironment,
+  SunatStoredPdf,
+  SunatTransmission,
+  UpdateCompanyPayload,
+} from "../../../tenancy.api";
+import {
+  getCompanySunatTransmissions,
+  getSunatStoredPdfs,
+  retrySunatTransmission,
+  updateCompany,
+  uploadCompanySunatFile,
+} from "../../../tenancy.api";
 import { useEffect } from "react";
-import { Send } from "lucide-react";
+import { Download, Send } from "lucide-react";
 import { setTenantSelection } from "@/utils/tenant-preferences";
+import { BACKEND_URL } from "@/lib/utils";
+
+const MAX_NAME_LENGTH = 200;
+const RUC_MAX_LENGTH = 11;
+const NAME_FIELDS = ["name", "legalName", "sunatBusinessName"] as const;
+
+type NameField = (typeof NAME_FIELDS)[number];
+type FieldErrors = Partial<Record<keyof UpdateCompanyPayload, string | null>>;
+
+const validateCompanyForm = (state: UpdateCompanyPayload): FieldErrors => {
+  const errors: FieldErrors = {};
+  const nameRegistry: Record<string, NameField> = {};
+
+  NAME_FIELDS.forEach((field) => {
+    const raw = state[field] ?? "";
+    const trimmed = raw.trim();
+    if (trimmed.length > MAX_NAME_LENGTH) {
+      errors[field] = `Máximo ${MAX_NAME_LENGTH} caracteres.`;
+      return;
+    }
+    if (!trimmed) {
+      return;
+    }
+    const normalized = trimmed.toLocaleLowerCase();
+    const duplicatedField = nameRegistry[normalized];
+    if (duplicatedField) {
+      errors[field] = "Este nombre ya está en uso.";
+      if (!errors[duplicatedField]) {
+        errors[duplicatedField] = "Este nombre ya está en uso.";
+      }
+      return;
+    }
+    nameRegistry[normalized] = field;
+  });
+
+  const validateRuc = (value: string | null | undefined, field: "taxId" | "sunatRuc") => {
+    const trimmed = (value ?? "").trim();
+    if (!trimmed) {
+      errors[field] = "El RUC es obligatorio.";
+      return;
+    }
+    if (!/^\d{11}$/.test(trimmed)) {
+      errors[field] = "El RUC debe tener 11 dígitos numéricos.";
+    }
+  };
+
+  validateRuc(state.taxId, "taxId");
+  validateRuc(state.sunatRuc, "sunatRuc");
+
+  return errors;
+};
+
+const getErrorMessage = (error: unknown): string | undefined =>
+  error instanceof Error ? error.message : undefined;
 
 interface CompanyEditFormProps {
   company: CompanyDetail;
@@ -27,18 +93,23 @@ export function CompanyEditForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [formState, setFormState] = useState<UpdateCompanyPayload>({
+  const createInitialFormState = (): UpdateCompanyPayload => ({
     name: company.name,
     legalName: company.legalName ?? "",
     taxId: company.taxId ?? "",
     status: company.status ?? "ACTIVE",
     sunatEnvironment: (company.sunatEnvironment ?? "BETA") as SunatEnvironment,
     sunatRuc: company.sunatRuc ?? "",
+    sunatBusinessName: company.sunatBusinessName ?? "",
+    sunatAddress: company.sunatAddress ?? "",
+    sunatPhone: company.sunatPhone ?? "",
     sunatSolUserBeta: company.sunatSolUserBeta ?? "",
     sunatSolPasswordBeta: company.sunatSolPasswordBeta ?? "",
     sunatSolUserProd: company.sunatSolUserProd ?? "",
     sunatSolPasswordProd: company.sunatSolPasswordProd ?? "",
   });
+
+  const [formState, setFormState] = useState<UpdateCompanyPayload>(createInitialFormState);
   const [sunatPaths, setSunatPaths] = useState({
     betaCert: company.sunatCertPathBeta ?? null,
     betaKey: company.sunatKeyPathBeta ?? null,
@@ -48,7 +119,21 @@ export function CompanyEditForm({
   const [uploadingTarget, setUploadingTarget] = useState<string | null>(null);
   const [sunatLogs, setSunatLogs] = useState<SunatTransmission[]>([]);
   const [sunatLogsLoading, setSunatLogsLoading] = useState(true);
+  const [sunatPdfs, setSunatPdfs] = useState<SunatStoredPdf[]>([]);
+  const [sunatPdfsLoading, setSunatPdfsLoading] = useState(true);
   const [retryingId, setRetryingId] = useState<number | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>(() => validateCompanyForm(createInitialFormState()));
+
+  const updateFormState = useCallback(
+    (updater: (prev: UpdateCompanyPayload) => UpdateCompanyPayload) => {
+      setFormState((prev) => {
+        const nextState = updater(prev);
+        setFieldErrors(validateCompanyForm(nextState));
+        return nextState;
+      });
+    },
+    [],
+  );
 
   const fetchSunatLogs = useCallback(async () => {
     setSunatLogsLoading(true);
@@ -69,17 +154,55 @@ export function CompanyEditForm({
     fetchSunatLogs();
   }, [fetchSunatLogs]);
 
-  const handleChange = (field: keyof UpdateCompanyPayload) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    setFormState((prev) => ({
+  const fetchSunatPdfs = useCallback(async () => {
+    setSunatPdfsLoading(true);
+    try {
+      const list = await getSunatStoredPdfs();
+      setSunatPdfs(list.filter((item) => item.companyId === company.id));
+    } catch (error) {
+      console.error("No se pudieron cargar los PDF almacenados", error);
+      toast.error("No se pudieron cargar los PDF almacenados");
+      setSunatPdfs([]);
+    } finally {
+      setSunatPdfsLoading(false);
+    }
+  }, [company.id]);
+
+  useEffect(() => {
+    fetchSunatPdfs();
+  }, [fetchSunatPdfs]);
+
+  const handleBasicChange =
+    (field: keyof UpdateCompanyPayload) => (event: React.ChangeEvent<HTMLInputElement>) => {
+      const value = event.target.value;
+      updateFormState((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+    };
+
+  const handleLimitedTextChange =
+    (field: NameField) => (event: React.ChangeEvent<HTMLInputElement>) => {
+      const limited = event.target.value.slice(0, MAX_NAME_LENGTH);
+      updateFormState((prev) => ({
+        ...prev,
+        [field]: limited,
+      }));
+    };
+
+  const handleRucChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = event.target.value.replace(/\D/g, "").slice(0, RUC_MAX_LENGTH);
+    updateFormState((prev) => ({
       ...prev,
-      [field]: event.target.value,
+      taxId: digits,
+      sunatRuc: digits,
     }));
   };
 
   const environmentValue = (formState.sunatEnvironment ?? "BETA") as SunatEnvironment;
 
   const handleEnvironmentChange = (value: SunatEnvironment) => {
-    setFormState((prev) => ({
+    updateFormState((prev) => ({
       ...prev,
       sunatEnvironment: value,
     }));
@@ -126,8 +249,10 @@ export function CompanyEditForm({
         });
         toast.success("Archivo SUNAT actualizado correctamente.");
         fetchSunatLogs();
-      } catch (error: any) {
-        toast.error(error?.message ?? "No se pudo subir el archivo.");
+        fetchSunatPdfs();
+      } catch (error: unknown) {
+        const message = getErrorMessage(error);
+        toast.error(message ?? "No se pudo subir el archivo.");
       } finally {
         setUploadingTarget(null);
         target.value = "";
@@ -142,8 +267,9 @@ export function CompanyEditForm({
       await retrySunatTransmission(transmissionId);
       toast.success("Reintento iniciado.");
       fetchSunatLogs();
-    } catch (error: any) {
-      toast.error(error?.message || "No se pudo reintentar el envío.");
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      toast.error(message || "No se pudo reintentar el envío.");
     } finally {
       setRetryingId(null);
     }
@@ -151,6 +277,13 @@ export function CompanyEditForm({
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const submissionErrors = validateCompanyForm(formState);
+    setFieldErrors(submissionErrors);
+    const hasErrors = Object.values(submissionErrors).some((value) => Boolean(value));
+    if (hasErrors) {
+      toast.error("Corrige los campos marcados antes de guardar.");
+      return;
+    }
     startTransition(async () => {
       try {
         await updateCompany(company.id, {
@@ -160,6 +293,9 @@ export function CompanyEditForm({
           legalName: sanitize(formState.legalName),
           taxId: sanitize(formState.taxId),
           sunatRuc: sanitize(formState.sunatRuc),
+          sunatBusinessName: sanitize(formState.sunatBusinessName),
+          sunatAddress: sanitize(formState.sunatAddress),
+          sunatPhone: sanitize(formState.sunatPhone),
           sunatSolUserBeta: sanitize(formState.sunatSolUserBeta),
           sunatSolPasswordBeta: sanitize(formState.sunatSolPasswordBeta),
           sunatSolUserProd: sanitize(formState.sunatSolUserProd),
@@ -172,10 +308,9 @@ export function CompanyEditForm({
         toast.success("Empresa actualizada correctamente.");
         router.push("/dashboard/tenancy/companies");
         router.refresh();
-      } catch (error: any) {
-        toast.error(
-          error?.message ?? "No se pudo actualizar la empresa. Inténtalo nuevamente.",
-        );
+      } catch (error: unknown) {
+        const message = getErrorMessage(error);
+        toast.error(message ?? "No se pudo actualizar la empresa. Inténtalo nuevamente.");
       }
     });
   };
@@ -196,48 +331,67 @@ export function CompanyEditForm({
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-6">
-          <section className="space-y-4">
-            <div className="grid gap-2">
+          <section className="space-y-5">
+            <div className="space-y-1.5">
               <Label htmlFor="company-name">Nombre comercial</Label>
               <Input
                 id="company-name"
                 value={formState.name ?? ""}
-                onChange={handleChange("name")}
+                onChange={handleLimitedTextChange("name")}
+                maxLength={MAX_NAME_LENGTH}
+                aria-invalid={Boolean(fieldErrors.name)}
                 required
                 placeholder="Mi Empresa S.A."
                 disabled={isPending}
               />
+              {fieldErrors.name ? (
+                <p className="text-xs text-destructive">{fieldErrors.name}</p>
+              ) : null}
             </div>
-            <div className="grid gap-2">
+            <div className="space-y-1.5">
               <Label htmlFor="company-legal-name">Razón social</Label>
               <Input
                 id="company-legal-name"
                 value={formState.legalName ?? ""}
-                onChange={handleChange("legalName")}
+                onChange={handleLimitedTextChange("legalName")}
+                maxLength={MAX_NAME_LENGTH}
+                aria-invalid={Boolean(fieldErrors.legalName)}
                 placeholder="Mi Empresa Sociedad Anónima"
                 disabled={isPending}
               />
+              {fieldErrors.legalName ? (
+                <p className="text-xs text-destructive">{fieldErrors.legalName}</p>
+              ) : null}
             </div>
-            <div className="grid gap-2">
+            <div className="space-y-1.5">
               <Label htmlFor="company-tax-id">RUC / NIT</Label>
               <Input
                 id="company-tax-id"
                 value={formState.taxId ?? ""}
-                onChange={handleChange("taxId")}
+                onChange={handleRucChange}
+                inputMode="numeric"
+                pattern="\\d{11}"
+                maxLength={RUC_MAX_LENGTH}
+                aria-invalid={Boolean(fieldErrors.taxId)}
                 placeholder="Ingrese el número de identificación fiscal"
                 disabled={isPending}
               />
+              {fieldErrors.taxId ? (
+                <p className="text-xs text-destructive">{fieldErrors.taxId}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Debe contener 11 dígitos numéricos.</p>
+              )}
             </div>
           </section>
 
           <Separator />
 
-          <section className="grid gap-2">
+          <section className="space-y-1.5">
             <Label htmlFor="company-status">Estado</Label>
             <Input
               id="company-status"
               value={formState.status ?? ""}
-              onChange={handleChange("status")}
+              onChange={handleBasicChange("status")}
               placeholder="ACTIVE"
               disabled={isPending}
             />
@@ -245,34 +399,77 @@ export function CompanyEditForm({
 
           <Separator />
 
-          <section className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Ambiente SUNAT activo</Label>
-                <Select
-                  value={environmentValue}
-                  onValueChange={(value) => handleEnvironmentChange(value as SunatEnvironment)}
-                  disabled={isPending}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona un ambiente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="BETA">BETA (Pruebas)</SelectItem>
-                    <SelectItem value="PROD">PROD (Producción)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sunat-ruc">RUC utilizado para SUNAT</Label>
-                <Input
-                  id="sunat-ruc"
-                  value={formState.sunatRuc ?? ""}
-                  onChange={handleChange("sunatRuc")}
-                  placeholder="20123456789"
-                  disabled={isPending}
-                />
-              </div>
+          <section className="space-y-5">
+            <div className="space-y-1.5">
+              <Label>Ambiente SUNAT activo</Label>
+              <Select
+                value={environmentValue}
+                onValueChange={(value) => handleEnvironmentChange(value as SunatEnvironment)}
+                disabled={isPending}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un ambiente" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BETA">BETA (Pruebas)</SelectItem>
+                  <SelectItem value="PROD">PROD (Producción)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sunat-ruc">RUC utilizado para SUNAT</Label>
+              <Input
+                id="sunat-ruc"
+                value={formState.sunatRuc ?? ""}
+                onChange={handleRucChange}
+                inputMode="numeric"
+                pattern="\\d{11}"
+                maxLength={RUC_MAX_LENGTH}
+                aria-invalid={Boolean(fieldErrors.sunatRuc)}
+                placeholder="20123456789"
+                disabled={isPending}
+              />
+              {fieldErrors.sunatRuc ? (
+                <p className="text-xs text-destructive">{fieldErrors.sunatRuc}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Se sincroniza automáticamente con el RUC principal.</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="sunat-business-name">Nombre de la empresa en comprobante</Label>
+              <Input
+                id="sunat-business-name"
+                value={formState.sunatBusinessName ?? ""}
+                onChange={handleLimitedTextChange("sunatBusinessName")}
+                maxLength={MAX_NAME_LENGTH}
+                aria-invalid={Boolean(fieldErrors.sunatBusinessName)}
+                placeholder="Ej. Tecnología Informática EIRL"
+                disabled={isPending}
+              />
+              {fieldErrors.sunatBusinessName ? (
+                <p className="text-xs text-destructive">{fieldErrors.sunatBusinessName}</p>
+              ) : null}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sunat-address">Dirección fiscal para comprobante</Label>
+              <Input
+                id="sunat-address"
+                value={formState.sunatAddress ?? ""}
+                onChange={handleBasicChange("sunatAddress")}
+                placeholder="Av. Principal 123 - Distrito"
+                disabled={isPending}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sunat-phone">Teléfono</Label>
+              <Input
+                id="sunat-phone"
+                value={formState.sunatPhone ?? ""}
+                onChange={handleBasicChange("sunatPhone")}
+                placeholder="+51 999 999 999"
+                disabled={isPending}
+              />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -289,7 +486,7 @@ export function CompanyEditForm({
                     <Input
                       id="sunat-beta-user"
                       value={formState.sunatSolUserBeta ?? ""}
-                      onChange={handleChange("sunatSolUserBeta")}
+                      onChange={handleBasicChange("sunatSolUserBeta")}
                       placeholder="MODDATOS"
                       disabled={isPending}
                     />
@@ -300,7 +497,7 @@ export function CompanyEditForm({
                       id="sunat-beta-password"
                       type="password"
                       value={formState.sunatSolPasswordBeta ?? ""}
-                      onChange={handleChange("sunatSolPasswordBeta")}
+                      onChange={handleBasicChange("sunatSolPasswordBeta")}
                       placeholder="********"
                       disabled={isPending}
                     />
@@ -347,7 +544,7 @@ export function CompanyEditForm({
                     <Input
                       id="sunat-prod-user"
                       value={formState.sunatSolUserProd ?? ""}
-                      onChange={handleChange("sunatSolUserProd")}
+                      onChange={handleBasicChange("sunatSolUserProd")}
                       placeholder="EMPRESA1"
                       disabled={isPending}
                     />
@@ -358,7 +555,7 @@ export function CompanyEditForm({
                       id="sunat-prod-password"
                       type="password"
                       value={formState.sunatSolPasswordProd ?? ""}
-                      onChange={handleChange("sunatSolPasswordProd")}
+                      onChange={handleBasicChange("sunatSolPasswordProd")}
                       placeholder="********"
                       disabled={isPending}
                     />
@@ -463,6 +660,58 @@ export function CompanyEditForm({
               )}
             </div>
           </section>
+        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base">PDF almacenados</CardTitle>
+            </div>
+            <p className="text-xs text-muted-foreground">Archivos PDF registrados para los comprobantes de esta empresa.</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700">
+            {sunatPdfsLoading ? (
+              <div className="p-4 text-sm text-muted-foreground">Cargando PDFs...</div>
+            ) : sunatPdfs.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">
+                Aún no se registran PDFs para esta empresa.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-muted/50 text-left">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Tipo</th>
+                      <th className="px-3 py-2 font-medium">Archivo</th>
+                      <th className="px-3 py-2 font-medium">Fecha</th>
+                      <th className="px-3 py-2 font-medium text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {sunatPdfs.map((pdf) => {
+                      const downloadUrl = `${BACKEND_URL}/api/sunat/pdf/${encodeURIComponent(pdf.type)}/${encodeURIComponent(pdf.filename)}`;
+                      return (
+                        <tr key={pdf.id}>
+                          <td className="px-3 py-2 capitalize">{pdf.type}</td>
+                          <td className="px-3 py-2 break-all">{pdf.filename}</td>
+                          <td className="px-3 py-2">
+                            {new Date(pdf.createdAt).toLocaleString("es-PE", { hour12: false })}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <Button asChild variant="outline" size="sm">
+                              <a href={downloadUrl} target="_blank" rel="noreferrer">
+                                <Download className="h-4 w-4 mr-2" />
+                                Descargar
+                              </a>
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
         </CardContent>
         <CardFooter className="flex flex-wrap gap-3 pt-6">
           <Button

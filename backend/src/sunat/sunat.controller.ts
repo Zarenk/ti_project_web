@@ -125,16 +125,15 @@ export class SunatController {
   @UseInterceptors(
     FileInterceptor('pdf', {
       storage: diskStorage({
-        destination: (_req, file, cb) => {
-          const nombre = file.originalname ?? 'documento.pdf';
-          const tipo = nombre.includes('-01-') ? 'factura' : 'boleta';
-          const dir = resolveBackendPath('comprobantes', 'pdf', tipo);
-          fs.mkdirSync(dir, { recursive: true });
-          cb(null, dir);
+        destination: (_req, _file, cb) => {
+          const tmpDir = resolveBackendPath('uploads', 'sunat', 'pdf', 'tmp');
+          fs.mkdirSync(tmpDir, { recursive: true });
+          cb(null, tmpDir);
         },
         filename: (_req, file, cb) => {
-          const nombre = file.originalname ?? 'documento.pdf';
-          cb(null, nombre);
+          const safeName =
+            file.originalname?.replace(/\s+/g, '_') || 'sunat-pdf.pdf';
+          cb(null, safeName);
         },
       }),
       fileFilter: (_req, file, cb) => {
@@ -148,30 +147,100 @@ export class SunatController {
       },
     }),
   )
-  async uploadPdf(@UploadedFile() file: Express.Multer.File) {
+  async uploadPdf(
+    @Body('tipo') tipoInput: string | undefined,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentTenant() tenant: TenantContext | null,
+  ) {
     if (!file) {
       throw new BadRequestException('No se subio ningun archivo PDF.');
     }
 
+    const organizationId = tenant?.organizationId ?? undefined;
+    const companyId = tenant?.companyId ?? undefined;
+
+    if (!organizationId || !companyId) {
+      throw new BadRequestException(
+        'No se pudo determinar la organizacion o empresa activa.',
+      );
+    }
+
+    const normalizedType =
+      typeof tipoInput === 'string' && tipoInput.length > 0
+        ? tipoInput.toLowerCase()
+        : undefined;
+    const effectiveType =
+      normalizedType === 'factura' || normalizedType === 'boleta'
+        ? normalizedType
+        : file.originalname.includes('-01-')
+          ? 'factura'
+          : 'boleta';
+
+    const tenantAwarePath = path.join(
+      'comprobantes',
+      'pdf',
+      `org-${organizationId}`,
+      `company-${companyId}`,
+      effectiveType,
+    );
+
+    const destination = resolveBackendPath(tenantAwarePath);
+    fs.mkdirSync(destination, { recursive: true });
+    const finalPath = path.join(destination, file.filename);
+    if (fs.existsSync(finalPath)) {
+      fs.unlinkSync(finalPath);
+    }
+    fs.renameSync(file.path, finalPath);
+
+    const relativePath = path
+      .relative(resolveBackendPath(), finalPath)
+      .replace(/\\/g, '/');
+
+    await this.sunatService.registerStoredPdf({
+      organizationId,
+      companyId,
+      type: effectiveType,
+      filename: file.filename,
+      relativePath,
+      userId: tenant?.userId ?? null,
+    });
+
     return {
       message: 'PDF guardado correctamente en el servidor.',
       filename: file.filename,
+      path: relativePath,
     };
   }
 
   @Get('pdf/:tipo/:filename')
-  getComprobantePdf(
+  async getComprobantePdf(
     @Param('tipo') tipo: 'boleta' | 'factura',
     @Param('filename') filename: string,
+    @CurrentTenant() tenant: TenantContext | null,
     @Res() res: Response,
   ) {
+    const record = await this.sunatService.getStoredPdfForTenant({
+      filename,
+      type: tipo,
+      tenant: tenant ?? null,
+    });
+
     try {
-      const filePath = this.sunatService.getComprobantePdfPath(tipo, filename);
+      const filePath = this.sunatService.getComprobantePdfPath(
+        tipo,
+        record.filename,
+        record.relativePath,
+      );
       res.setHeader('Content-Type', 'application/pdf');
       res.sendFile(filePath);
     } catch (error: any) {
       throw new NotFoundException(error?.message ?? 'Archivo no encontrado');
     }
+  }
+
+  @Get('pdfs')
+  async listStoredPdfs(@CurrentTenant() tenant: TenantContext | null) {
+    return this.sunatService.listStoredPdfsForTenant(tenant ?? null);
   }
 
   @Post('transmissions/:id/retry')

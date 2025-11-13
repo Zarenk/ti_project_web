@@ -1,7 +1,8 @@
-import {
+﻿import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
@@ -223,7 +224,7 @@ export class SunatService {
   ) {
     if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
       throw new ForbiddenException(
-        'Solo los super administradores pueden reintentar envíos.',
+        'Solo los super administradores pueden reintentar envÃ­os.',
       );
     }
 
@@ -235,14 +236,14 @@ export class SunatService {
     });
 
     if (!transmission) {
-      throw new BadRequestException('El envío indicado no existe.');
+      throw new BadRequestException('El envÃ­o indicado no existe.');
     }
 
     this.ensureOrganizationAccess(transmission.company.organizationId, tenant);
 
     if (!transmission.payload) {
       throw new BadRequestException(
-        'No se puede reintentar porque no se almacenó el payload.',
+        'No se puede reintentar porque no se almacenÃ³ el payload.',
       );
     }
 
@@ -291,9 +292,14 @@ export class SunatService {
     };
   }
 
-  getComprobantePdfPath(tipo: 'boleta' | 'factura', filename: string): string {
-    const basePath = resolveBackendPath('comprobantes/pdf', tipo);
-    const filePath = path.join(basePath, filename);
+  getComprobantePdfPath(
+    tipo: 'boleta' | 'factura',
+    filename: string,
+    relativePath?: string,
+  ): string {
+    const filePath = relativePath
+      ? resolveBackendPath(relativePath)
+      : path.join(resolveBackendPath('comprobantes/pdf', tipo), filename);
 
     if (!fs.existsSync(filePath)) {
       throw new Error('Archivo no encontrado');
@@ -367,7 +373,7 @@ export class SunatService {
   ) {
     if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
       throw new ForbiddenException(
-        'No tienes permisos para gestionar envíos de esta empresa.',
+        'No tienes permisos para gestionar envÃ­os de esta empresa.',
       );
     }
 
@@ -386,8 +392,104 @@ export class SunatService {
     }
     if (allowed.size > 0 && !allowed.has(organizationId)) {
       throw new ForbiddenException(
-        'No tienes permisos para gestionar envíos de esta organización.',
+        'No tienes permisos para gestionar envÃ­os de esta organizaciÃ³n.',
       );
     }
+  }
+  async registerStoredPdf(params: {
+    organizationId: number;
+    companyId: number;
+    type: string;
+    filename: string;
+    relativePath: string;
+    userId?: number | null;
+  }) {
+    const { organizationId, companyId, type, filename, relativePath, userId } =
+      params;
+
+    await this.prismaService.sunatStoredPdf.upsert({
+      where: {
+        companyId_filename: {
+          companyId,
+          filename,
+        },
+      },
+      update: {
+        type,
+        relativePath,
+        createdBy: userId ?? undefined,
+      },
+      create: {
+        organizationId,
+        companyId,
+        type,
+        filename,
+        relativePath,
+        createdBy: userId ?? undefined,
+      },
+    });
+  }
+
+  async getStoredPdfForTenant(params: {
+    filename: string;
+    type: string;
+    tenant: TenantContext | null;
+  }) {
+    const { filename, type, tenant } = params;
+
+    const record = await this.prismaService.sunatStoredPdf.findFirst({
+      where: {
+        filename,
+        type,
+      },
+    });
+
+    if (!record) {
+      throw new NotFoundException('PDF no encontrado.');
+    }
+
+    this.ensureOrganizationAccess(record.organizationId, tenant);
+
+    if (
+      tenant &&
+      !tenant.isSuperAdmin &&
+      tenant.companyId !== null &&
+      record.companyId !== tenant.companyId &&
+      !(tenant.allowedCompanyIds ?? []).includes(record.companyId)
+    ) {
+      throw new ForbiddenException(
+        'No tienes permisos para acceder a este PDF.',
+      );
+    }
+
+    return record;
+  }
+
+  async listStoredPdfsForTenant(tenant: TenantContext | null) {
+    if (!tenant) {
+      throw new ForbiddenException('Contexto de tenant no disponible.');
+    }
+
+    const where: Prisma.SunatStoredPdfWhereInput = {};
+
+    if (tenant.companyId !== null && !tenant.isSuperAdmin) {
+      where.companyId = {
+        in: [
+          tenant.companyId,
+          ...(tenant.allowedCompanyIds ?? []).filter(
+            (id): id is number => typeof id === 'number',
+          ),
+        ],
+      };
+    }
+
+    if (!tenant.isSuperAdmin && tenant.organizationId !== null) {
+      where.organizationId = tenant.organizationId;
+    }
+
+    return this.prismaService.sunatStoredPdf.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

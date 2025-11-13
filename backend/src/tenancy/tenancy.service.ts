@@ -412,6 +412,11 @@ export class TenancyService {
     const sunatEnvironment =
       this.normalizeSunatEnvironment(dto.sunatEnvironment) ?? 'BETA';
     const sunatRuc = this.normalizeNullableInput(dto.sunatRuc);
+    const sunatBusinessName = this.normalizeNullableInput(
+      dto.sunatBusinessName,
+    );
+    const sunatAddress = this.normalizeNullableInput(dto.sunatAddress);
+    const sunatPhone = this.normalizeNullableInput(dto.sunatPhone);
     const sunatSolUserBeta = this.normalizeNullableInput(dto.sunatSolUserBeta);
     const sunatSolPasswordBeta = this.normalizeNullableInput(
       dto.sunatSolPasswordBeta,
@@ -439,6 +444,9 @@ export class TenancyService {
           status,
           sunatEnvironment,
           sunatRuc: sunatRuc ?? null,
+          sunatBusinessName: sunatBusinessName ?? null,
+          sunatAddress: sunatAddress ?? null,
+          sunatPhone: sunatPhone ?? null,
           sunatSolUserBeta: sunatSolUserBeta ?? null,
           sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
           sunatCertPathBeta: sunatCertPathBeta ?? null,
@@ -575,6 +583,11 @@ export class TenancyService {
       dto.sunatEnvironment,
     );
     const sunatRuc = this.normalizeNullableInput(dto.sunatRuc);
+    const sunatBusinessName = this.normalizeNullableInput(
+      dto.sunatBusinessName,
+    );
+    const sunatAddress = this.normalizeNullableInput(dto.sunatAddress);
+    const sunatPhone = this.normalizeNullableInput(dto.sunatPhone);
     const sunatSolUserBeta = this.normalizeNullableInput(dto.sunatSolUserBeta);
     const sunatSolPasswordBeta = this.normalizeNullableInput(
       dto.sunatSolPasswordBeta,
@@ -622,6 +635,15 @@ export class TenancyService {
     }
     if (dto.sunatRuc !== undefined) {
       data.sunatRuc = sunatRuc ?? null;
+    }
+    if (dto.sunatBusinessName !== undefined) {
+      data.sunatBusinessName = sunatBusinessName ?? null;
+    }
+    if (dto.sunatAddress !== undefined) {
+      data.sunatAddress = sunatAddress ?? null;
+    }
+    if (dto.sunatPhone !== undefined) {
+      data.sunatPhone = sunatPhone ?? null;
     }
     if (dto.sunatSolUserBeta !== undefined) {
       data.sunatSolUserBeta = sunatSolUserBeta ?? null;
@@ -1081,6 +1103,11 @@ export class TenancyService {
       const sunatEnvironment =
         this.normalizeSunatEnvironment(company.sunatEnvironment) ?? 'BETA';
       const sunatRuc = this.normalizeNullableInput(company.sunatRuc);
+      const sunatBusinessName = this.normalizeNullableInput(
+        company.sunatBusinessName,
+      );
+      const sunatAddress = this.normalizeNullableInput(company.sunatAddress);
+      const sunatPhone = this.normalizeNullableInput(company.sunatPhone);
       const sunatSolUserBeta = this.normalizeNullableInput(
         company.sunatSolUserBeta,
       );
@@ -1115,6 +1142,9 @@ export class TenancyService {
           status: company.status ?? 'ACTIVE',
           sunatEnvironment,
           sunatRuc: sunatRuc ?? null,
+          sunatBusinessName: sunatBusinessName ?? null,
+          sunatAddress: sunatAddress ?? null,
+          sunatPhone: sunatPhone ?? null,
           sunatSolUserBeta: sunatSolUserBeta ?? null,
           sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
           sunatCertPathBeta: sunatCertPathBeta ?? null,
@@ -1301,6 +1331,15 @@ export class TenancyService {
         if (company.sunatRuc !== undefined) {
           updateData.sunatRuc = sunatRuc ?? null;
         }
+        if (company.sunatBusinessName !== undefined) {
+          updateData.sunatBusinessName = sunatBusinessName ?? null;
+        }
+        if (company.sunatAddress !== undefined) {
+          updateData.sunatAddress = sunatAddress ?? null;
+        }
+        if (company.sunatPhone !== undefined) {
+          updateData.sunatPhone = sunatPhone ?? null;
+        }
         if (company.sunatSolUserBeta !== undefined) {
           updateData.sunatSolUserBeta = sunatSolUserBeta ?? null;
         }
@@ -1346,6 +1385,9 @@ export class TenancyService {
           status: normalizedStatus ?? 'ACTIVE',
           sunatEnvironment: sunatEnvironment ?? 'BETA',
           sunatRuc: sunatRuc ?? null,
+          sunatBusinessName: sunatBusinessName ?? null,
+          sunatAddress: sunatAddress ?? null,
+          sunatPhone: sunatPhone ?? null,
           sunatSolUserBeta: sunatSolUserBeta ?? null,
           sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
           sunatCertPathBeta: sunatCertPathBeta ?? null,

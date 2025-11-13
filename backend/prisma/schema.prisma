@@ -209,6 +209,7 @@ model User {
   clientMessages   ChatMessage[]      @relation("ClientMessages")
   sentMessages     ChatMessage[]      @relation("SenderMessages")
   favorites        Favorite[]
+  sunatStoredPdfs  SunatStoredPdf[]
 
   memberships OrganizationMembership[]
 
@@ -248,6 +249,7 @@ model Organization {
   catalogCover CatalogCover[]
   siteSettings SiteSettings[]
   sunatTransmissions SunatTransmission[]
+  sunatStoredPdfs   SunatStoredPdf[]
 
   @@unique([name])
   @@index([status])
@@ -262,6 +264,9 @@ model Company {
   status         String        @default("ACTIVE")
   sunatEnvironment     String        @default("BETA")
   sunatRuc             String?
+  sunatBusinessName    String?
+  sunatAddress         String?
+  sunatPhone           String?
   sunatSolUserBeta     String?
   sunatSolPasswordBeta String?
   sunatCertPathBeta    String?
@@ -286,6 +291,7 @@ model Company {
   catalogCover CatalogCover[]
   siteSettings SiteSettings[]
   sunatTransmissions SunatTransmission[]
+  sunatStoredPdfs   SunatStoredPdf[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -316,6 +322,25 @@ model SunatTransmission {
   @@index([companyId, status])
   @@index([organizationId])
   @@index([saleId])
+}
+
+model SunatStoredPdf {
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  companyId      Int
+  type           String
+  filename       String
+  relativePath   String
+  createdBy      Int?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  uploadedBy   User?        @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, filename])
+  @@index([organizationId])
+  @@index([companyId, type])
 }
 
 model OrganizationUnit {

@@ -34,6 +34,9 @@ export interface CompanyResponse {
   status: string
   sunatEnvironment: SunatEnvironment
   sunatRuc: string | null
+  sunatBusinessName: string | null
+  sunatAddress: string | null
+  sunatPhone: string | null
   sunatSolUserBeta: string | null
   sunatSolPasswordBeta: string | null
   sunatCertPathBeta: string | null
@@ -98,6 +101,9 @@ export interface UpdateCompanyPayload {
   status?: string
   sunatEnvironment?: SunatEnvironment
   sunatRuc?: string | null
+  sunatBusinessName?: string | null
+  sunatAddress?: string | null
+  sunatPhone?: string | null
   sunatSolUserBeta?: string | null
   sunatSolPasswordBeta?: string | null
   sunatSolUserProd?: string | null
@@ -122,6 +128,17 @@ export interface SunatTransmission {
   updatedAt: string
 }
 
+export interface SunatStoredPdf {
+  id: number
+  organizationId: number
+  companyId: number
+  type: string
+  filename: string
+  relativePath: string
+  createdBy: number | null
+  createdAt: string
+}
+
 function mapCompanyResponse(data: any): CompanyResponse {
   return {
     id: Number(data.id),
@@ -132,6 +149,9 @@ function mapCompanyResponse(data: any): CompanyResponse {
     status: String(data.status ?? ""),
     sunatEnvironment: (data.sunatEnvironment === "PROD" ? "PROD" : "BETA") as SunatEnvironment,
     sunatRuc: data.sunatRuc ?? null,
+    sunatBusinessName: data.sunatBusinessName ?? null,
+    sunatAddress: data.sunatAddress ?? null,
+    sunatPhone: data.sunatPhone ?? null,
     sunatSolUserBeta: data.sunatSolUserBeta ?? null,
     sunatSolPasswordBeta: data.sunatSolPasswordBeta ?? null,
     sunatCertPathBeta: data.sunatCertPathBeta ?? null,
@@ -670,6 +690,40 @@ export async function getCompanySunatTransmissions(
     errorMessage: item.errorMessage ?? null,
     createdAt: new Date(item.createdAt).toISOString(),
     updatedAt: new Date(item.updatedAt).toISOString(),
+  }))
+}
+
+export async function getSunatStoredPdfs(): Promise<SunatStoredPdf[]> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/sunat/pdfs`, {
+    headers,
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    throw new Error("No se pudieron obtener los PDFs almacenados")
+  }
+
+  const data = await response.json()
+  if (!Array.isArray(data)) {
+    return []
+  }
+
+  return data.map((item: any) => ({
+    id: Number(item.id),
+    organizationId: Number(item.organizationId),
+    companyId: Number(item.companyId),
+    type: String(item.type ?? "factura"),
+    filename: String(item.filename ?? ""),
+    relativePath: item.relativePath ?? "",
+    createdBy:
+      typeof item.createdBy === "number" ? item.createdBy : item.createdBy ? Number(item.createdBy) : null,
+    createdAt: new Date(item.createdAt ?? new Date()).toISOString(),
   }))
 }
 

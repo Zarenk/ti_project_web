@@ -455,7 +455,7 @@ export class SalesService {
               inventoryId: inventoryRecord.inventoryId,
               userId: actorId ?? sale.userId,
               action: 'sale_deleted',
-              description: `ReversiÃ³n de la venta ${sale.id} en ${sale.store.name}`,
+              description: `Reversion de la venta ${sale.id} en ${sale.store.name}`,
               stockChange: detail.quantity,
               previousStock: inventoryRecord.stock,
               newStock: inventoryRecord.stock + detail.quantity,
@@ -555,6 +555,28 @@ export class SalesService {
     });
 
     return deletedSale;
+  }
+
+  async getSaleSunatTransmissions(
+    saleId: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const sale = await this.prisma.sales.findFirst({
+      where: { id: saleId, ...this.buildSalesWhere(organizationId, companyId) },
+      select: { id: true },
+    });
+
+    if (!sale) {
+      throw new NotFoundException(
+        `No se encontro la venta con ID ${saleId}.`,
+      );
+    }
+
+    return this.prisma.sunatTransmission.findMany({
+      where: { saleId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   // MÃ©todo para obtener las series vendidas en una venta especÃ­fica
@@ -1540,7 +1562,6 @@ export class SalesService {
     };
   }
 }
-
 
 
 

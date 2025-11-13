@@ -72,6 +72,19 @@ export class SalesController {
     );
   }
 
+  @Get(':saleId/sunat/transmissions')
+  async getSaleSunatTransmissions(
+    @Param('saleId', ParseIntPipe) saleId: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getSaleSunatTransmissions(
+      saleId,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
   @Get('monthly-total')
   async getMonthlySalesTotal(
     @CurrentTenant('organizationId') organizationId: number | null,

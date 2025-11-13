@@ -534,6 +534,10 @@ export function SaleDetailDialog({
   );
 }
 
+type SaleSunatTransmissionItem = Sale["sunatTransmissions"] extends Array<infer T>
+  ? T
+  : never;
+
 const STATUS_COLORS: Record<string, string> = {
   SENT: "bg-emerald-100 text-emerald-800 border-emerald-200",
   SENDING: "bg-blue-100 text-blue-800 border-blue-200",
@@ -544,7 +548,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function renderSunatStatusBadge(
-  status?: Sale["sunatStatus"] | Sale["sunatTransmissions"]?.[number] | null,
+  status?: Sale["sunatStatus"] | SaleSunatTransmissionItem | null,
 ) {
   if (!status) {
     return <span className="text-xs text-muted-foreground">Sin envíos</span>;

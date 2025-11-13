@@ -73,3 +73,9 @@ etryTransmission.`n- POST /sunat/transmissions/:id/retry reenvia un comprobante 
 - SalesService y WebSalesService devuelven el último estado SUNAT y el historial reciente de transmisiones asociados a cada venta/orden.
 - La tabla de ventas, el modal de detalle y las pantallas de órdenes muestran badges con el estado SUNAT, ticket y mensajes de error cuando aplica.
 - Las órdenes tienen un resumen dedicado con el histórico de transmisiones para facilitar soporte sin abandonar el flujo comercial.
+
+### Avance 10 (2025-05-11) Consulta puntual de transmisiones
+
+- Nueva ruta `GET /sales/:saleId/sunat/transmissions` expone el historial de envÃ­os por venta respetando el contexto del tenant.
+- SalesService incorpora `getSaleSunatTransmissions`, reutilizando los filtros multi-tenant antes de listar registros.
+- Esta API habilita herramientas de monitoreo y facilita construir vistas especÃ­ficas sin relajar permisos.

@@ -227,6 +227,20 @@ export function InvoiceDocument({
   data.tipoMoneda === 'PEN' ? 'SOLES' : data.tipoMoneda.toUpperCase();
 
   const direccionFormateada = wrapText(data.cliente.direccion || 'N/A', 40);
+  const emitter = data?.emisor ?? {};
+  const emitterName =
+    emitter.razonSocial ||
+    emitter.nombre ||
+    emitter.businessName ||
+    emitter.companyName ||
+    'Nombre no disponible';
+  const emitterAddress = wrapText(
+    emitter.address || emitter.adress || 'Dirección no disponible',
+    40,
+  );
+  const emitterPhone =
+    emitter.phone || emitter.telefono || emitter.phoneNumber || null;
+  const emitterRuc = emitter.ruc || emitter.taxId || emitter.sunatRuc || '—';
 
   return (
     <Document>
@@ -235,18 +249,13 @@ export function InvoiceDocument({
         <View style={styles.header}>
           <View style={styles.leftColumn}>
             <Image src="/logo_ti.png" style={styles.logo} />
-            <Text style={styles.companyName}>TEGNOLOGIA INFORMATICA EIRL</Text>
-            <Text>
-              AV. CORONEL MENDOZA 1945 INT. K367 AS.C.C MERCADILLO{"\n"}
-              BOLOGNESI - TACNA - TACNA - TACNA
-            </Text>
-            <Text>
-              TELEFONO: 052-413038{"\n"}
-            </Text>
+            <Text style={styles.companyName}>{emitterName}</Text>
+            <Text>{emitterAddress}</Text>
+            {emitterPhone ? <Text>TELEFONO: {emitterPhone}</Text> : null}
           </View>
           <View style={styles.rightColumn}>
             <View style={styles.invoiceBox}>
-              <Text style={styles.rucText}>RUC: 20519857538</Text>
+              <Text style={styles.rucText}>RUC: {emitterRuc}</Text>
               <View style={styles.titleBox}>
                 <Text style={styles.titleText}>
                   {documentTypeLabel} ELECTRÓNICA

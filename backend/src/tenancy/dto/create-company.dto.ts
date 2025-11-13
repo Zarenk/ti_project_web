@@ -46,6 +46,21 @@ export class CreateCompanyDto {
   @IsOptional()
   @IsString()
   @MaxLength(255)
+  sunatBusinessName?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  sunatAddress?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  sunatPhone?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
   sunatSolUserBeta?: string | null;
 
   @IsOptional()
