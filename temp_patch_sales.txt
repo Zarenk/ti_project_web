@@ -1,0 +1,28 @@
+*** Begin Patch
+*** Update File: backend/src/utils/sales-helper.ts
+@@
+-      await prismaTx.salesDetail.create({
+-        data: {
+-          salesId: sale.id,
+-          entryDetailId: entryDetail.id,
+-          storeOnInventoryId: storeInventory.id,
+-          productId: detail.productId,
+-          companyId: sale.companyId ?? undefined,
+-          quantity: detail.quantity,
+-          price: detail.price,
+-          series: detail.series ?? [],
+-        },
+-      });
++      await prismaTx.salesDetail.create({
++        data: {
++          salesId: sale.id,
++          entryDetailId: entryDetail.id,
++          storeOnInventoryId: storeInventory.id,
++          productId: detail.productId,
++          companyId: sale.companyId!,
++          quantity: detail.quantity,
++          price: detail.price,
++          series: detail.series ?? [],
++        },
++      });
+*** End Patch

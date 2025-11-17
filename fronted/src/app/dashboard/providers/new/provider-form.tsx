@@ -53,7 +53,7 @@ export function ProviderForm({provider}: {provider: any}) {
 
     const mapProviderToFormValues = useMemo(() => ({
       name: provider?.name ?? '',
-      document: (provider?.document ?? 'Sin Documento') as ProviderType['document'],
+      document: (provider?.document ?? 'Otro Documento') as ProviderType['document'],
       documentNumber: provider?.documentNumber ?? '',
       description: provider?.description ?? '',
       phone: provider?.phone ?? '',
@@ -66,7 +66,7 @@ export function ProviderForm({provider}: {provider: any}) {
 
     const emptyFormValues = useMemo(() => ({
       name: '',
-      document: 'Sin Documento' as ProviderType['document'],
+      document: 'Otro Documento' as ProviderType['document'],
       documentNumber: '',
       description: '',
       phone: '',
@@ -86,6 +86,7 @@ export function ProviderForm({provider}: {provider: any}) {
     });
 
   const { handleSubmit, register, setValue } = form;
+  const selectedDocumentType = form.watch("document");
 
   const router = useRouter();
   const params = useParams<{id: string}>();
@@ -173,7 +174,7 @@ export function ProviderForm({provider}: {provider: any}) {
                         <Label className='py-3'>
                             Seleccione el Tipo de Documento
                         </Label>
-                        <Select value={form.watch("document")} // Sincroniza el valor del Select con el formulario
+                        <Select value={selectedDocumentType} // Sincroniza el valor del Select con el formulario
                         defaultValue={form.getValues("document")} onValueChange={(value) => setValue("document", value as "DNI" | "RUC" | "Otro Documento", {shouldValidate: true})}>
                             <SelectTrigger>
                                 <SelectValue /> {/*placeholder="Documento" */}
@@ -181,7 +182,7 @@ export function ProviderForm({provider}: {provider: any}) {
                             <SelectContent>
                                 <SelectItem value="DNI">DNI</SelectItem>
                                 <SelectItem value="RUC">RUC</SelectItem>
-                                <SelectItem value="Sin Documento">Otro Documento</SelectItem>
+                                <SelectItem value="Otro Documento">Otro Documento</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -191,11 +192,17 @@ export function ProviderForm({provider}: {provider: any}) {
                             Numero del Documento
                         </Label>
                         <Input
-                        type="text" // Mantén el tipo como "text" para que el valor sea una cadena
-                        maxLength={11} // Limita a 100 caracteres
+                        type="text"
+                        maxLength={selectedDocumentType === "RUC" ? 11 : selectedDocumentType === "DNI" ? 8 : 25}
                         onInput={(e) => {
                             const input = e.target as HTMLInputElement;
-                            input.value = input.value.replace(/\D/g, ""); // Reemplaza cualquier carácter no numérico
+                            if (selectedDocumentType === "DNI") {
+                              input.value = input.value.replace(/\D/g, "").slice(0, 8);
+                            } else if (selectedDocumentType === "RUC") {
+                              input.value = input.value.replace(/\D/g, "").slice(0, 11);
+                            } else {
+                              input.value = input.value.slice(0, 25);
+                            }
                         }}
                         {...register('documentNumber')}></Input>
                         {form.formState.errors.documentNumber && (

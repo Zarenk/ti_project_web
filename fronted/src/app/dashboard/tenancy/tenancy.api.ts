@@ -17,6 +17,15 @@ export interface CreateOrganizationPayload {
   units: OrganizationUnitInput[]
 }
 
+export interface UpdateOrganizationPayload {
+  name?: string
+  code?: string | null
+  status?: string
+  slug?: string | null
+  units?: OrganizationUnitInput[]
+  companies?: CompanyResponse[]
+}
+
 export interface OrganizationSuperAdmin {
   id: number
   username: string
@@ -24,6 +33,23 @@ export interface OrganizationSuperAdmin {
 }
 
 export type SunatEnvironment = "BETA" | "PROD"
+
+export interface CompanyDocumentSequence {
+  id: number
+  documentType: string
+  serie: string
+  nextCorrelative: number
+  correlativeLength: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CompanyDocumentSequenceInput {
+  documentType: string
+  serie: string
+  nextCorrelative: string
+  correlativeLength?: number
+}
 
 export interface CompanyResponse {
   id: number
@@ -50,6 +76,7 @@ export interface CompanyResponse {
   sunatKeyPathProd: string | null
   createdAt: string
   updatedAt: string
+  documentSequences: CompanyDocumentSequence[]
 }
 
 export interface OrganizationResponse {
@@ -57,6 +84,7 @@ export interface OrganizationResponse {
   name: string
   code: string | null
   status: string
+  slug?: string | null
   createdAt: string
   updatedAt: string
   units: Array<{
@@ -114,6 +142,7 @@ export interface UpdateCompanyPayload {
   sunatSolPasswordBeta?: string | null
   sunatSolUserProd?: string | null
   sunatSolPasswordProd?: string | null
+  documentSequences?: CompanyDocumentSequenceInput[]
 }
 
 export interface SunatTransmission {
@@ -171,6 +200,25 @@ function mapCompanyResponse(data: any): CompanyResponse {
     sunatKeyPathProd: data.sunatKeyPathProd ?? null,
     createdAt: new Date(data.createdAt).toISOString(),
     updatedAt: new Date(data.updatedAt).toISOString(),
+    documentSequences: Array.isArray(data.documentSequences)
+      ? data.documentSequences.map((sequence: any) => {
+          const length =
+            typeof sequence?.correlativeLength === "number"
+              ? sequence.correlativeLength
+              : typeof sequence?.nextCorrelative === "number"
+                ? String(sequence.nextCorrelative).length
+                : 3
+          return {
+            id: Number(sequence.id),
+            documentType: String(sequence.documentType ?? "").toUpperCase(),
+            serie: String(sequence.serie ?? ""),
+            nextCorrelative: Number(sequence.nextCorrelative ?? 1),
+            correlativeLength: length,
+            createdAt: new Date(sequence.createdAt ?? data.createdAt ?? new Date()).toISOString(),
+            updatedAt: new Date(sequence.updatedAt ?? data.updatedAt ?? new Date()).toISOString(),
+          }
+        })
+      : [],
   }
 }
 
@@ -237,6 +285,60 @@ export async function getOrganization(
       (typeof data === "object" && data && "message" in data
         ? (data as { message?: string }).message
         : undefined) || "No se pudo obtener la organizacion"
+    throw new Error(message)
+  }
+
+  return data as OrganizationResponse
+}
+
+export async function updateOrganization(
+  id: number,
+  payload: UpdateOrganizationPayload,
+): Promise<OrganizationResponse> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const body: Record<string, unknown> = {}
+  if (typeof payload.name === "string") {
+    body.name = payload.name
+  }
+  if (payload.code !== undefined) {
+    body.code = payload.code
+  }
+  if (payload.status !== undefined) {
+    body.status = payload.status
+  }
+  if (payload.slug !== undefined) {
+    body.slug = payload.slug
+  }
+  if (payload.units !== undefined) {
+    body.units = payload.units
+  }
+  if (payload.companies !== undefined) {
+    body.companies = payload.companies
+  }
+
+  headers["Content-Type"] = "application/json"
+
+  const response = await fetch(`${BACKEND_URL}/api/tenancy/${id}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(body),
+    cache: "no-store",
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo actualizar la organizacion"
     throw new Error(message)
   }
 

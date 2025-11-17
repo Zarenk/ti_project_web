@@ -40,6 +40,13 @@ export interface TenantSelectionSummary {
   companies: TenantSelectionCompany[];
 }
 
+type NormalizedSequenceInput = {
+  documentType: string;
+  serie: string;
+  nextCorrelative: number;
+  correlativeLength: number;
+};
+
 @Injectable()
 export class TenancyService {
   constructor(private readonly prisma: PrismaService) {}
@@ -190,11 +197,17 @@ export class TenancyService {
         );
 
         // 1. Crear organizacion
+        const organizationCode = await this.resolveOrganizationCode(
+          prisma,
+          createTenancyDto.code,
+          createTenancyDto.name,
+        );
+
         const organization = await prisma.organization.create({
           data: {
             name: createTenancyDto.name.trim(),
             slug: organizationSlug,
-            code: this.normalizeCodeInput(createTenancyDto.code) ?? null,
+            code: organizationCode ?? null,
             status: createTenancyDto.status ?? 'ACTIVE',
           },
         });
@@ -327,12 +340,22 @@ export class TenancyService {
           );
         }
 
+        let nextCode: string | null | undefined = undefined;
+        if (updateTenancyDto.code !== undefined) {
+          nextCode = await this.resolveOrganizationCode(
+            prisma,
+            updateTenancyDto.code,
+            effectiveName,
+            id,
+          );
+        }
+
         const organization = await prisma.organization.update({
           where: { id },
           data: {
             name: trimmedName?.length ? trimmedName : undefined,
             slug: slugValue,
-            code: this.normalizeCodeInput(updateTenancyDto.code),
+            code: nextCode,
             status: updateTenancyDto.status,
           },
         });
@@ -474,35 +497,53 @@ export class TenancyService {
       dto.sunatCertPathProd,
     );
     const sunatKeyPathProd = this.normalizeNullableInput(dto.sunatKeyPathProd);
+    const normalizedSequences = this.normalizeDocumentSequencesInput(
+      dto.documentSequences,
+    );
 
     try {
-      const company = await this.prisma.company.create({
-        data: {
-          organizationId,
-          name: trimmedName,
-          legalName: legalName?.length ? legalName : null,
-          taxId: taxId?.length ? taxId : null,
-          status,
-          sunatEnvironment,
-          sunatRuc: sunatRuc ?? null,
-          sunatBusinessName: sunatBusinessName ?? null,
-          sunatAddress: sunatAddress ?? null,
-          sunatPhone: sunatPhone ?? null,
-          logoUrl: logoUrl ?? null,
-          primaryColor: primaryColor ?? null,
-          secondaryColor: secondaryColor ?? null,
-          sunatSolUserBeta: sunatSolUserBeta ?? null,
-          sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
-          sunatCertPathBeta: sunatCertPathBeta ?? null,
-          sunatKeyPathBeta: sunatKeyPathBeta ?? null,
-          sunatSolUserProd: sunatSolUserProd ?? null,
-          sunatSolPasswordProd: sunatSolPasswordProd ?? null,
-          sunatCertPathProd: sunatCertPathProd ?? null,
-          sunatKeyPathProd: sunatKeyPathProd ?? null,
-        },
+      const company = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.company.create({
+          data: {
+            organizationId,
+            name: trimmedName,
+            legalName: legalName?.length ? legalName : null,
+            taxId: taxId?.length ? taxId : null,
+            status,
+            sunatEnvironment,
+            sunatRuc: sunatRuc ?? null,
+            sunatBusinessName: sunatBusinessName ?? null,
+            sunatAddress: sunatAddress ?? null,
+            sunatPhone: sunatPhone ?? null,
+            logoUrl: logoUrl ?? null,
+            primaryColor: primaryColor ?? null,
+            secondaryColor: secondaryColor ?? null,
+            sunatSolUserBeta: sunatSolUserBeta ?? null,
+            sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
+            sunatCertPathBeta: sunatCertPathBeta ?? null,
+            sunatKeyPathBeta: sunatKeyPathBeta ?? null,
+            sunatSolUserProd: sunatSolUserProd ?? null,
+            sunatSolPasswordProd: sunatSolPasswordProd ?? null,
+            sunatCertPathProd: sunatCertPathProd ?? null,
+            sunatKeyPathProd: sunatKeyPathProd ?? null,
+          },
+        });
+
+        if (normalizedSequences) {
+          await this.saveCompanySequences(tx, created.id, normalizedSequences);
+        }
+
+        return tx.company.findUnique({
+          where: { id: created.id },
+          include: this.buildCompanyInclude(),
+        });
       });
 
-      return company;
+      if (!company) {
+        throw new NotFoundException('No se pudo cargar la empresa creada.');
+      }
+
+      return company as CompanySnapshot;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -540,7 +581,12 @@ export class TenancyService {
       where,
       include: {
         units: { orderBy: { id: 'asc' } },
-        companies: { orderBy: { id: 'asc' } },
+        companies: {
+          orderBy: { id: 'asc' },
+          include: {
+            documentSequences: { orderBy: { documentType: 'asc' } },
+          },
+        },
         _count: { select: { memberships: true } },
       },
       orderBy: { id: 'asc' },
@@ -568,11 +614,7 @@ export class TenancyService {
   > {
     const company = await this.prisma.company.findUnique({
       where: { id },
-      include: {
-        organization: {
-          select: { id: true, name: true, code: true, status: true },
-        },
-      },
+      include: this.buildCompanyInclude({ organization: true }),
     });
 
     if (!company) {
@@ -651,6 +693,9 @@ export class TenancyService {
       dto.sunatCertPathProd,
     );
     const sunatKeyPathProd = this.normalizeNullableInput(dto.sunatKeyPathProd);
+    const normalizedSequences = this.normalizeDocumentSequencesInput(
+      dto.documentSequences,
+    );
 
     if (dto.name !== undefined) {
       const trimmed = dto.name.trim();
@@ -727,10 +772,27 @@ export class TenancyService {
     }
 
     try {
-      return await this.prisma.company.update({
-        where: { id },
-        data,
+      const updatedCompany = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.company.update({
+          where: { id },
+          data,
+        });
+
+        if (normalizedSequences) {
+          await this.saveCompanySequences(tx, updated.id, normalizedSequences);
+        }
+
+        return tx.company.findUnique({
+          where: { id },
+          include: this.buildCompanyInclude(),
+        });
       });
+
+      if (!updatedCompany) {
+        throw new NotFoundException('La empresa actualizada no existe.');
+      }
+
+      return updatedCompany as CompanySnapshot;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -779,6 +841,7 @@ export class TenancyService {
       data: {
         logoUrl: filePath,
       },
+      include: this.buildCompanyInclude(),
     });
   }
 
@@ -826,6 +889,7 @@ export class TenancyService {
     return this.prisma.company.update({
       where: { id },
       data,
+      include: this.buildCompanyInclude(),
     });
   }
 
@@ -926,6 +990,12 @@ export class TenancyService {
           throw new NotFoundException(`User ${userId} was not found`);
         }
 
+        const previousSuperAdmins =
+          await prisma.organizationMembership.findMany({
+            where: { organizationId, role: 'SUPER_ADMIN' },
+            select: { userId: true },
+          });
+
         await prisma.organizationMembership.updateMany({
           where: { organizationId, role: 'SUPER_ADMIN' },
           data: { role: 'ADMIN', isDefault: false },
@@ -954,6 +1024,24 @@ export class TenancyService {
               isDefault: true,
             },
           });
+        }
+
+        await this.promoteUserToOrganizationSuperAdmin(prisma, userId);
+
+        const demotedUserIds = previousSuperAdmins
+          .map((entry) => entry.userId)
+          .filter(
+            (previousId): previousId is number =>
+              typeof previousId === 'number' &&
+              Number.isFinite(previousId) &&
+              previousId !== userId,
+          );
+
+        for (const demotedUserId of demotedUserIds) {
+          await this.maybeDemoteOrganizationSuperAdmin(
+            prisma,
+            demotedUserId,
+          );
         }
 
         const units = await prisma.organizationUnit.findMany({
@@ -1671,6 +1759,135 @@ export class TenancyService {
     return trimmed;
   }
 
+  private buildCompanyInclude(options?: {
+    organization?: boolean;
+  }): Prisma.CompanyInclude {
+    const include: Prisma.CompanyInclude = {
+      documentSequences: { orderBy: { documentType: 'asc' } },
+    };
+
+    if (options?.organization) {
+      include.organization = {
+        select: { id: true, name: true, code: true, status: true },
+      };
+    }
+
+    return include;
+  }
+
+  private normalizeDocumentSequencesInput(
+    sequences?:
+      | Array<{
+          documentType?: string | null;
+          serie?: string | null;
+          nextCorrelative?: string | number | null;
+          correlativeLength?: number | null;
+        }>
+      | null,
+  ): NormalizedSequenceInput[] | null {
+    if (!Array.isArray(sequences) || sequences.length === 0) {
+      return null;
+    }
+
+    const normalized: NormalizedSequenceInput[] = [];
+    const seenTypes = new Set<string>();
+
+    for (const entry of sequences) {
+      if (!entry) {
+        continue;
+      }
+
+      const documentType = entry.documentType
+        ?.toString()
+        .trim()
+        .toUpperCase();
+      if (!documentType) {
+        throw new BadRequestException(
+          'El tipo de documento de la serie es obligatorio.',
+        );
+      }
+
+      const serie = entry.serie?.toString().trim().toUpperCase();
+      if (!serie) {
+        throw new BadRequestException(
+          `La serie para el tipo de documento ${documentType} es obligatoria.`,
+        );
+      }
+
+      const correlativoRaw = entry.nextCorrelative
+        ?.toString()
+        .trim();
+      if (!correlativoRaw || !/^[0-9]+$/.test(correlativoRaw)) {
+        throw new BadRequestException(
+          `El numero correlativo inicial para ${documentType} debe contener solo digitos.`,
+        );
+      }
+
+      const correlativoNumber = Number.parseInt(correlativoRaw, 10);
+      if (!Number.isFinite(correlativoNumber) || correlativoNumber < 1) {
+        throw new BadRequestException(
+          `El numero correlativo inicial para ${documentType} debe ser mayor o igual a 1.`,
+        );
+      }
+
+      if (seenTypes.has(documentType)) {
+        throw new BadRequestException(
+          `Solo puedes configurar una serie por tipo de documento (${documentType}).`,
+        );
+      }
+      seenTypes.add(documentType);
+
+      const correlativeLength = Math.max(
+        Number(entry.correlativeLength ?? correlativoRaw.length) ||
+          correlativoRaw.length,
+        correlativoRaw.length,
+        1,
+      );
+
+      normalized.push({
+        documentType,
+        serie,
+        nextCorrelative: correlativoNumber,
+        correlativeLength,
+      });
+    }
+
+    return normalized.length ? normalized : null;
+  }
+
+  private async saveCompanySequences(
+    prisma: PrismaService | Prisma.TransactionClient,
+    companyId: number,
+    sequences: NormalizedSequenceInput[],
+  ): Promise<void> {
+    if (!sequences.length) {
+      return;
+    }
+
+    for (const sequence of sequences) {
+      await prisma.companyDocumentSequence.upsert({
+        where: {
+          companyId_documentType: {
+            companyId,
+            documentType: sequence.documentType,
+          },
+        },
+        update: {
+          serie: sequence.serie,
+          nextCorrelative: sequence.nextCorrelative,
+          correlativeLength: sequence.correlativeLength,
+        },
+        create: {
+          companyId,
+          documentType: sequence.documentType,
+          serie: sequence.serie,
+          nextCorrelative: sequence.nextCorrelative,
+          correlativeLength: sequence.correlativeLength,
+        },
+      });
+    }
+  }
+
   private resolveParentId(
     unit: OrganizationUnitInputDto,
     unitsByCode: Map<string, number>,
@@ -1782,7 +1999,181 @@ export class TenancyService {
       return null;
     }
 
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
+    const normalized = value
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private async promoteUserToOrganizationSuperAdmin(
+    prisma: PrismaService,
+    userId: number,
+  ): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!user) {
+      return;
+    }
+
+    const normalizedRole = (user.role ?? '')
+      .toString()
+      .trim()
+      .toUpperCase();
+
+    if (
+      normalizedRole === 'SUPER_ADMIN_GLOBAL' ||
+      normalizedRole === 'SUPER_ADMIN_ORG' ||
+      normalizedRole === 'SUPER_ADMIN'
+    ) {
+      return;
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { role: 'SUPER_ADMIN_ORG' },
+    });
+  }
+
+  private async maybeDemoteOrganizationSuperAdmin(
+    prisma: PrismaService,
+    userId: number,
+  ): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!user) {
+      return;
+    }
+
+    const normalizedRole = (user.role ?? '')
+      .toString()
+      .trim()
+      .toUpperCase();
+
+    if (normalizedRole === 'SUPER_ADMIN_GLOBAL') {
+      return;
+    }
+
+    const remainingAssignments =
+      await prisma.organizationMembership.count({
+        where: { userId, role: 'SUPER_ADMIN' },
+      });
+
+    if (remainingAssignments > 0) {
+      return;
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { role: 'ADMIN' },
+    });
+  }
+
+  private async resolveOrganizationCode(
+    prisma: PrismaService,
+    codeInput: string | null | undefined,
+    fallbackName: string,
+    excludeId?: number,
+  ): Promise<string | null> {
+    const normalized = this.normalizeCodeInput(codeInput);
+    if (normalized === undefined) {
+      const base = this.buildOrganizationCodeBase(fallbackName);
+      if (!base) {
+        return null;
+      }
+      return this.generateOrganizationCodeFromBase(prisma, base, excludeId);
+    }
+
+    if (normalized === null) {
+      return null;
+    }
+
+    await this.ensureOrganizationCodeAvailability(
+      prisma,
+      normalized,
+      excludeId,
+    );
+    return normalized;
+  }
+
+  private buildOrganizationCodeBase(input: string): string | null {
+    const normalized = input
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, ' ')
+      .trim();
+
+    if (!normalized) {
+      return null;
+    }
+
+    const tokens = normalized.split(/\s+/).filter(Boolean);
+    const compact = tokens
+      .map((token) => token.slice(0, 3))
+      .join('')
+      .slice(0, 10);
+
+    if (compact) {
+      return compact;
+    }
+
+    const fallback = normalized.replace(/\s+/g, '').slice(0, 10);
+    return fallback || 'ORG';
+  }
+
+  private async generateOrganizationCodeFromBase(
+    prisma: PrismaService,
+    base: string,
+    excludeId?: number,
+  ): Promise<string> {
+    let candidate = base;
+    let counter = 1;
+
+    while (true) {
+      const existing = await prisma.organization.findFirst({
+        where: {
+          code: candidate,
+          ...(excludeId ? { NOT: { id: excludeId } } : {}),
+        },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        return candidate;
+      }
+
+      counter += 1;
+      const suffix = String(counter);
+      const baseLength = Math.max(3, 10 - suffix.length);
+      candidate = `${base.slice(0, baseLength)}${suffix}`;
+    }
+  }
+
+  private async ensureOrganizationCodeAvailability(
+    prisma: PrismaService,
+    code: string,
+    excludeId?: number,
+  ): Promise<void> {
+    const existing = await prisma.organization.findFirst({
+      where: {
+        code,
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        'El codigo ingresado ya esta en uso por otra organizacion.',
+      );
+    }
   }
 }

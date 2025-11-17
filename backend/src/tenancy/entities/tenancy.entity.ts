@@ -16,6 +16,16 @@ export type OrganizationSuperAdmin = {
   email: string;
 };
 
+export type CompanyDocumentSequenceSnapshot = {
+  id: number;
+  documentType: string;
+  serie: string;
+  nextCorrelative: number;
+  correlativeLength: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type CompanySnapshot = {
   id: number;
   organizationId: number;
@@ -41,6 +51,7 @@ export type CompanySnapshot = {
   sunatKeyPathProd: string | null;
   createdAt: Date;
   updatedAt: Date;
+  documentSequences: CompanyDocumentSequenceSnapshot[];
 };
 
 export type TenancySnapshot = {

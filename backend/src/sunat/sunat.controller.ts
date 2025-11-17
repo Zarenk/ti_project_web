@@ -100,14 +100,20 @@ export class SunatController {
   }
 
   @Post('generar-y-enviar')
-  async generarYEnviarDocumento(@Body() data: { documentType?: string }) {
+  async generarYEnviarDocumento(
+    @Body() data: { documentType?: string; companyId?: number },
+    @CurrentTenant() tenant: TenantContext | null,
+  ) {
     if (!data?.documentType) {
       throw new BadRequestException('El campo "documentType" es obligatorio.');
     }
 
+    const resolvedCompanyId = this.resolveCompanyId(data.companyId, tenant);
+
     try {
       const respuesta = await this.sunatService.generarYEnviarConSerie(
         data.documentType,
+        resolvedCompanyId ?? undefined,
       );
       return {
         mensaje: 'Serie y numero correlativo generado correctamente.',

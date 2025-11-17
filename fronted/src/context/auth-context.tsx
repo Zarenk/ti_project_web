@@ -17,8 +17,14 @@ import {
 } from "@/lib/auth"
 import { toast } from 'sonner'
 import { signOut } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { clearManualLogout, markManualLogout } from "@/utils/manual-logout"
+import {
+  TENANT_ORGANIZATIONS_EVENT,
+  clearTenantSelection,
+  setTenantSelection,
+} from "@/utils/tenant-preferences"
+import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
 import { SESSION_EXPIRED_EVENT } from "@/utils/session-expired-event"
 
 type AuthContextType = {
@@ -34,6 +40,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [userName, setUserName] = useState<string | null>(null)
   const [userId, setUserId] = useState<number | null>(null)
   const [role, setRole] = useState<string | null>(null)
@@ -44,6 +51,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshFailureNotifiedRef = useRef(false)
   const sessionExpiryInProgressRef = useRef(false)
   const [sessionExpiryOverlay, setSessionExpiryOverlay] = useState(false)
+  const lastUserIdRef = useRef<number | null>(null)
+  const ensureTenantDefaults = useCallback(async () => {
+    try {
+      const summary = await getCurrentTenant()
+      const resolvedOrgId = summary.organization?.id ?? null
+      const resolvedCompanyId = summary.company?.id ?? summary.companies?.[0]?.id ?? null
+      if (resolvedOrgId != null && resolvedCompanyId != null) {
+        setTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
+        window.dispatchEvent(new Event(TENANT_SELECTION_EVENT))
+        window.dispatchEvent(new Event(TENANT_ORGANIZATIONS_EVENT))
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   const clearSessionTimer = useCallback(() => {
     if (sessionTimerRef.current !== null) {
@@ -55,6 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     const data = await getUserDataFromToken()
     if (data) {
+      const hasChangedUser =
+        lastUserIdRef.current === null || lastUserIdRef.current !== data.id
+      if (hasChangedUser) {
+        clearTenantSelection()
+        void ensureTenantDefaults()
+      }
+      lastUserIdRef.current = data.id ?? null
       setUserName(data.name ?? null)
       setUserId(data.id ?? null)
       setRole(data.role ?? null)
@@ -104,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setAuthPending(false)
         refreshFailureNotifiedRef.current = false
+        lastUserIdRef.current = null
       }
     },
     [clearSessionTimer],
@@ -210,6 +240,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser()
   }, [refreshUser])
 
+  useEffect(() => {
+    if (!sessionExpiryOverlay) {
+      return
+    }
+    if (typeof window === "undefined") {
+      return
+    }
+    if (pathname && pathname.startsWith("/login")) {
+      setSessionExpiryOverlay(false)
+    }
+  }, [pathname, sessionExpiryOverlay])
+
   const handleSessionExpiredEvent = useCallback(() => {
     void forceLogoutDueToExpiry()
   }, [forceLogoutDueToExpiry])
@@ -279,6 +321,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             <p className="mt-2 text-sm text-muted-foreground">
               Estamos redirigiéndote al inicio de sesión para que puedas continuar trabajando.
             </p>
+            <button
+              type="button"
+              className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              onClick={() => {
+                setSessionExpiryOverlay(false)
+                redirectToLogin()
+              }}
+            >
+              Ir al inicio de sesión
+            </button>
           </div>
         </div>
       )}

@@ -361,7 +361,7 @@ export default function OrganizationDetailPage({
                               disabled={isCurrent || assigningUserId === user.id}
                               onClick={() => handleAssign(user.id)}
                             >
-                              {assigningUserId === user.id ? "AsignandoÃ¢â‚¬Â¦" : isCurrent ? "Asignado" : "Asignar"}
+                              {assigningUserId === user.id ? "Asignando Usuario" : isCurrent ? "Asignado" : "Asignar"}
                             </Button>
                           </li>
                         )

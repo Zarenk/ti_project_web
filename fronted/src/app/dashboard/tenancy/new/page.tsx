@@ -34,6 +34,7 @@ import {
   type CreateOrganizationPayload,
   type OrganizationUnitInput,
 } from "../tenancy.api"
+import { TENANT_ORGANIZATIONS_EVENT, setTenantSelection } from "@/utils/tenant-preferences"
 
 type MutableUnit = OrganizationUnitInput & { key: string }
 
@@ -138,6 +139,14 @@ export default function NewOrganizationPage() {
     try {
       const response = await createOrganization(payload)
       toast.success(`Organización "${response.name}" creada correctamente.`)
+      const primaryCompany = response.companies?.[0] ?? null
+      setTenantSelection({
+        orgId: response.id,
+        companyId: primaryCompany?.id ?? null,
+      })
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event(TENANT_ORGANIZATIONS_EVENT))
+      }
       router.push(`/dashboard/tenancy/${response.id}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo crear la organización"

@@ -41,6 +41,7 @@ import {
   type CurrentTenantResponse,
 } from "@/app/dashboard/tenancy/tenancy.api"
 import {
+  TENANT_ORGANIZATIONS_EVENT,
   TENANT_SELECTION_EVENT,
   getTenantSelection,
   setTenantSelection,
@@ -182,6 +183,21 @@ export function TeamSwitcher(): React.ReactElement | null {
       }
     }
   }, [fetchOrganizations, isSuperUser, selection.orgId, selection.companyId])
+
+  useEffect(() => {
+    if (!isSuperUser) return
+    const handler = () => {
+      void fetchOrganizations()
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener(TENANT_ORGANIZATIONS_EVENT, handler)
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener(TENANT_ORGANIZATIONS_EVENT, handler)
+      }
+    }
+  }, [fetchOrganizations, isSuperUser])
 
   useEffect(() => {
     if (isSuperUser || role === null) return
@@ -571,14 +587,16 @@ export function TeamSwitcher(): React.ReactElement | null {
                         Sin empresas registradas
                       </DropdownMenuItem>
                     )}
-                    {canAddCompanies ? (
-                      <DropdownMenuItem
-                        className="gap-2 p-2"
-                        onClick={() => {
-                          setActiveOrgId(organization.id)
-                          setDialogOpen(true)
-                        }}
-                      >
+                      {canAddCompanies ? (
+                        <DropdownMenuItem
+                          className="gap-2 p-2"
+                          onClick={() => {
+                            setActiveOrgId(organization.id)
+                            setActiveCompanyId(null)
+                            setTenantSelection({ orgId: organization.id, companyId: null })
+                            setDialogOpen(true)
+                          }}
+                        >
                         <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
                           <Plus className="size-4" />
                         </div>

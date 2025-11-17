@@ -14,6 +14,79 @@ export interface SaleAllocation {
   storeInventory: any;
 }
 
+async function allocateInvoiceSequence(
+  prisma: Prisma.TransactionClient,
+  params: { companyId: number; documentType: string },
+): Promise<{ serie: string; correlativo: string }> {
+  const { companyId, documentType } = params;
+  const normalizedType = documentType.toUpperCase();
+
+  let sequence = await prisma.companyDocumentSequence.findUnique({
+    where: {
+      companyId_documentType: {
+        companyId,
+        documentType: normalizedType,
+      },
+    },
+  });
+
+  if (!sequence) {
+    const fallbackSerie =
+      normalizedType === 'FACTURA'
+        ? 'F001'
+        : normalizedType === 'BOLETA'
+          ? 'B001'
+          : 'S001';
+
+    const lastInvoice = await prisma.invoiceSales.findFirst({
+      where: {
+        companyId,
+        tipoComprobante: normalizedType,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const lastCorrelative =
+      lastInvoice && /^[0-9]+$/.test(lastInvoice.nroCorrelativo)
+        ? Number(lastInvoice.nroCorrelativo)
+        : null;
+
+    const padding =
+      lastInvoice?.nroCorrelativo?.length ??
+      lastCorrelative?.toString().length ??
+      3;
+
+    sequence = await prisma.companyDocumentSequence.create({
+      data: {
+        companyId,
+        documentType: normalizedType,
+        serie: lastInvoice?.serie ?? fallbackSerie,
+        nextCorrelative:
+          lastCorrelative !== null ? lastCorrelative + 1 : 1,
+        correlativeLength: padding,
+      },
+    });
+  }
+
+  const updated = await prisma.companyDocumentSequence.update({
+    where: { id: sequence.id },
+    data: { nextCorrelative: { increment: 1 } },
+    select: {
+      nextCorrelative: true,
+      serie: true,
+      correlativeLength: true,
+    },
+  });
+
+  const issuedNumber = updated.nextCorrelative - 1;
+  const padding = updated.correlativeLength ?? sequence.correlativeLength ?? 3;
+
+  return {
+    serie: updated.serie,
+    correlativo: String(issuedNumber).padStart(padding, '0'),
+  };
+}
+
 export async function prepareSaleContext(
   prisma: PrismaService,
   storeId: number,
@@ -220,6 +293,7 @@ export async function executeSale(
           entryDetailId: entryDetail.id,
           storeOnInventoryId: storeInventory.id,
           productId: detail.productId,
+          companyId: sale.companyId!,
           quantity: detail.quantity,
           price: detail.price,
           series: detail.series ?? [],
@@ -337,24 +411,29 @@ export async function executeSale(
           currency: payment.currency,
           transactionId: payment.transactionId,
           cashTransactionId: transaction.id,
+          companyId: sale.companyId!,
         },
       });
     }
 
     if (tipoComprobante && tipoComprobante !== 'SIN COMPROBANTE') {
-      const serie = tipoComprobante === 'FACTURA' ? 'F001' : 'B001';
-      const lastInvoice = await prismaTx.invoiceSales.findFirst({
-        where: { tipoComprobante },
-        orderBy: { nroCorrelativo: 'desc' },
+      if (sale.companyId == null) {
+        throw new BadRequestException(
+          'No se puede emitir un comprobante sin una compania asociada.',
+        );
+      }
+
+      const nextSequence = await allocateInvoiceSequence(prismaTx, {
+        companyId: sale.companyId,
+        documentType: tipoComprobante,
       });
-      const nuevoCorrelativo = lastInvoice
-        ? parseInt(lastInvoice.nroCorrelativo) + 1
-        : 1;
+
       await prismaTx.invoiceSales.create({
         data: {
           salesId: sale.id,
-          serie,
-          nroCorrelativo: nuevoCorrelativo.toString().padStart(3, '0'),
+          companyId: sale.companyId,
+          serie: nextSequence.serie,
+          nroCorrelativo: nextSequence.correlativo,
           tipoComprobante,
           tipoMoneda: tipoMoneda || 'PEN',
           total,

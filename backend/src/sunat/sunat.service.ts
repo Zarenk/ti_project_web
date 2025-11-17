@@ -263,6 +263,7 @@ export class SunatService {
 
   async generarYEnviarConSerie(
     documentType: string,
+    companyId?: number | null,
   ): Promise<{ serie: string; correlativo: string }> {
     const normalizedType = this.normalizeDocumentType(documentType);
     const tipo =
@@ -276,8 +277,13 @@ export class SunatService {
 
     const prefix = tipo === '01' ? 'F001' : tipo === '03' ? 'B001' : 'N001';
 
+    const where: Prisma.InvoiceSalesWhereInput = { serie: prefix };
+    if (typeof companyId === 'number') {
+      where.companyId = companyId;
+    }
+
     const ultimo = await this.prismaService.invoiceSales.findFirst({
-      where: { serie: prefix },
+      where,
       orderBy: { nroCorrelativo: 'desc' },
       select: { serie: true, nroCorrelativo: true },
     });

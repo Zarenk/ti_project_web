@@ -3,6 +3,7 @@ const COMPANY_COOKIE = "tenant_company_id"
 const STORAGE_KEY = "dashboard.tenant-selection"
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30 // 30 dias
 export const TENANT_SELECTION_EVENT = "tenant-selection:change" as const
+export const TENANT_ORGANIZATIONS_EVENT = "tenant-selection:organizations-refresh" as const
 
 type TenantSelection = {
   orgId: number | null

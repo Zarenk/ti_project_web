@@ -60,6 +60,8 @@ export class ProductsController {
   }
 
   @Post('verify-or-create-products')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
   async verifyOrCreateProducts(
     @Body()
     products: {
