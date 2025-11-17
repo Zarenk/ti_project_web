@@ -81,6 +81,7 @@ export class EntriesService {
       totalGross?: number;
       igvRate?: number;
       organizationId?: number | null;
+      referenceId?: string;
       details: {
         productId: number;
         name: string;
@@ -102,6 +103,16 @@ export class EntriesService {
   ) {
     try {
       console.log('Datos recibidos en createEntry:', data);
+
+      if (data.referenceId) {
+        const existingEntry = await this.prisma.entry.findFirst({
+          where: { referenceId: data.referenceId },
+          include: { details: true },
+        });
+        if (existingEntry) {
+          return existingEntry;
+        }
+      }
       // Normalizar y validar para evitar errores de Prisma por tipos inesperados
       const normalizedDetails = (data.details ?? []).map((d: any) => ({
         productId: Number(d.productId),
@@ -269,6 +280,7 @@ export class EntriesService {
             totalGross,
             igvRate,
             organizationId,
+            referenceId: data.referenceId ?? null,
             details: {
               create: verifiedProducts.map((product) => ({
                 productId: product.productId,

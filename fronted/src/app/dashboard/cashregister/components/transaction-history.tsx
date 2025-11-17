@@ -97,6 +97,9 @@ const removePaymentMethodSegments = (value: string) => {
   )
 }
 
+const trimDescriptionSeparators = (value: string) =>
+  value.replace(/^[\s\-|;:.,]+/, "").replace(/[\s\-|;:.,]+$/, "")
+
 const parseSaleItemsFromDescription = (description?: string | null) => {
   if (!description) {
     return { items: [] as SaleDetailItem[], notes: "" }
@@ -120,7 +123,7 @@ const parseSaleItemsFromDescription = (description?: string | null) => {
     .trim()
 
   const matches = Array.from(
-    saleSegment.matchAll(/([^|]+?)\s*(?:[-–—])?\s*Cantidad:\s*([0-9.,]+)\s*,\s*Precio\s*Unitario:\s*([0-9.,]+)/gi),
+    saleSegment.matchAll(/([^|]+)\s*(?:[-–—])?\s*Cantidad:\s*([0-9.,]+)\s*,\s*Precio\s*Unitario:\s*([0-9.,]+)/gi),
   )
 
   const items = matches
@@ -128,9 +131,7 @@ const parseSaleItemsFromDescription = (description?: string | null) => {
       const rawName = match[1] ?? ""
       const quantity = parseLocaleNumber(match[2] ?? "0")
       const unitPrice = parseLocaleNumber(match[3] ?? "0")
-      const cleanedName = normalizeWhitespace(
-        rawName.replace(/^[\-|]+/, "").replace(/[\-|]+$/, ""),
-      )
+      const cleanedName = normalizeWhitespace(trimDescriptionSeparators(rawName))
 
       if (!cleanedName) {
         return null
@@ -149,7 +150,7 @@ const parseSaleItemsFromDescription = (description?: string | null) => {
   matches.forEach((match) => {
     remainderSegment = remainderSegment.replace(match[0], " ")
   })
-  remainderSegment = remainderSegment.replace(/[|]+/g, " ")
+  remainderSegment = remainderSegment.replace(/[|;]+/g, " ")
 
   const cleanedPrefix = removePaymentMethodSegments(prefix)
   const cleanedRemainder = removePaymentMethodSegments(remainderSegment)
@@ -163,6 +164,55 @@ const parseSaleItemsFromDescription = (description?: string | null) => {
     items,
     notes: combinedNotes,
   }
+}
+
+const normalizeProvidedSaleItems = (
+  items?: Array<{
+    name?: string | null
+    quantity?: number | null
+    unitPrice?: number | null
+    total?: number | null
+  }>,
+) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [] as SaleDetailItem[]
+  }
+
+  return items
+    .map((item) => {
+      const cleanedName = normalizeWhitespace(trimDescriptionSeparators(item.name ?? ""))
+      if (!cleanedName) {
+        return null
+      }
+      const quantity = Number(item.quantity ?? 0)
+      const unitPrice = Number(item.unitPrice ?? 0)
+      const total =
+        item.total !== undefined && item.total !== null
+          ? Number(item.total)
+          : quantity * unitPrice
+
+      return {
+        name: toSentenceCase(cleanedName),
+        quantity,
+        unitPrice,
+        total,
+      }
+    })
+    .filter((entry): entry is SaleDetailItem => entry !== null)
+}
+
+const resolveSaleDetails = (
+  description?: string | null,
+  providedItems?: Transaction["saleItems"],
+) => {
+  const parsed = parseSaleItemsFromDescription(description)
+  const normalized = normalizeProvidedSaleItems(providedItems)
+
+  if (normalized.length > 0) {
+    return { items: normalized, notes: parsed.notes }
+  }
+
+  return parsed
 }
 
 const formatCurrency = (amount: number, currencySymbol: string) =>
@@ -292,7 +342,8 @@ const formatSaleDescription = (description?: string | null) => {
       .map((segment) => segment.trim())
       .filter((segment) => segment.length > 0)
 
-    return segments.join(" ").replace(/\s+/g, " ").trim()
+    const combined = segments.join(" ").replace(/\s+/g, " ").trim()
+    return removePaymentMethodSegments(combined)
   }
 
 const normalizeInvoiceUrl = (invoiceUrl?: string | null) => {
@@ -348,7 +399,12 @@ const sanitizeIncomeNoteValue = (value?: string | null) => {
     " ",
   )
 
-  const segments = withoutRedundantPhrase
+  const withoutPaymentSegments = withoutRedundantPhrase.replace(
+    /\|\s*[a-záéíóúüñ\s]+:\s*(?:s\/\.?|s\.\/|\$)\s*[0-9.,]+/gi,
+    " ",
+  )
+
+  const segments = withoutPaymentSegments
     .split("|")
     .map((segment) => normalizeWhitespace(segment))
     .filter((segment) => segment.length > 0)
@@ -636,7 +692,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
           .map((operation) => {
             const effectiveType =
               (operation.internalType ?? operation.type) === "EXPENSE" ? "EXPENSE" : "INCOME"
-            const saleDetails = parseSaleItemsFromDescription(operation.description)
+            const saleDetails = resolveSaleDetails(operation.description, operation.saleItems)
             const rawSaleNotes =
               effectiveType === "INCOME"
                 ? sanitizeIncomeNoteValue(saleDetails.notes)
@@ -908,8 +964,8 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
         ? closureDetailsMap.get(modalTransaction.id)
         : undefined
     const modalSaleDetails = useMemo(
-      () => parseSaleItemsFromDescription(modalTransaction?.description),
-      [modalTransaction?.description],
+      () => resolveSaleDetails(modalTransaction?.description, modalTransaction?.saleItems),
+      [modalTransaction?.description, modalTransaction?.saleItems],
     )
 
     const dialogDescriptionId = "transaction-history-dialog-description"
@@ -1201,7 +1257,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                           const {
                             items: saleItems,
                             notes: rawSaleNotes,
-                          } = parseSaleItemsFromDescription(transaction.description)
+                          } = resolveSaleDetails(transaction.description, transaction.saleItems)
                           const paymentMethods = Array.isArray(transaction.paymentMethods)
                             ? transaction.paymentMethods
                             : []
@@ -1219,13 +1275,25 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                               ? sanitizeIncomeNoteValue(baseTransactionNotes)
                               : baseTransactionNotes
                           const itemsTotal = saleItems.reduce((sum, item) => sum + item.total, 0)
-                          const rawNoteCandidates = isClosure
-                            ? [transactionNotes, saleNotes, formattedDescription ?? ""]
-                            : [saleNotes, transactionNotes, formattedDescription ?? ""]
+                          const rawNoteCandidates = (() => {
+                            if (isClosure) {
+                              return [transactionNotes, saleNotes]
+                            }
+                            const includeSaleNotes = saleItems.length === 0
+                            return includeSaleNotes
+                              ? [transactionNotes, saleNotes]
+                              : [transactionNotes]
+                          })()
 
                           const notesContent = rawNoteCandidates
                             .map((value) => collapseRepeatedPhrase(value ?? ""))
                             .map((value) => normalizeWhitespace(value))
+                            .map((value) => removePaymentMethodSegments(value))
+                            .filter(
+                              (value) =>
+                                value.length > 0 &&
+                                !/^(venta\s+(registrada|realizada))$/i.test(value),
+                            )
                             .filter((value) => value.length > 0)
                             .filter(
                               (value, index, array) =>
@@ -1803,9 +1871,15 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                       (sum, item) => sum + item.total,
                       0,
                     )
+                    const rawModalSaleNotes =
+                      modalEffectiveType === "INCOME" ? normalizeWhitespace(saleDetails.notes) : ""
+                    const sanitizedModalSaleNotes = removePaymentMethodSegments(rawModalSaleNotes)
                     const saleNotes =
-                      modalEffectiveType === "INCOME"
-                        ? normalizeWhitespace(saleDetails.notes)
+                      modalEffectiveType === "INCOME" && saleItems.length === 0
+                        ? sanitizedModalSaleNotes &&
+                          !/^(venta\s+(registrada|realizada))$/i.test(sanitizedModalSaleNotes)
+                          ? sanitizedModalSaleNotes
+                          : ""
                         : ""
 
                     const paymentEntriesForModal = paymentEntries.map((entry) => ({

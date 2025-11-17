@@ -8,6 +8,9 @@ import {
   Image,
 } from '@react-pdf/renderer';
 
+const BACKEND_BASE_URL =
+  (process.env.NEXT_PUBLIC_BACKEND_URL ?? '').replace(/\/$/, '');
+
 const styles = StyleSheet.create({
   page: {
     padding: 30,
@@ -205,6 +208,25 @@ function wrapText(text: string, maxLength: number) {
   return lines.join('\n');
 }
 
+function resolveLogoSrc(raw?: string | null): string {
+  const fallback = '/logo_ti.png';
+  if (!raw) {
+    return fallback;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  const normalized = trimmed.replace(/^\/+/, '');
+  if (BACKEND_BASE_URL) {
+    return `${BACKEND_BASE_URL}/${normalized}`;
+  }
+  return `/${normalized}`;
+}
+
 export function InvoiceDocument({
   data,
   qrCode,
@@ -241,6 +263,18 @@ export function InvoiceDocument({
   const emitterPhone =
     emitter.phone || emitter.telefono || emitter.phoneNumber || null;
   const emitterRuc = emitter.ruc || emitter.taxId || emitter.sunatRuc || '—';
+  const logoSrc = resolveLogoSrc(
+    data.logoUrl ?? emitter.logoUrl ?? emitter.logo ?? null,
+  );
+  const primaryColor =
+    data.primaryColor ||
+    emitter.primaryColor ||
+    emitter.brandColor ||
+    '#0B2B66';
+  const secondaryColor =
+    data.secondaryColor ||
+    emitter.secondaryColor ||
+    '#0F3B8C';
 
   return (
     <Document>
@@ -248,7 +282,7 @@ export function InvoiceDocument({
         {/* Encabezado */}
         <View style={styles.header}>
           <View style={styles.leftColumn}>
-            <Image src="/logo_ti.png" style={styles.logo} />
+            <Image src={logoSrc} style={styles.logo} />
             <Text style={styles.companyName}>{emitterName}</Text>
             <Text>{emitterAddress}</Text>
             {emitterPhone ? <Text>TELEFONO: {emitterPhone}</Text> : null}
@@ -256,7 +290,7 @@ export function InvoiceDocument({
           <View style={styles.rightColumn}>
             <View style={styles.invoiceBox}>
               <Text style={styles.rucText}>RUC: {emitterRuc}</Text>
-              <View style={styles.titleBox}>
+              <View style={[styles.titleBox, { backgroundColor: primaryColor }]}>
                 <Text style={styles.titleText}>
                   {documentTypeLabel} ELECTRÓNICA
                 </Text>
@@ -314,7 +348,7 @@ export function InvoiceDocument({
 
         {/* Tabla de productos */}
         <View style={styles.table}>
-          <View style={styles.tableHeader}>
+          <View style={[styles.tableHeader, { backgroundColor: secondaryColor }]}>
             <Text style={styles.cellCenter}>Cantidad</Text>
             <Text style={styles.cellCenter}>UM</Text>
             <Text style={[styles.cell, { flex: 3 }]}>Descripción</Text>

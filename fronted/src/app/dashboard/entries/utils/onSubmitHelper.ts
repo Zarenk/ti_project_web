@@ -1,8 +1,9 @@
-﻿import { toast } from "sonner"
+import { toast } from "sonner";
 import { createProvider } from "../../providers/providers.api";
 import { verifyOrCreateProducts } from "../../products/products.api";
 import { createEntry, uploadGuiaPdf, uploadPdf } from "../entries.api";
 import { updateProductPriceSell } from "../../inventory/inventory.api";
+import { UnauthenticatedError } from "@/utils/auth-fetch";
 
 function parseMonetaryAmount(value?: string | number): number | undefined {
   if (value == null) {
@@ -51,27 +52,28 @@ export async function handleFormSubmission({
   getUserIdFromToken,
   tipoMoneda, // Nuevo parÃ¡metro
   tipoCambioActual, // Nuevo parÃ¡metro
-}: any) {
+  referenceId,
+}: any): Promise<boolean> {
   const userId = await getUserIdFromToken();
   if (!userId) {
     toast.error("No se pudo obtener el ID del usuario. Por favor, inicie sesiÃ³n nuevamente.");
-    return;
+    return false;
   }
 
   try {
     const storeId = stores.find((store: any) => store.name === data.store_name)?.id;
     if (!storeId) {
       toast.error("Debe seleccionar una tienda valida.");
-      return;
+      return false;
     }
 
     if (selectedProducts.length === 0) {
       toast.error("Debe agregar al menos un producto al registro.");
-      return;
+      return false;
     }
 
     const areSeriesValid = await validateSeriesBeforeSubmit();
-    if (!areSeriesValid) return;
+    if (!areSeriesValid) return false;
 
     let providerIdBoolean: number | null = null;
 
@@ -97,7 +99,7 @@ export async function handleFormSubmission({
     if (!providerId) {
       if (!providerIdBoolean) {
         toast.error("Debe seleccionar un proveedor valido.");
-        return;
+        return false;
       } else {
         providerId = providerIdBoolean;
       }
@@ -131,7 +133,7 @@ export async function handleFormSubmission({
 
     const updatedProducts = selectedProducts.map((product: any) => {
       const verifiedProduct = verifiedProducts.find((vp: any) => vp.name === product.name);
-      if (!verifiedProduct) throw new Error(`No se encontrÃ³ un ID para el producto con nombre: ${product.name}`);
+      if (!verifiedProduct) throw new Error(`No se encontro un ID para el producto con nombre: ${product.name}`);
 
       // Calcular el precio en soles si la moneda es "USD"
       const priceInSoles = tipoMoneda === "USD" && tipoCambioActual
@@ -156,6 +158,7 @@ export async function handleFormSubmission({
     );
 
     const payload = {
+      referenceId,
       storeId,
       userId,
       providerId,
@@ -185,9 +188,15 @@ export async function handleFormSubmission({
     toast.success("Se registro la informacion correctamente.");
     router.push("/dashboard/entries");
     router.refresh();
+    return true;
   } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      toast.error("Tu sesión expiró. Inicia sesión nuevamente antes de registrar un ingreso.");
+      return false;
+    }
     console.error("Error al crear/actualizar la entrada:", error);
-    toast.error("OcurriÃ³ un error al guardar la entrada.");
+    toast.error("Ocurrió un error al guardar la entrada.");
+    return false;
   }
 }
 

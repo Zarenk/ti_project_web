@@ -251,6 +251,15 @@ export class CashregisterService {
               include: {
                 client: true,
                 invoices: true,
+                salesDetails: {
+                  include: {
+                    entryDetail: {
+                      include: {
+                        product: true,
+                      },
+                    },
+                  },
+                },
               },
             },
           },
@@ -295,7 +304,23 @@ export class CashregisterService {
       },
     });
     const formattedTransactions = transactions.map((tx) => {
-      const linkedClient = tx.salePayments[0]?.sale?.client;
+      const linkedSale = tx.salePayments[0]?.sale;
+      const linkedClient = linkedSale?.client;
+      const saleItems =
+        linkedSale?.salesDetails?.map((detail) => {
+          const productName =
+            detail.entryDetail?.product?.name ??
+            (detail.entryDetail as any)?.productName ??
+            `Producto ${detail.productId}`;
+          const quantity = Number(detail.quantity ?? 0);
+          const unitPrice = Number(detail.price ?? 0);
+          return {
+            name: productName?.trim() ?? '',
+            quantity,
+            unitPrice,
+            total: quantity * unitPrice,
+          };
+        }) ?? [];
       return {
         id: tx.id.toString(),
         cashRegisterId: tx.cashRegisterId,
@@ -323,6 +348,7 @@ export class CashregisterService {
         clientName: linkedClient?.name ?? tx.clientName ?? null,
         clientDocument: linkedClient?.typeNumber ?? tx.clientDocument ?? null,
         clientDocumentType: linkedClient?.type ?? tx.clientDocumentType ?? null,
+        saleItems,
       };
     });
     const formattedClosures = closures.map((closure) => ({

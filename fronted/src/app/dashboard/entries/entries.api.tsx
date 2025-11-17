@@ -15,6 +15,7 @@ export async function createEntry(data: {
   paymentTerm?: 'CASH' | 'CREDIT';
   details: { productId: number; quantity: number; price: number; priceInSoles: number }[];
   invoice?: { serie: string; nroCorrelativo: string; tipoComprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
+  referenceId?: string;
 }) {
     try{
       const response = await authFetch(`${BACKEND_URL}/api/entries`, {

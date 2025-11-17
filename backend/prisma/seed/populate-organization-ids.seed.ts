@@ -15,6 +15,8 @@ export const POPULATE_ENTITY_KEYS = [
   'inventory-history',
   'entry',
   'provider',
+  'category',
+  'product',
   'sales',
   'transfer',
   'orders',
@@ -58,8 +60,9 @@ export type PopulateOptions = {
 
 type UpdatePlan = {
   id: number;
-  organizationId: number;
+  organizationId?: number;
   reason: string;
+  companyId?: number | null;
 };
 
 type EntitySummary = {
@@ -86,6 +89,7 @@ type PopulateContext = {
   dryRun: boolean;
   chunkSize: number;
   overrides: OverridesMap;
+  defaultCompanyId?: number | null;
 };
 
 const DEFAULT_CHUNK_SIZE = 25;
@@ -452,29 +456,97 @@ async function ensureDefaultOrganization(
   return { id: created.id, created: true };
 }
 
-function inferReason(values: Array<[boolean, string]>): string {
+async function resolveDefaultCompanyId(
+  prisma: PrismaContextClient,
+  organizationId: number,
+  logger: Logger,
+): Promise<number | null> {
+  const company = (await prisma.company.findFirst({
+    where: { organizationId } as any,
+    orderBy: { id: 'asc' } as any,
+    select: { id: true } as any,
+  })) as any;
+
+  if (!company) {
+    logger.warn(
+      `[populate-org] No company found for organization ${organizationId}; companyId propagation will be skipped.`,
+    );
+    return null;
+  }
+
+  logger.info(
+    `[populate-org] Using company ${company.id} as default fallback for organization ${organizationId}.`,
+  );
+  return company.id;
+}
+
+function inferReason(
+  values: Array<[boolean, string]>,
+  fallback: string = 'fallback:default-organization',
+): string {
   const found = values.find(([condition]) => condition);
-  return found ? found[1] : 'fallback:default-organization';
+  return found ? found[1] : fallback;
 }
 
 async function populateStores(context: PopulateContext, defaultOrganizationId: number) {
+  const defaultCompanyId = context.defaultCompanyId ?? null;
+  const whereClause: any =
+    defaultCompanyId !== null
+      ? {
+          OR: [{ organizationId: null } as any, { companyId: null } as any],
+        }
+      : { organizationId: null } as any;
+
   const stores = (await context.prisma.store.findMany({
-    where: { organizationId: null } as any,
-    select: { id: true } as any,
+    where: whereClause,
+    select: { id: true, organizationId: true, companyId: true } as any,
   })) as any[];
 
-  const plans = stores.map<UpdatePlan>((store) => ({
-    id: store.id,
-    organizationId: defaultOrganizationId,
-    reason: 'fallback:default-organization',
-  }));
+  const plans = stores
+    .map<UpdatePlan | null>((store) => {
+      const needsOrganization = store.organizationId == null;
+      const needsCompany = defaultCompanyId !== null && store.companyId == null;
+
+      if (!needsOrganization && !needsCompany) {
+        return null;
+      }
+
+      const reason = inferReason(
+        [
+          [needsOrganization && needsCompany, 'fallback:default-organization-and-company'],
+          [needsOrganization, 'fallback:default-organization'],
+          [needsCompany, 'fallback:default-company'],
+        ],
+        'fallback:default-organization',
+      );
+
+      const plan: UpdatePlan = {
+        id: store.id,
+        reason,
+      };
+
+      if (needsOrganization) {
+        plan.organizationId = defaultOrganizationId;
+      }
+      if (needsCompany && defaultCompanyId !== null) {
+        plan.companyId = defaultCompanyId;
+      }
+
+      return plan;
+    })
+    .filter((plan): plan is UpdatePlan => Boolean(plan));
 
   return executePlan('store', plans, context, (chunk) =>
     context.prisma.$transaction(
       chunk.map((plan) =>
         context.prisma.store.update({
           where: { id: plan.id },
-          data: { organizationId: plan.organizationId } as any,
+          data: {
+            ...(plan.organizationId !== undefined
+              ? { organizationId: plan.organizationId }
+              : {}),
+            ...(plan.companyId !== undefined ? { companyId: plan.companyId } : {}),
+          } as any,
         }) as any,
       ),
     ),
@@ -752,37 +824,241 @@ async function populateProviders(context: PopulateContext, defaultOrganizationId
   );
 }
 
-async function populateSales(context: PopulateContext, defaultOrganizationId: number) {
-  const sales = (await context.prisma.sales.findMany({
-    where: { organizationId: null } as any,
+async function populateCategories(context: PopulateContext, defaultOrganizationId: number) {
+  const defaultCompanyId = context.defaultCompanyId ?? null;
+  const whereClause: any = {
+    OR: [{ organizationId: null } as any],
+  };
+
+  if (defaultCompanyId !== null) {
+    whereClause.OR.push({ companyId: null } as any);
+  }
+
+  const categories = (await context.prisma.category.findMany({
+    where: whereClause,
+    select: { id: true, organizationId: true, companyId: true } as any,
+  })) as any[];
+
+  const plans = categories
+    .map<UpdatePlan | null>((category) => {
+      const needsOrganization = category.organizationId == null;
+      const needsCompany = defaultCompanyId !== null && category.companyId == null;
+
+      if (!needsOrganization && !needsCompany) {
+        return null;
+      }
+
+      const organizationId = needsOrganization
+        ? defaultOrganizationId
+        : category.organizationId;
+
+      const plan: UpdatePlan = {
+        id: category.id,
+        organizationId,
+        reason: needsOrganization
+          ? needsCompany
+            ? 'fallback:default-organization-and-company'
+            : 'fallback:default-organization'
+          : 'fallback:default-company',
+      };
+
+      if (needsCompany && defaultCompanyId !== null) {
+        plan.companyId = defaultCompanyId;
+      }
+
+      return plan;
+    })
+    .filter((plan): plan is UpdatePlan => Boolean(plan));
+
+  return executePlan('category', plans, context, (chunk) =>
+    context.prisma.$transaction(
+      chunk.map((plan) =>
+        context.prisma.category.update({
+          where: { id: plan.id },
+          data: {
+            organizationId: plan.organizationId,
+            ...(plan.companyId !== undefined ? { companyId: plan.companyId } : {}),
+          } as any,
+        }) as any,
+      ),
+    ),
+  );
+}
+
+async function populateProducts(context: PopulateContext, defaultOrganizationId: number) {
+  const defaultCompanyId = context.defaultCompanyId ?? null;
+  const whereClause: any = {
+    OR: [{ organizationId: null } as any],
+  };
+
+  if (defaultCompanyId !== null) {
+    whereClause.OR.push({ companyId: null } as any);
+  }
+
+  const products = (await context.prisma.product.findMany({
+    where: whereClause,
     select: {
       id: true,
-      store: { select: { organizationId: true } as any },
+      organizationId: true,
+      companyId: true,
+      category: {
+        select: {
+          organizationId: true,
+          companyId: true,
+        },
+      },
+    } as any,
+  })) as any[];
+
+  const plans = products
+    .map<UpdatePlan | null>((product) => {
+      const needsOrganization = product.organizationId == null;
+      const needsCompany =
+        product.companyId == null &&
+        (product.category?.companyId != null || defaultCompanyId !== null);
+
+      if (!needsOrganization && !needsCompany) {
+        return null;
+      }
+
+      const resolvedOrganizationId = needsOrganization
+        ? product.category?.organizationId ?? defaultOrganizationId
+        : product.organizationId;
+
+      let resolvedCompanyId: number | null | undefined = product.companyId;
+      if (needsCompany) {
+        resolvedCompanyId =
+          product.category?.companyId ?? defaultCompanyId ?? null;
+        if (resolvedCompanyId == null) {
+          return null;
+        }
+      }
+
+      let reason: string;
+      if (needsOrganization && needsCompany) {
+        reason = inferReason(
+          [
+            [product.category?.organizationId != null, 'inherit:category'],
+            [product.category?.companyId != null, 'inherit:category-company'],
+          ],
+          'fallback:default-organization-and-company',
+        );
+      } else if (needsOrganization) {
+        reason = inferReason(
+          [[product.category?.organizationId != null, 'inherit:category']],
+        );
+      } else {
+        reason = inferReason(
+          [[product.category?.companyId != null, 'inherit:category-company']],
+          'fallback:default-company',
+        );
+      }
+
+      const plan: UpdatePlan = {
+        id: product.id,
+        organizationId: resolvedOrganizationId,
+        reason,
+      };
+
+      if (needsCompany && resolvedCompanyId != null) {
+        plan.companyId = resolvedCompanyId;
+      }
+
+      return plan;
+    })
+    .filter((plan): plan is UpdatePlan => Boolean(plan));
+
+  return executePlan('product', plans, context, (chunk) =>
+    context.prisma.$transaction(
+      chunk.map((plan) =>
+        context.prisma.product.update({
+          where: { id: plan.id },
+          data: {
+            organizationId: plan.organizationId,
+            ...(plan.companyId !== undefined ? { companyId: plan.companyId } : {}),
+          } as any,
+        }) as any,
+      ),
+    ),
+  );
+}
+
+async function populateSales(context: PopulateContext, defaultOrganizationId: number) {
+  const sales = (await context.prisma.sales.findMany({
+    where: {
+      OR: [
+        { organizationId: null } as any,
+        ...(context.defaultCompanyId != null ? [{ companyId: null } as any] : []),
+      ],
+    } as any,
+    select: {
+      id: true,
+      organizationId: true,
+      companyId: true,
+      store: { select: { organizationId: true, companyId: true } as any },
       client: { select: { organizationId: true } as any },
       user: { select: { organizationId: true } as any },
     } as any,
   })) as any[];
 
-  const plans = sales.map<UpdatePlan>((sale) => {
-    const storeOrg = sale.store?.organizationId ?? null;
-    const clientOrg = sale.client?.organizationId ?? null;
-    const userOrg = sale.user?.organizationId ?? null;
-    const organizationId = storeOrg ?? clientOrg ?? userOrg ?? defaultOrganizationId;
-    const reason = inferReason([
-      [storeOrg !== null, 'inherit:store'],
-      [clientOrg !== null, 'inherit:client'],
-      [userOrg !== null, 'inherit:user'],
-    ]);
+  const plans = sales
+    .map<UpdatePlan | null>((sale) => {
+      const needsOrganization = sale.organizationId == null;
+      const needsCompany =
+        sale.companyId == null && (context.defaultCompanyId != null || sale.store?.companyId != null);
 
-    return { id: sale.id, organizationId, reason };
-  });
+      if (!needsOrganization && !needsCompany) {
+        return null;
+      }
+
+      const storeOrg = sale.store?.organizationId ?? null;
+      const clientOrg = sale.client?.organizationId ?? null;
+      const userOrg = sale.user?.organizationId ?? null;
+      const resolvedOrg = needsOrganization
+        ? storeOrg ?? clientOrg ?? userOrg ?? defaultOrganizationId
+        : sale.organizationId;
+
+      let resolvedCompany: number | null | undefined = sale.companyId;
+      if (needsCompany) {
+        resolvedCompany =
+          sale.store?.companyId ?? context.defaultCompanyId ?? null;
+      }
+
+      const reason = inferReason(
+        [
+          [storeOrg !== null, 'inherit:store'],
+          [clientOrg !== null, 'inherit:client'],
+          [userOrg !== null, 'inherit:user'],
+          [needsCompany && resolvedCompany == null, 'fallback:default-company'],
+        ],
+        needsOrganization ? 'fallback:default-organization' : 'fallback:default-company',
+      );
+
+      const plan: UpdatePlan = {
+        id: sale.id,
+        organizationId: needsOrganization ? resolvedOrg : undefined,
+        reason,
+      };
+
+      if (needsCompany && resolvedCompany != null) {
+        plan.companyId = resolvedCompany;
+      }
+
+      return plan;
+    })
+    .filter((plan): plan is UpdatePlan => Boolean(plan));
 
   return executePlan('sales', plans, context, (chunk) =>
     context.prisma.$transaction(
       chunk.map((plan) =>
         context.prisma.sales.update({
           where: { id: plan.id },
-          data: { organizationId: plan.organizationId } as any,
+          data: {
+            ...(plan.organizationId !== undefined
+              ? { organizationId: plan.organizationId }
+              : {}),
+            ...(plan.companyId !== undefined ? { companyId: plan.companyId } : {}),
+          } as any,
         }) as any,
       ),
     ),
@@ -951,6 +1227,8 @@ const ENTITY_POPULATORS: ReadonlyArray<{
   { key: 'inventory-history', handler: populateInventoryHistory },
   { key: 'entry', handler: populateEntries },
   { key: 'provider', handler: populateProviders },
+  { key: 'category', handler: populateCategories },
+  { key: 'product', handler: populateProducts },
   { key: 'sales', handler: populateSales },
   { key: 'transfer', handler: populateTransfers },
   { key: 'orders', handler: populateOrders },
@@ -1001,7 +1279,14 @@ export async function populateMissingOrganizationIds(
     return accumulator;
   }, {} as Record<PopulateEntityKey, EntitySummary>);
   const overall = createEmptyEntitySummary();
-  const context: PopulateContext = { prisma: prismaWithAny, logger, dryRun, chunkSize, overrides };
+  const context: PopulateContext = {
+    prisma: prismaWithAny,
+    logger,
+    dryRun,
+    chunkSize,
+    overrides,
+    defaultCompanyId: undefined,
+  };
   const shouldDisconnect = !options.prisma;
 
   try {
@@ -1010,6 +1295,12 @@ export async function populateMissingOrganizationIds(
       logger,
       defaultOrganizationCode,
     );
+    const defaultCompanyId = await resolveDefaultCompanyId(
+      prismaWithAny,
+      defaultOrganizationId,
+      logger,
+    );
+    context.defaultCompanyId = defaultCompanyId ?? undefined;
 
     for (const { key, handler } of ENTITY_POPULATORS) {
       if (!enabledSet.has(key)) {

@@ -146,6 +146,38 @@ export class TenancyService {
     );
   }
 
+  private ensureCompanyAccess(
+    company: { id: number; organizationId: number },
+    tenant: TenantContext,
+  ): void {
+    if (tenant.isSuperAdmin || tenant.isOrganizationSuperAdmin) {
+      this.ensureOrganizationAccess(company.organizationId, tenant);
+      return;
+    }
+
+    const allowedCompanies = tenant.allowedCompanyIds ?? [];
+    const allowedOrganizations = tenant.allowedOrganizationIds ?? [];
+
+    const hasOrgConstraints = allowedOrganizations.length > 0;
+    const hasCompanyConstraints = allowedCompanies.length > 0;
+
+    const orgMatches =
+      tenant.organizationId === company.organizationId ||
+      allowedOrganizations.includes(company.organizationId);
+
+    const companyMatches =
+      tenant.companyId === company.id || allowedCompanies.includes(company.id);
+
+    const orgAllowed = hasOrgConstraints ? orgMatches : tenant.organizationId === null || tenant.organizationId === company.organizationId;
+    const companyAllowed = hasCompanyConstraints ? companyMatches : tenant.companyId === null || tenant.companyId === company.id;
+
+    if (!orgAllowed || !companyAllowed) {
+      throw new ForbiddenException(
+        'No tienes permisos para consultar o gestionar esta empresa.',
+      );
+    }
+  }
+
   async create(createTenancyDto: CreateTenancyDto): Promise<TenancySnapshot> {
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -417,6 +449,15 @@ export class TenancyService {
     );
     const sunatAddress = this.normalizeNullableInput(dto.sunatAddress);
     const sunatPhone = this.normalizeNullableInput(dto.sunatPhone);
+    const logoUrl = this.normalizeNullableInput(dto.logoUrl);
+    const primaryColor = this.normalizeColorInput(
+      dto.primaryColor,
+      'primaryColor',
+    );
+    const secondaryColor = this.normalizeColorInput(
+      dto.secondaryColor,
+      'secondaryColor',
+    );
     const sunatSolUserBeta = this.normalizeNullableInput(dto.sunatSolUserBeta);
     const sunatSolPasswordBeta = this.normalizeNullableInput(
       dto.sunatSolPasswordBeta,
@@ -447,6 +488,9 @@ export class TenancyService {
           sunatBusinessName: sunatBusinessName ?? null,
           sunatAddress: sunatAddress ?? null,
           sunatPhone: sunatPhone ?? null,
+          logoUrl: logoUrl ?? null,
+          primaryColor: primaryColor ?? null,
+          secondaryColor: secondaryColor ?? null,
           sunatSolUserBeta: sunatSolUserBeta ?? null,
           sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
           sunatCertPathBeta: sunatCertPathBeta ?? null,
@@ -522,12 +566,6 @@ export class TenancyService {
       };
     }
   > {
-    if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
-      throw new ForbiddenException(
-        'Solo los super administradores pueden consultar empresas.',
-      );
-    }
-
     const company = await this.prisma.company.findUnique({
       where: { id },
       include: {
@@ -547,7 +585,10 @@ export class TenancyService {
       );
     }
 
-    this.ensureOrganizationAccess(company.organizationId, tenant);
+    this.ensureCompanyAccess(
+      { id: company.id, organizationId: company.organizationId },
+      tenant,
+    );
 
     const { organization, ...snapshot } = company;
     return {
@@ -561,12 +602,6 @@ export class TenancyService {
     dto: UpdateCompanyDto,
     tenant: TenantContext,
   ): Promise<CompanySnapshot> {
-    if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
-      throw new ForbiddenException(
-        'Solo los super administradores pueden actualizar empresas.',
-      );
-    }
-
     const existing = await this.prisma.company.findUnique({
       where: { id },
     });
@@ -575,7 +610,10 @@ export class TenancyService {
       throw new NotFoundException(`La empresa ${id} no existe.`);
     }
 
-    this.ensureOrganizationAccess(existing.organizationId, tenant);
+    this.ensureCompanyAccess(
+      { id: existing.id, organizationId: existing.organizationId },
+      tenant,
+    );
 
     const data: Prisma.CompanyUpdateInput = {};
 
@@ -588,6 +626,15 @@ export class TenancyService {
     );
     const sunatAddress = this.normalizeNullableInput(dto.sunatAddress);
     const sunatPhone = this.normalizeNullableInput(dto.sunatPhone);
+    const logoUrl = this.normalizeNullableInput(dto.logoUrl);
+    const primaryColor = this.normalizeColorInput(
+      dto.primaryColor,
+      'primaryColor',
+    );
+    const secondaryColor = this.normalizeColorInput(
+      dto.secondaryColor,
+      'secondaryColor',
+    );
     const sunatSolUserBeta = this.normalizeNullableInput(dto.sunatSolUserBeta);
     const sunatSolPasswordBeta = this.normalizeNullableInput(
       dto.sunatSolPasswordBeta,
@@ -645,6 +692,15 @@ export class TenancyService {
     if (dto.sunatPhone !== undefined) {
       data.sunatPhone = sunatPhone ?? null;
     }
+    if (dto.logoUrl !== undefined) {
+      data.logoUrl = logoUrl ?? null;
+    }
+    if (dto.primaryColor !== undefined) {
+      data.primaryColor = primaryColor ?? null;
+    }
+    if (dto.secondaryColor !== undefined) {
+      data.secondaryColor = secondaryColor ?? null;
+    }
     if (dto.sunatSolUserBeta !== undefined) {
       data.sunatSolUserBeta = sunatSolUserBeta ?? null;
     }
@@ -695,6 +751,37 @@ export class TenancyService {
     }
   }
 
+  async updateCompanyLogo(
+    id: number,
+    input: {
+      tenant: TenantContext;
+      filePath: string;
+      originalName?: string;
+    },
+  ): Promise<CompanySnapshot> {
+    const { tenant, filePath } = input;
+
+    const existing = await this.prisma.company.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`La empresa ${id} no existe.`);
+    }
+
+    this.ensureCompanyAccess(
+      { id: existing.id, organizationId: existing.organizationId },
+      tenant,
+    );
+
+    return this.prisma.company.update({
+      where: { id },
+      data: {
+        logoUrl: filePath,
+      },
+    });
+  }
+
   async updateCompanySunatFile(
     id: number,
     input: {
@@ -707,12 +794,6 @@ export class TenancyService {
   ): Promise<CompanySnapshot> {
     const { tenant, environment, kind, filePath } = input;
 
-    if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
-      throw new ForbiddenException(
-        'Solo los super administradores pueden actualizar empresas.',
-      );
-    }
-
     const existing = await this.prisma.company.findUnique({
       where: { id },
     });
@@ -721,7 +802,10 @@ export class TenancyService {
       throw new NotFoundException(`La empresa ${id} no existe.`);
     }
 
-    this.ensureOrganizationAccess(existing.organizationId, tenant);
+    this.ensureCompanyAccess(
+      { id: existing.id, organizationId: existing.organizationId },
+      tenant,
+    );
 
     const data: Prisma.CompanyUpdateInput = {};
 
@@ -905,8 +989,35 @@ export class TenancyService {
     context: TenantContext,
   ): Promise<TenantSelectionSummary> {
     const prismaClient = this.prisma as unknown as PrismaService as any;
-    const allowedOrganizationIds = context.allowedOrganizationIds ?? [];
+    let allowedOrganizationIds = (context.allowedOrganizationIds ?? []).filter(
+      (id): id is number => typeof id === 'number' && Number.isFinite(id),
+    );
     const allowedCompanyIds = context.allowedCompanyIds ?? [];
+
+    if (
+      allowedOrganizationIds.length === 0 &&
+      context.userId !== null &&
+      !context.isGlobalSuperAdmin
+    ) {
+      const memberships = await prismaClient.organizationMembership.findMany({
+        where: { userId: context.userId },
+        select: { organizationId: true },
+      });
+      const membershipIds = new Set<number>();
+      for (const membership of memberships) {
+        if (
+          typeof membership.organizationId === 'number' &&
+          Number.isFinite(membership.organizationId)
+        ) {
+          membershipIds.add(membership.organizationId);
+        }
+      }
+      if (membershipIds.size > 0) {
+        allowedOrganizationIds = Array.from(membershipIds).sort(
+          (a, b) => a - b,
+        );
+      }
+    }
 
     const organizationInclude = {
       companies: {
@@ -919,23 +1030,31 @@ export class TenancyService {
       ReturnType<(typeof prismaClient.organization)['findFirst']>
     > | null = null;
 
-    if (context.organizationId !== null) {
+    const hasOrgRestrictions =
+      !context.isGlobalSuperAdmin && allowedOrganizationIds.length > 0;
+    const requestedOrganizationId =
+      context.organizationId !== null &&
+      (!hasOrgRestrictions ||
+        allowedOrganizationIds.includes(context.organizationId))
+        ? context.organizationId
+        : null;
+
+    if (requestedOrganizationId !== null) {
       organization = await prismaClient.organization.findUnique({
-        where: { id: context.organizationId },
+        where: { id: requestedOrganizationId },
         include: organizationInclude,
       });
     } else {
       organization = await prismaClient.organization.findFirst({
-        where:
-          allowedOrganizationIds.length > 0
-            ? { id: { in: allowedOrganizationIds } }
-            : undefined,
+        where: hasOrgRestrictions
+          ? { id: { in: allowedOrganizationIds } }
+          : undefined,
         include: organizationInclude,
         orderBy: { id: 'asc' },
       });
     }
 
-    if (!organization && allowedOrganizationIds.length > 0) {
+    if (!organization && hasOrgRestrictions) {
       organization = await prismaClient.organization.findFirst({
         include: organizationInclude,
         orderBy: { id: 'asc' },
@@ -1108,6 +1227,15 @@ export class TenancyService {
       );
       const sunatAddress = this.normalizeNullableInput(company.sunatAddress);
       const sunatPhone = this.normalizeNullableInput(company.sunatPhone);
+      const logoUrl = this.normalizeNullableInput(company.logoUrl);
+      const primaryColor = this.normalizeColorInput(
+        company.primaryColor,
+        'primaryColor',
+      );
+      const secondaryColor = this.normalizeColorInput(
+        company.secondaryColor,
+        'secondaryColor',
+      );
       const sunatSolUserBeta = this.normalizeNullableInput(
         company.sunatSolUserBeta,
       );
@@ -1145,6 +1273,9 @@ export class TenancyService {
           sunatBusinessName: sunatBusinessName ?? null,
           sunatAddress: sunatAddress ?? null,
           sunatPhone: sunatPhone ?? null,
+          logoUrl: logoUrl ?? null,
+          primaryColor: primaryColor ?? null,
+          secondaryColor: secondaryColor ?? null,
           sunatSolUserBeta: sunatSolUserBeta ?? null,
           sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
           sunatCertPathBeta: sunatCertPathBeta ?? null,
@@ -1274,6 +1405,20 @@ export class TenancyService {
         company.sunatEnvironment,
       );
       const sunatRuc = this.normalizeNullableInput(company.sunatRuc);
+      const sunatBusinessName = this.normalizeNullableInput(
+        company.sunatBusinessName,
+      );
+      const sunatAddress = this.normalizeNullableInput(company.sunatAddress);
+      const sunatPhone = this.normalizeNullableInput(company.sunatPhone);
+      const logoUrl = this.normalizeNullableInput(company.logoUrl);
+      const primaryColor = this.normalizeColorInput(
+        company.primaryColor,
+        'primaryColor',
+      );
+      const secondaryColor = this.normalizeColorInput(
+        company.secondaryColor,
+        'secondaryColor',
+      );
       const sunatSolUserBeta = this.normalizeNullableInput(
         company.sunatSolUserBeta,
       );
@@ -1340,6 +1485,15 @@ export class TenancyService {
         if (company.sunatPhone !== undefined) {
           updateData.sunatPhone = sunatPhone ?? null;
         }
+        if (company.logoUrl !== undefined) {
+          updateData.logoUrl = logoUrl ?? null;
+        }
+        if (company.primaryColor !== undefined) {
+          updateData.primaryColor = primaryColor ?? null;
+        }
+        if (company.secondaryColor !== undefined) {
+          updateData.secondaryColor = secondaryColor ?? null;
+        }
         if (company.sunatSolUserBeta !== undefined) {
           updateData.sunatSolUserBeta = sunatSolUserBeta ?? null;
         }
@@ -1388,6 +1542,9 @@ export class TenancyService {
           sunatBusinessName: sunatBusinessName ?? null,
           sunatAddress: sunatAddress ?? null,
           sunatPhone: sunatPhone ?? null,
+          logoUrl: logoUrl ?? null,
+          primaryColor: primaryColor ?? null,
+          secondaryColor: secondaryColor ?? null,
           sunatSolUserBeta: sunatSolUserBeta ?? null,
           sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
           sunatCertPathBeta: sunatCertPathBeta ?? null,
@@ -1447,6 +1604,29 @@ export class TenancyService {
 
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private normalizeColorInput(
+    value: string | null | undefined,
+    fieldName = 'color',
+  ): string | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value === null) {
+      return null;
+    }
+    const trimmed = value.trim();
+    if (!trimmed.length) {
+      return null;
+    }
+    const normalized = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+    if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(normalized)) {
+      throw new BadRequestException(
+        `El campo ${fieldName} debe ser un color HEX válido.`,
+      );
+    }
+    return normalized.toUpperCase();
   }
 
   private normalizeCompanyStatus(

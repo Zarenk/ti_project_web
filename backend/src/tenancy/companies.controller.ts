@@ -162,4 +162,88 @@ export class CompaniesController {
       originalName: file.originalname,
     });
   }
+
+  @Post(':id/logo')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          const tmpDir = resolveBackendPath('uploads', 'company-logos', 'tmp');
+          fs.mkdirSync(tmpDir, { recursive: true });
+          cb(null, tmpDir);
+        },
+        filename: (_req, file, cb) => {
+          const safeName =
+            file.originalname?.replace(/\s+/g, '_') || 'company-logo';
+          cb(null, `${Date.now()}-${safeName}`);
+        },
+      }),
+      limits: { fileSize: 2 * 1024 * 1024 },
+    }),
+  )
+  async uploadCompanyLogo(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentTenant() tenant: TenantContext | null,
+  ): Promise<CompanySnapshot> {
+    if (!file) {
+      throw new BadRequestException('Debes adjuntar una imagen.');
+    }
+
+    const allowedMimeTypes = ['image/png', 'image/jpeg'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      fs.unlink(file.path, () => {});
+      throw new BadRequestException('El logo debe ser PNG o JPG.');
+    }
+
+    const context = tenant ?? this.tenantContextService.getContext();
+    const company = await this.tenancyService.getCompanyById(id, context);
+
+    const orgFolder = `org-${company.organization.id}`;
+    const companyFolder = `company-${id}`;
+    const finalDir = resolveBackendPath(
+      'uploads',
+      'company-logos',
+      orgFolder,
+      companyFolder,
+    );
+    fs.mkdirSync(finalDir, { recursive: true });
+
+    const ext = file.mimetype === 'image/png' ? '.png' : '.jpg';
+    const finalName = `logo-${Date.now()}${ext}`;
+    const finalPath = path.join(finalDir, finalName);
+
+    try {
+      fs.renameSync(file.path, finalPath);
+    } catch (error) {
+      fs.unlink(file.path, () => {});
+      throw error;
+    }
+
+    const relativePath = path
+      .relative(resolveBackendPath(), finalPath)
+      .replace(/\\/g, '/');
+
+    try {
+      const updated = await this.tenancyService.updateCompanyLogo(id, {
+        tenant: context,
+        filePath: relativePath,
+        originalName: file.originalname,
+      });
+
+      if (company.logoUrl && company.logoUrl !== relativePath) {
+        const isExternal = /^https?:\/\//i.test(company.logoUrl);
+        if (!isExternal) {
+          const normalizedPrevious = company.logoUrl.replace(/^[/\\]+/, '');
+          const previousPath = resolveBackendPath(normalizedPrevious);
+          fs.unlink(previousPath, () => {});
+        }
+      }
+
+      return updated;
+    } catch (error) {
+      fs.unlink(finalPath, () => {});
+      throw error;
+    }
+  }
 }

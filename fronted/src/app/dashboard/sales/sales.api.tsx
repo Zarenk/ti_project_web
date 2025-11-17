@@ -36,6 +36,7 @@ export async function createSale(data: {
   tipoMoneda: string;
   payments: { paymentMethodId: number; amount: number; currency: string }[];
   source?: 'POS' | 'WEB';
+  referenceId?: string;
 }) {
   const headers = await getAuthHeaders();
   if (!('Authorization' in headers)) {
@@ -63,6 +64,68 @@ export async function createSale(data: {
   catch(error){
     console.error('Error al crear la venta:', error);
     throw error;
+  }
+}
+
+export interface LookupResponse {
+  identifier: string
+  name: string
+  address: string | null
+  status?: string | null
+  condition?: string | null
+  type: "RUC" | "DNI"
+  raw: unknown
+}
+
+export async function lookupSunatDocument(document: string): Promise<LookupResponse> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const trimmed = document.trim()
+  if (!/^\d{8}$|^\d{11}$/.test(trimmed)) {
+    throw new Error("Ingresa un DNI (8 dígitos) o RUC (11 dígitos)")
+  }
+
+  const isRuc = trimmed.length === 11
+  const endpoint = isRuc
+    ? `${BACKEND_URL}/api/lookups/decolecta/ruc/${trimmed}`
+    : `${BACKEND_URL}/api/lookups/dni/${trimmed}`
+
+  const res = await fetch(endpoint, { headers })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    const message =
+      (typeof data === "object" && data && "message" in data ? (data as any).message : null) ||
+      "No se pudo consultar el documento"
+    throw new Error(message)
+  }
+
+  const data = await res.json()
+  if (isRuc) {
+  return {
+    identifier: trimmed,
+    name: data?.razon_social ?? data?.nombre ?? "—",
+    address: data?.direccion ?? null,
+    status: data?.estado ?? null,
+    condition: data?.condicion ?? null,
+    type: "RUC",
+      raw: data,
+    }
+  }
+
+  const nombres = [data?.nombres, data?.apellidoPaterno, data?.apellidoMaterno]
+    .filter((value: string | undefined) => !!value && value.trim().length > 0)
+    .join(" ")
+    .trim()
+
+  return {
+    identifier: trimmed,
+    name: nombres || data?.nombreCompleto || "—",
+    address: data?.direccion ?? null,
+    type: "DNI",
+    raw: data,
   }
 }
 

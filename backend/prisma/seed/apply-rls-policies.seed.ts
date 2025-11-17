@@ -71,6 +71,8 @@ const ENTITY_TABLES: Record<PopulateEntityKey, { table: string; column: string }
     },
     entry: { table: '"Entry"', column: '"organizationId"' },
     provider: { table: '"Provider"', column: '"organizationId"' },
+    category: { table: '"Category"', column: '"organizationId"' },
+    product: { table: '"Product"', column: '"organizationId"' },
     sales: { table: '"Sales"', column: '"organizationId"' },
     transfer: { table: '"Transfer"', column: '"organizationId"' },
     orders: { table: '"Orders"', column: '"organizationId"' },

@@ -7,14 +7,15 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { z } from 'zod'
-import { JSX, useEffect, useMemo, useState } from 'react'
+import { JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Barcode, CalendarIcon, Check, ChevronsUpDown, Loader2, Plus, Save, X } from 'lucide-react'
+import { Barcode, CalendarIcon, Check, ChevronsUpDown, Loader2, Plus, Save, Search, X } from 'lucide-react'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { cn, normalizeOptionValue, uploadPdfToServer } from '@/lib/utils'
+import { BACKEND_URL, cn, normalizeOptionValue, uploadPdfToServer } from '@/lib/utils'
 import React from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {jwtDecode} from 'jwt-decode';
 import { getAuthToken } from "@/utils/auth-token";
 import {  getStores } from '../../stores/stores.api'
@@ -25,7 +26,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { format } from 'date-fns'
 import { es } from "date-fns/locale";
 import AddClientDialog from '../components/AddClientDialog'
-import { createSale, fetchSeriesByProductAndStore, generarYEnviarDocumento, getProductsByStore, getSeriesByProductAndStore, getStockByProductAndStore, sendInvoiceToSunat } from '../sales.api'
+import { createSale, fetchSeriesByProductAndStore, generarYEnviarDocumento, getProductsByStore, getSeriesByProductAndStore, getStockByProductAndStore, lookupSunatDocument, type LookupResponse, sendInvoiceToSunat } from '../sales.api'
 import { AddSeriesDialog } from '../components/AddSeriesDialog'
 import { SeriesModal } from '../components/SeriesModal'
 import { StoreChangeDialog } from '../components/StoreChangeDialog'
@@ -38,6 +39,7 @@ import { PaymentMethodsModal } from '../components/PaymentMethodsSelector'
 import { ProductDetailModal } from '../components/ProductDetailModal'
 import { useTenantSelection } from '@/context/tenant-selection-context'
 import { getCompanyDetail, type CompanyDetail } from '../../tenancy/tenancy.api'
+import { UnauthenticatedError } from '@/utils/auth-fetch'
 // @ts-ignore
 const Numalet = require('numalet');
 
@@ -172,11 +174,29 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   const [currentSeries, setCurrentSeries] = useState<string[]>([]); // Series del producto actual
   
   // Estado para manejar el combobox de series
-  const [availableSeries, setAvailableSeries] = useState<string[]>([]); // Series disponibles
-  const [selectedSeries, setSelectedSeries] = useState<string[]>([]); // Series seleccionadas en el modal
+const [availableSeries, setAvailableSeries] = useState<string[]>([]); // Series disponibles
+const [selectedSeries, setSelectedSeries] = useState<string[]>([]); // Series seleccionadas en el modal
+const saleReferenceIdRef = useRef<string | null>(null);
+const getSaleReferenceId = () => {
+  if (saleReferenceIdRef.current) {
+    return saleReferenceIdRef.current;
+  }
+  const fallbackId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const generated =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : fallbackId;
+  saleReferenceIdRef.current = generated;
+  return generated;
+};
 
   // Estado para controlar la superposición de carga al registrar la venta
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSunatDialogOpen, setIsSunatDialogOpen] = useState(false);
+  const [sunatSearchValue, setSunatSearchValue] = useState("");
+  const [sunatSearchResults, setSunatSearchResults] = useState<LookupResponse[]>([]);
+  const [sunatSearchError, setSunatSearchError] = useState<string | null>(null);
+  const [sunatSearchLoading, setSunatSearchLoading] = useState(false);
   
   // Estado para controlar el diálogo de confirmación del boton REGISTRAR VENTA
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -195,6 +215,20 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
   const [activeCompany, setActiveCompany] = useState<CompanyDetail | null>(null);
   const [isCompanyLoading, setIsCompanyLoading] = useState(false);
+  const normalizedBackendUrl = useMemo(
+    () => BACKEND_URL.replace(/\/$/, ''),
+    [],
+  );
+  const companyLogoUrl = useMemo(() => {
+    const raw = activeCompany?.logoUrl?.trim();
+    if (!raw) {
+      return null;
+    }
+    if (/^https?:\/\//i.test(raw)) {
+      return raw;
+    }
+    return `${normalizedBackendUrl}/${raw.replace(/^\/+/, '')}`;
+  }, [activeCompany?.logoUrl, normalizedBackendUrl]);
 
   // Estado para los productos
   const [products, setProducts] = useState<
@@ -222,6 +256,75 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   const [currentProduct, setCurrentProduct] = useState<{ id: number; name: string; price: number; categoryId: number; category_name: string; series?: string[] } | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
   const [stock, setStock] = useState<number>(0);
+
+  const NAME_COLUMN_MIN_WIDTH = 120;
+  const NAME_COLUMN_MAX_WIDTH = 420;
+  const [nameColumnWidth, setNameColumnWidth] = useState<number>(140);
+  const productTableContainerRef = useRef<HTMLDivElement | null>(null);
+  const nameColumnResizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const nameColumnDraftWidthRef = useRef<number>(nameColumnWidth);
+
+  useEffect(() => {
+    nameColumnDraftWidthRef.current = nameColumnWidth;
+    if (productTableContainerRef.current) {
+      productTableContainerRef.current.style.setProperty('--name-column-width', `${nameColumnWidth}px`);
+    }
+  }, [nameColumnWidth]);
+
+  const handleNameColumnMouseMove = useCallback((event: MouseEvent) => {
+    if (!nameColumnResizeStateRef.current) {
+      return;
+    }
+    const delta = event.clientX - nameColumnResizeStateRef.current.startX;
+    const nextWidth = Math.min(
+      NAME_COLUMN_MAX_WIDTH,
+      Math.max(NAME_COLUMN_MIN_WIDTH, nameColumnResizeStateRef.current.startWidth + delta),
+    );
+    nameColumnDraftWidthRef.current = nextWidth;
+    productTableContainerRef.current?.style.setProperty('--name-column-width', `${nextWidth}px`);
+  }, []);
+
+  const stopNameColumnResize = useCallback(() => {
+    if (!nameColumnResizeStateRef.current) {
+      return;
+    }
+    nameColumnResizeStateRef.current = null;
+    document.body.style.cursor = '';
+    document.removeEventListener('mousemove', handleNameColumnMouseMove);
+    document.removeEventListener('mouseup', stopNameColumnResize);
+    setNameColumnWidth(nameColumnDraftWidthRef.current);
+  }, [handleNameColumnMouseMove]);
+
+  const startNameColumnResize = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault();
+      nameColumnResizeStateRef.current = {
+        startX: event.clientX,
+        startWidth: nameColumnDraftWidthRef.current,
+      };
+      document.body.style.cursor = 'col-resize';
+      document.addEventListener('mousemove', handleNameColumnMouseMove);
+      document.addEventListener('mouseup', stopNameColumnResize);
+    },
+    [handleNameColumnMouseMove, stopNameColumnResize],
+  );
+
+  useEffect(() => {
+    return () => {
+      document.body.style.cursor = '';
+      document.removeEventListener('mousemove', handleNameColumnMouseMove);
+      document.removeEventListener('mouseup', stopNameColumnResize);
+      nameColumnResizeStateRef.current = null;
+    };
+  }, [handleNameColumnMouseMove, stopNameColumnResize]);
+
+  const nameColumnWidthStyle = useMemo(
+    () => ({
+      width: `var(--name-column-width, ${nameColumnWidth}px)`,
+      maxWidth: `var(--name-column-width, ${nameColumnWidth}px)`,
+    }),
+    [nameColumnWidth],
+  );
 
   const totalAmount = useMemo(() => {
     return selectedProducts.reduce((sum, product) => {
@@ -357,6 +460,67 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
   const getCommandValue = (raw: unknown) =>
     typeof raw === "string" ? raw.trim() : raw != null ? String(raw) : "";
+
+  const currentTipoComprobante =
+    form.watch("tipoComprobante") || valueInvoice || "";
+  const canUseSunatLookup = ["FACTURA", "BOLETA"].includes(
+    (currentTipoComprobante ?? "").toUpperCase(),
+  );
+
+  const resetSunatDialog = () => {
+    setSunatSearchValue("");
+    setSunatSearchResults([]);
+    setSunatSearchError(null);
+    setSunatSearchLoading(false);
+  };
+
+  const handleOpenSunatDialog = () => {
+    if (!canUseSunatLookup) {
+      toast.error("Disponible solo para Boleta o Factura.");
+      return;
+    }
+    const currentDocument = form.getValues("client_typeNumber")?.trim() ?? "";
+    setSunatSearchValue(currentDocument);
+    setSunatSearchResults([]);
+    setSunatSearchError(null);
+    setIsSunatDialogOpen(true);
+  };
+
+  const handleSunatSearch = async () => {
+    const documentValue = sunatSearchValue.trim();
+    if (!/^\d{8}$|^\d{11}$/.test(documentValue)) {
+      setSunatSearchError(
+        "Ingresa un DNI (8 dígitos) o RUC (11 dígitos) para buscar.",
+      );
+      setSunatSearchResults([]);
+      return;
+    }
+
+    setSunatSearchLoading(true);
+    setSunatSearchError(null);
+    try {
+      const result = await lookupSunatDocument(documentValue);
+      setSunatSearchResults([result]);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo consultar el documento.";
+      setSunatSearchError(message);
+      setSunatSearchResults([]);
+    } finally {
+      setSunatSearchLoading(false);
+    }
+  };
+
+  const handleSelectSunatResult = (result: LookupResponse) => {
+    form.setValue("client_name", result.name ?? "");
+    form.setValue("client_type", result.type === "RUC" ? "RUC" : "DNI");
+    form.setValue("client_typeNumber", result.identifier ?? "");
+    toast.success("Datos del cliente cargados desde SUNAT.");
+    setIsSunatDialogOpen(false);
+    resetSunatDialog();
+  };
 
   const normalizedSelectedProductValue = useMemo(() => normalizeOptionValue(value), [value]);
   const normalizedSelectedStoreValue = useMemo(() => normalizeOptionValue(valueStore), [valueStore]);
@@ -547,6 +711,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
           details: transformedDetails,
           tipoMoneda: data.tipo_moneda,
           source: 'POS',
+          referenceId: getSaleReferenceId(),
           ...(data.tipoComprobante !== "SIN COMPROBANTE" && { // Solo incluir si no es "SIN COMPROBANTE"
             tipoComprobante: data.tipoComprobante,
           }),
@@ -557,9 +722,11 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
         if (!createdSale || !createdSale.id) {
           throw new Error("No se pudo obtener el ID de la venta creada.");
-        }   
-
-        toast.success("Se registro la informacion correctamente."); // Notificación de éxito
+        }
+ 
+        saleReferenceIdRef.current = null;
+        toast.success("Se registro la informacion correctamente."); // Notificaci??n de ?xito
+ 
 
         if(data.tipoComprobante != "SIN COMPROBANTE"){
           // Llamar al endpoint para enviar la factura a la SUNAT
@@ -588,20 +755,26 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
             tipoMoneda: data.tipo_moneda,
             total: Number(total),
             fechaEmision: createdAt ? createdAt.toISOString() : new Date().toISOString(),
+            logoUrl: companyLogoUrl,
+            primaryColor: activeCompany?.primaryColor ?? null,
+            secondaryColor: activeCompany?.secondaryColor ?? null,
             cliente: {
               razonSocial: data.client_name,
               ruc: data.client_typeNumber,
               dni: data.client_typeNumber,
               nombre: data.client_name,
               tipoDocumento: tipoDocumentoFormatted,
-              },
-              emisor: {
-                razonSocial: emitterBusinessName,
-                address: emitterAddress,
-                adress: emitterAddress,
-                phone: emitterPhone,
-                ruc: emitterRuc,
-              },
+            },
+            emisor: {
+              razonSocial: emitterBusinessName,
+              address: emitterAddress,
+              adress: emitterAddress,
+              phone: emitterPhone,
+              ruc: emitterRuc,
+              logoUrl: companyLogoUrl,
+              primaryColor: activeCompany?.primaryColor ?? null,
+              secondaryColor: activeCompany?.secondaryColor ?? null,
+            },
             items: selectedProducts.map((product) => ({
               cantidad: Number(product.quantity),
               descripcion: product.name,
@@ -666,9 +839,13 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
         router.refresh();
     }
     catch(error: any){
-      console.error("Error al registrar la venta o enviar la factura:", error);
-      const message = error instanceof Error ? error.message : "Ocurrió un error al guardar la venta.";
-      toast.error(message);
+      if (error instanceof UnauthenticatedError) {
+        toast.error("Tu sesion expiro. Inicia sesion nuevamente antes de registrar la venta.");
+      } else {
+        console.error("Error al registrar la venta o enviar la factura:", error);
+        const message = error instanceof Error ? error.message : "Ocurrio un error al guardar la venta.";
+        toast.error(message);
+      }
     }
     finally {
       setIsSubmitting(false);
@@ -1197,13 +1374,31 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                 </Command>
                               </PopoverContent>
                             </Popover>
-                            <Button className='sm:w-auto sm:ml-2 ml-0
-                            bg-green-700 hover:bg-green-800 text-white cursor-pointer' type="button" 
-                            disabled={isClientDisabled}
-                            onClick={() => setIsDialogOpenClient(true)}
-                            title="Registrar un nuevo cliente durante la venta">
-                                <Save className="w-6 h-6"/>
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                className="sm:w-auto sm:ml-2 ml-0 bg-green-700 hover:bg-green-800 text-white cursor-pointer"
+                                type="button"
+                                disabled={isClientDisabled}
+                                onClick={() => setIsDialogOpenClient(true)}
+                                title="Registrar un nuevo cliente durante la venta"
+                              >
+                                <Save className="w-6 h-6" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="sm:w-auto text-muted-foreground"
+                                title={
+                                  canUseSunatLookup
+                                    ? "Buscar clientes en SUNAT"
+                                    : "Disponible solo cuando el comprobante es Boleta o Factura"
+                                }
+                                onClick={handleOpenSunatDialog}
+                                disabled={!canUseSunatLookup || isSubmitting}
+                              >
+                                <Search className="h-4 w-4" />
+                              </Button>
+                            </div>
                             <AddClientDialog
                             isOpen={isDialogOpenClient}
                             onClose={() => setIsDialogOpenClient(false)}
@@ -1214,19 +1409,104 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                               form.setValue("tipoComprobante", tipoComprobante); // Actualiza el formulario
                             }}
                             />   
+                            <Dialog
+                              open={isSunatDialogOpen}
+                              onOpenChange={(open) => {
+                                setIsSunatDialogOpen(open)
+                                if (!open) {
+                                  resetSunatDialog()
+                                }
+                              }}
+                            >
+                              <DialogContent className="sm:max-w-lg">
+                                <DialogHeader>
+                                  <DialogTitle>Buscar clientes en SUNAT</DialogTitle>
+                                  <DialogDescription>
+                                    Ingresa un DNI (8 dígitos) o RUC (11 dígitos) para obtener los datos oficiales y doble clic en el resultado para aplicarlos.
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div className="flex gap-2">
+                                    <Input
+                                      value={sunatSearchValue}
+                                      onChange={(event) => setSunatSearchValue(event.target.value)}
+                                      placeholder="DNI o RUC"
+                                      autoFocus
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter") {
+                                          event.preventDefault()
+                                          void handleSunatSearch()
+                                        }
+                                      }}
+                                    />
+                                    <Button
+                                      type="button"
+                                      onClick={handleSunatSearch}
+                                      disabled={sunatSearchLoading}
+                                    >
+                                      {sunatSearchLoading ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <>
+                                          <Search className="h-4 w-4 mr-2" />
+                                          Buscar
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
+                                  {sunatSearchError ? (
+                                    <p className="text-sm text-destructive">{sunatSearchError}</p>
+                                  ) : null}
+                                  <div className="border rounded-md max-h-64 overflow-y-auto">
+                                    {sunatSearchResults.length === 0 ? (
+                                      <p className="p-4 text-sm text-muted-foreground">
+                                        Ingresa un documento y presiona Buscar para ver resultados.
+                                      </p>
+                                    ) : (
+                                      <Table>
+                                        <TableHeader>
+                                          <TableRow>
+                                            <TableHead>Documento</TableHead>
+                                            <TableHead>Nombre o Razón Social</TableHead>
+                                            <TableHead>Dirección</TableHead>
+                                            <TableHead>Estado</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {sunatSearchResults.map((result) => (
+                                            <TableRow
+                                              key={result.identifier}
+                                              className="cursor-pointer hover:bg-muted/60"
+                                              onDoubleClick={() => handleSelectSunatResult(result)}
+                                            >
+                                              <TableCell className="whitespace-nowrap font-medium">
+                                                {result.identifier}
+                                              </TableCell>
+                                              <TableCell>{result.name}</TableCell>
+                                              <TableCell>{result.address ?? "—"}</TableCell>
+                                              <TableCell>{result.status ?? "—"}</TableCell>
+                                            </TableRow>
+                                          ))}
+                                        </TableBody>
+                                      </Table>
+                                    )}
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
                           </div>
                           <Label className="text-sm font-medium py-2">Nombre del Cliente</Label>
                           <Input {...register("client_name")} readOnly></Input>     
                           <div className="flex justify-between gap-1">
                             <div className="flex flex-col flex-grow">
                               <Label className="text-sm font-medium py-2">Tipo de Documento</Label>
-                              <Input {...register("client_type")} readOnly></Input>
+                              <Input {...register("client_type")} readOnly />
                             </div>
-                            <div className="flex flex-col">
+                            <div className="flex flex-col flex-grow">
                               <Label className="text-sm font-medium py-2">N° de Documento</Label>
-                              <Input {...register("client_typeNumber")} readOnly ></Input> 
-                            </div>  
-                          </div>                          
+                              <Input {...register("client_typeNumber")} readOnly />
+                            </div>
+                          </div>
                         </div>
                                  
                         <div className="flex-1 flex flex-col border border-gray-600 rounded-md p-2">
@@ -1410,7 +1690,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
                                               setValue(
                                                 "category_name",
-                                                category?.name || selectedProduct.category_name || "Sin categor??a",
+                                                category?.name || selectedProduct.category_name || "Sin categoria",
                                               );
                                               setValue("price", selectedProduct.price || 0);
                                               setValue("description", selectedProduct.description || "");
@@ -1522,11 +1802,25 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                   </div>
 
                     {/* Datatable para mostrar los productos seleccionados */}
-                    <div className="border px-1 sm:px-2 overflow-x-auto max-w-full max-h-[280px] overflow-y-auto sm:max-h-none sm:overflow-y-visible">
-                      <Table className="w-full min-w-[280px] sm:min-w-[620px] text-xs sm:text-sm table-fixed">
+                    <div
+                      ref={productTableContainerRef}
+                      className="border px-1 sm:px-2 overflow-x-auto max-w-full max-h-[280px] overflow-y-auto sm:max-h-none sm:overflow-y-visible"
+                    >
+                      <Table className="w-full min-w-[280px] sm:min-w-[620px] text-xs sm:text-sm table-auto">
                         <TableHeader className="bg-muted/50">
                           <TableRow>
-                            <TableHead className="text-left w-[104px] truncate py-1.5 sm:py-2">Nombre</TableHead>
+                            <TableHead className="relative text-left truncate py-1.5 sm:py-2" style={nameColumnWidthStyle}>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="truncate">Nombre</span>
+                                <span
+                                  role="separator"
+                                  aria-orientation="horizontal"
+                                  aria-label="Ajustar ancho de la columna Nombre"
+                                  className="ml-1 inline-flex h-4 w-1 cursor-col-resize select-none rounded bg-muted-foreground/50 transition-colors hover:bg-muted-foreground"
+                                  onMouseDown={startNameColumnResize}
+                                />
+                              </div>
+                            </TableHead>
                             <TableHead className="text-left hidden sm:table-cell w-[140px] truncate py-1.5 sm:py-2">Categoria</TableHead>
                             <TableHead className="text-left w-[56px] truncate py-1.5 sm:py-2">Cant.</TableHead>
                             <TableHead className="text-left w-[64px] truncate py-1.5 sm:py-2">Prec.</TableHead>
@@ -1554,7 +1848,11 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
                                   }
                                 }}
                               >
-                                <TableCell className="font-semibold w-[92px] sm:w-[140px] truncate whitespace-nowrap overflow-hidden text-[11px] sm:text-xs">
+                                <TableCell
+                                  className="font-semibold truncate whitespace-nowrap overflow-hidden text-[11px] sm:text-xs"
+                                  style={nameColumnWidthStyle}
+                                  title={product.name}
+                                >
                                   {product.name}
                                 </TableCell>
                                 <TableCell className="hidden sm:table-cell truncate text-xs">
@@ -1878,4 +2176,5 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 }
 
 export default SalesForm
+
 

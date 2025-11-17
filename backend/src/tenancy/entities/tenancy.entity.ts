@@ -28,6 +28,9 @@ export type CompanySnapshot = {
   sunatBusinessName: string | null;
   sunatAddress: string | null;
   sunatPhone: string | null;
+  logoUrl: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
   sunatSolUserBeta: string | null;
   sunatSolPasswordBeta: string | null;
   sunatCertPathBeta: string | null;

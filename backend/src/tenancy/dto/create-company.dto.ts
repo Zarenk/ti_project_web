@@ -61,6 +61,21 @@ export class CreateCompanyDto {
   @IsOptional()
   @IsString()
   @MaxLength(255)
+  logoUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  primaryColor?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  secondaryColor?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
   sunatSolUserBeta?: string | null;
 
   @IsOptional()

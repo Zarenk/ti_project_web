@@ -14,8 +14,10 @@ import {
 import {
   TENANT_SELECTION_EVENT,
   getTenantSelection,
+  setTenantSelection,
   type TenantSelection,
 } from "@/utils/tenant-preferences"
+import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
 
 type TenantSelectionContextValue = {
   selection: TenantSelection
@@ -32,6 +34,42 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
   const [selection, setSelection] = useState<TenantSelection>(DEFAULT_SELECTION)
   const [version, setVersion] = useState(0)
   const [loading, setLoading] = useState(true)
+  const ensureDefaultSelection = useCallback(
+    async (current: TenantSelection): Promise<TenantSelection> => {
+      if (current.orgId && current.companyId) {
+        return current
+      }
+
+      try {
+        const summary = await getCurrentTenant()
+        const resolvedOrgId = current.orgId ?? summary.organization?.id ?? null
+        const resolvedCompanyId =
+          current.companyId ??
+          summary.company?.id ??
+          summary.companies?.[0]?.id ??
+          null
+
+        const resolved: TenantSelection = {
+          orgId: resolvedOrgId,
+          companyId: resolvedCompanyId,
+        }
+
+        const changed =
+          (resolved.orgId ?? null) !== (current.orgId ?? null) ||
+          (resolved.companyId ?? null) !== (current.companyId ?? null)
+
+        if (changed && resolved.orgId && resolved.companyId) {
+          setTenantSelection(resolved)
+          return resolved
+        }
+
+        return changed ? resolved : current
+      } catch {
+        return current
+      }
+    },
+    [],
+  )
   const applySelection = useCallback((next: TenantSelection) => {
     setSelection((prev) => {
       const changed = prev.orgId !== next.orgId || prev.companyId !== next.companyId
@@ -46,13 +84,14 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
     async (provided?: TenantSelection) => {
       try {
         setLoading(true)
-        const nextSelection = provided ?? (await getTenantSelection())
-        applySelection(nextSelection)
+        const baseSelection = provided ?? (await getTenantSelection())
+        const ensured = await ensureDefaultSelection(baseSelection)
+        applySelection(ensured)
       } finally {
         setLoading(false)
       }
     },
-    [applySelection],
+    [applySelection, ensureDefaultSelection],
   )
 
   useEffect(() => {

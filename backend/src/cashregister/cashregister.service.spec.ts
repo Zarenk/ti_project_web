@@ -411,6 +411,77 @@ describe('CashregisterService (multi-organization)', () => {
         }),
       );
     });
+
+    it('incluye los nombres completos de los productos en saleItems, incluso con tildes', async () => {
+      const createdAt = new Date('2024-05-01T15:00:00.000Z');
+      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 99,
+          cashRegisterId: 12,
+          type: 'INCOME',
+          amount: 53.5,
+          createdAt,
+          userId: 5,
+          user: { username: 'ecoterradmin' },
+          description: 'Venta registrada',
+          paymentMethods: [],
+          salePayments: [
+            {
+              sale: {
+                client: null,
+                invoices: [],
+                salesDetails: [
+                  {
+                    productId: 1,
+                    quantity: 1,
+                    price: 16.5,
+                    entryDetail: {
+                      product: {
+                        name: 'MANTEQUILLA DE MANÍ 100% 230 GR SPREAD',
+                      },
+                    },
+                  },
+                  {
+                    productId: 2,
+                    quantity: 1,
+                    price: 14,
+                    entryDetail: {
+                      product: {
+                        name: 'JABÓN DE ARROZ YXANE',
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ]);
+      (prisma.cashClosure.findMany as jest.Mock).mockResolvedValue([]);
+
+      const records = await service.getTransactionsByStoreAndDate(
+        3,
+        startOfDay,
+        endOfDay,
+      );
+
+      expect(records).toHaveLength(1);
+      const saleRecord = records.find((record) => record.type !== 'CLOSURE') as any;
+      expect(saleRecord?.saleItems).toEqual([
+        {
+          name: 'MANTEQUILLA DE MANÍ 100% 230 GR SPREAD',
+          quantity: 1,
+          unitPrice: 16.5,
+          total: 16.5,
+        },
+        {
+          name: 'JABÓN DE ARROZ YXANE',
+          quantity: 1,
+          unitPrice: 14,
+          total: 14,
+        },
+      ]);
+    });
   });
 
   describe('findAllTransaction', () => {

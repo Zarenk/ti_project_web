@@ -68,6 +68,7 @@ export class SalesService {
     payments: { paymentMethodId: number; amount: number; currency: string }[];
     organizationId?: number | null;
     companyId?: number | null;
+    referenceId?: string;
   }) {
     const {
       userId,
@@ -80,7 +81,17 @@ export class SalesService {
       tipoMoneda,
       organizationId: inputOrganizationId,
       companyId: inputCompanyId,
+      referenceId,
     } = data;
+
+    if (referenceId) {
+      const existingSale = await this.prisma.sales.findFirst({
+        where: { referenceId },
+      });
+      if (existingSale) {
+        return existingSale;
+      }
+    }
 
     const { store, cashRegister, clientIdToUse } = await prepareSaleContext(
       this.prisma,
@@ -169,6 +180,7 @@ export class SalesService {
       getStoreName: () => store.name,
       organizationId,
       companyId,
+      referenceId: referenceId ?? null,
       onSalePosted: async (id) => {
         try {
           await this.accountingHook.postSale(id);
@@ -1562,8 +1574,6 @@ export class SalesService {
     };
   }
 }
-
-
 
 
 

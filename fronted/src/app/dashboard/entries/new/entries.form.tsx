@@ -5,7 +5,7 @@ import { checkSeries, processPDF } from '../entries.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { z } from 'zod'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import React from 'react'
 import { getProducts } from '../../products/products.api'
@@ -205,6 +205,21 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // ENVIAR GUIA PDF
   const [pdfGuiaFile, setPdfGuiaFile] = useState<File | null>(null);
+
+
+  const entryReferenceIdRef = useRef<string | null>(null);
+  const getEntryReferenceId = (): string => {
+    if (entryReferenceIdRef.current) {
+      return entryReferenceIdRef.current;
+    }
+    const fallbackId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const generated =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : fallbackId;
+    entryReferenceIdRef.current = generated;
+    return generated;
+  };
 
   // Función para agregar un producto al datatable
   const [selectedProducts, setSelectedProducts] = useState<
@@ -564,7 +579,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     if (isSubmitting) return; // ✅ Evita clicks repetidos
     setIsSubmitting(true); // ✅ Bloquea nuevos intentos
     try {
-      await handleFormSubmission({
+      const success = await handleFormSubmission({
         data,
         form,
         stores,
@@ -579,7 +594,11 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
         getUserIdFromToken,
         tipoMoneda, // Pasar el tipo de moneda
         tipoCambioActual, // Pasar el tipo de cambio actual
+        referenceId: getEntryReferenceId(),
       });
+      if (success) {
+        entryReferenceIdRef.current = null;
+      }
     } finally {
       setIsSubmitting(false); // ✅ Libera el botón cuando termina
     }

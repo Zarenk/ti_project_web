@@ -877,7 +877,26 @@ type SaleItem = {
   unitPrice: number;
 };
 
-const extractSaleItems = (description: string) => {
+const normalizeTransactionSaleItems = (
+  items?: Transaction["saleItems"],
+): SaleItem[] => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+  return items
+    .map((item) => {
+      const name = normalizeWhitespace(item.name ?? "");
+      if (!name) {
+        return null;
+      }
+      const quantity = Number(item.quantity ?? 0);
+      const unitPrice = Number(item.unitPrice ?? 0);
+      return { name, quantity, unitPrice };
+    })
+    .filter((item): item is SaleItem => item !== null);
+};
+
+const extractSaleItemsFromDescription = (description: string) => {
   const items = new Map<string, SaleItem>();
   const cleaned = normalizeWhitespace(description);
   const itemRegex = /([A-Za-z0-9().\- ]+?)(?: -)? *Cantidad: *([0-9.,]+) *,? *Precio *Unitario: *([0-9.,]+)/gi;
@@ -929,7 +948,11 @@ const mergeSaleTransactions = (transactions: Transaction[]) => {
 
   transactions.forEach((transaction, index) => {
     const description = transaction.description ?? "";
-    const saleItems = extractSaleItems(description);
+    const providedItems = normalizeTransactionSaleItems(transaction.saleItems);
+    const saleItems =
+      providedItems.length > 0
+        ? providedItems
+        : extractSaleItemsFromDescription(description);
     const hasSaleIndicators =
       saleItems.length > 0 ||
       /venta registrada:/i.test(description) ||
@@ -1246,6 +1269,7 @@ const adaptTransaction = (transaction: any): Transaction => {
     nextOpeningBalance: toNullableNumber(
       (transaction as any)?.nextOpeningBalance ?? (transaction as any)?.nextInitialBalance ?? null,
     ),
+    saleItems: normalizeTransactionSaleItems(transaction?.saleItems),
   } as Transaction;
 };
 

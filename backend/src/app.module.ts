@@ -50,6 +50,7 @@ import { ModulePermissionsGuard } from './common/guards/module-permissions.guard
 import { SystemMaintenanceModule } from './system-maintenance/system-maintenance.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { TenantContextGuard } from './tenancy/tenant-context.guard';
+import { LookupsModule } from './lookups/lookups.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { TenantContextGuard } from './tenancy/tenant-context.guard';
     SiteSettingsModule,
     SystemMaintenanceModule,
     TenancyModule,
+    LookupsModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [

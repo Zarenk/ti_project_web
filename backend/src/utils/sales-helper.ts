@@ -136,6 +136,7 @@ export async function executeSale(
     onSalePosted?: (saleId: number, postedAt: Date) => Promise<void> | void;
     organizationId?: number | null;
     companyId?: number | null;
+    referenceId?: string | null;
   },
 ) {
   const {
@@ -154,6 +155,7 @@ export async function executeSale(
     onSalePosted,
     organizationId,
     companyId,
+    referenceId,
   } = params;
 
   const saleOrganizationId = organizationId ?? null;
@@ -169,6 +171,7 @@ export async function executeSale(
         source,
         organizationId: organizationId ?? null,
         companyId: companyId ?? null,
+        referenceId: referenceId ?? null,
       },
     });
 
@@ -247,77 +250,6 @@ export async function executeSale(
         }
       }
 
-      for (const payment of payments) {
-        if (
-          payment.paymentMethodId === null ||
-          payment.paymentMethodId === undefined
-        ) {
-          throw new BadRequestException(
-            'Debe proporcionar un paymentMethodId válido.',
-          );
-        }
-
-        let paymentMethod = await prismaTx.paymentMethod.findUnique({
-          where: { id: payment.paymentMethodId },
-        });
-        if (!paymentMethod) {
-          const defaultNames: Record<number, string> = {
-            [-1]: 'EN EFECTIVO',
-            [-2]: 'TRANSFERENCIA',
-            [-3]: 'PAGO CON VISA',
-            [-4]: 'YAPE',
-            [-5]: 'PLIN',
-            [-6]: 'OTRO MEDIO DE PAGO',
-          };
-          const methodName = defaultNames[payment.paymentMethodId];
-          if (!methodName) {
-            throw new BadRequestException(
-              `Método de pago no válido: ${payment.paymentMethodId}`,
-            );
-          }
-          paymentMethod = await prismaTx.paymentMethod.findFirst({
-            where: { name: methodName },
-          });
-          if (!paymentMethod) {
-            paymentMethod = await prismaTx.paymentMethod.create({
-              data: { name: methodName, isActive: true },
-            });
-          }
-        }
-
-        const transaction = await prismaTx.cashTransaction.create({
-          data: {
-            cashRegisterId: cashRegister.id,
-            type: 'INCOME',
-            amount: new Prisma.Decimal(payment.amount),
-            description: `Venta realizada. Pago vía ${paymentMethod.name}, ${descriptionTransaction}`,
-            userId,
-            clientName: client?.name ?? null,
-            clientDocument: client?.typeNumber ?? null,
-            clientDocumentType: client?.type ?? null,
-            organizationId: saleOrganizationId,
-          },
-        });
-
-        await prismaTx.cashTransactionPaymentMethod.create({
-          data: {
-            cashTransactionId: transaction.id,
-            paymentMethodId: paymentMethod.id,
-          },
-        });
-
-        await prismaTx.salePayment.create({
-          data: {
-            salesId: sale.id,
-            paymentMethodId: paymentMethod.id,
-            amount: payment.amount,
-            currency: payment.currency,
-            transactionId: payment.transactionId,
-            cashTransactionId: transaction.id,
-          },
-        });
-      }
-
       await prismaTx.storeOnInventory.update({
         where: { id: storeInventory.id },
         data: { stock: storeInventory.stock - detail.quantity },
@@ -334,6 +266,77 @@ export async function executeSale(
           newStock: storeInventory.stock - detail.quantity,
           organizationId: organizationId ?? null,
           companyId: companyId ?? null,
+        },
+      });
+    }
+
+    for (const payment of payments) {
+      if (
+        payment.paymentMethodId === null ||
+        payment.paymentMethodId === undefined
+      ) {
+        throw new BadRequestException(
+          'Debe proporcionar un paymentMethodId válido.',
+        );
+      }
+
+      let paymentMethod = await prismaTx.paymentMethod.findUnique({
+        where: { id: payment.paymentMethodId },
+      });
+      if (!paymentMethod) {
+        const defaultNames: Record<number, string> = {
+          [-1]: 'EN EFECTIVO',
+          [-2]: 'TRANSFERENCIA',
+          [-3]: 'PAGO CON VISA',
+          [-4]: 'YAPE',
+          [-5]: 'PLIN',
+          [-6]: 'OTRO MEDIO DE PAGO',
+        };
+        const methodName = defaultNames[payment.paymentMethodId];
+        if (!methodName) {
+          throw new BadRequestException(
+            `Método de pago no válido: ${payment.paymentMethodId}`,
+          );
+        }
+        paymentMethod = await prismaTx.paymentMethod.findFirst({
+          where: { name: methodName },
+        });
+        if (!paymentMethod) {
+          paymentMethod = await prismaTx.paymentMethod.create({
+            data: { name: methodName, isActive: true },
+          });
+        }
+      }
+
+      const transaction = await prismaTx.cashTransaction.create({
+        data: {
+          cashRegisterId: cashRegister.id,
+          type: 'INCOME',
+          amount: new Prisma.Decimal(payment.amount),
+          description: `Venta realizada. Pago vía ${paymentMethod.name}, ${descriptionTransaction}`,
+          userId,
+          clientName: client?.name ?? null,
+          clientDocument: client?.typeNumber ?? null,
+          clientDocumentType: client?.type ?? null,
+          organizationId: saleOrganizationId,
+        },
+      });
+
+      await prismaTx.cashTransactionPaymentMethod.create({
+        data: {
+          cashTransactionId: transaction.id,
+          paymentMethodId: paymentMethod.id,
+        },
+      });
+
+      await prismaTx.salePayment.create({
+        data: {
+          salesId: sale.id,
+          paymentMethodId: paymentMethod.id,
+          amount: payment.amount,
+          currency: payment.currency,
+          transactionId: payment.transactionId,
+          cashTransactionId: transaction.id,
         },
       });
     }

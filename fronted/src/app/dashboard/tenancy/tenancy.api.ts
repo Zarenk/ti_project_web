@@ -37,6 +37,9 @@ export interface CompanyResponse {
   sunatBusinessName: string | null
   sunatAddress: string | null
   sunatPhone: string | null
+  logoUrl: string | null
+  primaryColor: string | null
+  secondaryColor: string | null
   sunatSolUserBeta: string | null
   sunatSolPasswordBeta: string | null
   sunatCertPathBeta: string | null
@@ -104,6 +107,9 @@ export interface UpdateCompanyPayload {
   sunatBusinessName?: string | null
   sunatAddress?: string | null
   sunatPhone?: string | null
+  logoUrl?: string | null
+  primaryColor?: string | null
+  secondaryColor?: string | null
   sunatSolUserBeta?: string | null
   sunatSolPasswordBeta?: string | null
   sunatSolUserProd?: string | null
@@ -152,6 +158,9 @@ function mapCompanyResponse(data: any): CompanyResponse {
     sunatBusinessName: data.sunatBusinessName ?? null,
     sunatAddress: data.sunatAddress ?? null,
     sunatPhone: data.sunatPhone ?? null,
+    logoUrl: data.logoUrl ?? null,
+    primaryColor: data.primaryColor ?? null,
+    secondaryColor: data.secondaryColor ?? null,
     sunatSolUserBeta: data.sunatSolUserBeta ?? null,
     sunatSolPasswordBeta: data.sunatSolPasswordBeta ?? null,
     sunatCertPathBeta: data.sunatCertPathBeta ?? null,
@@ -642,6 +651,48 @@ export async function uploadCompanySunatFile(
       (typeof data === "object" && data && "message" in data
         ? (data as { message?: string }).message
         : undefined) || "No se pudo subir el archivo"
+    throw new Error(message)
+  }
+
+  return mapCompanyResponse(data)
+}
+
+export async function uploadCompanyLogo(
+  companyId: number,
+  file: File,
+): Promise<CompanyResponse> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const formData = new FormData()
+  formData.append("file", file)
+
+  const uploadHeaders: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (value) {
+      uploadHeaders[key] = value
+    }
+  }
+  delete uploadHeaders["Content-Type"]
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/logo`, {
+    method: "POST",
+    headers: uploadHeaders,
+    body: formData,
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo actualizar el logo"
     throw new Error(message)
   }
 

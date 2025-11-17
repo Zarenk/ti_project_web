@@ -1,6 +1,7 @@
 import { refreshAuthToken } from "@/utils/auth-refresh"
 import { getAuthHeaders } from "@/utils/auth-token"
 import { wasManualLogoutRecently } from "@/utils/manual-logout"
+import { notifySessionExpired } from "@/utils/session-expired-event"
 
 export class UnauthenticatedError extends Error {
   constructor(message = 'Unauthenticated') {
@@ -47,6 +48,7 @@ export async function authFetch(
 
   const refreshed = await refreshAuthToken()
   if (!refreshed) {
+    notifySessionExpired()
     throw new UnauthenticatedError()
   }
   const retryHeaders = new Headers(init.headers || {})
@@ -54,6 +56,7 @@ export async function authFetch(
   Object.entries(newAuth).forEach(([k, v]) => retryHeaders.set(k, v as string))
   res = await fetch(url, { ...init, headers: retryHeaders })
   if (res.status === 401) {
+    notifySessionExpired()
     throw new UnauthenticatedError()
   }
   return res

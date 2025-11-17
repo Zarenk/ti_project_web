@@ -28,4 +28,7 @@ export class CreateEntryDto {
 
   @ApiPropertyOptional({ nullable: true })
   organizationId?: number | null;
+
+  @ApiPropertyOptional()
+  referenceId?: string;
 }

@@ -95,4 +95,8 @@ export class CreateSaleDto {
   @IsOptional()
   @IsIn(['POS', 'WEB'])
   source?: 'POS' | 'WEB';
+
+  @IsOptional()
+  @IsString()
+  referenceId?: string;
 }

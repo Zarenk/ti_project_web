@@ -31,7 +31,6 @@ model Product {
   companyId      Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
   // Relación con Brand
   brandId Int?
   brand   Brand? @relation(fields: [brandId], references: [id])
@@ -267,6 +266,9 @@ model Company {
   sunatBusinessName    String?
   sunatAddress         String?
   sunatPhone           String?
+  logoUrl        String?
+  primaryColor    String?
+  secondaryColor  String?
   sunatSolUserBeta     String?
   sunatSolPasswordBeta String?
   sunatCertPathBeta    String?
@@ -478,6 +480,7 @@ model Entry {
   organizationId Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  referenceId String? @unique
 
   store    Store         @relation(fields: [storeId], references: [id]) // Relación con el modelo Store
   user     User          @relation(fields: [userId], references: [id]) // Relación con el modelo User
@@ -685,6 +688,7 @@ model Sales {
   companyId      Int?
   createdAt   DateTime   @default(now()) // Fecha de la venta
   updatedAt   DateTime   @updatedAt
+  referenceId String? @unique
 
   user           User            @relation(fields: [userId], references: [id]) // Relación con el usuario
   store          Store           @relation(fields: [storeId], references: [id]) // Relación con la tienda
