@@ -1,7 +1,31 @@
-import axios from "axios";
 import { getAuthHeaders } from "@/utils/auth-token";
+import { getTenantSelection } from "@/utils/tenant-preferences";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+
+async function authorizedFetch(
+  url: string,
+  init: RequestInit = {},
+  requireAuth = true,
+): Promise<Response> {
+  const authHeaders = await getAuthHeaders();
+  if (requireAuth && !("Authorization" in authHeaders)) {
+    throw new Error("No se encontro un token de autenticacion");
+  }
+
+  const headers = new Headers(init.headers ?? {});
+  for (const [key, value] of Object.entries(authHeaders)) {
+    if (value != null && value !== "") {
+      headers.set(key, value);
+    }
+  }
+
+  return fetch(url, {
+    ...init,
+    headers,
+    credentials: init.credentials ?? "include",
+  });
+}
 
 async function safeJson<T>(response: Response): Promise<T | null> {
   if (response.status === 204) return null;
@@ -17,19 +41,58 @@ async function safeJson<T>(response: Response): Promise<T | null> {
   }
 }
 
+async function appendTenantQueryParams(
+  url: string,
+  extra?: Record<string, string | number | boolean | null | undefined>,
+): Promise<string> {
+  const { orgId, companyId } = await getTenantSelection();
+  const [base, existingQuery] = url.split("?");
+  const params = new URLSearchParams(existingQuery ?? "");
+
+  if (orgId != null) {
+    params.set("organizationId", String(orgId));
+  }
+  if (companyId != null) {
+    params.set("companyId", String(companyId));
+  }
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) {
+      if (value === null || value === undefined) continue;
+      params.set(key, String(value));
+    }
+  }
+
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
+}
+
+async function withTenantIdentifiers<T extends Record<string, any>>(
+  payload: T,
+): Promise<T & { organizationId?: number; companyId?: number }> {
+  const { orgId, companyId } = await getTenantSelection();
+  return {
+    ...payload,
+    ...(orgId != null ? { organizationId: orgId } : {}),
+    ...(companyId != null ? { companyId } : {}),
+  };
+}
+
 // CAJA
 export async function getCashRegisterBalance(storeId: number) {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/cashregister/balance/${storeId}`, {
-      method: 'GET',
+    const endpoint = await appendTenantQueryParams(
+      `${BACKEND_URL}/api/cashregister/balance/${storeId}`,
+    );
+    const response = await authorizedFetch(endpoint, {
+      method: "GET",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     });
 
     if (!response.ok) {
       if (response.status === 404) return null;
-      throw new Error('Error al obtener el balance');
+      throw new Error("Error al obtener el balance");
     }
 
     if (response.status === 204) {
@@ -37,14 +100,13 @@ export async function getCashRegisterBalance(storeId: number) {
     }
 
     const data = await safeJson<{ currentBalance?: number }>(response);
-    // Si el backend devuelve null significa que no hay caja activa
-    if (data === null || data.currentBalance === null || data.currentBalance === undefined) {
+    if (data === null || data.currentBalance == null) {
       return null;
     }
 
     return Number(data.currentBalance ?? 0);
   } catch (error: any) {
-    console.error('Error al obtener el balance de la caja:', error.message || error);
+    console.error("Error al obtener el balance de la caja:", error.message || error);
     if (error instanceof SyntaxError) {
       return null;
     }
@@ -54,21 +116,23 @@ export async function getCashRegisterBalance(storeId: number) {
 
 export async function getTodayTransactions(storeId: number) {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/cashregister/transactions/${storeId}/today`, {
-      method: 'GET',
+    const endpoint = await appendTenantQueryParams(
+      `${BACKEND_URL}/api/cashregister/transactions/${storeId}/today`,
+    );
+    const response = await authorizedFetch(endpoint, {
+      method: "GET",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     });
 
     if (!response.ok) {
-      throw new Error('Error al obtener las transacciones del día.');
+      throw new Error("Error al obtener las transacciones del dia.");
     }
 
-    const data = await response.json();
-    return data;
+    return response.json();
   } catch (error: any) {
-    console.error('Error al obtener las transacciones del día:', error.message || error);
+    console.error("Error al obtener las transacciones del dia:", error.message || error);
     throw error;
   }
 }
@@ -80,30 +144,30 @@ export const createIndependentTransaction = async (data: {
   amount: number;
   employee: string;
   description?: string;
-  paymentMethods: { method: string; amount: number }[]; // 👈 Agregado para permitir paymentMethods
+  paymentMethods: { method: string; amount: number }[];
   clientName?: string;
   clientDocument?: string;
   clientDocumentType?: string;
 }) => {
-  const payload = {
+  const basePayload = {
     cashRegisterId: data.cashRegisterId,
     userId: data.userId,
     type: data.type,
     amount: data.amount,
     description: data.description || "",
     employee: data.employee,
-     clientName: data.clientName,
-     clientDocument: data.clientDocument,
-     clientDocumentType: data.clientDocumentType,
-    paymentMethods: data.paymentMethods.map(pm => ({
+    clientName: data.clientName,
+    clientDocument: data.clientDocument,
+    clientDocumentType: data.clientDocumentType,
+    paymentMethods: data.paymentMethods.map((pm) => ({
       method: pm.method,
-      amount: Number(pm.amount),  // 👈 FORZAMOS QUE amount sea un número real
+      amount: Number(pm.amount),
     })),
   };
 
-  console.log('Payload final enviado a backend:', payload); // 👈
+  const payload = await withTenantIdentifiers(basePayload);
 
-  const response = await fetch(`${BACKEND_URL}/api/cashregister/transaction`, {
+  const response = await authorizedFetch(`${BACKEND_URL}/api/cashregister/transaction`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -112,56 +176,59 @@ export const createIndependentTransaction = async (data: {
   });
 
   if (!response.ok) {
-    const text = await response.text(); // Leer el error real
+    const text = await response.text();
     console.error("Error Body:", text);
-    throw new Error("Error al registrar la transacción");
+    throw new Error("Error al registrar la transaccion");
   }
 
-  return await response.json();
+  return response.json();
 };
 
-export async function getActiveCashRegister(storeId: number): Promise<{ id: number; name: string; currentBalance: number; initialBalance: number; } | null> {
-  const headers = await getAuthHeaders();
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación');
-  }
-
+export async function getActiveCashRegister(
+  storeId: number,
+): Promise<{ id: number; name: string; currentBalance: number; initialBalance: number } | null> {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/cashregister/active/${storeId}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json', ...headers },
+    const endpoint = await appendTenantQueryParams(
+      `${BACKEND_URL}/api/cashregister/active/${storeId}`,
+    );
+    const response = await authorizedFetch(endpoint, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
     });
 
     if (!response.ok) {
       if (response.status === 404) {
         return null;
       }
-      throw new Error('No se pudo obtener la caja activa.');
+      throw new Error("No se pudo obtener la caja activa.");
     }
 
     if (response.status === 204) {
       return null;
     }
 
-    const data = await safeJson<{ id: number; name: string; currentBalance: number; initialBalance: number }>(response);
+    const data = await safeJson<{
+      id: number;
+      name: string;
+      currentBalance: number;
+      initialBalance: number;
+    }>(response);
 
-    // Si el backend responde null no existe caja activa
     if (data === null) {
       return null;
     }
 
-    console.log('Response de la caja activa:', data);
+    console.log("Response de la caja activa:", data);
     return data;
   } catch (error) {
-    console.error('Error al obtener la caja activa:', error);
+    console.error("Error al obtener la caja activa:", error);
     if (error instanceof SyntaxError) {
       return null;
     }
-    throw new Error('Error al obtener la caja activa. Por favor, intente nuevamente.');
+    throw new Error("Error al obtener la caja activa. Por favor, intente nuevamente.");
   }
 }
 
-// cashregister.api.ts
 export interface CashClosureSummary {
   id: number;
   cashRegisterId: number;
@@ -170,6 +237,7 @@ export interface CashClosureSummary {
   closingBalance: number;
   totalIncome: number;
   totalExpense: number;
+  nextOpeningBalance?: number | null;
   notes?: string | null;
   createdAt: string;
   storeId?: number;
@@ -205,24 +273,24 @@ export async function createCashClosure(payload: any): Promise<CreateCashClosure
     totalExpense: Number(payload.totalExpense),
     nextInitialBalance:
       payload.nextInitialBalance !== undefined && payload.nextInitialBalance !== null
-        ? Number(payload.nextInitialBalance)
-        : undefined,
+      ? Number(payload.nextInitialBalance)
+      : undefined,
   };
 
-  const response = await fetch(`${BACKEND_URL}/api/cashregister/closure`, {
+  const payloadWithTenant = await withTenantIdentifiers(cleanPayload);
+
+  const response = await authorizedFetch(`${BACKEND_URL}/api/cashregister/closure`, {
     method: "POST",
-    body: JSON.stringify(cleanPayload),
     headers: {
       "Content-Type": "application/json",
     },
+    body: JSON.stringify(payloadWithTenant),
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => null); // intenta parsear JSON
-  
+    const errorBody = await response.json().catch(() => null);
     const errorMessage = errorBody?.message || "Error desconocido al cerrar la caja";
-  
-    console.error("❌ Error en createCashClosure:", errorMessage);
+    console.error("Error en createCashClosure:", errorMessage);
     throw new Error(errorMessage);
   }
 
@@ -254,23 +322,27 @@ export async function createCashClosure(payload: any): Promise<CreateCashClosure
   const closure = raw?.closure ?? null;
   const normalizedClosure: CashClosureSummary = {
     id: Number(closure?.id ?? 0),
-    cashRegisterId: Number(closure?.cashRegisterId ?? payload.cashRegisterId ?? 0),
-    userId: Number(closure?.userId ?? payload.userId ?? 0),
-    openingBalance: parseDecimal(closure?.openingBalance ?? payload.openingBalance ?? 0),
-    closingBalance: parseDecimal(closure?.closingBalance ?? payload.closingBalance ?? 0),
-    totalIncome: parseDecimal(closure?.totalIncome ?? payload.totalIncome ?? 0),
-    totalExpense: parseDecimal(closure?.totalExpense ?? payload.totalExpense ?? 0),
-    notes: closure?.notes ?? payload.notes ?? null,
+    cashRegisterId: Number(closure?.cashRegisterId ?? cleanPayload.cashRegisterId ?? 0),
+    userId: Number(closure?.userId ?? cleanPayload.userId ?? 0),
+    openingBalance: parseDecimal(closure?.openingBalance ?? cleanPayload.openingBalance ?? 0),
+    closingBalance: parseDecimal(closure?.closingBalance ?? cleanPayload.closingBalance ?? 0),
+    totalIncome: parseDecimal(closure?.totalIncome ?? cleanPayload.totalIncome ?? 0),
+    totalExpense: parseDecimal(closure?.totalExpense ?? cleanPayload.totalExpense ?? 0),
+    nextOpeningBalance:
+      closure?.nextOpeningBalance !== undefined && closure?.nextOpeningBalance !== null
+        ? parseDecimal(closure.nextOpeningBalance)
+        : undefined,
+    notes: closure?.notes ?? cleanPayload.notes ?? null,
     createdAt: closure?.createdAt ?? new Date().toISOString(),
-    storeId: Number(closure?.storeId ?? payload.storeId ?? 0) || undefined,
+    storeId: Number(closure?.storeId ?? cleanPayload.storeId ?? 0) || undefined,
   };
 
   const requestedNextInitialBalance =
     typeof raw?.requestedNextInitialBalance === "number"
       ? raw.requestedNextInitialBalance
-      : payload.nextInitialBalance !== undefined
-      ? Number(payload.nextInitialBalance)
-      : undefined;
+      : cleanPayload.nextInitialBalance !== undefined
+        ? Number(cleanPayload.nextInitialBalance)
+        : undefined;
 
   return {
     closure: normalizedClosure,
@@ -281,19 +353,26 @@ export async function createCashClosure(payload: any): Promise<CreateCashClosure
 }
 
 export async function getClosuresByStore(storeId: number) {
-  const response = await fetch(`${BACKEND_URL}/api/cashregister/closures/${storeId}`);
-  if (!response.ok) throw new Error('Error al obtener los cierres de caja');
-  return await response.json();
+  const endpoint = await appendTenantQueryParams(
+    `${BACKEND_URL}/api/cashregister/closures/${storeId}`,
+  );
+  const response = await authorizedFetch(endpoint);
+  if (!response.ok) {
+    throw new Error("Error al obtener los cierres de caja");
+  }
+  return response.json();
 }
 
 export async function getTransactionsByDate(storeId: number, date: string) {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/cashregister/get-transactions/${storeId}/${date}`);
+    const endpoint = await appendTenantQueryParams(
+      `${BACKEND_URL}/api/cashregister/get-transactions/${storeId}/${date}`,
+    );
+    const res = await authorizedFetch(endpoint);
     if (!res.ok) {
       throw new Error("Error obteniendo transacciones por fecha");
     }
-    const data = await res.json();
-    return data;
+    return res.json();
   } catch (error) {
     console.error("Error en getTransactionsByDate:", error);
     throw error;
@@ -301,21 +380,51 @@ export async function getTransactionsByDate(storeId: number, date: string) {
 }
 
 export async function getClosureByDate(storeId: number, date: string) {
-  const response = await fetch(`${BACKEND_URL}/api/cashregister/closure/${storeId}/by-date/${date}`);
-  if (!response.ok) return null;
-  return await response.json();
+  const endpoint = await appendTenantQueryParams(
+    `${BACKEND_URL}/api/cashregister/closure/${storeId}/by-date/${date}`,
+  );
+  const response = await authorizedFetch(endpoint);
+  if (!response.ok) {
+    return null;
+  }
+  return response.json();
 }
 
 export const createCashRegister = async (payload: any) => {
-  const { data } = await axios.post(`${BACKEND_URL}/api/cashregister`, payload);
-  return data;
+  const payloadWithTenant = await withTenantIdentifiers(payload);
+  const response = await authorizedFetch(`${BACKEND_URL}/api/cashregister`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payloadWithTenant),
+  });
+
+  if (!response.ok) {
+    throw new Error("Error al crear la caja registradora");
+  }
+
+  return response.json();
 };
 
 export const getTransactions = async (cashRegisterId: number) => {
-  const { data } = await axios.get(`${BACKEND_URL}/api/cashregister/transaction/cashregister/${cashRegisterId}`);
-  return data;
+  const endpoint = await appendTenantQueryParams(
+    `${BACKEND_URL}/api/cashregister/transaction/cashregister/${cashRegisterId}`,
+  );
+  const response = await authorizedFetch(endpoint);
+
+  if (!response.ok) {
+    throw new Error("Error al obtener las transacciones de la caja");
+  }
+
+  return response.json();
 };
 
-export const getAllCashRegisters = () =>
-    axios.get(`${BACKEND_URL}/api/cashregister`).then((res) => res.data);
-  
+export const getAllCashRegisters = async () => {
+  const endpoint = await appendTenantQueryParams(`${BACKEND_URL}/api/cashregister`);
+  const response = await authorizedFetch(endpoint);
+  if (!response.ok) {
+    throw new Error("Error al obtener las cajas registradoras");
+  }
+  return response.json();
+};

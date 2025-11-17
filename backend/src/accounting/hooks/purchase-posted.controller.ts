@@ -21,7 +21,9 @@ export class PurchasePostedController {
   @HttpCode(202)
   async handle(@Body() data: PurchasePostedDto) {
     try {
-      this.logger.log(`Received purchase-posted event for purchase ${data.purchaseId}`);
+      this.logger.log(
+        `Received purchase-posted event for purchase ${data.purchaseId}`,
+      );
       const purchase = await this.prisma.entry.findUnique({
         where: { id: data.purchaseId },
         include: { details: true, invoice: true, provider: true },
@@ -31,7 +33,7 @@ export class PurchasePostedController {
       }
       const total = purchase.details.reduce(
         (sum: number, d: any) =>
-          sum + ((d.priceInSoles ?? d.price ?? 0) * d.quantity),
+          sum + (d.priceInSoles ?? d.price ?? 0) * d.quantity,
         0,
       );
       const lines = this.mapper.buildEntryFromPurchase({
@@ -64,7 +66,9 @@ export class PurchasePostedController {
         })),
       });
       await this.entries.post(entry.id);
-      this.logger.log(`Entry ${entry.id} created for purchase ${data.purchaseId}`);
+      this.logger.log(
+        `Entry ${entry.id} created for purchase ${data.purchaseId}`,
+      );
       return { status: 'posted', entryId: entry.id };
     } catch (err) {
       this.logger.error('Failed to process purchase-posted hook', err as any);

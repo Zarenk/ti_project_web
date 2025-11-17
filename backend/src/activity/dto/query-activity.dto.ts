@@ -1,4 +1,10 @@
-import { IsInt, IsOptional, IsString, Min, IsDateString } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+  IsDateString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class QueryActivityDto {

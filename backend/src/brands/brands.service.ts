@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
@@ -66,8 +70,12 @@ export class BrandsService {
       where: { name: normalized },
     });
     if (existing) return existing;
-    const brand = await this.prisma.brand.create({ data: { name: normalized } });
-    await this.prisma.keyword.create({ data: { name: brand.name, brandId: brand.id } });
+    const brand = await this.prisma.brand.create({
+      data: { name: normalized },
+    });
+    await this.prisma.keyword.create({
+      data: { name: brand.name, brandId: brand.id },
+    });
     return brand;
   }
 
@@ -117,7 +125,10 @@ export class BrandsService {
     const { actorId, actorEmail } = await this.getActorInfo(req);
     const diff: any = { before: {}, after: {} };
     for (const key of Object.keys(updated)) {
-      if (JSON.stringify((before as any)[key]) !== JSON.stringify((updated as any)[key])) {
+      if (
+        JSON.stringify((before as any)[key]) !==
+        JSON.stringify((updated as any)[key])
+      ) {
         diff.before[key] = (before as any)[key];
         diff.after[key] = (updated as any)[key];
       }
@@ -155,15 +166,3 @@ export class BrandsService {
     return removed;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-

@@ -8,11 +8,18 @@ import fs from 'fs';
  * @param signedXmlContent Contenido del XML firmado.
  * @returns Ruta del archivo ZIP generado.
  */
-export function generateZip(fileName: string, signedXmlContent: string, documentType: 'invoice' | 'boleta' | 'creditNote'): string {
+export function generateZip(
+  fileName: string,
+  signedXmlContent: string,
+  documentType: 'invoice' | 'boleta' | 'creditNote',
+): string {
   // Mapear el tipo de documento a la carpeta correspondiente
-  const folderName = documentType === 'invoice' ? 'factura' : 
-                     documentType === 'boleta' ? 'boleta' : 
-                     'creditNote';
+  const folderName =
+    documentType === 'invoice'
+      ? 'factura'
+      : documentType === 'boleta'
+        ? 'boleta'
+        : 'creditNote';
 
   const zip = new AdmZip();
   const xmlFileName = `${fileName}.xml`; // Nombre del archivo XML dentro del ZIP
@@ -21,12 +28,19 @@ export function generateZip(fileName: string, signedXmlContent: string, document
   zip.addFile(xmlFileName, Buffer.from(signedXmlContent, 'utf-8'));
 
   // Definir la carpeta donde se guardarán los ZIP
-  const zipFolderPath = join(__dirname, '..', '..', '..', 'sunat.zip', folderName);
+  const zipFolderPath = join(
+    __dirname,
+    '..',
+    '..',
+    '..',
+    'sunat.zip',
+    folderName,
+  );
   if (!fs.existsSync(zipFolderPath)) {
     fs.mkdirSync(zipFolderPath, { recursive: true }); // Crear la carpeta si no existe
   }
 
-  const zipFilePath = join(zipFolderPath,`${fileName}.zip`); // Ruta del archivo ZIP generado
+  const zipFilePath = join(zipFolderPath, `${fileName}.zip`); // Ruta del archivo ZIP generado
   zip.writeZip(zipFilePath);
 
   return zipFilePath;

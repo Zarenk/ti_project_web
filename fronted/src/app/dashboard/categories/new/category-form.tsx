@@ -10,8 +10,9 @@ import { SelectTrigger, SelectValue } from '@radix-ui/react-select'
 import { Select, SelectContent, SelectItem } from '@/components/ui/select'
 import { z } from 'zod'
 import { createCategory, updateCategory } from '../categories.api'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { useTenantSelection } from '@/context/tenant-selection-context'
 
 
 export function CategoryForm({product}: any) {
@@ -37,15 +38,26 @@ export function CategoryForm({product}: any) {
     //inferir el tipo de dato
     type CategoryType = z.infer<typeof categorySchema>;
 
+    const mapCategoryToFormValues = useMemo(() => ({
+      name: product?.name ?? '',
+      description: product?.description ?? '',
+      status: (product?.status ?? 'Activo') as CategoryType['status'],
+      image: product?.image ?? '',
+    }), [product]);
+
+    const emptyFormValues = useMemo(() => ({
+      name: '',
+      description: '',
+      status: 'Activo' as CategoryType['status'],
+      image: '',
+    }), []);
+
+    const { version } = useTenantSelection();
+
     //hook de react-hook-form
     const form = useForm<CategoryType>({
     resolver: zodResolver(categorySchema),
-    defaultValues: {
-        name: product?.name || '',
-        description: product?.description || '',
-        status: product?.status || "Activo" , // Valor predeterminado
-        image: product?.image || '',       
-    }
+    defaultValues: mapCategoryToFormValues,
     });
 
   const { handleSubmit, register, setValue} = form;
@@ -55,6 +67,23 @@ export function CategoryForm({product}: any) {
 
   // Estado para manejar el error del nombre si se repite
 const [nameError, setNameError] = useState<string | null>(null);
+const initializedVersion = useRef(false);
+
+useEffect(() => {
+  form.reset(mapCategoryToFormValues);
+  setNameError(null);
+}, [form, mapCategoryToFormValues]);
+
+useEffect(() => {
+  if (!initializedVersion.current) {
+    initializedVersion.current = true;
+    return;
+  }
+
+  setNameError(null);
+  form.reset(emptyFormValues);
+  router.refresh();
+}, [version, form, emptyFormValues, router]);
 
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {

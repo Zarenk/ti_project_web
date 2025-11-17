@@ -3,6 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { toast } from "sonner";
 import { completeWebOrder, rejectWebOrder, sendInvoiceToSunat } from "../sales/sales.api";
@@ -35,6 +36,13 @@ export type Order = {
   carrierName?: string;
   carrierId?: string;
   carrierMode?: string;
+  sunatStatus?: {
+    status: string;
+    ticket?: string | null;
+    environment?: string | null;
+    errorMessage?: string | null;
+    updatedAt?: string | null;
+  } | null;
 };
 
 export function getColumns(
@@ -44,6 +52,12 @@ export function getColumns(
   {
     accessorKey: "code",
     header: "Orden",
+  },
+  {
+    accessorKey: "sunatStatus",
+    header: "SUNAT",
+    enableSorting: false,
+    cell: ({ row }) => renderSunatStatusBadge(row.original.sunatStatus),
   },
   {
     accessorKey: "client",
@@ -277,5 +291,36 @@ export function getColumns(
       );
     },
   },
-];
+ ];
+}
+
+const ORDER_STATUS_COLORS: Record<string, string> = {
+  SENT: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  SENDING: "bg-blue-100 text-blue-800 border-blue-200",
+  PENDING: "bg-amber-100 text-amber-800 border-amber-200",
+  FAILED: "bg-red-100 text-red-800 border-red-200",
+  ERROR: "bg-red-100 text-red-800 border-red-200",
+  RETRYING: "bg-indigo-100 text-indigo-800 border-indigo-200",
+};
+
+function renderSunatStatusBadge(status?: Order["sunatStatus"] | null) {
+  if (!status) {
+    return <span className="text-xs text-muted-foreground">Sin envíos</span>;
+  }
+  const normalized = status.status?.toUpperCase() ?? "DESCONOCIDO";
+  const colorClass = ORDER_STATUS_COLORS[normalized] ?? "bg-slate-100 text-slate-800 border-slate-200";
+  const tooltipParts: string[] = [];
+  if (status.environment) tooltipParts.push(`Ambiente: ${status.environment}`);
+  if (status.ticket) tooltipParts.push(`Ticket: ${status.ticket}`);
+  if (status.errorMessage) tooltipParts.push(`Error: ${status.errorMessage}`);
+
+  return (
+    <Badge
+      variant="outline"
+      className={`text-xs font-medium ${colorClass}`}
+      title={tooltipParts.join(" • ") || undefined}
+    >
+      {normalized}
+    </Badge>
+  );
 }

@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { BarChart3, Box, DollarSign, Package, ShoppingCart, TrendingUp, Truck, Users } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { toast } from 'sonner'
+import { toast } from "sonner"
 import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api"
 import { getMonthlySalesTotal, getRecentSales } from "./sales/sales.api"
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
@@ -17,10 +17,15 @@ import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import { UnauthenticatedError } from "@/utils/auth-fetch"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { listOrganizations, type OrganizationResponse } from "./tenancy/tenancy.api"
+import { clearTenantSelection, getTenantSelection, setTenantSelection } from "@/utils/tenant-preferences"
+import { wasManualLogoutRecently } from "@/utils/manual-logout"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 
 type ActivityItem = {
   id: number | string
-  type: 'order' | 'sale' | 'entry' | 'alert'
+  type: "order" | "sale" | "entry" | "alert"
   description: string
   createdAt: string
   href: string
@@ -37,189 +42,354 @@ type LowStockItem = {
 }
 
 export default function WelcomeDashboard() {
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [organizations, setOrganizations] = useState<OrganizationResponse[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
+  const [organizationsLoading, setOrganizationsLoading] = useState(false)
+  const [bootstrapReady, setBootstrapReady] = useState(false)
+  const [totalInventory, setTotalInventory] = useState<{ name: string; totalStock: number }[]>([])
+  const [loading, setLoading] = useState(true)
 
-//------------------------------- CONSTANTES --------------------------------//
-  const [totalInventory, setTotalInventory] = useState<{ name: string; totalStock: number }[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const [monthlySales, setMonthlySales] = useState<{ total: number; growth: number | null } | null>(null);
+  const [monthlySales, setMonthlySales] = useState<{ total: number; growth: number | null } | null>(null)
 
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([])
   const [pendingOrders, setPendingOrders] = useState(0)
-  type ActivityItem = { id: number | string; type: 'order' | 'sale' | 'entry' | 'alert'; description: string; createdAt: string; href: string }
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
 
-  const checkPermission = useModulePermission();
+  const checkPermission = useModulePermission()
   const router = useRouter()
   const authErrorShown = useRef(false)
-  const handleAuthError = async (err: unknown) => {
+  const { selection, version } = useTenantSelection()
+
+  const handleAuthError = useCallback(async (err: unknown) => {
     if (authErrorShown.current) return true
     if (err instanceof UnauthenticatedError) {
+      if (wasManualLogoutRecently()) {
+        authErrorShown.current = true
+        return true
+      }
       authErrorShown.current = true
       if (await isTokenValid()) {
-        router.push('/unauthorized')
+        router.push("/unauthorized")
       } else {
-        toast.error('Tu sesión ha expirado. Vuelve a iniciar sesión.')
+        toast.error("Tu sesion ha expirado. Vuelve a iniciar sesion.")
         const path = window.location.pathname
         router.replace(`/login?returnTo=${encodeURIComponent(path)}`)
       }
       return true
     }
     return false
-  }
+  }, [router])
 
-//------------------------------- USE EFFECT --------------------------------//
+  const isGlobalSuperAdmin = userRole === "SUPER_ADMIN_GLOBAL"
 
-useEffect(() => {
-    async function fetchData() {
-        const data = await getUserDataFromToken();
-        if (!data || !(await isTokenValid()) || (data.role !== 'ADMIN' && data.role !== 'EMPLOYEE')) {
-          router.push('/unauthorized');
-          return;
+  const handleOrganizationChange = useCallback(
+    (value: string) => {
+      if (!isGlobalSuperAdmin) return
+      const trimmed = value.trim()
+      if (trimmed.length === 0) {
+        setSelectedOrgId(null)
+        setTenantSelection({ orgId: null, companyId: null })
+        router.refresh()
+        return
+      }
+
+      const nextId = Number.parseInt(trimmed, 10)
+      if (!Number.isFinite(nextId)) {
+        toast.error("Identificador de organizacion invalido.")
+        return
+      }
+
+      const target = nextId != null ? organizations.find((org) => org.id === nextId) ?? null : null
+      const nextCompanyId = target?.companies?.[0]?.id ?? null
+      setSelectedOrgId(nextId)
+      setTenantSelection({ orgId: nextId, companyId: nextCompanyId })
+      router.refresh()
+    },
+    [isGlobalSuperAdmin, organizations, router],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function bootstrap() {
+      try {
+        const data = await getUserDataFromToken()
+        const allowedRoles = ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG", "ADMIN", "EMPLOYEE"]
+        if (!data || !(await isTokenValid()) || !allowedRoles.includes(data.role ?? "")) {
+          router.push("/unauthorized")
+          return
         }
-        try {
-          const canInventory = checkPermission('inventory');
-          const canSales = checkPermission('sales');
-          const canOrders = checkPermission('sales');
 
-          const [
-            inventoryData,
-            monthlySalesData,
-            pendingData,
-            recentOrders,
-            entries,
-            recentSales,
-            lowStock,
-          ] = await Promise.all([
-            canInventory ? getTotalInventory() : Promise.resolve<any[]>([]),
-            canSales ? getMonthlySalesTotal() : Promise.resolve<{ total: number; growth: number | null } | null>(null),
-            canOrders ? getOrdersCount('PENDING') : Promise.resolve<{ count: number }>({ count: 0 }),
-            canOrders ? getRecentOrders(10) : Promise.resolve<any[]>([]),
-            canInventory ? getAllEntries() : Promise.resolve<any[]>([]),
-            canSales ? getRecentSales() : Promise.resolve<any[]>([]),
-            canInventory ? getLowStockItems() : Promise.resolve<any[]>([]),
-          ]);
+        setUserRole(data.role ?? null)
 
-          const safeInventory = Array.isArray(inventoryData) ? inventoryData : [];
-          const safePendingCount =
-            pendingData && typeof (pendingData as any).count === 'number'
-              ? Number((pendingData as any).count)
-              : 0;
-          const safeRecentOrders = Array.isArray(recentOrders) ? recentOrders : [];
-          const safeEntries = Array.isArray(entries) ? entries : [];
-          const safeRecentSales = Array.isArray(recentSales) ? recentSales : [];
-          const safeLowStock = Array.isArray(lowStock) ? lowStock : [];
+        if (data.role === "SUPER_ADMIN_GLOBAL") {
+          setOrganizationsLoading(true)
+          try {
+            const orgList = await listOrganizations()
+            if (cancelled) return
+            setOrganizations(orgList)
 
-          setTotalInventory(safeInventory);
-          setMonthlySales(monthlySalesData);
-          setPendingOrders(safePendingCount);
-          setLowStockItems(safeLowStock);
+            const stored = await getTenantSelection()
+            const resolvedOrg =
+              stored.orgId != null && orgList.some((org) => org.id === stored.orgId)
+                ? stored.orgId
+                : orgList[0]?.id ?? null
 
-          const entryItems = safeEntries
-            .slice()
-            .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .slice(0, 10);
+            let resolvedCompany: number | null = null
+            if (resolvedOrg != null) {
+              const target = orgList.find((org) => org.id === resolvedOrg)
+              resolvedCompany =
+                target?.companies?.some((company) => company.id === stored.companyId) === true
+                  ? stored.companyId
+                  : target?.companies?.[0]?.id ?? null
+            }
 
-          const activities: ActivityItem[] = [
-            ...safeRecentOrders.map((o: any) => ({
-              id: o.id,
-              type: 'order',
-              description: `Nueva orden #${o.code}`,
-              createdAt: o.createdAt,
-              href: `/dashboard/orders/${o.id}`,
-            })),
-            ...safeRecentSales.map((s: any) => ({
-              id: s.id,
-              type: 'sale',
-              description: `Venta interna #${s.id}`,
-              createdAt: s.createdAt,
-              href: '/dashboard/sales',
-            })),
-            ...entryItems.map((e: any) => ({
-              id: e.id,
-              type: 'entry',
-              description: `Ingreso de inventario #${e.id}`,
-              createdAt: e.createdAt,
-              href: '/dashboard/entries',
-            })),
-            // Mostrar solo una alerta de stock para no llenar el feed
-            // Alertas de bajo stock: mostrar nuevas y colapsar repetidas
-            ...(() => {
-              const list: ActivityItem[] = [];
-              if (safeLowStock.length === 0) return list;
-              try {
-                const storageKey = 'dashboard.lowstock.seen';
-                const raw = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
-                const seen: Record<string, number> = raw ? JSON.parse(raw) : {};
-                const now = Date.now();
-                const ttlMs = 24 * 60 * 60 * 1000; // 24h para no repetir en exceso
-                const newLow = safeLowStock.filter((i: any) => !seen[String(i.productId)] || (now - seen[String(i.productId)]) > ttlMs);
-
-                // Incluir hasta 3 nuevas alertas individuales para visibilidad
-                list.push(
-                  ...newLow.slice(0, 3).map((i: any) => ({
-                    id: `lowstock-${i.productId}-${now}`,
-                    type: 'alert' as const,
-                    description: `Sin stock: ${i.productName}`,
-                    createdAt: new Date().toISOString(),
-                    href: '/dashboard/inventory',
-                  }))
-                );
-
-                const remaining = safeLowStock.length - newLow.length;
-                if (newLow.length === 0 && safeLowStock.length > 0) {
-                  // Si no hay nuevas, mantener una sola entrada resumen
-                  const first = safeLowStock[0];
-                  list.push({
-                    id: 'lowstock-summary',
-                    type: 'alert',
-                    description: safeLowStock.length === 1
-                      ? `Sin stock: ${first.productName}`
-                      : `Sin stock: ${first.productName} y ${safeLowStock.length - 1} más`,
-                    createdAt: new Date().toISOString(),
-                    href: '/dashboard/inventory',
-                  });
-                } else if (remaining > 0) {
-                  // Hay más productos sin stock además de los nuevos mostrados
-                  list.push({
-                    id: 'lowstock-remaining',
-                    type: 'alert',
-                    description: `Otros ${remaining} productos en stock bajo`,
-                    createdAt: new Date().toISOString(),
-                    href: '/dashboard/inventory',
-                  });
-                }
-
-                // Persistir vistos (solo los nuevos que mostramos) con timestamp
-                const updated = { ...seen };
-                newLow.forEach((i: any) => { updated[String(i.productId)] = now; });
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem(storageKey, JSON.stringify(updated));
-                }
-              } catch {
-                // si storage falla, no romper el feed
-              }
-              return list;
-            })(),
-          ];
-          activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          setRecentActivity(activities.slice(0, 10));
-
-      } catch (error: unknown) {
-        if (!(await handleAuthError(error))) {
-          if (error instanceof Error && error.message === 'Unauthorized') {
-            router.push('/unauthorized');
-          } else {
-            console.error('Error cargando datos:', error);
+            setSelectedOrgId(resolvedOrg)
+            setTenantSelection({ orgId: resolvedOrg, companyId: resolvedCompany })
+          } catch (error) {
+            if (!cancelled) {
+              console.error("Error cargando organizaciones", error)
+              toast.error("No se pudieron cargar las organizaciones disponibles.")
+              setOrganizations([])
+              setSelectedOrgId(null)
+              clearTenantSelection()
+            }
+          } finally {
+            if (!cancelled) {
+              setOrganizationsLoading(false)
+            }
           }
-        }      
+        } else {
+          const stored = await getTenantSelection()
+          setSelectedOrgId(stored.orgId ?? null)
+        }
+      } catch (error) {
+        console.error("Error inicializando el dashboard", error)
+        toast.error("No se pudo inicializar el panel de control.")
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setBootstrapReady(true)
+        }
       }
     }
-  fetchData();
-  }, [])
 
+    bootstrap()
+
+    return () => {
+      cancelled = true
+    }
+  }, [router])
+
+  useEffect(() => {
+    if (!bootstrapReady || userRole === null) return
+    if (selection.orgId !== selectedOrgId) {
+      setSelectedOrgId(selection.orgId ?? null)
+    }
+  }, [bootstrapReady, selection.orgId, selectedOrgId, userRole])
+
+  useEffect(() => {
+    if (!bootstrapReady || userRole === null) return
+
+    if (userRole === "EMPLOYEE") {
+      setLoading(false)
+      setTotalInventory([])
+      setMonthlySales(null)
+      setPendingOrders(0)
+      setLowStockItems([])
+      setRecentActivity([])
+      return
+    }
+
+    if (isGlobalSuperAdmin) {
+      if (organizationsLoading) return
+
+      if (organizations.length === 0) {
+        setLoading(false)
+        setTotalInventory([])
+        setMonthlySales(null)
+        setPendingOrders(0)
+        setLowStockItems([])
+        setRecentActivity([])
+        return
+      }
+
+      if (selectedOrgId == null) {
+        setLoading(false)
+        return
+      }
+    }
+
+    let cancelled = false
+
+    async function fetchDashboardData() {
+      setLoading(true)
+      try {
+        const canInventory = checkPermission("inventory")
+        const canSales = checkPermission("sales")
+        const canOrders = checkPermission("sales")
+
+        const [
+          inventoryData,
+          monthlySalesData,
+          pendingData,
+          recentOrders,
+          entries,
+          recentSales,
+          lowStock,
+        ] = await Promise.all([
+          canInventory ? getTotalInventory() : Promise.resolve<any[]>([]),
+          canSales ? getMonthlySalesTotal() : Promise.resolve<{ total: number; growth: number | null } | null>(null),
+          canOrders ? getOrdersCount("PENDING") : Promise.resolve<{ count: number }>({ count: 0 }),
+          canOrders ? getRecentOrders(10) : Promise.resolve<any[]>([]),
+          canInventory ? getAllEntries() : Promise.resolve<any[]>([]),
+          canSales ? getRecentSales() : Promise.resolve<any[]>([]),
+          canInventory ? getLowStockItems() : Promise.resolve<any[]>([]),
+        ])
+
+        if (cancelled) return
+
+        const safeInventory = Array.isArray(inventoryData) ? inventoryData : []
+        const safePendingCount =
+          pendingData && typeof (pendingData as any).count === "number"
+            ? Number((pendingData as any).count)
+            : 0
+        const safeRecentOrders = Array.isArray(recentOrders) ? recentOrders : []
+        const safeEntries = Array.isArray(entries) ? entries : []
+        const safeRecentSales = Array.isArray(recentSales) ? recentSales : []
+        const safeLowStock = Array.isArray(lowStock) ? lowStock : []
+
+        setTotalInventory(safeInventory)
+        setMonthlySales(monthlySalesData)
+        setPendingOrders(safePendingCount)
+        setLowStockItems(safeLowStock)
+
+        const entryItems = safeEntries
+          .slice()
+          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 10)
+
+        const activities: ActivityItem[] = [
+          ...safeRecentOrders.map((o: any) => ({
+            id: o.id,
+            type: "order" as const,
+            description: `Nueva orden #${o.code}`,
+            createdAt: o.createdAt,
+            href: `/dashboard/orders/${o.id}`,
+          })),
+          ...safeRecentSales.map((s: any) => ({
+            id: s.id,
+            type: "sale" as const,
+            description: `Venta interna #${s.id}`,
+            createdAt: s.createdAt,
+            href: "/dashboard/sales",
+          })),
+          ...entryItems.map((e: any) => ({
+            id: e.id,
+            type: "entry" as const,
+            description: `Ingreso de inventario #${e.id}`,
+            createdAt: e.createdAt,
+            href: "/dashboard/entries",
+          })),
+          ...(() => {
+            const list: ActivityItem[] = []
+            if (safeLowStock.length === 0) return list
+            try {
+              const storageKey = "dashboard.lowstock.seen"
+              const raw = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null
+              const seen: Record<string, number> = raw ? JSON.parse(raw) : {}
+              const now = Date.now()
+              const ttlMs = 24 * 60 * 60 * 1000
+              const newLow = safeLowStock.filter(
+                (i: any) => !seen[String(i.productId)] || now - seen[String(i.productId)] > ttlMs,
+              )
+
+              list.push(
+                ...newLow.slice(0, 3).map((i: any) => ({
+                  id: `lowstock-${i.productId}-${now}`,
+                  type: "alert" as const,
+                  description: `Sin stock: ${i.productName}`,
+                  createdAt: new Date().toISOString(),
+                  href: "/dashboard/inventory",
+                })),
+              )
+
+              const remaining = safeLowStock.length - newLow.length
+              if (newLow.length === 0 && safeLowStock.length > 0) {
+                const first = safeLowStock[0]
+                list.push({
+                  id: "lowstock-summary",
+                  type: "alert" as const,
+                  description:
+                    safeLowStock.length === 1
+                      ? `Sin stock: ${first.productName}`
+                      : `Sin stock: ${first.productName} y ${safeLowStock.length - 1} mas`,
+                  createdAt: new Date().toISOString(),
+                  href: "/dashboard/inventory",
+                })
+              } else if (remaining > 0) {
+                list.push({
+                  id: "lowstock-remaining",
+                  type: "alert" as const,
+                  description: `Otros ${remaining} productos en stock bajo`,
+                  createdAt: new Date().toISOString(),
+                  href: "/dashboard/inventory",
+                })
+              }
+
+              const updated = { ...seen }
+              newLow.forEach((i: any) => {
+                updated[String(i.productId)] = now
+              })
+              if (typeof window !== "undefined") {
+                localStorage.setItem(storageKey, JSON.stringify(updated))
+              }
+            } catch {
+              /* ignore */
+            }
+            return list
+          })(),
+        ]
+
+        activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        setRecentActivity(activities.slice(0, 10))
+      } catch (error: unknown) {
+        if (!(await handleAuthError(error))) {
+          if (error instanceof Error && error.message === "Unauthorized") {
+            router.push("/unauthorized")
+          } else {
+            console.error("Error cargando datos:", error)
+            toast.error("No se pudo cargar la informacion del dashboard.")
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    fetchDashboardData()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    bootstrapReady,
+    isGlobalSuperAdmin,
+    organizationsLoading,
+    organizations,
+    selectedOrgId,
+    checkPermission,
+    handleAuthError,
+    router,
+    version,
+    userRole,
+  ])
+
+  const showOrganizationSelector =
+    isGlobalSuperAdmin && (organizationsLoading || organizations.length > 0)
+  const organizationSelectValue = selectedOrgId != null ? String(selectedOrgId) : ""
   if (loading) {
     return (
       <div className="flex min-h-screen w-full flex-col bg-muted/40">
@@ -300,6 +470,35 @@ useEffect(() => {
             <Package className="h-6 w-6" />
             <span className="text-lg font-semibold">Managment Pro V1</span>
           </div>
+          {showOrganizationSelector ? (
+            <div className="ml-auto flex items-center gap-3">
+              <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
+                Organizacion
+              </span>
+              <Select
+                value={organizationSelectValue.length > 0 ? organizationSelectValue : undefined}
+                onValueChange={handleOrganizationChange}
+                disabled={organizationsLoading || organizations.length === 0}
+              >
+                <SelectTrigger className="w-[240px]">
+                  <SelectValue
+                    placeholder={
+                      organizationsLoading
+                        ? "Cargando organizaciones..."
+                        : "Selecciona una organizacion"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {organizations.map((org) => (
+                    <SelectItem key={org.id} value={String(org.id)}>
+                      {org.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
           <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
@@ -469,6 +668,9 @@ useEffect(() => {
     </div>
   )
 }
+
+
+
 
 
 

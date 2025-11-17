@@ -19,6 +19,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { deleteEntry, getPdfGuiaUrl, getPdfUrl } from './entries.api';
+import { DeleteActionsGuard } from '@/components/delete-actions-guard';
 
 
 export type Entryes = {
@@ -247,10 +248,11 @@ export const columns: ColumnDef<Entryes>[] = [
                 <DropdownMenuItem onClick={handleViewClick}>
                 Visualizar
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsDialogOpen(true)}
-                >
-                Eliminar
-              </DropdownMenuItem>             
+                <DeleteActionsGuard>
+                  <DropdownMenuItem onClick={() => setIsDialogOpen(true)}>
+                    Eliminar
+                  </DropdownMenuItem>
+                </DeleteActionsGuard>             
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -379,3 +381,4 @@ export const columns: ColumnDef<Entryes>[] = [
     },
    
 ]
+

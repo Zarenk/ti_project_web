@@ -9,12 +9,33 @@ import { getOrders } from "./orders.api";
 import { getStore } from "@/app/dashboard/stores/stores.api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { useTenantSelection } from "@/context/tenant-selection-context";
+
+const normalizeOrderSunatStatus = (value: any) => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const statusRaw = typeof value.status === "string" ? value.status.trim() : "";
+  if (!statusRaw) {
+    return null;
+  }
+
+  return {
+    status: statusRaw.toUpperCase(),
+    ticket: value.ticket ?? null,
+    environment: typeof value.environment === "string" ? value.environment : null,
+    errorMessage: value.errorMessage ?? null,
+    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : value.updated_at ?? null,
+  };
+};
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const [storesMap, setStoresMap] = useState<Record<number, string>>({});
+  const { version } = useTenantSelection();
 
   const handleStatusUpdate = useCallback((id: number, status: string) => {
     setOrders((prev) =>
@@ -25,9 +46,18 @@ export default function OrdersPage() {
   const columns = useMemo(() => getColumns(handleStatusUpdate), [handleStatusUpdate]);
 
   useEffect(() => {
+    setIsLoading(true);
+    setOrders([]);
+    setStoresMap({});
     async function fetchData() {
       const user = await getUserDataFromToken();
-      if (!user || !(await isTokenValid()) || user.role !== "ADMIN") {
+      const isValid = await isTokenValid();
+      const normalizedRole = user?.role ? user.role.trim().toUpperCase().replace(/\s+/g, "_") : null;
+      const isSuperAdmin = normalizedRole ? normalizedRole.includes("SUPER_ADMIN") : false;
+      const allowedRoles = new Set(["ADMIN", "EMPLOYEE", "ACCOUNTANT", "AUDITOR"]);
+      const roleAllowed = normalizedRole ? (isSuperAdmin || allowedRoles.has(normalizedRole)) : false;
+
+      if (!user || !isValid || !roleAllowed) {
         router.replace("/unauthorized");
         return;
       }
@@ -70,6 +100,7 @@ export default function OrdersPage() {
             carrierName: o.carrierName ?? undefined,
             carrierId: o.carrierId ?? undefined,
             carrierMode: o.carrierMode ?? undefined,
+            sunatStatus: normalizeOrderSunatStatus(o.sunatStatus ?? o.sunat_status ?? null),
           };
         });
         setOrders(mapped);
@@ -80,7 +111,7 @@ export default function OrdersPage() {
       }
     }
     fetchData();
-  }, [router]);
+  }, [router, version]);
 
   return (
     <section className="py-2 sm:py-6">

@@ -1,20 +1,90 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
-import { CreateClientDto } from './dto/create-client.dto';
-import { Prisma} from '@prisma/client';
+// backend/src/clients/clients.service.ts
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateClientDto } from './dto/update-client.dto';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import {
+  buildOrganizationFilter,
+  resolveCompanyId,
+} from 'src/tenancy/organization.utils';
 
 @Injectable()
 export class ClientService {
-  
-  constructor(
-    private prismaService: PrismaService,
-  ) {}
+  constructor(private prismaService: PrismaService) {}
 
-  async create(data: { name: string; type: string; typeNumber: string; userId?: number; image?: string }) {
-    const userId = data.userId || (await this.createGenericUser()); // Crear un usuario genérico si no se proporciona uno
-  
+  private async assertCompanyMatchesOrganization(
+    companyId: number,
+    organizationId: number,
+  ) {
+    const company = await this.prismaService.company.findUnique({
+      where: { id: companyId },
+      select: { organizationId: true },
+    });
+    if (!company || company.organizationId !== organizationId) {
+      throw new BadRequestException(
+        `La compania ${companyId} no pertenece a la organizacion ${organizationId}.`,
+      );
+    }
+  }
+
+  async create(
+    data: {
+      name: string;
+      type: string;
+      typeNumber: string;
+      userId?: number;
+      image?: string;
+      organizationId?: number | null;
+      companyId?: number | null;
+    },
+    organizationIdFromContext?: number | null,
+    companyIdFromContext?: number | null,
+  ) {
+    const orgId =
+      organizationIdFromContext === undefined
+        ? (data.organizationId ?? null)
+        : organizationIdFromContext;
+    const compId =
+      companyIdFromContext === undefined
+        ? resolveCompanyId({
+            provided: data.companyId ?? null,
+            mismatchError:
+              'La compania proporcionada no coincide con el contexto.',
+          })
+        : resolveCompanyId({
+            provided: data.companyId ?? null,
+            fallbacks: [companyIdFromContext],
+            mismatchError:
+              'La compania proporcionada no coincide con el contexto.',
+          });
+
+    if (compId !== null) {
+      if (orgId === null) {
+        throw new BadRequestException(
+          'Debe indicar una organizacion valida para asociar el cliente a una compania.',
+        );
+      }
+      await this.assertCompanyMatchesOrganization(compId, orgId);
+    }
+
+    logOrganizationContext({
+      service: ClientService.name,
+      operation: 'create',
+      organizationId: orgId,
+      companyId: compId,
+      metadata: { userId: data.userId ?? null, type: data.type },
+    });
+
+    const userId = data.userId || (await this.createGenericUser(orgId));
+
     try {
       return await this.prismaService.client.create({
         data: {
@@ -23,30 +93,62 @@ export class ClientService {
           typeNumber: data.typeNumber,
           userId,
           image: data.image,
+          organizationId: orgId ?? null,
+          companyId: compId ?? null,
         },
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException('Ya existe un cliente con esos datos');
       }
-      console.error('Error en el backend:', error);
       throw new InternalServerErrorException('Error al crear el cliente');
     }
   }
-  
-  private async createGenericUser() {
+
+  private async createGenericUser(organizationId?: number | null) {
+    logOrganizationContext({
+      service: ClientService.name,
+      operation: 'createGenericUser',
+      organizationId,
+    });
     const genericUser = await this.prismaService.user.create({
       data: {
         email: `generic_${Date.now()}@example.com`,
         username: `generic_${Date.now()}`,
-        password: "default_password", // Asegúrate de encriptar esto si es necesario
-        role: "CLIENT",
+        password: 'default_password', // recuerda encriptar si aplica
+        role: 'CLIENT',
+        organizationId: organizationId ?? null,
       },
     });
     return genericUser.id;
   }
 
-  async createGuest() {
+  async createGuest(
+    organizationIdFromContext?: number | null,
+    companyIdFromContext?: number | null,
+  ) {
+    const orgId = organizationIdFromContext ?? null;
+    const compId = companyIdFromContext ?? null;
+
+    if (compId !== null && orgId === null) {
+      throw new BadRequestException(
+        'Debe indicar una organizacion valida para asociar el cliente invitado a una compania.',
+      );
+    }
+    if (compId !== null) {
+      await this.assertCompanyMatchesOrganization(compId, orgId as number);
+    }
+
+    logOrganizationContext({
+      service: ClientService.name,
+      operation: 'createGuest',
+      organizationId: orgId,
+      companyId: compId,
+    });
+
     const username = `generic_${randomUUID()}`;
     const user = await this.prismaService.user.create({
       data: {
@@ -54,6 +156,7 @@ export class ClientService {
         username,
         password: 'default_password',
         role: 'GUEST',
+        organizationId: orgId,
       },
       select: { id: true },
     });
@@ -63,6 +166,8 @@ export class ClientService {
         data: {
           name: username,
           userId: user.id,
+          organizationId: orgId,
+          companyId: compId,
         },
         select: { id: true, name: true },
       });
@@ -76,62 +181,139 @@ export class ClientService {
       ) {
         throw new ConflictException('Ya existe un cliente con esos datos');
       }
-      console.error('Error en el backend:', error);
-      throw new InternalServerErrorException('Error al crear el cliente invitado');
+      throw new InternalServerErrorException(
+        'Error al crear el cliente invitado',
+      );
     }
   }
 
-  async verifyOrCreateClients(clients: { name: string; type:string; typeNumber: string; idUser: number }[]) {
-    const createdClients: {
-      id: number;
-      name: string | null;
-      type: string | null;
-      typeNumber: string | null;
-      phone: string | null;
-      adress: string | null;
-      email: string | null;
-      status: string | null;
-      image: string | null;
-      createdAt: Date;
-      updatedAt: Date;
-    }[] = [];
-  
+  async verifyOrCreateClients(
+    clients: {
+      name: string;
+      type: string;
+      typeNumber: string;
+      idUser: number;
+      organizationId?: number | null;
+      companyId?: number | null;
+    }[],
+    organizationIdFromContext?: number | null,
+    companyIdFromContext?: number | null,
+  ) {
+    const created: any[] = [];
+
     for (const client of clients) {
-      // Verificar si el documento ya existe
-      let existingClient = await this.prismaService.client.findUnique({
-        where: { typeNumber: client.typeNumber },
+      const orgId =
+        organizationIdFromContext === undefined
+          ? (client.organizationId ?? null)
+          : organizationIdFromContext;
+      const compId =
+        companyIdFromContext === undefined
+          ? resolveCompanyId({
+              provided: client.companyId ?? null,
+              mismatchError:
+                'La compania proporcionada no coincide con el contexto.',
+            })
+          : resolveCompanyId({
+              provided: client.companyId ?? null,
+              fallbacks: [companyIdFromContext],
+              mismatchError:
+                'La compania proporcionada no coincide con el contexto.',
+            });
+
+      if (compId !== null) {
+        if (orgId === null) {
+          throw new BadRequestException(
+            'Debe indicar una organizacion valida para asociar el cliente a una compania.',
+          );
+        }
+        await this.assertCompanyMatchesOrganization(compId, orgId);
+      }
+
+      logOrganizationContext({
+        service: ClientService.name,
+        operation: 'verifyOrCreateClients',
+        organizationId: orgId,
+        companyId: compId,
+        metadata: { userId: client.idUser, typeNumber: client.typeNumber },
       });
-  
-      if (!existingClient) {
-        // Crear el producto si no existe
+
+      const existing = await this.prismaService.client.findUnique({
+        where: { typeNumber: client.typeNumber }, // es unique global en tu schema
+      });
+
+      if (!existing) {
         const newClient = await this.prismaService.client.create({
           data: {
             name: client.name,
             type: client.type || '',
             typeNumber: client.typeNumber || '',
             userId: client.idUser,
+            organizationId: orgId,
+            companyId: compId,
           },
         });
-        createdClients.push(newClient);
-      }
-      else {
-        createdClients.push(existingClient);
+        created.push(newClient);
+      } else {
+        created.push(existing);
       }
     }
-  
-    console.log("Clientes creados/verificados:", createdClients);
-    return createdClients;
+
+    return created;
   }
 
-  /**
-   * Registro rápido de clientes desde el formulario público.
-   * No realiza comprobaciones de número o tipo de documento.
-   */
-  async selfRegister(data: { name: string; userId: number; type?: string | null; typeNumber?: string | null; image?: string | null }) {
-    // Si el usuario ya tiene cliente simplemente devuélvelo
-    const existing = await this.prismaService.client.findUnique({ where: { userId: data.userId } });
+  async selfRegister(
+    data: {
+      name: string;
+      userId: number;
+      type?: string | null;
+      typeNumber?: string | null;
+      image?: string | null;
+      organizationId?: number | null;
+      companyId?: number | null;
+    },
+    organizationIdFromContext?: number | null,
+    companyIdFromContext?: number | null,
+  ) {
+    const orgId =
+      organizationIdFromContext === undefined
+        ? (data.organizationId ?? null)
+        : organizationIdFromContext;
+    const compId =
+      companyIdFromContext === undefined
+        ? resolveCompanyId({
+            provided: data.companyId ?? null,
+            mismatchError:
+              'La compania proporcionada no coincide con el contexto.',
+          })
+        : resolveCompanyId({
+            provided: data.companyId ?? null,
+            fallbacks: [companyIdFromContext],
+            mismatchError:
+              'La compania proporcionada no coincide con el contexto.',
+          });
+
+    if (compId !== null) {
+      if (orgId === null) {
+        throw new BadRequestException(
+          'Debe indicar una organizacion valida para asociar el cliente a una compania.',
+        );
+      }
+      await this.assertCompanyMatchesOrganization(compId, orgId);
+    }
+
+    logOrganizationContext({
+      service: ClientService.name,
+      operation: 'selfRegister',
+      organizationId: orgId,
+      companyId: compId,
+      metadata: { userId: data.userId },
+    });
+
+    const existing = await this.prismaService.client.findUnique({
+      where: { userId: data.userId },
+    });
     if (existing) return existing;
-    
+
     try {
       return await this.prismaService.client.create({
         data: {
@@ -140,88 +322,146 @@ export class ClientService {
           typeNumber: data.typeNumber ?? null,
           userId: data.userId,
           image: data.image ?? null,
+          organizationId: orgId,
+          companyId: compId,
         },
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException('Ya existe un cliente con esos datos');
       }
-      console.error('Error en el backend:', error);
       throw new InternalServerErrorException('Error al registrar el cliente');
     }
   }
 
-  // client.service.ts
   async checkIfExists(typeNumber: string): Promise<boolean> {
     const client = await this.prismaService.client.findUnique({
       where: { typeNumber },
     });
-    return !! client; // Devuelve true si el proveedor existe, false si no
+    return !!client;
   }
 
-  findAll() {
-    return this.prismaService.client.findMany()
+  findAll(organizationId?: number | null, companyId?: number | null) {
+    const where = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.ClientWhereInput;
+    return Object.keys(where).length === 0
+      ? this.prismaService.client.findMany()
+      : this.prismaService.client.findMany({ where });
   }
 
-  findRegistered() {
+  findRegistered(organizationId?: number | null, companyId?: number | null) {
+    const orgFilter = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.ClientWhereInput;
+    const where: Prisma.ClientWhereInput = {
+      ...orgFilter,
+      OR: [{ name: 'Sin Cliente' }, { user: { role: 'CLIENT' } }],
+    };
+    return this.prismaService.client.findMany({ where });
+  }
+
+  findAllForChat(organizationId?: number | null, companyId?: number | null) {
+    const where = buildOrganizationFilter(
+      organizationId,
+      companyId,
+    ) as Prisma.ClientWhereInput;
     return this.prismaService.client.findMany({
-      where: {
-        OR: [
-          { name: 'Sin Cliente' },
-          {
-            AND: [
-              // Solo clientes cuyo usuario tiene rol CLIENT
-              { user: { role: 'CLIENT' } },
-              // Excluir usuarios generados (guest/generic)
-              { user: { email: { not: { startsWith: 'generic_' } } } },
-              { user: { username: { not: { startsWith: 'generic_' } } } },
-            ],
-          },
-        ],
-      },
+      where: Object.keys(where).length ? where : undefined,
+      include: { user: true },
     });
   }
 
-  findAllForChat() {
-    return this.prismaService.client.findMany({
-      include: {
-        user: true,
-      },
-    });
-  }
-
-  async findOne(id: number) {
-
+  async findOne(
+    id: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     if (!id || typeof id !== 'number') {
       throw new Error('El ID proporcionado no es válido.');
     }
-
-    const clientFound = await this.prismaService.client.findUnique({ // NO OLVIDAR EL AWAIT O ASYNC CON FUNCIONES
-      where: {id: id,}
-    })
-
-    if(!clientFound){
-      throw new NotFoundException(`Client with id ${id} not found`)
-    }
-
+    const clientFound = await this.prismaService.client.findFirst({
+      where: {
+        id,
+        ...(buildOrganizationFilter(
+          organizationId,
+          companyId,
+        ) as Prisma.ClientWhereInput),
+      },
+    });
+    if (!clientFound)
+      throw new NotFoundException(`Client with id ${id} not found`);
     return clientFound;
   }
 
-  async update(id: number, updateClientDto: UpdateClientDto) {
-    try {
-      const updatedClient = await this.prismaService.client.update({
-        where: { id: Number(id) },
-        data: updateClientDto,
-      });
+  async update(
+    id: number,
+    updateClientDto: UpdateClientDto,
+    organizationIdFromContext?: number | null,
+    companyIdFromContext?: number | null,
+  ) {
+    const before = await this.findOne(
+      id,
+      organizationIdFromContext,
+      companyIdFromContext,
+    );
 
-      return updatedClient;
+    const orgId =
+      organizationIdFromContext === undefined
+        ? (updateClientDto.organizationId ?? before.organizationId ?? null)
+        : organizationIdFromContext;
+
+    const compId =
+      companyIdFromContext === undefined
+        ? resolveCompanyId({
+            provided: updateClientDto.companyId ?? null,
+            fallbacks: [before.companyId ?? null],
+            mismatchError:
+              'La compania proporcionada no coincide con el contexto.',
+          })
+        : resolveCompanyId({
+            provided: updateClientDto.companyId ?? null,
+            fallbacks: [companyIdFromContext],
+            mismatchError:
+              'La compania proporcionada no coincide con el contexto.',
+          });
+
+    if (compId !== null) {
+      if (orgId === null) {
+        throw new BadRequestException(
+          'Debe indicar una organizacion valida para asociar el cliente a una compania.',
+        );
+      }
+      await this.assertCompanyMatchesOrganization(compId, orgId);
+    }
+
+    try {
+      return await this.prismaService.client.update({
+        where: { id: Number(id) },
+        data: {
+          name: updateClientDto.name,
+          type: updateClientDto.type,
+          typeNumber: updateClientDto.typeNumber,
+          phone: updateClientDto.phone,
+          adress: updateClientDto.adress,
+          email: updateClientDto.email,
+          status: updateClientDto.status,
+          organizationId: orgId ?? null,
+          companyId: compId ?? null,
+        },
+      });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
         throw new ConflictException(
-          `El cliente con el nombre "${updateClientDto.name}" ya existe.`
+          `El cliente con el nombre "${updateClientDto.name}" ya existe.`,
         );
       }
       if (
@@ -230,30 +470,41 @@ export class ClientService {
       ) {
         throw new NotFoundException(`Client with id ${id} not found`);
       }
-
-      console.error('Error en el backend:', error);
       throw new InternalServerErrorException('Error al actualizar el cliente');
-    }  
+    }
   }
 
-  async updateMany(clients: UpdateClientDto[]) {
+  async updateMany(
+    clients: UpdateClientDto[],
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     if (!Array.isArray(clients) || clients.length === 0) {
-      throw new BadRequestException('No se proporcionaron clientes para actualizar.');
+      throw new BadRequestException(
+        'No se proporcionaron clientes para actualizar.',
+      );
     }
-  
-    try {
-      // Validar que todos los productos tengan un ID válido
-      const invalidClients = clients.filter((client) => !client.id || isNaN(Number(client.id)));
-      if (invalidClients.length > 0) {
-        throw new BadRequestException('Todos los clientes deben tener un ID válido.');
+
+    // Validación de IDs
+    const invalid = clients.filter((c) => !c.id || isNaN(Number(c.id)));
+    if (invalid.length > 0)
+      throw new BadRequestException(
+        'Todos los clientes deben tener un ID válido.',
+      );
+
+    // Asegurar pertenencia del conjunto al tenant (si llega contexto fijo)
+    if (organizationId !== undefined || companyId !== undefined) {
+      for (const c of clients) {
+        await this.findOne(Number(c.id), organizationId, companyId);
       }
-  
-      // Ejecutar la transacción para actualizar múltiples productos
+    }
+
+    try {
       const updatedClients = await this.prismaService.$transaction(
         clients.map((client) =>
           this.prismaService.client.update({
             where: { id: Number(client.id) },
-            data: {             
+            data: {
               name: client.name,
               type: client.type,
               typeNumber: client.typeNumber,
@@ -261,71 +512,66 @@ export class ClientService {
               adress: client.adress,
               email: client.email,
               status: client.status,
+              organizationId: client.organizationId ?? organizationId ?? null,
+              companyId: client.companyId ?? companyId ?? null,
             },
-          })
-        )
+          }),
+        ),
       );
-  
+
       return {
         message: `${updatedClients.length} cliente(s) actualizado(s) correctamente.`,
         updatedClients,
       };
     } catch (error) {
-      console.error('Error al actualizar clientes:', error);
-  
-      // Manejar errores específicos de Prisma
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') {
-          throw new NotFoundException('Uno o más clientes no fueron encontrados.');
-        }
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(
+          'Uno o más clientes no fueron encontrados.',
+        );
       }
-  
-      throw new InternalServerErrorException('Hubo un error al actualizar los clientes.');
+      throw new InternalServerErrorException(
+        'Hubo un error al actualizar los clientes.',
+      );
     }
   }
 
-  async remove(id: number) {
-      const deletedClient = this.prismaService.client.delete({
-      where:{
-        id
-      }
-    })
-
-    if(!deletedClient){
-      throw new NotFoundException(`Client with id ${id} not found`)
-    }
-
-    return deletedClient;
+  async remove(
+    id: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    await this.findOne(id, organizationId, companyId);
+    return this.prismaService.client.delete({ where: { id } });
   }
 
-  async removes(ids: number[]) {
+  async removes(
+    ids: number[],
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
     if (!Array.isArray(ids) || ids.length === 0) {
-      throw new NotFoundException('No se proporcionaron IDs válidos para eliminar.');
+      throw new NotFoundException(
+        'No se proporcionaron IDs válidos para eliminar.',
+      );
     }
-  
-    try {
-
-      // Convertir los IDs a números
-      const numericIds = ids.map((id) => Number(id));
-
-      const deletedClients = await this.prismaService.client.deleteMany({
-        where: {
-          id: {
-            in: numericIds, // Elimina todos los productos cuyos IDs estén en este array
-          },
-        },
-      });
-  
-      if (deletedClients.count === 0) {
-        throw new NotFoundException('No se encontraron clientes con los IDs proporcionados.');
-      }
-        
-      return {
-        message: `${deletedClients.count} cliente(s) eliminado(s) correctamente.`,
-      };
-    } catch (error) {
-      console.error("Error en el backend:", error);
-      throw new InternalServerErrorException('Hubo un error al eliminar los clientes.');     
+    // Verificar pertenencia (evita borrar fuera del tenant)
+    for (const id of ids) {
+      await this.findOne(Number(id), organizationId, companyId);
     }
+    const numericIds = ids.map((id) => Number(id));
+    const deleted = await this.prismaService.client.deleteMany({
+      where: { id: { in: numericIds } },
+    });
+    if (deleted.count === 0) {
+      throw new NotFoundException(
+        'No se encontraron clientes con los IDs proporcionados.',
+      );
+    }
+    return {
+      message: `${deleted.count} cliente(s) eliminado(s) correctamente.`,
+    };
   }
 }

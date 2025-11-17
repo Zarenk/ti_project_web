@@ -17,30 +17,39 @@ function generateDigest(xml: string): string {
 function buildSignedInfoXml(digestValue: string): string {
   return create()
     .ele('ds:SignedInfo', { xmlns: 'http://www.w3.org/2000/09/xmldsig#' })
-      .ele('ds:CanonicalizationMethod', {
-        Algorithm: 'http://www.w3.org/2001/10/xml-exc-c14n#'
-      }).up()
-      .ele('ds:SignatureMethod', {
-        Algorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256'
-      }).up()
-      .ele('ds:Reference', { URI: '#Invoice' })
-        .ele('ds:Transforms')
-          .ele('ds:Transform', {
-            Algorithm: 'http://www.w3.org/2000/09/xmldsig#enveloped-signature'
-          }).up()
-        .up()
-        .ele('ds:DigestMethod', {
-          Algorithm: 'http://www.w3.org/2001/04/xmlenc#sha256'
-        }).up()
-        .ele('ds:DigestValue').txt(digestValue).up()
-      .up()
+    .ele('ds:CanonicalizationMethod', {
+      Algorithm: 'http://www.w3.org/2001/10/xml-exc-c14n#',
+    })
+    .up()
+    .ele('ds:SignatureMethod', {
+      Algorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+    })
+    .up()
+    .ele('ds:Reference', { URI: '#Invoice' })
+    .ele('ds:Transforms')
+    .ele('ds:Transform', {
+      Algorithm: 'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
+    })
+    .up()
+    .up()
+    .ele('ds:DigestMethod', {
+      Algorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+    })
+    .up()
+    .ele('ds:DigestValue')
+    .txt(digestValue)
+    .up()
+    .up()
     .end({ headless: true });
 }
 
 /**
  * Firma el SignedInfo con la clave privada.
  */
-function signWithPrivateKey(signedInfo: string, privateKeyPath: string): string {
+function signWithPrivateKey(
+  signedInfo: string,
+  privateKeyPath: string,
+): string {
   const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
   const signer = crypto.createSign('RSA-SHA256');
   signer.update(signedInfo);
@@ -51,11 +60,14 @@ function signWithPrivateKey(signedInfo: string, privateKeyPath: string): string 
 /**
  * Firma un documento UBL 2.1 (factura, boleta, nota de crédito).
  */
-export async function firmarDocumentoUBL(xml: string, privateKeyPath: string, certificatePath: string): Promise<string> {
-  
+export async function firmarDocumentoUBL(
+  xml: string,
+  privateKeyPath: string,
+  certificatePath: string,
+): Promise<string> {
   xml = xml.replace(
     /<Invoice([^>]*)(?<!Id="Invoice")>/,
-    (_match, attrs) => `<Invoice${attrs} Id="Invoice">`
+    (_match, attrs) => `<Invoice${attrs} Id="Invoice">`,
   );
 
   const placeholder = '<__raw><!-- Firma digital no disponible --></__raw>';
@@ -71,7 +83,8 @@ export async function firmarDocumentoUBL(xml: string, privateKeyPath: string, ce
   const signedInfoXml = buildSignedInfoXml(digestValue);
   const signatureValue = signWithPrivateKey(signedInfoXml, privateKeyPath);
 
-  const cert = fs.readFileSync(certificatePath, 'utf8')
+  const cert = fs
+    .readFileSync(certificatePath, 'utf8')
     .replace('-----BEGIN CERTIFICATE-----', '')
     .replace('-----END CERTIFICATE-----', '')
     .replace(/\r?\n|\r/g, '');
@@ -80,7 +93,7 @@ export async function firmarDocumentoUBL(xml: string, privateKeyPath: string, ce
 
   const firmaDoc = create().ele('ds:Signature', {
     xmlns: 'http://www.w3.org/2000/09/xmldsig#',
-    Id: 'SignatureKG'
+    Id: 'SignatureKG',
   });
 
   firmaDoc.import(signedInfoNode);

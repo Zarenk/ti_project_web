@@ -10,19 +10,30 @@ import { TelemetryInterceptor } from './metrics/trace.interceptor';
 import './metrics/tracing';
 
 async function bootstrap() {
-  
   const app = await NestFactory.create(AppModule);
   const metrics = app.get(MetricsService);
   app.useGlobalInterceptors(new TelemetryInterceptor(metrics));
 
-  const allowedOrigins =
-    process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()) ||
-    ['http://localhost:3000'];
+  const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map((o) =>
+    o.trim(),
+  ) || ['http://localhost:3000'];
 
   app.enableCors({
     origin: allowedOrigins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-org-id',
+      'x-company-id',
+      'x-org-unit-id',
+      'x-tenant-slug',
+    ],
+    exposedHeaders: [
+      'x-site-settings-updated-at',
+      'x-site-settings-created-at',
+    ],
   });
 
   // Serve static files before applying the global prefix so they remain
@@ -32,14 +43,19 @@ async function bootstrap() {
   // PARA COLOCAR PREVIAMENTE EN LA URL /API/
   app.setGlobalPrefix('api');
   // Habilitar la validación global de DTOs
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true, // elimina campos no definidos en DTO
-    forbidNonWhitelisted: true, // lanza error si llegan campos extras
-    transform: true, // transforma automáticamente el payload a la clase
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true, // elimina campos no definidos en DTO
+      forbidNonWhitelisted: true, // lanza error si llegan campos extras
+      transform: true, // transforma automáticamente el payload a la clase
+    }),
+  );
 
   // Servir archivos estáticos desde la carpeta "uploads/sunat"
-  app.use('/sunat.zip/facturas', express.static(join(__dirname, '..', 'sunat.zip', 'facturas')));
+  app.use(
+    '/sunat.zip/facturas',
+    express.static(join(__dirname, '..', 'sunat.zip', 'facturas')),
+  );
 
   //DOCUMENTACION SWAGGER
   const config = new DocumentBuilder()

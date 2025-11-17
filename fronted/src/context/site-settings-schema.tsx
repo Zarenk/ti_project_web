@@ -94,6 +94,10 @@ export const siteSettingsSchema = z.object({
     enabled: z.boolean(),
     message: z.string(),
   }),
+  system: z.object({
+    autoBackupFrequency: z.enum(["manual", "daily", "weekly", "biweekly", "monthly"]),
+    lastAutoBackupAt: z.string().nullable().optional(),
+  }),
   permissions: z.object({
     dashboard: z.boolean(),
     catalog: z.boolean(),
@@ -103,8 +107,10 @@ export const siteSettingsSchema = z.object({
     purchases: z.boolean(),
     accounting: z.boolean(),
     marketing: z.boolean(),
-    ads: z.boolean(),
+    providers: z.boolean(),
     settings: z.boolean(),
+    hidePurchaseCost: z.boolean(),
+    hideDeleteActions: z.boolean(),
   }),
 });
 
@@ -208,13 +214,17 @@ export const defaultSiteSettings: SiteSettings = {
     x: "",
   },
   privacy: {
-    cookieBanner: true,
+    cookieBanner: false,
     cookieText: "Este sitio utiliza cookies para mejorar tu experiencia.",
     acceptText: "Aceptar",
   },
   maintenance: {
     enabled: false,
     message: "Estamos realizando mantenimiento. Vuelve pronto.",
+  },
+  system: {
+    autoBackupFrequency: "manual",
+    lastAutoBackupAt: null,
   },
   permissions: {
     dashboard: true,
@@ -225,8 +235,10 @@ export const defaultSiteSettings: SiteSettings = {
     purchases: true,
     accounting: true,
     marketing: true,
-    ads: true,
+    providers: true,
     settings: true,
+    hidePurchaseCost: false,
+    hideDeleteActions: false,
   },
 };
 

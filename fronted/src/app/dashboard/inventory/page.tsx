@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { Filter, Tags, CalendarDays, Clock } from "lucide-react";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 import { columns } from "./columns"; // Importar las columnas definidas
 import { getAllPurchasePrices, getInventoryWithCurrency } from "./inventory.api";
 import { DataTable } from "./data-table";
@@ -123,31 +124,51 @@ export default function InventoryPage() {
   const [baseInventory, setBaseInventory] = useState<InventoryItem[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("created");
   const [inStockOnly, setInStockOnly] = useState(false);
+  const { selection, version, loading: tenantLoading } = useTenantSelection();
+  const selectionKey = useMemo(
+    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
+    [selection.orgId, selection.companyId, version],
+  );
+
 
   useEffect(() => {
-    async function fetchInventory() {
+    if (tenantLoading) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadInventory = async () => {
+      setLoading(true);
+      setInventory([]);
+      setBaseInventory([]);
+
       try {
-        // Obtener el inventario y los precios de compra en paralelo
         const [inventoryData, purchasePrices] = await Promise.all([
-          //getInventory(), // Llama al endpoint para obtener el inventario
           getInventoryWithCurrency(), // Llama al endpoint para obtener el inventario con desglose por moneda
           getAllPurchasePrices(), // Llama al endpoint para obtener los precios de compra
         ]);
-  
-        // Crear un mapa de precios para un acceso rápido
-        const priceMap = purchasePrices.reduce((acc: any, price: any) => {
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!Array.isArray(inventoryData)) {
+          throw new Error("Los datos del inventario no son validos");
+        }
+
+        const priceMap = (Array.isArray(purchasePrices) ? purchasePrices : []).reduce((acc: any, price: any) => {
           acc[price.productId] = {
             highestPurchasePrice: price.highestPurchasePrice,
             lowestPurchasePrice: price.lowestPurchasePrice,
           };
           return acc;
         }, {});
-  
-        // Agrupar productos por nombre y calcular el stock global
+
         const groupedData = Object.values(
           inventoryData.reduce((acc: any, item: any) => {
             const productName = item.product.name;
-  
+
             if (!acc[productName]) {
               acc[productName] = {
                 id: item.product.id,
@@ -161,62 +182,69 @@ export default function InventoryPage() {
                 updateAt: item.updatedAt,
                 storeOnInventory: [],
                 serialNumbers: [],
-                highestPurchasePrice: priceMap[item.product.id]?.highestPurchasePrice || 0, // Precio más alto
-                lowestPurchasePrice: priceMap[item.product.id]?.lowestPurchasePrice || 0, // Precio más bajo
+                highestPurchasePrice: priceMap[item.product.id]?.highestPurchasePrice || 0, // Precio mas alto
+                lowestPurchasePrice: priceMap[item.product.id]?.lowestPurchasePrice || 0, // Precio mas bajo
               };
             }
-  
-            // Sumar el stock por moneda
+
             acc[productName].stock += item.storeOnInventory.reduce(
               (total: number, store: any) => total + store.stock,
               0
             );
 
-            // Sumar el stock por moneda
-          item.stockByStore.forEach((store: any) => {
-            acc[productName].stockByCurrency.USD += store.stockByCurrency.USD;
-            acc[productName].stockByCurrency.PEN += store.stockByCurrency.PEN;
-          });
-  
-            // Agregar las tiendas al inventario agrupado
+            item.stockByStore.forEach((store: any) => {
+              acc[productName].stockByCurrency.USD += store.stockByCurrency.USD;
+              acc[productName].stockByCurrency.PEN += store.stockByCurrency.PEN;
+            });
+
             acc[productName].storeOnInventory.push(...item.storeOnInventory);
 
-            // Agregar números de serie disponibles
             item.entryDetails?.forEach((detail: any) => {
               const series = detail.series?.map((s: any) => s.serial) || [];
               acc[productName].serialNumbers.push(...series);
             });
-  
-            // Calcular el updateAt más reciente entre las entradas de storeOnInventory
+
             const latestUpdateAt = item.storeOnInventory.reduce(
               (latest: Date, store: any) =>
                 new Date(store.updatedAt) > new Date(latest) ? new Date(store.updatedAt) : latest,
               new Date(acc[productName].updateAt)
             );
-  
-            acc[productName].updateAt = latestUpdateAt; // Actualizar el updateAt con el más reciente
-  
+
+            acc[productName].updateAt = latestUpdateAt;
+
             return acc;
           }, {})
         );
-  
-        // Ordenar los datos por fecha de creación en orden descendente
+
         const sortedData = groupedData.sort(
           (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
+
+        if (cancelled) {
+          return;
+        }
 
         setBaseInventory(groupedData as InventoryItem[]);
         setInventory(sortedData as InventoryItem[]);
       } catch (error) {
         console.error("Error al obtener el inventario:", error);
-        toast.error("Error al obtener el inventario");
+        if (!cancelled) {
+          toast.error("Error al obtener el inventario");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    }
+    };
 
-    fetchInventory();
-  }, []);
+    void loadInventory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantLoading, selectionKey]);
+
 
   // Aplicar orden y filtro según controles
   useEffect(() => {

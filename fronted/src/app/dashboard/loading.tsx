@@ -10,6 +10,10 @@ export default function DashboardLoading() {
             <Skeleton className="h-6 w-6 rounded-full" />
             <Skeleton className="h-4 w-40" />
           </div>
+          <div className="ml-auto hidden items-center gap-2 sm:flex">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-10 w-56" />
+          </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
           <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">

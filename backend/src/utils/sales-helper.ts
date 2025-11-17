@@ -14,14 +14,35 @@ export interface SaleAllocation {
   storeInventory: any;
 }
 
-export async function prepareSaleContext(prisma: PrismaService, storeId: number, clientId?: number) {
-  const store = await prisma.store.findUnique({ where: { id: storeId } });
+export async function prepareSaleContext(
+  prisma: PrismaService,
+  storeId: number,
+  clientId?: number,
+) {
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: {
+      id: true,
+      name: true,
+      organizationId: true,
+      companyId: true,
+    },
+  });
   if (!store) {
     throw new NotFoundException(`La tienda con ID ${storeId} no existe.`);
   }
 
   let cashRegister = await prisma.cashRegister.findFirst({
     where: { storeId, status: 'ACTIVE' },
+    select: {
+      id: true,
+      name: true,
+      currentBalance: true,
+      initialBalance: true,
+      status: true,
+      organizationId: true,
+      storeId: true,
+    },
   });
 
   if (!cashRegister) {
@@ -29,22 +50,35 @@ export async function prepareSaleContext(prisma: PrismaService, storeId: number,
       data: {
         storeId,
         name: `Caja Principal - Tienda ${storeId} - ${Date.now()}`,
-        initialBalance: 0,
-        currentBalance: 0,
+        initialBalance: new Prisma.Decimal(0),
+        currentBalance: new Prisma.Decimal(0),
         status: 'ACTIVE',
+        organizationId: store.organizationId ?? null,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
     });
+  } else if (
+    store.organizationId !== undefined &&
+    cashRegister.organizationId !== store.organizationId
+  ) {
+    cashRegister = await prisma.cashRegister.update({
+      where: { id: cashRegister.id },
+      data: { organizationId: store.organizationId ?? null },
+    });
   }
 
   if (!cashRegister) {
-    throw new BadRequestException(`No hay una caja activa para la tienda con ID ${storeId}.`);
+    throw new BadRequestException(
+      `No hay una caja activa para la tienda con ID ${storeId}.`,
+    );
   }
 
   let clientIdToUse = clientId;
   if (!clientIdToUse) {
-    let genericUser = await prisma.user.findFirst({ where: { username: 'generic_user' } });
+    let genericUser = await prisma.user.findFirst({
+      where: { username: 'generic_user' },
+    });
     if (!genericUser) {
       genericUser = await prisma.user.create({
         data: {
@@ -58,7 +92,9 @@ export async function prepareSaleContext(prisma: PrismaService, storeId: number,
       });
     }
 
-    let genericClient = await prisma.client.findFirst({ where: { name: 'Sin Cliente' } });
+    let genericClient = await prisma.client.findFirst({
+      where: { name: 'Sin Cliente' },
+    });
     if (!genericClient) {
       genericClient = await prisma.client.create({
         data: {
@@ -77,26 +113,32 @@ export async function prepareSaleContext(prisma: PrismaService, storeId: number,
   return { store, cashRegister, clientIdToUse };
 }
 
-export async function executeSale(prisma: PrismaService, params: {
-  userId: number;
-  storeId: number;
-  clientId: number;
-  description?: string;
-  allocations: SaleAllocation[];
-  payments: {
-    paymentMethodId: number;
-    amount: number;
-    currency: string;
-    transactionId?: string;
-  }[];
-  tipoComprobante?: string;
-  tipoMoneda: string;
-  cashRegister: any;
-  total: number;
-  source: 'POS' | 'WEB';
-  getStoreName: (alloc: SaleAllocation) => string;
-  onSalePosted?: (saleId: number, postedAt: Date) => Promise<void> | void;
-}) {
+export async function executeSale(
+  prisma: PrismaService,
+  params: {
+    userId: number;
+    storeId: number;
+    clientId: number;
+    description?: string;
+    allocations: SaleAllocation[];
+    payments: {
+      paymentMethodId: number;
+      amount: number;
+      currency: string;
+      transactionId?: string;
+    }[];
+    tipoComprobante?: string;
+    tipoMoneda: string;
+    cashRegister: any;
+    total: number;
+    source: 'POS' | 'WEB';
+    getStoreName: (alloc: SaleAllocation) => string;
+    onSalePosted?: (saleId: number, postedAt: Date) => Promise<void> | void;
+    organizationId?: number | null;
+    companyId?: number | null;
+    referenceId?: string | null;
+  },
+) {
   const {
     userId,
     storeId,
@@ -111,7 +153,12 @@ export async function executeSale(prisma: PrismaService, params: {
     source,
     getStoreName,
     onSalePosted,
+    organizationId,
+    companyId,
+    referenceId,
   } = params;
+
+  const saleOrganizationId = organizationId ?? null;
 
   const sale = await prisma.$transaction(async (prismaTx) => {
     const sale = await prismaTx.sales.create({
@@ -122,6 +169,9 @@ export async function executeSale(prisma: PrismaService, params: {
         total,
         description,
         source,
+        organizationId: organizationId ?? null,
+        companyId: companyId ?? null,
+        referenceId: referenceId ?? null,
       },
     });
 
@@ -137,9 +187,13 @@ export async function executeSale(prisma: PrismaService, params: {
     });
 
     for (const { detail, storeInventory } of allocations) {
-      const product = await prisma.product.findUnique({ where: { id: detail.productId } });
+      const product = await prisma.product.findUnique({
+        where: { id: detail.productId },
+      });
       if (!product) {
-        throw new NotFoundException(`No se encontró el producto con ID ${detail.productId}.`);
+        throw new NotFoundException(
+          `No se encontró el producto con ID ${detail.productId}.`,
+        );
       }
 
       descriptionTransaction += `${product.name} - Cantidad: ${detail.quantity}, Precio Unitario: ${detail.price}`;
@@ -177,6 +231,7 @@ export async function executeSale(prisma: PrismaService, params: {
           const series = await prismaTx.entryDetailSeries.findFirst({
             where: {
               serial,
+              organizationId: saleOrganizationId,
               entryDetail: {
                 productId: detail.productId,
                 entry: { storeId: storeInventory.storeId },
@@ -188,62 +243,11 @@ export async function executeSale(prisma: PrismaService, params: {
               `La serie ${serial} no se encontró para el producto con ID ${detail.productId} en la tienda con ID ${storeInventory.storeId}.`,
             );
           }
-          await prismaTx.entryDetailSeries.update({ where: { id: series.id }, data: { status: 'inactive' } });
+          await prismaTx.entryDetailSeries.update({
+            where: { id: series.id },
+            data: { status: 'inactive' },
+          });
         }
-      }
-
-      for (const payment of payments) {
-        if (payment.paymentMethodId === null || payment.paymentMethodId === undefined) {
-          throw new BadRequestException('Debe proporcionar un paymentMethodId válido.');
-        }
-
-        let paymentMethod = await prismaTx.paymentMethod.findUnique({ where: { id: payment.paymentMethodId } });
-        if (!paymentMethod) {
-          const defaultNames: Record<number, string> = {
-            [-1]: 'EN EFECTIVO',
-            [-2]: 'TRANSFERENCIA',
-            [-3]: 'PAGO CON VISA',
-            [-4]: 'YAPE',
-            [-5]: 'PLIN',
-            [-6]: 'OTRO MEDIO DE PAGO',
-          };
-          const methodName = defaultNames[payment.paymentMethodId];
-          if (!methodName) {
-            throw new BadRequestException(`Método de pago no válido: ${payment.paymentMethodId}`);
-          }
-          paymentMethod = await prismaTx.paymentMethod.findFirst({ where: { name: methodName } });
-          if (!paymentMethod) {
-            paymentMethod = await prismaTx.paymentMethod.create({ data: { name: methodName, isActive: true } });
-          }
-        }
-
-        const transaction = await prismaTx.cashTransaction.create({
-          data: {
-            cashRegisterId: cashRegister.id,
-            type: 'INCOME',
-            amount: new Prisma.Decimal(payment.amount),
-            description: `Venta realizada. Pago vía ${paymentMethod.name}, ${descriptionTransaction}`,
-            userId,
-            clientName: client?.name ?? null,
-            clientDocument: client?.typeNumber ?? null,
-            clientDocumentType: client?.type ?? null,
-          },
-        });
-
-        await prismaTx.cashTransactionPaymentMethod.create({
-          data: { cashTransactionId: transaction.id, paymentMethodId: paymentMethod.id },
-        });
-
-        await prismaTx.salePayment.create({
-          data: {
-            salesId: sale.id,
-            paymentMethodId: paymentMethod.id,
-            amount: payment.amount,
-            currency: payment.currency,
-            transactionId: payment.transactionId,
-            cashTransactionId: transaction.id,
-          },
-        });
       }
 
       await prismaTx.storeOnInventory.update({
@@ -260,6 +264,79 @@ export async function executeSale(prisma: PrismaService, params: {
           stockChange: -detail.quantity,
           previousStock: storeInventory.stock,
           newStock: storeInventory.stock - detail.quantity,
+          organizationId: organizationId ?? null,
+          companyId: companyId ?? null,
+        },
+      });
+    }
+
+    for (const payment of payments) {
+      if (
+        payment.paymentMethodId === null ||
+        payment.paymentMethodId === undefined
+      ) {
+        throw new BadRequestException(
+          'Debe proporcionar un paymentMethodId válido.',
+        );
+      }
+
+      let paymentMethod = await prismaTx.paymentMethod.findUnique({
+        where: { id: payment.paymentMethodId },
+      });
+      if (!paymentMethod) {
+        const defaultNames: Record<number, string> = {
+          [-1]: 'EN EFECTIVO',
+          [-2]: 'TRANSFERENCIA',
+          [-3]: 'PAGO CON VISA',
+          [-4]: 'YAPE',
+          [-5]: 'PLIN',
+          [-6]: 'OTRO MEDIO DE PAGO',
+        };
+        const methodName = defaultNames[payment.paymentMethodId];
+        if (!methodName) {
+          throw new BadRequestException(
+            `Método de pago no válido: ${payment.paymentMethodId}`,
+          );
+        }
+        paymentMethod = await prismaTx.paymentMethod.findFirst({
+          where: { name: methodName },
+        });
+        if (!paymentMethod) {
+          paymentMethod = await prismaTx.paymentMethod.create({
+            data: { name: methodName, isActive: true },
+          });
+        }
+      }
+
+      const transaction = await prismaTx.cashTransaction.create({
+        data: {
+          cashRegisterId: cashRegister.id,
+          type: 'INCOME',
+          amount: new Prisma.Decimal(payment.amount),
+          description: `Venta realizada. Pago vía ${paymentMethod.name}, ${descriptionTransaction}`,
+          userId,
+          clientName: client?.name ?? null,
+          clientDocument: client?.typeNumber ?? null,
+          clientDocumentType: client?.type ?? null,
+          organizationId: saleOrganizationId,
+        },
+      });
+
+      await prismaTx.cashTransactionPaymentMethod.create({
+        data: {
+          cashTransactionId: transaction.id,
+          paymentMethodId: paymentMethod.id,
+        },
+      });
+
+      await prismaTx.salePayment.create({
+        data: {
+          salesId: sale.id,
+          paymentMethodId: paymentMethod.id,
+          amount: payment.amount,
+          currency: payment.currency,
+          transactionId: payment.transactionId,
+          cashTransactionId: transaction.id,
         },
       });
     }
@@ -270,7 +347,9 @@ export async function executeSale(prisma: PrismaService, params: {
         where: { tipoComprobante },
         orderBy: { nroCorrelativo: 'desc' },
       });
-      const nuevoCorrelativo = lastInvoice ? parseInt(lastInvoice.nroCorrelativo) + 1 : 1;
+      const nuevoCorrelativo = lastInvoice
+        ? parseInt(lastInvoice.nroCorrelativo) + 1
+        : 1;
       await prismaTx.invoiceSales.create({
         data: {
           salesId: sale.id,

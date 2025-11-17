@@ -1,4 +1,4 @@
-import { CreateUserDto } from "./create-user.dto";
+import { CreateUserDto } from './create-user.dto';
 
 //export class UpdateProductDto extends PartialType(CreateProductDto) {}
 

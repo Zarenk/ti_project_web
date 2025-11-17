@@ -5,10 +5,11 @@ import { checkSeries, processPDF } from '../entries.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { z } from 'zod'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import React from 'react'
 import { getProducts } from '../../products/products.api'
+import { getCategories } from '../../categories/categories.api'
 import { getProviders } from '../../providers/providers.api'
 import {jwtDecode} from 'jwt-decode';
 import { getAuthToken } from "@/utils/auth-token";
@@ -35,6 +36,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useTenantSelection } from '@/context/tenant-selection-context'
 
 // Función para obtener el userId del token JWT almacenado en localStorage
 async function getUserIdFromToken(): Promise<number | null> {
@@ -80,35 +82,43 @@ const entriesSchema = z.object({
 //inferir el tipo de dato
 export type EntriesType = z.infer<typeof entriesSchema>;
 
+function buildDefaultEntryValues(entry?: any): EntriesType {
+  return {
+    name: entry?.name ?? "",
+    description: entry?.description ?? "",
+    price: entry?.price ?? 1,
+    priceSell: entry?.priceSell ?? 1,
+    quantity: entry?.quantity ?? 1,
+    category_name: entry?.category_name ?? "",
+    provider_name: entry?.provider_name ?? "",
+    provider_adress: entry?.provider_adress ?? "",
+    provider_documentNumber: entry?.provider_documentNumber ?? "",
+    store_name: entry?.store_name ?? "",
+    store_adress: entry?.store_adress ?? "",
+    entry_date: entry?.entry_date ? new Date(entry.entry_date) : new Date(),
+    entry_description: entry?.entry_description ?? "",
+    ruc: entry?.ruc ?? "",
+    serie: entry?.serie ?? "",
+    nroCorrelativo: entry?.nroCorrelativo ?? "",
+    fecha_emision_comprobante: entry?.fecha_emision_comprobante ?? "",
+    comprobante: entry?.comprobante ?? "",
+    total_comprobante: entry?.total_comprobante ?? "",
+    tipo_moneda: entry?.tipo_moneda ?? "PEN",
+    payment_method: entry?.payment_method ?? "CASH",
+  };
+}
+
 export function EntriesForm({entries, categories}: {entries: any; categories: any}) {
 
-    //hook de react-hook-form
+    const initialValues = useMemo<EntriesType>(() => buildDefaultEntryValues(entries), [entries]);
     const form = useForm<EntriesType>({
-    resolver: zodResolver(entriesSchema),
-    defaultValues: {
-        name: entries?.name || '',
-        description: entries?.description || '',      
-        price: entries?.price || 1, // Valor predeterminado para quantity
-        priceSell: entries?.priceSell || 1, // Valor predeterminado para quantity
-        quantity: entries?.quantity || 1, // Valor predeterminado para quantity
-        category_name: entries?.category_name || '', // Valor predeterminado para category_name
-        provider_name: entries?.provider_name || '', // Valor predeterminado para provider_name
-        provider_adress: entries?.provider_adress || '', // Valor predeterminado para provider_adress
-        provider_documentNumber: entries?.provider_documentNumber || '', // Valor predeterminado para provider_documentNumber
-        store_name: entries?.store_name || '', // Valor predeterminado para store_name
-        store_adress: entries?.store_adress || '', // Valor predeterminado para store_adress
-        entry_date: entries?.entry_date ? new Date(entries.entry_date) : new Date(), // Valor predeterminado para entry_date
-        entry_description: entries?.entry_description || '', // Valor predeterminado para entry_description
-        ruc: entries?.ruc || '', // Valor predeterminado para ruc
-        serie: entries?.serie || '', // Valor predeterminado para serie
-        nroCorrelativo: entries?.nroCorrelativo || '', // Valor predeterminado para serie
-        fecha_emision_comprobante: entries?.fecha_emision_comprobante || '', // Valor predeterminado 
-        comprobante: entries?.comprobante || '', // Valor predeterminado
-        total_comprobante: entries?.total_comprobante || '', // Valor predeterminado
-        tipo_moneda: entries?.total_comprobante || '', // Valor predeterminado
-        payment_method: entries?.payment_method || 'CASH',
-    }
+      resolver: zodResolver(entriesSchema),
+      defaultValues: initialValues,
     });
+
+    useEffect(() => {
+      form.reset(initialValues);
+    }, [form, initialValues]);
 
   // Extraer funciones y estados del formulario
   const { handleSubmit, register, setValue, formState: {errors} } = form;
@@ -121,12 +131,44 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [loadingStores, setLoadingStores] = useState(true);
+  const [loadingCategories, setLoadingCategories] = useState(!categories?.length);
+  const { version } = useTenantSelection();
 
   // MODAL DE PRODUCTOS
   const [categoriesState, setCategories] = useState<{ id: number; name: string }[]>(categories ?? []);
   useEffect(() => {
     setCategories(categories ?? []);
   }, [categories]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function fetchCategoriesByTenant() {
+      try {
+        setLoadingCategories(true);
+        setCategories([]);
+        const nextCategories = await getCategories();
+        if (isActive) {
+          setCategories(Array.isArray(nextCategories) ? nextCategories : []);
+        }
+      } catch (error) {
+        console.error('Error al obtener las categorias:', error);
+        if (isActive) {
+          setCategories([]);
+        }
+      } finally {
+        if (isActive) {
+          setLoadingCategories(false);
+        }
+      }
+    }
+
+    fetchCategoriesByTenant();
+
+    return () => {
+      isActive = false;
+    };
+  }, [version]);
   const [isDialogOpenProduct, setIsDialogOpenProduct] = useState(false);
   // Estado adicional para manejar el checkbox
   const [isNewCategoryBoolean, setIsNewCategoryBoolean] = useState(false);
@@ -163,6 +205,21 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // ENVIAR GUIA PDF
   const [pdfGuiaFile, setPdfGuiaFile] = useState<File | null>(null);
+
+
+  const entryReferenceIdRef = useRef<string | null>(null);
+  const getEntryReferenceId = (): string => {
+    if (entryReferenceIdRef.current) {
+      return entryReferenceIdRef.current;
+    }
+    const fallbackId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const generated =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : fallbackId;
+    entryReferenceIdRef.current = generated;
+    return generated;
+  };
 
   // Función para agregar un producto al datatable
   const [selectedProducts, setSelectedProducts] = useState<
@@ -522,7 +579,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     if (isSubmitting) return; // ✅ Evita clicks repetidos
     setIsSubmitting(true); // ✅ Bloquea nuevos intentos
     try {
-      await handleFormSubmission({
+      const success = await handleFormSubmission({
         data,
         form,
         stores,
@@ -537,7 +594,11 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
         getUserIdFromToken,
         tipoMoneda, // Pasar el tipo de moneda
         tipoCambioActual, // Pasar el tipo de cambio actual
+        referenceId: getEntryReferenceId(),
       });
+      if (success) {
+        entryReferenceIdRef.current = null;
+      }
     } finally {
       setIsSubmitting(false); // ✅ Libera el botón cuando termina
     }
@@ -735,53 +796,111 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // Cargar los productos al montar el componente
   useEffect(() => {
+    let isActive = true;
+
     async function fetchProducts() {
       try {
-        const products = await getProducts();
-        setProducts(products); // Guarda los productos en el estado
+        const productsResponse = await getProducts();
+        if (isActive) {
+          setProducts(productsResponse);
+        }
       } catch (error) {
         console.error('Error al obtener los productos:', error);
+        if (isActive) {
+          setProducts([]);
+        }
       } finally {
-        setLoadingProducts(false);
+        if (isActive) {
+          setLoadingProducts(false);
+        }
       }
      }
 
+    setLoadingProducts(true);
+    setProducts([]);
     fetchProducts();
-  }, []);
+
+    return () => {
+      isActive = false;
+    };
+  }, [version]);
   //
 
   // Cargar los proveedores al montar el componente
   useEffect(() => {
+    let isActive = true;
+
     async function fetchProviders() {
       try {
-          const providers = await getProviders();
-          setProviders(providers); // Guarda los proveedores en el estado
+          const providersResponse = await getProviders();
+          if (isActive) {
+            setProviders(providersResponse);
+          }
       } catch (error) {
           console.error('Error al obtener los proveedores:', error);
+          if (isActive) {
+            setProviders([]);
+          }
         } finally {
-          setLoadingProviders(false);
+          if (isActive) {
+            setLoadingProviders(false);
+          }
         }
       }
   
-      fetchProviders();
-  }, []);
+    setLoadingProviders(true);
+    setProviders([]);
+    fetchProviders();
+
+    return () => {
+      isActive = false;
+    };
+  }, [version]);
   //
 
     // Cargar lass tiendas al montar el componente
   useEffect(() => {
+    let isActive = true;
+
     async function fetchStores() {
       try {
-          const stores = await getStores();
-          setStores(stores); // Guarda las tiendas en el estado
+          const storesResponse = await getStores();
+          if (isActive) {
+            setStores(storesResponse);
+          }
       } catch (error) {
           console.error('Error al obtener las tiendas:', error);
+          if (isActive) {
+            setStores([]);
+          }
         } finally {
-          setLoadingStores(false);
+          if (isActive) {
+            setLoadingStores(false);
+          }
         }
       }
   
-      fetchStores();
-  }, []);
+    setLoadingStores(true);
+    setStores([]);
+    fetchStores();
+
+    return () => {
+      isActive = false;
+    };
+  }, [version]);
+
+  useEffect(() => {
+    setSelectedProducts([]);
+    setSeries([]);
+    setCurrentProduct(null);
+    setValueProduct('');
+    setValueStore('');
+    setValueProvider('');
+    setPdfGuiaFile(null);
+    setTipoMoneda('PEN');
+    setTipoCambioActual(null);
+    form.reset(buildDefaultEntryValues());
+  }, [version, form]);
   //
 
   // Efecto para ajustar las series cuando cambia la cantidad
@@ -793,7 +912,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     }
   }, [quantity]);
 
-  const isLoading = loadingProducts || loadingProviders || loadingStores;
+  const isLoading = loadingProducts || loadingProviders || loadingStores || loadingCategories;
 
   if (isLoading) {
     return (

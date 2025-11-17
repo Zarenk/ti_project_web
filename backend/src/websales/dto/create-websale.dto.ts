@@ -1,13 +1,23 @@
-import { IsArray, IsIn, IsNumber, IsOptional, IsPositive, IsString, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 
 class WebSaleDetailDto {
-  @IsNumber()
-  @IsPositive()
+  @IsInt()
+  @Min(1)
   productId!: number;
 
-  @IsNumber()
-  @IsPositive()
+  @IsInt()
+  @Min(1)
   quantity!: number;
 
   @IsNumber()
@@ -25,7 +35,7 @@ class WebSaleDetailDto {
 }
 
 class WebPaymentDto {
-  @IsNumber()
+  @IsInt()
   paymentMethodId!: number;
 
   @IsNumber()
@@ -41,18 +51,32 @@ class WebPaymentDto {
 }
 
 export class CreateWebSaleDto {
-  @IsNumber()
-  @IsPositive()
+  @IsInt()
+  @Min(1)
   userId!: number;
 
   @IsOptional()
-  @IsNumber()
-  @IsPositive()
+  @IsInt()
+  @Min(1)
   storeId?: number;
 
+  // ✅ tenant: permitir recibir null y convertirlo a undefined para que IsOptional lo ignore
   @IsOptional()
-  @IsNumber()
-  @IsPositive()
+  @IsInt()
+  @Min(1)
+  @Transform(({ value }) => (value === null ? undefined : value))
+  organizationId?: number;
+
+  // ✅ NUEVO: companyId opcional, mismo tratamiento que organizationId
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Transform(({ value }) => (value === null ? undefined : value))
+  companyId?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   clientId?: number;
 
   @IsNumber()

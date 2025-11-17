@@ -8,7 +8,9 @@ import * as crypto from 'crypto';
 export class KmsService {
   private readonly masterKey: Buffer;
 
-  constructor(masterKey = process.env.KMS_MASTER_KEY || 'local-dev-master-key') {
+  constructor(
+    masterKey = process.env.KMS_MASTER_KEY || 'local-dev-master-key',
+  ) {
     // Derive a 32 byte key from provided string
     this.masterKey = crypto.createHash('sha256').update(masterKey).digest();
   }
@@ -19,13 +21,23 @@ export class KmsService {
     // Encrypt plaintext with data key
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', dataKey, iv);
-    const cipherText = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
+    const cipherText = Buffer.concat([
+      cipher.update(plainText, 'utf8'),
+      cipher.final(),
+    ]);
     const authTag = cipher.getAuthTag();
 
     // Encrypt data key with master key
     const keyIv = crypto.randomBytes(12);
-    const keyCipher = crypto.createCipheriv('aes-256-gcm', this.masterKey, keyIv);
-    const encKey = Buffer.concat([keyCipher.update(dataKey), keyCipher.final()]);
+    const keyCipher = crypto.createCipheriv(
+      'aes-256-gcm',
+      this.masterKey,
+      keyIv,
+    );
+    const encKey = Buffer.concat([
+      keyCipher.update(dataKey),
+      keyCipher.final(),
+    ]);
     const keyTag = keyCipher.getAuthTag();
 
     const payload = {

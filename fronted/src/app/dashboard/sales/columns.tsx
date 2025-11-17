@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ArrowUpDown } from "lucide-react";
 import {
   AlertDialog,
@@ -18,6 +19,20 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { deleteSale } from "./sales.api";
 import { ViewSaleDetailHandler } from "./components/sale-detail-dialog";
+import { DeleteActionsGuard } from "@/components/delete-actions-guard";
+
+export type SaleSunatStatus = {
+  id?: number;
+  status: string;
+  ticket?: string | null;
+  environment?: string | null;
+  updatedAt?: string | null;
+  errorMessage?: string | null;
+};
+
+export type SaleSunatTransmission = SaleSunatStatus & {
+  createdAt?: string | null;
+};
 
 export type Sale = {
   id: number;
@@ -56,6 +71,8 @@ export type Sale = {
     product_sku?: string;
     series?: (string | { number?: string })[];
   }[];
+  sunatStatus?: SaleSunatStatus | null;
+  sunatTransmissions?: SaleSunatTransmission[];
 };
 
 export function createSalesColumns(
@@ -150,6 +167,12 @@ export function createSalesColumns(
       ),
     },
     {
+      accessorKey: "sunatStatus",
+      header: "SUNAT",
+      enableSorting: false,
+      cell: ({ row }) => renderSunatStatusBadge(row.original.sunatStatus),
+    },
+    {
       accessorKey: "actions",
       header: "Acciones",
       enableSorting: false,
@@ -190,16 +213,18 @@ export function createSalesColumns(
             >
               Ver Detalles
             </Button>
-            <Button
-              variant="destructive"
-              onClick={(event) => {
-                event.stopPropagation();
-                setIsDialogOpen(true);
-              }}
-              disabled={isDeleting}
-            >
-              {isDeleting ? "Eliminando..." : "Eliminar"}
-            </Button>
+            <DeleteActionsGuard>
+              <Button
+                variant="destructive"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsDialogOpen(true);
+                }}
+                disabled={isDeleting}
+              >
+                {isDeleting ? "Eliminando..." : "Eliminar"}
+              </Button>
+            </DeleteActionsGuard>
           </div>
 
           <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -230,3 +255,38 @@ export function createSalesColumns(
   },
  ];
 }
+
+const STATUS_COLORS: Record<string, string> = {
+  SENT: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  SENDING: "bg-blue-100 text-blue-800 border-blue-200",
+  PENDING: "bg-amber-100 text-amber-800 border-amber-200",
+  FAILED: "bg-red-100 text-red-800 border-red-200",
+  ERROR: "bg-red-100 text-red-800 border-red-200",
+  RETRYING: "bg-indigo-100 text-indigo-800 border-indigo-200",
+};
+
+function renderSunatStatusBadge(status?: SaleSunatStatus | null) {
+  if (!status) {
+    return <span className="text-xs text-muted-foreground">Sin envíos</span>;
+  }
+
+  const normalized = status.status?.toUpperCase() ?? "DESCONOCIDO";
+  const colorClass = STATUS_COLORS[normalized] ?? "bg-slate-100 text-slate-800 border-slate-200";
+  const tooltipParts: string[] = [];
+  if (status.environment) tooltipParts.push(`Ambiente: ${status.environment}`);
+  if (status.ticket) tooltipParts.push(`Ticket: ${status.ticket}`);
+  if (status.errorMessage) tooltipParts.push(`Último error: ${status.errorMessage}`);
+  const title = tooltipParts.join(" • ");
+
+  return (
+    <Badge
+      variant="outline"
+      title={title || undefined}
+      className={`text-xs font-medium ${colorClass}`}
+    >
+      {normalized}
+    </Badge>
+  );
+}
+
+

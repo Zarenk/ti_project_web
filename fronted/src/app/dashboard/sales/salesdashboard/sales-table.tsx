@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useTenantSelection } from "@/context/tenant-selection-context"
+import { useEffect, useMemo, useState } from "react"
 import {
   Table,
   TableBody,
@@ -33,6 +34,11 @@ export function SalesTable({ dateRange }: Props) {
   const [selectedSale, setSelectedSale] = useState<any | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(5)
+  const { selection, version } = useTenantSelection()
+  const selectionKey = useMemo(
+    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
+    [selection.orgId, selection.companyId, version],
+  )
 
   useEffect(() => {
     setPage(1)
@@ -47,7 +53,7 @@ export function SalesTable({ dateRange }: Props) {
         .then(setSales)
         .catch(console.error)
     }
-  }, [dateRange])
+  }, [dateRange, selectionKey])
 
   const handleSort = (key: string) => {
     if (sortKey === key) {

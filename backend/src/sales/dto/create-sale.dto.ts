@@ -56,6 +56,16 @@ export class CreateSaleDto {
   @IsOptional()
   @IsNumber()
   @IsPositive()
+  organizationId?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  companyId?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
   clientId?: number;
 
   @IsNumber()
@@ -85,4 +95,8 @@ export class CreateSaleDto {
   @IsOptional()
   @IsIn(['POS', 'WEB'])
   source?: 'POS' | 'WEB';
+
+  @IsOptional()
+  @IsString()
+  referenceId?: string;
 }

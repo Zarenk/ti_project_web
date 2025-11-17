@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { GuideService } from './guide.service';
 import { CreateGuideDto } from './dto/create-guide.dto';
 import { zipSignedXmlFromString } from './utils/zip-signed-xml';
@@ -7,7 +15,8 @@ import { FirmadorJavaService } from './firmador-java.service';
 
 @Controller('guide')
 export class GuideController {
-  constructor(private readonly guideService: GuideService,
+  constructor(
+    private readonly guideService: GuideService,
     private readonly firmadorJavaService: FirmadorJavaService,
   ) {}
 
@@ -16,7 +25,7 @@ export class GuideController {
     return this.guideService.generarGuia(dto);
   }
 
- @Post('send-rest')
+  @Post('send-rest')
   async enviarGuiaRest(@Body() dto: CreateGuideDto) {
     console.log('✅ Entrando al controlador enviarGuiaRest');
     const serie = 'T001'; // puedes parametrizar si deseas
@@ -34,7 +43,10 @@ export class GuideController {
     console.log('📦 ZIP generado con tamaño:', zipBuffer.length);
     const nombreArchivo = `${dto.numeroDocumentoRemitente}-09-${serie}-${correlativo}.zip`;
 
-    const resultado = await this.guideService.sendGuideToSunatRest(zipBuffer, nombreArchivo);
+    const resultado = await this.guideService.sendGuideToSunatRest(
+      zipBuffer,
+      nombreArchivo,
+    );
     return resultado;
   }
 

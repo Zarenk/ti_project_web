@@ -8,6 +8,9 @@ import {
   Image,
 } from '@react-pdf/renderer';
 
+const BACKEND_BASE_URL =
+  (process.env.NEXT_PUBLIC_BACKEND_URL ?? '').replace(/\/$/, '');
+
 const styles = StyleSheet.create({
   page: {
     padding: 30,
@@ -205,6 +208,25 @@ function wrapText(text: string, maxLength: number) {
   return lines.join('\n');
 }
 
+function resolveLogoSrc(raw?: string | null): string {
+  const fallback = '/logo_ti.png';
+  if (!raw) {
+    return fallback;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  const normalized = trimmed.replace(/^\/+/, '');
+  if (BACKEND_BASE_URL) {
+    return `${BACKEND_BASE_URL}/${normalized}`;
+  }
+  return `/${normalized}`;
+}
+
 export function InvoiceDocument({
   data,
   qrCode,
@@ -227,6 +249,32 @@ export function InvoiceDocument({
   data.tipoMoneda === 'PEN' ? 'SOLES' : data.tipoMoneda.toUpperCase();
 
   const direccionFormateada = wrapText(data.cliente.direccion || 'N/A', 40);
+  const emitter = data?.emisor ?? {};
+  const emitterName =
+    emitter.razonSocial ||
+    emitter.nombre ||
+    emitter.businessName ||
+    emitter.companyName ||
+    'Nombre no disponible';
+  const emitterAddress = wrapText(
+    emitter.address || emitter.adress || 'Dirección no disponible',
+    40,
+  );
+  const emitterPhone =
+    emitter.phone || emitter.telefono || emitter.phoneNumber || null;
+  const emitterRuc = emitter.ruc || emitter.taxId || emitter.sunatRuc || '—';
+  const logoSrc = resolveLogoSrc(
+    data.logoUrl ?? emitter.logoUrl ?? emitter.logo ?? null,
+  );
+  const primaryColor =
+    data.primaryColor ||
+    emitter.primaryColor ||
+    emitter.brandColor ||
+    '#0B2B66';
+  const secondaryColor =
+    data.secondaryColor ||
+    emitter.secondaryColor ||
+    '#0F3B8C';
 
   return (
     <Document>
@@ -234,20 +282,15 @@ export function InvoiceDocument({
         {/* Encabezado */}
         <View style={styles.header}>
           <View style={styles.leftColumn}>
-            <Image src="/logo_ti.png" style={styles.logo} />
-            <Text style={styles.companyName}>TEGNOLOGIA INFORMATICA EIRL</Text>
-            <Text>
-              AV. CORONEL MENDOZA 1945 INT. K367 AS.C.C MERCADILLO{"\n"}
-              BOLOGNESI - TACNA - TACNA - TACNA
-            </Text>
-            <Text>
-              TELEFONO: 052-413038{"\n"}
-            </Text>
+            <Image src={logoSrc} style={styles.logo} />
+            <Text style={styles.companyName}>{emitterName}</Text>
+            <Text>{emitterAddress}</Text>
+            {emitterPhone ? <Text>TELEFONO: {emitterPhone}</Text> : null}
           </View>
           <View style={styles.rightColumn}>
             <View style={styles.invoiceBox}>
-              <Text style={styles.rucText}>RUC: 20519857538</Text>
-              <View style={styles.titleBox}>
+              <Text style={styles.rucText}>RUC: {emitterRuc}</Text>
+              <View style={[styles.titleBox, { backgroundColor: primaryColor }]}>
                 <Text style={styles.titleText}>
                   {documentTypeLabel} ELECTRÓNICA
                 </Text>
@@ -305,7 +348,7 @@ export function InvoiceDocument({
 
         {/* Tabla de productos */}
         <View style={styles.table}>
-          <View style={styles.tableHeader}>
+          <View style={[styles.tableHeader, { backgroundColor: secondaryColor }]}>
             <Text style={styles.cellCenter}>Cantidad</Text>
             <Text style={styles.cellCenter}>UM</Text>
             <Text style={[styles.cell, { flex: 3 }]}>Descripción</Text>

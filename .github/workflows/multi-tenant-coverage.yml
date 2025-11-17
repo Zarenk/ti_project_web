@@ -1,0 +1,51 @@
+name: Multi-tenant Coverage
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/multi-tenant-coverage.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/multi-tenant-coverage.yml'
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run E2E with multi-tenant metrics + phase3
+        run: >
+          npm run ci:multi-tenant-report --
+          --phase3
+          --phase3-print-options
+          --phase3-env=PHASE3_OPTIONS_PATH=tmp/phase3/options.json
+          --runInBand
+
+      - name: Consolidate Phase 3 report
+        run: npm run phase3:report -- --dir tmp/phase3 --output tmp/phase3/report.json --summary-stdout=false
+
+      - name: Upload multi-tenant metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-tenant-metrics
+          path: |
+            backend/tmp/multi-tenant-fixtures/metrics.json
+            backend/tmp/multi-tenant-fixtures/coverage-badge.json
+            backend/tmp/phase3

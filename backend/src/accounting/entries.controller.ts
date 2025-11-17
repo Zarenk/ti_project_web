@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { EntriesService, Entry, EntryLine } from './entries.service';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { TenantContext } from 'src/tenancy/tenant-context.interface';
 
 @Controller('accounting/entries')
 export class EntriesController {
@@ -13,15 +15,19 @@ export class EntriesController {
     @Query('tz') tz = 'America/Lima',
     @Query('page') page = '1',
     @Query('size') size = '25',
+    @CurrentTenant() tenant: TenantContext | null = null,
   ): Promise<{ data: Entry[]; total: number }> {
-    const { data, total } = await this.service.findAll({
-      period,
-      from,
-      to,
-      tz,
-      page: Number(page),
-      size: Number(size),
-    });
+    const { data, total } = await this.service.findAll(
+      {
+        period,
+        from,
+        to,
+        tz,
+        page: Number(page),
+        size: Number(size),
+      },
+      tenant,
+    );
     return {
       data: data.map((e) => ({
         id: e.id,
@@ -36,14 +42,19 @@ export class EntriesController {
         totalDebit: e.totalDebit,
         totalCredit: e.totalCredit,
         lines: e.lines,
+        organizationId: e.organizationId ?? null,
+        companyId: e.companyId ?? null,
       })),
       total,
     };
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string): Promise<Entry> {
-    const e = await this.service.findOne(Number(id));
+  async findOne(
+    @Param('id') id: string,
+    @CurrentTenant() tenant: TenantContext | null = null,
+  ): Promise<Entry> {
+    const e = await this.service.findOne(Number(id), tenant);
     return {
       id: e.id,
       period: e.period,
@@ -57,6 +68,8 @@ export class EntriesController {
       totalDebit: e.totalDebit,
       totalCredit: e.totalCredit,
       lines: e.lines,
+      organizationId: e.organizationId ?? null,
+      companyId: e.companyId ?? null,
     };
   }
 
@@ -72,25 +85,35 @@ export class EntriesController {
       correlativo?: string;
       invoiceUrl?: string;
     },
+    @CurrentTenant() tenant: TenantContext | null = null,
   ): Promise<Entry> {
-    return this.service.createDraft({
-      period: body.period,
-      date: new Date(body.date),
-      lines: body.lines,
-      providerId: body.providerId,
-      serie: body.serie,
-      correlativo: body.correlativo,
-      invoiceUrl: body.invoiceUrl,
-    });
+    return this.service.createDraft(
+      {
+        period: body.period,
+        date: new Date(body.date),
+        lines: body.lines,
+        providerId: body.providerId,
+        serie: body.serie,
+        correlativo: body.correlativo,
+        invoiceUrl: body.invoiceUrl,
+      },
+      tenant,
+    );
   }
 
   @Post(':id/post')
-  post(@Param('id') id: string): Promise<Entry> {
-    return this.service.post(Number(id));
+  post(
+    @Param('id') id: string,
+    @CurrentTenant() tenant: TenantContext | null = null,
+  ): Promise<Entry> {
+    return this.service.post(Number(id), tenant);
   }
 
   @Post(':id/void')
-  void(@Param('id') id: string): Promise<Entry> {
-    return this.service.void(Number(id));
+  void(
+    @Param('id') id: string,
+    @CurrentTenant() tenant: TenantContext | null = null,
+  ): Promise<Entry> {
+    return this.service.void(Number(id), tenant);
   }
 }

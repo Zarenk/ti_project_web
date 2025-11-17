@@ -21,6 +21,7 @@ import pdfParse from 'pdf-parse';
 import { diskStorage } from 'multer';
 import path from 'path';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
 @ModulePermission('inventory')
 @Controller('entries')
@@ -62,6 +63,7 @@ export class EntriesController {
         fechaEmision: Date;
       };
     },
+    @CurrentTenant('organizationId') organizationId: number | null | undefined,
   ) {
     if (
       body.paymentTerm &&
@@ -75,7 +77,10 @@ export class EntriesController {
     if (body.igvRate !== undefined && typeof body.igvRate !== 'number') {
       throw new BadRequestException('igvRate debe ser un número.');
     }
-    return this.entriesService.createEntry(body);
+    return this.entriesService.createEntry(
+      body,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   // Endpoint para registrar historial de inventario
@@ -90,6 +95,7 @@ export class EntriesController {
       stockchange: number;
       previousStock: number;
       newStock: number;
+      organizationId?: number | null;
     },
   ) {
     return this.entriesService.createHistory(body);
@@ -136,7 +142,6 @@ export class EntriesController {
       },
     }),
   )
-
   async uploadPdf(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
@@ -149,7 +154,7 @@ export class EntriesController {
     return this.entriesService.updateEntryPdf(Number(id), pdfUrl);
   }
 
-   // Endpoint para actualizar una entrada con un PDF GUIA
+  // Endpoint para actualizar una entrada con un PDF GUIA
   @Post(':id/upload-pdf-guia')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -187,65 +192,86 @@ export class EntriesController {
 
   // Endpoint para listar todas las entradas
   @Get()
-  async findAllEntries() {
-    return this.entriesService.findAllEntries();
+  async findAllEntries(
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.entriesService.findAllEntries(organizationId ?? undefined);
   }
 
   // Endpoint para obtener una entrada específica por ID
   @Get('by-id/:id')
-  async findEntryById(@Param('id') id: string) {
+  async findEntryById(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) {
       throw new BadRequestException(
         'El ID de la entrada debe ser un número válido.',
       );
     }
-    return this.entriesService.findEntryById(numericId);
+    return this.entriesService.findEntryById(
+      numericId,
+      organizationId ?? undefined,
+    );
   }
 
   // Alias para compatibilidad: GET /entries/:id
   @Get('id/:id')
-  async findEntryAlias(@Param('id') id: string) {
+  async findEntryAlias(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') orgId: number | null,
+  ) {
     const numericId = parseInt(id, 10);
-    if (isNaN(numericId)) {
-      throw new BadRequestException(
-        'El ID de la entrada debe ser un número válido.',
-      );
-    }
-    return this.entriesService.findEntryById(numericId);
+    if (isNaN(numericId)) throw new BadRequestException('ID inválido.');
+    return this.entriesService.findEntryById(numericId, orgId ?? undefined);
   }
 
   @Get('store/:storeId')
-  findAllByStore(@Param('storeId') storeId: string) {
+  findAllByStore(
+    @Param('storeId') storeId: string,
+    @CurrentTenant('organizationId') orgId: number | null,
+  ) {
     const numericStoreId = parseInt(storeId, 10);
-    if (isNaN(numericStoreId)) {
-      throw new BadRequestException(
-        'El ID de la tienda debe ser un número válido.',
-      );
-    }
-    return this.entriesService.findAllByStore(numericStoreId);
+    if (isNaN(numericStoreId))
+      throw new BadRequestException('Store ID inválido.');
+    return this.entriesService.findAllByStore(
+      numericStoreId,
+      orgId ?? undefined,
+    );
   }
 
   @Delete(':id')
-    remove(@Param('id') id: string) {
-      return this.entriesService.deleteEntry(+id);
+  remove(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') orgId: number | null,
+  ) {
+    return this.entriesService.deleteEntry(+id, orgId ?? undefined);
   }
 
   @Delete()
-  async deleteEntries(@Body('ids') ids: number[]) {
+  async deleteEntries(
+    @Body('ids') ids: number[],
+    @CurrentTenant('organizationId') orgId: number | null,
+  ) {
     if (!Array.isArray(ids) || ids.length === 0) {
       throw new BadRequestException(
         'No se proporcionaron IDs válidos para eliminar.',
       );
     }
 
-    return this.entriesService.deleteEntries(ids);
+    return this.entriesService.deleteEntries(ids, orgId ?? undefined);
   }
 
   @Get('recent')
-  async findRecent(@Query('limit') limit = '5') {
+  async findRecent(
+    @Query('limit') limit = '5',
+    @CurrentTenant('organizationId') orgId: number | null,
+  ) {
     const take = parseInt(limit, 10);
-    return this.entriesService.findRecentEntries(isNaN(take) ? 5 : take);
+    return this.entriesService.findRecentEntries(
+      isNaN(take) ? 5 : take,
+      orgId ?? undefined,
+    );
   }
-  
 }

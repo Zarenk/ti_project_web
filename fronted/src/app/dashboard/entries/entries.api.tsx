@@ -1,5 +1,4 @@
-import axios from 'axios';
-import { getAuthHeaders } from '@/utils/auth-token';
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
@@ -16,9 +15,10 @@ export async function createEntry(data: {
   paymentTerm?: 'CASH' | 'CREDIT';
   details: { productId: number; quantity: number; price: number; priceInSoles: number }[];
   invoice?: { serie: string; nroCorrelativo: string; tipoComprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
+  referenceId?: string;
 }) {
     try{
-      const response = await fetch(`${BACKEND_URL}/api/entries`, {
+      const response = await authFetch(`${BACKEND_URL}/api/entries`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -41,23 +41,27 @@ export async function createEntry(data: {
 // Obtener todas las entradas
 export async function getAllEntries() {
   try{
-    const response = await fetch(`${BACKEND_URL}/api/entries`, {
+    const response = await authFetch(`${BACKEND_URL}/api/entries`, {
       method: 'GET',
     });
-  
+
     if (!response.ok) {
       throw new Error('Error al obtener las entradas');
     }
-  
+
     return await response.json();
   }catch(error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
     console.error("Error al obtener las entradas:", error); 
+    throw error;
   } 
 }
 
 // Obtener una entrada específica por ID
 export async function getEntryById(id: string) {
-  const response = await fetch(`${BACKEND_URL}/api/entries/by-id/${id}`, {
+  const response = await authFetch(`${BACKEND_URL}/api/entries/by-id/${id}`, {
     method: 'GET',
   });
 
@@ -70,7 +74,7 @@ export async function getEntryById(id: string) {
 
 // Eliminar Entrada
 export async function deleteEntry(id: number) {
-  const response = await fetch(`${BACKEND_URL}/api/entries/${id}`, {
+  const response = await authFetch(`${BACKEND_URL}/api/entries/${id}`, {
     method: 'DELETE',
   });
 
@@ -85,7 +89,7 @@ export async function deleteEntry(id: number) {
 // Eliminar múltiples entradas
 export async function deleteEntries(ids: number[]) {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/entries`, {
+    const response = await authFetch(`${BACKEND_URL}/api/entries`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -111,7 +115,7 @@ export async function processPDF(file: File): Promise<string> {
   formData.append('file', file);
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/entries/process-pdf`, {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/process-pdf`, {
       method: 'POST',
       body: formData,
     });
@@ -137,7 +141,7 @@ export async function uploadPdf(entryId: number, pdfFile: File): Promise<void> {
   formData.append('file', pdfFile);
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/entries/${entryId}/upload-pdf`, {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/${entryId}/upload-pdf`, {
       method: 'POST',
       body: formData,
     });
@@ -167,7 +171,7 @@ export async function uploadGuiaPdf(entryId: number, pdfFile: File): Promise<voi
   formData.append('file', pdfFile);
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/entries/${entryId}/upload-pdf-guia`, {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/${entryId}/upload-pdf-guia`, {
       method: 'POST',
       body: formData,
     });
@@ -194,33 +198,55 @@ export function getPdfGuiaUrl(pdfPath: string): string {
 // Verificar si una serie ya existe
 export const checkSeries = async (serial: string): Promise<{ exists: boolean }> => {
   try {
-    const response = await axios.post(`${BACKEND_URL}/api/series/check`, { serial });
-    return response.data; // Retorna { exists: boolean }
+    const response = await authFetch(`${BACKEND_URL}/api/series/check`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ serial }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Error al verificar la serie.');
+    }
+
+    return (await response.json()) as { exists: boolean };
   } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      throw error;
+    }
     console.error('Error al verificar la serie:', error);
-    throw new Error(error.response?.data?.message || 'Error al verificar la serie.');
+    throw error;
   }
 };
 //
 
 export async function getRecentEntries(limit = 5) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BACKEND_URL}/api/entries/recent?limit=${limit}`, {
-    cache: 'no-store',
-    headers,
-    credentials: 'include',
-  });
-  if (res.status === 401) {
-    return [];
-  }
-  if (!res.ok) {
-    let message = 'Error al obtener los últimos ingresos';
-    try {
-      message = await res.text();
-    } catch {
-      /* ignore */
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/entries/recent?limit=${limit}`, {
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) {
+        return [];
+      }
+
+      let message = 'Error al obtener los últimos ingresos';
+      try {
+        message = await res.text();
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
     }
-    throw new Error(message);
+
+    return res.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
   }
-  return res.json();
 }

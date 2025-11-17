@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation';
 import { deleteCategory } from './categories.api';
 
 import { toast } from 'sonner';
+import { DeleteActionsGuard } from '@/components/delete-actions-guard';
 
 
 export type Categories = {
@@ -163,44 +164,51 @@ export const columns: ColumnDef<Categories>[] = [
               <DropdownMenuItem onClick={handleViewClick}>
                 Visualizar
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIsDialogOpen(true)}
-              >
-              Eliminar
-              </DropdownMenuItem>             
+              <DeleteActionsGuard>
+                <DropdownMenuItem onClick={() => setIsDialogOpen(true)}>
+                  Eliminar
+                </DropdownMenuItem>
+              </DeleteActionsGuard>
             </DropdownMenuContent>
           </DropdownMenu>
 
           {/* AlertDialog fuera del DropdownMenu */}
-          <AlertDialog open={isDialogOpen} onOpenChange={(open) => {
-            // Solo actualiza el estado si el usuario cierra el diálogo manualmente
-            if (!open) {
-              setIsDialogOpen(false);
-            }
-          }}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta acción no se puede deshacer. Esto eliminará permanentemente la categoria.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => {
-                  // Cierra el diálogo al hacer clic en "Cancelar"
+          <DeleteActionsGuard>
+            <AlertDialog
+              open={isDialogOpen}
+              onOpenChange={(open) => {
+                if (!open) {
                   setIsDialogOpen(false);
-                }}>Cancelar
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={async () => {
-                    await handleRemoveCategory(category.id)
-                    setIsDialogOpen(false)
-                  }}
-                >
-                  Continuar
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                }
+              }}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta acción no se puede deshacer. Esto eliminará permanentemente la categoria.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel
+                    onClick={() => {
+                      setIsDialogOpen(false);
+                    }}
+                  >
+                    Cancelar
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={async () => {
+                      await handleRemoveCategory(category.id);
+                      setIsDialogOpen(false);
+                    }}
+                  >
+                    Continuar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </DeleteActionsGuard>
 
           {/* Diálogo de Visualización */}
           <AlertDialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>

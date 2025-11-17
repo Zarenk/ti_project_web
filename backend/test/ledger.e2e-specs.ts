@@ -8,9 +8,11 @@ describe('Accounting Ledger (e2e)', () => {
   let app: INestApplication;
   const mockPrisma = {
     journalLine: {
-      findMany: jest.fn().mockResolvedValue([
-        { id: 1, date: new Date(), debit: 100, credit: 0 },
-      ]),
+      findMany: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 1, date: new Date(), debit: 100, credit: 0 },
+        ]),
     },
   } as any;
 

@@ -55,7 +55,10 @@ export class CreditNotePostedController {
       );
       return { status: 'posted', entryId: entry.id };
     } catch (err) {
-      this.logger.error('Failed to process credit-note-posted hook', err as any);
+      this.logger.error(
+        'Failed to process credit-note-posted hook',
+        err as any,
+      );
       throw err;
     }
   }

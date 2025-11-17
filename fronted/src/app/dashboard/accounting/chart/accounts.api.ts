@@ -1,5 +1,4 @@
-import axios from "axios";
-import { BACKEND_URL } from "@/lib/utils";
+import { authFetch } from "@/utils/auth-fetch";
 
 export interface Account {
   id: string;
@@ -10,30 +9,53 @@ export interface Account {
 }
 
 export async function fetchAccounts(): Promise<Account[]> {
-  const res = await axios.get(`${BACKEND_URL}/api/accounting/accounts`);
-  return res.data;
+  const res = await authFetch("/api/accounting/accounts", {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error("No se pudieron obtener las cuentas contables");
+  }
+  return (await res.json()) as Account[];
 }
 
 export async function createAccount(data: Omit<Account, "id" | "children">) {
   try {
-    const res = await axios.post(`${BACKEND_URL}/api/accounting/accounts`, data);
-    return res.data as Account;
-  } catch (error: any) {
-    if (axios.isAxiosError(error) && error.response?.status === 400) {
-      throw error.response.data.errors as Record<string, string>;
+    const res = await authFetch("/api/accounting/accounts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+    if (res.status === 400) {
+      throw ((await res.json())?.errors ?? {}) as Record<string, string>;
     }
+    if (!res.ok) {
+      throw new Error("No se pudo crear la cuenta contable");
+    }
+    return (await res.json()) as Account;
+  } catch (error) {
     throw error;
   }
 }
 
 export async function updateAccount(id: string, data: Omit<Account, "id" | "children">) {
   try {
-    const res = await axios.put(`${BACKEND_URL}/api/accounting/accounts/${id}`, data);
-    return res.data as Account;
-  } catch (error: any) {
-    if (axios.isAxiosError(error) && error.response?.status === 400) {
-      throw error.response.data.errors as Record<string, string>;
+    const res = await authFetch(`/api/accounting/accounts/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+    if (res.status === 400) {
+      throw ((await res.json())?.errors ?? {}) as Record<string, string>;
     }
+    if (!res.ok) {
+      throw new Error("No se pudo actualizar la cuenta contable");
+    }
+    return (await res.json()) as Account;
+  } catch (error) {
     throw error;
   }
 }

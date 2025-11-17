@@ -1,0 +1,32 @@
+[
+  {
+    "code": "DEFAULT",
+    "name": "Organización Única",
+    "status": "ACTIVE",
+    "units": [
+      {
+        "code": "HQ",
+        "name": "Casa Matriz",
+        "status": "ACTIVE"
+      }
+    ]
+  },
+  {
+    "code": "ECOTERRA",
+    "name": "ECOTERRA",
+    "status": "ACTIVE",
+    "units": [
+      {
+        "code": "HQ",
+        "name": "Central ECOTERRA",
+        "status": "ACTIVE"
+      },
+      {
+        "code": "OPS",
+        "name": "Operaciones",
+        "status": "ACTIVE",
+        "parentCode": "HQ"
+      }
+    ]
+  }
+]

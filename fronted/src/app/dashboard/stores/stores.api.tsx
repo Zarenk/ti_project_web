@@ -1,7 +1,22 @@
+import { getAuthHeaders } from "@/utils/auth-token";
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
+async function authorizedFetch(url: string, init: RequestInit = {}) {
+  const auth = await getAuthHeaders();
+  const headers = new Headers(init.headers ?? {});
+
+  for (const [key, value] of Object.entries(auth)) {
+    if (value != null && value !== "") {
+      headers.set(key, value);
+    }
+  }
+
+  return fetch(url, { ...init, headers });
+}
+
+
 export async function createStore(storeData: any){
-    const res = await fetch(`${BACKEND_URL}/api/stores`,{
+    const res = await authorizedFetch(`${BACKEND_URL}/api/stores`,{
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',         
@@ -18,14 +33,14 @@ export async function createStore(storeData: any){
 }
 
 export async function getStores(){
-    const data = await fetch(`${BACKEND_URL}/api/stores`, {
+    const data = await authorizedFetch(`${BACKEND_URL}/api/stores`, {
         'cache': 'no-store',
     });
     return data.json()
 }
 
 export async function getStore(id: string){
-    const data = await fetch(`${BACKEND_URL}/api/stores/${id}`, {
+    const data = await authorizedFetch(`${BACKEND_URL}/api/stores/${id}`, {
         'cache': 'no-store',
     });
 
@@ -46,7 +61,7 @@ export async function getStore(id: string){
 // 
 export async function checkStoreExists(name: string): Promise<boolean> {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/stores/check`, {
+    const response = await authorizedFetch(`${BACKEND_URL}/api/stores/check`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -68,7 +83,7 @@ export async function checkStoreExists(name: string): Promise<boolean> {
 }
 
 export async function deleteStore(id: string){
-    const res = await fetch(`${BACKEND_URL}/api/stores/${id}`, {
+    const res = await authorizedFetch(`${BACKEND_URL}/api/stores/${id}`, {
         method: 'DELETE',
     });
     return res.json()
@@ -82,7 +97,7 @@ export const deleteStores = async (ids: string[]) => {
       // Convertir los IDs a números antes de enviarlos
       const numericIds = ids.map((id) => Number(id))
 
-      const response = await fetch(`${BACKEND_URL}/api/stores/`, {
+      const response = await authorizedFetch(`${BACKEND_URL}/api/stores/`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -102,7 +117,7 @@ export const deleteStores = async (ids: string[]) => {
   };
 
 export async function updateStore(id: string, newStore: any){
-    const res = await fetch(`${BACKEND_URL}/api/stores/${id}`, {
+    const res = await authorizedFetch(`${BACKEND_URL}/api/stores/${id}`, {
         method: 'PATCH',
         headers: {
             'Content-Type': 'application/json',
@@ -123,7 +138,7 @@ export async function updateManyStores(stores: any[]) {
     console.log("Enviando tiendas al backend para actualización masiva:", stores); // Log para depuración
   
     try {
-      const response = await fetch(`${BACKEND_URL}/api/stores`, {
+      const response = await authorizedFetch(`${BACKEND_URL}/api/stores`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

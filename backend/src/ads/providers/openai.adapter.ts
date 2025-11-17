@@ -1,6 +1,10 @@
 import axios from 'axios';
 import { CircuitBreaker } from './circuit-breaker';
-import { ImageGenerationProvider, GenerationRequest, GenerationResult } from './interfaces';
+import {
+  ImageGenerationProvider,
+  GenerationRequest,
+  GenerationResult,
+} from './interfaces';
 import { RateLimiter } from './rate-limiter';
 
 interface AdapterOptions {
@@ -14,7 +18,10 @@ export class OpenAIAdapter implements ImageGenerationProvider {
   private breaker: CircuitBreaker;
   private timeout: number;
 
-  constructor(private apiKey: string, options: AdapterOptions = {}) {
+  constructor(
+    private apiKey: string,
+    options: AdapterOptions = {},
+  ) {
     this.timeout = options.timeoutMs ?? 10000;
     const rl = options.rateLimit ?? { limit: 1, intervalMs: 1000 };
     this.limiter = new RateLimiter(rl.limit, rl.intervalMs);

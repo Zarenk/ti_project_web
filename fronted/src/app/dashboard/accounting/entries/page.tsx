@@ -31,7 +31,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import { BACKEND_URL } from '@/lib/utils'
+import { authFetch } from '@/utils/auth-fetch'
+import { useTenantSelection } from '@/context/tenant-selection-context'
 
 interface Entry {
   id: string
@@ -52,6 +53,7 @@ export default function AccountingEntriesPage() {
   const [total, setTotal] = useState(0)
   const [voidId, setVoidId] = useState<string | null>(null)
   const size = 25
+  const { version } = useTenantSelection()
 
   const fetchEntries = async () => {
     try {
@@ -60,7 +62,9 @@ export default function AccountingEntriesPage() {
         size: size.toString()
       })
       if (period) params.append('period', period)
-      const res = await fetch(`${BACKEND_URL}/api/accounting/entries?${params.toString()}`)
+      const res = await authFetch(`/api/accounting/entries?${params.toString()}`, {
+        cache: 'no-store',
+      })
       if (res.ok) {
         const { data, total }: { data: Entry[]; total: number } = await res.json()
         setEntries(Array.isArray(data) ? data : [])
@@ -73,16 +77,19 @@ export default function AccountingEntriesPage() {
 
   useEffect(() => {
     fetchEntries()
-  }, [page, period])
+  }, [page, period, version])
 
   const createDraft = async (e: FormEvent) => {
     e.preventDefault()
     try {
-      await fetch(`${BACKEND_URL}/api/accounting/entries`, {
+      const res = await authFetch(`/api/accounting/entries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description })
       })
+      if (!res.ok) {
+        throw new Error('Failed to create draft')
+      }
       setDescription('')
       fetchEntries()
     } catch (err) {
@@ -93,7 +100,10 @@ export default function AccountingEntriesPage() {
   const postEntry = async (id: string) => {
     try {
       // Use the `/post` endpoint to post an entry.
-      await fetch(`${BACKEND_URL}/api/accounting/entries/${id}/post`, { method: 'POST' })
+      const res = await authFetch(`/api/accounting/entries/${id}/post`, { method: 'POST' })
+      if (!res.ok) {
+        throw new Error('Failed to post entry')
+      }
       fetchEntries()
     } catch (err) {
       console.error('Failed to post entry', err)
@@ -102,7 +112,7 @@ export default function AccountingEntriesPage() {
 
   const voidEntry = async (id: string) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/accounting/entries/${id}/void`, { method: 'POST' })
+      const res = await authFetch(`/api/accounting/entries/${id}/void`, { method: 'POST' })
       if (!res.ok) throw new Error('No se pudo anular el asiento')
       fetchEntries()
       toast.success('Asiento anulado correctamente')

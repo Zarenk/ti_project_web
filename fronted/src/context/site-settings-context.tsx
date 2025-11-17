@@ -19,6 +19,9 @@ import {
   TYPOGRAPHY_FONT_CLASSES,
   getTypographyFont,
 } from "@/lib/typography-fonts";
+import { useOptionalTenantSelection } from "@/context/tenant-selection-context";
+import { TENANT_SELECTION_EVENT } from "@/utils/tenant-preferences";
+import { getAuthHeaders } from "@/utils/auth-token";
 
 const API_ENDPOINT = "/api/site-settings";
 
@@ -374,6 +377,9 @@ export function SiteSettingsProvider({
   initialUpdatedAt = null,
   initialCreatedAt = null,
 }: SiteSettingsProviderProps) {
+  const tenantSelection = useOptionalTenantSelection();
+  const [manualTenantVersion, setManualTenantVersion] = useState(0);
+  const version = tenantSelection?.version ?? manualTenantVersion;
   const [settings, setSettings] = useState<SiteSettings>(() =>
     withDefaultSettings(initialSettings),
   );
@@ -387,10 +393,23 @@ export function SiteSettingsProvider({
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(false);
 
+  const tenantAwareFetch = useCallback(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const headers = new Headers(init.headers ?? {});
+    const authHeaders = await getAuthHeaders();
+    for (const [key, value] of Object.entries(authHeaders)) {
+      if (value != null && value !== "") {
+        headers.set(key, value);
+      }
+    }
+
+    return fetch(input, { ...init, headers });
+  }, []);
+
   const refresh = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(API_ENDPOINT, { cache: "no-store" });
+      const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}&ts=${Date.now()}`;
+      const response = await tenantAwareFetch(url, { cache: "no-store" });
 
       if (!response.ok) {
         const message = await readErrorMessage(response);
@@ -418,7 +437,7 @@ export function SiteSettingsProvider({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [tenantAwareFetch, version]);
 
   useEffect(() => {
     if (initialSettings) {
@@ -429,6 +448,41 @@ export function SiteSettingsProvider({
       console.error("Error initializing site settings", err);
     });
   }, [initialSettings, refresh]);
+
+  useEffect(() => {
+    if (tenantSelection) {
+      return;
+    }
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handler = () => {
+      setManualTenantVersion((current) => current + 1);
+    };
+
+    window.addEventListener(TENANT_SELECTION_EVENT, handler as EventListener);
+    return () => {
+      window.removeEventListener(TENANT_SELECTION_EVENT, handler as EventListener);
+    };
+  }, [tenantSelection]);
+
+  const previousVersionRef = useRef(version);
+  useEffect(() => {
+    if (previousVersionRef.current === version) {
+      return;
+    }
+    previousVersionRef.current = version;
+    setPersistedSettings(withDefaultSettings(null));
+    setSettings(withDefaultSettings(null));
+    setPersistedUpdatedAt(null);
+    setPersistedCreatedAt(null);
+    setError(null);
+    refresh().catch((err) => {
+      console.error("Error loading site settings for tenant", err);
+    });
+  }, [version, refresh]);
 
   useIsomorphicLayoutEffect(() => {
     if (typeof document !== "undefined") {
@@ -473,66 +527,121 @@ export function SiteSettingsProvider({
       const previousPersistedUpdatedAt = persistedUpdatedAt;
       const previousPersistedCreatedAt = persistedCreatedAt;
 
-      setIsSaving(true);
-      setPersistedSettings(clone(validated));
-      setSettings(clone(validated));
-
-      try {
-        const response = await fetch(API_ENDPOINT, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            data: validated,
-            expectedUpdatedAt: persistedUpdatedAt,
-          }),
-        });
-
-        if (!response.ok) {
-          const message = await readErrorMessage(response);
-          throw new Error(message);
-        }
-
-        let parsed: SiteSettings | null = null;
-        if (response.headers.get("content-type")?.includes("application/json")) {
+      const syncLatestSettings = async (): Promise<{
+        updatedAt: string | null;
+        createdAt: string | null;
+      } | null> => {
+        try {
+          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}&ts=${Date.now()}`;
+          const response = await tenantAwareFetch(url, { cache: "no-store" });
+          if (!response.ok) {
+            return null;
+          }
           const payload = (await response.json()) as DeepPartial<SiteSettings>;
-          parsed = siteSettingsSchema.parse(withDefaultSettings(payload));
-        }
+          const parsedLatest = siteSettingsSchema.parse(withDefaultSettings(payload));
+          const latestUpdatedAt = response.headers.get("x-site-settings-updated-at");
+          const latestCreatedAt = response.headers.get("x-site-settings-created-at");
 
-        const nextUpdatedAt = response.headers.get("x-site-settings-updated-at");
-        const nextCreatedAt = response.headers.get("x-site-settings-created-at");
-
-        if (parsed) {
-          setPersistedSettings(clone(parsed));
-          setSettings(clone(parsed));
-          setPersistedUpdatedAt(nextUpdatedAt);
-          setPersistedCreatedAt(nextCreatedAt);
-          applyCssVariables(parsed);
+          setPersistedSettings(clone(parsedLatest));
+          setSettings(clone(parsedLatest));
+          setPersistedUpdatedAt(latestUpdatedAt);
+          setPersistedCreatedAt(latestCreatedAt);
+          if (mountedRef.current) {
+            applyCssVariables(parsedLatest);
+          }
           setError(null);
-          return parsed;
+          return { updatedAt: latestUpdatedAt, createdAt: latestCreatedAt };
+        } catch {
+          return null;
         }
+      };
 
-        setPersistedUpdatedAt(nextUpdatedAt);
-        setPersistedCreatedAt(nextCreatedAt);
+      const applyValidated = () => {
+        setPersistedSettings(clone(validated));
+        setSettings(clone(validated));
+      };
 
-        applyCssVariables(validated);
-        setError(null);
-        return validated;
-      } catch (err) {
+      const revertToPrevious = () => {
         setPersistedSettings(clone(previousPersisted));
         setSettings(clone(previousPersisted));
         setPersistedUpdatedAt(previousPersistedUpdatedAt);
         setPersistedCreatedAt(previousPersistedCreatedAt);
         applyCssVariables(previousPersisted);
-        const message = err instanceof Error ? err.message : "No se pudieron guardar los ajustes.";
-        setError(message);
-        throw err instanceof Error ? err : new Error(message);
+      };
+
+      let currentExpectedUpdatedAt = persistedUpdatedAt;
+
+      setIsSaving(true);
+
+      try {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          applyValidated();
+
+          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}`;
+          const response = await tenantAwareFetch(url, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              data: validated,
+              expectedUpdatedAt: currentExpectedUpdatedAt,
+            }),
+            cache: "no-store",
+          });
+
+          if (response.status === 409) {
+            const latestMeta = await syncLatestSettings();
+            currentExpectedUpdatedAt =
+              latestMeta?.updatedAt ?? persistedUpdatedAt ?? null;
+            if (attempt === 1) {
+              revertToPrevious();
+              throw new Error(
+                "No se pudieron guardar los ajustes. Vuelve a intentarlo en unos segundos.",
+              );
+            }
+            continue;
+          }
+
+          if (!response.ok) {
+            const message = await readErrorMessage(response);
+            revertToPrevious();
+            throw new Error(message);
+          }
+
+          let parsed: SiteSettings | null = null;
+          if (response.headers.get("content-type")?.includes("application/json")) {
+            const payload = (await response.json()) as DeepPartial<SiteSettings>;
+            parsed = siteSettingsSchema.parse(withDefaultSettings(payload));
+          }
+
+          const nextUpdatedAt = response.headers.get("x-site-settings-updated-at");
+          const nextCreatedAt = response.headers.get("x-site-settings-created-at");
+
+          if (parsed) {
+            setPersistedSettings(clone(parsed));
+            setSettings(clone(parsed));
+            setPersistedUpdatedAt(nextUpdatedAt);
+            setPersistedCreatedAt(nextCreatedAt);
+            applyCssVariables(parsed);
+            setError(null);
+            return parsed;
+          }
+
+          setPersistedUpdatedAt(nextUpdatedAt);
+          setPersistedCreatedAt(nextCreatedAt);
+          applyCssVariables(validated);
+          setError(null);
+          return validated;
+        }
+
+        revertToPrevious();
+        throw new Error("No se pudieron guardar los ajustes.");
       } finally {
         setIsSaving(false);
       }
     },
-    [persistedSettings, persistedUpdatedAt, persistedCreatedAt],
+    [persistedSettings, persistedUpdatedAt, persistedCreatedAt, tenantAwareFetch, version],
   );
 
   const updateSettings = useCallback(

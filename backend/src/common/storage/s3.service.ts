@@ -1,4 +1,8 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 
@@ -11,9 +15,19 @@ export class S3Service {
     this.client = new S3Client({ region: process.env.AWS_REGION });
   }
 
-  async uploadAndSign(key: string, body: Buffer, contentType: string, ttlSeconds = 60) {
+  async uploadAndSign(
+    key: string,
+    body: Buffer,
+    contentType: string,
+    ttlSeconds = 60,
+  ) {
     await this.client.send(
-      new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: body, ContentType: contentType }),
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      }),
     );
     return await getSignedUrl(
       this.client,

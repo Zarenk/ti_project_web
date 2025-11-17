@@ -18,6 +18,8 @@ import {
 import { toast } from 'sonner'
 import { signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { clearManualLogout, markManualLogout } from "@/utils/manual-logout"
+import { SESSION_EXPIRED_EVENT } from "@/utils/session-expired-event"
 
 type AuthContextType = {
   userId: number | null
@@ -40,6 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const autoLogoutTriggeredRef = useRef(false)
   const lastInteractionRef = useRef<number>(Date.now())
   const refreshFailureNotifiedRef = useRef(false)
+  const sessionExpiryInProgressRef = useRef(false)
+  const [sessionExpiryOverlay, setSessionExpiryOverlay] = useState(false)
 
   const clearSessionTimer = useCallback(() => {
     if (sessionTimerRef.current !== null) {
@@ -55,6 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserId(data.id ?? null)
       setRole(data.role ?? null)
       autoLogoutTriggeredRef.current = false
+      sessionExpiryInProgressRef.current = false
+      setSessionExpiryOverlay(false)
+      clearManualLogout()
     } else {
       setUserName(null)
       setUserId(null)
@@ -69,6 +76,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearSessionTimer()
       setAuthPending(true)
       try {
+        if (!silent) {
+          markManualLogout()
+        }
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 5000)
         const logoutReq = fetch('/api/logout', {
@@ -114,6 +124,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.refresh()
   }, [router])
 
+  const forceLogoutDueToExpiry = useCallback(async () => {
+    if (sessionExpiryInProgressRef.current) {
+      return
+    }
+    sessionExpiryInProgressRef.current = true
+    autoLogoutTriggeredRef.current = true
+    setSessionExpiryOverlay(true)
+    try {
+      toast.error('Tu sesión ha expirado. Redirigiendo al inicio de sesión.')
+    } catch {}
+    await logout({ silent: true })
+    redirectToLogin()
+  }, [logout, redirectToLogin])
+
   const scheduleSessionCheck = useCallback(async () => {
     if (typeof window === 'undefined' || !userId) {
       clearSessionTimer()
@@ -127,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const now = Date.now()
-    const safetyWindowMs = 30_000
+    const safetyWindowMs = 15_000
     const activeGraceWindowMs = 2 * 60_000
     const minDelayMs = 5_000
     const delay = Math.max(expiry.getTime() - now - safetyWindowMs, minDelayMs)
@@ -143,12 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const stillValid = await isTokenValid()
       if (!stillValid) {
-        if (!autoLogoutTriggeredRef.current) {
-          autoLogoutTriggeredRef.current = true
-          try { toast.error('Tu sesión ha expirado. Debes iniciar sesión nuevamente.') } catch {}
-          await logout({ silent: true })
-          redirectToLogin()
-        }
+        await forceLogoutDueToExpiry()
         return
       }
 
@@ -163,11 +182,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             void scheduleSessionCheck()
             return
           }
-        } else if (!refreshFailureNotifiedRef.current) {
-          refreshFailureNotifiedRef.current = true
-          try {
-            toast.warning('No se pudo renovar tu sesión. Guarda tu trabajo y vuelve a iniciar sesión pronto.')
-          } catch {}
+        } else {
+          if (!refreshFailureNotifiedRef.current) {
+            refreshFailureNotifiedRef.current = true
+            try {
+              toast.warning('No se pudo renovar tu sesión. Guardaremos tu página y te enviaremos al login.')
+            } catch {}
+          }
+          await forceLogoutDueToExpiry()
+          return
         }
       }
       void scheduleSessionCheck()
@@ -175,8 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [
     userId,
     clearSessionTimer,
-    logout,
-    redirectToLogin,
+    forceLogoutDueToExpiry,
     refreshUser,
   ])
 
@@ -187,6 +209,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshUser()
   }, [refreshUser])
+
+  const handleSessionExpiredEvent = useCallback(() => {
+    void forceLogoutDueToExpiry()
+  }, [forceLogoutDueToExpiry])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -223,6 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('keydown', handleUserInteraction, true)
     window.addEventListener('focus', handleUserInteraction, true)
     window.addEventListener('mousemove', handleUserInteraction, true)
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpiredEvent as EventListener)
 
     return () => {
       window.removeEventListener('authchange', handleAuthChange)
@@ -232,17 +259,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('keydown', handleUserInteraction, true)
       window.removeEventListener('focus', handleUserInteraction, true)
       window.removeEventListener('mousemove', handleUserInteraction, true)
+      window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpiredEvent as EventListener)
       clearSessionTimer()
     }
   }, [
     scheduleSessionCheck,
     clearSessionTimer,
     registerInteraction,
+    handleSessionExpiredEvent,
   ])
 
   return (
     <AuthContext.Provider value={{ userId, userName, role, authPending, refreshUser, logout }}>
       {children}
+      {sessionExpiryOverlay && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm text-center px-6">
+          <div className="rounded-lg border bg-card px-6 py-4 shadow-lg">
+            <p className="text-lg font-semibold text-card-foreground">Tu sesión ha expirado</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Estamos redirigiéndote al inicio de sesión para que puedas continuar trabajando.
+            </p>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   )
 }

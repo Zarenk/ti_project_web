@@ -28,10 +28,12 @@ export function NavMain({
     url: string
     icon?: LucideIcon
     isActive?: boolean
+    requiredRoles?: string[]
     items?: {
       title: string
       url: string
       badge?: number
+      requiredRoles?: string[]
     }[]
   }[]
 }) {

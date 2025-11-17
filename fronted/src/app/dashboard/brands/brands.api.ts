@@ -1,7 +1,31 @@
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
+async function buildAuthHeaders(base?: HeadersInit): Promise<Headers> {
+  const { getAuthHeaders } = await import('@/utils/auth-token');
+  const authHeaders = await getAuthHeaders();
+  const headers = new Headers(base ?? {});
+  for (const [key, value] of Object.entries(authHeaders)) {
+    if (value != null) {
+      headers.set(key, value);
+    }
+  }
+  return headers;
+}
+
+async function fetchWithAuth(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> {
+  const headers = await buildAuthHeaders(init.headers);
+  return fetch(input, {
+    ...init,
+    headers,
+    credentials: 'include',
+  });
+}
+
 export async function getBrands(page = 1, limit = 10) {
-  const res = await fetch(
+  const res = await fetchWithAuth(
     `${BACKEND_URL}/api/brands?page=${page}&limit=${limit}`,
     { cache: 'no-store' },
   );
@@ -12,7 +36,7 @@ export async function getBrands(page = 1, limit = 10) {
 }
 
 export async function getKeywords() {
-  const res = await fetch(`${BACKEND_URL}/api/keywords`, {
+  const res = await fetchWithAuth(`${BACKEND_URL}/api/keywords`, {
     cache: 'no-store',
   });
   if (!res.ok) {
@@ -26,8 +50,6 @@ export async function createBrand(data: {
   logoSvg?: File;
   logoPng?: File;
 }) {
-  const { getAuthHeaders } = await import('@/utils/auth-token')
-  const headers = await getAuthHeaders()
   const formData = new FormData();
   formData.append('name', data.name);
   if (data.logoSvg) {
@@ -37,10 +59,8 @@ export async function createBrand(data: {
     formData.append('logoPng', data.logoPng);
   }
 
-  const res = await fetch(`${BACKEND_URL}/api/brands`, {
+  const res = await fetchWithAuth(`${BACKEND_URL}/api/brands`, {
     method: 'POST',
-    headers,
-    credentials: 'include',
     body: formData,
   });
 
@@ -56,17 +76,13 @@ export async function updateBrand(
   id: number,
   data: { name?: string; logoSvg?: File; logoPng?: File },
 ) {
-  const { getAuthHeaders } = await import('@/utils/auth-token')
-  const headers = await getAuthHeaders()
   const formData = new FormData();
   if (data.name) formData.append('name', data.name);
   if (data.logoSvg) formData.append('logoSvg', data.logoSvg);
   if (data.logoPng) formData.append('logoPng', data.logoPng);
 
-  const res = await fetch(`${BACKEND_URL}/api/brands/${id}`, {
+  const res = await fetchWithAuth(`${BACKEND_URL}/api/brands/${id}`, {
     method: 'PATCH',
-    headers,
-    credentials: 'include',
     body: formData,
   });
   if (!res.ok) {
@@ -77,9 +93,9 @@ export async function updateBrand(
 }
 
 export async function deleteBrand(id: number) {
-  const { getAuthHeaders } = await import('@/utils/auth-token')
-  const headers = await getAuthHeaders()
-  const res = await fetch(`${BACKEND_URL}/api/brands/${id}`, { method: 'DELETE', headers, credentials: 'include' });
+  const res = await fetchWithAuth(`${BACKEND_URL}/api/brands/${id}`, {
+    method: 'DELETE',
+  });
   if (!res.ok) {
     throw new Error('Error al eliminar la marca');
   }
@@ -88,12 +104,8 @@ export async function deleteBrand(id: number) {
 }
 
 export async function convertBrandPngToSvg(id: number) {
-  const { getAuthHeaders } = await import('@/utils/auth-token')
-  const headers = await getAuthHeaders()
-  const res = await fetch(`${BACKEND_URL}/api/brands/${id}/convert-png`, {
+  const res = await fetchWithAuth(`${BACKEND_URL}/api/brands/${id}/convert-png`, {
     method: 'POST',
-    headers,
-    credentials: 'include',
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => null);

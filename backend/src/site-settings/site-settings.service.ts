@@ -1,9 +1,8 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma, SiteSettings } from '@prisma/client';
+
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateSiteSettingsDto } from './dto/update-site-setting.dto';
-
-const SETTINGS_ID = 1;
 
 function cloneJson<T extends Prisma.JsonValue>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -126,13 +125,20 @@ const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
     x: '',
   },
   privacy: {
-    cookieBanner: true,
+    cookieBanner: false,
     cookieText: 'Este sitio utiliza cookies para mejorar tu experiencia.',
     acceptText: 'Aceptar',
+    termsUrl: '',
+    privacyUrl: '',
+    cookiePolicyUrl: '',
   },
   maintenance: {
     enabled: false,
-    message: 'Estamos realizando mantenimiento. Vuelve pronto.',
+    message: 'Estamos realizando mantenimiento programado.',
+  },
+  system: {
+    autoBackupFrequency: 'manual',
+    lastAutoBackupAt: null,
   },
   permissions: {
     dashboard: true,
@@ -143,75 +149,121 @@ const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
     purchases: true,
     accounting: true,
     marketing: true,
-    ads: true,
+    providers: true,
     settings: true,
+    hidePurchaseCost: false,
+    hideDeleteActions: false,
   },
 };
 
-
 @Injectable()
 export class SiteSettingsService {
-  private cachedSettings: SiteSettings | null = null;
-  private cacheTimestamp = 0;
   private readonly CACHE_TTL_MS = 30_000;
-  
+  private cache = new Map<
+    string,
+    {
+      value: SiteSettings;
+      timestamp: number;
+    }
+  >();
+
   constructor(private readonly prisma: PrismaService) {}
 
-  async findOrCreate(): Promise<SiteSettings> {
+  private buildTenantKey(
+    organizationId: number | null,
+    companyId: number | null,
+  ): string {
+    const normalizedOrg =
+      typeof organizationId === 'number' && Number.isFinite(organizationId)
+        ? organizationId
+        : 0;
+    const normalizedCompany =
+      typeof companyId === 'number' && Number.isFinite(companyId)
+        ? companyId
+        : 0;
+
+    return `org:${normalizedOrg}|company:${normalizedCompany}`;
+  }
+
+  private async findOrCreate(
+    organizationId: number | null,
+    companyId: number | null,
+  ): Promise<SiteSettings> {
+    const tenantKey = this.buildTenantKey(organizationId, companyId);
+
     return this.prisma.siteSettings.upsert({
-      where: { id: SETTINGS_ID },
+      where: { tenantKey },
       update: {},
       create: {
-        id: SETTINGS_ID,
+        tenantKey,
+        organizationId,
+        companyId,
         data: DEFAULT_SITE_SETTINGS,
       },
     });
   }
 
-  async getSettings(): Promise<SiteSettings> {
-
-    if (this.cachedSettings && this.isCacheValid()) {
-      return this.cloneSettings(this.cachedSettings);
+  async getSettings(
+    organizationId: number | null,
+    companyId: number | null,
+  ): Promise<SiteSettings> {
+    const cacheKey = this.buildTenantKey(organizationId, companyId);
+    const cached = this.getFromCache(cacheKey);
+    if (cached) {
+      return this.cloneSettings(cached);
     }
 
-    const settings = await this.findOrCreate();
+    const settings = await this.findOrCreate(organizationId, companyId);
     const sanitized = {
       ...settings,
       data: this.sanitizeSettingsData(settings.data),
     } as SiteSettings;
 
-    this.setCache(sanitized);
+    this.setCache(cacheKey, sanitized);
 
     return this.cloneSettings(sanitized);
   }
 
-  async updateSettings(dto: UpdateSiteSettingsDto): Promise<SiteSettings> {
+  async updateSettings(
+    dto: UpdateSiteSettingsDto,
+    organizationId: number | null,
+    companyId: number | null,
+  ): Promise<SiteSettings> {
+    const tenantKey = this.buildTenantKey(organizationId, companyId);
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.siteSettings.findUnique({
-        where: { id: SETTINGS_ID },
+        where: { tenantKey },
       });
 
       if (existing && dto.expectedUpdatedAt) {
         const expected = new Date(dto.expectedUpdatedAt);
         if (existing.updatedAt.getTime() !== expected.getTime()) {
-          throw new ConflictException('Site settings were modified by another user.');
+          throw new ConflictException(
+            'Site settings were modified by another user.',
+          );
         }
       }
 
-      const payload = (dto.data ?? DEFAULT_SITE_SETTINGS) as Prisma.InputJsonValue;
+      const payload = (dto.data ??
+        DEFAULT_SITE_SETTINGS) as Prisma.InputJsonValue;
 
       if (!existing) {
         return tx.siteSettings.create({
           data: {
-            id: SETTINGS_ID,
+            tenantKey,
+            organizationId,
+            companyId,
             data: payload,
           },
         });
       }
 
       return tx.siteSettings.update({
-        where: { id: SETTINGS_ID },
+        where: { tenantKey },
         data: {
+          organizationId,
+          companyId,
           data: payload,
         },
       });
@@ -222,20 +274,29 @@ export class SiteSettingsService {
       data: this.sanitizeSettingsData(updated.data),
     } as SiteSettings;
 
-    this.setCache(sanitized);
+    this.setCache(tenantKey, sanitized);
+
+    if (organizationId !== null) {
+      const sanitizedPermissions = (sanitized.data as Prisma.JsonObject)
+        ?.permissions;
+      if (sanitizedPermissions && typeof sanitizedPermissions === 'object') {
+        await this.propagatePermissionsToOrganization(
+          organizationId,
+          sanitizedPermissions as Prisma.JsonObject,
+          sanitized.id,
+        );
+      }
+    }
 
     return this.cloneSettings(sanitized);
   }
 
   private sanitizeSettingsData(data: Prisma.JsonValue): Prisma.JsonValue {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
-      return data;
+      return cloneJson(DEFAULT_SITE_SETTINGS);
     }
 
-    const merged = deepMergeJson(
-      DEFAULT_SITE_SETTINGS,
-      data as Prisma.JsonObject,
-    );
+    const merged = deepMergeJson(DEFAULT_SITE_SETTINGS, data);
     const integrations = merged.integrations as Prisma.JsonValue;
 
     if (integrations && isPlainObject(integrations)) {
@@ -252,23 +313,59 @@ export class SiteSettingsService {
     return merged;
   }
 
-  private isCacheValid(): boolean {
-      return (
-        !!this.cachedSettings &&
-        Date.now() - this.cacheTimestamp < this.CACHE_TTL_MS
-      );
+  private getFromCache(cacheKey: string): SiteSettings | null {
+    const cached = this.cache.get(cacheKey);
+    if (!cached) {
+      return null;
+    }
+
+    if (Date.now() - cached.timestamp > this.CACHE_TTL_MS) {
+      this.cache.delete(cacheKey);
+      return null;
+    }
+
+    return cached.value;
   }
 
-  private setCache(settings: SiteSettings): void {
-      this.cachedSettings = settings;
-      this.cacheTimestamp = Date.now();
+  private setCache(cacheKey: string, settings: SiteSettings): void {
+    this.cache.set(cacheKey, {
+      value: settings,
+      timestamp: Date.now(),
+    });
   }
 
   private cloneSettings(settings: SiteSettings): SiteSettings {
-      return {
-        ...settings,
-        data: cloneJson(settings.data),
-      };
+    return {
+      ...settings,
+      data: cloneJson(settings.data),
+    };
+  }
+
+  private async propagatePermissionsToOrganization(
+    organizationId: number,
+    permissions: Prisma.JsonObject,
+    skipSiteSettingsId?: number,
+  ): Promise<void> {
+    const entries = await this.prisma.siteSettings.findMany({
+      where: { organizationId },
+    });
+
+    await Promise.all(
+      entries.map((entry) => {
+        if (skipSiteSettingsId && entry.id === skipSiteSettingsId) {
+          return Promise.resolve();
+        }
+        const currentData = (entry.data as Prisma.JsonObject) ?? {};
+        const nextData: Prisma.JsonObject = {
+          ...currentData,
+          permissions,
+        };
+
+        return this.prisma.siteSettings.update({
+          where: { id: entry.id },
+          data: { data: nextData },
+        });
+      }),
+    );
   }
 }
-

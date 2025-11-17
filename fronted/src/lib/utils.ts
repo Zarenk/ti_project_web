@@ -1,6 +1,7 @@
 import { io } from "socket.io-client";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { getAuthHeaders } from "@/utils/auth-token";
 
 const DEFAULT_DEV_BACKEND = "http://localhost:4000";
 
@@ -81,8 +82,21 @@ export async function uploadPdfToServer({
     console.log(`FormData -> ${key}:`, value);
   });
 
+  const authHeaders = await getAuthHeaders();
+  if (!authHeaders.Authorization) {
+    throw new Error("No se encontro un token de autenticacion");
+  }
+
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(authHeaders)) {
+    if (value) {
+      headers[key] = value;
+    }
+  }
+
   const response = await fetch(`${BACKEND_URL}/api/sunat/upload-pdf`, {
     method: "POST",
+    headers,
     body: formData,
   });
 

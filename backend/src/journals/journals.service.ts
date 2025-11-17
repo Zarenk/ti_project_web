@@ -1,7 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateJournalDto } from './dto/create-journal.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { endOfDay, startOfDay } from 'date-fns';
+
+import { PrismaService } from 'src/prisma/prisma.service';
+import { TenantContext } from 'src/tenancy/tenant-context.interface';
+
+import { CreateJournalDto } from './dto/create-journal.dto';
 
 export interface Journal {
   id: string;
@@ -26,48 +29,114 @@ interface InventoryHistoryRecord {
 
 @Injectable()
 export class JournalsService {
-  private journals: Journal[] = [];
+  private readonly tenantJournals = new Map<string, Journal[]>();
   constructor(private prisma: PrismaService) {}
 
-  create(dto: CreateJournalDto): Journal {
+  private getTenantKey(context: TenantContext): string {
+    const orgPart = context.organizationId ?? 'none';
+    const companyPart = context.companyId ?? 'none';
+    return `${orgPart}:${companyPart}`;
+  }
+
+  private getTenantJournalStore(context: TenantContext): Journal[] {
+    const key = this.getTenantKey(context);
+    if (!this.tenantJournals.has(key)) {
+      this.tenantJournals.set(key, []);
+    }
+    return this.tenantJournals.get(key)!;
+  }
+
+  private createJournalId(): string {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  private buildTenantFilters(context: TenantContext) {
+    const organizationFilter =
+      context.organizationId !== null
+        ? { equals: context.organizationId }
+        : context.allowedOrganizationIds.length > 0
+          ? { in: context.allowedOrganizationIds }
+          : undefined;
+
+    const companyFilter =
+      context.companyId !== null ? { equals: context.companyId } : undefined;
+
+    return { organizationFilter, companyFilter };
+  }
+
+  create(dto: CreateJournalDto, context: TenantContext): Journal {
+    const store = this.getTenantJournalStore(context);
     const journal: Journal = {
-      id: (this.journals.length + 1).toString(),
+      id: this.createJournalId(),
       ...dto,
     };
-    this.journals.push(journal);
+    store.push(journal);
     return journal;
   }
 
-  update(id: string, dto: CreateJournalDto): Journal {
-    const index = this.journals.findIndex((j) => j.id === id);
+  update(id: string, dto: CreateJournalDto, context: TenantContext): Journal {
+    const store = this.getTenantJournalStore(context);
+    const index = store.findIndex((j) => j.id === id);
     if (index === -1) {
       throw new NotFoundException('Journal not found');
     }
     const updated: Journal = { id, ...dto };
-    this.journals[index] = updated;
+    store[index] = updated;
     return updated;
   }
 
-  remove(id: string): void {
-    this.journals = this.journals.filter((j) => j.id !== id);
+  remove(id: string, context: TenantContext): void {
+    const store = this.getTenantJournalStore(context);
+    const filtered = store.filter((j) => j.id !== id);
+    const key = this.getTenantKey(context);
+    this.tenantJournals.set(key, filtered);
   }
 
-  async findAll(): Promise<Journal[]> {
+  async findAll(context: TenantContext): Promise<Journal[]> {
     const start = startOfDay(new Date());
     const end = endOfDay(new Date());
+    const { organizationFilter, companyFilter } =
+      this.buildTenantFilters(context);
+
+    const sharedFilters: Record<string, unknown> = {
+      ...(organizationFilter ? { organizationId: organizationFilter } : {}),
+      ...(companyFilter ? { companyId: companyFilter } : {}),
+    };
 
     const [sales, inventory, entryDetails] = await Promise.all([
       this.prisma.sales.findMany({
-        where: { createdAt: { gte: start, lte: end } },
+        where: {
+          createdAt: { gte: start, lte: end },
+          ...(Object.keys(sharedFilters).length > 0 ? sharedFilters : {}),
+        },
       }),
       this.prisma.inventoryHistory.findMany({
-        where: { createdAt: { gte: start, lte: end } },
+        where: {
+          createdAt: { gte: start, lte: end },
+          ...(Object.keys(sharedFilters).length > 0 ? sharedFilters : {}),
+        },
         include: { inventory: { include: { product: true } } },
       }),
       this.prisma.entryDetail.findMany({
         where: {
           createdAt: { gte: start, lte: end },
           inventoryId: { not: null },
+          ...(organizationFilter || companyFilter
+            ? {
+                entry: {
+                  ...(organizationFilter
+                    ? { organizationId: organizationFilter }
+                    : {}),
+                  ...(companyFilter
+                    ? {
+                        store: {
+                          companyId: companyFilter,
+                        },
+                      }
+                    : {}),
+                },
+              }
+            : {}),
         },
         include: { series: true },
       }),
@@ -135,7 +204,7 @@ export class JournalsService {
       };
     });
 
-    const manualToday = this.journals.filter((j) => {
+    const manualToday = this.getTenantJournalStore(context).filter((j) => {
       const d = new Date(j.date);
       return d >= start && d <= end;
     });

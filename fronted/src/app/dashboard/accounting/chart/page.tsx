@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { Plus, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,15 +19,41 @@ import {
 } from "@/components/ui/table";
 import { Account, fetchAccounts } from "./accounts.api";
 import { AccountForm } from "./account-form";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 
 export default function ChartPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { version } = useTenantSelection();
 
   useEffect(() => {
-    fetchAccounts().then(setAccounts).catch(() => setAccounts([]));
-  }, []);
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetchAccounts()
+      .then((data) => {
+        if (!cancelled) {
+          setAccounts(data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAccounts([]);
+          setError("No se pudieron cargar las cuentas contables.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
 
   const handleCreate = (account: Account) => {
     setAccounts((prev) => [...prev, account]);
@@ -56,6 +82,33 @@ export default function ChartPage() {
       ...(acc.children ? renderRows(acc.children, level + 1) : []),
     ]);
 
+  const content = useMemo(() => {
+    if (loading) {
+      return <p className="text-sm text-muted-foreground">Cargando cuentas…</p>;
+    }
+    if (error) {
+      return (
+        <p className="text-sm text-destructive">
+          {error}
+        </p>
+      );
+    }
+    return (
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>{renderRows(accounts)}</TableBody>
+        </Table>
+      </div>
+    );
+  }, [accounts, loading, error]);
+
   return (
     <div className="space-y-4">
       <Card className="shadow-sm">
@@ -65,20 +118,7 @@ export default function ChartPage() {
             <Plus className="mr-2 h-4 w-4" /> New Account
           </Button>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>{renderRows(accounts)}</TableBody>
-            </Table>
-          </div>
-        </CardContent>
+        <CardContent>{content}</CardContent>
       </Card>
       <AccountForm
         open={createOpen}

@@ -35,6 +35,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { deleteStores, updateManyStores } from "./stores.api"
 import { Button } from "@/components/ui/button"
+import { DeleteActionsGuard } from "@/components/delete-actions-guard"
 import { DataTablePagination } from "../../../components/data-table-pagination"
 
 import { useMemo, useRef, useState } from "react";
@@ -831,3 +832,4 @@ export function DataTable<TData extends {id:string, name:string,
       
   )
 }
+

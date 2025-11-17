@@ -1,3 +1,5 @@
+import { wasManualLogoutRecently } from "@/utils/manual-logout"
+
 const REFRESH_ENDPOINT = '/api/auth/refresh'
 
 function getBaseUrl() {
@@ -5,6 +7,9 @@ function getBaseUrl() {
 }
 
 export async function refreshAuthToken(): Promise<boolean> {
+  if (wasManualLogoutRecently()) {
+    return false
+  }
   const base = getBaseUrl()
   try {
     const res = await fetch(`${base}${REFRESH_ENDPOINT}`, {

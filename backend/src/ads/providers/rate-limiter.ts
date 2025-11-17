@@ -3,7 +3,10 @@ export class RateLimiter {
   private tokens: number;
   private queue: Array<() => void> = [];
 
-  constructor(private limit: number, private intervalMs: number) {
+  constructor(
+    private limit: number,
+    private intervalMs: number,
+  ) {
     this.tokens = limit;
     setInterval(() => {
       this.tokens = this.limit;

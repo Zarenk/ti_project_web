@@ -1,4 +1,9 @@
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import {
+  CallHandler,
+  ExecutionContext,
+  Injectable,
+  NestInterceptor,
+} from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
 import { trace } from '@opentelemetry/api';
 import { MetricsService } from './metrics.service';
@@ -9,7 +14,9 @@ export class TelemetryInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const tracer = trace.getTracer('default');
-    const span = tracer.startSpan(`${context.getClass().name}.${context.getHandler().name}`);
+    const span = tracer.startSpan(
+      `${context.getClass().name}.${context.getHandler().name}`,
+    );
     const start = process.hrtime();
 
     return next.handle().pipe(

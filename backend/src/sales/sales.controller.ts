@@ -17,43 +17,97 @@ import { CreateSaleDto } from './dto/create-sale.dto';
 import { RolesGuard } from 'src/users/roles.guard';
 import { Roles } from 'src/users/roles.decorator';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+
+const SALES_ALLOWED_ROLES = [
+  'ADMIN',
+  'EMPLOYEE',
+  'SUPER_ADMIN_GLOBAL',
+  'SUPER_ADMIN_ORG',
+] as const;
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN', 'EMPLOYEE')
+@Roles(...SALES_ALLOWED_ROLES)
 @ModulePermission('sales')
 @Controller('sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
   @Post()
-  async createSale(@Body() createSaleDto: CreateSaleDto) {
-    return this.salesService.createSale(createSaleDto);
+  async createSale(
+    @Body() createSaleDto: CreateSaleDto,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.createSale({
+      ...createSaleDto,
+      organizationId:
+        createSaleDto.organizationId ?? organizationId ?? undefined,
+      companyId: createSaleDto.companyId ?? companyId ?? undefined,
+    });
   }
 
   @Get()
-  async findAllSales() {
-    return this.salesService.findAllSales();
+  async findAllSales(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.findAllSales(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
-  // Endpoint para obtener las series vendidas en una venta específica
+  // Endpoint para obtener las series vendidas en una venta especifica
   @Get(':saleId/sold-series')
-  async getSoldSeriesBySale(@Param('saleId', ParseIntPipe) saleId: number) {
-    return this.salesService.getSoldSeriesBySale(saleId);
+  async getSoldSeriesBySale(
+    @Param('saleId', ParseIntPipe) saleId: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getSoldSeriesBySale(
+      saleId,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get(':saleId/sunat/transmissions')
+  async getSaleSunatTransmissions(
+    @Param('saleId', ParseIntPipe) saleId: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getSaleSunatTransmissions(
+      saleId,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('monthly-total')
-  async getMonthlySalesTotal() {
-    return this.salesService.getMonthlySalesTotal();
+  async getMonthlySalesTotal(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getMonthlySalesTotal(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('revenue-by-category/from/:startDate/to/:endDate')
   getRevenueByCategoryByRange(
     @Param('startDate') startDate: string,
     @Param('endDate') endDate: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     return this.salesService.getRevenueByCategory(
       new Date(startDate),
       new Date(endDate),
+      organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
@@ -61,10 +115,14 @@ export class SalesController {
   async getSalesChartByDateRange(
     @Param('from') from: string,
     @Param('to') to: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
     return this.salesService.getDailySalesByDateRange(
       new Date(from),
       new Date(to),
+      organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
@@ -73,12 +131,24 @@ export class SalesController {
   getTopProductsByRange(
     @Param('startDate') startDate: string,
     @Param('endDate') endDate: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
   ) {
-    return this.salesService.getTopProducts(10, startDate, endDate);
+    return this.salesService.getTopProducts(
+      10,
+      startDate,
+      endDate,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('top-products/type/:type')
-  getTopProductsByType(@Param('type') type: string) {
+  getTopProductsByType(
+    @Param('type') type: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -89,27 +159,69 @@ export class SalesController {
           10,
           startOfMonth.toISOString(),
           endOfMonth.toISOString(),
+          organizationId ?? undefined,
+          companyId ?? undefined,
         );
       case 'all':
-        return this.salesService.getTopProducts(10);
+        return this.salesService.getTopProducts(
+          10,
+          undefined,
+          undefined,
+          organizationId ?? undefined,
+          companyId ?? undefined,
+        );
       default:
-        throw new BadRequestException(`Tipo inválido: ${type}`);
+        throw new BadRequestException(`Tipo invalido: ${type}`);
     }
   }
 
   @Get('monthly-count')
-  async getMonthlySalesCount() {
-    return this.salesService.getMonthlySalesCount();
+  async getMonthlySalesCount(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getMonthlySalesCount(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('monthly-clients')
-  getMonthlyClientStats() {
-    return this.salesService.getMonthlyClientStats();
+  getMonthlyClientStats(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getMonthlyClientStats(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('top-clients')
-  getTopClients(@Query('from') from?: string, @Query('to') to?: string) {
-    return this.salesService.getTopClients(10, from, to);
+  getTopClients(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+  ) {
+    return this.salesService.getTopClients(
+      10,
+      from,
+      to,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('product-report-options')
+  getProductReportOptions(
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+  ) {
+    return this.salesService.getProductReportOptions(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('product-report/:productId')
@@ -117,40 +229,89 @@ export class SalesController {
     @Param('productId', ParseIntPipe) productId: number,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
   ) {
-    return this.salesService.getProductSalesReport(productId, from, to);
+    return this.salesService.getProductSalesReport(
+      productId,
+      from,
+      to,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('transactions')
   getSalesTransactions(
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
   ) {
     return this.salesService.getSalesTransactions(
       from ? new Date(from) : undefined,
       to ? new Date(to) : undefined,
+      organizationId ?? undefined,
+      companyId ?? undefined,
     );
   }
 
   @Get('my')
   @Roles('CLIENT')
-  async getMySales(@Req() req) {
-    return this.salesService.findSalesByUser(req.user.userId);
+  async getMySales(
+    @Req() req,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.findSalesByUser(
+      req.user.userId,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get('recent/:from/:to')
-  async getRecentSales(@Param('from') from: string, @Param('to') to: string) {
-    return this.salesService.getRecentSales(from, to);
+  async getRecentSales(
+    @Param('from') from: string,
+    @Param('to') to: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+  ) {
+    return this.salesService.getRecentSales(
+      from,
+      to,
+      10,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.salesService.findOne(id);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.findOne(
+      id,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 
   @Delete(':id')
-  async deleteSale(@Param('id', ParseIntPipe) id: number, @Req() req) {
+  async deleteSale(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
     const userId = req?.user?.userId;
-    return this.salesService.deleteSale(id, userId);
+    return this.salesService.deleteSale(
+      id,
+      userId,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
   }
 }

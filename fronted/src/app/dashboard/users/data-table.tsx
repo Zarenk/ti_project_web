@@ -31,14 +31,12 @@ import { Label } from "@/components/ui/label";
 import { useDebounce } from "@/app/hooks/useDebounce";
 import { DataTablePagination } from "@/components/data-table-pagination";
 import type { DashboardUser } from "./users.api";
-import { columns as userColumns } from "./columns";
+import { buildUserColumns, type UserRow } from "./columns";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
 }
-
-type UserRow = DashboardUser & { createdAt: string };
 
 export function DataTable<TValue>({ columns, data }: DataTableProps<UserRow, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
@@ -274,6 +272,29 @@ export function DataTable<TValue>({ columns, data }: DataTableProps<UserRow, TVa
   );
 }
 
-export function UsersDataTable({ data }: { data: UserRow[] }) {
-  return <DataTable columns={userColumns} data={data} />;
+export function UsersDataTable({
+  data,
+  canManageUsers,
+  isGlobalSuperAdmin,
+  organizationId,
+  onUserUpdated,
+}: {
+  data: UserRow[];
+  canManageUsers: boolean;
+  isGlobalSuperAdmin: boolean;
+  organizationId: number | null;
+  onUserUpdated: (user: DashboardUser) => void;
+}) {
+  const columns = React.useMemo(
+    () =>
+      buildUserColumns({
+        canManageUsers,
+        isGlobalSuperAdmin,
+        organizationId,
+        onUserUpdated,
+      }),
+    [canManageUsers, isGlobalSuperAdmin, organizationId, onUserUpdated],
+  );
+
+  return <DataTable columns={columns} data={data} />;
 }

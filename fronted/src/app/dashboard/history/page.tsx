@@ -1,84 +1,106 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { jwtDecode } from "jwt-decode"
-import { getAuthToken } from "@/utils/auth-token"
-import { toast } from "sonner"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import { DataTable } from "./data-table"
-import { columns, History } from "./columns"
-import { getUserHistory, getUserActivity } from "./history.api"
-import { activityColumns, Activity } from "./activity-columns"
+import { useEffect, useState } from "react";
+import { jwtDecode } from "jwt-decode";
+import { toast } from "sonner";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useTenantSelection } from "@/context/tenant-selection-context";
+import { getAuthToken } from "@/utils/auth-token";
+
+import { DataTable } from "./data-table";
+import { activityColumns, type Activity } from "./activity-columns";
+import { columns, type History } from "./columns";
+import { getUserActivity, getUserHistory } from "./history.api";
 
 interface HistoryEntry {
-  id: number
-  action: string
-  stockChange: number
-  previousStock: number | null
-  newStock: number | null
-  createdAt: string
-  user: { username: string }
+  id: number;
+  action: string;
+  stockChange: number;
+  previousStock: number | null;
+  newStock: number | null;
+  createdAt: string;
+  user: { username: string };
   inventory: {
-    product: { name: string }
+    product: { name: string };
     storeOnInventory: {
-      store: { name: string }
-      stock: number
-    }[]
-  }
+      store: { name: string };
+      stock: number;
+    }[];
+  };
 }
 
 async function getUserIdFromToken(): Promise<number | null> {
-  const token = await getAuthToken()
+  const token = await getAuthToken();
   if (!token) {
-    return null
+    return null;
   }
 
   try {
-    const decoded: { sub: string | number } = jwtDecode(token)
-    const id = Number(decoded.sub)
-    if (Number.isNaN(id)) return null
-    return id
+    const decoded: { sub: string | number } = jwtDecode(token);
+    const id = Number(decoded.sub);
+    if (Number.isNaN(id)) return null;
+    return id;
   } catch (error) {
-    console.error("Error decoding token:", error)
-    return null
+    console.error("Error decoding token:", error);
+    return null;
   }
 }
 
-export default function UserHistory() {
-  const [history, setHistory] = useState<History[]>([])
-  const [activity, setActivity] = useState<Activity[]>([])
-  const [loading, setLoading] = useState(false)
-  const [userId, setUserId] = useState<number | null>(null)
+export default function UserHistory(): React.ReactElement {
+  const [history, setHistory] = useState<History[]>([]);
+  const [activity, setActivity] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { version } = useTenantSelection();
 
   useEffect(() => {
-    async function fetchData() {
-      const id = await getUserIdFromToken()
-      if (!id) {
-        toast.error("No se pudo obtener el ID del usuario. Inicia sesión nuevamente.")
-        return
-      }
-  
-      setUserId(id) // Si necesitas conservarlo en el estado global/local
-  
-      setLoading(true)
+    let cancelled = false;
+
+    const fetchData = async () => {
+      if (cancelled) return;
+
+      setLoading(true);
+      setError(null);
+
       try {
+        const id = await getUserIdFromToken();
+        if (!id) {
+          if (!cancelled) {
+            const message =
+              "No se pudo obtener el ID del usuario. Inicia sesion nuevamente.";
+            setError(message);
+            toast.error(message);
+            setHistory([]);
+            setActivity([]);
+          }
+          return;
+        }
+
         const [historyData, activityData] = await Promise.all([
           getUserHistory(id),
           getUserActivity(id),
-        ])
-        const mapped = historyData.map((entry: HistoryEntry) => ({
+        ]);
+
+        if (cancelled) return;
+
+        const mappedHistory = historyData.map((entry: HistoryEntry) => ({
           id: entry.id,
           username: entry.user.username,
           action: entry.action,
           product: entry.inventory.product.name,
-          stores: entry.inventory.storeOnInventory.map((s) => s.store.name).join(", "),
+          stores: entry.inventory.storeOnInventory
+            .map((s) => s.store.name)
+            .join(", "),
           previousStock: entry.previousStock ?? 0,
           stockChange: entry.stockChange,
-          newStock: entry.inventory.storeOnInventory.map((s) => s.stock).join(", "),
+          newStock: entry.inventory.storeOnInventory
+            .map((s) => s.stock)
+            .join(", "),
           createdAt: entry.createdAt,
-        })) as History[]
-        setHistory(mapped)
+        })) as History[];
+
         const mappedActivity = activityData.map((entry: any) => ({
           id: entry.id,
           username: entry.actorEmail ?? "",
@@ -86,17 +108,36 @@ export default function UserHistory() {
           entityType: entry.entityType,
           summary: entry.summary,
           createdAt: entry.createdAt,
-        })) as Activity[]
-        setActivity(mappedActivity)
-      } catch (error) {
-        console.error("Error:", error)
+        })) as Activity[];
+
+        if (!cancelled) {
+          setHistory(mappedHistory);
+          setActivity(mappedActivity);
+        }
+      } catch (err) {
+        console.error("Error:", err);
+        if (cancelled) return;
+        const message =
+          err instanceof Error
+            ? err.message
+            : "No se pudo cargar el historial del usuario.";
+        setError(message);
+        toast.error(message);
+        setHistory([]);
+        setActivity([]);
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    }
-  
-    fetchData()
-  }, [])
+    };
+
+    void fetchData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -105,6 +146,9 @@ export default function UserHistory() {
           <CardTitle className="text-xl">Historial del Usuario</CardTitle>
         </CardHeader>
         <CardContent>
+          {error ? (
+            <p className="mb-4 text-sm text-destructive">{error}</p>
+          ) : null}
           {loading ? (
             <div className="space-y-4">
               {[...Array(5)].map((_, i) => (
@@ -112,7 +156,9 @@ export default function UserHistory() {
               ))}
             </div>
           ) : history.length === 0 ? (
-            <p className="text-muted-foreground">No hay historial disponible para este usuario.</p>
+            <p className="text-muted-foreground">
+              No hay historial disponible para este usuario.
+            </p>
           ) : (
             <div className="overflow-auto">
               <DataTable columns={columns} data={history} />
@@ -133,7 +179,9 @@ export default function UserHistory() {
               ))}
             </div>
           ) : activity.length === 0 ? (
-            <p className="text-muted-foreground">No hay actividad disponible para este usuario.</p>
+            <p className="text-muted-foreground">
+              No hay actividad disponible para este usuario.
+            </p>
           ) : (
             <div className="overflow-auto">
               <DataTable columns={activityColumns} data={activity} />
@@ -142,5 +190,5 @@ export default function UserHistory() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

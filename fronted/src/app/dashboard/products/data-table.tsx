@@ -53,6 +53,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
 import { IconName, icons } from "@/lib/icons"
+import { useSiteSettings } from "@/context/site-settings-context"
+import { useAuth } from "@/context/auth-context"
+import { DeleteActionsGuard } from "@/components/delete-actions-guard"
 
 type ProductSpecification = {
   processor?: string | null
@@ -120,6 +123,33 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
+  const { settings } = useSiteSettings()
+  const { role } = useAuth()
+  const normalizedRole = role ? role.toUpperCase() : null
+  const canViewCosts =
+    normalizedRole === "SUPER_ADMIN_GLOBAL" ||
+    normalizedRole === "SUPER_ADMIN_ORG" ||
+    normalizedRole === "ADMIN"
+  const hidePurchaseCost = (settings.permissions?.hidePurchaseCost ?? false) && !canViewCosts
+  const effectiveColumns = useMemo(() => {
+    if (!hidePurchaseCost) {
+      return columns
+    }
+    return columns.filter((column) => {
+      const accessorKey =
+        typeof (column as { accessorKey?: string | number }).accessorKey === "string"
+          ? ((column as { accessorKey?: string | number }).accessorKey as string)
+          : undefined
+      const columnId =
+        typeof (column as { id?: string }).id === "string"
+          ? ((column as { id?: string }).id as string)
+          : undefined
+      if (accessorKey === "price" || columnId === "price") {
+        return false
+      }
+      return true
+    })
+  }, [columns, hidePurchaseCost])
 
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
@@ -237,6 +267,10 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
             .map((key) => `<td>${formatHtmlValue(product.specification?.[key] ?? "—")}</td>`)
             .join("");
 
+          const purchasePriceCell = hidePurchaseCost
+            ? ""
+            : `<td class="numeric">S/. ${priceFormatter.format(Number(product.price ?? 0))}</td>`;
+
           return `
             <tr>
               <td>${index + 1}</td>
@@ -244,7 +278,7 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
               <td>${formatHtmlValue(product.description)}</td>
               <td>${formatHtmlValue(brand)}</td>
               <td>${formatHtmlValue(product.category_name)}</td>
-              <td class="numeric">S/. ${priceFormatter.format(Number(product.price ?? 0))}</td>
+              ${purchasePriceCell}
               <td class="numeric">S/. ${priceFormatter.format(Number(product.priceSell ?? 0))}</td>
               <td><span class="${statusClass}">${formatHtmlValue(normalizedStatus)}</span></td>
               <td>${formatHtmlValue(formattedDate)}</td>
@@ -264,6 +298,7 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
         timeStyle: "short",
       });
 
+      const purchasePriceHeader = hidePurchaseCost ? "" : "<th>Precio Compra (S/.)</th>";
       const htmlContent = `<!DOCTYPE html>
         <html lang="es">
         <head>
@@ -371,7 +406,7 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
                 <th>Descripción</th>
                 <th>Marca</th>
                 <th>Categoría</th>
-                <th>Precio Compra (S/.)</th>
+                ${purchasePriceHeader}
                 <th>Precio Venta (S/.)</th>
                 <th>Estado</th>
                 <th>Fecha de Creación</th>
@@ -440,7 +475,7 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
   // DATATABLE ACCIONES
   const table = useReactTable({
     data: filteredData,
-    columns,
+    columns: effectiveColumns,
     getRowId: (row) => row.id, // Usa el campo `id` como identificador único
     getCoreRowModel: getCoreRowModel(),
     getFacetedRowModel: getFacetedRowModel(), // Habilita el cálculo de facetas
@@ -861,17 +896,19 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
             <>
             {totalSelectedRows > 0 && (
               <div className="flex flex-wrap gap-2">
-              <Button
-                key="button-1"
-                onClick={() => setIsDialogOpen(true)}
-                className="bg-red-500 hover:bg-red-600 text-white cursor-pointer
+              <DeleteActionsGuard>
+                <Button
+                  key="button-1"
+                  onClick={() => setIsDialogOpen(true)}
+                  className="bg-red-500 hover:bg-red-600 text-white cursor-pointer
                 text-xs sm:text-sm h-7 sm:h-8 px-2 sm:px-4"
-                disabled={totalSelectedRows === 0}
-                title="Eliminar seleccionado(s)" // Tooltip al pasar el mouse
+                  disabled={totalSelectedRows === 0}
+                  title="Eliminar seleccionado(s)" // Tooltip al pasar el mouse
                 >          
-                <span className="hidden md:inline">Eliminar Seleccionado(s)</span> ({totalSelectedRows})
-                <TrashIcon className="size-6" aria-hidden="true" />
-              </Button>
+                  <span className="hidden md:inline">Eliminar Seleccionado(s)</span> ({totalSelectedRows})
+                  <TrashIcon className="size-6" aria-hidden="true" />
+                </Button>
+              </DeleteActionsGuard>
 
               <Button
                 key="button-2"
@@ -1331,3 +1368,4 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
       
   )
 }
+

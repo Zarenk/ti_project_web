@@ -19,7 +19,10 @@ export class PaymentMethodsService {
   }
 
   // Actualizar un método de pago
-  async updatePaymentMethod(id: number, data: { name?: string; description?: string; isActive?: boolean }) {
+  async updatePaymentMethod(
+    id: number,
+    data: { name?: string; description?: string; isActive?: boolean },
+  ) {
     return this.prisma.paymentMethod.update({
       where: { id },
       data,

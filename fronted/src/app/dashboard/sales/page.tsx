@@ -1,5 +1,6 @@
 "use client";
 
+import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createSalesColumns, Sale } from "./columns";
 import { DataTable } from "./data-table";
@@ -45,6 +46,54 @@ const normalizeOptionalString = (value: unknown): string | undefined => {
     return Number.isFinite(value) ? String(value) : undefined;
   }
   return undefined;
+};
+
+const normalizeSunatTimestamp = (value: unknown): string | undefined => {
+  if (value === null || value === undefined) return undefined;
+  const candidate =
+    value instanceof Date ? value : typeof value === "string" ? new Date(value) : new Date(String(value));
+  if (Number.isNaN(candidate.getTime())) {
+    return undefined;
+  }
+  return candidate.toISOString();
+};
+
+const normalizeSunatStatus = (value: any) => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const statusRaw = typeof value.status === "string" ? value.status.trim() : "";
+  if (!statusRaw) {
+    return null;
+  }
+
+  return {
+    id: typeof value.id === "number" ? value.id : Number(value.id) || undefined,
+    status: statusRaw.toUpperCase(),
+    ticket: value.ticket ?? null,
+    environment: typeof value.environment === "string" ? value.environment : null,
+    errorMessage: value.errorMessage ?? null,
+    updatedAt: normalizeSunatTimestamp(value.updatedAt ?? value.updated_at),
+  };
+};
+
+const normalizeSunatTransmissions = (value: any): Sale["sunatTransmissions"] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => ({
+      id: typeof item.id === "number" ? item.id : Number(item.id) || undefined,
+      status: String(item.status ?? "PENDING").toUpperCase(),
+      ticket: item.ticket ?? null,
+      environment: typeof item.environment === "string" ? item.environment : null,
+      errorMessage: item.errorMessage ?? null,
+      updatedAt: normalizeSunatTimestamp(item.updatedAt ?? item.updated_at),
+      createdAt: normalizeSunatTimestamp(item.createdAt ?? item.created_at),
+    }))
+    .filter((item) => typeof item.status === "string");
 };
 
 const normalizeSaleDetail = (
@@ -161,6 +210,12 @@ const normalizeApiSale = (sale: any): Sale => {
     : [];
 
   const total = parseNumberValue(sale.total);
+  const sunatStatus = normalizeSunatStatus(
+    sale.sunatStatus ?? sale.sunat_status ?? null,
+  );
+  const sunatTransmissions = normalizeSunatTransmissions(
+    sale.sunatTransmissions ?? sale.sunat_transmissions ?? [],
+  );
 
   const clientDocumentCandidate =
     sale.client?.documentNumber ??
@@ -258,6 +313,8 @@ const normalizeApiSale = (sale: any): Sale => {
     tipoMoneda: sale.tipoMoneda ?? sale.tipo_moneda ?? undefined,
     payments,
     details,
+    sunatStatus,
+    sunatTransmissions,
   };
 };
 
@@ -274,6 +331,11 @@ export default function Page() {
   const [maxTotal, setMaxTotal] = useState("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("ALL");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const { selection, version } = useTenantSelection();
+  const selectionKey = useMemo(
+    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
+    [selection.orgId, selection.companyId, version],
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -291,7 +353,7 @@ export default function Page() {
       }
     };
     fetchData();
-  }, []);
+  }, [selectionKey]);
 
   const handleDeleted = useCallback((id: number) => {
     setSales((prev) => prev.filter((sale) => sale.id !== id));
@@ -1124,11 +1186,11 @@ export default function Page() {
                     className="h-10"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Monto total (S/)
                   </p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
                     <Input
                       value={minTotal}
                       onChange={(event) => setMinTotal(event.target.value)}

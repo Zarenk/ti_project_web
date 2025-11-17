@@ -16,7 +16,13 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AdsService } from './ads.service';
 import { Request } from 'express';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
@@ -104,7 +110,10 @@ export class AdsController {
     @Body() dto: UpdateCampaignDto,
     @Req() req: Request,
   ) {
-    return this.adsService.updateCampaign(id, req.user, { ...dto, organizationId });
+    return this.adsService.updateCampaign(id, req.user, {
+      ...dto,
+      organizationId,
+    });
   }
 
   @Post('organizations/:organizationId/campaigns/:id/publish')
@@ -118,7 +127,10 @@ export class AdsController {
     @Body() dto: PublishCampaignDto,
     @Req() req: Request,
   ) {
-    return this.adsService.publishCampaign(id, req.user, { ...dto, organizationId });
+    return this.adsService.publishCampaign(id, req.user, {
+      ...dto,
+      organizationId,
+    });
   }
 
   @Post('organizations/:organizationId/campaigns/:campaignId/creatives')
@@ -132,7 +144,11 @@ export class AdsController {
     @Body() dto: CreateCreativeDto,
     @Req() req: Request,
   ) {
-    return this.adsService.createCreative(req.user, { ...dto, campaignId, organizationId });
+    return this.adsService.createCreative(req.user, {
+      ...dto,
+      campaignId,
+      organizationId,
+    });
   }
 
   @Patch('organizations/:organizationId/creatives/:id')
@@ -146,7 +162,10 @@ export class AdsController {
     @Body() dto: UpdateCreativeDto,
     @Req() req: Request,
   ) {
-    return this.adsService.updateCreative(id, req.user, { ...dto, organizationId });
+    return this.adsService.updateCreative(id, req.user, {
+      ...dto,
+      organizationId,
+    });
   }
 
   @Post('organizations/:organizationId/creatives/:id/review')
@@ -160,7 +179,10 @@ export class AdsController {
     @Body() dto: ReviewCreativeDto,
     @Req() req: Request,
   ) {
-    return this.adsService.reviewCreative(id, req.user, { ...dto, organizationId });
+    return this.adsService.reviewCreative(id, req.user, {
+      ...dto,
+      organizationId,
+    });
   }
 
   @Post('reference-image')
@@ -176,17 +198,24 @@ export class AdsController {
       }),
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
-          return cb(new BadRequestException('Only image files are allowed'), false);
+          return cb(
+            new BadRequestException('Only image files are allowed'),
+            false,
+          );
         }
         cb(null, true);
       },
     }),
   )
-  uploadReferenceImage(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
+  uploadReferenceImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+  ) {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
-    const baseUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+    const baseUrl =
+      process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
     return { url: `${baseUrl}/uploads/ads/${file.filename}` };
   }
 }

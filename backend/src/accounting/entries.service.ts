@@ -1,10 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { zonedTimeToUtc } from 'date-fns-tz';
 import { EntriesRepository } from './services/entries.repository';
 import {
   AccEntryStatus as EntryStatus,
   AccPeriodStatus as PeriodStatus,
 } from '@prisma/client';
+import { TenantContext } from 'src/tenancy/tenant-context.interface';
 
 export interface EntryLine {
   account: string;
@@ -29,6 +34,8 @@ export interface Entry {
   totalCredit: number;
   source?: string;
   sourceId?: number;
+  organizationId?: number | null;
+  companyId?: number | null;
 }
 
 @Injectable()
@@ -36,7 +43,7 @@ export class EntriesService {
   constructor(private readonly repo: EntriesRepository) {}
 
   private normalizeInvoiceUrl(value?: string | null): string | undefined {
-    if (typeof value !== "string") {
+    if (typeof value !== 'string') {
       return undefined;
     }
     const trimmed = value.trim();
@@ -47,11 +54,11 @@ export class EntriesService {
     if (!entry) {
       return undefined;
     }
-    const source = (entry as any).source;
-    if (source !== "inventory_entry") {
+    const source = entry.source;
+    if (source !== 'inventory_entry') {
       return undefined;
     }
-    const sourceId = Number((entry as any).sourceId);
+    const sourceId = Number(entry.sourceId);
     return Number.isInteger(sourceId) ? sourceId : undefined;
   }
 
@@ -59,7 +66,7 @@ export class EntriesService {
     entry: any,
     inventoryInvoices?: Map<number, string | undefined>,
   ): string | undefined {
-    const direct = this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined);
+    const direct = this.normalizeInvoiceUrl(entry?.invoiceUrl ?? undefined);
     if (direct) {
       return direct;
     }
@@ -76,170 +83,222 @@ export class EntriesService {
     return p?.status ?? PeriodStatus.OPEN;
   }
 
-  async findAll(params: {
-  period?: string;
-  from?: string;
-  to?: string;
-  tz?: string;
-  page?: number;
-  size?: number;
-}): Promise<{ data: Entry[]; total: number }> {
-  const { period, from, to, tz = 'America/Lima', page = 1, size = 25 } = params;
+  private resolveOrganizationFilter(
+    tenant?: TenantContext | null,
+  ): number | null | undefined {
+    return tenant == null ? undefined : (tenant.organizationId ?? null);
+  }
 
-  // Normaliza YYYY-MM-DD a rango del dia en tz; si viene ISO, se usa tal cual
-  const toDayStart = (d: string | undefined) => (d && d.length === 10 ? `${d}T00:00:00` : d);
-  const toDayEnd = (d: string | undefined) => (d && d.length === 10 ? `${d}T23:59:59.999` : d);
+  private resolveCompanyFilter(
+    tenant?: TenantContext | null,
+  ): number | null | undefined {
+    return tenant == null ? undefined : (tenant.companyId ?? null);
+  }
 
-  const fromIso = toDayStart(from ?? undefined);
-  const toIso = toDayEnd(to ?? from ?? undefined);
+  async findAll(
+    params: {
+      period?: string;
+      from?: string;
+      to?: string;
+      tz?: string;
+      page?: number;
+      size?: number;
+    },
+    tenant?: TenantContext | null,
+  ): Promise<{ data: Entry[]; total: number }> {
+    const {
+      period,
+      from,
+      to,
+      tz = 'America/Lima',
+      page = 1,
+      size = 25,
+    } = params;
 
-  const fromUtc = fromIso ? zonedTimeToUtc(fromIso, tz) : undefined;
-  const toUtc = toIso ? zonedTimeToUtc(toIso, tz) : undefined;
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
 
-  const { data, total } = await this.repo.findAll({
-    period,
-    from: fromUtc,
-    to: toUtc,
-    skip: (page - 1) * size,
-    take: size,
-  });
+    // Normaliza YYYY-MM-DD a rango del dia en tz; si viene ISO, se usa tal cual
+    const toDayStart = (d: string | undefined) =>
+      d && d.length === 10 ? `${d}T00:00:00` : d;
+    const toDayEnd = (d: string | undefined) =>
+      d && d.length === 10 ? `${d}T23:59:59.999` : d;
 
-  const entriesNeedingInvoice = data.filter(
-    (entry) =>
+    const fromIso = toDayStart(from ?? undefined);
+    const toIso = toDayEnd(to ?? from ?? undefined);
+
+    const fromUtc = fromIso ? zonedTimeToUtc(fromIso, tz) : undefined;
+    const toUtc = toIso ? zonedTimeToUtc(toIso, tz) : undefined;
+
+    const { data, total } = await this.repo.findAll({
+      period,
+      from: fromUtc,
+      to: toUtc,
+      skip: (page - 1) * size,
+      take: size,
+      organizationId: organizationFilter,
+      companyId: companyFilter,
+    });
+
+    const entriesNeedingInvoice = data.filter(
+      (entry) =>
+        !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
+        this.getInventorySourceId(entry) !== undefined,
+    );
+
+    const inventorySourceIds = Array.from(
+      new Set(
+        entriesNeedingInvoice
+          .map((entry) => this.getInventorySourceId(entry))
+          .filter(
+            (id): id is number =>
+              typeof id === 'number' && Number.isInteger(id) && id > 0,
+          ),
+      ),
+    );
+
+    const inventoryInvoices =
+      inventorySourceIds.length > 0
+        ? await this.repo.findInventoryPdfUrls(inventorySourceIds)
+        : undefined;
+
+    return {
+      data: data.map((e) => ({
+        id: e.id,
+        period: e.period.name,
+        date: e.date,
+        description: (e as any).description ?? undefined,
+        provider: (e.provider as any)?.name ?? undefined,
+        serie: (e as any).serie ?? undefined,
+        correlativo: (e as any).correlativo ?? undefined,
+        invoiceUrl: this.buildInvoiceUrlFromEntry(e, inventoryInvoices),
+        source: (e as any).source ?? undefined,
+        sourceId: (e as any).sourceId ?? undefined,
+        status: e.status,
+        totalDebit: e.totalDebit,
+        totalCredit: e.totalCredit,
+        organizationId: (e as any).organizationId ?? null,
+        companyId: (e as any).companyId ?? null,
+        lines: e.lines.map((l) => ({
+          account: l.account,
+          description: l.description ?? undefined,
+          debit: Number((l as any).debit ?? 0),
+          credit: Number((l as any).credit ?? 0),
+          quantity: (l as any).quantity ?? undefined,
+        })),
+      })),
+      total,
+    };
+  }
+
+  async findOne(id: number, tenant?: TenantContext | null): Promise<Entry> {
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
+    const entry = await this.repo.findOne(id, {
+      organizationId: organizationFilter,
+      companyId: companyFilter,
+    });
+    if (!entry) {
+      throw new NotFoundException(`Entry ${id} not found`);
+    }
+
+    const sourceId = this.getInventorySourceId(entry);
+    const needsInventoryLookup =
       !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
-      this.getInventorySourceId(entry) !== undefined,
-  );
+      sourceId !== undefined;
+    const inventoryInvoices =
+      needsInventoryLookup && sourceId !== undefined
+        ? await this.repo.findInventoryPdfUrls([sourceId])
+        : undefined;
+    const invoiceUrl = this.buildInvoiceUrlFromEntry(entry, inventoryInvoices);
 
-  const inventorySourceIds = Array.from(
-    new Set(
-      entriesNeedingInvoice
-        .map((entry) => this.getInventorySourceId(entry))
-        .filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0),
-    ),
-  );
-
-  const inventoryInvoices =
-    inventorySourceIds.length > 0
-      ? await this.repo.findInventoryPdfUrls(inventorySourceIds)
-      : undefined;
-
-  return {
-    data: data.map((e) => ({
-      id: e.id,
-      period: e.period.name,
-      date: e.date,
-      description: (e as any).description ?? undefined,
-      provider: (e.provider as any)?.name ?? undefined,
-      serie: (e as any).serie ?? undefined,
-      correlativo: (e as any).correlativo ?? undefined,
-      invoiceUrl: this.buildInvoiceUrlFromEntry(e, inventoryInvoices),
-      source: (e as any).source ?? undefined,
-      sourceId: (e as any).sourceId ?? undefined,
-      status: e.status,
-      totalDebit: e.totalDebit,
-      totalCredit: e.totalCredit,
-      lines: e.lines.map((l) => ({
+    return {
+      id: entry.id,
+      period: entry.period.name,
+      date: entry.date,
+      description: (entry as any).description ?? undefined,
+      provider: (entry.provider as any)?.name ?? undefined,
+      serie: (entry as any).serie ?? undefined,
+      correlativo: (entry as any).correlativo ?? undefined,
+      invoiceUrl,
+      source: (entry as any).source ?? undefined,
+      sourceId: (entry as any).sourceId ?? undefined,
+      status: entry.status,
+      totalDebit: entry.totalDebit,
+      totalCredit: entry.totalCredit,
+      lines: entry.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
         debit: Number((l as any).debit ?? 0),
         credit: Number((l as any).credit ?? 0),
         quantity: (l as any).quantity ?? undefined,
       })),
-    })),
-    total,
-  };
-}
-
-  async findOne(id: number): Promise<Entry> {
-  const entry = await this.repo.findOne(id);
-  if (!entry) {
-    throw new NotFoundException(`Entry ${id} not found`);
+    };
   }
-
-  const sourceId = this.getInventorySourceId(entry);
-  const needsInventoryLookup =
-    !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
-    sourceId !== undefined;
-  const inventoryInvoices =
-    needsInventoryLookup && sourceId !== undefined
-      ? await this.repo.findInventoryPdfUrls([sourceId])
-      : undefined;
-  const invoiceUrl = this.buildInvoiceUrlFromEntry(entry, inventoryInvoices);
-
-  return {
-    id: entry.id,
-    period: entry.period.name,
-    date: entry.date,
-    description: (entry as any).description ?? undefined,
-    provider: (entry.provider as any)?.name ?? undefined,
-    serie: (entry as any).serie ?? undefined,
-    correlativo: (entry as any).correlativo ?? undefined,
-    invoiceUrl,
-    source: (entry as any).source ?? undefined,
-    sourceId: (entry as any).sourceId ?? undefined,
-    status: entry.status,
-    totalDebit: entry.totalDebit,
-    totalCredit: entry.totalCredit,
-    lines: entry.lines.map((l) => ({
-      account: l.account,
-      description: l.description ?? undefined,
-      debit: Number((l as any).debit ?? 0),
-      credit: Number((l as any).credit ?? 0),
-      quantity: (l as any).quantity ?? undefined,
-    })),
-  };
-}
 
   async findByInvoice(
     serie: string,
     correlativo: string,
-): Promise<Entry | null> {
-  const entry = await this.repo.findByInvoice(serie, correlativo);
-  if (!entry) {
-    return null;
+    tenant?: TenantContext | null,
+  ): Promise<Entry | null> {
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
+    const entry = await this.repo.findByInvoice(serie, correlativo, {
+      organizationId: organizationFilter,
+      companyId: companyFilter,
+    });
+    if (!entry) {
+      return null;
+    }
+
+    const sourceId = this.getInventorySourceId(entry);
+    const needsInventoryLookup =
+      !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
+      sourceId !== undefined;
+    const inventoryInvoices =
+      needsInventoryLookup && sourceId !== undefined
+        ? await this.repo.findInventoryPdfUrls([sourceId])
+        : undefined;
+    const invoiceUrl = this.buildInvoiceUrlFromEntry(entry, inventoryInvoices);
+
+    return {
+      id: entry.id,
+      period: entry.period.name,
+      date: entry.date,
+      description: (entry as any).description ?? undefined,
+      provider: (entry.provider as any)?.name ?? undefined,
+      serie: (entry as any).serie ?? undefined,
+      correlativo: (entry as any).correlativo ?? undefined,
+      invoiceUrl,
+      status: entry.status,
+      totalDebit: entry.totalDebit,
+      totalCredit: entry.totalCredit,
+      organizationId: (entry as any).organizationId ?? null,
+      companyId: (entry as any).companyId ?? null,
+      lines: entry.lines.map((l) => ({
+        account: l.account,
+        description: l.description ?? undefined,
+        debit: Number((l as any).debit ?? 0),
+        credit: Number((l as any).credit ?? 0),
+        quantity: (l as any).quantity ?? undefined,
+      })),
+    };
   }
 
-  const sourceId = this.getInventorySourceId(entry);
-  const needsInventoryLookup =
-    !this.normalizeInvoiceUrl((entry as any)?.invoiceUrl ?? undefined) &&
-    sourceId !== undefined;
-  const inventoryInvoices =
-    needsInventoryLookup && sourceId !== undefined
-      ? await this.repo.findInventoryPdfUrls([sourceId])
-      : undefined;
-  const invoiceUrl = this.buildInvoiceUrlFromEntry(entry, inventoryInvoices);
-
-  return {
-    id: entry.id,
-    period: entry.period.name,
-    date: entry.date,
-    description: (entry as any).description ?? undefined,
-    provider: (entry.provider as any)?.name ?? undefined,
-    serie: (entry as any).serie ?? undefined,
-    correlativo: (entry as any).correlativo ?? undefined,
-    invoiceUrl,
-    status: entry.status,
-    totalDebit: entry.totalDebit,
-    totalCredit: entry.totalCredit,
-    lines: entry.lines.map((l) => ({
-      account: l.account,
-      description: l.description ?? undefined,
-      debit: Number((l as any).debit ?? 0),
-      credit: Number((l as any).credit ?? 0),
-      quantity: (l as any).quantity ?? undefined,
-    })),
-  };
-}
-
-  async createDraft(data: {
-    period: string;
-    date: Date;
-    lines: EntryLine[];
-    providerId?: number;
-    serie?: string;
-    correlativo?: string;
-    invoiceUrl?: string;
-  }): Promise<Entry> {
+  async createDraft(
+    data: {
+      period: string;
+      date: Date;
+      lines: EntryLine[];
+      providerId?: number;
+      serie?: string;
+      correlativo?: string;
+      invoiceUrl?: string;
+    },
+    tenant?: TenantContext | null,
+  ): Promise<Entry> {
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
     const period = await this.repo.ensurePeriod(data.period);
     if (period.status === PeriodStatus.LOCKED) {
       throw new BadRequestException('Period is locked');
@@ -258,10 +317,13 @@ export class EntriesService {
       serie: data.serie,
       correlativo: data.correlativo,
       invoiceUrl: data.invoiceUrl,
-      lines: data.lines.map(line => ({
+      lines: data.lines.map((line) => ({
         ...line,
-        quantity: line.quantity ?? undefined
+        quantity: line.quantity ?? undefined,
       })),
+      organizationId:
+        organizationFilter !== undefined ? organizationFilter : undefined,
+      companyId: companyFilter !== undefined ? companyFilter : undefined,
     });
     return {
       id: entry.id,
@@ -275,6 +337,8 @@ export class EntriesService {
       status: entry.status,
       totalDebit: entry.totalDebit,
       totalCredit: entry.totalCredit,
+      organizationId: (entry as any).organizationId ?? null,
+      companyId: (entry as any).companyId ?? null,
       lines: entry.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
@@ -285,8 +349,13 @@ export class EntriesService {
     };
   }
 
-  async post(id: number): Promise<Entry> {
-    const entry = await this.repo.findOne(id);
+  async post(id: number, tenant?: TenantContext | null): Promise<Entry> {
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
+    const entry = await this.repo.findOne(id, {
+      organizationId: organizationFilter,
+      companyId: companyFilter,
+    });
     if (!entry) {
       throw new NotFoundException(`Entry ${id} not found`);
     }
@@ -310,6 +379,8 @@ export class EntriesService {
       status: updated.status,
       totalDebit: updated.totalDebit,
       totalCredit: updated.totalCredit,
+      organizationId: (updated as any).organizationId ?? null,
+      companyId: (updated as any).companyId ?? null,
       lines: updated.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,
@@ -320,8 +391,13 @@ export class EntriesService {
     };
   }
 
-  async void(id: number): Promise<Entry> {
-    const entry = await this.repo.findOne(id);
+  async void(id: number, tenant?: TenantContext | null): Promise<Entry> {
+    const organizationFilter = this.resolveOrganizationFilter(tenant);
+    const companyFilter = this.resolveCompanyFilter(tenant);
+    const entry = await this.repo.findOne(id, {
+      organizationId: organizationFilter,
+      companyId: companyFilter,
+    });
     if (!entry) {
       throw new NotFoundException(`Entry ${id} not found`);
     }
@@ -345,6 +421,8 @@ export class EntriesService {
       status: updated.status,
       totalDebit: updated.totalDebit,
       totalCredit: updated.totalCredit,
+      organizationId: (updated as any).organizationId ?? null,
+      companyId: (updated as any).companyId ?? null,
       lines: updated.lines.map((l) => ({
         account: l.account,
         description: l.description ?? undefined,

@@ -12,7 +12,9 @@ export class AuthService {
   async refreshToken(token: string) {
     try {
       const payload = this.jwtService.verify(token);
-      const user = await this.prismaService.user.findUnique({ where: { id: payload.sub } });
+      const user = await this.prismaService.user.findUnique({
+        where: { id: payload.sub },
+      });
       if (!user || user.tokenVersion !== payload.tokenVersion) {
         throw new UnauthorizedException('Invalid refresh token');
       }

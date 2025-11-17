@@ -35,9 +35,20 @@ async function getBrandLogos(): Promise<Record<string, string>> {
   return cachedBrandLogos;
 }
 
-async function getActiveCoverPath(): Promise<string | null> {
+async function getActiveCoverPath(options: {
+  organizationId?: number | null;
+  companyId?: number | null;
+} = {}): Promise<string | null> {
+  const { organizationId, companyId } = options;
+  if (organizationId == null) {
+    return null;
+  }
   const cover = await prisma.catalogCover.findFirst({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      organizationId,
+      companyId: companyId ?? null,
+    },
     orderBy: { createdAt: 'desc' },
   });
   if (!cover) {
@@ -244,10 +255,11 @@ async function itemsToPdf(items: CatalogItem[], options: { coverImagePath?: stri
 
 export async function exportCatalogPdf(
   filters: Record<string, any>,
+  options: { organizationId?: number | null; companyId?: number | null } = {},
 ): Promise<Buffer> {
   const [items, coverImagePath] = await Promise.all([
-    getCatalogItems(filters),
-    getActiveCoverPath(),
+    getCatalogItems(filters, options),
+    getActiveCoverPath(options),
   ]);
   return itemsToPdf(items, { coverImagePath });
 }

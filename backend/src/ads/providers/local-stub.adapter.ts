@@ -1,6 +1,9 @@
-import { ImageGenerationProvider, GenerationRequest, GenerationResult } from "./interfaces";
-import { RateLimiter } from "./rate-limiter";
-
+import {
+  ImageGenerationProvider,
+  GenerationRequest,
+  GenerationResult,
+} from './interfaces';
+import { RateLimiter } from './rate-limiter';
 
 export class LocalStubAdapter implements ImageGenerationProvider {
   private limiter: RateLimiter;

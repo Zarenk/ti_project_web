@@ -9,10 +9,13 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { ConfigService } from '@nestjs/config';
 import { SimpleCookieMiddleware } from './simple-cookie.middleware';
 import { ActivityModule } from 'src/activity/activity.module';
+import { GlobalSuperAdminGuard } from 'src/tenancy/global-super-admin.guard';
+import { TenancyModule } from 'src/tenancy/tenancy.module';
 
 @Module({
   imports: [
     ActivityModule,
+    TenancyModule,
     PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -23,7 +26,13 @@ import { ActivityModule } from 'src/activity/activity.module';
     }),
   ],
   controllers: [UsersController],
-  providers: [UsersService, PrismaService, JwtStrategy, JwtAuthGuard],
+  providers: [
+    UsersService,
+    PrismaService,
+    JwtStrategy,
+    JwtAuthGuard,
+    GlobalSuperAdminGuard,
+  ],
   exports: [JwtAuthGuard],
 })
 export class UsersModule implements NestModule {

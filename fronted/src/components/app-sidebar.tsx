@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   AudioWaveform,
+  Building2,
   Banknote,
   BookOpen,
   Bot,
@@ -56,6 +57,7 @@ type NavSubItem = {
   url: string
   permission?: ModulePermissionKey
   badge?: number
+  requiredRoles?: string[]
 }
 
 type NavItem = {
@@ -64,6 +66,7 @@ type NavItem = {
   icon?: LucideIcon
   isActive?: boolean
   permission?: ModulePermissionKey
+  requiredRoles?: string[]
   items?: NavSubItem[]
 }
 
@@ -165,17 +168,17 @@ const data: SidebarData = {
       url: "/dashboard/providers",
       icon: Globe,
       isActive: true,
-      permission: "purchases",
+      permission: "providers",
       items: [
         {
           title: "Nuevo Proveedor",
           url: "/dashboard/providers/new",
-          permission: "purchases",
+          permission: "providers",
         },
         {
           title: "Ver Proveedores",
           url: "/dashboard/providers",
-          permission: "purchases",
+          permission: "providers",
         },
       ],
     },
@@ -198,6 +201,39 @@ const data: SidebarData = {
           title: "Ver Usuarios",
           url: "/dashboard/users",
           permission: "settings",
+        },
+        {
+          title: "Super usuarios",
+          url: "/dashboard/super-users",
+          permission: "settings",
+          requiredRoles: ["SUPER_ADMIN_GLOBAL"],
+        },
+      ],
+    },
+    {
+      title: "Organizaciones",
+      url: "#",
+      icon: Building2,
+      permission: "settings",
+      requiredRoles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+      items: [
+        {
+          title: "Nueva Organizacion",
+          url: "/dashboard/tenancy/new",
+          permission: "settings",
+          requiredRoles: ["SUPER_ADMIN_GLOBAL"],
+        },
+        {
+          title: "Ver Organizaciones",
+          url: "/dashboard/tenancy",
+          permission: "settings",
+          requiredRoles: ["SUPER_ADMIN_GLOBAL"],
+        },
+        {
+          title: "Empresas",
+          url: "/dashboard/tenancy/companies",
+          permission: "settings",
+          requiredRoles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
         },
       ],
     },
@@ -238,13 +274,13 @@ const data: SidebarData = {
       ],
     },
     {
-      title: "Catálogo",
+      title: "Catalogo",
       url: "/dashboard/catalog",
       icon: Link,
       permission: "store",
       items: [
         {
-          title: "Exportar Catálogo",
+          title: "Exportar Catalogo",
           url: "/dashboard/catalog",
           permission: "store",
         },
@@ -332,34 +368,46 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { totalUnread } = useMessages()
   const { settings } = useSiteSettings()
   const checkPermission = useModulePermission()
+  const normalizedRoleValue = role?.toString().trim().toUpperCase() ?? ""
 
   const roleLabel = React.useMemo(() => {
-    if (!role) {
+    if (!normalizedRoleValue) {
       return "Usuario"
     }
 
-    const normalized = role.toString().trim().toUpperCase()
     const roleMap: Record<string, string> = {
+      SUPER_ADMIN_GLOBAL: "Super Admin Global",
+      SUPER_ADMIN_ORG: "Super Administrador",
       ADMIN: "Administrador",
       EMPLOYEE: "Empleado",
     }
 
-    if (roleMap[normalized]) {
-      return roleMap[normalized]
+    if (roleMap[normalizedRoleValue]) {
+      return roleMap[normalizedRoleValue]
     }
 
-    const formatted = normalized
+    const formatted = normalizedRoleValue
       .toLowerCase()
       .split(/[_\s]+/)
       .filter(Boolean)
       .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
       .join(" ")
 
-    return formatted || normalized.charAt(0) + normalized.slice(1).toLowerCase()
-  }, [role])
+    return (
+      formatted ||
+      normalizedRoleValue.charAt(0) +
+        normalizedRoleValue.slice(1).toLowerCase()
+    )
+  }, [normalizedRoleValue])
 
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
-  const canAccessAccounting = useRBAC(["admin", "accountant", "auditor"])
+  const canAccessAccounting = useRBAC([
+    "admin",
+    "accountant",
+    "auditor",
+    "SUPER_ADMIN_GLOBAL",
+    "SUPER_ADMIN_ORG",
+  ])
 
   const adsEnabled = useFeatureFlag("ads")
   const canManageAds = useRBAC(["admin", "marketing"])
@@ -388,11 +436,41 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   const filteredNav = data.navMain
-    .filter((item) => checkPermission(item.permission))
+    .filter((item) => {
+      if (!checkPermission(item.permission)) {
+        return false
+      }
+
+      if (item.requiredRoles?.length) {
+        if (!normalizedRoleValue) {
+          return false
+        }
+
+        return item.requiredRoles.some(
+          (required) => required.toUpperCase() === normalizedRoleValue,
+        )
+      }
+
+      return true
+    })
     .map((item) => {
-      const items = item.items?.filter((subItem) =>
-        checkPermission(subItem.permission ?? item.permission)
-      )
+      const items = item.items?.filter((subItem) => {
+        if (!checkPermission(subItem.permission ?? item.permission)) {
+          return false
+        }
+
+        if (subItem.requiredRoles?.length) {
+          if (!normalizedRoleValue) {
+            return false
+          }
+
+          return subItem.requiredRoles.some(
+            (required) => required.toUpperCase() === normalizedRoleValue,
+          )
+        }
+
+        return true
+      })
 
       return {
         ...item,
@@ -429,7 +507,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           { title: "Asientos", url: "/dashboard/accounting/entries", permission: "accounting" as const },
           { title: "Libro Mayor", url: "/dashboard/accounting/reports/ledger", permission: "accounting" as const },
           {
-            title: "Balance de Comprobación",
+            title: "Balance de Comprobacion",
             url: "/dashboard/accounting/reports/trial-balance",
             permission: "accounting" as const,
           },

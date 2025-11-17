@@ -1,9 +1,11 @@
 import {
-  Injectable,
-  UnauthorizedException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  Injectable,
   InternalServerErrorException,
+  NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole, AuditAction, User } from '@prisma/client';
@@ -14,6 +16,9 @@ import { Prisma } from '@prisma/client';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { Request } from 'express';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { TenantContext } from 'src/tenancy/tenant-context.interface';
 
 @Injectable()
 export class UsersService {
@@ -46,7 +51,9 @@ export class UsersService {
     }
 
     if (user.lockUntil && user.lockUntil > now) {
-      const minutesRemaining = Math.ceil((user.lockUntil.getTime() - now.getTime()) / 60000);
+      const minutesRemaining = Math.ceil(
+        (user.lockUntil.getTime() - now.getTime()) / 60000,
+      );
       throw new UnauthorizedException(
         `Tu cuenta está temporalmente bloqueada. Intenta nuevamente en ${minutesRemaining} minuto(s).`,
       );
@@ -59,7 +66,11 @@ export class UsersService {
       throw new UnauthorizedException(message);
     }
 
-    if (user.failedLoginAttempts !== 0 || user.lockUntil || user.isPermanentlyLocked) {
+    if (
+      user.failedLoginAttempts !== 0 ||
+      user.lockUntil ||
+      user.isPermanentlyLocked
+    ) {
       user = await this.resetLoginState(user, req);
     }
 
@@ -105,10 +116,12 @@ export class UsersService {
         'Tu cuenta ha sido bloqueada por múltiples intentos fallidos. Comunícate con soporte para restaurar el acceso.';
     } else if (attempts === 5) {
       lockUntil = new Date(now.getTime() + 60 * 60 * 1000);
-      message = 'Tu cuenta se ha bloqueado por 1 hora debido a múltiples intentos fallidos.';
+      message =
+        'Tu cuenta se ha bloqueado por 1 hora debido a múltiples intentos fallidos.';
     } else if (attempts === 4) {
       lockUntil = new Date(now.getTime() + 10 * 60 * 1000);
-      message = 'Tu cuenta se ha bloqueado temporalmente por 10 minutos debido a intentos fallidos consecutivos.';
+      message =
+        'Tu cuenta se ha bloqueado temporalmente por 10 minutos debido a intentos fallidos consecutivos.';
     } else {
       const remainingBeforeTempLock = Math.max(0, 4 - attempts);
       if (remainingBeforeTempLock > 0) {
@@ -127,8 +140,8 @@ export class UsersService {
     const summary = isPermanentlyLocked
       ? `La cuenta ${updatedUser.email} se bloqueó de forma indefinida tras ${attempts} intentos fallidos.`
       : lockUntil
-      ? `La cuenta ${updatedUser.email} se bloqueó hasta ${lockUntil.toISOString()} tras ${attempts} intentos fallidos.`
-      : `Intento fallido ${attempts} para la cuenta ${updatedUser.email}.`;
+        ? `La cuenta ${updatedUser.email} se bloqueó hasta ${lockUntil.toISOString()} tras ${attempts} intentos fallidos.`
+        : `Intento fallido ${attempts} para la cuenta ${updatedUser.email}.`;
 
     await this.activityService.log(
       {
@@ -144,7 +157,7 @@ export class UsersService {
 
     return message;
   }
-  
+
   async login(user: any, req?: Request) {
     const payload = {
       username: user.username,
@@ -181,15 +194,32 @@ export class UsersService {
     return { message: 'Logged out' };
   }
 
-  async register(data: { email: string; username?: string; password: string; role: string; status?: string }) {
+  async register(data: {
+    email: string;
+    username?: string;
+    password: string;
+    role: string;
+    status?: string;
+    organizationId?: number | null;
+  }) {
+    logOrganizationContext({
+      service: UsersService.name,
+      operation: 'register',
+      organizationId: data.organizationId,
+      metadata: { role: data.role },
+    });
     const username = data.username || data.email.split('@')[0];
 
-    const existingEmail = await this.prismaService.user.findUnique({ where: { email: data.email } });
+    const existingEmail = await this.prismaService.user.findUnique({
+      where: { email: data.email },
+    });
     if (existingEmail) {
       throw new BadRequestException('El correo ya está registrado');
     }
 
-    const existingUsername = await this.prismaService.user.findUnique({ where: { username } });
+    const existingUsername = await this.prismaService.user.findUnique({
+      where: { username },
+    });
     if (existingUsername) {
       throw new BadRequestException('El nombre de usuario ya está registrado');
     }
@@ -204,6 +234,7 @@ export class UsersService {
           password: hashedPassword,
           role: data.role as UserRole,
           status: data.status ?? 'ACTIVO',
+          organizationId: data.organizationId ?? null,
         },
       });
 
@@ -216,9 +247,11 @@ export class UsersService {
         summary: `User ${user.email} registered`,
       });
       return user;
-
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException('El usuario ya existe');
       }
       console.error('Error en el backend:', error);
@@ -226,16 +259,37 @@ export class UsersService {
     }
   }
 
-  async publicRegister(data: { email: string; username?: string; password: string; name: string; image?: string | null; type?: string | null; typeNumber?: string | null }) {
+  async publicRegister(data: {
+    email: string;
+    username?: string;
+    password: string;
+    name: string;
+    image?: string | null;
+    type?: string | null;
+    typeNumber?: string | null;
+    organizationId?: number | null;
+  }) {
+    logOrganizationContext({
+      service: UsersService.name,
+      operation: 'publicRegister',
+      organizationId: data.organizationId,
+    });
     const user = await this.register({
       email: data.email,
       username: data.username,
       password: data.password,
       role: 'CLIENT',
       status: 'ACTIVO',
+      organizationId: data.organizationId,
     });
 
     try {
+      logOrganizationContext({
+        service: UsersService.name,
+        operation: 'publicRegister.createClient',
+        organizationId: data.organizationId,
+        metadata: { userId: user.id },
+      });
       await this.prismaService.client.create({
         data: {
           name: data.name,
@@ -244,12 +298,16 @@ export class UsersService {
           type: data.type ?? null,
           typeNumber: data.typeNumber ?? null,
           email: data.email,
+          organizationId: data.organizationId ?? null,
         },
       });
     } catch (error) {
       // Si falla la creación del cliente, eliminamos el usuario recién creado
       await this.prismaService.user.delete({ where: { id: user.id } });
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException('Ya existe un cliente con esos datos');
       }
       console.error('Error en el backend:', error);
@@ -291,11 +349,45 @@ export class UsersService {
     });
   }
 
-  findAll() {
-    return this.prismaService.user.findMany()
+  findAll(search?: string, organizationId?: number | null) {
+    const where: Prisma.UserWhereInput = {};
+
+    if (search && search.trim().length > 0) {
+      where.OR = [
+        {
+          username: {
+            contains: search.trim(),
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
+        {
+          email: {
+            contains: search.trim(),
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
+      ];
+    }
+
+    if (organizationId !== undefined) {
+      where.organizationId = organizationId ?? null;
+    }
+
+    return this.prismaService.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async update(id: number, data: UpdateUserDto) {
+    if (data.organizationId !== undefined) {
+      logOrganizationContext({
+        service: UsersService.name,
+        operation: 'update',
+        organizationId: data.organizationId,
+        metadata: { userId: id },
+      });
+    }
     if (data.email) {
       const existing = await this.prismaService.user.findUnique({
         where: { email: data.email },
@@ -310,7 +402,9 @@ export class UsersService {
         where: { username: data.username },
       });
       if (existing && existing.id !== id) {
-        throw new BadRequestException('El nombre de usuario ya está registrado');
+        throw new BadRequestException(
+          'El nombre de usuario ya está registrado',
+        );
       }
     }
 
@@ -331,16 +425,41 @@ export class UsersService {
 
   async updateProfile(id: number, data: UpdateProfileDto) {
     const { phone, image, ...userData } = data;
+    if (userData.organizationId !== undefined) {
+      logOrganizationContext({
+        service: UsersService.name,
+        operation: 'updateProfile',
+        organizationId: userData.organizationId,
+        metadata: { userId: id },
+      });
+    }
     const updated = await this.update(id, userData);
 
-    if (phone !== undefined || image !== undefined) {
+    if (
+      phone !== undefined ||
+      image !== undefined ||
+      updated.organizationId !== undefined
+    ) {
+      logOrganizationContext({
+        service: UsersService.name,
+        operation: 'updateProfile.syncClient',
+        organizationId: updated.organizationId,
+        metadata: { userId: id },
+      });
       const existingClient = await this.prismaService.client.findUnique({
         where: { userId: id },
       });
 
-      const clientData: { phone?: string | null; image?: string | null; name?: string; email?: string } = {};
+      const clientData: {
+        phone?: string | null;
+        image?: string | null;
+        name?: string;
+        email?: string;
+        organizationId?: number | null;
+      } = {};
       if (phone !== undefined) clientData.phone = phone;
       if (image !== undefined) clientData.image = image;
+      clientData.organizationId = updated.organizationId ?? null;
 
       if (existingClient) {
         await this.prismaService.client.update({
@@ -371,7 +490,11 @@ export class UsersService {
     return updated;
   }
 
-  async changePassword(id: number, currentPassword: string, newPassword: string) {
+  async changePassword(
+    id: number,
+    currentPassword: string,
+    newPassword: string,
+  ) {
     const user = await this.prismaService.user.findUnique({ where: { id } });
     if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
       throw new UnauthorizedException('Contraseña actual incorrecta');
@@ -391,7 +514,102 @@ export class UsersService {
       action: AuditAction.UPDATED,
       summary: `User ${user.email} changed password`,
     });
-    
+
     return { message: 'Password updated successfully' };
+  }
+
+  async updateUserRoleAndStatus(
+    userId: number,
+    dto: UpdateUserRoleDto,
+    tenant: TenantContext | null,
+    actor: { actorId: number | null; actorEmail: string | null },
+  ) {
+    if (!dto.role && !dto.status) {
+      throw new BadRequestException(
+        'Debes proporcionar al menos un campo para actualizar.',
+      );
+    }
+
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    const isGlobalAdmin = tenant?.isGlobalSuperAdmin ?? false;
+    const isOrgAdmin = tenant?.isOrganizationSuperAdmin ?? false;
+
+    if (!isGlobalAdmin) {
+      if (!isOrgAdmin) {
+        throw new ForbiddenException(
+          'No cuentas con permisos para actualizar usuarios.',
+        );
+      }
+
+      if (
+        tenant?.organizationId == null ||
+        user.organizationId !== tenant.organizationId
+      ) {
+        throw new ForbiddenException(
+          'Solo puedes actualizar usuarios de tu organizacion.',
+        );
+      }
+
+      if (dto.role === UserRole.SUPER_ADMIN_GLOBAL) {
+        throw new ForbiddenException(
+          'No puedes asignar el rol de super administrador global.',
+        );
+      }
+    }
+
+    if (
+      dto.role &&
+      dto.role !== UserRole.ADMIN &&
+      dto.role !== UserRole.EMPLOYEE
+    ) {
+      throw new BadRequestException(
+        'Solo se permiten los roles Administrador o Empleado.',
+      );
+    }
+
+    const updatePayload: Prisma.UserUpdateInput = {};
+    if (dto.role) {
+      updatePayload.role = dto.role;
+    }
+    if (dto.status) {
+      updatePayload.status = dto.status;
+    }
+
+    const updated = await this.prismaService.user.update({
+      where: { id: userId },
+      data: updatePayload,
+    });
+
+    await this.activityService.log(
+      {
+        actorId: actor.actorId ?? undefined,
+        actorEmail: actor.actorEmail ?? undefined,
+        entityType: 'User',
+        entityId: userId.toString(),
+        action: AuditAction.UPDATED,
+        summary: `Actualización de rol/estado para ${updated.email}`,
+        diff: {
+          before: { role: user.role, status: user.status },
+          after: { role: updated.role, status: updated.status },
+        } as any,
+      },
+      undefined,
+    );
+
+    return {
+      id: updated.id,
+      email: updated.email,
+      username: updated.username,
+      role: updated.role,
+      status: updated.status,
+      createdAt: updated.createdAt,
+    };
   }
 }

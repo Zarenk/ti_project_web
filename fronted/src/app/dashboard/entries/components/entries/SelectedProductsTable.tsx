@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronsUpDown, X } from "lucide-react"
 import { EditSeriesModal } from "../EditSeriesModal"
-import { useState } from "react"
+import { useState, type MouseEvent, useCallback, useEffect, useMemo, useRef } from "react"
 import { MobileProductModal } from "../MobileProductModal"
 import { cn } from "@/lib/utils"
 
@@ -56,6 +56,71 @@ export const SelectedProductsTable = ({
   removeProduct,
   categories,
 }: Props) => {
+
+  const NAME_COLUMN_MIN_WIDTH = 120
+  const NAME_COLUMN_MAX_WIDTH = 420
+  const [nameColumnWidth, setNameColumnWidth] = useState<number>(140)
+  const tableContainerRef = useRef<HTMLDivElement | null>(null)
+  const nameColumnResizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const nameColumnDraftWidthRef = useRef<number>(nameColumnWidth)
+
+  useEffect(() => {
+    nameColumnDraftWidthRef.current = nameColumnWidth
+    if (tableContainerRef.current) {
+      tableContainerRef.current.style.setProperty('--entry-name-column-width', `${nameColumnWidth}px`)
+    }
+  }, [nameColumnWidth])
+
+  const handleNameColumnMouseMove = useCallback((event: globalThis.MouseEvent) => {
+    if (!nameColumnResizeStateRef.current) return
+    const delta = event.clientX - nameColumnResizeStateRef.current.startX
+    const nextWidth = Math.min(
+      NAME_COLUMN_MAX_WIDTH,
+      Math.max(NAME_COLUMN_MIN_WIDTH, nameColumnResizeStateRef.current.startWidth + delta),
+    )
+    nameColumnDraftWidthRef.current = nextWidth
+    tableContainerRef.current?.style.setProperty('--entry-name-column-width', `${nextWidth}px`)
+  }, [])
+
+  const stopNameColumnResize = useCallback(() => {
+    if (!nameColumnResizeStateRef.current) return
+    nameColumnResizeStateRef.current = null
+    document.body.style.cursor = ''
+    document.removeEventListener('mousemove', handleNameColumnMouseMove)
+    document.removeEventListener('mouseup', stopNameColumnResize)
+    setNameColumnWidth(nameColumnDraftWidthRef.current)
+  }, [handleNameColumnMouseMove])
+
+  const startNameColumnResize = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault()
+      nameColumnResizeStateRef.current = {
+        startX: event.clientX,
+        startWidth: nameColumnDraftWidthRef.current,
+      }
+      document.body.style.cursor = 'col-resize'
+      document.addEventListener('mousemove', handleNameColumnMouseMove)
+      document.addEventListener('mouseup', stopNameColumnResize)
+    },
+    [handleNameColumnMouseMove, stopNameColumnResize],
+  )
+
+  useEffect(() => {
+    return () => {
+      document.body.style.cursor = ''
+      document.removeEventListener('mousemove', handleNameColumnMouseMove)
+      document.removeEventListener('mouseup', stopNameColumnResize)
+      nameColumnResizeStateRef.current = null
+    }
+  }, [handleNameColumnMouseMove, stopNameColumnResize])
+
+  const nameColumnWidthStyle = useMemo(
+    () => ({
+      width: `var(--entry-name-column-width, ${nameColumnWidth}px)`,
+      maxWidth: `var(--entry-name-column-width, ${nameColumnWidth}px)`,
+    }),
+    [nameColumnWidth],
+  )
 
   const [activeProductIndex, setActiveProductIndex] = useState<number | null>(null)
   const [categoryPopoverIndex, setCategoryPopoverIndex] = useState<number | null>(null)
@@ -122,21 +187,50 @@ export const SelectedProductsTable = ({
 
   const activeProduct = activeProductIndex !== null ? selectedProducts[activeProductIndex] ?? null : null
 
+  const openProductDetails = (index: number) => {
+    setCategoryPopoverIndex(null)
+    setActiveProductIndex(index)
+  }
+
+  const handleRowDoubleClick = (
+    event: MouseEvent<HTMLTableRowElement>,
+    index: number,
+  ) => {
+    const target = event.target as Element | null
+    if (
+      target?.closest(
+        "button, input, select, textarea, a[href], [role='button'], [contenteditable='true']",
+      )
+    ) {
+      return
+    }
+    openProductDetails(index)
+  }
+
   return (
-    <div className='border px-1 sm:px-2 overflow-x-auto max-w-full'>
-      <Table className={cn("w-full min-w-[340px] sm:min-w-[640px] text-[11px] sm:text-xs table-fixed")}>
+    <div ref={tableContainerRef} className='border px-1 sm:px-2 overflow-x-auto max-w-full'>
+      <Table className={cn("w-full min-w-[340px] sm:min-w-[640px] text-[11px] sm:text-xs table-auto")}>
         <TableHeader>
           <TableRow>
             {/* Nombre: Compacto, pero siempre visible. Con truncate es clave. */}
-            <TableHead className="text-left w-[120px] truncate py-1.5 sm:py-2">
-              <button
-                type="button"
-                onClick={() => sortProducts("name")}
-                className="flex items-center gap-1"
-              >
-                Nombre
-                {renderSortIcon("name")}
-              </button>
+            <TableHead className="relative text-left truncate py-1.5 sm:py-2" style={nameColumnWidthStyle}>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => sortProducts("name")}
+                  className="flex flex-1 items-center gap-1 truncate text-left"
+                >
+                  Nombre
+                  {renderSortIcon("name")}
+                </button>
+                <span
+                  role="separator"
+                  aria-orientation="horizontal"
+                  aria-label="Ajustar ancho de la columna Nombre"
+                  className="ml-1 inline-flex h-4 w-1 cursor-col-resize select-none rounded bg-muted-foreground/50 transition-colors hover:bg-muted-foreground"
+                  onMouseDown={startNameColumnResize}
+                />
+              </div>
             </TableHead>
             {/* Categoria: Oculta en XS, aparece en SM, con ancho reducido. */}
             <TableHead className="text-left w-[70px] sm:w-[110px] truncate hidden sm:table-cell py-1.5 sm:py-2">
@@ -212,10 +306,19 @@ export const SelectedProductsTable = ({
           {selectedProducts.map((product, index) => (
             <TableRow
               key={product.id}
-              onClick={() => window.innerWidth < 640 && setActiveProductIndex(index)} // abre el modal
+              onClick={() => {
+                if (typeof window !== "undefined" && window.innerWidth < 640) {
+                  openProductDetails(index)
+                }
+              }}
+              onDoubleClick={(event) => handleRowDoubleClick(event, index)}
               className="cursor-pointer sm:cursor-default"
             >
-              <TableCell className={cn("w-[120px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2")}>
+              <TableCell
+                className={cn("truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2")}
+                style={nameColumnWidthStyle}
+                title={product.name}
+              >
                 {product.name}
               </TableCell>
               <TableCell

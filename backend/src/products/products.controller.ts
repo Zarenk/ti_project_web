@@ -37,7 +37,7 @@ export class ProductsController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
   @ApiOperation({ summary: 'Create a product' }) // Swagger
   async create(
     @Body() createProductDto: CreateProductDto,
@@ -63,18 +63,18 @@ export class ProductsController {
   async verifyOrCreateProducts(
     @Body()
     products: {
-      name: string
-      price: number
-      description?: string
-      brandId?: number
-      categoryId?: number
+      name: string;
+      price: number;
+      description?: string;
+      brandId?: number;
+      categoryId?: number;
     }[],
   ) {
     return this.productsService.verifyOrCreateProducts(products);
   }
 
   @Post('upload-image')
-    @UseInterceptors(
+  @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
         destination: './uploads/products',
@@ -83,7 +83,7 @@ export class ProductsController {
           cb(null, `${unique}${extname(file.originalname)}`);
         },
       }),
-    fileFilter: (req, file, cb) => {
+      fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
           return cb(
             new BadRequestException('Solo se permiten imagenes'),
@@ -104,7 +104,7 @@ export class ProductsController {
   }
 
   @Get()
-  @ApiResponse({status: 200, description: 'Return all products'}) // Swagger 
+  @ApiResponse({ status: 200, description: 'Return all products' }) // Swagger
   findAll() {
     return this.productsService.findAll();
   }
@@ -113,7 +113,7 @@ export class ProductsController {
   findOne(@Param('id') id: string) {
     const numericId = parseInt(id, 10); // Convierte el ID a un número entero
     if (isNaN(numericId)) {
-    throw new BadRequestException('El ID debe ser un número válido.');
+      throw new BadRequestException('El ID debe ser un número válido.');
     }
     return this.productsService.findOne(numericId);
   }
@@ -130,9 +130,12 @@ export class ProductsController {
     const updated = await this.productsService.update(+id, updateProductDto);
     const diff: any = { before: {}, after: {} };
     for (const key of Object.keys(updated)) {
-      if (JSON.stringify((before as any)[key]) !== JSON.stringify((updated as any)[key])) {
-        (diff.before as any)[key] = (before as any)[key];
-        (diff.after as any)[key] = (updated as any)[key];
+      if (
+        JSON.stringify((before as any)[key]) !==
+        JSON.stringify((updated as any)[key])
+      ) {
+        diff.before[key] = (before as any)[key];
+        diff.after[key] = (updated as any)[key];
       }
     }
     await this.activityService.log(
@@ -156,9 +159,10 @@ export class ProductsController {
   @ApiOperation({ summary: 'Update multiple products with the same values' }) // Swagger
   @ApiResponse({ status: 200, description: 'Products updated successfully' }) // Swagger
   async updateMany(@Body() updateProductsDto: UpdateProductDto[]) {
-
     if (!Array.isArray(updateProductsDto) || updateProductsDto.length === 0) {
-      throw new BadRequestException('No se proporcionaron productos para actualizar.');
+      throw new BadRequestException(
+        'No se proporcionaron productos para actualizar.',
+      );
     }
 
     // Delegar la lógica al servicio
@@ -169,16 +173,22 @@ export class ProductsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async remove(@Param('id') id: string, @Req() req: Request) {
-    const removed = await this.productsService.remove(+id);
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) {
+      throw new BadRequestException('El ID debe ser un número válido.');
+    }
+
+    const before = await this.productsService.findOne(numericId);
+    const removed = await this.productsService.remove(numericId);
     await this.activityService.log(
       {
         actorId: (req as any)?.user?.userId,
         actorEmail: (req as any)?.user?.username,
         entityType: 'Product',
-        entityId: id,
+        entityId: numericId.toString(),
         action: AuditAction.DELETED,
-        summary: `Producto ${removed.name} eliminado`,
-        diff: { before: removed } as any,
+        summary: `Producto ${before?.name ?? numericId} eliminado`,
+        diff: { before } as any,
       },
       req,
     );
@@ -224,9 +234,14 @@ export class ProductsController {
     }
 
     if (!categoryId || isNaN(categoryId)) {
-      throw new BadRequestException('El ID de la categoría debe ser un número válido.');
+      throw new BadRequestException(
+        'El ID de la categoría debe ser un número válido.',
+      );
     }
 
-    return this.productsService.update(numericId, { id: numericId, categoryId });
+    return this.productsService.update(numericId, {
+      id: numericId,
+      categoryId,
+    });
   }
 }

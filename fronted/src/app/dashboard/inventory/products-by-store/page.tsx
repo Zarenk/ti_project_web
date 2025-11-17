@@ -18,8 +18,11 @@ import { Button } from "@/components/ui/button";
 import { cn, formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useSiteSettings } from "@/context/site-settings-context";
+import { useAuth } from "@/context/auth-context";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getBrands } from "../../brands/brands.api";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 
 type SortKey =
   | "product"
@@ -30,9 +33,63 @@ type SortKey =
   | "createdAt"
   | "lastSaleAt";
 
+type StoreSelection = number | "all" | null;
+
+const selectMostRecentSalesDetails = (
+  currentDetails: any[] | undefined,
+  incomingDetails: any[] | undefined,
+) => {
+  const currentDate = currentDetails?.[0]?.sale?.createdAt
+    ? new Date(currentDetails[0].sale.createdAt)
+    : null;
+  const incomingDate = incomingDetails?.[0]?.sale?.createdAt
+    ? new Date(incomingDetails[0].sale.createdAt)
+    : null;
+
+  if (!incomingDate) {
+    return currentDetails;
+  }
+
+  if (!currentDate || incomingDate > currentDate) {
+    return incomingDetails;
+  }
+
+  return currentDetails;
+};
+
+const aggregateProductsAcrossStores = (items: any[]) => {
+  const aggregated = new Map<number, any>();
+
+  items.forEach((item) => {
+    const productId = item?.inventory?.product?.id;
+    if (!productId) {
+      return;
+    }
+
+    const stock = Number(item?.stock ?? 0);
+    const existing = aggregated.get(productId);
+
+    if (!existing) {
+      aggregated.set(productId, {
+        ...item,
+        stock,
+      });
+      return;
+    }
+
+    aggregated.set(productId, {
+      ...existing,
+      stock: Number(existing.stock ?? 0) + stock,
+      salesDetails: selectMostRecentSalesDetails(existing.salesDetails, item.salesDetails),
+    });
+  });
+
+  return Array.from(aggregated.values());
+};
+
 export default function ProductsByStorePage() {
   const [stores, setStores] = useState<{ id: number; name: string }[]>([]);
-  const [selectedStore, setSelectedStore] = useState<number | null>(null);
+  const [selectedStore, setSelectedStore] = useState<StoreSelection>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -41,7 +98,7 @@ export default function ProductsByStorePage() {
   const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const debouncedSearchTerm = useDebounce(searchTerm, 1000); // 👈 Aplica debounce
-  const debouncedSelectedStore = useDebounce(selectedStore, 600)
+  const debouncedSelectedStore = useDebounce<StoreSelection>(selectedStore, 600)
   const debouncedSelectedCategory = useDebounce(selectedCategory, 600)
   const debouncedSelectedBrand = useDebounce(selectedBrand, 600)
   const [withStockOnly, setWithStockOnly] = useState(false); // ✅ checkbox de stock
@@ -52,10 +109,19 @@ export default function ProductsByStorePage() {
   const [globalInventoryValue, setGlobalInventoryValue] = useState(0);
   const [filteredInventoryValue, setFilteredInventoryValue] = useState(0);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: "asc" | "desc" } | null>(null);
+  const { settings } = useSiteSettings();
+  const { role } = useAuth();
+  const normalizedRole = role ? role.toUpperCase() : null;
+  const canViewCosts =
+    normalizedRole === "SUPER_ADMIN_GLOBAL" ||
+    normalizedRole === "SUPER_ADMIN_ORG" ||
+    normalizedRole === "ADMIN";
+  const showPurchaseCost = !(settings.permissions?.hidePurchaseCost ?? false) || canViewCosts;
 
   // Dentro del componente:
   const [open, setOpen] = useState(false)
   const [brandOpen, setBrandOpen] = useState(false)
+  const { version } = useTenantSelection();
   const selectedCategoryName =
     selectedCategory === 0
       ? "Todas las categorías"
@@ -173,18 +239,24 @@ export default function ProductsByStorePage() {
       .localeCompare(valueB.toString(), "es", { sensitivity: "base" });
   };
 
-  const handleSort = useCallback((key: SortKey) => {
-    setSortConfig((prev) => {
-      if (prev?.key === key) {
-        return {
-          key,
-          direction: prev.direction === "asc" ? "desc" : "asc",
-        };
+  const handleSort = useCallback(
+    (key: SortKey) => {
+      if (!showPurchaseCost && key === "purchasePrice") {
+        return;
       }
+      setSortConfig((prev) => {
+        if (prev?.key === key) {
+          return {
+            key,
+            direction: prev.direction === "asc" ? "desc" : "asc",
+          };
+        }
 
-      return { key, direction: "asc" };
-    });
-  }, []);
+        return { key, direction: "asc" };
+      });
+    },
+    [showPurchaseCost],
+  );
 
   const renderSortIcon = (key: SortKey) => {
     if (sortConfig?.key !== key) {
@@ -199,7 +271,7 @@ export default function ProductsByStorePage() {
   };
 
   const handleExport = useCallback(() => {
-    if (selectedStore === null || isExporting) {
+    if (typeof selectedStore !== "number" || isExporting) {
       return;
     }
 
@@ -234,6 +306,10 @@ export default function ProductsByStorePage() {
   }, []);
 
   useEffect(() => {
+    handleClearFilters();
+  }, [version, handleClearFilters]);
+
+  useEffect(() => {
     async function fetchGlobalInventoryValue() {
       try {
         const data = await getInventory();
@@ -262,8 +338,9 @@ export default function ProductsByStorePage() {
       }
     }
 
+    setGlobalInventoryValue(0);
     fetchGlobalInventoryValue();
-  }, []);
+  }, [version]);
 
   useEffect(() => {
     async function fetchStores() {
@@ -274,31 +351,78 @@ export default function ProductsByStorePage() {
         console.error("Error al obtener las tiendas:", error);
       }
     }
+    setStores([]);
     fetchStores();
-  }, []);
+  }, [version]);
 
   useEffect(() => {
-    if (debouncedSelectedStore !== null) {
-      async function fetchProducts() {
-        try {
-          const data = withStockOnly
-            ? await getProductsByStore(debouncedSelectedStore ?? 0, filtersQuery)
-            : await getAllProductsByStore(debouncedSelectedStore ?? 0, filtersQuery);
-  
-          setProducts(data);
-        } catch (error) {
-          console.error("Error al obtener los productos:", error);
+    let isMounted = true;
+
+    const fetchProducts = async () => {
+      if (debouncedSelectedStore === null) {
+        if (isMounted) {
+          setProducts([]);
+        }
+        return;
+      }
+
+      try {
+        if (debouncedSelectedStore === "all") {
+          if (stores.length === 0) {
+            if (isMounted) {
+              setProducts([]);
+            }
+            return;
+          }
+
+          const responses = await Promise.all(
+            stores.map((store) =>
+              (withStockOnly
+                ? getProductsByStore(store.id, filtersQuery)
+                : getAllProductsByStore(store.id, filtersQuery)
+              ).catch((error) => {
+                console.error(`Error al obtener los productos de la tienda ${store.id}:`, error);
+                return [];
+              }),
+            ),
+          );
+
+          if (!isMounted) {
+            return;
+          }
+
+          setProducts(aggregateProductsAcrossStores(responses.flat()));
+          return;
+        }
+
+        const storeId = debouncedSelectedStore;
+        const data = withStockOnly
+          ? await getProductsByStore(storeId, filtersQuery)
+          : await getAllProductsByStore(storeId, filtersQuery);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProducts(data);
+      } catch (error) {
+        console.error("Error al obtener los productos:", error);
+        if (isMounted) {
+          setProducts([]);
         }
       }
-      fetchProducts();
-      } else {
-      setProducts([]);
-    }
-  }, [debouncedSelectedStore, filtersQuery, withStockOnly]);
+    };
+
+    fetchProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [debouncedSelectedStore, filtersQuery, withStockOnly, stores, version]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtersQuery, debouncedSelectedStore]);
+  }, [filtersQuery, debouncedSelectedStore, version]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -307,7 +431,7 @@ export default function ProductsByStorePage() {
   
       if (isShortcut) {
         event.preventDefault();
-        if (selectedStore !== null && !isExporting) {
+        if (typeof selectedStore === "number" && !isExporting) {
           handleExport();
         }
       }
@@ -323,14 +447,16 @@ export default function ProductsByStorePage() {
     async function fetchCategories() {
       try {
         const data = await getCategories();
-        console.log("Categorías obtenidas:", data); // Verifica los datos obtenidos
         setCategories(data);
       } catch (error) {
         console.error("Error al obtener las categorías:", error);
+        setCategories([]);
       }
     }
+
+    setCategories([]);
     fetchCategories();
-  }, []);
+  }, [version]);
 
   useEffect(() => {
     async function fetchBrands() {
@@ -342,11 +468,13 @@ export default function ProductsByStorePage() {
         setBrands(normalizedBrands);
       } catch (error) {
         console.error("Error al obtener las marcas:", error);
+        setBrands([]);
       }
     }
 
+    setBrands([]);
     fetchBrands();
-  }, []);
+  }, [version]);
 
   // Filtrar productos por término de búsqueda
   useEffect(() => {
@@ -369,6 +497,12 @@ export default function ProductsByStorePage() {
       const product = item?.inventory?.product;
       const productName = product?.name ? product.name.toLowerCase() : "";
       const matchesSearch = productName.includes(normalizedSearch);
+
+      const matchesCategory =
+        !debouncedSelectedCategory ||
+        debouncedSelectedCategory === 0 ||
+        product?.category?.id === debouncedSelectedCategory ||
+        product?.categoryId === debouncedSelectedCategory;
 
       const matchesBrand = (() => {
         if (!debouncedSelectedBrand || debouncedSelectedBrand === 0) {
@@ -405,7 +539,7 @@ export default function ProductsByStorePage() {
         );
       })();
 
-      return matchesSearch && matchesBrand;
+      return matchesSearch && matchesBrand && matchesCategory;
     });
 
     const filteredTotalValue = filtered.reduce((acc, item) => {
@@ -441,6 +575,7 @@ export default function ProductsByStorePage() {
     currentPage,
     limit,
     debouncedSelectedBrand,
+    debouncedSelectedCategory,
     brands,
     sortConfig,
     withStockOnly,
@@ -457,7 +592,7 @@ export default function ProductsByStorePage() {
               <TooltipTrigger asChild>
                 <Button
                   onClick={handleExport}
-                  disabled={selectedStore === null || isExporting}
+                  disabled={typeof selectedStore !== "number" || isExporting}
                   style={{ touchAction: 'manipulation' }}
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
@@ -498,14 +633,35 @@ export default function ProductsByStorePage() {
         <div className="flex-1 mb-3 sm:mb-0">
           <label className="block mb-1 text-sm font-medium">Selecciona una tienda</label>
           <Select
-            key={selectedStore ?? -1}
-            value={selectedStore !== null ? selectedStore.toString() : undefined}
-            onValueChange={(value) => setSelectedStore(Number(value))}
+            key={
+              selectedStore === null
+                ? "none"
+                : selectedStore === "all"
+                  ? "all"
+                  : selectedStore
+            }
+            value={
+              selectedStore === null
+                ? undefined
+                : selectedStore === "all"
+                  ? "all"
+                  : selectedStore.toString()
+            }
+            onValueChange={(value) => {
+              if (value === "all") {
+                setSelectedStore("all");
+                return;
+              }
+
+              const parsedValue = Number(value);
+              setSelectedStore(Number.isNaN(parsedValue) ? null : parsedValue);
+            }}
           >
             <SelectTrigger className="w-full h-10 text-sm border-gray-300 shadow-sm">
               <SelectValue placeholder="Selecciona una tienda" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">Todas las Tiendas</SelectItem>
               {stores.map((store) => (
                 <SelectItem key={store.id} value={store.id.toString()}>
                   {store.name}
@@ -650,28 +806,30 @@ export default function ProductsByStorePage() {
         </div>
       </div>
 
-      <div className="mb-6 flex flex-col gap-4 md:flex-row">
-        <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 
-        via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 
-          dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
-          <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real del inventario</p>
-          <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
-            {formatCurrency(globalInventoryValue, "PEN")}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
-            Sumatoria del precio de compra por stock de todos los productos en todas las tiendas.
-          </p>
+      {showPurchaseCost && (
+        <div className="mb-6 flex flex-col gap-4 md:flex-row">
+          <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 
+          via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 
+            dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
+            <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real del inventario</p>
+            <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
+              {formatCurrency(globalInventoryValue, "PEN")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
+              Sumatoria del precio de compra por stock de todos los productos en todas las tiendas.
+            </p>
+          </div>
+          <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
+            <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real según filtros activos</p>
+            <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
+              {formatCurrency(filteredInventoryValue, "PEN")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
+              Actualizado automáticamente al filtrar por categoría, marca, tienda, producto o stock.
+            </p>
+          </div>
         </div>
-        <div className="max-w-md flex-1 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 via-white to-white p-4 shadow-sm sm:rounded-xl sm:p-5 dark:border-emerald-900/40 dark:bg-gradient-to-r dark:from-emerald-950/80 dark:via-slate-950/80 dark:to-slate-950/80 dark:shadow-none">
-          <p className="text-sm font-medium text-muted-foreground dark:text-emerald-100">Valor real según filtros activos</p>
-          <p className="mt-2 text-2xl font-semibold text-green-700 sm:text-3xl dark:text-emerald-200">
-            {formatCurrency(filteredInventoryValue, "PEN")}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground dark:text-emerald-100/80">
-            Actualizado automáticamente al filtrar por categoría, marca, tienda, producto o stock.
-          </p>
-        </div>
-      </div>
+      )}
 
       <div className="overflow-x-auto">
         <Table>
@@ -697,16 +855,18 @@ export default function ProductsByStorePage() {
                   {renderSortIcon("category")}
                 </button>
               </TableHead>
-              <TableHead className="text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleSort("purchasePrice")}
-                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
-                >
-                  Precio de Compra
-                  {renderSortIcon("purchasePrice")}
-                </button>
-              </TableHead>
+              {showPurchaseCost && (
+                <TableHead className="text-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("purchasePrice")}
+                    className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                  >
+                    Precio de Compra
+                    {renderSortIcon("purchasePrice")}
+                  </button>
+                </TableHead>
+              )}
               <TableHead className="text-xs">
                 <button
                   type="button"
@@ -756,7 +916,9 @@ export default function ProductsByStorePage() {
                 <TableCell className="text-sm">
                   {item.inventory.product.category?.name || "Sin categoría"}
                 </TableCell>
-                <TableCell className="text-sm">{item.inventory.product.price}</TableCell>
+                {showPurchaseCost && (
+                  <TableCell className="text-sm">{item.inventory.product.price}</TableCell>
+                )}
                 <TableCell className="text-sm">{item.inventory.product.priceSell}</TableCell>
                 <TableCell className="text-sm">{item.stock}</TableCell>
                 <TableCell className="text-sm">
@@ -818,3 +980,11 @@ export default function ProductsByStorePage() {
     </Card>
   );
 }
+
+
+
+
+
+
+
+

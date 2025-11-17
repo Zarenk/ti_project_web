@@ -86,6 +86,7 @@ import {
   TYPOGRAPHY_FONT_OPTIONS,
   getTypographyFont,
 } from "@/lib/typography-fonts";
+import { DeleteActionsGuard } from "@/components/delete-actions-guard";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
@@ -109,6 +110,22 @@ type SectionId =
   | "system";
 
 const defaultValues: SettingsFormData = defaultSiteSettings;
+const ACTIVE_SECTION_STORAGE_KEY = "dashboard.options.active-section";
+
+function getStoredActiveSection(): SectionId {
+  if (typeof window === "undefined") {
+    return "company";
+  }
+  try {
+    const stored = window.sessionStorage.getItem(ACTIVE_SECTION_STORAGE_KEY);
+    if (!stored) return "company";
+    return sections.some((section) => section.id === stored)
+      ? (stored as SectionId)
+      : "company";
+  } catch {
+    return "company";
+  }
+}
 
 const sections: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "company", label: "Empresa", icon: Building2 },
@@ -128,8 +145,13 @@ const sections: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "system", label: "Datos del Sistema", icon: Database },
 ];
 
+type PermissionModuleKey = Exclude<
+  keyof SiteSettings["permissions"],
+  "hidePurchaseCost" | "hideDeleteActions"
+>;
+
 const permissionModules: {
-  key: keyof SiteSettings["permissions"];
+  key: PermissionModuleKey;
   label: string;
   description: string;
 }[] = [
@@ -174,9 +196,9 @@ const permissionModules: {
     description: "Gestionar campañas y automatizaciones.",
   },
   {
-    key: "ads",
-    label: "Publicidad",
-    description: "Administrar anuncios y audiencias.",
+    key: "providers",
+    label: "Proveedores",
+    description: "Permitir que los usuarios accedan a la gestión de proveedores.",
   },
   {
     key: "settings",
@@ -211,6 +233,8 @@ type SystemDataSectionProps = {
   isBackupPending: boolean;
   isPurgeDialogOpen: boolean;
   onPurgeDialogOpenChange: (open: boolean) => void;
+  watch: Watch;
+  setValue: SetValue;
 };
 
 type BrandSectionProps = Pick<SectionProps, "register" | "errors" | "setValue" | "watch">;
@@ -270,7 +294,7 @@ function mergeSettingsDeep<T extends Record<string, unknown>>(
 }
 
 export default function SettingsPage() {
-  const [activeSection, setActiveSection] = useState<SectionId>("company");
+  const [activeSection, setActiveSection] = useState<SectionId>(getStoredActiveSection);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importJson, setImportJson] = useState("");
   const [firstSave, setFirstSave] = useState(true);
@@ -316,6 +340,17 @@ export default function SettingsPage() {
   useEffect(() => {
     reset(persistedSettings);
   }, [persistedSettings, reset]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(ACTIVE_SECTION_STORAGE_KEY, activeSection);
+    } catch {
+      /* ignore */
+    }
+  }, [activeSection]);
 
   const watchedValues = useWatch<SettingsFormData>({ control });
   const skipPreviewUpdateRef = useRef(false);
@@ -627,7 +662,7 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-background font-site">
       <header className="sticky top-0 z-40 border-b border-border bg-card/50 backdrop-blur-sm">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
+        <div className="container mx-auto flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Configuración del sitio</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -635,8 +670,8 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex items-center justify-center gap-1 rounded-lg bg-muted p-1 sm:justify-start">
               <Button
                 variant={themeMode === "light" ? "secondary" : "ghost"}
                 size="sm"
@@ -663,14 +698,19 @@ export default function SettingsPage() {
               </Button>
             </div>
 
-            <Button variant="outline" size="sm" onClick={() => setConfirmExportOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmExportOpen(true)}
+              className="w-full sm:w-auto"
+            >
               <Download className="mr-2 h-4 w-4" />
               Exportar JSON
             </Button>
 
             <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="w-full sm:w-auto">
                   <Upload className="mr-2 h-4 w-4" />
                   Importar JSON
                 </Button>
@@ -839,6 +879,8 @@ export default function SettingsPage() {
                       isBackupPending={isBackupPending}
                       isPurgeDialogOpen={isPurgeDialogOpen}
                       onPurgeDialogOpenChange={setIsPurgeDialogOpen}
+                      watch={watch}
+                      setValue={setValue}
                     />
                   )}
                 </motion.div>
@@ -855,8 +897,8 @@ export default function SettingsPage() {
           animate={{ y: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
         >
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
               {hasUnsavedChanges && (
                 <Badge variant="secondary" className="animate-pulse">
                   Cambios sin guardar
@@ -870,7 +912,7 @@ export default function SettingsPage() {
               )}
             </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <Button
                 type="button"
                 variant="outline"
@@ -961,9 +1003,21 @@ function SystemDataSection({
   isBackupPending,
   isPurgeDialogOpen,
   onPurgeDialogOpenChange,
+  watch,
+  setValue,
 }: SystemDataSectionProps) {
   const [confirmationText, setConfirmationText] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
+  const systemSettings = watch("system") ?? defaultValues.system;
+  const autoBackupFrequency = systemSettings.autoBackupFrequency ?? defaultValues.system.autoBackupFrequency;
+  const lastAutoBackupAt = systemSettings.lastAutoBackupAt ?? null;
+  const formattedLastBackup =
+    lastAutoBackupAt != null
+      ? new Intl.DateTimeFormat("es-PE", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(new Date(lastAutoBackupAt))
+      : "Nunca se ha ejecutado";
 
   useEffect(() => {
     if (!isPurgeDialogOpen) {
@@ -977,6 +1031,14 @@ function SystemDataSection({
     confirmationText.trim().toUpperCase() === confirmationPhrase;
   const canConfirmPurge = isConfirmationTextValid && acknowledged;
 
+  const backupOptions: { value: SiteSettings["system"]["autoBackupFrequency"]; label: string }[] = [
+    { value: "manual", label: "Manual" },
+    { value: "daily", label: "Diario" },
+    { value: "weekly", label: "Semanal" },
+    { value: "biweekly", label: "Cada 15 días" },
+    { value: "monthly", label: "Mensual" },
+  ];
+
   const handleConfirmPurge = () => {
     if (!canConfirmPurge) {
       return;
@@ -986,6 +1048,54 @@ function SystemDataSection({
 
   return (
     <div className="space-y-6">
+      <Card className="border-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <RotateCcw className="h-5 w-5" />
+            Programación automática
+          </CardTitle>
+          <CardDescription>
+            Define cada cuánto tiempo los administradores obtendrán una copia de seguridad de esta
+            organización.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Label htmlFor="auto-backup-frequency">Frecuencia</Label>
+              <p className="text-xs text-muted-foreground">
+                Los respaldos se generan en segundo plano y se guardan en el servidor.
+              </p>
+            </div>
+            <Select
+              value={autoBackupFrequency}
+              onValueChange={(value) =>
+                setValue(
+                  "system.autoBackupFrequency",
+                  value as SiteSettings["system"]["autoBackupFrequency"],
+                  { shouldDirty: true },
+                )
+              }
+            >
+              <SelectTrigger id="auto-backup-frequency" className="w-full sm:w-60">
+                <SelectValue placeholder="Selecciona frecuencia" />
+              </SelectTrigger>
+              <SelectContent>
+                {backupOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+            <p className="font-medium text-muted-foreground">Último respaldo automático</p>
+            <p className="text-foreground">{formattedLastBackup}</p>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="border-2">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1236,18 +1346,20 @@ function BrandSection({ register, errors, setValue, watch }: BrandSectionProps) 
               accept="image/*"
               onChange={(event) => handleFileUpload(event, "logoUrl")}
             />
-            {logoUrl && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="gap-2"
-                onClick={() => setValue("brand.logoUrl", "", { shouldDirty: true, shouldValidate: true })}
-              >
-                <X className="h-4 w-4" />
-                Eliminar imagen
-              </Button>
-            )}
+            <DeleteActionsGuard>
+              {logoUrl && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setValue("brand.logoUrl", "", { shouldDirty: true, shouldValidate: true })}
+                >
+                  <X className="h-4 w-4" />
+                  Eliminar imagen
+                </Button>
+              )}
+            </DeleteActionsGuard>
             <p className="text-xs text-muted-foreground">
               PNG o SVG recomendado. Puedes subir un archivo o proporcionar una URL.
             </p>
@@ -1262,18 +1374,20 @@ function BrandSection({ register, errors, setValue, watch }: BrandSectionProps) 
               accept="image/*"
               onChange={(event) => handleFileUpload(event, "faviconUrl")}
             />
-            {faviconUrl && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="gap-2"
-                onClick={() => setValue("brand.faviconUrl", "", { shouldDirty: true, shouldValidate: true })}
-              >
-                <X className="h-4 w-4" />
-                Eliminar imagen
-              </Button>
-            )}
+            <DeleteActionsGuard>
+              {faviconUrl && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setValue("brand.faviconUrl", "", { shouldDirty: true, shouldValidate: true })}
+                >
+                  <X className="h-4 w-4" />
+                  Eliminar imagen
+                </Button>
+              )}
+            </DeleteActionsGuard>
             <p className="text-xs text-muted-foreground">
               ICO, PNG o SVG. Puedes subir un archivo o proporcionar una URL.
             </p>
@@ -2259,6 +2373,57 @@ function PermissionsSection({ watch, setValue }: PermissionsSectionProps) {
             </div>
           );
         })}
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-border/60 bg-card/40 p-4">
+          <div className="space-y-1">
+            <Label htmlFor="permissions-hidePurchaseCost" className="text-base font-medium">
+              Ocultar precios de compra
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Evita mostrar el costo de compra en Productos e Inventario para mejorar la confidencialidad.
+            </p>
+          </div>
+          <Checkbox
+            id="permissions-hidePurchaseCost"
+            checked={currentPermissions.hidePurchaseCost ?? false}
+            onCheckedChange={(checked) =>
+              setValue(
+                "permissions",
+                {
+                  ...currentPermissions,
+                  hidePurchaseCost: checked === true,
+                },
+                { shouldDirty: true },
+              )
+            }
+            aria-label="Activar ocultamiento de precios de compra"
+          />
+        </div>
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-border/60 bg-card/40 p-4">
+          <div className="space-y-1">
+            <Label htmlFor="permissions-hideDeleteActions" className="text-base font-medium">
+              Ocultar acciones de eliminar
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Quita los botones de eliminado para usuarios y administradores. Los super administradores globales
+              y de organización siempre los verán.
+            </p>
+          </div>
+          <Checkbox
+            id="permissions-hideDeleteActions"
+            checked={currentPermissions.hideDeleteActions ?? false}
+            onCheckedChange={(checked) =>
+              setValue(
+                "permissions",
+                {
+                  ...currentPermissions,
+                  hideDeleteActions: checked === true,
+                },
+                { shouldDirty: true },
+              )
+            }
+            aria-label="Ocultar acciones de eliminar"
+          />
+        </div>
       </CardContent>
     </Card>
   );

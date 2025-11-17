@@ -28,5 +28,11 @@ export interface Transaction {
     closingBalance?: number | null;
     totalIncome?: number | null;
     totalExpense?: number | null;
-    nextOpeningBalance?: number | null;
-  }
+  nextOpeningBalance?: number | null;
+  saleItems?: Array<{
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+}

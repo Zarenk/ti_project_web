@@ -17,7 +17,7 @@ datasource db {
 
 model Product {
   id          Int      @id @default(autoincrement())
-  name        String   @unique
+  name        String
   barcode     String?  @unique // Opcional pero único
   qrCode      String?  @unique // Opcional pero único
   description String?
@@ -27,12 +27,18 @@ model Product {
   status      String?
   image       String?
   images      String[]
+  organizationId Int?
+  companyId      Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
   // Relación con Brand
   brandId Int?
   brand   Brand? @relation(fields: [brandId], references: [id])
+
+  // NUEVO: relación directa con Organization
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  // 👇 NUEVA RELACIÓN CON COMPANY
+  company     Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   // Relación con Category
   categoryId  Int
@@ -48,9 +54,13 @@ model Product {
   // Relación con Transfer
   transfers Transfer[] // Relación con el modelo Transfer
 
+  @@unique([organizationId, name])
   @@index([categoryId])
   @@index([name])
   @@index([brandId])
+  @@index([organizationId, name])
+  @@index([organizationId, companyId]) // 👈 Índice para filtros eficientes
+  @@index([companyId])
 }
 
 model ProductSpecification {
@@ -109,10 +119,19 @@ model Keyword {
 }
 
 model SiteSettings {
-  id        Int      @id @default(1)
-  data      Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  tenantKey      String   @unique @default("org:0|company:0")
+  organizationId Int?
+  companyId      Int?
+  data           Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([companyId])
 }
 
 model CatalogCover {
@@ -121,26 +140,42 @@ model CatalogCover {
   originalName String?
   mimeType     String?
   isActive     Boolean  @default(true)
+  organizationId  Int?
+  companyId       Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@index([isActive])
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company         Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, companyId, isActive])
 }
 
 model Category {
   id          Int      @id @default(autoincrement())
-  name        String   @unique
+  name        String
   description String?
   status      String?
   image       String?
+  organizationId Int?
+  companyId      Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relación con Product
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull) // 👈 NUEVO
   products Product[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, name])
+  @@index([companyId])                          // 👈 Útil para auditoría
+  @@index([organizationId, companyId])          // 👈 (opcional) para informes
 }
 
 enum UserRole {
+  SUPER_ADMIN_GLOBAL
+  SUPER_ADMIN_ORG
   ADMIN
   EMPLOYEE
   CLIENT
@@ -154,6 +189,7 @@ model User {
   password     String
   role         UserRole @default(CLIENT) // Enum para roles de usuario
   status       String   @default("ACTIVO")
+  organizationId      Int?
   failedLoginAttempts Int      @default(0)
   lockUntil    DateTime?
   isPermanentlyLocked Boolean  @default(false)
@@ -172,28 +208,220 @@ model User {
   clientMessages   ChatMessage[]      @relation("ClientMessages")
   sentMessages     ChatMessage[]      @relation("SenderMessages")
   favorites        Favorite[]
+  sunatStoredPdfs  SunatStoredPdf[]
+
+  memberships OrganizationMembership[]
 
   @@index([email])
   @@index([username])
+  @@index([organizationId, email])
+}
+
+enum OrganizationMembershipRole {
+  OWNER
+  SUPER_ADMIN
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model Organization {
+  id        Int       @id @default(autoincrement())
+  name      String
+  slug      String?   @unique
+  code      String?   @unique
+  status    String    @default("ACTIVE")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  orders       Orders[]
+  units        OrganizationUnit[]
+  companies    Company[]
+  memberships  OrganizationMembership[]
+  settings     OrganizationSetting?
+  providers    Provider[]
+  products     Product[]
+  categories   Category[]
+  accEntries   AccEntry[]
+  exchangeRates TipoCambio[]
+  entrySeries  EntryDetailSeries[]
+  catalogCover CatalogCover[]
+  siteSettings SiteSettings[]
+  sunatTransmissions SunatTransmission[]
+  sunatStoredPdfs   SunatStoredPdf[]
+
+  @@unique([name])
+  @@index([status])
+}
+
+model Company {
+  id             Int           @id @default(autoincrement())
+  organizationId Int
+  name           String
+  legalName      String?
+  taxId          String?       @unique
+  status         String        @default("ACTIVE")
+  sunatEnvironment     String        @default("BETA")
+  sunatRuc             String?
+  sunatBusinessName    String?
+  sunatAddress         String?
+  sunatPhone           String?
+  logoUrl        String?
+  primaryColor    String?
+  secondaryColor  String?
+  sunatSolUserBeta     String?
+  sunatSolPasswordBeta String?
+  sunatCertPathBeta    String?
+  sunatKeyPathBeta     String?
+  sunatSolUserProd     String?
+  sunatSolPasswordProd String?
+  sunatCertPathProd    String?
+  sunatKeyPathProd     String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  units          OrganizationUnit[]
+  stores         Store[]
+  sales          Sales[]
+  orders         Orders[]
+  clients        Client[]
+  inventoryHistories InventoryHistory[]
+  products           Product[] // 👈 NUEVA RELACIÓN
+  categories         Category[]
+  accEntries         AccEntry[]
+  catalogCover CatalogCover[]
+  siteSettings SiteSettings[]
+  sunatTransmissions SunatTransmission[]
+  sunatStoredPdfs   SunatStoredPdf[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+}
+
+model SunatTransmission {
+  id             Int      @id @default(autoincrement())
+  companyId      Int
+  organizationId Int?
+  saleId         Int?
+  environment    String   @default("BETA")
+  documentType   String
+  serie          String?
+  correlativo    String?
+  zipFilePath    String?
+  ticket         String?
+  status         String   @default("PENDING")
+  response       Json?
+  payload        Json?
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  sale         Sales?        @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status])
+  @@index([organizationId])
+  @@index([saleId])
+}
+
+model SunatStoredPdf {
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  companyId      Int
+  type           String
+  filename       String
+  relativePath   String
+  createdBy      Int?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  uploadedBy   User?        @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, filename])
+  @@index([organizationId])
+  @@index([companyId, type])
+}
+
+model OrganizationUnit {
+  id              Int                @id @default(autoincrement())
+  organizationId  Int
+  companyId       Int?
+  parentUnitId    Int?
+  name            String
+  code            String?
+  status          String             @default("ACTIVE")
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company         Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  parent          OrganizationUnit?  @relation("OrganizationUnitHierarchy", fields: [parentUnitId], references: [id])
+  children        OrganizationUnit[] @relation("OrganizationUnitHierarchy")
+  memberships     OrganizationMembership[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([companyId])
+  @@index([parentUnitId])
+}
+
+model OrganizationMembership {
+  id                  Int                          @id @default(autoincrement())
+  userId              Int
+  organizationId      Int
+  organizationUnitId  Int?
+  role                OrganizationMembershipRole   @default(MEMBER)
+  isDefault           Boolean                      @default(false)
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+
+  user                User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationUnit    OrganizationUnit?            @relation(fields: [organizationUnitId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, organizationId, organizationUnitId])
+  @@index([organizationId])
+  @@index([organizationUnitId])
+  @@index([userId, isDefault])
+}
+
+model OrganizationSetting {
+  id              Int           @id @default(autoincrement())
+  organizationId  Int           @unique
+  preferences     Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model Client {
-  id         Int      @id @default(autoincrement())
-  userId     Int      @unique
-  name       String
-  type       String?
-  typeNumber String?  @unique
-  phone      String?
-  adress     String?
-  email      String?
-  status     String?
-  image      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  name           String
+  type           String?
+  typeNumber     String?  @unique
+  phone          String?
+  adress         String?
+  email          String?
+  status         String?
+  image          String?
+  organizationId Int?
+  companyId      Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   user  User    @relation(fields: [userId], references: [id])
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   // Relación con Sales
   sales Sales[] // Relación con el modelo Sales
+
+  @@index([organizationId, name])
+  @@index([companyId])
 }
 
 model Provider {
@@ -208,11 +436,16 @@ model Provider {
   website        String?
   status         String?
   image          String?
+  organizationId Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   entrys     Entry[] // Relación con el modelo Entry
   accEntries AccEntry[] // Relación con el modelo AccEntry
+
+  @@index([organizationId])
+  @@unique([organizationId, documentNumber]) // 👈 NUEVO: unicidad por organización
 }
 
 enum PaymentTerm {
@@ -244,8 +477,10 @@ model Entry {
   igvRate      Decimal            @default(0.18)
   pdfUrl       String?
   guiaUrl      String? // URL del PDF de la guía de remisión
+  organizationId Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  referenceId String? @unique
 
   store    Store         @relation(fields: [storeId], references: [id]) // Relación con el modelo Store
   user     User          @relation(fields: [userId], references: [id]) // Relación con el modelo User
@@ -263,6 +498,7 @@ model Entry {
   @@index([providerId])
   @@index([journalId])
   @@index([date])
+  @@index([organizationId, date])
 }
 
 model Invoice {
@@ -286,6 +522,7 @@ model Inventory {
   id        Int      @id @default(autoincrement())
   productId Int
   storeId   Int
+  organizationId Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -296,6 +533,7 @@ model Inventory {
   entryDetails EntryDetail[] // Relación uno-a-muchos con EntryDetail
 
   @@unique([productId, storeId]) // Clave compuesta
+  @@index([organizationId, productId])
 }
 
 model EntryDetail {
@@ -324,11 +562,16 @@ model EntryDetail {
 model EntryDetailSeries {
   id            Int         @id @default(autoincrement())
   entryDetailId Int
-  serial        String      @unique
+  serial        String
   status        String      @default("active") // Nuevo campo
+  organizationId Int?
   entryDetail   EntryDetail @relation(fields: [entryDetailId], references: [id], onDelete: Cascade)
+  organization  Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+
+  @@unique([organizationId, serial])
+  @@index([organizationId, serial])
 }
 
 model Store {
@@ -342,6 +585,8 @@ model Store {
   website     String?
   status      String?
   image       String?
+  organizationId Int?
+  companyId      Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -359,6 +604,10 @@ model Store {
 
   // Relación con la tabla de caja
   CashRegister CashRegister[]
+
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, name])
 }
 
 model StoreOnInventory {
@@ -387,14 +636,19 @@ model InventoryHistory {
   stockChange   Int // Cambio en el stock (positivo o negativo)
   previousStock Int? // Stock anterior (opcional)
   newStock      Int? // Stock nuevo (opcional)
+  organizationId Int?
+  companyId      Int?
   createdAt     DateTime @default(now()) // Fecha del cambio
 
   inventory Inventory @relation(fields: [inventoryId], references: [id])
   user      User      @relation(fields: [userId], references: [id]) // Relación con la tabla de usuarios
+  company   Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([inventoryId])
   @@index([userId])
   @@index([createdAt])
+  @@index([organizationId, createdAt])
+  @@index([companyId, createdAt])
 }
 
 model Transfer {
@@ -404,6 +658,7 @@ model Transfer {
   productId          Int // ID del producto trasladado
   quantity           Int // Cantidad trasladada
   description        String? // Descripción opcional
+  organizationId     Int?
   createdAt          DateTime @default(now()) // Fecha del traslado
 
   // Relación con la tabla Store para la tienda de origen
@@ -417,7 +672,8 @@ model Transfer {
 
   @@index([sourceStoreId]) // Índice para optimizar consultas por tienda de origen
   @@index([destinationStoreId]) // Índice para optimizar consultas por tienda de destino
-  @@index([productId]) // Índice para optimizar consultas por producto 
+  @@index([productId]) // Índice para optimizar consultas por producto
+  @@index([organizationId, createdAt])
 }
 
 model Sales {
@@ -428,8 +684,11 @@ model Sales {
   total       Float // Total de la venta
   description String? // Descripción opcional
   source      SaleSource @default(POS)
+  organizationId Int?
+  companyId      Int?
   createdAt   DateTime   @default(now()) // Fecha de la venta
   updatedAt   DateTime   @updatedAt
+  referenceId String? @unique
 
   user           User            @relation(fields: [userId], references: [id]) // Relación con el usuario
   store          Store           @relation(fields: [storeId], references: [id]) // Relación con la tienda
@@ -437,14 +696,17 @@ model Sales {
   salesDetails   SalesDetail[] // Relación con los detalles de la venta
   invoices       InvoiceSales[] // Relación con las facturas de venta
   payments       SalePayment[] // 👈 Relación con tabla intermedia
-  shippingGuides ShippingGuide[]
-  order          Orders?
+  shippingGuides     ShippingGuide[]
+  order              Orders?
+  company            Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  sunatTransmissions SunatTransmission[]
 
   @@index([userId])
   @@index([storeId])
   @@index([clientId])
   @@index([createdAt])
   @@index([source])
+  @@index([organizationId, createdAt])
 }
 
 model PaymentMethod {
@@ -529,14 +791,20 @@ model Orders {
   phone           String?
   carrierId       String?
   carrierName     String?
+  organizationId  Int?
+  companyId       Int?
   carrierMode     String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   sale          Sales?          @relation(fields: [salesId], references: [id])
   OrderTracking OrderTracking[]
+  organization  Organization?   @relation(fields: [organizationId], references: [id])
+  company       Company?       @relation(fields: [companyId], references: [id])
 
   @@index([salesId])
+  @@index([organizationId, createdAt])
+  @@index([companyId, createdAt])
 }
 
 model OrderTracking {
@@ -552,16 +820,18 @@ model OrderTracking {
 }
 
 model TipoCambio {
-  id        Int      @id @default(autoincrement())
-  fecha     DateTime // Fecha del tipo de cambio
-  moneda    String // Ej: "USD", "EUR", "CLP"
-  valor     Float // Cuánto vale 1 unidad de esa moneda en soles
-  createdAt DateTime @default(now())
+  id             Int           @id @default(autoincrement())
+  fecha          DateTime      // Fecha del tipo de cambio
+  moneda         String        // Ej: "USD", "EUR", "CLP"
+  valor          Float         // Cuánto vale 1 unidad de esa moneda en soles
+  createdAt      DateTime      @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationId Int?
 
   entries Entry[] // Relación con entradas
 
-  @@unique([fecha, moneda]) // Evita duplicados
-  @@index([fecha, moneda]) // 🚀 índice compuesto
+  @@unique([fecha, moneda, organizationId]) // Evita duplicados por organización
+  @@index([fecha, moneda, organizationId])
 }
 
 model CashRegister {
@@ -572,6 +842,7 @@ model CashRegister {
   initialBalance Decimal            @default(0.00)
   currentBalance Decimal            @default(0.00)
   status         CashRegisterStatus @default(ACTIVE)
+  organizationId Int?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
@@ -579,6 +850,7 @@ model CashRegister {
   transactions CashTransaction[]
   closures     CashClosure[]
 
+  @@index([organizationId, storeId])
   @@map("cash_registers")
 }
 
@@ -592,6 +864,7 @@ model CashTransaction {
   clientDocument     String?
   clientDocumentType String?
   userId             Int
+  organizationId     Int?
   createdAt          DateTime            @default(now())
 
   cashRegister   CashRegister                   @relation(fields: [cashRegisterId], references: [id])
@@ -599,6 +872,7 @@ model CashTransaction {
   user           User                           @relation(fields: [userId], references: [id])
   salePayments   SalePayment[]
 
+  @@index([organizationId, createdAt])
   @@map("cash_transactions")
 }
 
@@ -619,13 +893,16 @@ model CashClosure {
   openingBalance Decimal
   closingBalance Decimal
   totalIncome    Decimal
+  nextOpeningBalance Decimal?
   notes          String?
   totalExpense   Decimal
+  organizationId     Int?
   createdAt      DateTime @default(now())
 
   cashRegister CashRegister @relation(fields: [cashRegisterId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
 
+  @@index([organizationId, createdAt])
   @@map("cash_closures")
 }
 
@@ -1105,8 +1382,12 @@ model AccEntry {
   source      String?
   sourceId    Int?
   referenceId String?        @unique
+  organizationId Int?
+  companyId      Int?
   period      AccPeriod      @relation(fields: [periodId], references: [id])
   provider    Provider?      @relation(fields: [providerId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   lines       AccEntryLine[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
@@ -1114,6 +1395,8 @@ model AccEntry {
   @@unique([source, sourceId])
   @@index([periodId])
   @@index([providerId])
+  @@index([organizationId])
+  @@index([organizationId, companyId])
 }
 
 model AccEntryLine {

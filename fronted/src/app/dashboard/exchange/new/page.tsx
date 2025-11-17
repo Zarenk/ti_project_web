@@ -1,59 +1,142 @@
-'use client'
+"use client";
 
-import { useState } from 'react';
-import { createTipoCambio } from '../exchange.api';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent } from '@/components/ui/card';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format } from 'date-fns';
-import { CalendarIcon } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
+import { toast } from "sonner";
 
-export default function TipoCambioForm() {
-  const [fecha, setFecha] = useState<Date | undefined>(new Date());
-  const [moneda, setMoneda] = useState('USD');
-  const [valor, setValor] = useState('');
-  const router = useRouter(); // ✅
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+import {
+  createTipoCambio,
+  getLatestExchangeRateByCurrency,
+} from "../exchange.api";
+
+const CURRENCY_OPTIONS = [
+  { value: "USD", label: "USD" },
+  { value: "EUR", label: "EUR" },
+] as const;
+
+const DEFAULT_CURRENCY = "USD";
+
+export default function TipoCambioForm(): React.ReactElement {
+  const router = useRouter();
+  const { version } = useTenantSelection();
+
+  const [fecha, setFecha] = useState<Date>(new Date());
+  const [moneda, setMoneda] = useState<typeof CURRENCY_OPTIONS[number]["value"]>(
+    DEFAULT_CURRENCY,
+  );
+  const [valor, setValor] = useState<string>("");
+  const [loadingRate, setLoadingRate] = useState(false);
+  const [rateError, setRateError] = useState<string | null>(null);
+
+  const resetForm = useCallback(() => {
+    setFecha(new Date());
+    setValor("");
+    setRateError(null);
+  }, []);
+
+  useEffect(() => {
+    resetForm();
+  }, [version, resetForm]);
+
+  const fetchLatestRate = useCallback(
+    async (currency: string) => {
+      setLoadingRate(true);
+      setRateError(null);
+
+      try {
+        const latest = await getLatestExchangeRateByCurrency(currency);
+        if (latest !== null) {
+          setValor(latest.toFixed(4));
+        } else {
+          setValor("");
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "No se pudo obtener el tipo de cambio mas reciente.";
+        setRateError(message);
+        setValor("");
+      } finally {
+        setLoadingRate(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      await fetchLatestRate(moneda);
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [moneda, version, fetchLatestRate]);
+
+  const formattedDate = useMemo(
+    () => (fecha ? format(fecha, "yyyy-MM-dd") : ""),
+    [fecha],
+  );
+
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
+    event.preventDefault();
     if (!fecha) return;
+
+    const parsed = Number.parseFloat(valor);
+    if (!Number.isFinite(parsed)) {
+      toast.error("Ingresa un valor numerico valido.");
+      return;
+    }
+
     try {
       await createTipoCambio({
-        fecha: fecha.toISOString().split('T')[0],
+        fecha: formattedDate,
         moneda,
-        valor: parseFloat(valor),
+        valor: parsed,
       });
-      toast.success('✅ Tipo de cambio registrado correctamente');
-      router.push('/dashboard/exchange'); // ✅ Redirección
+      toast.success("Tipo de cambio registrado correctamente.");
+      router.push("/dashboard/exchange");
     } catch (error) {
-      toast.error('❌ Error al registrar el tipo de cambio');
+      const message =
+        error instanceof Error ? error.message : "Error al registrar el tipo de cambio.";
+      toast.error(message);
     }
   };
 
+  const isSubmittingDisabled = loadingRate;
+
   return (
-    <Card className="max-w-md mx-auto mt-10 shadow-xl">
+    <Card className="mx-auto mt-10 max-w-md shadow-xl">
       <CardContent className="p-6">
-        <h2 className="text-xl font-bold mb-6">Registrar Tipo de Cambio</h2>
+        <h2 className="mb-6 text-xl font-bold">Registrar Tipo de Cambio</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Fecha:</Label>
             <Popover>
               <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-left font-normal"
-                >
-                  {fecha ? format(fecha, 'yyyy-MM-dd') : <span>Selecciona una fecha</span>}
+                <Button variant="outline" className="w-full justify-start text-left font-normal">
+                  {formattedDate || <span>Selecciona una fecha</span>}
                   <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0">
-                <Calendar mode="single" selected={fecha} onSelect={setFecha} initialFocus />
+                <Calendar mode="single" selected={fecha} onSelect={(value) => value && setFecha(value)} />
               </PopoverContent>
             </Popover>
           </div>
@@ -62,12 +145,23 @@ export default function TipoCambioForm() {
             <Label>Moneda:</Label>
             <select
               value={moneda}
-              onChange={(e) => setMoneda(e.target.value)}
-              className="w-full p-2 border rounded bg-background"
+              onChange={(event) =>
+                setMoneda(event.target.value as typeof CURRENCY_OPTIONS[number]["value"])
+              }
+              className="w-full rounded border bg-background p-2"
+              disabled={loadingRate}
             >
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
+              {CURRENCY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
+            {loadingRate ? (
+              <Skeleton className="h-6 w-32" />
+            ) : rateError ? (
+              <p className="text-sm text-destructive">{rateError}</p>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -76,13 +170,14 @@ export default function TipoCambioForm() {
               type="number"
               step="0.0001"
               value={valor}
-              onChange={(e) => setValor(e.target.value)}
+              onChange={(event) => setValor(event.target.value)}
               required
+              disabled={loadingRate}
             />
           </div>
 
-          <Button type="submit" className="w-full">
-            Registrar
+          <Button type="submit" className="w-full" disabled={isSubmittingDisabled}>
+            {loadingRate ? "Cargando..." : "Registrar"}
           </Button>
         </form>
       </CardContent>

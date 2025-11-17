@@ -48,11 +48,14 @@ import { KeywordsModule } from './keywords/keywords.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { ModulePermissionsGuard } from './common/guards/module-permissions.guard';
 import { SystemMaintenanceModule } from './system-maintenance/system-maintenance.module';
+import { TenancyModule } from './tenancy/tenancy.module';
+import { TenantContextGuard } from './tenancy/tenant-context.guard';
+import { LookupsModule } from './lookups/lookups.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
-      ProductsModule,
+    ProductsModule,
     UsersModule,
     CategoryModule,
     StoresModule,
@@ -91,12 +94,18 @@ import { SystemMaintenanceModule } from './system-maintenance/system-maintenance
     KeywordsModule,
     SiteSettingsModule,
     SystemMaintenanceModule,
+    TenancyModule,
+    LookupsModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [
     AppService,
     BarcodeGateway,
     PrismaService,
+    {
+      provide: APP_GUARD,
+      useClass: TenantContextGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: ModulePermissionsGuard,

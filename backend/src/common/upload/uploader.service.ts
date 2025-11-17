@@ -5,7 +5,10 @@ import { AntivirusService } from '../security/antivirus.service';
 
 @Injectable()
 export class UploaderService {
-  constructor(private s3: S3Service, private av: AntivirusService) {}
+  constructor(
+    private s3: S3Service,
+    private av: AntivirusService,
+  ) {}
 
   async uploadImage(file: Express.Multer.File, key: string) {
     if (file.size > 5 * 1024 * 1024) {

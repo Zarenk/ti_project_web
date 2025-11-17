@@ -63,7 +63,7 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
     fgColor: { argb: 'FF333333' },
   };
   headerRow.height = 20;
-  
+
   categories.forEach((cat) => {
     const catRow = worksheet.addRow({ name: cat });
     const rowNumber = catRow.number;
@@ -84,7 +84,7 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
           categoryName: item.categoryName,
         });
 
-    row.getCell('price').numFmt = '#,##0.00';
+        row.getCell('price').numFmt = '#,##0.00';
         row.height = 60;
         row.alignment = { vertical: 'top', wrapText: true } as any;
 
@@ -104,7 +104,10 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
               return;
             }
 
-            const imageId = workbook.addImage({ filename: file, extension: excelExt });
+            const imageId = workbook.addImage({
+              filename: file,
+              extension: excelExt,
+            });
             const colNumber = worksheet.getColumn(column).number;
             const tl = new (ExcelJS as any).Anchor(worksheet, {
               col: colNumber - 1,
@@ -136,8 +139,9 @@ function populateWorkbook(items: CatalogItem[]): ExcelJS.Workbook {
  */
 export async function exportCatalogExcel(
   filters: Record<string, any>,
+  options: { organizationId?: number | null; companyId?: number | null } = {},
 ): Promise<{ buffer: Buffer }> {
-  const items: CatalogItem[] = await getCatalogItems(filters);
+  const items: CatalogItem[] = await getCatalogItems(filters, options);
   const workbook = populateWorkbook(items);
   const arrayBuffer = await workbook.xlsx.writeBuffer();
   return { buffer: Buffer.from(arrayBuffer) };

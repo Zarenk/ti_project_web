@@ -28,10 +28,15 @@ export class InventoryAdjustedController {
         lines,
       });
       await this.entries.post(entry.id);
-      this.logger.log(`Entry ${entry.id} created for product ${data.productId}`);
+      this.logger.log(
+        `Entry ${entry.id} created for product ${data.productId}`,
+      );
       return { status: 'posted', entryId: entry.id };
     } catch (err) {
-      this.logger.error('Failed to process inventory-adjusted hook', err as any);
+      this.logger.error(
+        'Failed to process inventory-adjusted hook',
+        err as any,
+      );
       throw err;
     }
   }

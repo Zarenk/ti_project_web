@@ -1,12 +1,14 @@
 "use client"
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import UpdatePriceDialog from "./inventory-product-details-components/UpdatePriceModal";
 import { getProductByInventoryId, getProductSales } from "../inventory.api";
-import { Book, DollarSign } from "lucide-react";
+import { Book, DollarSign, LayoutGrid, Table } from "lucide-react";
 import UpdateCategoryDialog from "./inventory-product-details-components/UpdateCategoryModal";
 import { QRCodeCanvas } from "qrcode.react";
+import { useSiteSettings } from "@/context/site-settings-context";
+import { useAuth } from "@/context/auth-context";
 
 const CODE39_PATTERNS: Record<string, string> = {
   "0": "nnnwwnwnn",
@@ -71,6 +73,15 @@ interface ProductDetailsPageProps {
 }
 
 export default function ProductDetailsPage({ product, stockDetails, entries, series, searchParams }: ProductDetailsPageProps) {
+  const { settings } = useSiteSettings();
+  const { role } = useAuth();
+  const normalizedRole = role ? role.toUpperCase() : null;
+  const canViewCosts =
+    normalizedRole === "SUPER_ADMIN_GLOBAL" ||
+    normalizedRole === "SUPER_ADMIN_ORG" ||
+    normalizedRole === "ADMIN";
+  const hidePurchaseCost = (settings.permissions?.hidePurchaseCost ?? false) && !canViewCosts;
+  const entryTableColSpan = hidePurchaseCost ? 5 : 6;
 
   // Lógica para mostrar el modal de actualización de precio al cargar la página
   const [isLoading, setIsLoading] = useState(true);
@@ -110,6 +121,41 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
 
   // Obtener las salidas del producto usando el productId real
   const [sales, setSales] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<"cards" | "tables">("cards");
+  const dateTimeFormatter = useMemo(
+    () =>
+      typeof window !== "undefined"
+        ? new Intl.DateTimeFormat("es-PE", {
+            dateStyle: "short",
+            timeStyle: "short",
+          })
+        : null,
+    [],
+  );
+
+  const formatDateTime = (value: string | Date | null | undefined): string => {
+    if (!value) return "No registrado";
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return typeof value === "string" ? value : "Fecha inválida";
+    }
+    if (dateTimeFormatter) {
+      return dateTimeFormatter.format(date);
+    }
+    return date.toLocaleString();
+  };
+
+  const resolveResponsibleName = (record: any): string => {
+    return (
+      record?.responsibleName ??
+      record?.userName ??
+      record?.user?.name ??
+      record?.user?.username ??
+      record?.employeeName ??
+      record?.createdBy ??
+      "No registrado"
+    );
+  };
   useEffect(() => {
     async function fetchProductSales() {
       try {
@@ -288,8 +334,12 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <p><strong>Nombre:</strong> {product.name}</p>
                 <p><strong>Categoría:</strong> {product.category}</p>
-                <p><strong>Precio Compra Mínimo:</strong> S/. {product.lowestPurchasePrice}</p>
-                <p><strong>Precio Compra Máximo:</strong> S/. {product.highestPurchasePrice}</p>
+                {!hidePurchaseCost && (
+                  <>
+                    <p><strong>Precio Compra Mínimo:</strong> S/. {product.lowestPurchasePrice}</p>
+                    <p><strong>Precio Compra Máximo:</strong> S/. {product.highestPurchasePrice}</p>
+                  </>
+                )}
                 <p><strong>Precio de Venta:</strong> S/. {product.priceSell}</p>
                 <p><strong>Stock General:</strong>{" "}
                   <span className={totalStock === 0 ? "text-red-600 font-bold" : ""}>
@@ -332,52 +382,167 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
           )}
         </div>
 
-        <div>
-            <h2 className="text-xl font-semibold mb-2">Entradas del Producto</h2>
-            {entries.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[...entries]
-              .sort((a, b) => a.storeName.localeCompare(b.storeName))
-              .map((entry, index) => (
-                <div key={index} className="border rounded-md p-4 shadow-sm space-y-1 text-sm">
-                    <p><strong>Fecha:</strong> {new Date(entry.createdAt).toLocaleDateString()}</p>
-                    <p><strong>Precio de Compra:</strong> S/. {(entry.price || 0).toFixed(2)}</p>
-                    <p><strong>Moneda:</strong> {entry.tipoMoneda}</p>
-                    <p><strong>Tienda:</strong> {entry.storeName}</p>
-                    <p><strong>Proveedor:</strong> {entry.supplierName}</p>
-                    <p><strong>Cantidad:</strong> {entry.quantity || 0}</p>
-                    <p><strong>Series:</strong> {entry.series.length > 0 ? entry.series.join(", ") : "No disponibles"}</p>
-                </div>
-                ))}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xl font-semibold">Entradas del Producto</h2>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="icon"
+                variant={viewMode === "cards" ? "default" : "outline"}
+                className="h-9 w-9"
+                onClick={() => setViewMode("cards")}
+                title="Vista en tarjetas"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant={viewMode === "tables" ? "default" : "outline"}
+                className="h-9 w-9"
+                onClick={() => setViewMode("tables")}
+                title="Vista comparativa en tablas"
+              >
+                <Table className="h-4 w-4" />
+              </Button>
             </div>
+          </div>
+
+          {viewMode === "cards" ? (
+            entries.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[...entries]
+                  .sort((a, b) => a.storeName.localeCompare(b.storeName))
+                  .map((entry, index) => (
+                    <div key={index} className="border rounded-md p-4 shadow-sm space-y-1 text-sm">
+                      <p><strong>Fecha y hora:</strong> {formatDateTime(entry.createdAt)}</p>
+                      {!hidePurchaseCost && (
+                        <p><strong>Precio de Compra:</strong> S/. {(entry.price || 0).toFixed(2)}</p>
+                      )}
+                      <p><strong>Moneda:</strong> {entry.tipoMoneda}</p>
+                      <p><strong>Tienda:</strong> {entry.storeName}</p>
+                      <p><strong>Proveedor:</strong> {entry.supplierName}</p>
+                      <p><strong>Cantidad:</strong> {entry.quantity || 0}</p>
+                      <p><strong>Responsable:</strong> {resolveResponsibleName(entry)}</p>
+                      <p><strong>Series:</strong> {entry.series.length > 0 ? entry.series.join(", ") : "No disponibles"}</p>
+                    </div>
+                ))}
+              </div>
             ) : (
-            <p className="text-muted-foreground text-sm">No hay entradas disponibles para este producto.</p>
-            )}
+              <p className="text-muted-foreground text-sm">No hay entradas disponibles para este producto.</p>
+            )
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="overflow-hidden rounded-md border">
+                <div className="bg-muted px-4 py-2 font-semibold">Entradas</div>
+                <div className="overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/60">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold">Fecha y hora</th>
+                        <th className="px-3 py-2 text-left font-semibold">Tienda</th>
+                        <th className="px-3 py-2 text-left font-semibold">Proveedor</th>
+                        <th className="px-3 py-2 text-left font-semibold">Responsable</th>
+                        <th className="px-3 py-2 text-right font-semibold">Cantidad</th>
+                        {!hidePurchaseCost && (
+                          <th className="px-3 py-2 text-right font-semibold">Precio</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.length > 0 ? (
+                        [...entries]
+                          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                          .map((entry, index) => (
+                            <tr key={index} className="border-t">
+                              <td className="px-3 py-2">{formatDateTime(entry.createdAt)}</td>
+                              <td className="px-3 py-2">{entry.storeName}</td>
+                              <td className="px-3 py-2">{entry.supplierName}</td>
+                              <td className="px-3 py-2">{resolveResponsibleName(entry)}</td>
+                              <td className="px-3 py-2 text-right">{entry.quantity || 0}</td>
+                              {!hidePurchaseCost && (
+                                <td className="px-3 py-2 text-right">S/. {(entry.price || 0).toFixed(2)}</td>
+                              )}
+                            </tr>
+                          ))
+                      ) : (
+                        <tr>
+                          <td colSpan={entryTableColSpan} className="px-3 py-4 text-center text-muted-foreground">No hay entradas registradas.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-md border">
+                <div className="bg-muted px-4 py-2 font-semibold">Salidas</div>
+                <div className="overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/60">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold">Fecha y hora</th>
+                        <th className="px-3 py-2 text-left font-semibold">Tienda</th>
+                        <th className="px-3 py-2 text-left font-semibold">Cliente</th>
+                        <th className="px-3 py-2 text-left font-semibold">Responsable</th>
+                        <th className="px-3 py-2 text-right font-semibold">Cantidad</th>
+                        <th className="px-3 py-2 text-right font-semibold">Precio</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sales.length > 0 ? (
+                        [...sales]
+                          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                          .map((sale, index) => (
+                            <tr key={index} className="border-t">
+                              <td className="px-3 py-2">{formatDateTime(sale.createdAt)}</td>
+                              <td className="px-3 py-2">{sale.storeName}</td>
+                              <td className="px-3 py-2">{sale.clientName}</td>
+                              <td className="px-3 py-2">{resolveResponsibleName(sale)}</td>
+                              <td className="px-3 py-2 text-right">{sale.quantity}</td>
+                              <td className="px-3 py-2 text-right">S/. {sale.price.toFixed(2)}</td>
+                            </tr>
+                          ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="px-3 py-4 text-center text-muted-foreground">No hay salidas registradas.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div>
-          <h2 className="text-xl font-semibold mb-2">Salidas del Producto</h2>
-          {sales.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[...sales]
-              .sort((a, b) => a.storeName.localeCompare(b.storeName))
-              .map((sale, index) => (
-                <div key={index} className="border rounded-md p-4 shadow-sm space-y-1 text-sm">
-                  <p><strong>Fecha:</strong> {new Date(sale.createdAt).toLocaleDateString()}</p>
-                  <p><strong>Cantidad:</strong> {sale.quantity}</p>
-                  <p><strong>Precio:</strong> S/. {sale.price.toFixed(2)}</p>
-                  <p><strong>Tienda:</strong> {sale.storeName}</p>
-                  <p><strong>Cliente:</strong> {sale.clientName}</p>
-                  {sale.series && sale.series.length > 0 && (
-                    <p><strong>Series:</strong> {sale.series.join(', ')}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted-foreground text-sm">No hay salidas disponibles para este producto.</p>
-          )}
-        </div>    
+        {viewMode === "cards" && (
+          <div>
+            <h2 className="text-xl font-semibold mb-2">Salidas del Producto</h2>
+            {sales.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[...sales]
+                  .sort((a, b) => a.storeName.localeCompare(b.storeName))
+                  .map((sale, index) => (
+                    <div key={index} className="border rounded-md p-4 shadow-sm space-y-1 text-sm">
+                      <p><strong>Fecha y hora:</strong> {formatDateTime(sale.createdAt)}</p>
+                      <p><strong>Cantidad:</strong> {sale.quantity}</p>
+                      <p><strong>Precio:</strong> S/. {sale.price.toFixed(2)}</p>
+                      <p><strong>Tienda:</strong> {sale.storeName}</p>
+                      <p><strong>Cliente:</strong> {sale.clientName}</p>
+                      <p><strong>Responsable:</strong> {resolveResponsibleName(sale)}</p>
+                      {sale.series && sale.series.length > 0 && (
+                        <p><strong>Series:</strong> {sale.series.join(', ')}</p>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-sm">No hay salidas disponibles para este producto.</p>
+            )}
+          </div>
+        )}
 
         <div ref={codesSectionRef} className="space-y-4">
           {showQR && (

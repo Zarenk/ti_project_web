@@ -1,11 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateTipoCambioDto } from './dto/create-exchange.dto';
 import { UpdateExchangeDto } from './dto/update-exchange.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { zonedTimeToUtc } from 'date-fns-tz';
 import { ActivityService } from '../activity/activity.service';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
 import { Request } from 'express';
+import {
+  buildOrganizationFilter,
+  resolveOrganizationId,
+} from 'src/tenancy/organization.utils';
+import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import { toJsonSafe } from 'src/utils/json-safe';
 
 @Injectable()
 export class ExchangeService {
@@ -14,39 +20,69 @@ export class ExchangeService {
     private activityService: ActivityService,
   ) {}
 
-  async create(dto: CreateTipoCambioDto, req: Request) {
+  async create(
+    dto: CreateTipoCambioDto,
+    req: Request,
+    organizationId?: number | null,
+  ) {
     const timeZone = 'America/Lima'; // Define la zona horaria deseada
     const fechaUtc = zonedTimeToUtc(dto.fecha, timeZone); // Convierte la fecha a UTC
-  
+
     const user = (
       req as Request & { user?: { userId?: number; username?: string } }
     ).user;
 
-    const existing = await this.prisma.tipoCambio.findUnique({
+    const providedOrganizationId = (
+      dto as CreateTipoCambioDto & { organizationId?: number | null }
+    ).organizationId;
+
+    const resolvedOrganizationId = resolveOrganizationId({
+      provided: providedOrganizationId,
+      fallbacks: [organizationId],
+      mismatchError:
+        'La organización del tipo de cambio no coincide con el contexto actual.',
+    });
+
+    logOrganizationContext({
+      service: ExchangeService.name,
+      operation: 'create',
+      organizationId: resolvedOrganizationId ?? null,
+      metadata: { currency: dto.moneda },
+    });
+
+    const organizationMatch =
+      resolvedOrganizationId === null
+        ? { organizationId: null }
+        : resolvedOrganizationId === undefined
+          ? {}
+          : { organizationId: resolvedOrganizationId };
+
+    const existing = await this.prisma.tipoCambio.findFirst({
       where: {
-        fecha_moneda: {
-          fecha: fechaUtc, // Usa la fecha en UTC
-          moneda: dto.moneda,
-        },
+        fecha: fechaUtc,
+        moneda: dto.moneda,
+        ...organizationMatch,
       },
     });
 
-    const rate = await this.prisma.tipoCambio.upsert({
-      where: {
-        fecha_moneda: {
+    let rate;
+    if (existing) {
+      rate = await this.prisma.tipoCambio.update({
+        where: { id: existing.id },
+        data: {
+          valor: dto.valor,
+        },
+      });
+    } else {
+      rate = await this.prisma.tipoCambio.create({
+        data: {
           fecha: fechaUtc, // Usa la fecha en UTC
           moneda: dto.moneda,
-        },
-      },
-      update: {
-        valor: dto.valor,
-      },
-      create: {
-        fecha: fechaUtc, // Usa la fecha en UTC
-        moneda: dto.moneda,
-        valor: dto.valor,
-      },
-    });
+          valor: dto.valor,
+          organizationId: resolvedOrganizationId ?? null,
+        } as Prisma.TipoCambioUncheckedCreateInput,
+      });
+    }
 
     await this.activityService.log(
       {
@@ -57,25 +93,8 @@ export class ExchangeService {
         action: existing ? AuditAction.UPDATED : AuditAction.CREATED,
         summary: `Tipo de cambio ${dto.moneda} ${existing ? 'actualizado' : 'creado'} a ${dto.valor}`,
         diff: existing
-          ? {
-              before: {
-                ...existing,
-                fecha: existing.fecha instanceof Date ? existing.fecha.toISOString() : existing.fecha,
-                createdAt: existing.createdAt instanceof Date ? existing.createdAt.toISOString() : existing.createdAt,
-              },
-              after: {
-                ...rate,
-                fecha: rate.fecha instanceof Date ? rate.fecha.toISOString() : rate.fecha,
-                createdAt: rate.createdAt instanceof Date ? rate.createdAt.toISOString() : rate.createdAt,
-              },
-            }
-          : {
-              after: {
-                ...rate,
-                fecha: rate.fecha instanceof Date ? rate.fecha.toISOString() : rate.fecha,
-                createdAt: rate.createdAt instanceof Date ? rate.createdAt.toISOString() : rate.createdAt,
-              },
-            },
+          ? toJsonSafe({ before: existing, after: rate })
+          : toJsonSafe({ after: rate }),
       },
       req,
     );
@@ -83,8 +102,35 @@ export class ExchangeService {
     return rate;
   }
 
-  async update(id: number, dto: UpdateExchangeDto, req: Request) {
-    const before = await this.prisma.tipoCambio.findUnique({ where: { id } });
+  async update(
+    id: number,
+    dto: UpdateExchangeDto,
+    req: Request,
+    organizationId?: number | null,
+  ) {
+    const organizationFilter = buildOrganizationFilter(organizationId);
+    const before = await this.prisma.tipoCambio.findFirst({
+      where: { id, ...organizationFilter },
+      select: {
+        id: true,
+        fecha: true,
+        moneda: true,
+        valor: true,
+        createdAt: true,
+        organizationId: true, // <-- necesario para logOrganizationContext
+      },
+    });
+    if (!before) {
+      throw new NotFoundException('Tipo de cambio no encontrado.');
+    }
+
+    logOrganizationContext({
+      service: ExchangeService.name,
+      operation: 'update',
+      organizationId: before.organizationId ?? null,
+      metadata: { exchangeId: id },
+    });
+
     const updated = await this.prisma.tipoCambio.update({
       where: { id },
       data: dto,
@@ -105,14 +151,26 @@ export class ExchangeService {
           before: before
             ? {
                 ...before,
-                fecha: before.fecha instanceof Date ? before.fecha.toISOString() : before.fecha,
-                createdAt: before.createdAt instanceof Date ? before.createdAt.toISOString() : before.createdAt,
+                fecha:
+                  before.fecha instanceof Date
+                    ? before.fecha.toISOString()
+                    : before.fecha,
+                createdAt:
+                  before.createdAt instanceof Date
+                    ? before.createdAt.toISOString()
+                    : before.createdAt,
               }
             : null,
           after: {
             ...updated,
-            fecha: updated.fecha instanceof Date ? updated.fecha.toISOString() : updated.fecha,
-            createdAt: updated.createdAt instanceof Date ? updated.createdAt.toISOString() : updated.createdAt,
+            fecha:
+              updated.fecha instanceof Date
+                ? updated.fecha.toISOString()
+                : updated.fecha,
+            createdAt:
+              updated.createdAt instanceof Date
+                ? updated.createdAt.toISOString()
+                : updated.createdAt,
           },
         },
       },
@@ -122,20 +180,47 @@ export class ExchangeService {
     return updated;
   }
 
-  async setRate(dto: CreateTipoCambioDto, req: Request) {
-    return this.create(dto, req);
+  async setRate(
+    dto: CreateTipoCambioDto,
+    req: Request,
+    organizationId?: number | null,
+  ) {
+    return this.create(dto, req, organizationId);
   }
 
-  async findAll() {
+  async findAll(organizationId?: number | null) {
+    const where = buildOrganizationFilter(organizationId);
+
+    logOrganizationContext({
+      service: ExchangeService.name,
+      operation: 'findAll',
+      organizationId:
+        organizationId === undefined ? undefined : (organizationId ?? null),
+    });
+
     return this.prisma.tipoCambio.findMany({
+      where,
       orderBy: { fecha: 'desc' },
     });
   }
 
   // Método para obtener el tipo de cambio más reciente por moneda
-  async getLatestByMoneda(moneda: string) {
+  async getLatestByMoneda(moneda: string, organizationId?: number | null) {
+    const where = {
+      moneda,
+      ...buildOrganizationFilter(organizationId),
+    };
+
+    logOrganizationContext({
+      service: ExchangeService.name,
+      operation: 'getLatestByMoneda',
+      organizationId:
+        organizationId === undefined ? undefined : (organizationId ?? null),
+      metadata: { currency: moneda },
+    });
+
     return this.prisma.tipoCambio.findFirst({
-      where: { moneda },
+      where,
       orderBy: { fecha: 'desc' },
     });
   }
