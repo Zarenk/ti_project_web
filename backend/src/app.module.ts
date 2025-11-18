@@ -51,6 +51,8 @@ import { SystemMaintenanceModule } from './system-maintenance/system-maintenance
 import { TenancyModule } from './tenancy/tenancy.module';
 import { TenantContextGuard } from './tenancy/tenant-context.guard';
 import { LookupsModule } from './lookups/lookups.module';
+import { InvoiceTemplatesModule } from './invoice-templates/invoice-templates.module';
+import { InvoiceExtractionModule } from './invoice-extraction/invoice-extraction.module';
 
 @Module({
   imports: [
@@ -96,6 +98,8 @@ import { LookupsModule } from './lookups/lookups.module';
     SystemMaintenanceModule,
     TenancyModule,
     LookupsModule,
+    InvoiceTemplatesModule,
+    InvoiceExtractionModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [

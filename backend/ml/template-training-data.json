@@ -1,0 +1,22 @@
+[
+  {
+    "templateId": 1,
+    "documentType": "FACTURA",
+    "text": "Factura electrónica serie F001 correlativo 000123 total 1500.00 proveedor Ecoterra RUC 20123456789 igv 18%"
+  },
+  {
+    "templateId": 1,
+    "documentType": "FACTURA",
+    "text": "Comprobante tipo 01 serie F103 número 01062846 moneda PEN total 3280.50 cliente ECOTERRA SAC"
+  },
+  {
+    "templateId": 2,
+    "documentType": "BOLETA",
+    "text": "Boleta de venta serie B001 correlativo 000452 proveedor Comercial Andina total 250.00 moneda PEN igv incluido"
+  },
+  {
+    "templateId": 2,
+    "documentType": "BOLETA",
+    "text": "Comprobante tipo BV serie B201 número 00015433 total 98.70 tienda Miraflores"
+  }
+]

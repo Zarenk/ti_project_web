@@ -195,6 +195,113 @@ export function getPdfGuiaUrl(pdfPath: string): string {
 }
 //
 
+export interface InvoiceExtractionLog {
+  id: number;
+  level: string;
+  message: string;
+  context?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface ExtractionResultPayload {
+  textPreview?: string;
+  templateId?: number;
+  templateVersion?: number;
+  fields?: Record<string, string | null>;
+  score?: number;
+  manualAssignment?: boolean;
+}
+
+export interface InvoiceSample {
+  id: number;
+  extractionStatus: string;
+  createdAt: string;
+  originalFilename: string;
+  storagePath: string;
+  invoiceTemplateId?: number | null;
+  extractionResult?: ExtractionResultPayload | null;
+  logs?: InvoiceExtractionLog[];
+}
+
+export interface InvoiceTemplateSummary {
+  id: number;
+  documentType: string;
+  providerName?: string | null;
+  version: number;
+}
+
+export async function getInvoiceSamples(
+  entryId: number,
+  includeLogs = false,
+): Promise<InvoiceSample[]> {
+  try {
+    const response = await authFetch(
+      `${BACKEND_URL}/api/invoice-samples/entry/${entryId}?includeLogs=${includeLogs}`,
+      { method: 'GET' },
+    );
+
+    if (!response.ok) {
+      throw new Error('Error al obtener las muestras de facturas');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    console.error('Error al obtener las muestras de facturas:', error);
+    throw error;
+  }
+}
+//
+
+export async function getInvoiceTemplates(): Promise<
+  InvoiceTemplateSummary[]
+> {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/invoice-templates`, {
+      method: 'GET',
+    });
+    if (!response.ok) {
+      throw new Error('Error al obtener las plantillas');
+    }
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    console.error('Error al obtener las plantillas:', error);
+    throw error;
+  }
+}
+
+export async function assignInvoiceTemplate(
+  sampleId: number,
+  templateId: number,
+  reprocess = true,
+) {
+  const response = await authFetch(
+    `${BACKEND_URL}/api/invoice-samples/${sampleId}/template`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ templateId, reprocess }),
+    },
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(
+      errorData?.message || 'Error al asignar la plantilla manualmente',
+    );
+  }
+
+  return response.json();
+}
+//
+
 // Verificar si una serie ya existe
 export const checkSeries = async (serial: string): Promise<{ exists: boolean }> => {
   try {

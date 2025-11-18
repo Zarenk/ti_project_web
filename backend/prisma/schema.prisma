@@ -210,7 +210,8 @@ model User {
   sunatStoredPdfs  SunatStoredPdf[]
 
   memberships OrganizationMembership[]
-
+  createdInvoiceTemplates InvoiceTemplate[] @relation("InvoiceTemplateCreatedBy")
+  updatedInvoiceTemplates InvoiceTemplate[] @relation("InvoiceTemplateUpdatedBy")
   @@index([email])
   @@index([username])
   @@index([organizationId, email])
@@ -248,6 +249,8 @@ model Organization {
   siteSettings SiteSettings[]
   sunatTransmissions SunatTransmission[]
   sunatStoredPdfs   SunatStoredPdf[]
+  invoiceTemplates InvoiceTemplate[]
+  invoiceSamples InvoiceSample[]
 
   @@unique([name])
   @@index([status])
@@ -295,6 +298,8 @@ model Company {
   sunatTransmissions SunatTransmission[]
   sunatStoredPdfs   SunatStoredPdf[]
   documentSequences CompanyDocumentSequence[]
+  invoiceTemplates InvoiceTemplate[]
+  invoiceSamples InvoiceSample[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -444,9 +449,44 @@ model Provider {
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   entrys     Entry[] // Relacion con el modelo Entry
   accEntries AccEntry[] // Relacion con el modelo AccEntry
+  invoiceTemplates InvoiceTemplate[]
 
   @@index([organizationId])
   @@unique([organizationId, documentNumber]) // NUEVO: unicidad por organizacion
+}
+
+model InvoiceTemplate {
+  id             Int      @id @default(autoincrement())
+  organizationId Int?
+  companyId      Int?
+  providerId     Int?
+  providerName   String?
+  documentType   String
+  version        Int      @default(1)
+  priority       Int      @default(100)
+  isActive       Boolean  @default(true)
+  checksum       String?
+  regexRules     Json?
+  fieldMappings  Json?
+  extractionHints Json?
+  sampleFilename String?
+  notes          String?
+  createdById    Int?
+  updatedById    Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  provider     Provider?     @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  createdBy    User?         @relation("InvoiceTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy    User?         @relation("InvoiceTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  samples      InvoiceSample[] @relation("InvoiceTemplateSamples")
+
+  @@index([organizationId, companyId])
+  @@index([providerId])
+  @@index([documentType])
+  @@unique([organizationId, companyId, providerId, documentType, version])
 }
 
 enum PaymentTerm {
@@ -493,6 +533,7 @@ model Entry {
   tipoCambio TipoCambio? @relation(fields: [tipoCambioId], references: [id])
 
   shippingGuides ShippingGuide[]
+  invoiceSamples InvoiceSample[]
 
   @@index([storeId])
   @@index([userId])
@@ -795,6 +836,47 @@ model CompanyDocumentSequence {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, documentType])
+}
+
+model InvoiceSample {
+  id                Int      @id @default(autoincrement())
+  organizationId    Int?
+  companyId         Int?
+  entryId           Int?
+  invoiceTemplateId Int?
+  originalFilename  String
+  storagePath       String
+  mimeType          String?
+  fileSize          BigInt?
+  sha256            String
+  extractionStatus  String   @default("PENDING")
+  extractionResult  Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  entry        Entry?           @relation(fields: [entryId], references: [id], onDelete: SetNull)
+  template     InvoiceTemplate? @relation("InvoiceTemplateSamples", fields: [invoiceTemplateId], references: [id], onDelete: SetNull)
+  logs         InvoiceExtractionLog[]
+
+  @@index([organizationId, companyId])
+  @@index([entryId])
+  @@index([invoiceTemplateId])
+  @@unique([sha256, organizationId], name: "InvoiceSample_hash_org_unique")
+}
+
+model InvoiceExtractionLog {
+  id        Int      @id @default(autoincrement())
+  sampleId  Int
+  level     String   @default("INFO")
+  message   String
+  context   Json?
+  createdAt DateTime @default(now())
+
+  sample InvoiceSample @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+
+  @@index([sampleId, level])
 }
 
 model Orders {

@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "InvoiceTemplate_org_company_provider_type_version_key" RENAME TO "InvoiceTemplate_organizationId_companyId_providerId_documen_key";

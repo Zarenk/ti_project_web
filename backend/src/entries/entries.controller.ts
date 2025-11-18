@@ -22,11 +22,17 @@ import { diskStorage } from 'multer';
 import path from 'path';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { InvoiceExtractionService } from 'src/invoice-extraction/invoice-extraction.service';
+import { promises as fs } from 'fs';
+import { createHash } from 'crypto';
 
 @ModulePermission('inventory')
 @Controller('entries')
 export class EntriesController {
-  constructor(private readonly entriesService: EntriesService) {}
+  constructor(
+    private readonly entriesService: EntriesService,
+    private readonly invoiceExtraction: InvoiceExtractionService,
+  ) {}
 
   // Endpoint para crear una nueva entrada
   @Post()
@@ -151,7 +157,9 @@ export class EntriesController {
     }
 
     const pdfUrl = `/uploads/invoices/${file.filename}`;
-    return this.entriesService.updateEntryPdf(Number(id), pdfUrl);
+    const entryId = Number(id);
+    await this.registerInvoiceSample(entryId, file);
+    return this.entriesService.updateEntryPdf(entryId, pdfUrl);
   }
 
   // Endpoint para actualizar una entrada con un PDF GUIA
@@ -273,5 +281,70 @@ export class EntriesController {
       isNaN(take) ? 5 : take,
       orgId ?? undefined,
     );
+  }
+
+  private async registerInvoiceSample(
+    entryId: number,
+    file: Express.Multer.File,
+  ) {
+    try {
+      const destination =
+        file.destination ??
+        (file.path ? path.dirname(file.path) : './uploads/invoices');
+      const absolutePath = path.resolve(destination, file.filename);
+
+      if (!(await this.fileExists(absolutePath))) {
+        console.warn(
+          `No se encontr�� el archivo para registrar muestra: ${absolutePath}`,
+        );
+        return;
+      }
+
+      const sha256 = await this.computeSha256(absolutePath);
+      const storagePath = path
+        .posix
+        .join('uploads', 'invoices', file.filename.replace(/\\/g, '/'));
+
+      const sample = await this.invoiceExtraction.recordSample({
+        entryId,
+        originalFilename: file.originalname,
+        storagePath,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        sha256,
+      });
+
+      await this.invoiceExtraction.appendLog(
+        sample.id,
+        'INFO',
+        'PDF subido',
+        { storagePath },
+      );
+
+      this.invoiceExtraction
+        .processSample(sample.id)
+        .catch((error) =>
+          console.error(
+            `Error al procesar la muestra ${sample.id}:`,
+            error,
+          ),
+        );
+    } catch (error) {
+      console.error('Error registrando la muestra de factura:', error);
+    }
+  }
+
+  private async computeSha256(filePath: string) {
+    const buffer = await fs.readFile(filePath);
+    return createHash('sha256').update(buffer).digest('hex');
+  }
+
+  private async fileExists(filePath: string) {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

@@ -7,9 +7,10 @@ import { ActivityModule } from 'src/activity/activity.module';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { AccountingService } from 'src/accounting/accounting.service';
 import { TenancyModule } from 'src/tenancy/tenancy.module';
+import { InvoiceExtractionModule } from 'src/invoice-extraction/invoice-extraction.module';
 
 @Module({
-  imports: [CategoryModule, ActivityModule, TenancyModule], // Asegúrate de importar el módulo de categorías
+  imports: [CategoryModule, ActivityModule, TenancyModule, InvoiceExtractionModule], // Asegúrate de importar el módulo de categorías
   controllers: [EntriesController],
   providers: [EntriesService, PrismaService, AccountingHook, AccountingService],
 })

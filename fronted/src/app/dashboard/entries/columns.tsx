@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { deleteEntry, getPdfGuiaUrl, getPdfUrl } from './entries.api';
 import { DeleteActionsGuard } from '@/components/delete-actions-guard';
+import { InvoiceSampleStatus } from './components/invoice-sample-status';
 
 
 export type Entryes = {
@@ -71,6 +72,15 @@ export const columns: ColumnDef<Entryes>[] = [
     ),
     enableSorting: false,
     enableHiding: false,
+    },
+    {
+      id: 'invoiceProcessing',
+      header: 'Procesamiento PDF',
+      cell: ({ row }) => (
+        <InvoiceSampleStatus entryId={Number(row.original.id)} />
+      ),
+      enableSorting: false,
+      enableHiding: false,
     },
     {
         accessorKey: 'createdAt',
