@@ -6,6 +6,7 @@ import {
   RecordInvoiceSampleDto,
 } from './dto/record-invoice-sample.dto';
 import { AssignTemplateDto } from './dto/assign-template.dto';
+import { SubmitCorrectionDto } from './dto/submit-correction.dto';
 import { promises as fs, existsSync } from 'fs';
 import path from 'path';
 import pdfParse from 'pdf-parse';
@@ -117,12 +118,12 @@ export class InvoiceExtractionService {
   }
 
   async processSample(sampleId: number) {
-    const sample = await this.prisma.invoiceSample.findUnique({
+    const sample = (await this.prisma.invoiceSample.findUnique({
       where: { id: sampleId },
       include: {
         entry: { include: { invoice: true } },
       },
-    });
+    })) as SampleWithEntry | null;
     if (!sample) {
       throw new NotFoundException(`InvoiceSample ${sampleId} not found`);
     }
@@ -173,12 +174,17 @@ export class InvoiceExtractionService {
         );
     } else {
       const fallback = await this.mlExtraction
-        .extract(textData.text, textData.preview, {
-          sampleId,
-          organizationId: sample.organizationId ?? null,
-          companyId: sample.companyId ?? null,
-          entryId: sample.entryId ?? null,
-        })
+        .extract(
+          textData.text,
+          textData.preview,
+          {
+            sampleId,
+            organizationId: sample.organizationId ?? null,
+            companyId: sample.companyId ?? null,
+            entryId: sample.entryId ?? null,
+          },
+          { filePath: sample.storagePath },
+        )
         .catch((error) => {
           this.logger.warn(
             `Fallo al invocar la capa ML de respaldo: ${
@@ -210,7 +216,11 @@ export class InvoiceExtractionService {
     }
 
 
-    await this.validateEntryData(sample.entryId ?? null, sampleId);
+    if (await this.validateEntryData(sample.entryId ?? null, sampleId)) {
+      await this.recordApprovalAudit(sampleId, sample, sample.entry ?? null, {
+        tipoComprobante: sample.entry?.invoice?.tipoComprobante ?? null,
+      });
+    }
   }
 
   async findByEntry(entryId: number, includeLogs = false) {
@@ -315,7 +325,14 @@ export class InvoiceExtractionService {
       );
     }
 
-    await this.validateEntryData(sample.entryId ?? null, sampleId);
+      if (await this.validateEntryData(sample.entryId ?? null, sampleId)) {
+        await this.recordApprovalAudit(
+          sampleId,
+          sample,
+          sample.entry ?? null,
+          sample.entry?.invoice ?? null,
+        );
+      }
     return this.prisma.invoiceSample.findUnique({ where: { id: sampleId } });
   }
   private async matchTemplate(
@@ -734,7 +751,7 @@ export class InvoiceExtractionService {
 
       for (const [label, value] of requiredFields) {
         if (!value || String(value).trim() === '') {
-          issues.push(`El campo de factura ${label} estÃ¡ vacÃ­o`);
+          issues.push(`El campo de factura ${label} esta¡ vacio`);
         }
       }
     } else {
@@ -745,18 +762,87 @@ export class InvoiceExtractionService {
       await this.appendLog(sampleId, 'WARN', 'Validaciones SUNAT/contables', {
         issues,
       });
-    } else {
-      await this.appendLog(
-        sampleId,
-        'INFO',
-        'Validaciones SUNAT/contables completadas',
-        {
-          detailsTotal: detailsTotal.toFixed(2),
-          invoiceTotal: invoiceTotal?.toFixed(2) ?? null,
-          recordedTotal: recordedTotal?.toFixed(2) ?? null,
-        },
-      );
+      return false;
     }
+    await this.appendLog(
+      sampleId,
+      'INFO',
+      'Validaciones SUNAT/contables completadas',
+      {
+        detailsTotal: detailsTotal.toFixed(2),
+        invoiceTotal: invoiceTotal?.toFixed(2) ?? null,
+        recordedTotal: recordedTotal?.toFixed(2) ?? null,
+      },
+    );
+    return true;
+  }
+
+  async recordCorrection(sampleId: number, dto: SubmitCorrectionDto) {
+    await this.ensureSample(sampleId);
+    const sample = await this.prisma.invoiceSample.findUnique({
+      where: { id: sampleId },
+    });
+    if (!sample) {
+      throw new NotFoundException(`InvoiceSample ${sampleId} not found`);
+    }
+
+    const fallbackFields =
+      sample.extractionResult?.['fields'] &&
+      typeof sample.extractionResult?.['fields'] === 'object'
+        ? JSON.stringify(sample.extractionResult?.['fields'])
+        : '';
+
+    const mlMetadata =
+      typeof sample.extractionResult === 'object' &&
+      sample.extractionResult !== null
+        ? (sample.extractionResult as any).mlMetadata ?? null
+        : null;
+
+    const text =
+      dto.text?.trim() ??
+      sample.extractionResult?.['textPreview'] ??
+      fallbackFields;
+
+    if (text) {
+      await this.training.recordSample({
+        templateId: dto.templateId ?? sample.invoiceTemplateId ?? 0,
+        text,
+        organizationId: sample.organizationId ?? null,
+        companyId: sample.companyId ?? null,
+        source: 'MANUAL',
+      });
+    }
+
+    await this.appendLog(sampleId, 'TRAINING_DATA', 'Corrección manual registrada', {
+      templateId: dto.templateId ?? sample.invoiceTemplateId ?? null,
+      fields: dto.fields,
+      mlMetadata,
+    });
+
+    return { success: true, mlMetadata };
+  }
+
+  private async recordApprovalAudit(
+    sampleId: number,
+    sample: InvoiceSample,
+    entry: SampleWithEntry['entry'] | null,
+    invoice: { tipoComprobante?: string | null } | null,
+  ) {
+    const ctx = this.tenant.getContext();
+    await this.appendLog(sampleId, 'AUDIT', 'Extracción aprobada', {
+      userId: ctx.userId,
+      entryId: sample.entryId,
+      templateId: sample.invoiceTemplateId,
+      mlProvider:
+        typeof sample.extractionResult === 'object' &&
+        sample.extractionResult !== null &&
+        'mlMetadata' in sample.extractionResult
+          ? (sample.extractionResult as any).mlMetadata?.source ?? null
+          : null,
+      invoiceType: invoice?.tipoComprobante ?? null,
+      organizationId: ctx.organizationId,
+      companyId: ctx.companyId,
+    });
   }
 
   private serializeSample(

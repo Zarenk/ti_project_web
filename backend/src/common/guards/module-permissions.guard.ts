@@ -1,8 +1,9 @@
-﻿import {
+import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
@@ -11,6 +12,7 @@ import type { Request } from 'express';
 import { MODULE_PERMISSION_KEY } from '../decorators/module-permission.decorator';
 import { SiteSettingsService } from 'src/site-settings/site-settings.service';
 import type { TenantContext } from 'src/tenancy/tenant-context.interface';
+import { SKIP_MODULE_PERMISSION_KEY } from '../decorators/skip-module-permission.decorator';
 
 interface RequestWithUser extends Request {
   user?: {
@@ -22,6 +24,7 @@ interface RequestWithUser extends Request {
 @Injectable()
 export class ModulePermissionsGuard implements CanActivate {
   private readonly jwtService: JwtService;
+  private readonly logger = new Logger(ModulePermissionsGuard.name);
 
   constructor(
     private readonly reflector: Reflector,
@@ -34,6 +37,14 @@ export class ModulePermissionsGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const skipGuard = this.reflector.getAllAndOverride<boolean>(
+      SKIP_MODULE_PERMISSION_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (skipGuard) {
+      return true;
+    }
+
     const permissionKey = this.reflector.getAllAndOverride<string | string[]>(
       MODULE_PERMISSION_KEY,
       [context.getHandler(), context.getClass()],
@@ -44,6 +55,10 @@ export class ModulePermissionsGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<RequestWithUser>();
+
+    this.logger.debug(
+      `module permissions check for handler=${context.getHandler()?.name} url=${request.url}`,
+    );
 
     const requiredKeys = Array.isArray(permissionKey)
       ? permissionKey
@@ -62,17 +77,28 @@ export class ModulePermissionsGuard implements CanActivate {
     }
 
     const { organizationId, companyId } = this.resolveTenantIds(request);
-    const settings = await this.siteSettingsService.getSettings(
-      organizationId,
-      companyId,
-    );
-    const permissions = (settings.data as Record<string, any>)?.permissions as
-      | Record<string, boolean>
-      | undefined;
+    let permissions: Record<string, boolean> | undefined;
+    try {
+      const settings = await this.siteSettingsService.getSettings(
+        organizationId,
+        companyId,
+      );
+      permissions = (settings.data as Record<string, any>)?.permissions as
+        | Record<string, boolean>
+        | undefined;
+    } catch (error) {
+      this.logger.warn(
+        `metrics guard failed to load settings for org=${organizationId} company=${companyId}: ${error}`,
+      );
+      throw error;
+    }
 
     const hasAccess = requiredKeys.some((key) => permissions?.[key] !== false);
 
     if (!hasAccess) {
+      this.logger.warn(
+        `Access denied for keys=${requiredKeys} / org=${organizationId} company=${companyId}`,
+      );
       throw new ForbiddenException('Module access is disabled.');
     }
 

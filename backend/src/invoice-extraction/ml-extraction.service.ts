@@ -1,11 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ExtractionResultPayload } from './dto/record-invoice-sample.dto';
 import { spawnSync } from 'child_process';
 import path from 'path';
+import os from 'os';
 import crypto from 'crypto';
-import { existsSync } from 'fs';
-import https from 'https';
+import { existsSync, readFileSync, unlinkSync } from 'fs';
 import http from 'http';
+import https from 'https';
 import { URL } from 'url';
 
 interface ExtractionMetadata {
@@ -20,6 +21,8 @@ interface ScriptPayload {
   metadata: ExtractionMetadata;
   sanitized: boolean;
   originalHash: string;
+  redactedPdfPath?: string | null;
+  redactedPdfHash?: string | null;
 }
 
 @Injectable()
@@ -27,30 +30,83 @@ export class MlExtractionService {
   private readonly logger = new Logger(MlExtractionService.name);
   private readonly scriptPath =
     process.env.ML_EXTRACTION_SCRIPT ??
-    path.resolve(
-      process.cwd(),
-      'backend',
-      'ml',
-      'extract_invoice_fields.py',
-    );
+    path.resolve(process.cwd(), 'backend', 'ml', 'extract_invoice_fields.py');
   private readonly pythonBin =
-    process.env.ML_EXTRACTION_BIN ??
-    process.env.PYTHON_BIN ??
-    'python';
+    process.env.ML_EXTRACTION_BIN ?? process.env.PYTHON_BIN ?? 'python';
   private readonly endpoint = process.env.ML_EXTRACTION_ENDPOINT ?? null;
   private readonly apiKey = process.env.ML_EXTRACTION_API_KEY ?? null;
   private readonly sanitize =
     process.env.ML_EXTRACTION_SANITIZE !== 'false';
+  private readonly donutScript =
+    process.env.DONUT_EXTRACTION_SCRIPT ??
+    path.resolve(process.cwd(), 'backend', 'ml', 'donut_inference.py');
+  private readonly donutBin =
+    process.env.DONUT_EXTRACTION_BIN ?? process.env.PYTHON_BIN ?? 'python';
+  private readonly redactionScript =
+    process.env.PDF_REDACTION_SCRIPT ??
+    path.resolve(process.cwd(), 'backend', 'ml', 'redact_pdf.py');
+  private readonly redactionBin =
+    process.env.PDF_REDACTION_BIN ?? process.env.PYTHON_BIN ?? 'python';
   private scriptWarningShown = false;
+  private redactionWarningShown = false;
+  private readonly complianceProviderName: string;
+  private readonly complianceRegion: string | null;
+  private readonly externalProviderConfigured: boolean;
 
+  constructor() {
+    this.complianceProviderName =
+      process.env.ML_EXTRACTION_PROVIDER ??
+      (this.endpoint ? 'external-ml' : 'python-ml-fallback');
+    this.complianceRegion = process.env.ML_EXTRACTION_REGION ?? null;
+    this.externalProviderConfigured =
+      typeof process.env.ML_EXTRACTION_PROVIDER === 'string' &&
+      process.env.ML_EXTRACTION_PROVIDER.trim().length > 0;
+  }
   async extract(
     text: string,
     preview: string,
     metadata: ExtractionMetadata,
+    options?: { filePath?: string },
   ): Promise<ExtractionResultPayload | null> {
+    let redactedForPdf: { path: string; hash: string | null } | null = null;
+    if (options?.filePath) {
+      redactedForPdf = this.redactPdf(options.filePath);
+      const inferencePath = redactedForPdf?.path ?? options.filePath;
+      try {
+        const donutResult = this.callDonutScript(inferencePath);
+        if (donutResult) {
+          return this.buildPayload(
+            {
+              status: donutResult.status ?? 'COMPLETED',
+              fields: donutResult.fields ?? {},
+              confidence: donutResult.confidence,
+              modelVersion: donutResult.modelVersion,
+              provider: 'donut-open-source',
+            },
+            preview,
+            {
+              text: text ?? '',
+              metadata,
+              sanitized: false,
+              originalHash: crypto
+                .createHash('sha256')
+                .update(text ?? '')
+                .digest('hex'),
+              redactedPdfPath: redactedForPdf?.path ?? null,
+              redactedPdfHash: redactedForPdf?.hash ?? null,
+            },
+            'donut-open-source',
+          );
+        }
+      } finally {
+        this.cleanupTempFile(redactedForPdf?.path);
+      }
+    }
+
     if (!text?.trim()) {
       return null;
     }
+
     const sanitized = this.sanitizeText(text);
     const payload: ScriptPayload = {
       text: sanitized.text,
@@ -59,6 +115,7 @@ export class MlExtractionService {
       originalHash: crypto.createHash('sha256').update(text).digest('hex'),
     };
 
+    this.ensureComplianceMetadata();
     const result = this.endpoint
       ? await this.callHttpEndpoint(payload)
       : this.callPythonScript(payload);
@@ -89,6 +146,92 @@ export class MlExtractionService {
     };
   }
 
+  private redactPdf(filePath: string) {
+    if (!existsSync(this.redactionScript)) {
+      if (!this.redactionWarningShown) {
+        this.logger.warn(
+          `Script de redacción no encontrado en ${this.redactionScript}. Se enviarán PDFs sin enmascarar.`,
+        );
+        this.redactionWarningShown = true;
+      }
+      return null;
+    }
+    const tempPath = path.join(
+      os.tmpdir(),
+      `redacted-${Date.now()}-${path.basename(filePath)}`,
+    );
+    const proc = spawnSync(
+      this.redactionBin,
+      ['--input', filePath, '--output', tempPath],
+      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 },
+    );
+    if (proc.error) {
+      this.logger.warn(
+        `Error al redaccionar ${filePath}: ${proc.error.message}`,
+      );
+      return null;
+    }
+    if (proc.status !== 0) {
+      this.logger.warn(
+        `El script de redacción terminó con código ${proc.status}: ${proc.stderr}`,
+      );
+      return null;
+    }
+    const output =
+      proc.stdout?.trim() && proc.stdout?.trim() !== tempPath
+        ? proc.stdout?.trim()
+        : tempPath;
+    if (!existsSync(output)) {
+      this.logger.warn(
+        `El script de redacción no generó un archivo válido: ${output}`,
+      );
+      return null;
+    }
+    const hash = this.computeFileHash(output);
+    return { path: output, hash };
+  }
+
+  private cleanupTempFile(filePath?: string) {
+    if (!filePath) {
+      return;
+    }
+    try {
+      unlinkSync(filePath);
+    } catch {
+      // ignore
+    }
+  }
+
+  private computeFileHash(filePath: string) {
+    try {
+      const buffer = readFileSync(filePath);
+      return crypto.createHash('sha256').update(buffer).digest('hex');
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo calcular hash para ${filePath}: ${
+          (error as Error)?.message ?? error
+        }`,
+      );
+      return null;
+    }
+  }
+
+  private ensureComplianceMetadata() {
+    if (!this.endpoint) {
+      return;
+    }
+    if (!this.externalProviderConfigured) {
+      throw new InternalServerErrorException(
+        'Cuando se configura un endpoint externo ML debes definir ML_EXTRACTION_PROVIDER para documentar el acuerdo de tratamiento.',
+      );
+    }
+    if (!this.complianceRegion) {
+      this.logger.warn(
+        'Recomendado definir ML_EXTRACTION_REGION para registrar la ubicación del servicio ML.',
+      );
+    }
+  }
+
   private normalizeFields(input: unknown) {
     if (!input || typeof input !== 'object') {
       return {};
@@ -114,11 +257,22 @@ export class MlExtractionService {
     result: any,
     preview: string,
     audit: ScriptPayload,
+    providerOverride?: string,
   ): ExtractionResultPayload {
+    if (result?.status && result.status !== 'COMPLETED') {
+      this.logger.warn('ML inference returned non-COMPLETED status', {
+        status: result.status,
+        modelVersion: result?.modelVersion,
+        provider: providerOverride ?? result?.provider,
+        debug: result?.debug,
+        response: result,
+      });
+    }
     const fields = this.normalizeFields(result?.fields);
     const provider =
+      providerOverride ??
       result?.provider ??
-      (this.endpoint ? 'external-ml' : 'python-ml-fallback');
+      (this.endpoint ? this.complianceProviderName : 'python-ml-fallback');
     const payload: ExtractionResultPayload = {
       status: result?.status ?? 'COMPLETED',
       data: {
@@ -130,12 +284,17 @@ export class MlExtractionService {
             ? result.confidence
             : null,
         mlModelVersion:
-          result?.modelVersion ??
-          result?.version ??
-          null,
+          result?.modelVersion ?? result?.version ?? null,
+        mlCompliance: {
+          provider: this.complianceProviderName,
+          region: this.complianceRegion,
+          endpoint: this.endpoint,
+        },
         mlMetadata: {
           sanitized: audit.sanitized,
           hash: audit.originalHash,
+          redactedFilePath: audit.redactedPdfPath ?? null,
+          redactedFileHash: audit.redactedPdfHash ?? null,
           source: provider,
         },
       },
@@ -153,7 +312,7 @@ export class MlExtractionService {
     if (!existsSync(this.scriptPath)) {
       if (!this.scriptWarningShown) {
         this.logger.warn(
-          `Script de extracci\u00F3n ML no encontrado en ${this.scriptPath}. Configura ML_EXTRACTION_SCRIPT o desactiva la capa ML.`,
+          `Script de extracción ML no encontrado en ${this.scriptPath}. Configura ML_EXTRACTION_SCRIPT o desactiva la capa ML.`,
         );
         this.scriptWarningShown = true;
       }
@@ -172,7 +331,7 @@ export class MlExtractionService {
     }
     if (proc.status !== 0) {
       this.logger.warn(
-        `El script ML termin\u00F3 con c\u00F3digo ${proc.status}: ${proc.stderr}`,
+        `El script ML terminó con código ${proc.status}: ${proc.stderr}`,
       );
       return null;
     }
@@ -184,7 +343,43 @@ export class MlExtractionService {
       return JSON.parse(stdout);
     } catch (error) {
       this.logger.warn(
-        `Salida no v\u00E1lida del script ML: ${
+        `Salida no válida del script ML: ${
+          (error as Error)?.message ?? error
+        }`,
+      );
+      return null;
+    }
+  }
+
+  private callDonutScript(filePath: string) {
+    if (!existsSync(this.donutScript)) {
+      return null;
+    }
+    const proc = spawnSync(this.donutBin, [this.donutScript, '--input', filePath], {
+      encoding: 'utf-8',
+      maxBuffer: 32 * 1024 * 1024,
+    });
+    if (proc.error) {
+      this.logger.warn(
+        `Error al ejecutar ${this.donutScript}: ${proc.error.message}`,
+      );
+      return null;
+    }
+    if (proc.status !== 0) {
+      this.logger.warn(
+        `El script Donut terminó con código ${proc.status}: ${proc.stderr}`,
+      );
+      return null;
+    }
+    const stdout = proc.stdout?.trim();
+    if (!stdout) {
+      return null;
+    }
+    try {
+      return JSON.parse(stdout);
+    } catch (error) {
+      this.logger.warn(
+        `Salida no válida del script Donut: ${
           (error as Error)?.message ?? error
         }`,
       );
@@ -198,11 +393,11 @@ export class MlExtractionService {
     }
     try {
       const target = new URL(this.endpoint);
-      const transport = target.protocol === 'https:' ? https : http;
+      const transport = target.protocol === "https:" ? https : http;
       const body = JSON.stringify(payload);
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body).toString(),
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body).toString(),
       };
       if (this.apiKey) {
         headers.Authorization = `Bearer ${this.apiKey}`;
@@ -211,20 +406,20 @@ export class MlExtractionService {
         const req = transport.request(
           target,
           {
-            method: 'POST',
+            method: "POST",
             headers,
           },
           (res) => {
             const chunks: Buffer[] = [];
-            res.on('data', (chunk) => chunks.push(chunk));
-            res.on('end', () => {
+            res.on("data", (chunk) => chunks.push(chunk));
+            res.on("end", () => {
               if (res.statusCode && res.statusCode >= 400) {
                 this.logger.warn(
-                  `Servicio ML respondi\u00F3 ${res.statusCode}: ${res.statusMessage}`,
+                  `Servicio ML respondió ${res.statusCode}: ${res.statusMessage}`,
                 );
                 return resolve(null);
               }
-              const raw = Buffer.concat(chunks).toString('utf-8');
+              const raw = Buffer.concat(chunks).toString("utf-8");
               if (!raw) {
                 return resolve(null);
               }
@@ -232,7 +427,7 @@ export class MlExtractionService {
                 resolve(JSON.parse(raw));
               } catch (error) {
                 this.logger.warn(
-                  `Respuesta ML no es JSON v\u00E1lido: ${
+                  `Respuesta ML no es JSON válido: ${
                     (error as Error)?.message ?? error
                   }`,
                 );
@@ -241,7 +436,7 @@ export class MlExtractionService {
             });
           },
         );
-        req.on('error', (error) => reject(error));
+        req.on("error", (error) => reject(error));
         req.write(body);
         req.end();
       });

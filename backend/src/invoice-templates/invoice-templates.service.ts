@@ -1,16 +1,41 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { Prisma, Provider } from '@prisma/client';
+import path from 'path';
+import { existsSync } from 'fs';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { TenantContextService } from 'src/tenancy/tenant-context.service';
 import { CreateInvoiceTemplateDto } from './dto/create-invoice-template.dto';
+import { SuggestInvoiceTemplateDto } from './dto/suggest-invoice-template.dto';
 import { UpdateInvoiceTemplateDto } from './dto/update-invoice-template.dto';
+import { buildTemplateSuggestion } from './template-suggestion';
+import { callDonutInference } from './suggest-file.helper';
+import { buildSuggestionFromDonutResponse } from './donut-placeholder';
+import { unlink } from 'fs/promises';
+
+function resolveDonutScript() {
+  const options = [
+    process.env.DONUT_EXTRACTION_SCRIPT,
+    path.resolve(process.cwd(), 'ml', 'donut_inference.py'),
+    path.resolve(__dirname, '..', '..', 'ml', 'donut_inference.py'),
+  ];
+  for (const option of options) {
+    if (option && existsSync(option)) {
+      return path.normalize(option);
+    }
+  }
+  return null;
+}
 
 @Injectable()
 export class InvoiceTemplatesService {
+  private readonly logger = new Logger(InvoiceTemplatesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
@@ -133,7 +158,21 @@ export class InvoiceTemplatesService {
         ctx.userId !== null ? { connect: { id: ctx.userId } } : undefined,
     };
 
-    return this.prisma.invoiceTemplate.create({ data: payload });
+    try {
+      return await this.prisma.invoiceTemplate.create({ data: payload });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        Array.isArray(error.meta?.target) &&
+        error.meta.target.includes('documentType')
+      ) {
+        throw new BadRequestException(
+          'Ya existe una plantilla con ese tipo de documento/proveedor/version.',
+        );
+      }
+      throw error;
+    }
   }
 
   async update(id: number, dto: UpdateInvoiceTemplateDto) {
@@ -174,5 +213,66 @@ export class InvoiceTemplatesService {
       where: { id: template.id },
       data: updateData,
     });
+  }
+
+  async suggestTemplate(dto: SuggestInvoiceTemplateDto) {
+    const suggestion = buildTemplateSuggestion(dto.sampleText);
+    return {
+      suggestion,
+      message: suggestion.regexRules?.serie
+        ? "Se encontraron patrones sugeridos."
+        : "No se detectaron coincidencias fuertes, revisa el texto.",
+    };
+  }
+
+  async suggestTemplateFromPdf(file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException("Se requiere un archivo PDF.");
+    }
+    const scriptPath =
+      resolveDonutScript() ??
+      (() => {
+        throw new InternalServerErrorException(
+          "No se encontró el script Donut. Define DONUT_EXTRACTION_SCRIPT.",
+        );
+      })();
+    const pythonBin =
+      process.env.DONUT_EXTRACTION_BIN ?? process.env.PYTHON_BIN ?? "python";
+    try {
+      const inference = callDonutInference(file.path, scriptPath, pythonBin);
+      if (inference.status === 'FAILED') {
+        this.logger.warn('Donut inference returned FAILED', {
+          file: file.originalname,
+          model: inference.modelVersion,
+          response: inference,
+        });
+      }
+      const placeholder = buildSuggestionFromDonutResponse(inference);
+      const fallbackRegexRules = inference.fields ?? {};
+      const fallbackFieldMappings = Object.fromEntries(
+        Object.keys(inference.fields ?? {}).map((key) => [
+          key,
+          { pattern: ".*" },
+        ]),
+      );
+      return {
+        suggestion: placeholder
+          ? placeholder
+          : {
+              regexRules: fallbackRegexRules,
+              fieldMappings: fallbackFieldMappings,
+            },
+        confidence: inference.confidence,
+        modelVersion: inference.modelVersion,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `No se pudo generar sugerencias desde el PDF: ${
+          error instanceof Error ? error.message : "Unknown"
+        }`,
+      );
+    } finally {
+      await unlink(file.path).catch(() => undefined);
+    }
   }
 }

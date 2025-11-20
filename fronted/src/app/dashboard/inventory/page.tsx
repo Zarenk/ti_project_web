@@ -8,12 +8,21 @@ import { Filter, Tags, CalendarDays, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { columns } from "./columns"; // Importar las columnas definidas
 import { getAllPurchasePrices, getInventoryWithCurrency } from "./inventory.api";
 import { DataTable } from "./data-table";
+import { CreateTemplateDialog } from "./create-template-dialog";
+import { authFetch } from "@/utils/auth-fetch";
 
 interface InventoryItem {
   id: number;
@@ -124,6 +133,20 @@ export default function InventoryPage() {
   const [baseInventory, setBaseInventory] = useState<InventoryItem[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("created");
   const [inStockOnly, setInStockOnly] = useState(false);
+  const [metrics, setMetrics] = useState<{
+    totalProcessed: number;
+    failedExtractions: number;
+    averageConfidence: number | null;
+    lowConfidenceSamples: Array<{ id: number; providerId?: number | null; mlConfidence: number }>;
+  } | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<{
+    failureAlerts: Array<{ id: number; sampleId: number; template: string | null; message: string; createdAt: string }>;
+    reviewDueTemplates: Array<{ id: number; documentType: string; providerName: string; updatedAt: string }>;
+  } | null>(null);
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
   const { selection, version, loading: tenantLoading } = useTenantSelection();
   const selectionKey = useMemo(
     () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
@@ -133,6 +156,9 @@ export default function InventoryPage() {
 
   useEffect(() => {
     if (tenantLoading) {
+      return;
+    }
+    if (!selection.orgId || !selection.companyId) {
       return;
     }
 
@@ -245,6 +271,78 @@ export default function InventoryPage() {
     };
   }, [tenantLoading, selectionKey]);
 
+  useEffect(() => {
+    let canceled = false;
+    const loadMetrics = async () => {
+      setMetricsError(null);
+      setMetricsLoading(true);
+      try {
+        const response = await authFetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000"}/api/invoice-templates/metrics-public`);
+        if (!response.ok) {
+          throw new Error("No se pudieron cargar las métricas");
+        }
+        const data = await response.json();
+        if (!canceled) {
+          setMetrics(data);
+        }
+      } catch (error: any) {
+        console.error("Error al cargar métricas de facturas:", error);
+        if (!canceled) {
+          setMetricsError(error.message || "No se pudo obtener métricas");
+        }
+      } finally {
+        if (!canceled) {
+          setMetricsLoading(false);
+        }
+      }
+    };
+    if (!tenantLoading && selection.orgId && selection.companyId) {
+      void loadMetrics();
+    }
+    return () => {
+      canceled = true;
+    };
+  }, [tenantLoading, selectionKey, selection.orgId, selection.companyId]);
+
+  useEffect(() => {
+    if (tenantLoading) {
+      return;
+    }
+
+    let canceled = false;
+    const loadAlerts = async () => {
+      setAlertsLoading(true);
+      setAlertsError(null);
+      try {
+        const response = await authFetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000"}/api/invoice-templates/alerts`,
+        );
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => null);
+          console.error("alerts fetch error body:", errorText);
+          throw new Error(errorText || "No se pudieron cargar las alertas");
+        }
+        const data = await response.json();
+        if (!canceled) {
+          setAlerts(data);
+        }
+      } catch (error: any) {
+        console.error("Error al cargar alertas:", error);
+        if (!canceled) {
+          setAlertsError(error.message || "No se pudieron obtener alertas");
+        }
+      } finally {
+        if (!canceled) {
+          setAlertsLoading(false);
+        }
+      }
+    };
+    void loadAlerts();
+    return () => {
+      canceled = true;
+    };
+  }, [tenantLoading, selectionKey]);
+
 
   // Aplicar orden y filtro según controles
   useEffect(() => {
@@ -313,6 +411,11 @@ export default function InventoryPage() {
                     </div>
                   </SheetContent>
                 </Sheet>
+                <CreateTemplateDialog
+                  organizationId={selection?.organizationId ?? null}
+                  companyId={selection?.companyId ?? null}
+                  sampleId={null}
+                />
                 <Button
                   asChild
                   className="inline-flex w-full items-center justify-center gap-2 sm:w-auto"
@@ -322,8 +425,98 @@ export default function InventoryPage() {
                     <span>Generar etiquetas</span>
                   </Link>
                 </Button>
+        </div>
+        {metrics && (
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <div className="rounded-lg border bg-background p-4 shadow-sm">
+              <p className="text-xs uppercase text-muted-foreground">Facturas procesadas</p>
+              <p className="text-3xl font-semibold">{metrics.totalProcessed.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">
+                Fallos: {(metrics.failedExtractions / Math.max(metrics.totalProcessed, 1) * 100).toFixed(1)}%
+              </p>
+            </div>
+            <div className="rounded-lg border bg-background p-4 shadow-sm">
+              <p className="text-xs uppercase text-muted-foreground">Confianza promedio</p>
+              <p className="text-3xl font-semibold">
+                {metrics.averageConfidence !== null
+                  ? `${(metrics.averageConfidence * 100).toFixed(1)}%`
+                  : "N/A"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {metrics.lowConfidenceSamples.length} muestras{' '}
+                <span className="text-xs text-destructive">baja confianza</span>
+              </p>
+            </div>
+            <div className="rounded-lg border bg-background p-4 shadow-sm">
+              <p className="text-xs uppercase text-muted-foreground">Alertas</p>
+              {metrics.lowConfidenceSamples.length > 0 ? (
+                <ul className="text-xs space-y-1">
+                  {metrics.lowConfidenceSamples.slice(0, 3).map((sample) => (
+                    <li key={sample.id}>
+                      <span className="font-semibold text-destructive">Muestra #{sample.id}</span>{' '}
+                      ({sample.mlConfidence.toFixed(2)})
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">Sin alertas</p>
+              )}
+            </div>
+          </div>
+        )}
+        {alerts && (
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="rounded-lg border bg-background p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase text-muted-foreground">Alertas recientes</p>
+                <span className="text-xs text-muted-foreground">
+                  {alerts.failureAlerts.length} eventos
+                </span>
               </div>
+              {alerts.failureAlerts.length > 0 ? (
+                <ul className="mt-2 text-xs space-y-2">
+                  {alerts.failureAlerts.map((alert) => (
+                    <li key={alert.id} className="rounded border px-2 py-1">
+                      <p className="font-semibold text-destructive">
+                        #{alert.sampleId} · {alert.template ?? "Sin plantilla"}
+                      </p>
+                      <p>{alert.message}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {new Date(alert.createdAt).toLocaleString()}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">No hay errores recientes.</p>
+              )}
+            </div>
+            <div className="rounded-lg border bg-background p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase text-muted-foreground">Plantillas por revisión</p>
+                <span className="text-xs text-muted-foreground">
+                  {alerts.reviewDueTemplates.length} entradas
+                </span>
               </div>
+              {alerts.reviewDueTemplates.length > 0 ? (
+                <ul className="mt-2 text-xs space-y-2">
+                  {alerts.reviewDueTemplates.map((template) => (
+                    <li key={template.id} className="rounded border px-2 py-1">
+                      <p className="font-semibold">{template.documentType}</p>
+                      <p>{template.providerName || <span className="text-muted-foreground">Proveedor pendiente</span>}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Última actualización: {new Date(template.updatedAt).toLocaleDateString()}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">No hay plantillas pendientes.</p>
+              )}
+            </div>
+          </div>
+        )}
+        </div>
             <div className="hidden border-b px-5 py-4 sm:block">
               <FilterControls
                 sortMode={sortMode}

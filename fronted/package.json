@@ -92,6 +92,7 @@
     "@types/recharts": "^2.0.1",
     "eslint": "^9",
     "eslint-config-next": "15.2.3",
+    "jsdom": "^27.2.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^1.5.0"

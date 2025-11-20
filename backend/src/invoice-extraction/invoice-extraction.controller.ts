@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { InvoiceExtractionService } from './invoice-extraction.service';
 import { AssignTemplateDto } from './dto/assign-template.dto';
+import { SubmitCorrectionDto } from './dto/submit-correction.dto';
 
 @Controller('invoice-samples')
 export class InvoiceExtractionController {
@@ -36,5 +37,13 @@ export class InvoiceExtractionController {
     @Body() dto: AssignTemplateDto,
   ) {
     return this.invoiceExtractionService.assignTemplate(sampleId, dto);
+  }
+
+  @Post(':sampleId/corrections')
+  submitCorrection(
+    @Param('sampleId', ParseIntPipe) sampleId: number,
+    @Body() dto: SubmitCorrectionDto,
+  ) {
+    return this.invoiceExtractionService.recordCorrection(sampleId, dto);
   }
 }

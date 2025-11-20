@@ -7,12 +7,15 @@ import { join } from 'path'; // Ensure 'join' is imported for path handling
 import { ValidationPipe } from '@nestjs/common';
 import { MetricsService } from './metrics/metrics.service';
 import { TelemetryInterceptor } from './metrics/trace.interceptor';
-import './metrics/tracing';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const metrics = app.get(MetricsService);
-  app.useGlobalInterceptors(new TelemetryInterceptor(metrics));
+  const telemetryEnabled = process.env.DISABLE_TELEMETRY !== 'true';
+  if (telemetryEnabled) {
+    app.useGlobalInterceptors(new TelemetryInterceptor(metrics));
+    await import('./metrics/tracing');
+  }
 
   const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map((o) =>
     o.trim(),

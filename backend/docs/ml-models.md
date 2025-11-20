@@ -11,7 +11,9 @@
 ### Dependencias
 ```bash
 pip install scikit-learn joblib
+pip install torch transformers pdf2image pillow
 ```
+> Instala `poppler-utils` (Linux/mac) o `poppler` (Windows) para que `pdf2image` convierta PDFs.
 
 ### Entrenamiento
 ```bash
@@ -51,23 +53,16 @@ Registra cada retraining (fecha, precisión, dataset) aquí.
 
 
 ### Extracción asistida por ML
-- Cuando no existe coincidencia de plantilla, `MlExtractionService` anonimiza el texto (enmascara RUC y números largos) y delega la extracción a:
-  1. Un endpoint externo (`ML_EXTRACTION_ENDPOINT` + `ML_EXTRACTION_API_KEY`), o
-  2. El script local `backend/ml/extract_invoice_fields.py` (configurable con `ML_EXTRACTION_SCRIPT`).
-- El script lee un payload JSON desde `stdin` y devuelve campos clave con un puntaje de confianza. Ejemplo:
+- Cuando no existe coincidencia de plantilla, `MlExtractionService` anonimiza el texto (enmascara RUC y números largos) y trata de ejecutar `backend/ml/donut_inference.py` sobre el PDF original (`DONUT_EXTRACTION_SCRIPT`).
+- Si no tienes Donut disponible, la capa cae al heurístico (`ML_EXTRACTION_SCRIPT`, `ML_EXTRACTION_BIN`).
+- Ejemplo de uso del script Donut:
   ```bash
-  cat sample-text.json | python backend/ml/extract_invoice_fields.py
+  python backend/ml/donut_inference.py --input storage/invoices/sample.pdf
   ```
-- Variables extra:
-  - `ML_EXTRACTION_SANITIZE` (`true` por defecto) controla si se anonimizan los textos antes de invocar la capa ML.
-  - `ML_EXTRACTION_BIN` permite usar un intérprete de Python distinto.
-- Los resultados guardan `mlProvider`, `mlConfidence`, `mlModelVersion` y un hash del texto original para auditabilidad.
-- Para pruebas rápidas sin depender de servicios externos puedes ejecutar un servidor local:
-  ```bash
-  python backend/ml/mock_ml_service.py --port 5055
-  export ML_EXTRACTION_ENDPOINT=http://127.0.0.1:5055/extract
-  ```
-  Este servicio reutiliza la lógica heurística y responde en JSON como lo haría un proveedor real.
+- Dependencias necesarias: `torch`, `transformers`, `pdf2image`, `pillow` (y `poppler` en el sistema) para poder convertir PDFs a imágenes y ejecutar el modelo.
+- La salida JSON incluye `fields`, `confidence`, `modelVersion` y se registra con `mlProvider=donut-open-source`; puedes extender el script para añadir `mlDebug`.
+- El endpoint `POST /invoice-templates/suggest-pdf` acepta un PDF, lo corre por Donut y devuelve `regexRules`/`fieldMappings` sugeridos y el `mlConfidence` calculado; útil para poblar el modal sin pegar texto manual.
+- Para pruebas sin Donut instalado puedes seguir usando `backend/ml/mock_ml_service.py` (el mock HTTP que envía el payload al heurístico), exportar `ML_EXTRACTION_ENDPOINT` y seguir desarrollando la UI.
 
 ### Integración en el backend
 - El servicio Node ejecuta \\predict_template.py\\ usando la variable \\PYTHON_BIN\\ (por defecto \\python\\).
