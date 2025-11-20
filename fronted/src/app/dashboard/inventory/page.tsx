@@ -277,7 +277,15 @@ export default function InventoryPage() {
       setMetricsError(null);
       setMetricsLoading(true);
       try {
-        const response = await authFetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000"}/api/invoice-templates/metrics-public`);
+        const response = await authFetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000"}/api/invoice-templates/metrics-public`,
+          {
+            headers: {
+              "x-org-id": String(selection.orgId),
+              "x-company-id": String(selection.companyId),
+            },
+          },
+        );
         if (!response.ok) {
           throw new Error("No se pudieron cargar las métricas");
         }
@@ -412,7 +420,7 @@ export default function InventoryPage() {
                   </SheetContent>
                 </Sheet>
                 <CreateTemplateDialog
-                  organizationId={selection?.organizationId ?? null}
+                  organizationId={selection?.orgId ?? null}
                   companyId={selection?.companyId ?? null}
                   sampleId={null}
                 />
