@@ -7,6 +7,7 @@ import { join } from 'path'; // Ensure 'join' is imported for path handling
 import { ValidationPipe } from '@nestjs/common';
 import { MetricsService } from './metrics/metrics.service';
 import { TelemetryInterceptor } from './metrics/trace.interceptor';
+import { TenantHeaderSanitizerMiddleware } from './common/middleware/tenant-header.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -45,6 +46,21 @@ async function bootstrap() {
 
   // PARA COLOCAR PREVIAMENTE EN LA URL /API/
   app.setGlobalPrefix('api');
+
+  const headerSanitizer = new TenantHeaderSanitizerMiddleware();
+  app.use('/api', (req, res, next) => headerSanitizer.use(req, res, next));
+
+  // Logging justo antes del ValidationPipe para verificar cómo llegan las cabeceras sanitizadas
+  app.use('/api', (req, _res, next) => {
+    const headerValues = ['x-org-id', 'x-company-id', 'x-org-unit-id']
+      .map((name) => `${name}=${req.headers[name] ?? '??'}`)
+      .join(', ');
+    console.log(
+      `[tenant-headers-before-validation] ${req.method} ${req.originalUrl} ${headerValues}`,
+    );
+    next();
+  });
+
   // Habilitar la validación global de DTOs
   app.useGlobalPipes(
     new ValidationPipe({

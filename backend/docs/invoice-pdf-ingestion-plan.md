@@ -44,11 +44,11 @@ Este documento resume los pasos para evolucionar el modulo de carga de comproban
 - Las pruebas unitarias de recordCorrection verifican que TemplateTrainingService.recordSample reciba el texto correcto y que TRAINING_DATA se loguee con mlMetadata completa.
 
 ## 8. Monitoreo Y Mejora Continua
-- Dashboard de metricas: numero de facturas procesadas, tasa de aciertos por plantilla/modelo, errores recurrentes por proveedor.
-- Alertas cuando:
-  - un proveedor supera cierto numero de fallos.
-  - se detecta un cambio de layout (por ejemplo, baja repentina en confianza).
-- Calendario de revalidación: revisar plantillas cada trimestre o al detectar cambios.
+- Dashboard y API de monitoreo (`/api/inventory-alerts`, `/summary`, `/events`) que exponen métricas por tenant y el timeline de `MonitoringAlertEvent`.
+- Alertas automáticas: `PROVIDER_FAILURE`, `CONFIDENCE_DROP` y `TEMPLATE_REVIEW`, con umbrales configurables (`INVOICE_ALERT_FAILURE_THRESHOLD`, `INVOICE_ALERT_FAILURE_LOOKBACK_HOURS`, `INVOICE_ALERT_CONFIDENCE_*`, `INVOICE_REVIEW_DAYS`).
+- Scheduler (`InventoryAlertsScheduler`) parametrizado mediante `INVENTORY_ALERT_SCHEDULER_DISABLED` y `INVENTORY_ALERT_SCHEDULER_INTERVAL_MS`.
+- Acción manual `POST /api/inventory-alerts/template/:templateId/review` expuesta en la UI para marcar plantillas revisadas y cerrar sus alertas.
+- Fixtures y pruebas: `npm run seed:invoice-alerts` + specs de `alerts.service.ts` para validar la lógica de eventos y revisiones.
 
 ## 9. Seguridad Y Cumplimiento
 - Almacenar los PDFs en un bucket cifrado (S3/Wasabi + SSE); restringir acceso por `companyId`.

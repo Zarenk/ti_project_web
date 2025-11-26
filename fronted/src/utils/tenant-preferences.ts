@@ -1,3 +1,6 @@
+import { userContextStorage } from "@/utils/user-context-storage"
+import { shouldRememberContext } from "@/utils/context-preferences"
+
 const ORG_COOKIE = "tenant_org_id"
 const COMPANY_COOKIE = "tenant_company_id"
 const STORAGE_KEY = "dashboard.tenant-selection"
@@ -8,6 +11,10 @@ export const TENANT_ORGANIZATIONS_EVENT = "tenant-selection:organizations-refres
 type TenantSelection = {
   orgId: number | null
   companyId: number | null
+}
+
+type TenantSelectionChangeDetail = TenantSelection & {
+  source?: "manual" | "system"
 }
 
 function parseNumber(value: string | null | undefined): number | null {
@@ -72,22 +79,25 @@ export async function getTenantSelection(): Promise<TenantSelection> {
   return readSelectionFromDocument()
 }
 
-export function setTenantSelection(selection: TenantSelection): void {
+export function setTenantSelection(
+  selection: TenantSelection,
+  metadata?: { source?: "manual" | "system" },
+): void {
   if (typeof document === "undefined") {
     return
   }
 
   const { orgId, companyId } = selection
-  const options = `path=/; max-age=${COOKIE_MAX_AGE_SECONDS}`
+  const cookieOptions = `path=/; max-age=${COOKIE_MAX_AGE_SECONDS}`
 
   if (orgId != null) {
-    document.cookie = `${ORG_COOKIE}=${encodeURIComponent(String(orgId))}; ${options}`
+    document.cookie = `${ORG_COOKIE}=${encodeURIComponent(String(orgId))}; ${cookieOptions}`
   } else {
     document.cookie = `${ORG_COOKIE}=; path=/; max-age=0`
   }
 
   if (companyId != null) {
-    document.cookie = `${COMPANY_COOKIE}=${encodeURIComponent(String(companyId))}; ${options}`
+    document.cookie = `${COMPANY_COOKIE}=${encodeURIComponent(String(companyId))}; ${cookieOptions}`
   } else {
     document.cookie = `${COMPANY_COOKIE}=; path=/; max-age=0`
   }
@@ -106,10 +116,20 @@ export function setTenantSelection(selection: TenantSelection): void {
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(
-      new CustomEvent<TenantSelection>(TENANT_SELECTION_EVENT, {
-        detail: { orgId, companyId },
+      new CustomEvent<TenantSelectionChangeDetail>(TENANT_SELECTION_EVENT, {
+        detail: {
+          orgId,
+          companyId,
+          source: metadata?.source ?? "system",
+        },
       }),
     )
+  }
+
+  if (orgId != null && shouldRememberContext()) {
+    void userContextStorage.saveContext(orgId, companyId ?? null)
+  } else {
+    userContextStorage.clearContext({ silent: orgId != null })
   }
 }
 
@@ -127,12 +147,18 @@ export function clearTenantSelection(): void {
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(
-      new CustomEvent<TenantSelection>(TENANT_SELECTION_EVENT, {
-        detail: { orgId: null, companyId: null },
+      new CustomEvent<TenantSelectionChangeDetail>(TENANT_SELECTION_EVENT, {
+        detail: { orgId: null, companyId: null, source: "system" },
       }),
     )
   }
+
+  userContextStorage.clearContext()
 }
 
-export type { TenantSelection }
+export function setManualTenantSelection(selection: TenantSelection): void {
+  setTenantSelection(selection, { source: "manual" })
+}
+
+export type { TenantSelection, TenantSelectionChangeDetail }
 

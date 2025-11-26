@@ -28,6 +28,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { useTenantSelection } from '@/context/tenant-selection-context'
+import { resolveImageUrl } from '@/lib/images'
 
 interface ProductFormProps {
   product: any
@@ -728,6 +729,72 @@ export function ProductForm({
                                 <SelectItem value="Inactivo">Inactivo</SelectItem>
                             </SelectContent>
                         </Select>
+                    </div>
+                    <div className="flex flex-col pt-4">
+                      <Label className="py-3 font-semibold">Imágenes</Label>
+                      {imageFields.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          No hay imágenes registradas aún.
+                        </p>
+                      )}
+                      <div className="space-y-4">
+                        {imageFields.map((field, index) => {
+                          const preview = form.watch(`images.${index}` as const) || '';
+                          return (
+                            <div
+                              key={field.id}
+                              className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-start"
+                            >
+                              <div className="flex-1 space-y-2">
+                                <Input
+                                  placeholder="URL o ruta relativa /uploads"
+                                  {...register(`images.${index}` as const)}
+                                />
+                                <Input
+                                  type="file"
+                                  accept="image/*"
+                                  disabled={isProcessing}
+                                  onChange={(event) => handleImageFile(event, index)}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Puedes ingresar una URL externa o subir un archivo (se almacenará en /uploads).
+                                </p>
+                              </div>
+                              <div className="flex flex-col items-center gap-2">
+                                {preview ? (
+                                  <img
+                                    src={resolveImageUrl(preview)}
+                                    alt={`preview-${index}`}
+                                    className="h-24 w-24 rounded border object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-24 w-24 items-center justify-center rounded border text-xs text-muted-foreground">
+                                    Sin vista previa
+                                  </div>
+                                )}
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => removeImage(index)}
+                                  disabled={isProcessing}
+                                >
+                                  Quitar
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-3 w-fit"
+                        disabled={isProcessing}
+                        onClick={() => appendImage('')}
+                      >
+                        Agregar imagen
+                      </Button>
                     </div>
                     <Button className='mt-4'>
                         {

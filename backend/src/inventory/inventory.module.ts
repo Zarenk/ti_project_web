@@ -4,10 +4,14 @@ import { InventoryController } from './inventory.controller';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityModule } from 'src/activity/activity.module';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
+import { InvoiceTemplatesModule } from 'src/invoice-templates/invoice-templates.module';
+import { TenancyModule } from 'src/tenancy/tenancy.module';
+import { SiteSettingsModule } from 'src/site-settings/site-settings.module';
+import { InventoryMetricsController } from './metrics.controller';
 
 @Module({
-  imports: [ActivityModule],
-  controllers: [InventoryController],
+  imports: [ActivityModule, InvoiceTemplatesModule, TenancyModule, SiteSettingsModule],
+  controllers: [InventoryController, InventoryMetricsController],
   providers: [InventoryService, PrismaService, AccountingHook],
   exports: [InventoryService],
 })

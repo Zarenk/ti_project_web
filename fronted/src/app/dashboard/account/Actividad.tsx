@@ -25,6 +25,13 @@ import { CalendarIcon } from "lucide-react";
 import { startOfDay, endOfDay, format } from "date-fns";
 import { getAuthHeaders } from "@/utils/auth-token";
 import { formatInTimeZone } from "date-fns-tz";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
@@ -49,6 +56,7 @@ export default function Actividad() {
   const pageSize = 10;
   const [search, setSearch] = useState("");
   const [specificDate, setSpecificDate] = useState<Date | undefined>(undefined);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,10 +101,29 @@ export default function Actividad() {
     setPage(1);
   };
 
-  const handleSpecificDateClear = () => {
-    setSpecificDate(undefined);
-    setPage(1);
-  };
+ const handleSpecificDateClear = () => {
+   setSpecificDate(undefined);
+   setPage(1);
+ };
+
+const matchesCategory = (log: AuditLog, filter: string) => {
+  if (filter === "all") return true;
+  const summary = (log.summary ?? "").toLowerCase();
+  switch (filter) {
+    case "created":
+      return summary.includes("cre") || summary.includes("ingres");
+    case "updates":
+      return summary.includes("modific") || summary.includes("actualiz");
+    case "deleted":
+      return summary.includes("elim");
+    case "sales":
+      return summary.includes("venta") || summary.includes("factura");
+    case "inventory":
+      return summary.includes("invent") || summary.includes("almac");
+    default:
+      return true;
+  }
+};
 
   useEffect(() => {
     async function load() {
@@ -138,8 +165,9 @@ export default function Actividad() {
       }
     }
     load();
-  }, [page, search, specificDate]);
+  }, [page, search, specificDate, categoryFilter]);
 
+  const filteredLogs = logs.filter((log) => matchesCategory(log, categoryFilter));
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -153,6 +181,25 @@ export default function Actividad() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full sm:max-w-sm"
             />
+            <Select
+              value={categoryFilter}
+              onValueChange={(value) => {
+                setCategoryFilter(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectValue placeholder="Filtrar categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las actividades</SelectItem>
+                <SelectItem value="created">Ingresos / creaciones</SelectItem>
+                <SelectItem value="updates">Modificaciones</SelectItem>
+                <SelectItem value="deleted">Eliminaciones</SelectItem>
+                <SelectItem value="sales">Ventas / facturación</SelectItem>
+                <SelectItem value="inventory">Inventario / almacén</SelectItem>
+              </SelectContent>
+            </Select>
             <Button variant="outline" onClick={() => setSearch("")}>
               Limpiar búsqueda
             </Button>
@@ -190,7 +237,7 @@ export default function Actividad() {
         {error && <p className="text-sm text-red-600">{error}</p>}
         {loading ? (
           <p className="text-sm text-slate-500">Cargando...</p>
-        ) : logs.length === 0 ? (
+        ) : filteredLogs.length === 0 ? (
           <p className="text-sm text-slate-500">Sin actividad registrada.</p>
         ) : (
           <div className="space-y-2">
@@ -208,7 +255,7 @@ export default function Actividad() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logs.map((log) => (
+                  {filteredLogs.map((log) => (
                     <TableRow key={log.id}>
                       <TableCell>{formatTimestamp(log.createdAt)}</TableCell>
                       <TableCell>{log.actorEmail || "-"}</TableCell>
@@ -233,7 +280,7 @@ export default function Actividad() {
             </div>
 
             <div className="space-y-3 md:hidden">
-              {logs.map((log) => (
+              {filteredLogs.map((log) => (
                 <div
                   key={log.id}
                   className="space-y-3 rounded-lg border bg-muted/30 p-4 shadow-sm"

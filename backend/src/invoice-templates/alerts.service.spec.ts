@@ -5,21 +5,35 @@ import { PrismaService } from 'src/prisma/prisma.service';
 describe('InvoiceTemplatesAlertsService', () => {
   let service: InvoiceTemplatesAlertsService;
   let prisma: {
-    invoiceExtractionLog: {
-      findMany: jest.Mock;
-    };
     invoiceTemplate: {
       findMany: jest.Mock;
+      findUnique: jest.Mock;
+      update: jest.Mock;
+    };
+    monitoringAlertEvent: {
+      findMany: jest.Mock;
+      create: jest.Mock;
+    };
+    monitoringAlert: {
+      findMany: jest.Mock;
+      update: jest.Mock;
     };
   };
 
   beforeEach(async () => {
     prisma = {
-      invoiceExtractionLog: {
-        findMany: jest.fn(),
-      },
       invoiceTemplate: {
         findMany: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+      monitoringAlertEvent: {
+        findMany: jest.fn(),
+        create: jest.fn(),
+      },
+      monitoringAlert: {
+        findMany: jest.fn(),
+        update: jest.fn(),
       },
     };
     const module = await Test.createTestingModule({
@@ -31,16 +45,20 @@ describe('InvoiceTemplatesAlertsService', () => {
     service = module.get(InvoiceTemplatesAlertsService);
   });
 
-  it('returns recent error logs and review due templates', async () => {
-    prisma.invoiceExtractionLog.findMany.mockResolvedValue([
+  it('returns recent events and templates pending review', async () => {
+    prisma.monitoringAlertEvent.findMany.mockResolvedValue([
       {
         id: 99,
-        sampleId: 1,
-        level: 'ERROR',
+        alertType: 'PROVIDER_FAILURE',
+        status: 'ACTIVE',
+        severity: 'WARN',
         message: 'donut-fail',
+        metadata: { providerName: 'Proveedor A' },
         createdAt: new Date('2025-01-01'),
-        sample: {
-          template: { documentType: 'FACTURA_ELECTRONICA' },
+        alert: {
+          providerName: 'Proveedor A',
+          entityType: null,
+          entityId: null,
         },
       },
     ]);
@@ -54,11 +72,50 @@ describe('InvoiceTemplatesAlertsService', () => {
     ]);
     process.env.INVOICE_REVIEW_DAYS = '0';
 
-    const alerts = await service.getAlerts();
+    const alerts = await service.getAlerts(null, null);
 
     expect(alerts.failureAlerts).toHaveLength(1);
-    expect(alerts.failureAlerts[0].message).toBe('donut-fail');
-    expect(alerts.reviewDueTemplates[0].id).toBe(5);
+    expect(alerts.reviewDueTemplates).toHaveLength(1);
+    expect(alerts.recentEvents).toHaveLength(1);
     delete process.env.INVOICE_REVIEW_DAYS;
+  });
+
+  it('marks template as reviewed and resolves alerts', async () => {
+    prisma.invoiceTemplate.findUnique.mockResolvedValue({
+      id: 10,
+      organizationId: 1,
+      companyId: 1,
+      documentType: 'FACTURA',
+      providerName: 'Proveedor Demo',
+    });
+    prisma.invoiceTemplate.update.mockResolvedValue({
+      id: 10,
+      updatedAt: new Date(),
+    });
+    prisma.monitoringAlert.findMany.mockResolvedValue([
+      {
+        id: 30,
+        organizationId: 1,
+        companyId: 1,
+      },
+    ]);
+    const resolvedAt = new Date();
+    prisma.monitoringAlert.update.mockResolvedValue({
+      id: 30,
+      organizationId: 1,
+      companyId: 1,
+      resolvedAt,
+    });
+
+    await service.markTemplateReviewed({
+      templateId: 10,
+      organizationId: 1,
+      companyId: 1,
+      userId: 7,
+    });
+
+    expect(prisma.invoiceTemplate.update).toHaveBeenCalled();
+    expect(prisma.monitoringAlert.update).toHaveBeenCalled();
+    expect(prisma.monitoringAlertEvent.create).toHaveBeenCalled();
   });
 });

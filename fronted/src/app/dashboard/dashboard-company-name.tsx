@@ -9,6 +9,7 @@ import {
   getTenantSelection,
   setTenantSelection,
   type TenantSelection,
+  type TenantSelectionChangeDetail,
 } from "@/utils/tenant-preferences"
 
 export function DashboardCompanyName(): ReactElement {
@@ -94,8 +95,8 @@ export function DashboardCompanyName(): ReactElement {
 
     void resolveTenantDisplay()
 
-    const handler = (event: Event) => {
-      const detail = (event as CustomEvent<TenantSelection>).detail
+      const handler = (event: Event) => {
+        const detail = (event as CustomEvent<TenantSelectionChangeDetail>).detail
       void resolveTenantDisplay(detail)
     }
 

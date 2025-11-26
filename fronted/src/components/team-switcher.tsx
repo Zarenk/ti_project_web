@@ -44,11 +44,17 @@ import {
   TENANT_ORGANIZATIONS_EVENT,
   TENANT_SELECTION_EVENT,
   getTenantSelection,
-  setTenantSelection,
+  setManualTenantSelection,
   type TenantSelection,
+  type TenantSelectionChangeDetail,
 } from "@/utils/tenant-preferences"
 import { useAuth } from "@/context/auth-context"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { trackEvent } from "@/lib/analytics"
+import {
+  getOrganizationsCache,
+  setOrganizationsCache,
+} from "@/utils/tenant-organizations-cache"
 
 type ExtendedOrganization = OrganizationResponse & {
   companies: CompanyResponse[]
@@ -112,9 +118,19 @@ export function TeamSwitcher(): React.ReactElement | null {
         const selection =
           providedSelection ?? (await getTenantSelection())
 
+        if (!providedSelection) {
+          const cached = getOrganizationsCache()
+          if (cached) {
+            const normalizedCached = normalizeOrganizations(cached)
+            setOrganizations(normalizedCached)
+            setLoading(false)
+          }
+        }
+
         const orgs = await listOrganizations()
         if (cancelRef.current) return
 
+        setOrganizationsCache(orgs)
         const normalized = normalizeOrganizations(orgs)
         setOrganizations(normalized)
 
@@ -136,7 +152,7 @@ export function TeamSwitcher(): React.ReactElement | null {
           resolvedOrgId !== selection.orgId ||
           resolvedCompanyId !== selection.companyId
         ) {
-          setTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
+          setManualTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
         }
       } catch (error) {
         if (!cancelRef.current) {
@@ -163,7 +179,7 @@ export function TeamSwitcher(): React.ReactElement | null {
     }
 
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<TenantSelection>).detail
+      const detail = (event as CustomEvent<TenantSelectionChangeDetail>).detail
       if (isSuperUser) {
         void fetchOrganizations(detail)
       } else if (detail) {
@@ -216,7 +232,7 @@ export function TeamSwitcher(): React.ReactElement | null {
           selection.orgId !== resolvedOrgId ||
           selection.companyId !== resolvedCompanyId
         ) {
-          setTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
+          setManualTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
         }
       } catch (error) {
         if (!cancelled) {
@@ -255,7 +271,7 @@ export function TeamSwitcher(): React.ReactElement | null {
       setActiveOrgId(org.id)
       const nextCompanyId = org.companies[0]?.id ?? null
       setActiveCompanyId(nextCompanyId)
-      setTenantSelection({ orgId: org.id, companyId: nextCompanyId })
+      setManualTenantSelection({ orgId: org.id, companyId: nextCompanyId })
       return
     }
 
@@ -265,7 +281,7 @@ export function TeamSwitcher(): React.ReactElement | null {
     ) {
       const fallbackCompanyId = org.companies[0]?.id ?? null
       setActiveCompanyId(fallbackCompanyId)
-      setTenantSelection({ orgId: org.id, companyId: fallbackCompanyId })
+      setManualTenantSelection({ orgId: org.id, companyId: fallbackCompanyId })
     }
   }, [organizations, activeOrgId, activeCompanyId, isSuperUser])
 
@@ -300,7 +316,11 @@ export function TeamSwitcher(): React.ReactElement | null {
       }
       setActiveOrgId(organizationId)
       setActiveCompanyId(companyId)
-      setTenantSelection({ orgId: organizationId, companyId })
+      setManualTenantSelection({ orgId: organizationId, companyId })
+      trackEvent("context_manual_change", {
+        orgId: organizationId,
+        companyId,
+      })
       router.refresh()
     },
     [router],
@@ -344,7 +364,7 @@ export function TeamSwitcher(): React.ReactElement | null {
 
         setActiveOrgId(activeOrganization.id)
         setActiveCompanyId(created.id)
-        setTenantSelection({ orgId: activeOrganization.id, companyId: created.id })
+        setManualTenantSelection({ orgId: activeOrganization.id, companyId: created.id })
         router.refresh()
 
         setDialogOpen(false)
@@ -593,7 +613,7 @@ export function TeamSwitcher(): React.ReactElement | null {
                           onClick={() => {
                             setActiveOrgId(organization.id)
                             setActiveCompanyId(null)
-                            setTenantSelection({ orgId: organization.id, companyId: null })
+                            setManualTenantSelection({ orgId: organization.id, companyId: null })
                             setDialogOpen(true)
                           }}
                         >

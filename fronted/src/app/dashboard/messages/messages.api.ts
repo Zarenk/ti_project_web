@@ -3,7 +3,7 @@ import { authFetch } from '@/utils/auth-fetch';
 export async function getUnansweredMessages(): Promise<
   { clientId: number; count: number }[]
 > {
-  const res = await authFetch('/api/chat/unanswered');
+  const res = await authFetch('/chat/unanswered');
   if (!res.ok) {
     throw new Error('Error al obtener los mensajes');
   }
@@ -11,7 +11,7 @@ export async function getUnansweredMessages(): Promise<
 }
 
 export async function getMessages(clientId: number) {
-   const res = await authFetch(`/api/chat/${clientId}`, { cache: 'no-store' });
+   const res = await authFetch(`/chat/${clientId}`, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error('Error al obtener la conversación');
   }
@@ -19,7 +19,7 @@ export async function getMessages(clientId: number) {
 }
 
 export async function getClients() {
-  const res = await authFetch('/api/clients/chat', { cache: 'no-store' });
+  const res = await authFetch('/clients/chat', { cache: 'no-store' });
   if (!res.ok) {
     throw new Error('Error al obtener los clientes');
   }
@@ -32,7 +32,7 @@ export async function sendMessage(data: {
   text: string;
   file?: string;
 }) {
-  const res = await authFetch('/api/chat', {
+  const res = await authFetch('/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

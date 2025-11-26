@@ -6,6 +6,7 @@ export interface CatalogCover {
   id: number
   imagePath: string
   imageUrl?: string
+  pdfImageUrl?: string
   originalName?: string
   mimeType?: string
   isActive: boolean
@@ -51,4 +52,17 @@ export async function uploadCatalogCover(file: File): Promise<CatalogCover> {
   }
 
   return data.cover as CatalogCover
+}
+
+export async function deleteCatalogCover(): Promise<void> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${BACKEND_URL}/api/catalog/cover`, {
+    method: 'DELETE',
+    headers,
+    credentials: 'include',
+  })
+
+  if (!res.ok) {
+    throw new Error('Error al eliminar la caratula del catalogo')
+  }
 }

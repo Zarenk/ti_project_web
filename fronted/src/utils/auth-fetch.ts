@@ -14,14 +14,24 @@ export type ApiError = Error | UnauthenticatedError
 
 function resolveUrl(input: RequestInfo | URL): RequestInfo | URL {
   if (typeof input === 'string') {
-    const base = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+    const rawBase =
+      process.env.NEXT_PUBLIC_BACKEND_URL?.trim() || 'http://localhost:4000'
     if (/^https?:\/\//i.test(input)) {
       return input
     }
+    const normalizedBase = normalizeBackendBase(rawBase)
     const slash = input.startsWith('/') ? '' : '/'
-    return base + slash + input
+    return normalizedBase + slash + input
   }
   return input
+}
+
+function normalizeBackendBase(base: string): string {
+  const trimmed = base.endsWith('/') ? base.slice(0, -1) : base
+  if (/\/api$/i.test(trimmed)) {
+    return trimmed
+  }
+  return `${trimmed}/api`
 }
 
 export async function authFetch(
@@ -38,6 +48,13 @@ export async function authFetch(
     throw new UnauthenticatedError()
   }
   Object.entries(auth).forEach(([k, v]) => headers.set(k, v as string))
+
+  if (process.env.NEXT_PUBLIC_DEBUG_HEADERS === 'true') {
+    console.debug('authFetch headers', {
+      url: typeof input === 'string' ? input : input.toString(),
+      headers: Object.fromEntries(headers.entries()),
+    })
+  }
 
   let res = await fetch(url, { ...init, headers })
   if (res.status !== 401) return res

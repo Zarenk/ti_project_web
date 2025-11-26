@@ -58,11 +58,23 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 
   try {
     const { orgId, companyId } = await getTenantSelection()
-    if (orgId != null) {
-      headers["x-org-id"] = String(orgId)
+    const sanitizeNumeric = (value: number | null | undefined) => {
+      if (value == null) {
+        return null
+      }
+      if (!Number.isFinite(value)) {
+        return null
+      }
+      return value
     }
-    if (companyId != null) {
-      headers["x-company-id"] = String(companyId)
+
+    const orgValue = sanitizeNumeric(orgId)
+    const companyValue = sanitizeNumeric(companyId)
+    if (orgValue != null) {
+      headers["x-org-id"] = String(orgValue)
+    }
+    if (companyValue != null) {
+      headers["x-company-id"] = String(companyValue)
     }
   } catch {
     /* ignore tenant header failures */

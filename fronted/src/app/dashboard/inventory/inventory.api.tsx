@@ -11,6 +11,50 @@ export interface InventoryApiItem {
   [key: string]: any;
 }
 
+interface TenantHeaders {
+  organizationId?: number;
+  companyId?: number;
+}
+
+export interface InventoryAlertSummary {
+  providersOverThreshold: Array<{
+    provider: string;
+    failureCount: number;
+    lastFailureAt: string;
+  }>;
+  reviewDueCount: number;
+  badgeCount: number;
+}
+
+export interface MonitoringAlertEventPayload {
+  id: number;
+  alertType: string;
+  status: string;
+  severity: string;
+  message: string;
+  providerName: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface InventoryAlertsPayload {
+  failureAlerts: MonitoringAlertEventPayload[];
+  recentEvents: MonitoringAlertEventPayload[];
+  reviewDueTemplates: Array<{
+    id: number;
+    documentType: string;
+    providerName: string;
+    updatedAt: string;
+  }>;
+}
+
+const ensureTenant = (tenant?: TenantHeaders) => {
+  return {
+    organizationId: Number(tenant?.organizationId) || undefined,
+    companyId: Number(tenant?.companyId) || undefined,
+  };
+};
+
 // Obtener todo el inventario
 export async function getInventory(): Promise<InventoryApiItem[]> {
   const response = await authFetch(`${BACKEND_URL}/api/inventory`, {
@@ -42,6 +86,87 @@ export async function getAllPurchasePrices() {
   }
 
   return await response.json();
+}
+
+export async function getInventoryMetrics(tenant?: TenantHeaders) {
+  const payload = ensureTenant(tenant);
+  if (!payload.organizationId || !payload.companyId) {
+    return null;
+  }
+  const response = await authFetch(`${BACKEND_URL}/api/inventory/metrics`, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('No se pudieron cargar las métricas');
+  }
+
+  return response.json();
+}
+
+export async function getInventoryAlerts(
+  tenant?: TenantHeaders,
+): Promise<InventoryAlertsPayload | null> {
+  const payload = ensureTenant(tenant);
+  if (!payload.organizationId || !payload.companyId) {
+    return null;
+  }
+  const response = await authFetch(`${BACKEND_URL}/api/inventory-alerts`, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => null);
+    throw new Error(body || 'No se pudieron cargar las alertas');
+  }
+
+  return (await response.json()) as InventoryAlertsPayload;
+}
+
+export async function getInventoryAlertSummary(tenant?: TenantHeaders) {
+  const payload = ensureTenant(tenant);
+  if (!payload.organizationId || !payload.companyId) {
+    return null;
+  }
+  const response = await authFetch(`${BACKEND_URL}/api/inventory-alerts/summary`, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => null);
+    throw new Error(body || 'No se pudo cargar el resumen de alertas');
+  }
+
+  return (await response.json()) as InventoryAlertSummary;
+}
+
+export async function reviewTemplateAlert(templateId: number) {
+  const response = await authFetch(
+    `${BACKEND_URL}/api/inventory-alerts/template/${templateId}/review`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    },
+  );
+  if (!response.ok) {
+    const body = await response.text().catch(() => null);
+    throw new Error(body || 'No se pudo marcar la plantilla como revisada');
+  }
+  return response.json();
 }
 
 

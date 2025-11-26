@@ -8,6 +8,7 @@ import { TenancyModule } from 'src/tenancy/tenancy.module';
 import { InvoiceTemplatesMetricsService } from './metrics.service';
 import { InvoiceTemplatesAlertsService } from './alerts.service';
 import { InvoiceTemplatesMetricsPublicController } from './metrics-public.controller';
+import { InventoryAlertsScheduler } from './alerts.scheduler';
 
 @Module({
   imports: [TenancyModule],
@@ -22,6 +23,7 @@ import { InvoiceTemplatesMetricsPublicController } from './metrics-public.contro
     PrismaService,
     InvoiceTemplatesMetricsService,
     InvoiceTemplatesAlertsService,
+    InventoryAlertsScheduler,
   ],
   exports: [
     InvoiceTemplatesService,

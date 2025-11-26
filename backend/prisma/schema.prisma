@@ -189,6 +189,10 @@ model User {
   role         UserRole @default(CLIENT) // Enum para roles de usuario
   status       String   @default("ACTIVO")
   organizationId      Int?
+  lastOrgId    Int?
+  lastCompanyId Int?
+  lastContextUpdatedAt DateTime?
+  lastContextHash String?
   failedLoginAttempts Int      @default(0)
   lockUntil    DateTime?
   isPermanentlyLocked Boolean  @default(false)
@@ -197,6 +201,8 @@ model User {
   updatedAt    DateTime @updatedAt
   tokenVersion Int      @default(0)
 
+  lastOrg      Organization? @relation("UserLastOrganization", fields: [lastOrgId], references: [id], onDelete: SetNull)
+  lastCompany  Company?      @relation("UserLastCompany", fields: [lastCompanyId], references: [id], onDelete: SetNull)
   entrys           Entry[] // Relacion con el modelo Entry
   inventoryHistory InventoryHistory[] // Relacion con el modelo InventoryHistory
   // Relacion con Sales
@@ -212,9 +218,40 @@ model User {
   memberships OrganizationMembership[]
   createdInvoiceTemplates InvoiceTemplate[] @relation("InvoiceTemplateCreatedBy")
   updatedInvoiceTemplates InvoiceTemplate[] @relation("InvoiceTemplateUpdatedBy")
+  contextPreferences UserContextPreference[]
+  contextHistory UserContextHistory[]
   @@index([email])
   @@index([username])
   @@index([organizationId, email])
+  @@index([lastOrgId])
+  @@index([lastCompanyId])
+}
+
+model UserContextPreference {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  orgId           Int
+  companyId       Int?
+  totalSelections Int      @default(1)
+  lastSelectedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId, companyId], name: "user_context_preference_unique")
+  @@index([userId, lastSelectedAt])
+}
+
+model UserContextHistory {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  orgId      Int
+  companyId  Int?
+  device     String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 enum OrganizationMembershipRole {
@@ -251,6 +288,12 @@ model Organization {
   sunatStoredPdfs   SunatStoredPdf[]
   invoiceTemplates InvoiceTemplate[]
   invoiceSamples InvoiceSample[]
+  monitoringAlerts MonitoringAlert[]
+  monitoringAlertEvents MonitoringAlertEvent[]
+  userLastContext  User[] @relation("UserLastOrganization")
+  subscription     Subscription?
+  billingPaymentMethods BillingPaymentMethod[]
+  subscriptionInvoices SubscriptionInvoice[]
 
   @@unique([name])
   @@index([status])
@@ -296,13 +339,141 @@ model Company {
   catalogCover CatalogCover[]
   siteSettings SiteSettings[]
   sunatTransmissions SunatTransmission[]
+  userLastContext  User[] @relation("UserLastCompany")
   sunatStoredPdfs   SunatStoredPdf[]
   documentSequences CompanyDocumentSequence[]
   invoiceTemplates InvoiceTemplate[]
   invoiceSamples InvoiceSample[]
+  monitoringAlerts MonitoringAlert[]
+  monitoringAlertEvents MonitoringAlertEvent[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
+}
+
+enum SubscriptionInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum BillingPaymentProvider {
+  STRIPE
+  MERCADOPAGO
+  CULQI
+  MANUAL
+}
+
+enum BillingPaymentMethodStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SubscriptionInvoiceStatus {
+  PENDING
+  PAID
+  FAILED
+  VOID
+}
+
+model SubscriptionPlan {
+  id          Int                 @id @default(autoincrement())
+  code        String              @unique
+  name        String
+  description String?
+  interval    SubscriptionInterval @default(MONTHLY)
+  price       Decimal             @default(0.00)
+  currency    String              @default("PEN")
+  trialDays   Int?                @default(14)
+  features    Json?
+  quotas      Json?
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  subscriptions Subscription[]
+
+  @@index([isActive])
+}
+
+model BillingPaymentMethod {
+  id              Int                          @id @default(autoincrement())
+  organizationId  Int
+  provider        BillingPaymentProvider       @default(STRIPE)
+  externalId      String
+  brand           String?
+  last4           String?
+  expMonth        Int?
+  expYear         Int?
+  country         String?
+  status          BillingPaymentMethodStatus   @default(ACTIVE)
+  isDefault       Boolean                      @default(false)
+  metadata        Json?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[] @relation("SubscriptionDefaultPaymentMethod")
+  invoices      SubscriptionInvoice[]
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId, status])
+}
+
+model Subscription {
+  id                    Int                @id @default(autoincrement())
+  planId                Int
+  organizationId        Int                @unique
+  status                SubscriptionStatus @default(TRIAL)
+  billingCustomerId     String?
+  trialEndsAt           DateTime?
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean            @default(false)
+  canceledAt            DateTime?
+  metadata              Json?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  defaultPaymentMethodId Int?
+
+  plan          SubscriptionPlan       @relation(fields: [planId], references: [id], onDelete: Restrict)
+  organization  Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoices      SubscriptionInvoice[]
+  defaultPaymentMethod BillingPaymentMethod? @relation("SubscriptionDefaultPaymentMethod", fields: [defaultPaymentMethodId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+}
+
+model SubscriptionInvoice {
+  id                 Int                        @id @default(autoincrement())
+  subscriptionId     Int
+  organizationId     Int
+  paymentMethodId    Int?
+  providerInvoiceId  String?
+  status             SubscriptionInvoiceStatus  @default(PENDING)
+  amount             Decimal                    @default(0.00)
+  currency           String                     @default("PEN")
+  billingPeriodStart DateTime?
+  billingPeriodEnd   DateTime?
+  dueDate            DateTime?
+  paidAt             DateTime?
+  metadata           Json?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  subscription  Subscription         @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  paymentMethod BillingPaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+
+  @@index([subscriptionId])
+  @@index([organizationId])
+  @@index([status])
 }
 
 model SunatTransmission {
@@ -487,6 +658,51 @@ model InvoiceTemplate {
   @@index([providerId])
   @@index([documentType])
   @@unique([organizationId, companyId, providerId, documentType, version])
+}
+
+model MonitoringAlert {
+  id             Int       @id @default(autoincrement())
+  organizationId Int?
+  companyId      Int?
+  alertType      String
+  providerName   String?
+  entityType     String?
+  entityId       Int?
+  status         String    @default("ACTIVE")
+  failureCount   Int       @default(0)
+  lastFailureAt  DateTime?
+  resolvedAt     DateTime?
+  metadata       Json?
+  identifier     String    @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  events       MonitoringAlertEvent[]
+
+  @@index([alertType, status])
+  @@index([organizationId, companyId, status])
+}
+
+model MonitoringAlertEvent {
+  id             Int       @id @default(autoincrement())
+  alertId        Int?
+  organizationId Int?
+  companyId      Int?
+  alertType      String
+  status         String
+  severity       String    @default("INFO")
+  message        String
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+
+  alert        MonitoringAlert? @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, companyId, alertType])
+  @@index([alertId])
 }
 
 enum PaymentTerm {

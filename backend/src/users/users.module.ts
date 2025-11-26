@@ -11,6 +11,11 @@ import { SimpleCookieMiddleware } from './simple-cookie.middleware';
 import { ActivityModule } from 'src/activity/activity.module';
 import { GlobalSuperAdminGuard } from 'src/tenancy/global-super-admin.guard';
 import { TenancyModule } from 'src/tenancy/tenancy.module';
+import { ContextEventsGateway } from './context-events.gateway';
+import { ContextMetricsService } from './context-metrics.service';
+import { ContextThrottleService } from './context-throttle.service';
+import { ContextPrometheusService } from './context-prometheus.service';
+import { ContextMetricsController } from './context-metrics.controller';
 
 @Module({
   imports: [
@@ -25,13 +30,17 @@ import { TenancyModule } from 'src/tenancy/tenancy.module';
       }),
     }),
   ],
-  controllers: [UsersController],
+  controllers: [UsersController, ContextMetricsController],
   providers: [
     UsersService,
     PrismaService,
     JwtStrategy,
     JwtAuthGuard,
     GlobalSuperAdminGuard,
+    ContextMetricsService,
+    ContextThrottleService,
+    ContextPrometheusService,
+    ContextEventsGateway,
   ],
   exports: [JwtAuthGuard],
 })

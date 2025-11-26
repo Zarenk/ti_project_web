@@ -8,6 +8,7 @@ import { UsersModule } from './users/users.module';
 import { CategoryModule } from './category/category.module';
 import { StoresModule } from './stores/stores.module';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ProvidersModule } from './providers/providers.module';
 import { EntriesModule } from './entries/entries.module';
 import { InventoryModule } from './inventory/inventory.module';
@@ -53,10 +54,13 @@ import { TenantContextGuard } from './tenancy/tenant-context.guard';
 import { LookupsModule } from './lookups/lookups.module';
 import { InvoiceTemplatesModule } from './invoice-templates/invoice-templates.module';
 import { InvoiceExtractionModule } from './invoice-extraction/invoice-extraction.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { PublicSignupModule } from './public-signup/public-signup.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
+    ScheduleModule.forRoot(),
     ProductsModule,
     UsersModule,
     CategoryModule,
@@ -100,6 +104,8 @@ import { InvoiceExtractionModule } from './invoice-extraction/invoice-extraction
     LookupsModule,
     InvoiceTemplatesModule,
     InvoiceExtractionModule,
+    SubscriptionsModule,
+    PublicSignupModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [

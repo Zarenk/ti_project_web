@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/context/auth-context"
 import { Badge } from "@/components/ui/badge"
@@ -11,12 +12,27 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Mail, Phone, Shield, CalendarClock, LogIn, CheckCircle2, UserRound, ImageUp } from 'lucide-react'
+import {
+  Mail,
+  Phone,
+  Shield,
+  CalendarClock,
+  LogIn,
+  CheckCircle2,
+  UserRound,
+  ImageUp,
+  BookOpen,
+  BarChart3,
+} from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { getLastAccessFromToken, isTokenValid, getUserDataFromToken } from "@/lib/auth"
 import { getProfile, updateProfile, changePassword, uploadProfileImage } from "./account.api"
 import Actividad from "./Actividad"
+import { Switch } from "@/components/ui/switch"
+import { shouldRememberContext, updateContextPreferences } from "@/utils/context-preferences"
+import { userContextStorage } from "@/utils/user-context-storage"
+import { trackEvent } from "@/lib/analytics"
 
 export default function Page() {
   const [user, setUser] = useState({
@@ -42,10 +58,13 @@ export default function Page() {
     nueva: "",
     confirmar: "",
   })
+  const [rememberContext, setRememberContext] = useState(() => shouldRememberContext())
   const [savingDatos, setSavingDatos] = useState(false)
   const [savingPass, setSavingPass] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showActividad, setShowActividad] = useState(false)
+  const activityAllowedRoles = new Set(["ADMIN", "SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"])
+  const allowedRoles = new Set(["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG", "ADMIN", "EMPLOYEE"])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const { logout } = useAuth()
@@ -58,7 +77,8 @@ export default function Page() {
         router.replace('/login')
         return
       }
-      if (!['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE'].includes(session.role)) {
+      const normalizedRole = (session.role ?? "").toUpperCase()
+      if (!allowedRoles.has(normalizedRole)) {
         router.push('/unauthorized')
         return
       }
@@ -162,6 +182,18 @@ export default function Page() {
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = ""
     }
+  }
+
+  const handleRememberContextChange = (value: boolean) => {
+    setRememberContext(value)
+    updateContextPreferences({ rememberLastContext: value })
+    if (!value) {
+      userContextStorage.clearContext({ silent: true })
+      toast("Dejaremos de recordar automáticamente tu última organización.")
+    } else {
+      toast("Recordaremos tu última organización y empresa seleccionada.")
+    }
+    trackEvent("context_preference_changed", { rememberLastContext: value })
   }
 
   const initials = user.nombre
@@ -296,7 +328,7 @@ export default function Page() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {user.rol === 'ADMIN' && (
+              {activityAllowedRoles.has((user.rol ?? "").toUpperCase()) && (
                 <Button
                   variant="outline"
                   className="rounded-full border-sky-200 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
@@ -532,6 +564,52 @@ export default function Page() {
                     <Phone className="mr-2 size-4 text-sky-700 dark:text-slate-200" />
                     Llamar
                   </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-slate-800 dark:text-slate-100">
+                    Preferencias de contexto
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                        Recordar última organización
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Guarda tu última organización y empresa seleccionada para reanudar el trabajo más rápido.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={rememberContext}
+                      onCheckedChange={handleRememberContextChange}
+                      aria-label="Recordar última organización"
+                    />
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <Button
+                      className="flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 dark:from-slate-700 dark:to-slate-500"
+                      asChild
+                    >
+                      <Link href="/dashboard/account/context-history">
+                        <BookOpen className="size-4" />
+                        Historial completo
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex items-center gap-2 rounded-full border-sky-200 px-4 py-2 text-xs font-semibold text-sky-700 transition hover:bg-sky-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+                      asChild
+                    >
+                      <Link href="/dashboard/account/context-dashboard">
+                        <BarChart3 className="size-4" />
+                        Panel de métricas
+                      </Link>
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </aside>

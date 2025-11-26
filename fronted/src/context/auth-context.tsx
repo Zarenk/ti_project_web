@@ -24,6 +24,8 @@ import {
   clearTenantSelection,
   setTenantSelection,
 } from "@/utils/tenant-preferences"
+import { userContextStorage } from "@/utils/user-context-storage"
+import { useUserContextSync } from "@/hooks/use-user-context-sync"
 import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
 import { SESSION_EXPIRED_EVENT } from "@/utils/session-expired-event"
 
@@ -52,19 +54,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sessionExpiryInProgressRef = useRef(false)
   const [sessionExpiryOverlay, setSessionExpiryOverlay] = useState(false)
   const lastUserIdRef = useRef<number | null>(null)
-  const ensureTenantDefaults = useCallback(async () => {
+  useUserContextSync(userId)
+  const ensureTenantDefaults = useCallback(async (): Promise<boolean> => {
     try {
       const summary = await getCurrentTenant()
       const resolvedOrgId = summary.organization?.id ?? null
       const resolvedCompanyId = summary.company?.id ?? summary.companies?.[0]?.id ?? null
       if (resolvedOrgId != null && resolvedCompanyId != null) {
         setTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
-        window.dispatchEvent(new Event(TENANT_SELECTION_EVENT))
         window.dispatchEvent(new Event(TENANT_ORGANIZATIONS_EVENT))
+        return true
       }
     } catch {
       /* ignore */
     }
+    return false
   }, [])
 
   const clearSessionTimer = useCallback(() => {
@@ -80,13 +84,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const hasChangedUser =
         lastUserIdRef.current === null || lastUserIdRef.current !== data.id
       if (hasChangedUser) {
-        clearTenantSelection()
-        void ensureTenantDefaults()
+        const ensured = await ensureTenantDefaults()
+        if (!ensured) {
+          clearTenantSelection()
+        }
       }
       lastUserIdRef.current = data.id ?? null
+      const resolvedId = data.id ?? null
       setUserName(data.name ?? null)
-      setUserId(data.id ?? null)
+      setUserId(resolvedId)
       setRole(data.role ?? null)
+      userContextStorage.setUserHint(resolvedId)
       autoLogoutTriggeredRef.current = false
       sessionExpiryInProgressRef.current = false
       setSessionExpiryOverlay(false)
@@ -95,11 +103,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserName(null)
       setUserId(null)
       setRole(null)
+      userContextStorage.setUserHint(null)
     }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("authchange"))
     }
-  }, [])
+  }, [ensureTenantDefaults])
     const logout = useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
       clearSessionTimer()
@@ -128,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUserName(null)
         setUserId(null)
         setRole(null)
+        userContextStorage.setUserHint(null)
         if (!silent) {
           try { toast.success('Sesión cerrada') } catch {}
         }

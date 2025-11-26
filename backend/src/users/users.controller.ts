@@ -11,6 +11,7 @@ import {
   Query,
   Request,
   UseGuards,
+  ValidationPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -25,6 +26,8 @@ import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
 import { TenantContextGuard } from 'src/tenancy/tenant-context.guard';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { UpdateLastContextDto } from './dto/update-last-context.dto';
+import { ValidateContextDto } from './dto/validate-context.dto';
 
 @Controller('users')
 export class UsersController {
@@ -96,6 +99,72 @@ export class UsersController {
   @Post('profile')
   getProfile(@Request() req) {
     return this.usersService.getProfile(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  getCurrentUser(@Request() req) {
+    return this.usersService.getCurrentUserSummary(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/context-suggestion')
+  getContextSuggestion(@Request() req) {
+    return this.usersService.getContextSuggestion(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/context-history')
+  listHistory(
+    @Request() req,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    const parsedLimit = limit ? Number(limit) : undefined;
+    const parsedCursor = cursor ? Number(cursor) : undefined;
+    return this.usersService.listContextHistory(
+      req.user.userId,
+      Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      Number.isFinite(parsedCursor) ? parsedCursor : undefined,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('me/context-history/:id/restore')
+  restoreFromHistory(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.usersService.restoreFromHistory(
+      req.user.userId,
+      id,
+      req,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/last-context')
+  updateLastContext(
+    @Request() req,
+    @Body() dto: UpdateLastContextDto,
+  ) {
+    return this.usersService.updateLastContext(req.user.userId, dto, req);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/validate-context')
+  validateContext(
+    @Request() req,
+    @Query(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    query: ValidateContextDto,
+  ) {
+    return this.usersService.validateContext(req.user.userId, query);
   }
 
   @UseGuards(JwtAuthGuard)

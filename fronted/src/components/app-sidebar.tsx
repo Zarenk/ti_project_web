@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import dynamic from "next/dynamic"
 import {
   AudioWaveform,
   Building2,
@@ -10,7 +11,6 @@ import {
   Command,
   DollarSign,
   Frame,
-  GalleryVerticalEnd,
   Globe,
   Home,
   HouseIcon,
@@ -31,7 +31,6 @@ import type { LucideIcon } from "lucide-react"
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
-import { TeamSwitcher } from "@/components/team-switcher"
 import {
   Sidebar,
   SidebarContent,
@@ -45,12 +44,6 @@ import { useFeatureFlag } from "@/app/hooks/use-feature-flags"
 import { useRBAC } from "@/app/hooks/use-rbac"
 import { useSiteSettings } from "@/context/site-settings-context"
 import { useModulePermission, type ModulePermissionKey } from "@/hooks/use-module-permission"
-
-type Team = {
-  name: string
-  logo: LucideIcon
-  plan: string
-}
 
 type NavSubItem = {
   title: string
@@ -78,20 +71,12 @@ type ProjectItem = {
 }
 
 type SidebarData = {
-  teams: Team[]
   navMain: NavItem[]
   projects: ProjectItem[]
 }
 
 // Static navigation data
 const data: SidebarData = {
-  teams: [
-    {
-      name: "Tecnologia Informatica",
-      logo: GalleryVerticalEnd,
-      plan: "Administrador",
-    },
-  ],
   navMain: [
     {
       title: "Almacen",
@@ -143,7 +128,6 @@ const data: SidebarData = {
       title: "Productos",
       url: "/dashboard/products",
       icon: SquareTerminal,
-      isActive: true,
       permission: "catalog",
       items: [
         {
@@ -167,7 +151,6 @@ const data: SidebarData = {
       title: "Proveedores",
       url: "/dashboard/providers",
       icon: Globe,
-      isActive: true,
       permission: "providers",
       items: [
         {
@@ -362,6 +345,25 @@ const data: SidebarData = {
   ],
 }
 
+const TeamSwitcherLazy = dynamic(
+  () =>
+    import("@/components/team-switcher").then((mod) => ({
+      default: mod.TeamSwitcher,
+    })),
+  {
+    ssr: false,
+    loading: () => <TeamSwitcherSkeleton />,
+  },
+)
+
+function TeamSwitcherSkeleton() {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-10 flex-1 animate-pulse rounded-lg bg-muted" />
+    </div>
+  )
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const { userName, role } = useAuth()
@@ -412,20 +414,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const adsEnabled = useFeatureFlag("ads")
   const canManageAds = useRBAC(["admin", "marketing"])
   const canAccessAds = adsEnabled && canManageAds
-
-  const teams = React.useMemo(() => {
-    const primaryTeam = data.teams[0]
-    const companyName = settings.company?.name?.trim()
-
-    return [
-      {
-        ...primaryTeam,
-        name: companyName || primaryTeam.name,
-        plan: roleLabel,
-      },
-      ...data.teams.slice(1),
-    ]
-  }, [roleLabel, settings.company?.name])
 
   const brandLogo = settings.brand?.logoUrl?.trim()
 
@@ -553,7 +541,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={teams} initialTeamIndex={0} />
+        <TeamSwitcherLazy />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMain} />

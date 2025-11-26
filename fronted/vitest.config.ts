@@ -3,8 +3,8 @@ import path from "node:path"
 
 export default defineConfig({
   test: {
-    environment: "jsdom",
-    setupFiles: ["./vitest.setup.ts"],
+    environment: process.env.VITEST_ENV ?? "jsdom",
+    setupFiles: process.env.VITEST_ENV === "node" ? [] : ["./vitest.setup.ts"],
     css: false,
   },
   resolve: {

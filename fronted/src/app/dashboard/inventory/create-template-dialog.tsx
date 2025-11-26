@@ -130,9 +130,6 @@ export function CreateTemplateDialog({
     if (providerId) {
       payload.providerId = providerId;
     }
-    if (organizationId) {
-      payload.organizationId = organizationId;
-    }
     if (version) {
       payload.version = Number(version);
     }

@@ -15,6 +15,7 @@ import DashboardLoading from "./loading";
 import LogoutOverlay from "@/components/logout-overlay";
 import { DashboardCompanyName } from "./dashboard-company-name";
 import { TenantSelectionProvider } from "@/context/tenant-selection-context";
+import { ContextStatusBanner } from "@/components/context-status-banner";
 
 export const revalidate = 0;
 
@@ -35,6 +36,7 @@ export default async function Page({ children }: { children: ReactNode }) {
         <AppSidebar />
         <SidebarInset>
           <LogoutOverlay />
+          <ContextStatusBanner />
           <div className="flex items-center gap-2 px-4 py-4">
             <TooltipProvider>
               <Tooltip>

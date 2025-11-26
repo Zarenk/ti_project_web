@@ -1,6 +1,7 @@
-﻿import {
+import {
   BadRequestException,
   Controller,
+  Delete,
   Get,
   Post,
   Req,
@@ -19,6 +20,7 @@ import { Roles } from '../users/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveBackendPath } from '../utils/path-utils';
 import { CurrentTenant } from '../tenancy/tenant-context.decorator';
+import sharp from 'sharp';
 
 function ensureCatalogDir(): string {
   const dir = resolveBackendPath('uploads', 'catalog');
@@ -26,6 +28,29 @@ function ensureCatalogDir(): string {
     mkdirSync(dir, { recursive: true });
   }
   return dir;
+}
+
+function buildPdfVariantRelativePath(relativePath: string): string {
+  const extension = extname(relativePath);
+  const base = relativePath.slice(0, relativePath.length - extension.length);
+  return `${base}-pdf${extension}`;
+}
+
+async function createPdfReadyVariant(
+  sourceAbsolutePath: string,
+  targetAbsolutePath: string,
+) {
+  try {
+    await sharp(sourceAbsolutePath)
+      .modulate({ brightness: 0.45, saturation: 0.6 })
+      .linear(0.9, -24)
+      .toFile(targetAbsolutePath);
+  } catch (error) {
+    console.error(
+      '[catalog-cover] Failed to create PDF-friendly variant',
+      error,
+    );
+  }
 }
 
 @Controller('catalog/cover')
@@ -56,12 +81,20 @@ export class CatalogCoverController {
     }
     const baseUrl =
       process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+    const pdfRelativePath = buildPdfVariantRelativePath(cover.imagePath);
+    const pdfAbsolutePath = resolveBackendPath(
+      ...pdfRelativePath.replace(/^\//, '').split('/'),
+    );
+    const pdfImageUrl = existsSync(pdfAbsolutePath)
+      ? `${baseUrl}${pdfRelativePath}`
+      : undefined;
     return {
       cover: {
         ...cover,
         imageUrl: cover.imagePath.startsWith('http')
           ? cover.imagePath
           : `${baseUrl}${cover.imagePath}`,
+        pdfImageUrl,
       },
     };
   }
@@ -112,6 +145,13 @@ export class CatalogCoverController {
     }
 
     const relativePath = `/uploads/catalog/${file.filename}`;
+    const absolutePath = file.path;
+    const pdfRelativePath = buildPdfVariantRelativePath(relativePath);
+    const pdfAbsolutePath = resolveBackendPath(
+      ...pdfRelativePath.replace(/^\//, '').split('/'),
+    );
+
+    await createPdfReadyVariant(absolutePath, pdfAbsolutePath);
 
     const cover = await this.prisma.$transaction(async (tx) => {
       await tx.catalogCover.updateMany({
@@ -136,11 +176,40 @@ export class CatalogCoverController {
 
     const baseUrl =
       process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+    const pdfImageUrl = existsSync(pdfAbsolutePath)
+      ? `${baseUrl}${pdfRelativePath}`
+      : undefined;
     return {
       cover: {
         ...cover,
         imageUrl: `${baseUrl}${relativePath}`,
+        pdfImageUrl,
       },
     };
   }
+
+  @Delete()
+  @Roles('ADMIN')
+  async removeCover(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    if (organizationId === null) {
+      throw new BadRequestException(
+        'Debes seleccionar una organizacion valida antes de eliminar la caratula.',
+      );
+    }
+
+    await this.prisma.catalogCover.updateMany({
+      where: {
+        isActive: true,
+        organizationId,
+        companyId: companyId ?? null,
+      },
+      data: { isActive: false },
+    });
+
+    return { cover: null };
+  }
 }
+

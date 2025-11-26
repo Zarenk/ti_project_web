@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { exportCatalog } from "./catalog.api";
-import { generateCatalogPdf } from "./catalog-pdf";
-import { getCatalogCover, uploadCatalogCover, type CatalogCover } from "./catalog-cover.api";
+import { generateCatalogPdf, type CatalogLayoutMode } from "./catalog-pdf";
+import { deleteCatalogCover, getCatalogCover, uploadCatalogCover, type CatalogCover } from "./catalog-cover.api";
 import { resolveImageUrl } from "@/lib/images";
 import { getProducts } from "../products/products.api";
 import { getStoresWithProduct } from "../inventory/inventory.api";
@@ -13,25 +13,64 @@ import CatalogPreview from "./catalog-preview";
 import { toast } from "sonner";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { getCategories } from "./catalog.api";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getCompanyDetail } from "../tenancy/tenancy.api";
+import { Badge } from "@/components/ui/badge";
 
 export default function CatalogPage() {
   const [downloading, setDownloading] = useState<"pdf" | "excel" | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
   const [cover, setCover] = useState<CatalogCover | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [removingCover, setRemovingCover] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { version } = useTenantSelection();
+  const { version, selection } = useTenantSelection();
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [layoutMode, setLayoutMode] = useState<CatalogLayoutMode>("grid");
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+  const [hiddenProductIds, setHiddenProductIds] = useState<number[]>([]);
+  const [priceOverrides, setPriceOverrides] = useState<Record<number, number>>({});
+  const [previousPriceOverrides, setPreviousPriceOverrides] = useState<Record<number, number>>({});
 
   useEffect(() => {
+    let cancelled = false;
+    async function fetchAllProducts() {
+      try {
+        const all = await getProducts();
+        if (!cancelled) {
+          setCatalogProducts(all);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error fetching products:", error);
+          setCatalogProducts([]);
+        }
+      }
+    }
+    fetchAllProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
+
+  useEffect(() => {
+    let cancelled = false;
     async function fetchProducts() {
       if (selectedCategories.length === 0) {
         setProducts([]);
+        setHiddenProductIds([]);
         return;
       }
-      const all = await getProducts();
-      const filtered = all.filter((p: any) =>
+      const filtered = catalogProducts.filter((p: any) =>
         selectedCategories.includes(p.categoryId)
       );
       const mapped = await Promise.all(
@@ -49,10 +88,59 @@ export default function CatalogPage() {
           return { ...p, stock };
         })
       );
-      setProducts(mapped);
+      if (!cancelled) {
+        setProducts(mapped);
+        const availableIds = new Set(mapped.map((item: any) => item.id));
+        setHiddenProductIds((prev) => prev.filter((id) => availableIds.has(id)));
+        setPriceOverrides((prev) => {
+          const next: Record<number, number> = {};
+          for (const id of availableIds) {
+            if (prev[id] !== undefined) {
+              next[id] = prev[id];
+            }
+          }
+          return next;
+        });
+        setPreviousPriceOverrides((prev) => {
+          const next: Record<number, number> = {};
+          for (const id of availableIds) {
+            if (prev[id] !== undefined) {
+              next[id] = prev[id];
+            }
+          }
+          return next;
+        });
+      }
     }
     fetchProducts();
-  }, [selectedCategories]);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCategories, catalogProducts]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchCompanyLogo() {
+      if (!selection?.companyId) {
+        setCompanyLogoUrl(null);
+        return;
+      }
+      try {
+        const detail = await getCompanyDetail(selection.companyId);
+        if (cancelled) return;
+        const logo = detail?.logoUrl ? resolveImageUrl(detail.logoUrl) : null;
+        setCompanyLogoUrl(logo);
+      } catch {
+        if (!cancelled) {
+          setCompanyLogoUrl(null);
+        }
+      }
+    }
+    void fetchCompanyLogo();
+    return () => {
+      cancelled = true;
+    };
+  }, [selection?.companyId, version]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +151,9 @@ export default function CatalogPage() {
         setCover(null);
         setSelectedCategories([]);
         setProducts([]);
+        setHiddenProductIds([]);
+        setPriceOverrides({});
+        setPreviousPriceOverrides({});
         const [fetchedCategories, currentCover] = await Promise.all([
           getCategories(),
           getCatalogCover().catch(() => null),
@@ -125,6 +216,47 @@ export default function CatalogPage() {
     }
   }
 
+  async function handleRemoveCover() {
+    if (!cover) return;
+    try {
+      setRemovingCover(true);
+      await deleteCatalogCover();
+      setCover(null);
+      toast.success('Caratula eliminada');
+    } catch (error) {
+      console.error('Error deleting catalog cover:', error);
+      toast.error('No se pudo eliminar la caratula');
+    } finally {
+      setRemovingCover(false);
+    }
+  }
+
+  const visibleProducts = useMemo(
+    () => products.filter((p: any) => !hiddenProductIds.includes(p.id)),
+    [products, hiddenProductIds],
+  );
+
+  const pdfProducts = useMemo(
+    () =>
+      visibleProducts.map((product: any) => {
+        const overrides: any = { ...product };
+        if (typeof product.id === "number") {
+          if (priceOverrides[product.id] !== undefined) {
+            overrides.priceSell = priceOverrides[product.id];
+          }
+          if (previousPriceOverrides[product.id] !== undefined) {
+            overrides.previousPriceOverride = previousPriceOverrides[product.id];
+          }
+        }
+        return overrides;
+      }),
+    [visibleProducts, priceOverrides, previousPriceOverrides],
+  );
+
+  const hiddenProducts = products.filter((p: any) =>
+    hiddenProductIds.includes(p.id),
+  );
+
   async function handleDownload(format: "pdf" | "excel") {
     if (selectedCategories.length === 0) {
       toast.error("Debes seleccionar una categoría");
@@ -134,8 +266,17 @@ export default function CatalogPage() {
       setDownloading(format);
       let blob: Blob;
       if (format === "pdf") {
-        const coverImage = cover?.imageUrl ?? cover?.imagePath ?? undefined;
-        blob = await generateCatalogPdf(products, coverImage);
+        const coverImage =
+          cover?.imageUrl ??
+          cover?.imagePath ??
+          cover?.pdfImageUrl ??
+          undefined;
+        blob = await generateCatalogPdf(
+          pdfProducts,
+          coverImage,
+          layoutMode,
+          companyLogoUrl ?? undefined,
+        );
       } else {
         const params = { categories: selectedCategories };
         blob = await exportCatalog("excel", params);
@@ -155,6 +296,49 @@ export default function CatalogPage() {
     }
   }
 
+  function handleHideProduct(productId: number) {
+    setHiddenProductIds((prev) =>
+      prev.includes(productId) ? prev : [...prev, productId],
+    );
+  }
+
+  function handleRestoreProduct(productId: number) {
+    setHiddenProductIds((prev) => prev.filter((id) => id !== productId));
+  }
+
+  function handleRestoreAllHidden() {
+    setHiddenProductIds([]);
+  }
+
+  function handlePriceChange(productId: number, value: number | null) {
+    setPriceOverrides((prev) => {
+      if (value === null || Number.isNaN(value)) {
+        const { [productId]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [productId]: value };
+    });
+  }
+
+  function handlePreviousPriceChange(productId: number, value: number | null) {
+    setPreviousPriceOverrides((prev) => {
+      if (value === null || Number.isNaN(value)) {
+        const { [productId]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [productId]: value };
+    });
+  }
+
+  function handleResetCatalogOptions() {
+    setSelectedCategories([]);
+    setProducts([]);
+    setHiddenProductIds([]);
+    setPriceOverrides({});
+    setPreviousPriceOverrides({});
+    setLayoutMode("grid");
+  }
+
   const coverUrl = cover?.imageUrl || cover?.imagePath
     ? resolveImageUrl(cover?.imageUrl ?? cover?.imagePath)
     : null;
@@ -166,7 +350,41 @@ export default function CatalogPage() {
         categories={categories}
         selected={selectedCategories}
         onChange={setSelectedCategories}
+        products={catalogProducts}
       />
+      {hiddenProducts.length > 0 && (
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium">
+              Productos ocultos ({hiddenProductIds.length}):
+            </span>
+            {hiddenProducts.map((product: any) => (
+              <Badge
+                key={product.id}
+                variant="secondary"
+                className="flex items-center gap-2"
+              >
+                <span className="text-xs font-semibold">{product.name}</span>
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold text-primary underline"
+                  onClick={() => handleRestoreProduct(product.id)}
+                >
+                  Mostrar
+                </button>
+              </Badge>
+            ))}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRestoreAllHidden}
+              className="ml-auto text-xs font-medium"
+            >
+              Restaurar todos
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-4">
         <Button
           variant="outline"
@@ -181,12 +399,26 @@ export default function CatalogPage() {
         </Button>
         {coverUrl && (
           <div className="flex items-center gap-2">
-            <img
-              src={coverUrl}
-              alt="Caratula del catalogo"
-              className="h-16 w-32 rounded border object-cover"
-            />
-            <span className="text-sm text-muted-foreground">Vista previa</span>
+            <div className="relative h-16 w-32">
+              <img
+                src={coverUrl}
+                alt="Caratula del catalogo"
+                className="h-full w-full rounded border object-cover"
+              />
+              <button
+                type="button"
+                onClick={handleRemoveCover}
+                disabled={removingCover}
+                className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-xs font-bold text-white shadow"
+                aria-label="Eliminar caratula"
+                title="Eliminar caratula"
+              >
+                ×
+              </button>
+            </div>
+            <span className="text-sm text-muted-foreground">
+              {removingCover ? 'Eliminando...' : 'Vista previa'}
+            </span>
           </div>
         )}
       </div>
@@ -197,16 +429,59 @@ export default function CatalogPage() {
         className="hidden"
         onChange={handleCoverSelected}
       />
-
-      <div className="flex gap-4">
-        <Button onClick={() => handleDownload("pdf")} disabled={downloading === "pdf"}>
-          {downloading === "pdf" ? "Generando..." : "Descargar PDF"}
-        </Button>
-        <Button onClick={() => handleDownload("excel")} disabled={downloading === "excel"}>
-          {downloading === "excel" ? "Generando..." : "Descargar Excel"}
-        </Button>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="layout-mode" className="text-sm font-medium">
+              Distribución
+            </Label>
+            <Select
+              value={layoutMode}
+              onValueChange={(value) => setLayoutMode(value as CatalogLayoutMode)}
+            >
+              <SelectTrigger id="layout-mode" className="w-[200px]">
+                <SelectValue placeholder="Selecciona un modo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="grid">Tarjetas (3x3)</SelectItem>
+                <SelectItem value="list">Listado (1x1)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => handleDownload("pdf")} disabled={downloading === "pdf"}>
+              {downloading === "pdf" ? "Generando..." : "Descargar PDF"}
+            </Button>
+            <Button onClick={() => handleDownload("excel")} disabled={downloading === "excel"}>
+              {downloading === "excel" ? "Generando..." : "Descargar Excel"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleResetCatalogOptions}
+              className="group relative overflow-hidden border-primary/40 text-primary transition-all duration-200 hover:border-primary hover:bg-primary hover:text-white"
+            >
+              <span className="relative z-10">Limpiar configuración</span>
+              <span className="absolute inset-0 translate-y-full bg-primary/80 transition-all duration-200 group-hover:translate-y-0" />
+            </Button>
+          </div>
+        </div>
       </div>
-      {products.length > 0 && <CatalogPreview products={products} />}
+      {visibleProducts.length > 0 ? (
+        <CatalogPreview
+          products={visibleProducts}
+          layout={layoutMode}
+          onRemoveProduct={handleHideProduct}
+          onPriceChange={handlePriceChange}
+          onPreviousPriceChange={handlePreviousPriceChange}
+          priceOverrides={priceOverrides}
+          previousPriceOverrides={previousPriceOverrides}
+        />
+      ) : (
+        <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+          Selecciona categorias y deja visibles los productos que quieres incluir.
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Barcode, Check, ChevronsUpDown, Plus, Save, ChevronDown } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useLayoutEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -66,6 +66,25 @@ export function ProductSelection({
   const [previousCategoryId, setPreviousCategoryId] = useState<number | null>(null)
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false)
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
+  const productTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const [productTriggerWidth, setProductTriggerWidth] = useState<number | undefined>(undefined)
+  const categoryTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const [categoryTriggerWidth, setCategoryTriggerWidth] = useState<number | undefined>(undefined)
+
+  useLayoutEffect(() => {
+    const updateWidth = () => {
+      setProductTriggerWidth(productTriggerRef.current?.offsetWidth)
+      setCategoryTriggerWidth(categoryTriggerRef.current?.offsetWidth)
+    }
+
+    if (typeof window !== 'undefined') {
+      updateWidth()
+      window.addEventListener('resize', updateWidth)
+      return () => window.removeEventListener('resize', updateWidth)
+    }
+
+    return undefined
+  }, [])
 
   const categoryField = register('category_name')
 
@@ -247,12 +266,13 @@ export function ProductSelection({
               className="min-w-[150px] flex-1 sm:w-[300px]
               justify-between truncate text-xs sm:text-sm"
               title="Busca y selecciona el producto que deseas ingresar"
+              ref={productTriggerRef}
             >
               {displayedProductName || 'Selecciona un producto...'}
               <ChevronsUpDown className="opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="min-w-[150px] sm:w-[300px] p-0">
+          <PopoverContent className="p-0" style={{ width: productTriggerWidth }}>
             <Command>
               <CommandInput placeholder="Buscar producto..." />
               <CommandList>
@@ -392,12 +412,13 @@ export function ProductSelection({
               role="combobox"
               className="w-full justify-between"
               title="Selecciona o cambia la categoría asociada al producto"
+              ref={categoryTriggerRef}
             >
               {categoryValue || 'Selecciona una categoría...'}
               <ChevronsUpDown className="opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-full min-w-[200px] p-0">
+          <PopoverContent className="p-0" style={{ width: categoryTriggerWidth }}>
             <Command>
               <CommandInput placeholder="Buscar categoría..." />
               <CommandList>

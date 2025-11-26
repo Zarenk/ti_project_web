@@ -1,11 +1,11 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   DefaultValuePipe,
   Get,
   Param,
   ParseBoolPipe,
-  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -33,6 +33,16 @@ export class InvoiceTemplatesController {
     private readonly invoiceTemplatesService: InvoiceTemplatesService,
   ) {}
 
+  private parseNumericId(id: string): number {
+    const parsed = Number.parseInt(id, 10);
+    if (!Number.isFinite(parsed)) {
+      throw new BadRequestException(
+        'Validation failed (numeric string is expected)',
+      );
+    }
+    return parsed;
+  }
+
   @Get()
   findAll(
     @Query('includeInactive', new DefaultValuePipe(false), ParseBoolPipe)
@@ -42,8 +52,8 @@ export class InvoiceTemplatesController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.invoiceTemplatesService.findOne(id);
+  findOne(@Param('id') idParam: string) {
+    return this.invoiceTemplatesService.findOne(this.parseNumericId(idParam));
   }
 
   @Post()
@@ -79,9 +89,12 @@ export class InvoiceTemplatesController {
 
   @Patch(':id')
   update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') idParam: string,
     @Body() dto: UpdateInvoiceTemplateDto,
   ) {
-    return this.invoiceTemplatesService.update(id, dto);
+    return this.invoiceTemplatesService.update(
+      this.parseNumericId(idParam),
+      dto,
+    );
   }
 }

@@ -1207,7 +1207,7 @@ export default function Page() {
                     />
                   </div>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 flex flex-col justify-center">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Método de pago
                   </p>
