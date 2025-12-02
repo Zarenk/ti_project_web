@@ -102,7 +102,10 @@ describe('InvoiceExtractionService corrections', () => {
         mlMetadata: sample.extractionResult.mlMetadata,
       }),
     );
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({
+      success: true,
+      mlMetadata: sample.extractionResult.mlMetadata,
+    });
   });
 
   it('falls back to extraction fields when no text is supplied', async () => {
@@ -112,7 +115,7 @@ describe('InvoiceExtractionService corrections', () => {
       fields: { foo: 'new value' },
     };
 
-    await service.recordCorrection(sample.id, dto);
+    const result = await service.recordCorrection(sample.id, dto);
 
     expect(trainingService.recordSample).toHaveBeenCalledWith({
       templateId: sample.invoiceTemplateId ?? 0,
@@ -131,5 +134,9 @@ describe('InvoiceExtractionService corrections', () => {
         mlMetadata: sample.extractionResult.mlMetadata,
       }),
     );
+    expect(result).toEqual({
+      success: true,
+      mlMetadata: sample.extractionResult.mlMetadata,
+    });
   });
 });

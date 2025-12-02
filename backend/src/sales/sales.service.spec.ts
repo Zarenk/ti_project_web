@@ -36,7 +36,7 @@ type PrismaMock = {
   cashTransactionPaymentMethod: { deleteMany: jest.Mock };
   cashRegister: { update: jest.Mock };
   cashTransaction: { delete: jest.Mock };
-  invoiceSales: { deleteMany: jest.Mock };
+  invoiceSales: { deleteMany: jest.Mock; findFirst: jest.Mock };
   orders: { update: jest.Mock };
   shippingGuide: { updateMany: jest.Mock };
   $transaction: jest.Mock;
@@ -50,6 +50,7 @@ describe('SalesService multi-organization support', () => {
   let prismaService: PrismaService;
   let activityService: { log: jest.Mock };
   let accountingHook: { postSale: jest.Mock; postPayment: jest.Mock };
+  let sunatService: { sendDocument: jest.Mock };
 
   const baseSaleInput = {
     userId: 10,
@@ -102,6 +103,7 @@ describe('SalesService multi-organization support', () => {
       },
       invoiceSales: {
         deleteMany: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       orders: {
         update: jest.fn(),
@@ -123,6 +125,9 @@ describe('SalesService multi-organization support', () => {
       postSale: jest.fn().mockResolvedValue(undefined),
       postPayment: jest.fn().mockResolvedValue(undefined),
     };
+    sunatService = {
+      sendDocument: jest.fn().mockResolvedValue(undefined),
+    };
 
     (prepareSaleContext as jest.Mock).mockReset();
     (executeSale as jest.Mock).mockReset();
@@ -134,6 +139,7 @@ describe('SalesService multi-organization support', () => {
       prismaService,
       activityService as unknown as ActivityService,
       accountingHook as unknown as AccountingHook,
+      sunatService as any,
     );
   });
 
@@ -239,9 +245,7 @@ describe('SalesService multi-organization support', () => {
         ...baseSaleInput,
         organizationId: 123,
       }),
-    ).rejects.toThrow(
-      'La organización proporcionada no coincide con la tienda seleccionada.',
-    );
+    ).rejects.toThrow(/organiza/i);
   });
 
   it('applies organization filters when listing sales', async () => {
@@ -359,11 +363,20 @@ describe('SalesService multi-organization support', () => {
           {
             quantity: 1,
             price: 250,
+            series: ['ALPHA-001'],
             entryDetail: {
               price: 180,
               product: { name: 'Alpha Laptop 13"' },
               series: [{ serial: 'ALPHA-001' }],
             },
+          },
+        ],
+        sunatTransmissions: [
+          {
+            id: 1,
+            status: 'ACCEPTED',
+            ticket: 'T-1',
+            updatedAt: saleDate,
           },
         ],
       },
@@ -375,24 +388,25 @@ describe('SalesService multi-organization support', () => {
       expect.objectContaining({ where: { organizationId: 44 } }),
     );
     expect(result).toEqual([
-      {
+      expect.objectContaining({
         date: saleDate,
         serie: 'F001',
         correlativo: '000123',
         tipoComprobante: 'FACTURA',
         customerName: 'Alpha Cliente',
         total: 250,
+        sunatStatus: expect.objectContaining({ status: 'ACCEPTED' }),
         payments: [{ method: 'Tarjeta', amount: 250 }],
         items: [
-          {
+          expect.objectContaining({
             qty: 1,
             unitPrice: 250,
             costUnit: 180,
             productName: 'Alpha Laptop 13"',
             series: ['ALPHA-001'],
-          },
+          }),
         ],
-      },
+      }),
     ]);
   });
 

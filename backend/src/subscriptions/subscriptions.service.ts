@@ -6,22 +6,60 @@ import {
   Inject,
 } from '@nestjs/common';
 import {
+  BillingPaymentProvider,
   SubscriptionStatus,
   SubscriptionPlan,
   Subscription,
   SubscriptionInvoiceStatus,
+  SubscriptionInvoice,
+  AuditAction,
 } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { StartTrialDto } from './dto/start-trial.dto';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
+import { ChangePlanDto } from './dto/change-plan.dto';
+import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
 import {
   PaymentProvider,
   CheckoutSessionResult,
 } from './payment-providers/payment-provider.interface';
 import { PAYMENT_PROVIDER_TOKEN } from './subscriptions.tokens';
+import { TaxRateService } from './tax-rate.service';
+import { Prisma } from '@prisma/client';
+import { SunatService } from 'src/sunat/sunat.service';
+import { ActivityService } from 'src/activity/activity.service';
+import { ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
+import { OrganizationExportService } from './organization-export.service';
+import { UpsertPaymentMethodDto } from './dto/upsert-payment-method.dto';
 
 const DEFAULT_TRIAL_DAYS = 14;
 const BILLING_CYCLE_DAYS = 30;
+const SYSTEM_AUDIT_ACTOR = 'subscriptions-service';
+const DUNNING_SCHEDULE_DAYS = [1, 3, 5, 7];
+
+type PaymentWebhookEvent = {
+  provider: string;
+  type: string;
+  data?: Record<string, any> | null;
+};
+
+type BillingCompanySnapshot = {
+  id: number;
+  organizationId: number;
+  name: string;
+  taxId: string | null;
+  sunatRuc: string | null;
+  sunatEnvironment: string;
+  sunatSolUserBeta: string | null;
+  sunatSolPasswordBeta: string | null;
+  sunatCertPathBeta: string | null;
+  sunatKeyPathBeta: string | null;
+  sunatSolUserProd: string | null;
+  sunatSolPasswordProd: string | null;
+  sunatCertPathProd: string | null;
+  sunatKeyPathProd: string | null;
+};
 
 @Injectable()
 export class SubscriptionsService {
@@ -29,7 +67,14 @@ export class SubscriptionsService {
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_PROVIDER_TOKEN)
     private readonly paymentProvider: PaymentProvider,
-  ) {}
+    private readonly taxRateService: TaxRateService,
+    private readonly sunatService: SunatService,
+    private readonly activityService: ActivityService,
+    private readonly configService: ConfigService,
+    private readonly exportService: OrganizationExportService,
+  ) {
+    void this.taxRateService.upsertDefaultRate();
+  }
   private readonly logger = new Logger(SubscriptionsService.name);
 
   async listPlans() {
@@ -52,7 +97,7 @@ export class SubscriptionsService {
       existingSubscription?.metadata ?? {},
     );
 
-    return this.prisma.subscription.upsert({
+    const upsertedSubscription = await this.prisma.subscription.upsert({
       where: { organizationId: dto.organizationId },
       create: {
         organizationId: dto.organizationId,
@@ -78,6 +123,26 @@ export class SubscriptionsService {
       },
       include: { plan: true },
     });
+
+    await this.logAuditEvent({
+      action: existingSubscription ? AuditAction.UPDATED : AuditAction.CREATED,
+      entityType: 'subscription',
+      entityId: upsertedSubscription.id.toString(),
+      summary: existingSubscription
+        ? `Trial refrescado para la organización ${dto.organizationId} con el plan ${plan.code}`
+        : `Trial iniciado para la organización ${dto.organizationId} con el plan ${plan.code}`,
+      diff: {
+        organizationId: dto.organizationId,
+        planId: plan.id,
+        status: upsertedSubscription.status,
+        trialEndsAt:
+          upsertedSubscription.trialEndsAt?.toISOString() ?? null,
+        currentPeriodEnd:
+          upsertedSubscription.currentPeriodEnd?.toISOString() ?? null,
+      },
+    });
+
+    return upsertedSubscription;
   }
 
   async createCheckoutSession(dto: CreateCheckoutDto) {
@@ -131,6 +196,21 @@ export class SubscriptionsService {
       });
     }
 
+    await this.logAuditEvent({
+      action: existingSubscription ? AuditAction.UPDATED : AuditAction.CREATED,
+      entityType: 'subscription',
+      entityId: subscription.id.toString(),
+      summary: `Checkout iniciado para el plan ${plan.code} (session ${checkoutResult.sessionId})`,
+      diff: {
+        organizationId: dto.organizationId,
+        planId: plan.id,
+        previousPlanId: existingSubscription?.planId ?? null,
+        amount: plan.price.toString(),
+        currency,
+        checkoutSessionId: checkoutResult.sessionId,
+      },
+    });
+
     return {
       ...checkoutResult,
       currency,
@@ -138,6 +218,382 @@ export class SubscriptionsService {
       subscriptionId: subscription.id,
       planId: plan.id,
     };
+  }
+
+  async requestPlanChange(dto: ChangePlanDto) {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { organizationId: dto.organizationId },
+      include: { plan: true },
+    });
+    if (!subscription) {
+      throw new NotFoundException('No existe una suscripción para la organización indicada');
+    }
+
+    const targetPlan = await this.ensurePlan(dto.planCode);
+    if (subscription.planId === targetPlan.id) {
+      throw new BadRequestException('Ya estás utilizando este plan');
+    }
+
+    const metadata = this.coerceJsonRecord(subscription.metadata);
+    const effectiveImmediately = dto.effectiveImmediately ?? false;
+    if (effectiveImmediately) {
+      await this.applyImmediatePlanChange(subscription, targetPlan, metadata);
+      return {
+        effectiveImmediately: true,
+        planCode: targetPlan.code,
+        planName: targetPlan.name,
+      };
+    }
+
+    const scheduledFor =
+      subscription.currentPeriodEnd?.toISOString() ??
+      this.calculateNextPeriodEnd(new Date(), targetPlan).toISOString();
+
+    metadata.pendingPlanChange = {
+      planId: targetPlan.id,
+      planCode: targetPlan.code,
+      planName: targetPlan.name,
+      requestedAt: new Date().toISOString(),
+      scheduledFor,
+    };
+
+    await this.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { metadata },
+    });
+
+    return {
+      effectiveImmediately: false,
+      scheduledFor,
+      planCode: targetPlan.code,
+      planName: targetPlan.name,
+    };
+  }
+
+  async requestCancellation(dto: CancelSubscriptionDto) {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { organizationId: dto.organizationId },
+      include: { plan: true },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('No existe una suscripción para la organización indicada');
+    }
+
+    const metadata = this.coerceJsonRecord(subscription.metadata);
+    metadata.cancellationRequest = {
+      reasonCategory: dto.reasonCategory ?? null,
+      customReason: dto.customReason ?? null,
+      requestedAt: new Date().toISOString(),
+      cancelImmediately: dto.cancelImmediately ?? false,
+    };
+
+    if (dto.cancelImmediately) {
+      await this.applyImmediateCancellation(subscription, metadata);
+      await this.queueOrganizationExport(subscription.organizationId);
+      return {
+        cancelImmediately: true,
+        status: 'CANCELED',
+      };
+    }
+
+    await this.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        cancelAtPeriodEnd: true,
+        metadata,
+      },
+    });
+    await this.queueOrganizationExport(subscription.organizationId);
+
+    return {
+      cancelImmediately: false,
+      status: 'SCHEDULED',
+      currentPeriodEnd: subscription.currentPeriodEnd,
+    };
+  }
+
+  async listInvoices(organizationId: number) {
+    if (!Number.isFinite(organizationId) || organizationId <= 0) {
+      throw new BadRequestException(
+        'Debes especificar una organización válida.',
+      );
+    }
+
+    const invoices = await this.prisma.subscriptionInvoice.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        subscription: {
+          include: { plan: true },
+        },
+        paymentMethod: true,
+      },
+    });
+
+    return invoices.map((invoice) => {
+      const metadata = this.coerceJsonRecord(invoice.metadata);
+      const pdfFilename =
+        metadata.pdfFilename ??
+        metadata.sunatPdfFilename ??
+        metadata.filename ??
+        null;
+      return {
+        id: invoice.id,
+        code: invoice.providerInvoiceId ?? `INV-${invoice.id}`,
+        amount: this.decimalToString(invoice.amount),
+        currency: invoice.currency,
+        status: invoice.status,
+        billingPeriodStart: invoice.billingPeriodStart,
+        billingPeriodEnd: invoice.billingPeriodEnd,
+        createdAt: invoice.createdAt,
+        planName: invoice.subscription?.plan?.name ?? null,
+        paymentMethod: invoice.paymentMethod
+          ? {
+              brand: invoice.paymentMethod.brand,
+              last4: invoice.paymentMethod.last4,
+            }
+          : null,
+        pdfAvailable: Boolean(pdfFilename),
+        pdfFilename,
+        canRetry:
+          invoice.status !== SubscriptionInvoiceStatus.PAID &&
+          invoice.status !== SubscriptionInvoiceStatus.VOID,
+      };
+    });
+  }
+
+  async retryInvoice(organizationId: number, invoiceId: number) {
+    const invoice = await this.prisma.subscriptionInvoice.findUnique({
+      where: { id: invoiceId },
+      include: { subscription: { include: { plan: true } } },
+    });
+    if (!invoice || invoice.organizationId !== organizationId) {
+      throw new NotFoundException('Invoice no encontrada');
+    }
+    if (invoice.status === SubscriptionInvoiceStatus.PAID) {
+      throw new BadRequestException(
+        'Esta factura ya fue pagada y no puede reintentarse.',
+      );
+    }
+
+    const metadata = this.coerceJsonRecord(invoice.metadata);
+    await this.dispatchDunningAttempt(
+      invoice as SubscriptionInvoice & {
+        subscription: Subscription & { plan: SubscriptionPlan };
+      },
+      metadata,
+    );
+
+    return { ok: true };
+  }
+
+  async getInvoicePdf(organizationId: number, invoiceId: number) {
+    const invoice = await this.prisma.subscriptionInvoice.findUnique({
+      where: { id: invoiceId },
+      include: { subscription: true },
+    });
+    if (!invoice || invoice.organizationId !== organizationId) {
+      throw new NotFoundException('Invoice no encontrada');
+    }
+    const metadata = this.coerceJsonRecord(invoice.metadata);
+    const filename =
+      metadata.pdfFilename ??
+      metadata.sunatPdfFilename ??
+      metadata.filename ??
+      null;
+    if (!filename) {
+      throw new NotFoundException('Esta factura no tiene PDF disponible');
+    }
+    const docType = this.resolvePdfDocumentType(metadata.pdfType);
+
+    const record = await this.prisma.sunatStoredPdf.findFirst({
+      where: {
+        organizationId,
+        companyId: invoice.companyId,
+        filename,
+        type: docType,
+      },
+    });
+
+    if (!record) {
+      throw new NotFoundException('El PDF asociado no se encontró en el sistema');
+    }
+
+    const path = this.sunatService.getComprobantePdfPath(
+      docType,
+      record.filename,
+      record.relativePath,
+    );
+
+    return {
+      path,
+      filename: record.filename,
+    };
+  }
+
+  async listOrganizationExports(organizationId: number) {
+    if (!Number.isFinite(organizationId) || organizationId <= 0) {
+      throw new BadRequestException('organizationId invalido');
+    }
+    const exports = await this.exportService.listExports(organizationId);
+    return exports.map((item) => ({
+      id: item.id,
+      status: item.status,
+      cleanupStatus: item.cleanupStatus,
+      requestedAt: item.requestedAt,
+      completedAt: item.completedAt,
+      expiresAt: item.expiresAt,
+      errorMessage: item.errorMessage ?? null,
+      fileReady: Boolean(item.filePath),
+    }));
+  }
+
+  async requestOrganizationExport(
+    organizationId: number,
+    requestedBy?: number,
+  ) {
+    if (!Number.isFinite(organizationId) || organizationId <= 0) {
+      throw new BadRequestException('organizationId invalido');
+    }
+    return this.exportService.requestExport(organizationId, requestedBy ?? null);
+  }
+
+  async downloadOrganizationExport(organizationId: number, exportId: number) {
+    if (!Number.isFinite(organizationId) || organizationId <= 0) {
+      throw new BadRequestException('organizationId invalido');
+    }
+    if (!Number.isFinite(exportId) || exportId <= 0) {
+      throw new BadRequestException('exportId invalido');
+    }
+    return this.exportService.getExportFile(organizationId, exportId);
+  }
+
+  async listPaymentMethods(organizationId: number) {
+    if (!Number.isFinite(organizationId) || organizationId <= 0) {
+      throw new BadRequestException('organizationId inválido');
+    }
+    return this.prisma.billingPaymentMethod.findMany({
+      where: { organizationId },
+      orderBy: [
+        { isDefault: 'desc' },
+        { updatedAt: 'desc' },
+      ],
+    });
+  }
+
+  async upsertPaymentMethod(dto: UpsertPaymentMethodDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const record = await tx.billingPaymentMethod.upsert({
+        where: {
+          organizationId_externalId: {
+            organizationId: dto.organizationId,
+            externalId: dto.externalId,
+          },
+        },
+        create: {
+          organizationId: dto.organizationId,
+          provider: dto.provider,
+          externalId: dto.externalId,
+          brand: dto.brand ?? null,
+          last4: dto.last4 ?? null,
+          expMonth: dto.expMonth ?? null,
+          expYear: dto.expYear ?? null,
+          country: dto.country ?? null,
+          status: 'ACTIVE',
+          isDefault: dto.isDefault ?? false,
+        },
+        update: {
+          provider: dto.provider,
+          brand: dto.brand ?? null,
+          last4: dto.last4 ?? null,
+          expMonth: dto.expMonth ?? null,
+          expYear: dto.expYear ?? null,
+          country: dto.country ?? null,
+          status: 'ACTIVE',
+          ...(dto.isDefault !== undefined ? { isDefault: dto.isDefault } : {}),
+        },
+      });
+
+      const hasDefault =
+        (await tx.billingPaymentMethod.count({
+          where: {
+            organizationId: dto.organizationId,
+            isDefault: true,
+          },
+        })) > 0;
+
+      const shouldSetDefault =
+        dto.isDefault === true || (!hasDefault && dto.isDefault !== false);
+
+      if (shouldSetDefault) {
+        await this.setDefaultPaymentMethodForOrg(
+          tx,
+          dto.organizationId,
+          record.id,
+          dto.billingCustomerId ?? null,
+        );
+      } else if (dto.billingCustomerId) {
+        await tx.subscription.updateMany({
+          where: { organizationId: dto.organizationId },
+          data: { billingCustomerId: dto.billingCustomerId },
+        });
+      }
+
+      return record;
+    });
+  }
+
+  async removePaymentMethod(organizationId: number, methodId: number) {
+    const method = await this.prisma.billingPaymentMethod.findFirst({
+      where: { id: methodId, organizationId },
+    });
+    if (!method) {
+      throw new NotFoundException('Método de pago no encontrado');
+    }
+
+    await this.prisma.billingPaymentMethod.delete({
+      where: { id: methodId },
+    });
+
+    if (method.isDefault) {
+      const next = await this.prisma.billingPaymentMethod.findFirst({
+        where: { organizationId },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (next) {
+        await this.setDefaultPaymentMethodForOrg(
+          this.prisma,
+          organizationId,
+          next.id,
+        );
+      } else {
+        await this.setDefaultPaymentMethodForOrg(
+          this.prisma,
+          organizationId,
+          null,
+        );
+      }
+    }
+
+    return { removed: true };
+  }
+
+  async markDefaultPaymentMethod(organizationId: number, methodId: number) {
+    const method = await this.prisma.billingPaymentMethod.findFirst({
+      where: { id: methodId, organizationId },
+    });
+    if (!method) {
+      throw new NotFoundException('Método de pago no encontrado');
+    }
+
+    await this.setDefaultPaymentMethodForOrg(
+      this.prisma,
+      organizationId,
+      method.id,
+    );
+
+    return { ok: true };
   }
 
   async finalizeCheckoutSession(sessionId: string) {
@@ -166,6 +622,12 @@ export class SubscriptionsService {
     const metadata = this.coerceJsonRecord(subscription.metadata);
     delete metadata.pendingCheckout;
 
+    const billingCompany = await this.getBillingCompanySnapshot(
+      subscription.organizationId,
+    );
+
+    let createdInvoice: SubscriptionInvoice | null = null;
+
     await this.prisma.$transaction(async (tx) => {
       await tx.subscription.update({
         where: { id: subscription.id },
@@ -180,12 +642,25 @@ export class SubscriptionsService {
         },
       });
 
-      await tx.subscriptionInvoice.create({
+      const price = new Prisma.Decimal(plan.price);
+      const taxInfo =
+        await this.taxRateService.getRateForOrganization(
+          subscription.organizationId,
+        );
+      const taxRateDecimal = new Prisma.Decimal(taxInfo.rate ?? 0);
+      const taxAmount = price.mul(taxRateDecimal);
+      const totalAmount = price.add(taxAmount);
+
+      createdInvoice = await tx.subscriptionInvoice.create({
         data: {
           subscriptionId: subscription.id,
           organizationId: subscription.organizationId,
+          companyId: billingCompany.id,
           status: SubscriptionInvoiceStatus.PAID,
-          amount: plan.price,
+          subtotal: price,
+          taxRate: taxRateDecimal,
+          taxAmount,
+          amount: totalAmount,
           currency: plan.currency,
           billingPeriodStart: now,
           billingPeriodEnd: periodEnd,
@@ -193,19 +668,192 @@ export class SubscriptionsService {
           metadata: {
             provider: 'mock',
             sessionId,
+            taxCountry: taxInfo.countryCode ?? null,
+            taxRegion: taxInfo.regionCode ?? null,
           },
         },
       });
+    });
+
+    await this.logAuditEvent({
+      action: AuditAction.UPDATED,
+      entityType: 'subscription',
+      entityId: subscription.id.toString(),
+      summary: `Suscripción activada mediante la sesión ${sessionId}`,
+      diff: {
+        organizationId: subscription.organizationId,
+        planId: plan.id,
+        previousStatus: subscription.status,
+        newStatus: SubscriptionStatus.ACTIVE,
+        currentPeriodEnd: periodEnd.toISOString(),
+      },
     });
 
     this.logger.log(
       `Subscription ${subscription.id} activated via session ${sessionId}`,
     );
 
+    if (createdInvoice) {
+      const invoiceForSunat: SubscriptionInvoice = createdInvoice;
+      const invoiceMetadata = this.coerceJsonRecord(
+        invoiceForSunat.metadata ?? {},
+      );
+      await this.logAuditEvent({
+        action: AuditAction.CREATED,
+        entityType: 'subscription_invoice',
+        entityId: invoiceForSunat.id.toString(),
+        summary: `Invoice de suscripción emitida por ${invoiceForSunat.amount.toString()} ${invoiceForSunat.currency}`,
+        diff: {
+          subscriptionId: subscription.id,
+          organizationId: subscription.organizationId,
+          amount: invoiceForSunat.amount.toString(),
+          subtotal: invoiceForSunat.subtotal.toString(),
+          taxRate: invoiceForSunat.taxRate.toString(),
+          taxAmount: invoiceForSunat.taxAmount.toString(),
+          taxCountry: invoiceMetadata.taxCountry ?? null,
+          taxRegion: invoiceMetadata.taxRegion ?? null,
+        },
+      });
+      try {
+        await this.emitSunatForSubscriptionInvoice({
+          invoice: invoiceForSunat,
+          plan,
+          company: billingCompany,
+          organizationId: subscription.organizationId,
+        });
+      } catch (error) {
+        this.logger.error(
+          `No se pudo emitir comprobante SUNAT para la invoice ${invoiceForSunat.id}: ${
+            (error as Error)?.message ?? 'error desconocido'
+          }`,
+        );
+      }
+    }
+
     return {
       subscriptionId: subscription.id,
       status: SubscriptionStatus.ACTIVE,
       currentPeriodEnd: periodEnd,
+    };
+  }
+
+  async handleWebhookEvent(
+    event: PaymentWebhookEvent,
+    headers?: Record<string, string>,
+  ) {
+    const provider = (event.provider ?? '').toLowerCase();
+    if (provider === 'mercadopago') {
+      this.verifyMercadoPagoSignature(headers);
+    }
+
+    const payload = event.data ?? {};
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const sessionId = payload.sessionId ?? payload.id;
+        if (!sessionId) {
+          throw new BadRequestException(
+            'El evento no incluye un sessionId para completar el checkout',
+          );
+        }
+        return this.finalizeCheckoutSession(String(sessionId));
+      }
+      case 'invoice.payment_succeeded':
+      case 'invoice.paid': {
+        await this.applyInvoicePayment(payload);
+        return { received: true };
+      }
+      case 'invoice.payment_failed': {
+        await this.applyInvoiceFailure(payload);
+        return { received: true };
+      }
+      case 'payment.created':
+      case 'payment.updated': {
+        await this.upsertPaymentMethodFromWebhook(payload);
+        return { received: true };
+      }
+      default:
+        this.logger.warn(
+          `Webhook ${event.provider}:${event.type} ignorado (sin manejador)`,
+        );
+        return { received: true, ignored: true };
+    }
+  }
+
+  async getSummaryForUser(userId: number) {
+    const userRecord = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        organizationId: true,
+        lastOrgId: true,
+      },
+    });
+
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { userId },
+      select: { organizationId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const organizationId =
+      userRecord?.lastOrgId ??
+      userRecord?.organizationId ??
+      membership?.organizationId ??
+      null;
+
+    if (!organizationId) {
+      return this.buildFallbackSummary();
+    }
+
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { organizationId },
+      include: { plan: true },
+    });
+
+    const usersCount = await this.prisma.organizationMembership.count({
+      where: { organizationId },
+    });
+    const invoicesCount = await this.prisma.subscriptionInvoice.count({
+      where: { organizationId },
+    });
+
+    if (!subscription) {
+      return this.buildFallbackSummary({
+        usersCount,
+        invoicesCount,
+      });
+    }
+
+    const now = Date.now();
+    const trialEndsAt = subscription.trialEndsAt?.getTime() ?? null;
+    const daysLeft =
+      subscription.status === SubscriptionStatus.TRIAL && trialEndsAt
+        ? Math.max(
+            Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24)),
+            0,
+          )
+        : null;
+
+    return {
+      plan: {
+        name: subscription.plan?.name ?? 'Plan actual',
+        code: subscription.plan?.code ?? subscription.id.toString(),
+        status: subscription.status,
+      },
+      trial: {
+        isTrial: subscription.status === SubscriptionStatus.TRIAL,
+        daysLeft,
+        endsAt: subscription.trialEndsAt?.toISOString() ?? null,
+      },
+      quotas: {
+        users: null,
+        invoices: null,
+        storageMB: null,
+      },
+      usage: {
+        users: usersCount,
+        invoices: invoicesCount,
+        storageMB: 0,
+      },
     };
   }
 
@@ -263,5 +911,859 @@ export class SubscriptionsService {
     }
     result.setDate(result.getDate() + BILLING_CYCLE_DAYS);
     return result;
+  }
+
+  private async emitSunatForSubscriptionInvoice(params: {
+    invoice: SubscriptionInvoice;
+    plan: SubscriptionPlan;
+    company: BillingCompanySnapshot;
+    organizationId: number;
+  }) {
+    const { invoice, plan, company, organizationId } = params;
+
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, name: true, code: true },
+    });
+
+    const rucEmisor =
+      company.sunatRuc?.trim() ??
+      company.taxId?.trim() ??
+      organization?.code ??
+      null;
+
+    if (!rucEmisor) {
+      throw new BadRequestException(
+        'La empresa emisora no tiene RUC configurado para SUNAT.',
+      );
+    }
+
+    const serie = `SU${String(company.id % 100).padStart(2, '0')}`;
+    const correlativo = invoice.id.toString().padStart(8, '0');
+    const issueDate =
+      invoice.billingPeriodStart?.toISOString().slice(0, 10) ??
+      new Date().toISOString().slice(0, 10);
+
+    const subtotal = Number(invoice.subtotal ?? invoice.amount ?? 0);
+    const igv = Number(invoice.taxAmount ?? 0);
+    const total = Number(invoice.amount ?? 0);
+
+    const documentData = {
+      serie,
+      correlativo,
+      fechaEmision: issueDate,
+      tipoMoneda: invoice.currency ?? 'PEN',
+      total,
+      emisor: {
+        ruc: rucEmisor,
+        razonSocial: company.name ?? 'Factura Cloud',
+      },
+      cliente: {
+        ruc: organization?.code ?? '00000000000',
+        razonSocial: organization?.name ?? 'Cliente Suscripción',
+      },
+      items: [
+        {
+          descripcion: `Suscripción ${plan.name}`,
+          cantidad: 1,
+          precioUnitario: subtotal,
+          subTotal: subtotal,
+          igv,
+          total,
+        },
+      ],
+    };
+
+    await this.sunatService.sendDocument({
+      companyId: company.id,
+      documentType: 'invoice',
+      documentData,
+      subscriptionInvoiceId: invoice.id,
+    });
+  }
+
+  private buildFallbackSummary(params?: {
+    usersCount?: number;
+    invoicesCount?: number;
+  }) {
+    return {
+      plan: {
+        name: 'Plan demo',
+        code: 'trial',
+        status: SubscriptionStatus.TRIAL,
+      },
+      trial: {
+        isTrial: true,
+        daysLeft: DEFAULT_TRIAL_DAYS,
+        endsAt: null,
+      },
+      quotas: {
+        users: null,
+        invoices: null,
+        storageMB: null,
+      },
+      usage: {
+        users: params?.usersCount ?? 1,
+        invoices: params?.invoicesCount ?? 0,
+        storageMB: 0,
+      },
+    };
+  }
+
+  async applyScheduledPlanChanges() {
+    const nowIso = new Date().toISOString();
+    const now = new Date();
+    const [planChanges, cancellations] = await Promise.all([
+      this.prisma.subscription.findMany({
+        where: {
+          metadata: {
+            path: ['pendingPlanChange', 'scheduledFor'],
+            lte: nowIso,
+          },
+        },
+        include: { plan: true },
+      }),
+      this.prisma.subscription.findMany({
+        where: {
+          cancelAtPeriodEnd: true,
+          currentPeriodEnd: {
+            not: null,
+            lte: now,
+          },
+        },
+        include: { plan: true },
+      }),
+    ]);
+
+    for (const subscription of planChanges) {
+      const metadata = this.coerceJsonRecord(subscription.metadata);
+      const pending = metadata.pendingPlanChange;
+      if (!pending) {
+        continue;
+      }
+
+      let targetPlan: SubscriptionPlan | null = null;
+      if (pending.planId) {
+        targetPlan = await this.prisma.subscriptionPlan.findUnique({
+          where: { id: Number(pending.planId) },
+        });
+      }
+      if (!targetPlan && pending.planCode) {
+        try {
+          targetPlan = await this.ensurePlan(String(pending.planCode));
+        } catch {
+          targetPlan = null;
+        }
+      }
+
+      if (!targetPlan) {
+        this.logger.warn(
+          `No se pudo resolver el plan pendiente para la organización ${subscription.organizationId}`,
+        );
+        metadata.pendingPlanChange = null;
+        await this.prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { metadata },
+        });
+        continue;
+      }
+
+      await this.applyScheduledPlanChange(subscription, targetPlan, metadata);
+    }
+    for (const subscription of cancellations) {
+      const metadata = this.coerceJsonRecord(subscription.metadata);
+      await this.applyScheduledCancellation(subscription, metadata);
+    }
+  }
+
+  async processDueDunningInvoices() {
+    const now = new Date();
+    const invoices = await this.prisma.subscriptionInvoice.findMany({
+      where: { status: SubscriptionInvoiceStatus.FAILED },
+      include: {
+        subscription: {
+          include: { plan: true },
+        },
+      },
+    });
+
+    for (const invoice of invoices) {
+      const metadata = this.coerceJsonRecord(invoice.metadata);
+      const dunning = metadata.dunning;
+      if (!dunning?.nextAttemptAt) {
+        continue;
+      }
+      const nextAttemptDate = new Date(dunning.nextAttemptAt);
+      if (Number.isNaN(nextAttemptDate.getTime())) {
+        continue;
+      }
+      if (nextAttemptDate > now) {
+        continue;
+      }
+      await this.dispatchDunningAttempt(invoice, metadata);
+    }
+  }
+
+  private async logAuditEvent(entry: {
+    action: AuditAction;
+    entityType: string;
+    entityId: string;
+    summary: string;
+    diff?: Prisma.JsonValue;
+  }) {
+    try {
+      await this.activityService.log({
+        ...entry,
+        actorEmail: SYSTEM_AUDIT_ACTOR,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo registrar el log de auditoría (${entry.action} ${entry.entityType}): ${
+          (error as Error)?.message ?? 'error desconocido'
+        }`,
+      );
+    }
+  }
+
+  private async applyInvoicePayment(payload: Record<string, any>) {
+    const invoice = await this.resolveInvoiceFromPayload(payload);
+    if (!invoice) {
+      this.logger.warn(
+        `No se encontr�� la invoice del evento de pago: ${JSON.stringify(payload)}`,
+      );
+      return;
+    }
+    if (invoice.status === SubscriptionInvoiceStatus.PAID) {
+      return;
+    }
+    const now = new Date();
+    const metadata = this.coerceJsonRecord(invoice.metadata);
+    metadata.lastWebhookPayload = payload;
+    metadata.dunning = null;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.subscriptionInvoice.update({
+        where: { id: invoice.id },
+        data: {
+          status: SubscriptionInvoiceStatus.PAID,
+          paidAt: now,
+          metadata,
+        },
+      });
+
+      await tx.subscription.update({
+        where: { id: invoice.subscriptionId },
+        data: {
+          status: SubscriptionStatus.ACTIVE,
+          currentPeriodStart: invoice.billingPeriodStart ?? now,
+          currentPeriodEnd:
+            invoice.billingPeriodEnd ??
+            this.calculateNextPeriodEnd(
+              invoice.billingPeriodStart ?? now,
+              invoice.subscription.plan,
+            ),
+          cancelAtPeriodEnd: false,
+          canceledAt: null,
+        },
+      });
+    });
+  }
+
+  private async applyInvoiceFailure(payload: Record<string, any>) {
+    const invoice = await this.resolveInvoiceFromPayload(payload);
+    if (!invoice) {
+      this.logger.warn(
+        `No se encontr�� la invoice del evento de fallo: ${JSON.stringify(payload)}`,
+      );
+      return;
+    }
+    const now = new Date();
+    const metadata = this.coerceJsonRecord(invoice.metadata);
+    const nextState = this.buildNextDunningState(metadata.dunning, now);
+    metadata.dunning = nextState;
+    metadata.lastWebhookPayload = payload;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.subscriptionInvoice.update({
+        where: { id: invoice.id },
+        data: {
+          status: SubscriptionInvoiceStatus.FAILED,
+          metadata,
+        },
+      });
+      await tx.subscription.update({
+        where: { id: invoice.subscriptionId },
+        data: {
+          status: SubscriptionStatus.PAST_DUE,
+        },
+      });
+    });
+
+    if (nextState.exhausted) {
+      this.logger.warn(
+        `Dunning agotado para la invoice ${invoice.id} de la organizaci��n ${invoice.organizationId}`,
+      );
+    }
+  }
+
+  private async resolveInvoiceFromPayload(
+    payload: Record<string, any>,
+  ): Promise<
+    | (SubscriptionInvoice & {
+        subscription: Subscription & { plan: SubscriptionPlan };
+      })
+    | null
+  > {
+    const invoiceId = this.normalizeNumber(
+      payload.invoiceId ?? payload.id ?? payload.data?.invoiceId,
+    );
+    if (invoiceId) {
+      return this.prisma.subscriptionInvoice.findUnique({
+        where: { id: invoiceId },
+        include: {
+          subscription: { include: { plan: true } },
+        },
+      });
+    }
+
+    const providerInvoiceId =
+      typeof payload.providerInvoiceId === 'string'
+        ? payload.providerInvoiceId
+        : typeof payload.externalReference === 'string'
+          ? payload.externalReference
+          : typeof payload.id === 'string'
+            ? payload.id
+            : null;
+
+    if (providerInvoiceId) {
+      return this.prisma.subscriptionInvoice.findFirst({
+        where: { providerInvoiceId },
+        include: {
+          subscription: { include: { plan: true } },
+        },
+      });
+    }
+
+    return null;
+  }
+
+  private buildNextDunningState(
+    existing: Record<string, any> | undefined,
+    now: Date,
+  ) {
+    const failures = Number(existing?.failures ?? 0) + 1;
+    const scheduleIndex = failures - 1;
+    const delay =
+      scheduleIndex >= 0 && scheduleIndex < DUNNING_SCHEDULE_DAYS.length
+        ? DUNNING_SCHEDULE_DAYS[scheduleIndex]
+        : null;
+    return {
+      ...(existing ?? {}),
+      failures,
+      lastFailureAt: now.toISOString(),
+      nextAttemptAt: delay
+        ? this.addDays(now, delay).toISOString()
+        : null,
+      exhausted: !delay,
+    };
+  }
+
+  private async dispatchDunningAttempt(
+    invoice: SubscriptionInvoice & {
+      subscription: Subscription & { plan: SubscriptionPlan };
+    },
+    metadata: Record<string, any>,
+  ) {
+    const dunning = metadata.dunning ?? {};
+    const attempts = Number(dunning.attempts ?? 0) + 1;
+    const { successUrl, cancelUrl } = this.resolveBillingRetryUrls(
+      invoice.subscription.organizationId,
+      invoice.id,
+    );
+    try {
+      const session = await this.paymentProvider.createCheckoutSession({
+        organizationId: invoice.subscription.organizationId,
+        planCode: invoice.subscription.plan.code,
+        amount: this.decimalToString(invoice.amount),
+        currency: invoice.currency ?? invoice.subscription.plan.currency,
+        successUrl,
+        cancelUrl,
+        metadata: {
+          invoiceId: invoice.id,
+          retryAttempt: attempts,
+        },
+      });
+      dunning.attempts = attempts;
+      dunning.lastAttemptAt = new Date().toISOString();
+      dunning.nextAttemptAt = null;
+      dunning.pendingSessionId = session.sessionId;
+      dunning.checkoutUrl = session.checkoutUrl;
+      metadata.dunning = dunning;
+      await this.prisma.subscriptionInvoice.update({
+        where: { id: invoice.id },
+        data: { metadata },
+      });
+      this.logger.log(
+        `Dunning attempt ${attempts} generado para invoice ${invoice.id}`,
+      );
+    } catch (error) {
+      dunning.lastAttemptAt = new Date().toISOString();
+      metadata.dunning = dunning;
+      await this.prisma.subscriptionInvoice.update({
+        where: { id: invoice.id },
+        data: { metadata },
+      });
+      this.logger.error(
+        `Fallo al crear sesi��n de checkout para invoice ${invoice.id}: ${
+          (error as Error)?.message ?? error
+        }`,
+      );
+    }
+  }
+
+  private verifyMercadoPagoSignature(headers?: Record<string, string>) {
+    const secretKey =
+      this.configService.get<string>('MERCADOPAGO_WEBHOOK_SECRET');
+    if (!secretKey) {
+      return;
+    }
+
+    const signatureHeader = headers?.['x-signature'] ?? headers?.['X-Signature'];
+    const userId = headers?.['x-user-id'] ?? headers?.['X-User-Id'];
+    const resource =
+      headers?.['x-topic'] ??
+      headers?.['x-resource-id'] ??
+      headers?.['X-Topic'] ??
+      headers?.['X-Resource-Id'];
+
+    if (!signatureHeader || !userId || !resource) {
+      throw new BadRequestException('Encabezados faltantes para verificar firma');
+    }
+
+    const [algo, receivedSignature] = signatureHeader.split(',');
+    if (!algo || !receivedSignature) {
+      throw new BadRequestException('Formato de firma inválido');
+    }
+
+    const signatureValue = receivedSignature.split('=')[1];
+    if (!signatureValue) {
+      throw new BadRequestException('Valor de firma inválido');
+    }
+
+    const payload = `id:${resource};user_id:${userId}`;
+    const hmac = crypto.createHmac(algo.toLowerCase(), secretKey);
+    hmac.update(payload);
+    const expectedSignature = hmac.digest('hex');
+
+    if (expectedSignature !== signatureValue) {
+      throw new BadRequestException('Firma inválida para el webhook recibido');
+    }
+  }
+
+  private async upsertPaymentMethodFromWebhook(payload: Record<string, any>) {
+    const metadata = this.coerceJsonRecord(
+      payload.metadata ?? payload.data?.metadata ?? {},
+    );
+    const organizationId = this.normalizeNumber(
+      metadata.organizationId ??
+        payload.organizationId ??
+        payload.data?.organizationId ??
+        payload?.body?.organizationId,
+    );
+    if (!organizationId) {
+      this.logger.warn(
+        `Webhook de pago sin organizationId: ${JSON.stringify(payload)}`,
+      );
+      return;
+    }
+
+    const externalIdRaw =
+      payload.card?.id ??
+      payload.payment_method_id ??
+      payload.payment_method?.id ??
+      payload.id;
+    if (!externalIdRaw) {
+      this.logger.warn(
+        `Webhook de pago sin identificador de método para org ${organizationId}`,
+      );
+      return;
+    }
+    const externalId = String(externalIdRaw);
+    await this.upsertPaymentMethod({
+      organizationId,
+      provider: BillingPaymentProvider.MERCADOPAGO,
+      externalId,
+      brand:
+        payload.card?.brand ??
+        payload.payment_method?.type ??
+        payload.card?.first_six_digits ??
+        undefined,
+      last4: payload.card?.last_four_digits ?? undefined,
+      expMonth: this.normalizeNumber(payload.card?.expiration_month) ?? undefined,
+      expYear: this.normalizeNumber(payload.card?.expiration_year) ?? undefined,
+      country: payload.card?.cardholder?.identification?.type ?? undefined,
+      isDefault: true,
+      billingCustomerId: payload.payer?.id ? String(payload.payer.id) : undefined,
+    });
+  }
+
+  private async applyScheduledPlanChange(
+    subscription: Subscription & { plan: SubscriptionPlan },
+    targetPlan: SubscriptionPlan,
+    metadata: Record<string, any>,
+  ) {
+    const now = new Date();
+    const billingCompany = await this.getBillingCompanySnapshot(
+      subscription.organizationId,
+    );
+    const taxInfo = await this.taxRateService.getRateForOrganization(
+      subscription.organizationId,
+    );
+    const taxRateDecimal = new Prisma.Decimal(taxInfo.rate ?? 0);
+    const price = new Prisma.Decimal(targetPlan.price ?? 0);
+    const taxAmount = price.mul(taxRateDecimal);
+    const totalAmount = price.add(taxAmount);
+    const periodEnd = this.calculateNextPeriodEnd(now, targetPlan);
+
+    await this.prisma.subscriptionInvoice.create({
+      data: {
+        subscriptionId: subscription.id,
+        organizationId: subscription.organizationId,
+        companyId: billingCompany.id,
+        status: SubscriptionInvoiceStatus.PENDING,
+        amount: totalAmount,
+        subtotal: price,
+        taxRate: taxRateDecimal,
+        taxAmount,
+        currency: targetPlan.currency,
+        billingPeriodStart: now,
+        billingPeriodEnd: periodEnd,
+        metadata: {
+          reason: 'plan_change_cycle',
+          planCode: targetPlan.code,
+        },
+      },
+    });
+
+    metadata.pendingPlanChange = null;
+    metadata.lastPlanChangeAt = now.toISOString();
+
+    await this.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        planId: targetPlan.id,
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        metadata,
+      },
+    });
+
+    await this.logAuditEvent({
+      action: AuditAction.UPDATED,
+      entityType: 'subscription',
+      entityId: subscription.id.toString(),
+      summary: `Se aplicó el cambio de plan programado a ${targetPlan.code}`,
+      diff: {
+        organizationId: subscription.organizationId,
+        previousPlanId: subscription.planId,
+        newPlanId: targetPlan.id,
+      },
+    });
+  }
+
+  private async applyScheduledCancellation(
+    subscription: Subscription & { plan: SubscriptionPlan },
+    metadata: Record<string, any>,
+  ) {
+    metadata.cancellationRequest = null;
+    await this.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        status: SubscriptionStatus.CANCELED,
+        canceledAt: new Date(),
+        cancelAtPeriodEnd: false,
+        metadata,
+      },
+    });
+    await this.queueOrganizationExport(subscription.organizationId);
+    await this.logAuditEvent({
+      action: AuditAction.UPDATED,
+      entityType: 'subscription',
+      entityId: subscription.id.toString(),
+      summary: 'Suscripción cancelada al final del periodo',
+      diff: {
+        organizationId: subscription.organizationId,
+        planId: subscription.planId,
+      },
+    });
+  }
+
+  private async applyImmediatePlanChange(
+    subscription: Subscription & { plan: SubscriptionPlan },
+    targetPlan: SubscriptionPlan,
+    metadata?: Record<string, any>,
+  ) {
+    const meta = metadata ?? this.coerceJsonRecord(subscription.metadata);
+    const now = new Date();
+    const periodEnd =
+      subscription.currentPeriodEnd ??
+      this.calculateNextPeriodEnd(now, targetPlan);
+    const periodStart = subscription.currentPeriodStart ?? now;
+    const totalDays = Math.max(this.diffInDays(periodEnd, periodStart), 1);
+    const remainingDays = Math.max(this.diffInDays(periodEnd, now), 0);
+
+    const ratio =
+      totalDays === 0
+        ? new Prisma.Decimal(0)
+        : new Prisma.Decimal(remainingDays).div(totalDays);
+
+    const oldPrice = new Prisma.Decimal(subscription.plan.price ?? 0);
+    const newPrice = new Prisma.Decimal(targetPlan.price ?? 0);
+    const delta = newPrice.mul(ratio).minus(oldPrice.mul(ratio));
+
+    if (delta.toNumber() > 0.01) {
+      await this.createPlanChangeInvoice(
+        subscription,
+        targetPlan,
+        delta,
+        'plan_change_immediate',
+        periodEnd,
+      );
+    } else if (delta.toNumber() < -0.01) {
+      meta.planChangeCredit = {
+        amount: delta.neg().toString(),
+        updatedAt: now.toISOString(),
+      };
+    }
+
+    meta.pendingPlanChange = null;
+    meta.lastPlanChangeAt = now.toISOString();
+
+    await this.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        planId: targetPlan.id,
+        metadata: meta,
+      },
+    });
+
+    await this.logAuditEvent({
+      action: AuditAction.UPDATED,
+      entityType: 'subscription',
+      entityId: subscription.id.toString(),
+      summary: `Cambio inmediato al plan ${targetPlan.code}`,
+      diff: {
+        organizationId: subscription.organizationId,
+        previousPlanId: subscription.planId,
+        newPlanId: targetPlan.id,
+        delta: delta.toString(),
+      },
+    });
+  }
+
+  private async createPlanChangeInvoice(
+    subscription: Subscription & { plan: SubscriptionPlan },
+    targetPlan: SubscriptionPlan,
+    amount: Prisma.Decimal,
+    reason: string,
+    billingPeriodEnd: Date,
+  ) {
+    const billingCompany = await this.getBillingCompanySnapshot(
+      subscription.organizationId,
+    );
+    const taxInfo = await this.taxRateService.getRateForOrganization(
+      subscription.organizationId,
+    );
+    const taxRateDecimal = new Prisma.Decimal(taxInfo.rate ?? 0);
+    const taxAmount = amount.mul(taxRateDecimal);
+    const totalAmount = amount.add(taxAmount);
+    const now = new Date();
+
+    await this.prisma.subscriptionInvoice.create({
+      data: {
+        subscriptionId: subscription.id,
+        organizationId: subscription.organizationId,
+        companyId: billingCompany.id,
+        status: SubscriptionInvoiceStatus.PENDING,
+        amount: totalAmount,
+        subtotal: amount,
+        taxRate: taxRateDecimal,
+        taxAmount,
+        currency: targetPlan.currency,
+        billingPeriodStart: now,
+        billingPeriodEnd,
+        metadata: {
+          reason,
+          planCode: targetPlan.code,
+        },
+      },
+    });
+  }
+
+  private async getBillingCompanySnapshot(
+    organizationId: number,
+  ): Promise<BillingCompanySnapshot> {
+    const billingCompany =
+      (await this.prisma.company.findFirst({
+        where: { organizationId },
+        orderBy: { id: 'asc' },
+        select: {
+          id: true,
+          organizationId: true,
+          name: true,
+          taxId: true,
+          sunatRuc: true,
+          sunatEnvironment: true,
+          sunatSolUserBeta: true,
+          sunatSolPasswordBeta: true,
+          sunatCertPathBeta: true,
+          sunatKeyPathBeta: true,
+          sunatSolUserProd: true,
+          sunatSolPasswordProd: true,
+          sunatCertPathProd: true,
+          sunatKeyPathProd: true,
+        },
+      })) as BillingCompanySnapshot | null;
+
+    if (!billingCompany) {
+      throw new BadRequestException(
+        'No existe una empresa configurada para emitir comprobantes de esta organización.',
+      );
+    }
+
+    return billingCompany;
+  }
+
+  private async applyImmediateCancellation(
+    subscription: Subscription & { plan: SubscriptionPlan },
+    metadata: Record<string, any>,
+  ) {
+    metadata.cancellationRequest = metadata.cancellationRequest ?? {};
+    metadata.cancellationRequest.processedAt = new Date().toISOString();
+    await this.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        status: SubscriptionStatus.CANCELED,
+        cancelAtPeriodEnd: false,
+        canceledAt: new Date(),
+        metadata,
+      },
+    });
+
+    await this.logAuditEvent({
+      action: AuditAction.UPDATED,
+      entityType: 'subscription',
+      entityId: subscription.id.toString(),
+      summary: 'Suscripción cancelada de inmediato',
+      diff: {
+        organizationId: subscription.organizationId,
+        planId: subscription.planId,
+        reason: metadata.cancellationRequest,
+      },
+    });
+  }
+
+  private async queueOrganizationExport(organizationId: number) {
+    try {
+      await this.exportService.requestExport(organizationId, null);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo programar la exportacion de datos para la organizacion ${organizationId}: ${
+          (error as Error)?.message ?? error
+        }`,
+      );
+    }
+  }
+
+  private async setDefaultPaymentMethodForOrg(
+    client: PrismaService | Prisma.TransactionClient,
+    organizationId: number,
+    methodId: number | null,
+    billingCustomerId?: string | null,
+  ) {
+    if (methodId) {
+      await client.billingPaymentMethod.update({
+        where: { id: methodId },
+        data: { isDefault: true },
+      });
+      await client.billingPaymentMethod.updateMany({
+        where: { organizationId, NOT: { id: methodId } },
+        data: { isDefault: false },
+      });
+    } else {
+      await client.billingPaymentMethod.updateMany({
+        where: { organizationId },
+        data: { isDefault: false },
+      });
+    }
+
+    await client.subscription.updateMany({
+      where: { organizationId },
+      data: {
+        defaultPaymentMethodId: methodId,
+        ...(billingCustomerId ? { billingCustomerId } : {}),
+      },
+    });
+  }
+
+  private diffInDays(target: Date, base: Date) {
+    const diff = target.getTime() - base.getTime();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }
+
+  private resolveBillingRetryUrls(organizationId: number, invoiceId: number) {
+    const base =
+      this.configService.get<string>('PORTAL_BILLING_URL') ??
+      this.configService.get<string>('PUBLIC_URL') ??
+      'https://app.facturacloud.pe';
+    const normalized = base.replace(/\/$/, '');
+    const params = new URLSearchParams({
+      org: String(organizationId),
+      invoice: String(invoiceId),
+    }).toString();
+    return {
+      successUrl: `${normalized}/portal/billing/success?${params}`,
+      cancelUrl: `${normalized}/portal/billing/error?${params}`,
+    };
+  }
+
+  private addDays(date: Date, days: number) {
+    const result = new Date(date);
+    result.setDate(result.getDate() + days);
+    return result;
+  }
+
+  private normalizeNumber(value: unknown) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+
+  private decimalToString(value: Prisma.Decimal | number | null | undefined) {
+    if (value == null) {
+      return '0';
+    }
+    if (value instanceof Prisma.Decimal) {
+      return value.toFixed(2);
+    }
+    return Number(value).toFixed(2);
+  }
+
+  private resolvePdfDocumentType(input: unknown): 'boleta' | 'factura' {
+    if (typeof input === 'string') {
+      const normalized = input.toLowerCase();
+      if (normalized.includes('boleta') || normalized === '03') {
+        return 'boleta';
+      }
+      if (normalized.includes('factura') || normalized === 'invoice' || normalized === '01') {
+        return 'factura';
+      }
+    }
+    return 'factura';
   }
 }

@@ -335,13 +335,13 @@ describe('EntriesService multi-organization support', () => {
       store: { id: 500 },
     };
 
-    it('lists entries without filtering when organizationId is undefined', async () => {
+    it('lists entries without filtering when organizationId is undefined (legacy scope)', async () => {
       prisma.entry.findMany.mockResolvedValue([entryTemplate]);
 
       const result = await service.findAllEntries();
 
       expect(prisma.entry.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: {} }),
+        expect.objectContaining({ where: { organizationId: null } }),
       );
       expect(result[0].details[0].series).toEqual(['S-1', 'S-2']);
       expect(result[0].details[0].product_name).toBe('Widget');

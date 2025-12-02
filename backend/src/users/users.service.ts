@@ -95,6 +95,15 @@ export class UsersService {
       user = await this.resetLoginState(user, req);
     }
 
+    if (user.isPublicSignup && !user.emailVerifiedAt) {
+      throw new UnauthorizedException({
+        message:
+          'Debes verificar tu correo para acceder. Revisa tu bandeja de entrada o solicita un nuevo enlace.',
+        code: 'EMAIL_VERIFICATION_REQUIRED',
+        email: user.email,
+      });
+    }
+
     const { password: _password, ...result } = user;
     return result;
   }
@@ -180,11 +189,45 @@ export class UsersService {
   }
 
   async login(user: any, req?: Request) {
+    const memberships = await this.prismaService.organizationMembership.findMany(
+      {
+        where: { userId: user.id },
+        select: { organizationId: true },
+        orderBy: { createdAt: 'asc' },
+      },
+    );
+    const organizationIds = memberships
+      .map((membership) => membership.organizationId)
+      .filter(
+        (id): id is number => typeof id === 'number' && Number.isFinite(id),
+      );
+
+    const fallbackOrgId =
+      user.lastOrgId ??
+      user.organizationId ??
+      organizationIds[0] ??
+      null;
+
+    let defaultCompanyId: number | null =
+      user.lastCompanyId ?? null;
+    if (!defaultCompanyId && fallbackOrgId) {
+      const firstCompany = await this.prismaService.company.findFirst({
+        where: { organizationId: fallbackOrgId },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+      });
+      defaultCompanyId = firstCompany?.id ?? null;
+    }
+
     const payload = {
       username: user.username,
       sub: user.id,
       role: user.role,
       tokenVersion: user.tokenVersion,
+      defaultOrganizationId: fallbackOrgId,
+      defaultCompanyId,
+      organizations: organizationIds,
+      isPublicSignup: Boolean(user.isPublicSignup),
     };
     const token = this.jwtService.sign(payload);
     await this.activityService.log(
@@ -363,6 +406,8 @@ export class UsersService {
         email: true,
         role: true,
         createdAt: true,
+        isPublicSignup: true,
+        emailVerifiedAt: true,
         client: {
           select: { phone: true, image: true },
         },

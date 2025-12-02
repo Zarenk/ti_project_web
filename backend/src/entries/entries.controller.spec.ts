@@ -4,6 +4,11 @@ import { EntriesService } from './entries.service';
 describe('EntriesController multi-tenant propagation', () => {
   let controller: EntriesController;
   let service: { createEntry: jest.Mock };
+  let invoiceExtraction: {
+    recordSample: jest.Mock;
+    appendLog: jest.Mock;
+    processSample: jest.Mock;
+  };
 
   const baseBody = {
     storeId: 1,
@@ -17,7 +22,15 @@ describe('EntriesController multi-tenant propagation', () => {
     service = {
       createEntry: jest.fn().mockResolvedValue({ id: 123 }),
     };
-    controller = new EntriesController(service as unknown as EntriesService);
+    invoiceExtraction = {
+      recordSample: jest.fn(),
+      appendLog: jest.fn(),
+      processSample: jest.fn(),
+    };
+    controller = new EntriesController(
+      service as unknown as EntriesService,
+      invoiceExtraction as any,
+    );
   });
 
   it('passes tenant organizationId to the service when available', async () => {

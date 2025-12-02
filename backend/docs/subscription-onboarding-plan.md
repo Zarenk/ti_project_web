@@ -10,6 +10,14 @@ Este documento describe el plan integral para permitir que cualquier usuario cre
 - Ofrecer portal de facturación self-service y paneles internos para soporte.
 - Protegerse de fraude, cumplir requisitos legales (IGV/SUNAT) y garantizar observabilidad.
 
+## Estado actual (dic/2025)
+
+- ✅ **F1 Fundamentos:** modelo de `plans/subscriptions`, servicio de checkout con emisión de invoice e IGV (mock provider), cron de trial, tax-rate default y logging.
+- ✅ **F2 Landing + Auto-signup:** formulario público con reCAPTCHA y rate limiting, provisioning completo (org, company, owner, demo data) y envío de correos.
+- 🟨 **F3 Onboarding in-app:** wizard + datasets demo listos, banner de trial con contador exclusivo para usuarios del landing; faltan quota meters y limpiar data demo.
+- ⏳ **F4 Billing Portal & Dunning:** pendiente webhooks reales, flujo de upgrades/downgrades y UI de cancelación.
+- ⏳ **F5 Migración + Optimización:** no iniciado.
+
 ## 2. Modelo de datos y servicios
 
 1. **Tablas nuevas**

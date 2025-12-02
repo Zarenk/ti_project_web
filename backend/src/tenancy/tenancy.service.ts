@@ -1157,6 +1157,19 @@ export class TenancyService {
       });
     }
 
+    if (!organization && context.userId !== null) {
+      const membershipWithOrg = await prismaClient.organizationMembership.findFirst({
+        where: { userId: context.userId },
+        orderBy: { createdAt: 'asc' },
+        include: {
+          organization: {
+            include: organizationInclude,
+          },
+        },
+      });
+      organization = membershipWithOrg?.organization ?? null;
+    }
+
     if (!organization) {
       return { organization: null, company: null, companies: [] };
     }

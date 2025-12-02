@@ -31,6 +31,7 @@ interface SendDocumentParams {
   certificatePathOverride?: string | null;
   environmentOverride?: string;
   saleId?: number | null;
+  subscriptionInvoiceId?: number | null;
 }
 
 @Injectable()
@@ -46,6 +47,7 @@ export class SunatService {
       certificatePathOverride,
       environmentOverride,
       saleId,
+      subscriptionInvoiceId,
     } = params;
 
     let transmissionId: number | null = null;
@@ -165,6 +167,7 @@ export class SunatService {
           companyId,
           organizationId: company.organizationId ?? null,
           saleId: saleId ?? null,
+          subscriptionInvoiceId: subscriptionInvoiceId ?? null,
           environment,
           documentType: normalizedType,
           serie,

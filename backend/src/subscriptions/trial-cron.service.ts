@@ -78,12 +78,29 @@ export class TrialCronService {
       },
     });
 
+    const billingCompany = await this.prisma.company.findFirst({
+      where: { organizationId },
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    });
+
+    if (!billingCompany) {
+      this.logger.warn(
+        `No company available to record trial expiration invoice for org ${organizationId}`,
+      );
+      return;
+    }
+
     await this.prisma.subscriptionInvoice.create({
       data: {
         subscriptionId,
         organizationId,
+        companyId: billingCompany.id,
         status: 'PENDING',
         amount: 0,
+        subtotal: 0,
+        taxRate: 0,
+        taxAmount: 0,
         currency: 'PEN',
         metadata: { reason: 'trial_expired' },
       },

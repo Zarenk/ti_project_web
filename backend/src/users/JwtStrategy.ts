@@ -30,10 +30,44 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user || user.tokenVersion !== payload.tokenVersion) {
       throw new UnauthorizedException('Token revoked');
     }
+    let organizationIds: number[] = [];
+    if (Array.isArray(payload.organizations) && payload.organizations.length) {
+      organizationIds = payload.organizations
+        .map((value: unknown) =>
+          typeof value === 'number' ? value : Number.parseInt(`${value}`, 10),
+        )
+        .filter((id: number) => Number.isFinite(id));
+    } else {
+      const memberships = await this.prismaService.organizationMembership.findMany(
+        {
+          where: { userId: payload.sub },
+          select: { organizationId: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      );
+      organizationIds = memberships
+        .map((membership) => membership.organizationId)
+        .filter(
+          (id): id is number =>
+            typeof id === 'number' && Number.isFinite(id),
+        );
+    }
+
     return {
       userId: payload.sub,
       username: payload.username,
       role: payload.role,
+      defaultOrganizationId:
+        payload.defaultOrganizationId ??
+        user.lastOrgId ??
+        user.organizationId ??
+        null,
+      defaultCompanyId:
+        payload.defaultCompanyId ?? user.lastCompanyId ?? null,
+      organizations: organizationIds,
+      isPublicSignup: Boolean(
+        payload.isPublicSignup ?? user.isPublicSignup ?? false,
+      ),
     };
   }
 }

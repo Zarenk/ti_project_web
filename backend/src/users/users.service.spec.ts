@@ -33,6 +33,12 @@ describe('UsersService multi-organization support', () => {
   let activityService: { log: jest.Mock };
   let jwtService: { sign: jest.Mock };
   let service: UsersService;
+  let contextEventsGateway: { emitContextChanged: jest.Mock };
+  let contextThrottleService: { recordHit: jest.Mock };
+  let contextPrometheusService: {
+    recordContextUpdate: jest.Mock;
+    recordRateLimitHit: jest.Mock;
+  };
   let logOrganizationContextMock: jest.Mock;
 
   beforeEach(() => {
@@ -58,10 +64,24 @@ describe('UsersService multi-organization support', () => {
       sign: jest.fn(),
     };
 
+    contextEventsGateway = {
+      emitContextChanged: jest.fn(),
+    };
+    contextThrottleService = {
+      recordHit: jest.fn(),
+    };
+    contextPrometheusService = {
+      recordContextUpdate: jest.fn(),
+      recordRateLimitHit: jest.fn(),
+    };
+
     service = new UsersService(
       prisma as unknown as PrismaService,
       jwtService as unknown as JwtService,
       activityService as unknown as ActivityService,
+      contextEventsGateway as any,
+      contextThrottleService as any,
+      contextPrometheusService as any,
     );
 
     (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');

@@ -44,6 +44,7 @@ model Product {
   category    Category      @relation(fields: [categoryId], references: [id])
   entryDetail EntryDetail[]
   inventory   Inventory[]
+  isDemo      Boolean  @default(false)
 
   specification ProductSpecification?
   features      ProductFeature[]
@@ -160,6 +161,7 @@ model Category {
   companyId      Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  isDemo      Boolean  @default(false)
 
   // Relacion con Product
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
@@ -200,6 +202,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   tokenVersion Int      @default(0)
+  isDemo       Boolean  @default(false)
+  isPublicSignup Boolean @default(false)
+  emailVerificationToken String? @unique
+  emailVerifiedAt DateTime?
 
   lastOrg      Organization? @relation("UserLastOrganization", fields: [lastOrgId], references: [id], onDelete: SetNull)
   lastCompany  Company?      @relation("UserLastCompany", fields: [lastCompanyId], references: [id], onDelete: SetNull)
@@ -220,6 +226,7 @@ model User {
   updatedInvoiceTemplates InvoiceTemplate[] @relation("InvoiceTemplateUpdatedBy")
   contextPreferences UserContextPreference[]
   contextHistory UserContextHistory[]
+  requestedExports OrganizationDataExport[] @relation("OrganizationDataExportsRequestedBy")
   @@index([email])
   @@index([username])
   @@index([organizationId, email])
@@ -294,6 +301,8 @@ model Organization {
   subscription     Subscription?
   billingPaymentMethods BillingPaymentMethod[]
   subscriptionInvoices SubscriptionInvoice[]
+  onboardingProgress OnboardingProgress?
+  dataExports   OrganizationDataExport[] @relation("OrganizationDataExports")
 
   @@unique([name])
   @@index([status])
@@ -311,6 +320,7 @@ model Company {
   sunatBusinessName    String?
   sunatAddress         String?
   sunatPhone           String?
+  sunatContactEmail    String?
   logoUrl        String?
   primaryColor    String?
   secondaryColor  String?
@@ -322,6 +332,7 @@ model Company {
   sunatSolPasswordProd String?
   sunatCertPathProd    String?
   sunatKeyPathProd     String?
+  sunatCertificateNotes String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -346,6 +357,7 @@ model Company {
   invoiceSamples InvoiceSample[]
   monitoringAlerts MonitoringAlert[]
   monitoringAlertEvents MonitoringAlertEvent[]
+  subscriptionInvoices SubscriptionInvoice[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -375,11 +387,34 @@ enum BillingPaymentMethodStatus {
   INACTIVE
 }
 
+enum OrganizationDataExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum OrganizationCleanupStatus {
+  PENDING
+  SCHEDULED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+
 enum SubscriptionInvoiceStatus {
   PENDING
   PAID
   FAILED
   VOID
+}
+
+enum SignupAttemptStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  BLOCKED
 }
 
 model SubscriptionPlan {
@@ -454,10 +489,14 @@ model SubscriptionInvoice {
   id                 Int                        @id @default(autoincrement())
   subscriptionId     Int
   organizationId     Int
+  companyId          Int
   paymentMethodId    Int?
   providerInvoiceId  String?
   status             SubscriptionInvoiceStatus  @default(PENDING)
   amount             Decimal                    @default(0.00)
+  subtotal           Decimal                    @default(0.00)
+  taxRate            Decimal                    @default(0.00)
+  taxAmount          Decimal                    @default(0.00)
   currency           String                     @default("PEN")
   billingPeriodStart DateTime?
   billingPeriodEnd   DateTime?
@@ -469,11 +508,91 @@ model SubscriptionInvoice {
 
   subscription  Subscription         @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
   paymentMethod BillingPaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  sunatTransmissions SunatTransmission[]
 
   @@index([subscriptionId])
   @@index([organizationId])
+  @@index([companyId])
   @@index([status])
+}
+
+enum DemoDataStatus {
+  NONE
+  SEEDED
+  CLEANING
+}
+
+model OnboardingProgress {
+  id               Int             @id @default(autoincrement())
+  organizationId   Int             @unique
+  currentStep      Int             @default(1)
+  companyProfile   Json?
+  storeSetup       Json?
+  sunatSetup       Json?
+  dataImport       Json?
+  demoStatus       DemoDataStatus  @default(NONE)
+  demoSeededAt     DateTime?
+  demoClearedAt    DateTime?
+  wizardDismissedAt DateTime?
+  isCompleted      Boolean         @default(false)
+  completedAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
+}
+
+model PublicSignupAttempt {
+  id          Int                  @id @default(autoincrement())
+  email       String
+  domain      String
+  ip          String?
+  deviceHash  String?
+  userAgent   String?
+  status      SignupAttemptStatus  @default(PENDING)
+  errorMessage String?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([email, createdAt])
+  @@index([domain, createdAt])
+  @@index([ip, createdAt])
+  @@index([deviceHash, createdAt])
+}
+
+model SignupBlocklist {
+  id           Int       @id @default(autoincrement())
+  ip           String?
+  deviceHash   String?
+  domain       String?
+  reason       String?
+  blockedUntil DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([ip])
+  @@index([deviceHash])
+  @@index([domain])
+  @@index([blockedUntil])
+}
+
+model TaxRate {
+  id          Int      @id @default(autoincrement())
+  countryCode String
+  regionCode  String?
+  rate        Decimal  @default(0.00)
+  description String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([countryCode, regionCode])
+  @@index([isDefault])
+  @@unique([countryCode, regionCode])
 }
 
 model SunatTransmission {
@@ -481,6 +600,7 @@ model SunatTransmission {
   companyId      Int
   organizationId Int?
   saleId         Int?
+  subscriptionInvoiceId Int?
   environment    String   @default("BETA")
   documentType   String
   serie          String?
@@ -497,10 +617,12 @@ model SunatTransmission {
   company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   sale         Sales?        @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  subscriptionInvoice SubscriptionInvoice? @relation(fields: [subscriptionInvoiceId], references: [id], onDelete: SetNull)
 
   @@index([companyId, status])
   @@index([organizationId])
   @@index([saleId])
+  @@index([subscriptionInvoiceId])
 }
 
 model SunatStoredPdf {
@@ -521,6 +643,26 @@ model SunatStoredPdf {
   @@index([organizationId])
   @@index([companyId, type])
 }
+
+model OrganizationDataExport {
+  id             Int                           @id @default(autoincrement())
+  organizationId Int
+  requestedBy    Int?
+  status         OrganizationDataExportStatus  @default(PENDING)
+  filePath       String?
+  errorMessage   String?
+  requestedAt    DateTime                      @default(now())
+  completedAt    DateTime?
+  cleanupStatus  OrganizationCleanupStatus     @default(PENDING)
+  cleanupCompletedAt DateTime?
+  expiresAt      DateTime?
+
+  organization    Organization @relation("OrganizationDataExports", fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedByUser User?        @relation("OrganizationDataExportsRequestedBy", fields: [requestedBy], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+}
+
 
 model OrganizationUnit {
   id              Int                @id @default(autoincrement())
@@ -591,6 +733,7 @@ model Client {
   companyId      Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  isDemo         Boolean  @default(false)
 
   user  User    @relation(fields: [userId], references: [id])
   company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)

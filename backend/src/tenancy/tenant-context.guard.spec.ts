@@ -27,10 +27,14 @@ describe('TenantContextGuard', () => {
     );
 
     const request: Record<string, unknown> = {};
+    const handlerRef = () => undefined;
+    class ControllerRef {}
     const executionContext: ExecutionContext = {
       switchToHttp: () => ({
         getRequest: () => request,
       }),
+      getHandler: () => handlerRef,
+      getClass: () => ControllerRef,
     } as unknown as ExecutionContext;
 
     const canActivate = guard.canActivate(executionContext);

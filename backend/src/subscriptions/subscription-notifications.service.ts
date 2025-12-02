@@ -16,6 +16,19 @@ interface TrialExpiredPayload {
   planName?: string | null;
 }
 
+interface SignupWelcomePayload {
+  email: string;
+  fullName?: string | null;
+  organizationName: string;
+}
+
+interface SignupVerificationPayload {
+  email: string;
+  fullName?: string | null;
+  organizationName: string;
+  token: string;
+}
+
 @Injectable()
 export class SubscriptionNotificationsService {
   private readonly logger = new Logger(
@@ -141,5 +154,76 @@ export class SubscriptionNotificationsService {
         `Failed to send subscription email "${subject}": ${message}`,
       );
     }
+  }
+
+  async sendSignupWelcome(payload: SignupWelcomePayload) {
+    const recipients = payload.email ? [payload.email] : [];
+    if (!this.canSend(recipients)) return;
+    const loginUrl = this.resolvePortalLoginUrl();
+    const greeting = payload.fullName
+      ? `Hola ${payload.fullName.split(' ')[0]},`
+      : 'Hola,';
+    const body = [
+      greeting,
+      '',
+      `Ya está listo el entorno demo para ${payload.organizationName}.`,
+      'Ingresa con tu correo y la contraseña que registraste durante el proceso de alta.',
+      '',
+      `Portal: ${loginUrl}`,
+      '',
+      'Si no solicitaste esta cuenta puedes ignorar este mensaje.',
+    ].join('\n');
+    await this.sendEmail(
+      recipients,
+      'Tu entorno demo está listo',
+      body,
+    );
+  }
+
+  async sendSignupVerification(payload: SignupVerificationPayload) {
+    const recipients = payload.email ? [payload.email] : [];
+    if (!this.canSend(recipients)) return;
+    const verifyUrl = this.resolvePortalVerificationUrl(payload.token);
+    const greeting = payload.fullName
+      ? `Hola ${payload.fullName.split(' ')[0]},`
+      : 'Hola,';
+    const body = [
+      greeting,
+      '',
+      `Para activar el acceso a ${payload.organizationName}, confirma tu correo con el siguiente enlace:`,
+      verifyUrl,
+      '',
+      'Si no solicitaste esta cuenta puedes ignorar este mensaje.',
+    ].join('\n');
+
+    await this.sendEmail(
+      recipients,
+      'Confirma tu correo para activar tu demo',
+      body,
+    );
+  }
+
+  private resolvePortalLoginUrl() {
+    const explicit = this.configService.get<string>('PORTAL_LOGIN_URL');
+    if (explicit) {
+      return explicit;
+    }
+    const base = this.configService.get<string>('PUBLIC_URL');
+    if (base) {
+      return `${base.replace(/\/$/, '')}/portal/login`;
+    }
+    return 'https://app.facturacloud.pe/portal/login';
+  }
+
+  private resolvePortalVerificationUrl(token: string) {
+    const explicit = this.configService.get<string>('PORTAL_VERIFICATION_URL');
+    const base = (
+      explicit ??
+      this.configService.get<string>('PUBLIC_URL')?.replace(/\/$/, '') ??
+      'https://app.facturacloud.pe'
+    ).replace(/\/$/, '');
+    const url = explicit ? base : `${base}/portal/verify`;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}token=${encodeURIComponent(token)}`;
   }
 }
