@@ -470,32 +470,7 @@ function paginateGridItems(items: CatalogPdfItem[]): CatalogPdfItem[][] {
 }
 
 function paginateListItems(items: CatalogPdfItem[]): CatalogPdfItem[][] {
-  if (items.length <= LIST_MAX_ITEMS) {
-    return [items]
-  }
-  const pages: CatalogPdfItem[][] = []
-  let current: CatalogPdfItem[] = []
-  let units = 0
-
-  for (const item of items) {
-    const weight = Math.min(estimateItemComplexity(item), 2)
-    const wouldOverflow = current.length > 0 && (units + weight > LIST_MAX_ITEMS || current.length >= LIST_MAX_ITEMS)
-    if (wouldOverflow) {
-      pages.push(current)
-      current = []
-      units = 0
-    }
-    current.push(item)
-    units += weight
-  }
-
-  if (current.length) {
-    pages.push(current)
-  }
-
-  return pages.flatMap((page) =>
-    page.length > LIST_MAX_ITEMS ? chunk(page, LIST_MAX_ITEMS) : [page]
-  )
+  return chunk(items, LIST_MAX_ITEMS)
 }
 
 function paginateSectionItems(items: CatalogPdfItem[], layout: CatalogLayoutMode): CatalogPdfItem[][] {
@@ -924,7 +899,6 @@ export async function generateCatalogPdf(
   const blob = await pdf(document).toBlob()
   return blob
 }
-
 
 
 

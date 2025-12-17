@@ -8,6 +8,15 @@ import { QueryActivityDto } from './dto/query-activity.dto';
 export class ActivityService {
   constructor(private prisma: PrismaService) {}
 
+  private resolveHeaderId(value: string | string[] | undefined): number | undefined {
+    const candidate = Array.isArray(value) ? value[0] : value;
+    if (typeof candidate !== 'string') {
+      return undefined;
+    }
+    const parsed = Number(candidate.trim());
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
   async log(
     data: {
       actorId?: number | null;
@@ -17,6 +26,8 @@ export class ActivityService {
       action: AuditAction;
       summary?: string | null;
       diff?: Prisma.JsonValue;
+      organizationId?: number | null;
+      companyId?: number | null;
     },
     req?: Request,
   ) {
@@ -36,6 +47,11 @@ export class ActivityService {
       }
     }
 
+    const resolvedOrganizationId =
+      data.organizationId ?? this.resolveHeaderId(req?.headers?.['x-org-id']);
+    const resolvedCompanyId =
+      data.companyId ?? this.resolveHeaderId(req?.headers?.['x-company-id']);
+
     return this.prisma.auditLog.create({
       data: {
         actorId: data.actorId ?? undefined,
@@ -47,6 +63,8 @@ export class ActivityService {
         diff: data.diff ?? undefined,
         ip,
         userAgent,
+        organizationId: resolvedOrganizationId ?? undefined,
+        companyId: resolvedCompanyId ?? undefined,
       },
     });
   }
@@ -61,9 +79,11 @@ export class ActivityService {
       action,
       dateFrom,
       dateTo,
+      excludeContextUpdates,
     } = query;
 
     const where: Prisma.AuditLogWhereInput = {};
+    const andFilters: Prisma.AuditLogWhereInput[] = [];
 
     if (q) {
       where.OR = [
@@ -83,12 +103,40 @@ export class ActivityService {
       if (dateTo) where.createdAt.lte = new Date(dateTo);
     }
 
+    if (excludeContextUpdates) {
+      const excludeNeedles = [
+        'actualizo el contexto',
+        'actualizó el contexto',
+        'contexto a org',
+      ];
+      andFilters.push({
+        NOT: {
+          OR: excludeNeedles.map((needle) => ({
+            summary: { contains: needle, mode: 'insensitive' },
+          })),
+        },
+      });
+    }
+
+    if (andFilters.length > 0) {
+      const existingAnd = Array.isArray(where.AND)
+        ? where.AND
+        : where.AND
+          ? [where.AND]
+          : [];
+      where.AND = [...existingAnd, ...andFilters];
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.auditLog.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
+        include: {
+          organization: { select: { id: true, name: true } },
+          company: { select: { id: true, name: true } },
+        },
       }),
       this.prisma.auditLog.count({ where }),
     ]);
@@ -97,13 +145,23 @@ export class ActivityService {
   }
 
   async findOne(id: string) {
-    return this.prisma.auditLog.findUnique({ where: { id } });
+    return this.prisma.auditLog.findUnique({
+      where: { id },
+      include: {
+        organization: { select: { id: true, name: true } },
+        company: { select: { id: true, name: true } },
+      },
+    });
   }
 
   async findAllByUser(userId: number) {
     return this.prisma.auditLog.findMany({
       where: { actorId: userId },
       orderBy: { createdAt: 'desc' },
+      include: {
+        organization: { select: { id: true, name: true } },
+        company: { select: { id: true, name: true } },
+      },
     });
   }
 

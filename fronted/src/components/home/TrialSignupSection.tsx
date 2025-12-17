@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import ReCAPTCHA from "react-google-recaptcha";
+import { useRouter } from "next/navigation";
+import { submitTrialSignup } from "@/app/signup/api/trial-signup";
 
 const initialState = {
   fullName: "",
@@ -14,19 +16,76 @@ const initialState = {
   industry: "",
 };
 
+type SignupField = keyof typeof initialState;
+type FormErrors = Partial<
+  Record<SignupField | "recaptcha" | "general", string>
+>;
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const passwordRegex =
+  /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]{8,}$/;
+
 export function TrialSignupSection() {
   const [form, setForm] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FormErrors>({});
   const recaptchaRef = useRef<ReCAPTCHA | null>(null);
   const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+  const router = useRouter();
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({ ...prev, [name]: undefined, general: undefined }));
   };
+
+  const validateForm = () => {
+    const nextErrors: FormErrors = {};
+
+    if (form.fullName.trim().length < 3) {
+      nextErrors.fullName = "Ingresa tu nombre completo.";
+    }
+
+    if (!emailRegex.test(form.email.trim().toLowerCase())) {
+      nextErrors.email = "Ingresa un correo válido.";
+    }
+
+    if (!passwordRegex.test(form.password)) {
+      nextErrors.password =
+        "Debe tener 8 caracteres, al menos una letra y un número.";
+    }
+
+    if (!form.industry) {
+      nextErrors.industry = "Selecciona una industria.";
+    }
+
+    if (form.organizationName.trim().length < 3) {
+      nextErrors.organizationName =
+        "La organización debe tener al menos 3 caracteres.";
+    }
+
+    if (form.companyName.trim().length < 3) {
+      nextErrors.companyName =
+        "El nombre comercial debe tener al menos 3 caracteres.";
+    }
+
+    if (!recaptchaToken) {
+      nextErrors.recaptcha = "Confirma que no eres un robot.";
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const inputClasses = (hasError?: boolean) =>
+    `w-full rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 ${
+      hasError
+        ? "border-rose-300 bg-white/5 focus:ring-rose-300"
+        : "border-white/30 bg-white/10 focus:ring-sky-400"
+    }`;
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -34,21 +93,17 @@ export function TrialSignupSection() {
       toast.error("Falta configurar la clave de reCAPTCHA");
       return;
     }
-    if (!recaptchaToken) {
-      toast.error("Confirma que no eres un robot");
+    if (!validateForm()) {
       return;
     }
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/public/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, recaptchaToken }),
+      const token = recaptchaToken as string;
+      const data = await submitTrialSignup({
+        ...form,
+        recaptchaToken: token,
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.message ?? "No se pudo registrar la cuenta");
-      }
+
       toast.success(
         data?.message ??
           "Cuenta creada correctamente. Revisa tu correo para continuar.",
@@ -56,12 +111,25 @@ export function TrialSignupSection() {
       setForm(initialState);
       recaptchaRef.current?.reset();
       setRecaptchaToken(null);
+      setErrors({});
+      setTimeout(() => {
+        router.push("/portal/login?welcome=1");
+      }, 1200);
     } catch (error) {
-      toast.error(
+      const message =
         error instanceof Error
           ? error.message
-          : "No se pudo completar el registro",
-      );
+          : "No se pudo completar el registro";
+      toast.error(message);
+      recaptchaRef.current?.reset();
+      setRecaptchaToken(null);
+      if (message.toLowerCase().includes("correo")) {
+        setErrors((prev) => ({ ...prev, email: message }));
+      } else if (message.toLowerCase().includes("organización")) {
+        setErrors((prev) => ({ ...prev, organizationName: message }));
+      } else {
+        setErrors((prev) => ({ ...prev, general: message }));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -102,8 +170,12 @@ export function TrialSignupSection() {
                 required
                 value={form.fullName}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                className={inputClasses(Boolean(errors.fullName))}
+                aria-invalid={Boolean(errors.fullName)}
               />
+              {errors.fullName && (
+                <p className="mt-1 text-xs text-rose-200">{errors.fullName}</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">E-mail</label>
@@ -113,8 +185,12 @@ export function TrialSignupSection() {
                 required
                 value={form.email}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                className={inputClasses(Boolean(errors.email))}
+                aria-invalid={Boolean(errors.email)}
               />
+              {errors.email && (
+                <p className="mt-1 text-xs text-rose-200">{errors.email}</p>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -129,8 +205,12 @@ export function TrialSignupSection() {
                 minLength={8}
                 value={form.password}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                className={inputClasses(Boolean(errors.password))}
+                aria-invalid={Boolean(errors.password)}
               />
+              {errors.password && (
+                <p className="mt-1 text-xs text-rose-200">{errors.password}</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">
@@ -140,7 +220,8 @@ export function TrialSignupSection() {
                 name="industry"
                 value={form.industry}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400 text-slate-900"
+                className={`${inputClasses(Boolean(errors.industry))} text-slate-900`}
+                aria-invalid={Boolean(errors.industry)}
               >
                 <option value="">Selecciona una industria</option>
                 <option value="retail">Retail / Tienda</option>
@@ -148,6 +229,9 @@ export function TrialSignupSection() {
                 <option value="manufacturing">Manufactura</option>
                 <option value="distribution">Distribución</option>
               </select>
+              {errors.industry && (
+                <p className="mt-1 text-xs text-rose-200">{errors.industry}</p>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -160,8 +244,14 @@ export function TrialSignupSection() {
                 required
                 value={form.organizationName}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                className={inputClasses(Boolean(errors.organizationName))}
+                aria-invalid={Boolean(errors.organizationName)}
               />
+              {errors.organizationName && (
+                <p className="mt-1 text-xs text-rose-200">
+                  {errors.organizationName}
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">
@@ -172,8 +262,14 @@ export function TrialSignupSection() {
                 required
                 value={form.companyName}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-white/30 bg-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                className={inputClasses(Boolean(errors.companyName))}
+                aria-invalid={Boolean(errors.companyName)}
               />
+              {errors.companyName && (
+                <p className="mt-1 text-xs text-rose-200">
+                  {errors.companyName}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex justify-center">
@@ -181,7 +277,10 @@ export function TrialSignupSection() {
               <ReCAPTCHA
                 ref={recaptchaRef}
                 sitekey={recaptchaSiteKey}
-                onChange={(token) => setRecaptchaToken(token)}
+                onChange={(token:any) => {
+                  setRecaptchaToken(token);
+                  setErrors((prev) => ({ ...prev, recaptcha: undefined }));
+                }}
                 theme="dark"
               />
             ) : (
@@ -190,6 +289,16 @@ export function TrialSignupSection() {
               </p>
             )}
           </div>
+          {errors.recaptcha && (
+            <p className="text-sm text-rose-200 text-center">
+              {errors.recaptcha}
+            </p>
+          )}
+          {errors.general && (
+            <p className="text-sm text-rose-200 text-center">
+              {errors.general}
+            </p>
+          )}
           <button
             type="submit"
             disabled={isSubmitting}

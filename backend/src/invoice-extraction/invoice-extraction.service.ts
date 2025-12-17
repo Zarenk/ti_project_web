@@ -19,6 +19,7 @@ import {
 import { spawnSync } from 'child_process';
 import { TemplateTrainingService } from './template-training.service';
 import { MlExtractionService } from './ml-extraction.service';
+import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
 
 type SampleWithEntry = InvoiceSample & {
   entry?: {
@@ -45,6 +46,7 @@ export class InvoiceExtractionService {
     private readonly tenant: TenantContextService,
     private readonly mlExtraction: MlExtractionService,
     private readonly training: TemplateTrainingService,
+    private readonly quotaService: SubscriptionQuotaService,
   ) {}
 
   private tenantIds() {
@@ -57,6 +59,13 @@ export class InvoiceExtractionService {
 
   async recordSample(dto: RecordInvoiceSampleDto) {
     const { organizationId, companyId } = this.tenantIds();
+    if (organizationId) {
+      await this.quotaService.ensureQuota(
+        organizationId,
+        'storage',
+        dto.fileSize ?? 0,
+      );
+    }
     return this.prisma.invoiceSample.create({
       data: {
         organizationId,

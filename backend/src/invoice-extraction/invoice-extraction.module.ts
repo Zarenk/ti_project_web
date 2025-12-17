@@ -5,6 +5,7 @@ import { TenancyModule } from 'src/tenancy/tenancy.module';
 import { InvoiceExtractionController } from './invoice-extraction.controller';
 import { TemplateTrainingService } from './template-training.service';
 import { MlExtractionService } from './ml-extraction.service';
+import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
 
 @Module({
   imports: [TenancyModule],
@@ -14,6 +15,7 @@ import { MlExtractionService } from './ml-extraction.service';
     TemplateTrainingService,
     MlExtractionService,
     PrismaService,
+    SubscriptionQuotaService,
   ],
   exports: [InvoiceExtractionService],
 })

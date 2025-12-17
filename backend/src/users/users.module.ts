@@ -15,6 +15,7 @@ import { ContextEventsGateway } from './context-events.gateway';
 import { ContextMetricsService } from './context-metrics.service';
 import { ContextThrottleService } from './context-throttle.service';
 import { ContextPrometheusService } from './context-prometheus.service';
+import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
 import { ContextMetricsController } from './context-metrics.controller';
 
 @Module({
@@ -41,6 +42,7 @@ import { ContextMetricsController } from './context-metrics.controller';
     ContextThrottleService,
     ContextPrometheusService,
     ContextEventsGateway,
+    SubscriptionQuotaService,
   ],
   exports: [JwtAuthGuard],
 })

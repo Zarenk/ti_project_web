@@ -24,6 +24,7 @@ import {
   clearTenantSelection,
   setTenantSelection,
 } from "@/utils/tenant-preferences"
+import { clearContextPreferences } from "@/utils/context-preferences"
 import { userContextStorage } from "@/utils/user-context-storage"
 import { useUserContextSync } from "@/hooks/use-user-context-sync"
 import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
@@ -33,6 +34,7 @@ type AuthContextType = {
   userId: number | null
   userName: string | null
   role: string | null
+  isPublicSignup: boolean | null
   authPending: boolean
   refreshUser: () => Promise<void>
   logout: (options?: { silent?: boolean }) => Promise<void>
@@ -46,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string | null>(null)
   const [userId, setUserId] = useState<number | null>(null)
   const [role, setRole] = useState<string | null>(null)
+  const [isPublicSignup, setIsPublicSignup] = useState<boolean | null>(null)
   const [authPending, setAuthPending] = useState<boolean>(false)
   const sessionTimerRef = useRef<number | null>(null)
   const autoLogoutTriggeredRef = useRef(false)
@@ -55,13 +58,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionExpiryOverlay, setSessionExpiryOverlay] = useState(false)
   const lastUserIdRef = useRef<number | null>(null)
   useUserContextSync(userId)
-  const ensureTenantDefaults = useCallback(async (): Promise<boolean> => {
+  const ensureTenantDefaults = useCallback(async (ownerId?: number | null): Promise<boolean> => {
     try {
       const summary = await getCurrentTenant()
       const resolvedOrgId = summary.organization?.id ?? null
       const resolvedCompanyId = summary.company?.id ?? summary.companies?.[0]?.id ?? null
       if (resolvedOrgId != null && resolvedCompanyId != null) {
-        setTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
+        setTenantSelection(
+          { orgId: resolvedOrgId, companyId: resolvedCompanyId },
+          { ownerId: ownerId ?? null },
+        )
         window.dispatchEvent(new Event(TENANT_ORGANIZATIONS_EVENT))
         return true
       }
@@ -84,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const hasChangedUser =
         lastUserIdRef.current === null || lastUserIdRef.current !== data.id
       if (hasChangedUser) {
-        const ensured = await ensureTenantDefaults()
+        const ensured = await ensureTenantDefaults(data.id ?? null)
         if (!ensured) {
           clearTenantSelection()
         }
@@ -94,6 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserName(data.name ?? null)
       setUserId(resolvedId)
       setRole(data.role ?? null)
+      setIsPublicSignup(
+        typeof data.isPublicSignup === "boolean" ? data.isPublicSignup : false,
+      )
       userContextStorage.setUserHint(resolvedId)
       autoLogoutTriggeredRef.current = false
       sessionExpiryInProgressRef.current = false
@@ -103,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserName(null)
       setUserId(null)
       setRole(null)
+      setIsPublicSignup(null)
       userContextStorage.setUserHint(null)
     }
     if (typeof window !== "undefined") {
@@ -137,7 +147,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUserName(null)
         setUserId(null)
         setRole(null)
+        setIsPublicSignup(null)
         userContextStorage.setUserHint(null)
+        clearTenantSelection()
+        clearContextPreferences()
         if (!silent) {
           try { toast.success('Sesión cerrada') } catch {}
         }
@@ -322,7 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ])
 
   return (
-    <AuthContext.Provider value={{ userId, userName, role, authPending, refreshUser, logout }}>
+    <AuthContext.Provider value={{ userId, userName, role, isPublicSignup, authPending, refreshUser, logout }}>
       {children}
       {sessionExpiryOverlay && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm text-center px-6">

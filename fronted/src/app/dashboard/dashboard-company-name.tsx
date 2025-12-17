@@ -1,64 +1,34 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState, type ReactElement } from "react"
+import { useEffect, useRef, useState, type ReactElement } from "react"
 
 import { useSiteSettings } from "@/context/site-settings-context"
 import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
-import {
-  TENANT_SELECTION_EVENT,
-  getTenantSelection,
-  setTenantSelection,
-  type TenantSelection,
-  type TenantSelectionChangeDetail,
-} from "@/utils/tenant-preferences"
+import { setTenantSelection } from "@/utils/tenant-preferences"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 
 export function DashboardCompanyName(): ReactElement {
   const { settings } = useSiteSettings()
+  const { selection, version } = useTenantSelection()
   const [organizationName, setOrganizationName] = useState<string | null>(null)
   const [companyName, setCompanyName] = useState<string | null>(null)
-
-  const lastResolvedOrgIdRef = useRef<number | null>(null)
-  const lastResolvedCompanyIdRef = useRef<number | null>(null)
   const lastRequestIdRef = useRef(0)
-  const isMountedRef = useRef(true)
 
-  useEffect(
-    () => () => {
-      isMountedRef.current = false
-    },
-    [],
-  )
+  useEffect(() => {
+    let cancelled = false
 
-  const resolveTenantDisplay = useCallback(
-    async (providedSelection?: TenantSelection) => {
+    const resolveTenantDisplay = async () => {
       lastRequestIdRef.current += 1
       const requestId = lastRequestIdRef.current
 
       try {
-        const selection = providedSelection ?? (await getTenantSelection())
-        const orgId = selection.orgId ?? null
-
-        if (orgId === null) {
-          lastResolvedOrgIdRef.current = null
-          lastResolvedCompanyIdRef.current = null
-          if (isMountedRef.current && requestId === lastRequestIdRef.current) {
-            setOrganizationName(null)
-            setCompanyName(null)
-          }
-          return
-        }
-
         const summary = await getCurrentTenant()
-
-        if (!isMountedRef.current || requestId !== lastRequestIdRef.current) {
+        if (cancelled || requestId !== lastRequestIdRef.current) {
           return
         }
 
         const resolvedOrg = summary.organization ?? null
         const resolvedCompany = summary.company ?? null
-
-        lastResolvedOrgIdRef.current = resolvedOrg?.id ?? null
-        lastResolvedCompanyIdRef.current = resolvedCompany?.id ?? null
 
         const normalizedOrgName = resolvedOrg?.name?.trim() ?? ""
         const normalizedCompanyName = resolvedCompany?.name?.trim() ?? ""
@@ -66,45 +36,31 @@ export function DashboardCompanyName(): ReactElement {
         setOrganizationName(normalizedOrgName.length > 0 ? normalizedOrgName : null)
         setCompanyName(normalizedCompanyName.length > 0 ? normalizedCompanyName : null)
 
-        const resolvedOrgId = resolvedOrg?.id ?? null
-        const resolvedCompanyId = resolvedCompany?.id ?? null
+        const resolvedSelection = {
+          orgId: resolvedOrg?.id ?? null,
+          companyId: resolvedCompany?.id ?? null,
+        }
         if (
-          selection.orgId !== resolvedOrgId ||
-          selection.companyId !== resolvedCompanyId
+          resolvedSelection.orgId !== (selection.orgId ?? null) ||
+          resolvedSelection.companyId !== (selection.companyId ?? null)
         ) {
-          setTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
+          setTenantSelection(resolvedSelection)
         }
       } catch {
-        if (!isMountedRef.current || requestId !== lastRequestIdRef.current) {
+        if (cancelled || requestId !== lastRequestIdRef.current) {
           return
         }
-
-        lastResolvedOrgIdRef.current = null
-        lastResolvedCompanyIdRef.current = null
         setOrganizationName(null)
         setCompanyName(null)
       }
-    },
-    [],
-  )
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return
     }
 
     void resolveTenantDisplay()
 
-      const handler = (event: Event) => {
-        const detail = (event as CustomEvent<TenantSelectionChangeDetail>).detail
-      void resolveTenantDisplay(detail)
-    }
-
-    window.addEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
     return () => {
-      window.removeEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
+      cancelled = true
     }
-  }, [resolveTenantDisplay])
+  }, [selection.orgId, selection.companyId, version])
 
   const siteCompanyName = settings.company?.name?.trim() ?? null
   const displayCompanyName =

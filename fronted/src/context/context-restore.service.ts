@@ -6,6 +6,8 @@ import {
 } from "@/utils/user-context-storage"
 import { shouldRememberContext } from "@/utils/context-preferences"
 import { trackEvent } from "@/lib/analytics"
+import { ValidationCache } from "./validation-cache"
+import { prefetchTenantData as runTenantPrefetch } from "@/utils/tenant-prefetch"
 
 const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000
 const VALIDATION_CACHE_MS = 10_000
@@ -46,8 +48,9 @@ type RestoreDependencies = {
   ) => Promise<ValidationResponse>
   now: () => number
   isRememberEnabled: () => boolean
-  validationCacheMs: number
+  validationCache: ValidationCache<ValidationResponse>
   fetchSuggestion: () => Promise<{ orgId: number; companyId: number | null } | null>
+  prefetchTenantData: (selection: TenantSelection) => Promise<void>
 }
 
 export type ContextStrategyName =
@@ -146,7 +149,7 @@ const defaultDependencies: RestoreDependencies = {
   },
   now: () => Date.now(),
   isRememberEnabled: shouldRememberContext,
-  validationCacheMs: VALIDATION_CACHE_MS,
+  validationCache: new ValidationCache<ValidationResponse>(VALIDATION_CACHE_MS),
   fetchSuggestion: async () => {
     const res = await authFetch("/users/me/context-suggestion", {
       cache: "no-store",
@@ -169,14 +172,15 @@ const defaultDependencies: RestoreDependencies = {
           : null,
     }
   },
+  prefetchTenantData: (selection) =>
+    runTenantPrefetch(selection, {
+      includeActivity: false,
+      includePermissions: true,
+    }),
 }
 
 export class ContextRestoreService {
   private readonly deps: RestoreDependencies
-  private readonly validationCache = new Map<
-    string,
-    { timestamp: number; result: ValidationResponse }
-  >()
   private readonly strategy: ContextStrategy
 
   constructor(
@@ -248,11 +252,16 @@ export class ContextRestoreService {
         companyId: freshest.companyId ?? null,
         latency,
       })
+      const selection = {
+        orgId: freshest.orgId,
+        companyId: freshest.companyId ?? null,
+      }
+      this.deps
+        .prefetchTenantData(selection)
+        .catch(() => undefined)
+
       return {
-        selection: {
-          orgId: freshest.orgId,
-          companyId: freshest.companyId ?? null,
-        },
+        selection,
         source: freshest.source,
         context: freshest,
         validation,
@@ -362,16 +371,13 @@ export class ContextRestoreService {
     companyId: number | null,
   ): Promise<ValidationResponse> {
     const key = `${orgId}:${companyId ?? "null"}`
-    const cached = this.validationCache.get(key)
-    if (
-      cached &&
-      this.deps.now() - cached.timestamp < this.deps.validationCacheMs
-    ) {
-      return cached.result
+    const cached = this.deps.validationCache.get(key)
+    if (cached) {
+      return cached
     }
 
     const result = await this.deps.validateContext(orgId, companyId)
-    this.validationCache.set(key, { timestamp: this.deps.now(), result })
+    this.deps.validationCache.set(key, result)
     return result
   }
 

@@ -11,6 +11,7 @@ export interface CurrentUser {
   id: number
   name: string
   role?: string
+  isPublicSignup?: boolean
 }
 
 
@@ -92,6 +93,7 @@ export async function getUserDataFromToken(): Promise<CurrentUser | null> {
       id,
       name,
       role: data.role,
+      isPublicSignup: Boolean((data as any)?.isPublicSignup),
     }
   } catch {
     return null

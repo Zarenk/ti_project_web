@@ -1,7 +1,15 @@
 // Suite básica de tests E2E para validar el flujo de contexto en UI real.
+const mockUser = {
+  id: 1,
+  name: "E2E Admin",
+  role: "SUPER_ADMIN_GLOBAL",
+  isPublicSignup: false,
+}
+
 describe("Context restore flow", () => {
   beforeEach(() => {
     cy.loginViaApi()
+    cy.intercept("GET", "/api/me", mockUser).as("currentUserForContext")
   })
 
   it("shows history and allows restoration UI", () => {
@@ -24,3 +32,5 @@ describe("Context restore flow", () => {
     cy.contains("Actividad personal", { timeout: 10000 }).should("exist")
   })
 })
+
+export {}

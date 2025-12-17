@@ -12,6 +12,7 @@ describe('InvoiceExtractionService corrections', () => {
   let tenantContext: { getContext: jest.Mock };
   let trainingService: { recordSample: jest.Mock };
   let sample: any;
+  let quotaService: { ensureQuota: jest.Mock };
 
   const createSample = () => ({
     id: 123,
@@ -64,11 +65,16 @@ describe('InvoiceExtractionService corrections', () => {
       }),
     };
 
+    quotaService = {
+      ensureQuota: jest.fn().mockResolvedValue(undefined),
+    };
+
     service = new InvoiceExtractionService(
       prismaMock as any,
       tenantContext as any,
       {} as MlExtractionService,
       trainingService as any,
+      quotaService as any,
     );
 
     jest

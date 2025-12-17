@@ -24,7 +24,11 @@ export async function POST(request: Request) {
 
     if (!res.ok) {
       const message = typeof data === 'string' && data ? data : data?.message || 'Error en autenticación'
-      return NextResponse.json({ message }, { status: res.status || 500 })
+      const errorPayload =
+        data && typeof data === 'object'
+          ? data
+          : { message }
+      return NextResponse.json(errorPayload, { status: res.status || 500 })
     }
 
     // Ensure we have a JSON object to return

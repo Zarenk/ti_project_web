@@ -38,6 +38,9 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
           auto_return: 'approved',
           expires: true,
           expiration_date_to: expiresAt.toISOString(),
+          external_reference:
+            params.metadata?.subscriptionId?.toString() ??
+            `org-${params.organizationId}`,
           metadata: {
             organizationId: params.organizationId,
             planCode: params.planCode,
@@ -63,11 +66,28 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
             : expiresAt,
       };
     } catch (error) {
-      throw new BadRequestException(
+      const details = (error as any)?.response?.data;
+      // Log completo para depurar integraciones con MP
+      // eslint-disable-next-line no-console
+      console.error('[MercadoPago] preference.create failed', {
+        message: (error as Error)?.message,
+        details,
+      });
+
+      let extraInfo = '';
+      if (details) {
+        extraInfo =
+          typeof details === 'string'
+            ? ` | details: ${details}`
+            : ` | details: ${JSON.stringify(details)}`;
+      }
+
+      const baseMessage =
         error instanceof Error
           ? `Mercado Pago error: ${error.message}`
-          : 'Mercado Pago error',
-      );
+          : 'Mercado Pago error';
+
+      throw new BadRequestException(`${baseMessage}${extraInfo}`);
     }
   }
 }

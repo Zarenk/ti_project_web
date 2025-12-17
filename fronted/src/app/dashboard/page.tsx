@@ -9,7 +9,6 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api"
 import { getMonthlySalesTotal, getRecentSales } from "./sales/sales.api"
-import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 import { useModulePermission } from "@/hooks/use-module-permission"
 import { getOrdersCount, getRecentOrders } from "./orders/orders.api"
 import { getAllEntries } from "./entries/entries.api"
@@ -22,6 +21,7 @@ import { listOrganizations, type OrganizationResponse } from "./tenancy/tenancy.
 import { clearTenantSelection, getTenantSelection, setTenantSelection } from "@/utils/tenant-preferences"
 import { wasManualLogoutRecently } from "@/utils/manual-logout"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { useAuth } from "@/context/auth-context"
 
 type ActivityItem = {
   id: number | string
@@ -42,7 +42,6 @@ type LowStockItem = {
 }
 
 export default function WelcomeDashboard() {
-  const [userRole, setUserRole] = useState<string | null>(null)
   const [organizations, setOrganizations] = useState<OrganizationResponse[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
   const [organizationsLoading, setOrganizationsLoading] = useState(false)
@@ -60,6 +59,8 @@ export default function WelcomeDashboard() {
   const router = useRouter()
   const authErrorShown = useRef(false)
   const { selection, version } = useTenantSelection()
+  const { role: authRole } = useAuth()
+  const userRole = authRole ?? null
 
   const handleAuthError = useCallback(async (err: unknown) => {
     if (authErrorShown.current) return true
@@ -110,20 +111,20 @@ export default function WelcomeDashboard() {
   )
 
   useEffect(() => {
+    if (!userRole) {
+      return
+    }
     let cancelled = false
 
     async function bootstrap() {
       try {
-        const data = await getUserDataFromToken()
         const allowedRoles = ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG", "ADMIN", "EMPLOYEE"]
-        if (!data || !(await isTokenValid()) || !allowedRoles.includes(data.role ?? "")) {
+        if (!allowedRoles.includes(userRole)) {
           router.push("/unauthorized")
           return
         }
 
-        setUserRole(data.role ?? null)
-
-        if (data.role === "SUPER_ADMIN_GLOBAL") {
+        if (userRole === "SUPER_ADMIN_GLOBAL") {
           setOrganizationsLoading(true)
           try {
             const orgList = await listOrganizations()
@@ -179,7 +180,7 @@ export default function WelcomeDashboard() {
     return () => {
       cancelled = true
     }
-  }, [router])
+  }, [router, userRole])
 
   useEffect(() => {
     if (!bootstrapReady || userRole === null) return

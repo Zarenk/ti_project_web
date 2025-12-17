@@ -15,4 +15,35 @@ export class ChangePlanDto {
   @Type(() => Boolean)
   @IsBoolean()
   effectiveImmediately?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  successUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  cancelUrl?: string;
+}
+
+export class ChangePlanSelfDto {
+  @IsString()
+  @IsNotEmpty()
+  planCode!: string;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  effectiveImmediately?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  successUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  cancelUrl?: string;
 }

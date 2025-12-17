@@ -1,0 +1,41 @@
+groups:
+  - name: subscriptions-alerts
+    rules:
+      - alert: SubscriptionCancellationSpike
+        annotations:
+          summary: "Spike de cancelaciones en {{ $labels.instance }}"
+          description: |
+            Aumentó suddenamente el número de cancelaciones de suscripción.
+            Revisa logs de `SubscriptionsService.cancelSubscription`.
+        expr: |
+          increase(subscription_canceled_total[15m]) > {{ .Values.subscriptions.cancellationSpikeThreshold | default 5 }}
+        for: 5m
+        labels:
+          severity: warning
+          team: billing
+
+      - alert: SubscriptionWebhookFailures
+        annotations:
+          summary: "Fallos de webhooks de billing en {{ $labels.instance }}"
+          description: |
+            Se detectaron errores al procesar webhooks (provider={{ $labels.provider }}, type={{ $labels.type }}).
+            Revisar los eventos recientes en MercadoPago y reintentar si aplica.
+        expr: |
+          increase(subscription_webhook_events_total{result="failed"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          team: billing
+
+      - alert: SubscriptionDunningExhausted
+        annotations:
+          summary: "Workflow de dunning agotado para {{ $labels.instance }}"
+          description: |
+            Hay intentos de dunning marcados como retry_exhausted.
+            Necesario intervención manual (enviar email, contactar cliente).
+        expr: |
+          increase(subscription_dunning_attempts_total{result="retry_exhausted"}[1h]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: billing

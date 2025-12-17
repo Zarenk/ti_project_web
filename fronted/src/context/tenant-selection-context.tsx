@@ -10,13 +10,14 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { useRouter } from "next/navigation"
 
 import { toast } from "sonner"
 
 import {
   TENANT_SELECTION_EVENT,
   clearTenantSelection,
-  getTenantSelection,
+  getTenantSelectionWithOwner,
   setTenantSelection,
   type TenantSelection,
   type TenantSelectionChangeDetail,
@@ -28,6 +29,7 @@ import { useAuth } from "@/context/auth-context"
 import { prefetchTenantData } from "@/utils/tenant-prefetch"
 import { io } from "socket.io-client"
 import { SOCKET_URL } from "@/lib/utils"
+import { getAuthToken } from "@/utils/auth-token"
 
 type RestoreStatus =
   | { state: "idle"; message?: string }
@@ -51,17 +53,32 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
   const [selection, setSelection] = useState<TenantSelection>(DEFAULT_SELECTION)
   const [version, setVersion] = useState(0)
   const [loading, setLoading] = useState(true)
-  const contextRestore = useMemo(() => new ContextRestoreService(), [])
+  const { role, userId, isPublicSignup } = useAuth()
+  const router = useRouter()
+  const contextRestore = useMemo(() => {
+    if (isPublicSignup) {
+      return new ContextRestoreService({
+        prefetchTenantData: (selection) =>
+          prefetchTenantData(selection, {
+            includeActivity: false,
+            includePermissions: true,
+          }),
+      })
+    }
+    return new ContextRestoreService()
+  }, [isPublicSignup])
   const restoreToastShownRef = useRef(false)
-  const { role, userId } = useAuth()
   const normalizedRole = role?.toUpperCase() ?? ""
-  const isSuperUser =
-    normalizedRole === "SUPER_ADMIN_GLOBAL" || normalizedRole === "SUPER_ADMIN_ORG"
+  const isGlobalSuperAdmin = normalizedRole === "SUPER_ADMIN_GLOBAL"
+  const isLandingUser =
+    normalizedRole === "SUPER_ADMIN_ORG" && isPublicSignup !== false
+  const canQueryOrganizations = isGlobalSuperAdmin
   const [status, setStatus] = useState<RestoreStatus>({
     state: "restoring",
     message: "Restaurando tu espacio de trabajo...",
   })
   const [socketAttempt, setSocketAttempt] = useState(0)
+  const [pendingRefresh, setPendingRefresh] = useState(false)
 
   const resolveReasonMessage = (reason: string | null): string => {
     switch (reason) {
@@ -80,6 +97,9 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
   }
   const ensureDefaultSelection = useCallback(
     async (current: TenantSelection): Promise<TenantSelection> => {
+      if (!userId) {
+        return current
+      }
       const restoration = await contextRestore.restore(current)
 
       if (restoration.selection) {
@@ -102,7 +122,7 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
           (current.companyId ?? null) !== (resolved.companyId ?? null)
 
         if (changed) {
-          setTenantSelection(resolved)
+          setTenantSelection(resolved, { ownerId: userId ?? null })
         }
 
         return resolved
@@ -153,7 +173,7 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
           (resolved.companyId ?? null) !== (current.companyId ?? null)
 
         if (changed && resolved.orgId && resolved.companyId) {
-          setTenantSelection(resolved)
+          setTenantSelection(resolved, { ownerId: userId ?? null })
           setStatus({ state: "idle" })
           return resolved
         }
@@ -169,34 +189,65 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
         return current
       }
     },
-    [contextRestore],
+    [contextRestore, userId],
   )
   const applySelection = useCallback((next: TenantSelection) => {
     setSelection((prev) => {
       const changed = prev.orgId !== next.orgId || prev.companyId !== next.companyId
       if (changed) {
         setVersion((current) => current + 1)
+        setPendingRefresh(true)
       }
       return changed ? next : prev
     })
   }, [])
 
+  useEffect(() => {
+    if (!pendingRefresh) {
+      return
+    }
+    setPendingRefresh(false)
+    router.refresh()
+  }, [pendingRefresh, router])
+
   const resolveSelection = useCallback(
     async (provided?: TenantSelection) => {
+      const token = await getAuthToken()
+      if (!token) {
+        applySelection(DEFAULT_SELECTION)
+        setStatus({ state: "idle" })
+        setLoading(false)
+        return
+      }
       try {
         setLoading(true)
         setStatus({
           state: "restoring",
           message: "Restaurando tu espacio de trabajo...",
         })
-        const baseSelection = provided ?? (await getTenantSelection())
+        let baseSelection: TenantSelection
+        if (provided) {
+          baseSelection = provided
+        } else {
+          const { selection: storedSelection, ownerId } = await getTenantSelectionWithOwner()
+          if (
+            ownerId != null &&
+            userId != null &&
+            ownerId !== userId
+          ) {
+            clearTenantSelection()
+            baseSelection = DEFAULT_SELECTION
+          } else {
+            baseSelection = storedSelection
+          }
+        }
         const ensured = await ensureDefaultSelection(baseSelection)
         applySelection(ensured)
       } finally {
         setLoading(false)
       }
     },
-    [applySelection, ensureDefaultSelection],
+    [applySelection, ensureDefaultSelection, userId],
   )
 
   useEffect(() => {
@@ -224,15 +275,18 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
   }, [resolveSelection, applySelection])
 
   useEffect(() => {
-    if (!isSuperUser) {
+    if (!canQueryOrganizations) {
       return
     }
     if (status.state !== "idle") {
       return
     }
     void warmOrganizationsCache(listOrganizations)
-    void prefetchTenantData({ includeMessages: true, includeOrganizations: true })
-  }, [isSuperUser, status.state])
+    void prefetchTenantData(selection, {
+      includeMessages: true,
+      includeOrganizations: true,
+    })
+  }, [canQueryOrganizations, status.state, selection])
 
   useEffect(() => {
     if (!userId) {

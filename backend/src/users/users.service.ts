@@ -32,6 +32,7 @@ import { ValidateContextDto } from './dto/validate-context.dto';
 import { ContextEventsGateway } from './context-events.gateway';
 import { ContextThrottleService } from './context-throttle.service';
 import { ContextPrometheusService } from './context-prometheus.service';
+import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
 
 @Injectable()
 export class UsersService {
@@ -47,6 +48,7 @@ export class UsersService {
     private contextEventsGateway: ContextEventsGateway,
     private contextThrottleService: ContextThrottleService,
     private contextPrometheusService: ContextPrometheusService,
+    private readonly quotaService: SubscriptionQuotaService,
   ) {}
 
   async validateUser(email: string, password: string, req?: Request) {
@@ -286,6 +288,10 @@ export class UsersService {
     });
     if (existingUsername) {
       throw new BadRequestException('El nombre de usuario ya está registrado');
+    }
+
+    if (data.organizationId) {
+      await this.quotaService.ensureQuota(data.organizationId, 'users', 1);
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);

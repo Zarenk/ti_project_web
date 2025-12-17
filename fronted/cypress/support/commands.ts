@@ -5,6 +5,7 @@ declare global {
   namespace Cypress {
     interface Chainable {
       loginViaApi(): Chainable<void>
+      setTenantSelection(orgId: number | null, companyId: number | null): Chainable<void>
     }
   }
 }
@@ -37,11 +38,40 @@ Cypress.Commands.add("loginViaApi", () => {
     if (!token) {
       throw new Error("La respuesta de login no contiene access_token.")
     }
+    cy.setCookie("token", token)
     cy.visit("/", {
       onBeforeLoad(win) {
         win.localStorage.setItem("token", token)
       },
     })
+  })
+})
+
+Cypress.Commands.add("setTenantSelection", (orgId: number | null, companyId: number | null) => {
+  if (orgId === null) {
+    cy.clearCookie("tenant_org_id")
+  } else {
+    cy.setCookie("tenant_org_id", String(orgId))
+  }
+
+  if (companyId === null) {
+    cy.clearCookie("tenant_company_id")
+  } else {
+    cy.setCookie("tenant_company_id", String(companyId))
+  }
+
+  cy.window().then((win) => {
+    if (orgId == null && companyId == null) {
+      win.localStorage.removeItem("dashboard.tenant-selection")
+      return
+    }
+    win.localStorage.setItem(
+      "dashboard.tenant-selection",
+      JSON.stringify({
+        orgId,
+        companyId,
+      }),
+    )
   })
 })
 

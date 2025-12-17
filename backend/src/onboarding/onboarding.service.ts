@@ -159,8 +159,42 @@ export class OnboardingService {
 
   async updateDemoStatus(
     dto: UpdateDemoStatusDto,
+    organizationId?: number,
   ): Promise<OnboardingProgress> {
+    const targetOrganizationId = organizationId ?? this.requireOrganizationId();
+    return this.updateDemoStatusForOrganization(targetOrganizationId, dto);
+  }
+
+  async clearDemoData(reason?: string): Promise<OnboardingProgress> {
     const organizationId = this.requireOrganizationId();
+    return this.clearDemoDataForOrganization(organizationId, reason);
+  }
+
+  async clearDemoDataForOrganization(
+    organizationId: number,
+    reason?: string,
+  ): Promise<OnboardingProgress> {
+    const progress = await this.ensureProgressRecord(organizationId);
+    if (progress.demoStatus === DemoDataStatus.NONE) {
+      return progress;
+    }
+    await this.demoDataService.clearDemoData(organizationId);
+    return this.updateDemoStatusForOrganization(organizationId, {
+      status: DemoDataStatus.NONE,
+      note: reason ?? 'clear-demo',
+    });
+  }
+
+  async getProgressForOrganization(
+    organizationId: number,
+  ): Promise<OnboardingProgress> {
+    return this.ensureProgressRecord(organizationId);
+  }
+
+  private async updateDemoStatusForOrganization(
+    organizationId: number,
+    dto: UpdateDemoStatusDto,
+  ): Promise<OnboardingProgress> {
     await this.ensureProgressRecord(organizationId);
     const now = new Date();
     const nowIso = now.toISOString();
@@ -202,15 +236,6 @@ export class OnboardingService {
     return this.prisma.onboardingProgress.update({
       where: { organizationId },
       data,
-    });
-  }
-
-  async clearDemoData(reason?: string): Promise<OnboardingProgress> {
-    const organizationId = this.requireOrganizationId();
-    await this.demoDataService.clearDemoData(organizationId);
-    return this.updateDemoStatus({
-      status: DemoDataStatus.NONE,
-      note: reason ?? 'clear-demo',
     });
   }
 

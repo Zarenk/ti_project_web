@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SubscriptionsController } from './subscriptions.controller';
+import { AdminSubscriptionsController } from './admin-subscriptions.controller';
 import { SubscriptionsService } from './subscriptions.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { SubscriptionsWebhooksController } from './subscriptions-webhooks.controller';
@@ -18,10 +19,14 @@ import { ActivityModule } from 'src/activity/activity.module';
 import { DunningCronService } from './dunning-cron.service';
 import { OrganizationExportService } from './organization-export.service';
 import { OrganizationExportCronService } from './organization-export.cron';
+import { OnboardingModule } from 'src/onboarding/onboarding.module';
+import { MercadoPagoWebhookService } from './mercado-pago-webhook.service';
+import { SubscriptionPrometheusService } from './subscription-prometheus.service';
 
 @Module({
-  imports: [TenancyModule, SunatModule, ActivityModule],
+  imports: [TenancyModule, SunatModule, ActivityModule, OnboardingModule],
   controllers: [
+    AdminSubscriptionsController,
     SubscriptionsController,
     SubscriptionsWebhooksController,
     SubscriptionQuotaController,
@@ -47,7 +52,9 @@ import { OrganizationExportCronService } from './organization-export.cron';
     TaxRateService,
     OrganizationExportService,
     OrganizationExportCronService,
+    MercadoPagoWebhookService,
+    SubscriptionPrometheusService,
   ],
-  exports: [SubscriptionsService, SubscriptionNotificationsService],
+  exports: [SubscriptionsService, SubscriptionNotificationsService, SubscriptionPrometheusService],
 })
 export class SubscriptionsModule {}

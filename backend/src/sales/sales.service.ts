@@ -28,6 +28,7 @@ import {
 } from 'src/tenancy/organization.utils';
 import { InventoryHistoryUncheckedCreateInputWithOrganization } from 'src/tenancy/prisma-organization.types';
 import { SunatService } from 'src/sunat/sunat.service';
+import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
 
 @Injectable()
 export class SalesService {
@@ -48,6 +49,7 @@ export class SalesService {
     private readonly activityService: ActivityService,
     private readonly accountingHook: AccountingHook,
     private readonly sunatService: SunatService,
+    private readonly quotaService: SubscriptionQuotaService,
   ) {}
 
   // MÃ©todo para crear una venta
@@ -127,6 +129,10 @@ export class SalesService {
       companyId,
       metadata: { storeId, userId, clientId: clientIdToUse ?? clientId },
     });
+
+    if (organizationId) {
+      await this.quotaService.ensureQuota(organizationId, 'invoices', 1);
+    }
 
     // Validar stock, calcular el total y preparar las asignaciones de inventario
     const allocations: SaleAllocation[] = [];

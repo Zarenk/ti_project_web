@@ -39,6 +39,7 @@ describe('UsersService multi-organization support', () => {
     recordContextUpdate: jest.Mock;
     recordRateLimitHit: jest.Mock;
   };
+  let quotaService: { ensureQuota: jest.Mock };
   let logOrganizationContextMock: jest.Mock;
 
   beforeEach(() => {
@@ -74,6 +75,9 @@ describe('UsersService multi-organization support', () => {
       recordContextUpdate: jest.fn(),
       recordRateLimitHit: jest.fn(),
     };
+    quotaService = {
+      ensureQuota: jest.fn().mockResolvedValue(undefined),
+    };
 
     service = new UsersService(
       prisma as unknown as PrismaService,
@@ -82,6 +86,7 @@ describe('UsersService multi-organization support', () => {
       contextEventsGateway as any,
       contextThrottleService as any,
       contextPrometheusService as any,
+      quotaService as any,
     );
 
     (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');

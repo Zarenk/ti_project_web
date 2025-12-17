@@ -13,11 +13,12 @@ import {
   SubscriptionInvoiceStatus,
   SubscriptionInvoice,
   AuditAction,
+  SubscriptionInterval,
 } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { StartTrialDto } from './dto/start-trial.dto';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
-import { ChangePlanDto } from './dto/change-plan.dto';
+import { ChangePlanDto, ChangePlanSelfDto } from './dto/change-plan.dto';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
 import {
   PaymentProvider,
@@ -32,6 +33,11 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { OrganizationExportService } from './organization-export.service';
 import { UpsertPaymentMethodDto } from './dto/upsert-payment-method.dto';
+import { OnboardingService } from 'src/onboarding/onboarding.service';
+import { MercadoPagoWebhookService } from './mercado-pago-webhook.service';
+import { SubscriptionNotificationsService } from './subscription-notifications.service';
+import { SubscriptionQuotaService } from './subscription-quota.service';
+import { SubscriptionPrometheusService } from './subscription-prometheus.service';
 
 const DEFAULT_TRIAL_DAYS = 14;
 const BILLING_CYCLE_DAYS = 30;
@@ -71,7 +77,12 @@ export class SubscriptionsService {
     private readonly sunatService: SunatService,
     private readonly activityService: ActivityService,
     private readonly configService: ConfigService,
+    private readonly onboardingService: OnboardingService,
     private readonly exportService: OrganizationExportService,
+    private readonly mercadoPagoWebhookService: MercadoPagoWebhookService,
+    private readonly notifications: SubscriptionNotificationsService,
+    private readonly quotaService: SubscriptionQuotaService,
+    private readonly metrics: SubscriptionPrometheusService,
   ) {
     void this.taxRateService.upsertDefaultRate();
   }
@@ -142,6 +153,8 @@ export class SubscriptionsService {
       },
     });
 
+    this.metrics.recordTrialActivated(plan.code);
+
     return upsertedSubscription;
   }
 
@@ -161,7 +174,10 @@ export class SubscriptionsService {
       currency,
       successUrl: dto.successUrl,
       cancelUrl: dto.cancelUrl,
-      metadata: existingSubscription?.metadata as Record<string, any> | undefined,
+      metadata: {
+        subscriptionId: existingSubscription?.id ?? null,
+        organizationId: dto.organizationId,
+      },
     });
 
     const metadata = {
@@ -221,6 +237,9 @@ export class SubscriptionsService {
   }
 
   async requestPlanChange(dto: ChangePlanDto) {
+    this.logger.debug(
+      `Plan change requested org=${dto.organizationId} plan=${dto.planCode} successUrl=${dto.successUrl} cancelUrl=${dto.cancelUrl} immediate=${dto.effectiveImmediately}`,
+    );
     const subscription = await this.prisma.subscription.findUnique({
       where: { organizationId: dto.organizationId },
       include: { plan: true },
@@ -235,13 +254,33 @@ export class SubscriptionsService {
     }
 
     const metadata = this.coerceJsonRecord(subscription.metadata);
-    const effectiveImmediately = dto.effectiveImmediately ?? false;
+    const currentPrice = new Prisma.Decimal(subscription.plan.price ?? 0);
+    const targetPrice = new Prisma.Decimal(targetPlan.price ?? 0);
+    const isTrial = subscription.status === SubscriptionStatus.TRIAL;
+    const isUpgradeOrEqual = targetPrice.greaterThanOrEqualTo(currentPrice);
+    const shouldChargeNow = isTrial || isUpgradeOrEqual;
+    const effectiveImmediately = dto.effectiveImmediately ?? shouldChargeNow;
     if (effectiveImmediately) {
-      await this.applyImmediatePlanChange(subscription, targetPlan, metadata);
+      const checkoutOptions =
+        dto.successUrl && dto.cancelUrl
+          ? {
+              successUrl: dto.successUrl,
+              cancelUrl: dto.cancelUrl,
+            }
+          : undefined;
+      const immediateResult = await this.applyImmediatePlanChange(
+        subscription,
+        targetPlan,
+        metadata,
+        checkoutOptions,
+      );
       return {
         effectiveImmediately: true,
         planCode: targetPlan.code,
         planName: targetPlan.name,
+        checkoutUrl: immediateResult.checkoutSession?.checkoutUrl ?? null,
+        sessionId: immediateResult.checkoutSession?.sessionId ?? null,
+        invoiceId: immediateResult.invoiceId ?? null,
       };
     }
 
@@ -270,6 +309,18 @@ export class SubscriptionsService {
     };
   }
 
+  async requestPlanChangeForUser(userId: number, dto: ChangePlanSelfDto) {
+    const organizationId =
+      await this.resolveUserOrganizationIdOrThrow(userId);
+    return this.requestPlanChange({
+      organizationId,
+      planCode: dto.planCode,
+      effectiveImmediately: dto.effectiveImmediately,
+      successUrl: dto.successUrl,
+      cancelUrl: dto.cancelUrl,
+    });
+  }
+
   async requestCancellation(dto: CancelSubscriptionDto) {
     const subscription = await this.prisma.subscription.findUnique({
       where: { organizationId: dto.organizationId },
@@ -290,7 +341,6 @@ export class SubscriptionsService {
 
     if (dto.cancelImmediately) {
       await this.applyImmediateCancellation(subscription, metadata);
-      await this.queueOrganizationExport(subscription.organizationId);
       return {
         cancelImmediately: true,
         status: 'CANCELED',
@@ -304,7 +354,28 @@ export class SubscriptionsService {
         metadata,
       },
     });
-    await this.queueOrganizationExport(subscription.organizationId);
+
+    try {
+      await this.queueOrganizationExport(subscription.organizationId);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo programar la exportacion previa para la cancelacion solicitada por la organizacion ${subscription.organizationId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+    }
+
+    await this.logAuditEvent({
+      action: AuditAction.UPDATED,
+      entityType: 'subscription',
+      entityId: subscription.id.toString(),
+      summary: 'Cancelacion programada por el usuario',
+      diff: {
+        organizationId: subscription.organizationId,
+        cancelImmediately: false,
+        reason: metadata.cancellationRequest,
+      },
+    });
 
     return {
       cancelImmediately: false,
@@ -484,13 +555,26 @@ export class SubscriptionsService {
 
   async upsertPaymentMethod(dto: UpsertPaymentMethodDto) {
     return this.prisma.$transaction(async (tx) => {
-      const record = await tx.billingPaymentMethod.upsert({
-        where: {
-          organizationId_externalId: {
-            organizationId: dto.organizationId,
-            externalId: dto.externalId,
-          },
+      const uniqueWhere = {
+        organizationId_externalId: {
+          organizationId: dto.organizationId,
+          externalId: dto.externalId,
         },
+      };
+
+      const existingMethod = await tx.billingPaymentMethod.findUnique({
+        where: uniqueWhere,
+      });
+      const hasCustomerPatch = dto.billingCustomerId !== undefined;
+      const metadataForStorage = hasCustomerPatch
+        ? {
+            ...this.coerceJsonRecord(existingMethod?.metadata),
+            billingCustomerId: dto.billingCustomerId ?? null,
+          }
+        : null;
+
+      const record = await tx.billingPaymentMethod.upsert({
+        where: uniqueWhere,
         create: {
           organizationId: dto.organizationId,
           provider: dto.provider,
@@ -502,6 +586,7 @@ export class SubscriptionsService {
           country: dto.country ?? null,
           status: 'ACTIVE',
           isDefault: dto.isDefault ?? false,
+          ...(metadataForStorage ? { metadata: metadataForStorage } : {}),
         },
         update: {
           provider: dto.provider,
@@ -512,6 +597,7 @@ export class SubscriptionsService {
           country: dto.country ?? null,
           status: 'ACTIVE',
           ...(dto.isDefault !== undefined ? { isDefault: dto.isDefault } : {}),
+          ...(metadataForStorage ? { metadata: metadataForStorage } : {}),
         },
       });
 
@@ -566,11 +652,13 @@ export class SubscriptionsService {
           this.prisma,
           organizationId,
           next.id,
+          this.extractPaymentMethodCustomerId(next.metadata),
         );
       } else {
         await this.setDefaultPaymentMethodForOrg(
           this.prisma,
           organizationId,
+          null,
           null,
         );
       }
@@ -591,6 +679,7 @@ export class SubscriptionsService {
       this.prisma,
       organizationId,
       method.id,
+      this.extractPaymentMethodCustomerId(method.metadata),
     );
 
     return { ok: true };
@@ -616,6 +705,7 @@ export class SubscriptionsService {
       );
     }
 
+    const wasTrial = subscription.status === SubscriptionStatus.TRIAL;
     const plan = subscription.plan;
     const now = new Date();
     const periodEnd = this.calculateNextPeriodEnd(now, plan);
@@ -727,13 +817,22 @@ export class SubscriptionsService {
             (error as Error)?.message ?? 'error desconocido'
           }`,
         );
+        }
       }
-    }
 
-    return {
-      subscriptionId: subscription.id,
-      status: SubscriptionStatus.ACTIVE,
-      currentPeriodEnd: periodEnd,
+      await this.autoExportAndCleanupDemoData(
+        subscription.organizationId,
+        'activation',
+      );
+
+      if (wasTrial) {
+        this.metrics.recordTrialConverted(plan.code);
+      }
+
+      return {
+        subscriptionId: subscription.id,
+        status: SubscriptionStatus.ACTIVE,
+        currentPeriodEnd: periodEnd,
     };
   }
 
@@ -741,11 +840,70 @@ export class SubscriptionsService {
     event: PaymentWebhookEvent,
     headers?: Record<string, string>,
   ) {
+    let normalized: PaymentWebhookEvent | null;
+    try {
+      normalized = await this.normalizeWebhookEvent(event, headers);
+    } catch (error) {
+      this.metrics.recordWebhookEvent(
+        (event.provider ?? 'unknown').toLowerCase(),
+        event.type ?? 'unknown',
+        'failed',
+      );
+      throw error;
+    }
+
+    if (!normalized) {
+      this.metrics.recordWebhookEvent(
+        (event.provider ?? 'unknown').toLowerCase(),
+        event.type ?? 'ignored',
+        'success',
+      );
+      return { received: true, ignored: true };
+    }
+
+    try {
+      const result = await this.dispatchWebhookEvent(normalized);
+      this.metrics.recordWebhookEvent(
+        normalized.provider,
+        normalized.type,
+        'success',
+      );
+      return result;
+    } catch (error) {
+      this.metrics.recordWebhookEvent(
+        normalized.provider,
+        normalized.type,
+        'failed',
+      );
+      throw error;
+    }
+  }
+  private async normalizeWebhookEvent(
+    event: PaymentWebhookEvent,
+    headers?: Record<string, string>,
+  ): Promise<PaymentWebhookEvent | null> {
     const provider = (event.provider ?? '').toLowerCase();
     if (provider === 'mercadopago') {
       this.verifyMercadoPagoSignature(headers);
+      const normalized =
+        await this.mercadoPagoWebhookService.normalizeEvent({
+          provider: 'mercadopago',
+          type: event.type,
+          data: event.data ?? {},
+        });
+      return normalized;
     }
 
+    const fallbackProvider = provider || event.provider || 'unknown';
+    const normalizedType = event.type ?? 'unknown';
+    return {
+      provider: fallbackProvider,
+      type: normalizedType,
+      data: event.data ?? {},
+    };
+  }
+
+  private async dispatchWebhookEvent(event: PaymentWebhookEvent) {
     const payload = event.data ?? {};
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -780,46 +938,95 @@ export class SubscriptionsService {
   }
 
   async getSummaryForUser(userId: number) {
-    const userRecord = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        organizationId: true,
-        lastOrgId: true,
-      },
-    });
-
-    const membership = await this.prisma.organizationMembership.findFirst({
-      where: { userId },
-      select: { organizationId: true },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    const organizationId =
-      userRecord?.lastOrgId ??
-      userRecord?.organizationId ??
-      membership?.organizationId ??
-      null;
-
+    const organizationId = await this.resolveUserOrganizationId(userId);
     if (!organizationId) {
       return this.buildFallbackSummary();
     }
 
-    const subscription = await this.prisma.subscription.findUnique({
-      where: { organizationId },
-      include: { plan: true },
-    });
+    const [
+      subscription,
+      organization,
+      company,
+      memberships,
+      usersCount,
+      invoicesCount,
+      lastPaidInvoice,
+    ] = await Promise.all([
+      this.prisma.subscription.findUnique({
+        where: { organizationId },
+        include: { plan: true, defaultPaymentMethod: true },
+      }),
+      this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { id: true, name: true, slug: true },
+      }),
+      this.prisma.company.findFirst({
+        where: { organizationId },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, name: true, legalName: true },
+      }),
+      this.prisma.organizationMembership.findMany({
+        where: { organizationId },
+        include: {
+          user: {
+            select: {
+              email: true,
+              username: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.organizationMembership.count({ where: { organizationId } }),
+      this.prisma.subscriptionInvoice.count({ where: { organizationId } }),
+      this.prisma.subscriptionInvoice.findFirst({
+        where: {
+          organizationId,
+          status: SubscriptionInvoiceStatus.PAID,
+        },
+        orderBy: { paidAt: 'desc' },
+      }),
+    ]);
 
-    const usersCount = await this.prisma.organizationMembership.count({
-      where: { organizationId },
-    });
-    const invoicesCount = await this.prisma.subscriptionInvoice.count({
-      where: { organizationId },
-    });
+    let quotaSummary: Awaited<
+      ReturnType<typeof this.quotaService.getSummaryByOrganization>
+    > | null = null;
+    if (subscription) {
+      try {
+        quotaSummary =
+          await this.quotaService.getSummaryByOrganization(organizationId);
+      } catch (error) {
+        this.logger.warn(
+          `No se pudo obtener el resumen de consumo para la organizacion ${organizationId}: ${
+            (error as Error)?.message ?? error
+          }`,
+        );
+      }
+    }
+
+    const orgInfo = organization
+      ? {
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug ?? null,
+        }
+      : null;
+    const companyInfo = company
+      ? {
+          id: company.id,
+          name: company.name,
+          legalName: company.legalName ?? null,
+        }
+      : null;
+    const primaryContact = this.pickPrimaryContact(memberships);
 
     if (!subscription) {
       return this.buildFallbackSummary({
         usersCount,
         invoicesCount,
+        organization: orgInfo ?? undefined,
+        company: companyInfo ?? undefined,
+        primaryContact,
       });
     }
 
@@ -833,27 +1040,131 @@ export class SubscriptionsService {
           )
         : null;
 
+    const rawQuotas = this.coerceJsonRecord(subscription.plan?.quotas);
+    const subscriptionMetadata = this.coerceJsonRecord(subscription.metadata);
+    const legacyGraceUntilMeta =
+      typeof subscriptionMetadata.legacyGraceUntil === 'string'
+        ? subscriptionMetadata.legacyGraceUntil
+        : null;
+    const graceLimits =
+      subscriptionMetadata.graceLimits?.active &&
+      subscriptionMetadata.graceLimits?.quotas
+        ? {
+            ...subscriptionMetadata.graceLimits,
+            quotas: this.coerceJsonRecord(
+              subscriptionMetadata.graceLimits.quotas,
+            ),
+          }
+        : null;
+    const quotas = graceLimits
+      ? { ...rawQuotas, ...graceLimits.quotas }
+      : rawQuotas;
+    const normalizedQuotas = quotaSummary?.quotas ?? quotas;
+    const legacyInfo = {
+      isLegacy:
+        quotaSummary?.legacy?.isLegacy ??
+        ((subscription.plan?.code ?? '').toLowerCase() === 'legacy'),
+      graceUntil:
+        quotaSummary?.legacy?.graceUntil ?? legacyGraceUntilMeta,
+    };
+    const usage = quotaSummary?.usage ?? {
+      users: usersCount,
+      invoices: invoicesCount,
+      storageMB: 0,
+    };
+
     return {
+      organization: orgInfo,
+      company: companyInfo,
       plan: {
         name: subscription.plan?.name ?? 'Plan actual',
         code: subscription.plan?.code ?? subscription.id.toString(),
         status: subscription.status,
+        price: this.decimalToString(subscription.plan?.price),
+        currency: subscription.plan?.currency ?? 'PEN',
+        interval: subscription.plan?.interval ?? SubscriptionInterval.MONTHLY,
+        features: this.coerceJsonRecord(subscription.plan?.features),
+        isLegacy: legacyInfo.isLegacy,
+        legacyGraceUntil: legacyInfo.graceUntil,
+        restrictions: graceLimits
+          ? {
+              reason: graceLimits.reason ?? 'past_due',
+              activatedAt: graceLimits.activatedAt ?? null,
+            }
+          : null,
       },
       trial: {
         isTrial: subscription.status === SubscriptionStatus.TRIAL,
         daysLeft,
         endsAt: subscription.trialEndsAt?.toISOString() ?? null,
       },
+      billing: {
+        currentPeriodStart:
+          subscription.currentPeriodStart?.toISOString() ?? null,
+        currentPeriodEnd:
+          subscription.currentPeriodEnd?.toISOString() ?? null,
+        cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+        canceledAt: subscription.canceledAt?.toISOString() ?? null,
+        lastInvoicePaidAt: lastPaidInvoice?.paidAt?.toISOString() ?? null,
+        nextDueDate:
+          subscription.currentPeriodEnd?.toISOString() ??
+          lastPaidInvoice?.dueDate?.toISOString() ??
+          null,
+      },
+      contacts: {
+        primary: primaryContact,
+      },
       quotas: {
-        users: null,
-        invoices: null,
-        storageMB: null,
+        users: normalizedQuotas.users ?? null,
+        invoices: normalizedQuotas.invoices ?? null,
+        storageMB: normalizedQuotas.storageMB ?? null,
       },
-      usage: {
-        users: usersCount,
-        invoices: invoicesCount,
-        storageMB: 0,
-      },
+      usage,
+    };
+  }
+
+  private async resolveUserOrganizationId(userId: number) {
+    const userRecord = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastOrgId: true, organizationId: true },
+    });
+    if (userRecord?.lastOrgId) return userRecord.lastOrgId;
+    if (userRecord?.organizationId) return userRecord.organizationId;
+
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { userId },
+      select: { organizationId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return membership?.organizationId ?? null;
+  }
+
+  private async resolveUserOrganizationIdOrThrow(userId: number) {
+    const organizationId = await this.resolveUserOrganizationId(userId);
+    if (!organizationId) {
+      throw new BadRequestException(
+        'No se encontró una organización asociada al usuario.',
+      );
+    }
+    return organizationId;
+  }
+
+  private pickPrimaryContact(
+    memberships: Array<{
+      role: string;
+      user: { username: string | null; email: string };
+    }>,
+  ) {
+    if (!memberships.length) return null;
+    const priority = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'MEMBER', 'VIEWER'];
+    const selected =
+      memberships.find((membership) =>
+        priority.includes(membership.role),
+      ) ?? memberships[0];
+
+    return {
+      name: selected.user.username ?? selected.user.email,
+      email: selected.user.email,
     };
   }
 
@@ -985,17 +1296,40 @@ export class SubscriptionsService {
   private buildFallbackSummary(params?: {
     usersCount?: number;
     invoicesCount?: number;
+    organization?: { id: number; name: string | null; slug: string | null };
+    company?: { id: number; name: string | null; legalName: string | null };
+    primaryContact?: { name: string; email: string } | null;
   }) {
     return {
+      organization: params?.organization ?? null,
+      company: params?.company ?? null,
       plan: {
         name: 'Plan demo',
         code: 'trial',
         status: SubscriptionStatus.TRIAL,
+        price: null,
+        currency: 'PEN',
+        interval: SubscriptionInterval.MONTHLY,
+        features: {},
+        isLegacy: false,
+        legacyGraceUntil: null,
+        restrictions: null,
       },
       trial: {
         isTrial: true,
         daysLeft: DEFAULT_TRIAL_DAYS,
         endsAt: null,
+      },
+      billing: {
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        canceledAt: null,
+        lastInvoicePaidAt: null,
+        nextDueDate: null,
+      },
+      contacts: {
+        primary: params?.primaryContact ?? null,
       },
       quotas: {
         users: null,
@@ -1167,6 +1501,12 @@ export class SubscriptionsService {
         },
       });
     });
+
+    await this.clearGraceRestrictions(invoice.subscriptionId);
+    await this.autoExportAndCleanupDemoData(
+      invoice.organizationId,
+      'activation',
+    );
   }
 
   private async applyInvoiceFailure(payload: Record<string, any>) {
@@ -1199,11 +1539,16 @@ export class SubscriptionsService {
       });
     });
 
+    await this.notifyInvoiceFailure(invoice, nextState);
+    await this.applyGraceRestrictions(invoice.subscriptionId);
+
     if (nextState.exhausted) {
       this.logger.warn(
-        `Dunning agotado para la invoice ${invoice.id} de la organizaci��n ${invoice.organizationId}`,
+        `Dunning agotado para la invoice ${invoice.id} de la organizacion ${invoice.organizationId}`,
       );
+      await this.handleExhaustedDunning(invoice, nextState);
     }
+    
   }
 
   private async resolveInvoiceFromPayload(
@@ -1306,6 +1651,12 @@ export class SubscriptionsService {
       this.logger.log(
         `Dunning attempt ${attempts} generado para invoice ${invoice.id}`,
       );
+      await this.notifyDunningScheduled(
+        invoice,
+        attempts,
+        session.checkoutUrl,
+      );
+      this.metrics.recordDunningAttempt('success');
     } catch (error) {
       dunning.lastAttemptAt = new Date().toISOString();
       metadata.dunning = dunning;
@@ -1318,6 +1669,7 @@ export class SubscriptionsService {
           (error as Error)?.message ?? error
         }`,
       );
+      this.metrics.recordDunningAttempt('failed');
     }
   }
 
@@ -1485,7 +1837,8 @@ export class SubscriptionsService {
         metadata,
       },
     });
-    await this.queueOrganizationExport(subscription.organizationId);
+    this.metrics.recordSubscriptionCanceled('scheduled');
+
     await this.logAuditEvent({
       action: AuditAction.UPDATED,
       entityType: 'subscription',
@@ -1496,12 +1849,17 @@ export class SubscriptionsService {
         planId: subscription.planId,
       },
     });
+    await this.autoExportAndCleanupDemoData(
+      subscription.organizationId,
+      'cancellation',
+    );
   }
 
   private async applyImmediatePlanChange(
     subscription: Subscription & { plan: SubscriptionPlan },
     targetPlan: SubscriptionPlan,
     metadata?: Record<string, any>,
+    checkoutOptions?: { successUrl?: string; cancelUrl?: string },
   ) {
     const meta = metadata ?? this.coerceJsonRecord(subscription.metadata);
     const now = new Date();
@@ -1521,13 +1879,21 @@ export class SubscriptionsService {
     const newPrice = new Prisma.Decimal(targetPlan.price ?? 0);
     const delta = newPrice.mul(ratio).minus(oldPrice.mul(ratio));
 
+    let checkoutSession: CheckoutSessionResult | null = null;
+    let invoiceId: number | null = null;
+
     if (delta.toNumber() > 0.01) {
-      await this.createPlanChangeInvoice(
+      const planChangeInvoice = await this.createPlanChangeInvoice(
         subscription,
         targetPlan,
         delta,
         'plan_change_immediate',
         periodEnd,
+      );
+      invoiceId = planChangeInvoice.id;
+      checkoutSession = await this.launchInvoiceCheckoutSession(
+        planChangeInvoice,
+        checkoutOptions,
       );
     } else if (delta.toNumber() < -0.01) {
       meta.planChangeCredit = {
@@ -1559,6 +1925,11 @@ export class SubscriptionsService {
         delta: delta.toString(),
       },
     });
+
+    return {
+      invoiceId,
+      checkoutSession,
+    };
   }
 
   private async createPlanChangeInvoice(
@@ -1567,7 +1938,11 @@ export class SubscriptionsService {
     amount: Prisma.Decimal,
     reason: string,
     billingPeriodEnd: Date,
-  ) {
+  ): Promise<
+    SubscriptionInvoice & {
+      subscription: Subscription & { plan: SubscriptionPlan };
+    }
+  > {
     const billingCompany = await this.getBillingCompanySnapshot(
       subscription.organizationId,
     );
@@ -1579,7 +1954,7 @@ export class SubscriptionsService {
     const totalAmount = amount.add(taxAmount);
     const now = new Date();
 
-    await this.prisma.subscriptionInvoice.create({
+    return this.prisma.subscriptionInvoice.create({
       data: {
         subscriptionId: subscription.id,
         organizationId: subscription.organizationId,
@@ -1597,7 +1972,63 @@ export class SubscriptionsService {
           planCode: targetPlan.code,
         },
       },
+      include: {
+        subscription: {
+          include: { plan: true },
+        },
+      },
     });
+  }
+
+  private async launchInvoiceCheckoutSession(
+    invoice: SubscriptionInvoice & {
+      subscription: Subscription & { plan: SubscriptionPlan };
+    },
+    checkoutOptions?: { successUrl?: string; cancelUrl?: string },
+  ) {
+    const resolvedUrls =
+      checkoutOptions?.successUrl && checkoutOptions?.cancelUrl
+        ? {
+            successUrl: checkoutOptions.successUrl,
+            cancelUrl: checkoutOptions.cancelUrl,
+          }
+        : this.resolveBillingRetryUrls(
+            invoice.subscription.organizationId,
+            invoice.id,
+          );
+    const successUrl = resolvedUrls.successUrl;
+    const cancelUrl = resolvedUrls.cancelUrl;
+    this.logger.debug(
+      `Launching checkout session invoice=${invoice.id} successUrl=${successUrl} cancelUrl=${cancelUrl}`,
+    );
+
+    const session = await this.paymentProvider.createCheckoutSession({
+      organizationId: invoice.subscription.organizationId,
+      planCode: invoice.subscription.plan.code,
+      amount: this.decimalToString(invoice.amount),
+      currency: invoice.currency ?? invoice.subscription.plan.currency,
+      successUrl,
+      cancelUrl,
+      metadata: {
+        invoiceId: invoice.id,
+        reason: this.coerceJsonRecord(invoice.metadata).reason ?? 'plan_change_immediate',
+      },
+    });
+
+    const metadata = this.coerceJsonRecord(invoice.metadata);
+    metadata.pendingCheckout = {
+      provider: session.provider,
+      sessionId: session.sessionId,
+      checkoutUrl: session.checkoutUrl,
+      createdAt: new Date().toISOString(),
+    };
+
+    await this.prisma.subscriptionInvoice.update({
+      where: { id: invoice.id },
+      data: { metadata },
+    });
+
+    return session;
   }
 
   private async getBillingCompanySnapshot(
@@ -1650,6 +2081,8 @@ export class SubscriptionsService {
       },
     });
 
+    this.metrics.recordSubscriptionCanceled('immediate');
+
     await this.logAuditEvent({
       action: AuditAction.UPDATED,
       entityType: 'subscription',
@@ -1661,6 +2094,10 @@ export class SubscriptionsService {
         reason: metadata.cancellationRequest,
       },
     });
+    await this.autoExportAndCleanupDemoData(
+      subscription.organizationId,
+      'cancellation',
+    );
   }
 
   private async queueOrganizationExport(organizationId: number) {
@@ -1672,6 +2109,199 @@ export class SubscriptionsService {
           (error as Error)?.message ?? error
         }`,
       );
+    }
+  }
+
+  private async notifyInvoiceFailure(
+    invoice: SubscriptionInvoice & {
+      subscription: Subscription & { plan: SubscriptionPlan };
+    },
+    nextState: Record<string, any>,
+  ) {
+    try {
+      await this.notifications.sendInvoicePaymentFailed({
+        organizationId: invoice.organizationId,
+        invoiceId: invoice.id,
+        planName: invoice.subscription.plan?.name,
+        amount: this.decimalToString(invoice.amount),
+        currency:
+          invoice.currency ?? invoice.subscription.plan.currency ?? 'PEN',
+        nextAttemptAt: nextState?.nextAttemptAt
+          ? new Date(nextState.nextAttemptAt)
+          : null,
+      });
+      if (nextState?.exhausted) {
+        await this.notifications.sendInvoiceDunningFinalNotice({
+          organizationId: invoice.organizationId,
+          invoiceId: invoice.id,
+        });
+      }
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo enviar la notificacion de dunning para la invoice ${invoice.id}: ${
+          (error as Error)?.message ?? error
+        }`,
+      );
+    }
+  }
+
+  private async handleExhaustedDunning(
+    invoice: SubscriptionInvoice & {
+      subscription: Subscription & { plan: SubscriptionPlan };
+    },
+    dunningState: Record<string, any>,
+  ) {
+    const nowIso = new Date().toISOString();
+    const subscriptionMetadata = this.coerceJsonRecord(
+      invoice.subscription.metadata,
+    );
+    subscriptionMetadata.dunning = {
+      ...(subscriptionMetadata.dunning ?? {}),
+      exhaustedAt: nowIso,
+      failures: dunningState.failures ?? subscriptionMetadata.dunning?.failures,
+    };
+    if (!subscriptionMetadata.cancellationRequest) {
+      subscriptionMetadata.cancellationRequest = {
+        reasonCategory: 'dunning_exhausted',
+        customReason: null,
+        requestedAt: nowIso,
+        cancelImmediately: false,
+        preCleanupPreparedAt: null,
+      };
+    }
+
+    this.metrics.recordDunningAttempt('retry_exhausted');
+
+    await this.prisma.subscription.update({
+      where: { id: invoice.subscriptionId },
+      data: {
+        status: SubscriptionStatus.PAST_DUE,
+        cancelAtPeriodEnd: true,
+        metadata: subscriptionMetadata,
+      },
+    });
+
+    await this.applyGraceRestrictions(invoice.subscriptionId);
+  }
+
+  private async notifyDunningScheduled(
+    invoice: SubscriptionInvoice & {
+      subscription: Subscription & { plan: SubscriptionPlan };
+    },
+    attempt: number,
+    checkoutUrl?: string | null,
+  ) {
+    try {
+      await this.notifications.sendInvoiceDunningScheduled({
+        organizationId: invoice.organizationId,
+        invoiceId: invoice.id,
+        attempt,
+        checkoutUrl: checkoutUrl ?? undefined,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo enviar la notificacion del intento de dunning para la invoice ${invoice.id}: ${
+          (error as Error)?.message ?? error
+        }`,
+      );
+    }
+  }
+
+  private async autoExportAndCleanupDemoData(
+    organizationId: number,
+    trigger: 'activation' | 'cancellation',
+  ) {
+    try {
+      await this.queueOrganizationExport(organizationId);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo programar la exportacion previa para la organizacion ${organizationId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+    }
+    try {
+      const progress =
+        await this.onboardingService.getProgressForOrganization(
+          organizationId,
+        );
+      if (progress.demoStatus !== 'SEEDED') {
+        return;
+      }
+      await this.onboardingService.clearDemoDataForOrganization(
+        organizationId,
+        trigger === 'activation'
+          ? 'auto-clear-on-activation'
+          : 'auto-clear-on-cancellation',
+      );
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo limpiar datos demo para la organizacion ${organizationId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+    }
+  }
+
+  private async applyGraceRestrictions(subscriptionId: number) {
+    try {
+      await this.quotaService.activateGraceLimits(subscriptionId);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudieron aplicar restricciones de gracia para la suscripcion ${subscriptionId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+    }
+  }
+
+  private async clearGraceRestrictions(subscriptionId: number) {
+    try {
+      await this.quotaService.clearGraceLimits(subscriptionId);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudieron limpiar restricciones de gracia para la suscripcion ${subscriptionId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+    }
+  }
+
+  async preparePendingCancellations() {
+    const subscriptions = await this.prisma.subscription.findMany({
+      where: {
+        cancelAtPeriodEnd: true,
+        status: {
+          in: [
+            SubscriptionStatus.ACTIVE,
+            SubscriptionStatus.PAST_DUE,
+            SubscriptionStatus.TRIAL,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        metadata: true,
+      },
+    });
+
+    for (const subscription of subscriptions) {
+      const metadata = this.coerceJsonRecord(subscription.metadata);
+      const request = metadata.cancellationRequest;
+      if (!request || request.preCleanupPreparedAt) {
+        continue;
+      }
+      await this.autoExportAndCleanupDemoData(
+        subscription.organizationId,
+        'cancellation',
+      );
+      request.preCleanupPreparedAt = new Date().toISOString();
+      metadata.cancellationRequest = request;
+      await this.prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { metadata },
+      });
     }
   }
 
@@ -1697,13 +2327,30 @@ export class SubscriptionsService {
       });
     }
 
+    const normalizedCustomerId =
+      typeof billingCustomerId === 'string' && billingCustomerId.length > 0
+        ? billingCustomerId
+        : null;
+
     await client.subscription.updateMany({
       where: { organizationId },
       data: {
         defaultPaymentMethodId: methodId,
-        ...(billingCustomerId ? { billingCustomerId } : {}),
+        billingCustomerId: normalizedCustomerId,
       },
     });
+  }
+
+  private extractPaymentMethodCustomerId(
+    metadata: Prisma.JsonValue | null | undefined,
+  ): string | null {
+    const record = this.coerceJsonRecord(metadata ?? {});
+    const value = record.billingCustomerId;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+    return null;
   }
 
   private diffInDays(target: Date, base: Date) {

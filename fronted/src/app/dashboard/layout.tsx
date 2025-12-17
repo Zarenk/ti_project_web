@@ -16,6 +16,8 @@ import LogoutOverlay from "@/components/logout-overlay";
 import { DashboardCompanyName } from "./dashboard-company-name";
 import { TenantSelectionProvider } from "@/context/tenant-selection-context";
 import { ContextStatusBanner } from "@/components/context-status-banner";
+import { TrialStatusBanner } from "@/components/trial-status-banner";
+import { OnboardingWizardBanner } from "@/components/onboarding-wizard-banner";
 
 export const revalidate = 0;
 
@@ -37,6 +39,8 @@ export default async function Page({ children }: { children: ReactNode }) {
         <SidebarInset>
           <LogoutOverlay />
           <ContextStatusBanner />
+          <TrialStatusBanner />
+          <OnboardingWizardBanner />
           <div className="flex items-center gap-2 px-4 py-4">
             <TooltipProvider>
               <Tooltip>

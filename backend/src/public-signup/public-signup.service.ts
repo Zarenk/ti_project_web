@@ -20,6 +20,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { PublicSignupDto } from './dto/public-signup.dto';
 import { SubscriptionsService } from 'src/subscriptions/subscriptions.service';
 import { SubscriptionNotificationsService } from 'src/subscriptions/subscription-notifications.service';
+import { SubscriptionPrometheusService } from 'src/subscriptions/subscription-prometheus.service';
 
 const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
@@ -68,6 +69,7 @@ export class PublicSignupService {
     private readonly configService: ConfigService,
     private readonly subscriptionsService: SubscriptionsService,
     private readonly notifications: SubscriptionNotificationsService,
+    private readonly metrics: SubscriptionPrometheusService,
   ) {
     this.disposableDomains = this.buildDisposableDomainList();
   }
@@ -96,6 +98,7 @@ export class PublicSignupService {
     await this.enforceRateLimit(context);
 
     const attempt = await this.recordAttempt(context);
+    this.metrics.recordSignupStarted();
 
     try {
       const existing = await this.prisma.user.findUnique({
@@ -165,7 +168,7 @@ export class PublicSignupService {
           data: {
             userId: user.id,
             organizationId: organization.id,
-            role: OrganizationMembershipRole.OWNER,
+            role: OrganizationMembershipRole.SUPER_ADMIN,
           },
         });
 
@@ -199,11 +202,6 @@ export class PublicSignupService {
         // Continue even if trial setup fails; admin can fix later.
       }
 
-      await this.sendWelcomeEmailSafe({
-        email: normalizedEmail,
-        fullName: dto.fullName,
-        organizationName: dto.organizationName.trim(),
-      });
       await this.sendVerificationEmailSafe({
         email: normalizedEmail,
         fullName: dto.fullName,
@@ -212,6 +210,7 @@ export class PublicSignupService {
       });
 
       await this.markAttemptStatus(attempt.id, SignupAttemptStatus.SUCCESS);
+      this.metrics.recordSignupCompleted('success');
 
       return {
         message:
@@ -226,6 +225,7 @@ export class PublicSignupService {
         SignupAttemptStatus.FAILED,
         this.normalizeError(error),
       );
+      this.metrics.recordSignupCompleted('error');
       throw error;
     }
   }
@@ -352,20 +352,6 @@ export class PublicSignupService {
         phone: '999-999-999',
       },
     });
-  }
-
-  private async sendWelcomeEmailSafe(payload: {
-    email: string;
-    fullName?: string;
-    organizationName: string;
-  }) {
-    try {
-      await this.notifications.sendSignupWelcome(payload);
-    } catch (error) {
-      this.logger.warn(
-        `No se pudo enviar el correo de bienvenida a ${payload.email}: ${error}`,
-      );
-    }
   }
 
   private async sendVerificationEmailSafe(payload: {

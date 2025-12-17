@@ -6,6 +6,9 @@ import Pricing from "./components/pricing";
 import Testimonials from "./components/testimonials";
 import CTA from "./components/cta";
 import Footer from "./components/footer";
+import Support from "./components/support";
+import Faq from "./components/faq";
+import Compliance from "./components/compliance";
 import { TrialSignupSection } from "@/components/home/TrialSignupSection";
 import { FloatingWhatsAppButton } from "./components/floating-whatsapp-button";
 
@@ -24,6 +27,9 @@ export default function SignupPage() {
       <HowItWorks />
       <Pricing />
       <Testimonials />
+      <Support />
+      <Faq />
+      <Compliance />
       <CTA />
       <section id="signup-form">
         <TrialSignupSection />

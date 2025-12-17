@@ -5,6 +5,7 @@ import {
   Gauge,
   Histogram,
   Registry,
+  register as globalRegister,
 } from 'prom-client';
 
 @Injectable()
@@ -18,6 +19,7 @@ export class MetricsService {
   public dlqDepth: Gauge<string>;
 
   constructor() {
+    this.registry = globalRegister;
     collectDefaultMetrics({ register: this.registry });
 
     this.providerRequests = new Counter({

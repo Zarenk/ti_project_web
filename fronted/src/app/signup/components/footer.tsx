@@ -30,10 +30,9 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-foreground mb-4">Empresa</h4>
             <ul className="space-y-2 text-sm text-foreground/60">
-              <li><Link className="hover:text-foreground" href="/contact">Soporte</Link></li>
-              <li><Link className="hover:text-foreground" href="/faq">Preguntas frecuentes</Link></li>
-              <li><Link className="hover:text-foreground" href="/policy/privacy">Privacidad</Link></li>
-              <li><Link className="hover:text-foreground" href="/policy/terms">Términos</Link></li>
+              <li><a className="hover:text-foreground" href="#support">Soporte</a></li>
+              <li><a className="hover:text-foreground" href="#faq">Preguntas frecuentes</a></li>
+              <li><a className="hover:text-foreground" href="#compliance">Términos & Privacidad</a></li>
             </ul>
           </div>
           <div>

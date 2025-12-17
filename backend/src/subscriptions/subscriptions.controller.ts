@@ -16,7 +16,7 @@ import { SubscriptionsService } from './subscriptions.service';
 import { StartTrialDto } from './dto/start-trial.dto';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
-import { ChangePlanDto } from './dto/change-plan.dto';
+import { ChangePlanDto, ChangePlanSelfDto } from './dto/change-plan.dto';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
 import { UpsertPaymentMethodDto } from './dto/upsert-payment-method.dto';
 import { ManagePaymentMethodDto } from './dto/manage-payment-method.dto';
@@ -46,6 +46,18 @@ export class SubscriptionsController {
   @Post('change-plan')
   changePlan(@Body() dto: ChangePlanDto) {
     return this.subscriptionsService.requestPlanChange(dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('me/change-plan')
+  changePlanForCurrentUser(
+    @Body() dto: ChangePlanSelfDto,
+    @Request() req: { user: { userId: number } },
+  ) {
+    return this.subscriptionsService.requestPlanChangeForUser(
+      req.user.userId,
+      dto,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

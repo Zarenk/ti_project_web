@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { trackEvent } from "@/lib/analytics"
+import { useAuth } from "@/context/auth-context"
 
 const PAGE_SIZE = 10
 
@@ -38,6 +39,9 @@ export function ContextHistoryList(): ReactElement {
     companies: {},
   })
   const { refresh } = useTenantSelection()
+  const { role } = useAuth()
+  const normalizedRole = role?.toUpperCase() ?? null
+  const canQueryOrganizations = normalizedRole === "SUPER_ADMIN_GLOBAL"
 
   const loadHistory = useCallback(
     async (cursor: number | null, silent = false) => {
@@ -70,30 +74,32 @@ export function ContextHistoryList(): ReactElement {
     loadHistory(null).catch(() => {
       /* handled */
     })
-    warmOrganizationsCache(listOrganizations)
-      .then((orgsList?: OrganizationResponse[] | null) => {
-        if (cancelled || !Array.isArray(orgsList)) {
-          return
-        }
-        const orgMap: Record<number, string> = {}
-        const companyMap: Record<number, string> = {}
-        for (const org of orgsList) {
-          orgMap[org.id] = org.name
-          if (Array.isArray(org.companies)) {
-            for (const company of org.companies) {
-              companyMap[company.id] = company.name
+    if (canQueryOrganizations) {
+      warmOrganizationsCache(listOrganizations)
+        .then((orgsList?: OrganizationResponse[] | null) => {
+          if (cancelled || !Array.isArray(orgsList)) {
+            return
+          }
+          const orgMap: Record<number, string> = {}
+          const companyMap: Record<number, string> = {}
+          for (const org of orgsList) {
+            orgMap[org.id] = org.name
+            if (Array.isArray(org.companies)) {
+              for (const company of org.companies) {
+                companyMap[company.id] = company.name
+              }
             }
           }
-        }
-        setLookup({ orgs: orgMap, companies: companyMap })
-      })
-      .catch(() => {
-        /* ignore */
-      })
+          setLookup({ orgs: orgMap, companies: companyMap })
+        })
+        .catch(() => {
+          /* ignore */
+        })
+    }
     return () => {
       cancelled = true
     }
-  }, [loadHistory])
+  }, [loadHistory, canQueryOrganizations])
 
   const pageNumber = cursorStack.length + 1
   const hasPrevious = cursorStack.length > 0

@@ -33,6 +33,7 @@ import { Switch } from "@/components/ui/switch"
 import { shouldRememberContext, updateContextPreferences } from "@/utils/context-preferences"
 import { userContextStorage } from "@/utils/user-context-storage"
 import { trackEvent } from "@/lib/analytics"
+import { ACCOUNT_ALLOWED_ROLES } from "./use-account-access"
 
 export default function Page() {
   const [user, setUser] = useState({
@@ -64,7 +65,7 @@ export default function Page() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showActividad, setShowActividad] = useState(false)
   const activityAllowedRoles = new Set(["ADMIN", "SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"])
-  const allowedRoles = new Set(["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG", "ADMIN", "EMPLOYEE"])
+  const allowedRoles = ACCOUNT_ALLOWED_ROLES
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const { logout } = useAuth()
@@ -189,9 +190,9 @@ export default function Page() {
     updateContextPreferences({ rememberLastContext: value })
     if (!value) {
       userContextStorage.clearContext({ silent: true })
-      toast("Dejaremos de recordar automáticamente tu última organización.")
+      toast("Dejaremos de recordar autom?ticamente tu ?ltima organizaci?n.")
     } else {
-      toast("Recordaremos tu última organización y empresa seleccionada.")
+      toast("Recordaremos tu ?ltima organizaci?n y empresa seleccionada.")
     }
     trackEvent("context_preference_changed", { rememberLastContext: value })
   }
@@ -327,22 +328,52 @@ export default function Page() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {activityAllowedRoles.has((user.rol ?? "").toUpperCase()) && (
+            <div className="w-full overflow-x-auto md:overflow-visible">
+              <div className="flex min-w-max items-center gap-3 py-3 pr-2 md:min-w-full md:flex-wrap md:justify-end lg:flex-nowrap">
+                {activityAllowedRoles.has((user.rol ?? "").toUpperCase()) && (
+                  <Button
+                    variant="outline"
+                    className="rounded-full border-sky-200 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
+                    onClick={() => setShowActividad((v) => !v)}
+                  >
+                    Actividad
+                  </Button>
+                )}
                 <Button
-                  variant="outline"
-                  className="rounded-full border-sky-200 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
-                  onClick={() => setShowActividad((v) => !v)}
+                  variant="secondary"
+                  className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100"
+                  asChild
                 >
-                  Actividad
+                  <Link href="/dashboard/account/billing">Facturacion</Link>
                 </Button>
-              )}
-              <Button
-                className="rounded-full bg-sky-600 text-white hover:bg-sky-700 dark:bg-slate-700 dark:hover:bg-slate-600"
-                onClick={() => handleDatosSubmit(new Event('submit') as unknown as React.FormEvent)}
-              >
-                Guardar todo
-              </Button>
+                <Button
+                  variant="secondary"
+                  className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100"
+                  asChild
+                >
+                  <Link href="/dashboard/account/payment-methods">Metodos</Link>
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100"
+                  asChild
+                >
+                  <Link href="/dashboard/account/exports">Exportaciones</Link>
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100"
+                  asChild
+                >
+                  <Link href="/dashboard/account/plan">Consumo</Link>
+                </Button>
+                <Button
+                  className="rounded-full bg-sky-600 text-white hover:bg-sky-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+                  onClick={() => handleDatosSubmit(new Event('submit') as unknown as React.FormEvent)}
+                >
+                  Guardar todo
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -610,10 +641,12 @@ export default function Page() {
                       </Link>
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-            </aside>
-          </>
+              </CardContent>
+            </Card>
+
+
+        </aside>
+      </>
         )}
       </main>
     </div>

@@ -303,6 +303,7 @@ model Organization {
   subscriptionInvoices SubscriptionInvoice[]
   onboardingProgress OnboardingProgress?
   dataExports   OrganizationDataExport[] @relation("OrganizationDataExports")
+  auditLogs   AuditLog[]
 
   @@unique([name])
   @@index([status])
@@ -358,6 +359,7 @@ model Company {
   monitoringAlerts MonitoringAlert[]
   monitoringAlertEvents MonitoringAlertEvent[]
   subscriptionInvoices SubscriptionInvoice[]
+  auditLogs     AuditLog[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -1499,6 +1501,10 @@ model AuditLog {
   userAgent      String?
   journalEntryId Int?
   journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  organizationId Int?
+  companyId      Int?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   createdAt      DateTime      @default(now())
 
   @@index([createdAt])
@@ -1506,6 +1512,8 @@ model AuditLog {
   @@index([entityType])
   @@index([action])
   @@index([journalEntryId])
+  @@index([organizationId])
+  @@index([companyId])
 }
 
 enum TemplateVersion {

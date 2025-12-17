@@ -55,6 +55,7 @@ import {
   getOrganizationsCache,
   setOrganizationsCache,
 } from "@/utils/tenant-organizations-cache"
+import { getAuthToken } from "@/utils/auth-token"
 
 type ExtendedOrganization = OrganizationResponse & {
   companies: CompanyResponse[]
@@ -71,11 +72,14 @@ function normalizeOrganizations(orgs: OrganizationResponse[]): ExtendedOrganizat
 
 export function TeamSwitcher(): React.ReactElement | null {
   const { isMobile } = useSidebar()
-  const { role } = useAuth()
+  const { role, isPublicSignup, userId } = useAuth()
   const { selection } = useTenantSelection()
   const router = useRouter()
   const normalizedRole = role ? role.toUpperCase() : null
-  const isSuperUser = normalizedRole ? SUPER_ROLES.has(normalizedRole) : false
+  const isGlobalSuperAdmin = normalizedRole === "SUPER_ADMIN_GLOBAL"
+  const isOrgSuperAdmin = normalizedRole === "SUPER_ADMIN_ORG"
+  const isLandingUser = isOrgSuperAdmin && isPublicSignup !== false
+  const showGlobalSwitcher = isGlobalSuperAdmin
   const roleLabel = useMemo(() => {
     if (!normalizedRole) return "Nivel: desconocido"
     const labels: Record<string, string> = {
@@ -111,8 +115,16 @@ export function TeamSwitcher(): React.ReactElement | null {
   const cancelRef = useRef(false)
 
   const fetchOrganizations = useCallback(
-    async (providedSelection?: TenantSelection) => {
-      if (!isSuperUser) return
+      async (providedSelection?: TenantSelection) => {
+        if (!showGlobalSwitcher) return
+        const token = await getAuthToken()
+        if (!token || userId == null) {
+          setOrganizations([])
+          setActiveOrgId(null)
+        setActiveCompanyId(null)
+        setLoading(false)
+        return
+      }
       try {
         setLoading(true)
         const selection =
@@ -165,13 +177,13 @@ export function TeamSwitcher(): React.ReactElement | null {
         }
       }
     },
-    [isSuperUser],
+    [showGlobalSwitcher, userId],
   )
 
   useEffect(() => {
     cancelRef.current = false
 
-    if (isSuperUser) {
+    if (showGlobalSwitcher) {
       void fetchOrganizations()
     } else {
       setActiveOrgId(selection.orgId ?? null)
@@ -180,7 +192,7 @@ export function TeamSwitcher(): React.ReactElement | null {
 
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<TenantSelectionChangeDetail>).detail
-      if (isSuperUser) {
+      if (showGlobalSwitcher) {
         void fetchOrganizations(detail)
       } else if (detail) {
         setActiveOrgId(detail.orgId ?? null)
@@ -198,10 +210,10 @@ export function TeamSwitcher(): React.ReactElement | null {
         window.removeEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
       }
     }
-  }, [fetchOrganizations, isSuperUser, selection.orgId, selection.companyId])
+  }, [fetchOrganizations, showGlobalSwitcher, selection.orgId, selection.companyId])
 
   useEffect(() => {
-    if (!isSuperUser) return
+    if (!showGlobalSwitcher) return
     const handler = () => {
       void fetchOrganizations()
     }
@@ -213,14 +225,22 @@ export function TeamSwitcher(): React.ReactElement | null {
         window.removeEventListener(TENANT_ORGANIZATIONS_EVENT, handler)
       }
     }
-  }, [fetchOrganizations, isSuperUser])
+  }, [fetchOrganizations, showGlobalSwitcher])
 
   useEffect(() => {
-    if (isSuperUser || role === null) return
+    if (showGlobalSwitcher || role === null) return
     let cancelled = false
     setLoading(true)
     ;(async () => {
       try {
+        const token = await getAuthToken()
+        if (!token || userId == null) {
+          if (!cancelled) {
+            setTenantSummary(null)
+            setLoading(false)
+          }
+          return
+        }
         const summary = await getCurrentTenant()
         if (cancelled) return
         setTenantSummary(summary)
@@ -248,10 +268,10 @@ export function TeamSwitcher(): React.ReactElement | null {
     return () => {
       cancelled = true
     }
-  }, [isSuperUser, role, selection.orgId, selection.companyId])
+  }, [showGlobalSwitcher, role, selection.orgId, selection.companyId, userId])
 
   useEffect(() => {
-    if (!isSuperUser) return
+    if (!showGlobalSwitcher) return
 
     if (organizations.length === 0) {
       setActiveOrgId(null)
@@ -283,7 +303,7 @@ export function TeamSwitcher(): React.ReactElement | null {
       setActiveCompanyId(fallbackCompanyId)
       setManualTenantSelection({ orgId: org.id, companyId: fallbackCompanyId })
     }
-  }, [organizations, activeOrgId, activeCompanyId, isSuperUser])
+  }, [organizations, activeOrgId, activeCompanyId, showGlobalSwitcher])
 
   const activeOrganization = useMemo(() => {
     if (organizations.length === 0) return null
@@ -388,7 +408,7 @@ export function TeamSwitcher(): React.ReactElement | null {
     [activeOrganization, companyLegalName, companyName, companyStatus, companyTaxId],
   )
 
-  const canAddCompanies = isSuperUser && Boolean(activeOrganization)
+  const canAddCompanies = showGlobalSwitcher && Boolean(activeOrganization)
 
   const resolvedNonSuperOrgId = tenantSummary?.organization?.id ?? activeOrgId
   const employeeCompanies = tenantSummary?.companies ?? []
@@ -418,7 +438,7 @@ export function TeamSwitcher(): React.ReactElement | null {
     [activeCompanyId, handleSelectCompany, resolvedNonSuperOrgId],
   )
 
-  if (!isSuperUser) {
+  if (!showGlobalSwitcher) {
     if (loading && !tenantSummary) {
       return (
         <SidebarMenu>
@@ -524,7 +544,7 @@ export function TeamSwitcher(): React.ReactElement | null {
     )
   }
 
-  if (isSuperUser && loading && organizations.length === 0) {
+  if (showGlobalSwitcher && loading && organizations.length === 0) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
@@ -539,7 +559,7 @@ export function TeamSwitcher(): React.ReactElement | null {
     )
   }
 
-  if (isSuperUser && !activeOrganization) {
+  if (showGlobalSwitcher && !activeOrganization) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>

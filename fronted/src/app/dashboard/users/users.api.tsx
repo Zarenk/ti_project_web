@@ -39,7 +39,16 @@ export async function loginUser(email: string, password: string) {
 
     if (!response.ok) {
       const message = typeof data === 'string' && data ? data : data?.message || 'Error al iniciar sesión'
-      throw new Error(message)
+      const error: any = new Error(message)
+      if (data && typeof data === 'object') {
+        if ((data as any).code) {
+          error.code = (data as any).code
+        }
+        if ((data as any).email) {
+          error.email = (data as any).email
+        }
+      }
+      throw error
     }
 
     const payload = typeof data === 'string' ? {} : data

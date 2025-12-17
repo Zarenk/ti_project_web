@@ -12,11 +12,11 @@ Este documento describe el plan integral para permitir que cualquier usuario cre
 
 ## Estado actual (dic/2025)
 
-- ✅ **F1 Fundamentos:** modelo de `plans/subscriptions`, servicio de checkout con emisión de invoice e IGV (mock provider), cron de trial, tax-rate default y logging.
-- ✅ **F2 Landing + Auto-signup:** formulario público con reCAPTCHA y rate limiting, provisioning completo (org, company, owner, demo data) y envío de correos.
-- 🟨 **F3 Onboarding in-app:** wizard + datasets demo listos, banner de trial con contador exclusivo para usuarios del landing; faltan quota meters y limpiar data demo.
-- ⏳ **F4 Billing Portal & Dunning:** pendiente webhooks reales, flujo de upgrades/downgrades y UI de cancelación.
-- ⏳ **F5 Migración + Optimización:** no iniciado.
+- [x] **F1 Fundamentos:** modelo `plans/subscriptions/payment_methods`, checkout mock con IGV, invoices propios y cron de trial. `TaxRateService` fija la tarifa por defecto y se registran las activaciones.
+- [x] **F2 Landing + Auto-signup:** landing pública con reCAPTCHA, rate limiting y bloqueo de dominios desechables. `POST /public/signup` crea org/company/store, carga data demo, envía la verificación y define `trialEndsAt = 14 días`.
+- [x] **F3 Onboarding in-app:** wizard y datasets demo listos, banner trial segmentado, quota meter en `/dashboard/account/plan` y UI para limpiar demo data. La exportación y limpieza automática se dispara al activar plan pago o al entrar en fase de cancelación (cron dedicado).
+- [x] **F4 Billing Portal & Dunning:** `/dashboard/account/billing`, `/account/exports`, `/account/plan` y `/account/payment-methods` consumen las APIs reales. MercadoPago está integrado para checkout/dunning, upgrades/downgrades pro-rateados, cancelación self-service (encuesta + export previa) y multi-tarjeta. **Listo** el monitoreo con métricas Prometheus + alertas (archivo `monitoring/rules/subscriptions.rules.yml`) y runbook operativo en `docs/runbooks/subscriptions.md`.
+- [ ] **F5 Migración + Optimización:** pendiente definir el “grandfathering” de clientes legacy, scripts de migración y comunicaciones (email + banners) antes del lanzamiento.
 
 ## 2. Modelo de datos y servicios
 
@@ -74,8 +74,9 @@ Este documento describe el plan integral para permitir que cualquier usuario cre
    - Kits por industria (retail, servicios, manufactura). Marcar registros `is_demo`.
    - Scripts para eliminar demo data al activar plan.
 3. **Dashboards**
-   - Banner sticky con días restantes de trial y botón “Actualizar plan”.
-   - Quota meter en Settings: uso / límite (usuarios, comprobantes, almacenamiento).
+   - Banner sticky con días restantes de trial y botón "Actualizar plan".
+   - ✅ Quota meter en Settings: uso / límite (usuarios, comprobantes, almacenamiento) ya visible en `/dashboard/account/plan`.
+   - ⚠️ Automatizar limpieza/exportación cuando el tenant deja el modo prueba o cancela (hoy es manual).
 
 ## 6. Seguridad, fraude y cumplimiento
 
@@ -97,42 +98,75 @@ Este documento describe el plan integral para permitir que cualquier usuario cre
 
 ## 8. Observabilidad y alertas
 
-- Métricas clave:
-  - `signup_started`, `signup_completed`, `trial_activated`, `trial_converted`, `subscription_canceled`.
-  - Cohorts de retención.
-  - Funnel drop-offs (landing → checkout → activación).
-- Alertas:
-  - Spike de cancelaciones.
-  - Webhook failures.
-  - Cobros fallidos consecutivos > N.
-- Paneles internos (Grafana/Looker) + alertas Slack/Email.
+### Métricas publicadas
+
+El servicio `SubscriptionPrometheusService` incrementa counters en el mismo registro global de prom-client, por lo que `/api/metrics` muestra los valores sin configuración adicional. Los nombres expuestos son:
+
+- `signup_started_total`
+- `signup_completed_total{result="success|error"}`
+- `trial_activated_total{plan}`
+- `trial_converted_total{plan}`
+- `subscription_canceled_total{mode}`
+- `subscription_webhook_events_total{provider,type,result}`
+- `subscription_dunning_attempts_total{result="success|failed|retry_exhausted"}`
+- `subscription_dunning_job_runs_total{result="success|error"}`
+
+Para verificarlos basta correr `curl http://localhost:4000/api/metrics | Select-String "subscription_"`. Si Prometheus no está disponible, el helper escribe la entrada `[analytics]` en los logs.
+
+### Alertas operativas
+
+Las reglas oficiales viven en `monitoring/rules/subscriptions.rules.yml` y se cargan en Prometheus (`rule_files: ["rules/subscriptions.rules.yml"]`). Incluyen:
+
+```yaml
+- alert: SpikeSubscriptionCancellations
+  expr: increase(subscription_canceled_total[15m]) > 5
+- alert: SubscriptionWebhookFailures
+  expr: increase(subscription_webhook_events_total{result="failed"}[5m]) > 0
+- alert: SubscriptionDunningExhausted
+  expr: increase(subscription_dunning_attempts_total{result="retry_exhausted"}[1h]) > 0
+```
+
+Alertmanager enruta estos eventos al canal `billing-oncall` (Slack/email). El runbook `docs/runbooks/subscriptions.md` detalla cómo responder (ver logs, reintentar webhook en MercadoPago, forzar `retryInvoice`, etc.).
+
+### Pendiente
+
+- Construir dashboards de conversión, drop-offs y cohorts (Grafana/Looker) usando estas métricas.
+- Automatizar comunicaciones post-alerta (emails y tareas de soporte).
+- Completar la migración legacy (sección 9).
 
 ## 9. Migración de usuarios existentes
 
-- Estrategia:
-  - “Grandfather” de clientes actuales en plan legacy durante X meses.
-  - UI para que el admin seleccione nuevo plan → checkout.
-  - Comunicaciones: email + banner in-app explicando cambios y fechas.
-- Script de migración: asignar plan `legacy`, `subscription.status = active`, `trialEndsAt = null`.
+- **Pendiente de ejecución (F5).** El feature autoservicio ya funciona para nuevas cuentas, pero falta el plan de migración:
+  - Definir estrategia de “grandfathering” y qué plan (`legacy`) se asignará a clientes actuales, incluyendo precios y fecha límite.
+  - Scripts para migrar masivamente (`subscription.planId`, `status = active`, `trialEndsAt = null`, regenerar facturación si procede).
+  - Comunicaciones: emails, banners in-app y FAQ para acompañar el cambio.
+  - UI o wizard para que un admin legacy pueda seleccionar el nuevo plan y completar checkout (aprovechando la misma vista de upgrades).
 
-## 10. Roadmap sugerido
+## 10. Roadmap sugerido (actualizado)
 
 | Fase | Duración | Alcance |
 | --- | --- | --- |
 | **F1: Fundamentos** | 2 sprint | Modelo de datos, pasarela (checkout + webhooks), servicio de trial, jobs y alertas básicas. |
 | **F2: Landing + Auto-signup** | 1 sprint | Marketing site, formulario público, provisioning automático, seguridad (captcha, rate limit). |
 | **F3: Onboarding in-app** | 1 sprint | Wizard, demo datasets, banners de trial, quota meters. |
-| **F4: Billing Portal & Dunning** | 1 sprint | Portal de facturación, historial de invoices, reintentos automáticos, correos de dunning. |
-| **F5: Migración + Optimización** | 1 sprint | Migrar clientes existentes, referral program (opcional), mejoras UX. |
+| **F4: Billing Portal & Dunning** | ✅ | Integrado contra MercadoPago (checkout real, dunning 1/3/5/7, cron de cancelación/export, portal self-service completo). **Falta** monitoreo, alertas y runbooks de soporte. |
+| **F5: Migración + Optimización** | 1 sprint | Migrar clientes existentes (grandfathering), scripts y comunicaciones. Considerar mejoras UX/referral program. |
 
 ## 11. Checklist antes del Go-Live
 
 - [ ] Feature flags configurados (permite rollback).
 - [ ] Suites e2e (Cypress/Playwright) cubriendo signup → trial → upgrade → cancelación.
-- [ ] Webhooks monitoreados (reenvío automático si fallan).
+- [ ] Observabilidad: métricas + alertas para webhooks/dunning; runbooks de soporte.
 - [ ] Documentación de soporte (FAQs, scripts de migración, manual de facturación).
+- [ ] Plan de migración (grandfathering) comunicando fechas y pasos.
 - [ ] Backups verificados y plan de recuperación probado.
 
 ---
 
 Con este plan podemos implementar un flujo autoservicio completo, escalable y alineado con las mejores prácticas de suscripción SaaS. Cada fase puede desarrollarse y desplegarse incrementalmente bajo feature flags para minimizar riesgo. 
+
+## 12. Runbooks y soporte
+
+- Se documento el procedimiento operativo en docs/runbooks/subscriptions.md. El runbook explica como consultar las metricas publicadas (kubectl port-forward svc/billing-metrics 9000:9000, ejemplos de PromQL), como responder a cada alerta (revisar logs de SubscriptionsService, reintentar webhook desde MercadoPago, forzar 
+etryInvoice, activar job de dunning manual) y el flujo de escalamiento (Soporte N1 ? Billing Oncall ? Producto/Comercial).
+- El documento tambien lista los scripts de soporte planificados (backend/scripts/assign-legacy-plan.ts, backend/scripts/schedule-migration.ts) y el endpoint administrativo POST /api/admin/subscriptions/:orgId/migrate; hoy siguen marcados como **pendientes**, pero el runbook ya describe el contrato esperado para cuando se implementen.

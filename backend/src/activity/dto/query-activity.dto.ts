@@ -4,6 +4,7 @@ import {
   IsString,
   Min,
   IsDateString,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -43,4 +44,9 @@ export class QueryActivityDto {
   @IsOptional()
   @IsDateString()
   dateTo?: string;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  excludeContextUpdates?: boolean;
 }

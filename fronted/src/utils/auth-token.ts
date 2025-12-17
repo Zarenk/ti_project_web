@@ -48,7 +48,24 @@ function readCookieValue(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null
 }
 
-export async function getAuthHeaders(): Promise<Record<string, string>> {
+type TenantOverride = {
+  orgId?: number | string | null
+  companyId?: number | string | null
+  tenantSlug?: string | null
+}
+
+function coerceHeaderValue(
+  value: number | string | null | undefined,
+): string | null {
+  if (value == null) return null
+  if (typeof value === "string" && value.trim() === "") return null
+  if (typeof value === "number" && !Number.isFinite(value)) return null
+  return String(value)
+}
+
+export async function getAuthHeaders(
+  overrides?: TenantOverride,
+): Promise<Record<string, string>> {
   const token = await getAuthToken()
   const headers: Record<string, string> = {}
 
@@ -123,6 +140,22 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 
   if (resolvedSlug && !headers["x-tenant-slug"]) {
     headers["x-tenant-slug"] = resolvedSlug
+  }
+
+  if (overrides) {
+    const maybeOrg = coerceHeaderValue(overrides.orgId)
+    const maybeCompany = coerceHeaderValue(overrides.companyId)
+    const maybeSlug = coerceHeaderValue(overrides.tenantSlug)
+
+    if (maybeOrg !== null) {
+      headers["x-org-id"] = maybeOrg
+    }
+    if (maybeCompany !== null) {
+      headers["x-company-id"] = maybeCompany
+    }
+    if (maybeSlug !== null) {
+      headers["x-tenant-slug"] = maybeSlug
+    }
   }
 
   return headers

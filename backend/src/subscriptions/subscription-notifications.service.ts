@@ -16,17 +16,32 @@ interface TrialExpiredPayload {
   planName?: string | null;
 }
 
-interface SignupWelcomePayload {
-  email: string;
-  fullName?: string | null;
-  organizationName: string;
-}
-
 interface SignupVerificationPayload {
   email: string;
   fullName?: string | null;
   organizationName: string;
   token: string;
+}
+
+interface InvoiceFailurePayload {
+  organizationId: number;
+  invoiceId: number;
+  amount: string;
+  currency: string;
+  planName?: string | null;
+  nextAttemptAt?: Date | null;
+}
+
+interface InvoiceDunningAttemptPayload {
+  organizationId: number;
+  invoiceId: number;
+  attempt: number;
+  checkoutUrl?: string;
+}
+
+interface InvoiceDunningFinalPayload {
+  organizationId: number;
+  invoiceId: number;
 }
 
 @Injectable()
@@ -156,51 +171,111 @@ export class SubscriptionNotificationsService {
     }
   }
 
-  async sendSignupWelcome(payload: SignupWelcomePayload) {
-    const recipients = payload.email ? [payload.email] : [];
-    if (!this.canSend(recipients)) return;
-    const loginUrl = this.resolvePortalLoginUrl();
-    const greeting = payload.fullName
-      ? `Hola ${payload.fullName.split(' ')[0]},`
-      : 'Hola,';
-    const body = [
-      greeting,
-      '',
-      `Ya está listo el entorno demo para ${payload.organizationName}.`,
-      'Ingresa con tu correo y la contraseña que registraste durante el proceso de alta.',
-      '',
-      `Portal: ${loginUrl}`,
-      '',
-      'Si no solicitaste esta cuenta puedes ignorar este mensaje.',
-    ].join('\n');
-    await this.sendEmail(
-      recipients,
-      'Tu entorno demo está listo',
-      body,
-    );
-  }
-
   async sendSignupVerification(payload: SignupVerificationPayload) {
     const recipients = payload.email ? [payload.email] : [];
     if (!this.canSend(recipients)) return;
     const verifyUrl = this.resolvePortalVerificationUrl(payload.token);
+    const loginUrl = this.resolvePortalLoginUrl();
     const greeting = payload.fullName
       ? `Hola ${payload.fullName.split(' ')[0]},`
       : 'Hola,';
+    const organization =
+      payload.organizationName?.trim() || 'tu organización';
     const body = [
       greeting,
       '',
-      `Para activar el acceso a ${payload.organizationName}, confirma tu correo con el siguiente enlace:`,
-      verifyUrl,
+      `¡Bienvenido a ${organization}!`,
+      'Para activar tu entorno demo sigue estos pasos:',
+      '',
+      `1) Confirma tu correo con este enlace: ${verifyUrl}`,
+      `2) Luego ingresa con tu correo y contraseña registrada en: ${loginUrl}`,
+      '',
+      'El enlace de verificación expira en 72 horas.',
       '',
       'Si no solicitaste esta cuenta puedes ignorar este mensaje.',
     ].join('\n');
 
     await this.sendEmail(
       recipients,
-      'Confirma tu correo para activar tu demo',
+      'Activa tu demo y accede al portal',
       body,
     );
+  }
+
+  async sendInvoicePaymentFailed(payload: InvoiceFailurePayload) {
+    const recipients = await this.getRecipients(payload.organizationId);
+    if (!this.canSend(recipients)) return;
+
+    const subject = `Problema al cobrar la factura #${payload.invoiceId}`;
+    const nextAttempt = payload.nextAttemptAt
+      ? payload.nextAttemptAt.toLocaleDateString('es-PE', {
+          day: '2-digit',
+          month: 'long',
+          year: 'numeric',
+        })
+      : null;
+    const billingUrl = this.resolveBillingUrl(
+      payload.organizationId,
+      payload.invoiceId,
+    );
+
+    const body = [
+      'Hola,',
+      '',
+      `No pudimos completar el cobro de la factura #${payload.invoiceId}.`,
+      `Importe: ${this.formatCurrency(payload.amount, payload.currency)}.`,
+      payload.planName ? `Plan: ${payload.planName}.` : undefined,
+      nextAttempt
+        ? `Programaremos un nuevo intento el ${nextAttempt}.`
+        : 'Programaremos nuevos reintentos automáticos.',
+      '',
+      `Puedes actualizar el método de pago o pagar manualmente aquí: ${billingUrl}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    await this.sendEmail(recipients, subject, body);
+  }
+
+  async sendInvoiceDunningScheduled(payload: InvoiceDunningAttemptPayload) {
+    const recipients = await this.getRecipients(payload.organizationId);
+    if (!this.canSend(recipients)) return;
+
+    const subject = `Reintentaremos el cobro de la factura #${payload.invoiceId}`;
+    const checkoutUrl =
+      payload.checkoutUrl ??
+      this.resolveBillingUrl(payload.organizationId, payload.invoiceId);
+
+    const body = [
+      'Hola,',
+      '',
+      `Se generó el intento de cobro #${payload.attempt} para la factura #${payload.invoiceId}.`,
+      `Si prefieres pagarlo ahora puedes usar este enlace: ${checkoutUrl}`,
+    ].join('\n');
+
+    await this.sendEmail(recipients, subject, body);
+  }
+
+  async sendInvoiceDunningFinalNotice(payload: InvoiceDunningFinalPayload) {
+    const recipients = await this.getRecipients(payload.organizationId);
+    if (!this.canSend(recipients)) return;
+
+    const subject = `Suspensión de factura #${payload.invoiceId}`;
+    const billingUrl = this.resolveBillingUrl(
+      payload.organizationId,
+      payload.invoiceId,
+    );
+
+    const body = [
+      'Hola,',
+      '',
+      `No pudimos completar el cobro de la factura #${payload.invoiceId} tras múltiples intentos.`,
+      'El acceso quedará restringido hasta que registres un pago exitoso.',
+      '',
+      `Gestiona el pago desde: ${billingUrl}`,
+    ].join('\n');
+
+    await this.sendEmail(recipients, subject, body);
   }
 
   private resolvePortalLoginUrl() {
@@ -225,5 +300,30 @@ export class SubscriptionNotificationsService {
     const url = explicit ? base : `${base}/portal/verify`;
     const separator = url.includes('?') ? '&' : '?';
     return `${url}${separator}token=${encodeURIComponent(token)}`;
+  }
+
+  private resolveBillingUrl(organizationId: number, invoiceId?: number) {
+    const base =
+      this.configService.get<string>('PORTAL_BILLING_URL') ??
+      this.configService.get<string>('PUBLIC_URL') ??
+      'https://app.facturacloud.pe';
+    const normalized = base.replace(/\/$/, '');
+    const params = new URLSearchParams({
+      org: String(organizationId),
+      ...(invoiceId ? { invoice: String(invoiceId) } : {}),
+    }).toString();
+    return `${normalized}/dashboard/account/billing?${params}`;
+  }
+
+  private formatCurrency(value: string, currency: string) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+      return new Intl.NumberFormat('es-PE', {
+        style: 'currency',
+        currency: currency || 'PEN',
+        minimumFractionDigits: 2,
+      }).format(numeric);
+    }
+    return `${currency} ${value}`;
   }
 }

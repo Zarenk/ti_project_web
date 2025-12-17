@@ -1218,7 +1218,9 @@ export class TenancyService {
     prisma: Prisma.TransactionClient | PrismaService,
     organizationId: number,
   ): Promise<OrganizationSuperAdmin | null> {
-    const membership = await (prisma as any).organizationMembership.findFirst({
+    const client = prisma as Prisma.TransactionClient;
+
+    const membership = await client.organizationMembership.findFirst({
       where: { organizationId, role: 'SUPER_ADMIN' },
       include: {
         user: {
@@ -1228,14 +1230,36 @@ export class TenancyService {
       orderBy: { id: 'asc' },
     });
 
-    if (!membership?.user) {
+    if (membership?.user) {
+      return {
+        id: membership.user.id,
+        username: membership.user.username,
+        email: membership.user.email,
+      };
+    }
+
+    const ownerMembership = await client.organizationMembership.findFirst({
+      where: { organizationId, role: 'OWNER' },
+      include: {
+        user: { select: { id: true, username: true, email: true } },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    if (!ownerMembership?.user) {
       return null;
     }
 
+    await client.organizationMembership.update({
+      where: { id: ownerMembership.id },
+      data: { role: 'SUPER_ADMIN' },
+    });
+    await this.promoteUserToOrganizationSuperAdmin(prisma, ownerMembership.user.id);
+
     return {
-      id: membership.user.id,
-      username: membership.user.username,
-      email: membership.user.email,
+      id: ownerMembership.user.id,
+      username: ownerMembership.user.username,
+      email: ownerMembership.user.email,
     };
   }
 
@@ -2023,10 +2047,10 @@ export class TenancyService {
   }
 
   private async promoteUserToOrganizationSuperAdmin(
-    prisma: PrismaService,
+    prisma: PrismaService | Prisma.TransactionClient,
     userId: number,
   ): Promise<void> {
-    const user = await prisma.user.findUnique({
+    const user = await (prisma as Prisma.TransactionClient).user.findUnique({
       where: { id: userId },
       select: { role: true },
     });
@@ -2047,7 +2071,7 @@ export class TenancyService {
       return;
     }
 
-    await prisma.user.update({
+    await (prisma as Prisma.TransactionClient).user.update({
       where: { id: userId },
       data: { role: 'SUPER_ADMIN_ORG' },
     });

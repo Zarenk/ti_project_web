@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { loginUser } from '../dashboard/users/users.api';
+import { resendVerificationEmail } from '@/app/signup/api/verification';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -14,6 +15,8 @@ import { useAuth } from '@/context/auth-context';
 import { getUserDataFromToken } from '@/lib/auth';
 import { getAuthToken } from '@/utils/auth-token';
 import { jwtDecode } from 'jwt-decode';
+import { clearTenantSelection } from '@/utils/tenant-preferences';
+import { clearContextPreferences } from '@/utils/context-preferences';
 
 type AttemptState = {
   count: number;
@@ -95,6 +98,9 @@ export default function LoginForm() {
     message: string;
   } | null>(null);
   const [showRecovery, setShowRecovery] = useState(false);
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
+  const [resendVerificationStatus, setResendVerificationStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [resendVerificationLoading, setResendVerificationLoading] = useState(false);
   const router = useRouter();
   const { refreshUser } = useAuth();
 
@@ -194,7 +200,11 @@ export default function LoginForm() {
 
     try {
       await loginUser(normalizedEmail, password);
+      clearTenantSelection();
+      clearContextPreferences();
       await refreshUser();
+      setPendingVerificationEmail(null);
+      setResendVerificationStatus(null);
       setAttemptState(null);
       persistAttemptState(normalizedEmail, null);
       toast.success('Inicio de sesion exitoso');
@@ -239,6 +249,14 @@ export default function LoginForm() {
         setLoading(false);
       }
     } catch (error: any) {
+      if (error?.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        const emailForResend = error?.email || normalizedEmail;
+        setPendingVerificationEmail(emailForResend);
+        setResendVerificationStatus(null);
+        toast.error(error?.message || 'Debes verificar tu correo antes de continuar.');
+        setLoading(false);
+        return;
+      }
       const nextCount = (attemptState?.count ?? 0) + 1;
       const nextState: AttemptState = {
         count: nextCount,
@@ -335,6 +353,28 @@ export default function LoginForm() {
     setRecoveryLoading(false);
   };
 
+  const handleResendVerification = async () => {
+    if (!pendingVerificationEmail || resendVerificationLoading) {
+      return;
+    }
+    setResendVerificationLoading(true);
+    setResendVerificationStatus(null);
+    try {
+      const data = await resendVerificationEmail(pendingVerificationEmail);
+      const message =
+        data?.message || 'Te enviamos un nuevo correo de verificación.';
+      setResendVerificationStatus({ type: 'success', message });
+      toast.success(message);
+    } catch (error: any) {
+      const message =
+        error?.message || 'No pudimos reenviar el correo de verificación.';
+      setResendVerificationStatus({ type: 'error', message });
+      toast.error(message);
+    } finally {
+      setResendVerificationLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <form onSubmit={handleLogin} className="flex flex-col gap-4" aria-busy={loading}>
@@ -389,6 +429,32 @@ export default function LoginForm() {
           {loading ? 'Iniciando...' : 'Iniciar Sesion'}
         </Button>
       </form>
+      {pendingVerificationEmail && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+          <p className="text-sm font-medium">
+            Necesitas confirmar tu correo antes de iniciar sesión. Revisa la bandeja de {pendingVerificationEmail} o
+            solicita un nuevo enlace.
+          </p>
+          {resendVerificationStatus && (
+            <p
+              className={`mt-2 text-sm ${
+                resendVerificationStatus.type === 'error' ? 'text-red-700' : 'text-emerald-700'
+              }`}
+            >
+              {resendVerificationStatus.message}
+            </p>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-3 w-full hover:cursor-pointer disabled:cursor-not-allowed"
+            onClick={handleResendVerification}
+            disabled={resendVerificationLoading}
+          >
+            {resendVerificationLoading ? 'Enviando...' : 'Reenviar correo de verificación'}
+          </Button>
+        </div>
+      )}
       <div className="relative my-4">
         <Separator className="bg-slate-200" />
         <div className="absolute inset-0 flex justify-center">

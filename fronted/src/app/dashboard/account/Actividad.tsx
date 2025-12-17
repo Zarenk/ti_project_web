@@ -1,6 +1,6 @@
 "use client"
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import RequireAdmin from "@/components/require-admin";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/context/auth-context";
+import {
+  listOrganizationsWithCompanies,
+  OrganizationCompaniesOverview,
+} from "@/app/dashboard/tenancy/tenancy.api";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
@@ -47,9 +54,13 @@ interface AuditLog {
   ip?: string | null;
   userAgent?: string | null;
   createdAt: string;
+  organization?: { id: number; name: string | null } | null;
+  company?: { id: number; name: string | null } | null;
 }
 
 export default function Actividad() {
+  const { role } = useAuth();
+  const isSuperAdmin = role === "SUPER_ADMIN_GLOBAL";
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -59,6 +70,12 @@ export default function Actividad() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [orgsLoading, setOrgsLoading] = useState(false);
+  const [orgsError, setOrgsError] = useState<string | null>(null);
+  const [orgOptions, setOrgOptions] = useState<OrganizationCompaniesOverview[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string>("");
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
+  const [hideContextUpdates, setHideContextUpdates] = useState(true);
 
   const formatTimestamp = (value: string) =>
     formatInTimeZone(new Date(value), "America/Lima", "yyyy-MM-dd HH:mm");
@@ -125,11 +142,68 @@ const matchesCategory = (log: AuditLog, filter: string) => {
   }
 };
 
+const isContextUpdateLog = (log: AuditLog) => {
+  const summary = (log.summary ?? "").toLowerCase();
+  if (!summary) return false;
+  if (summary.includes("actualizo el contexto")) return true;
+  if (summary.includes("contexto a org")) return true;
+  if (summary.includes("actualizó el contexto")) return true;
+  return false;
+};
+
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      setOrgOptions([]);
+      setSelectedOrgId("");
+      setSelectedCompanyId("");
+      return;
+    }
+
+    let cancelled = false;
+    const loadOrgs = async () => {
+      setOrgsLoading(true);
+      try {
+        const data = await listOrganizationsWithCompanies();
+        if (!cancelled) {
+          setOrgOptions(data);
+          setOrgsError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setOrgOptions([]);
+          setOrgsError("No se pudieron obtener las organizaciones");
+        }
+      } finally {
+        if (!cancelled) {
+          setOrgsLoading(false);
+        }
+      }
+    };
+
+    loadOrgs();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSuperAdmin]);
+
+  const companyOptions = useMemo(() => {
+    if (!selectedOrgId) return [];
+    const org = orgOptions.find((org) => String(org.id) === String(selectedOrgId));
+    return org?.companies ?? [];
+  }, [orgOptions, selectedOrgId]);
+
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
-        const headers = await getAuthHeaders();
+        const overrides =
+          isSuperAdmin && selectedOrgId
+            ? {
+                orgId: Number(selectedOrgId),
+                companyId: selectedCompanyId ? Number(selectedCompanyId) : undefined,
+              }
+            : undefined;
+        const headers = await getAuthHeaders(overrides);
         const params = new URLSearchParams({
           page: String(page),
           pageSize: String(pageSize),
@@ -138,6 +212,9 @@ const matchesCategory = (log: AuditLog, filter: string) => {
         if (specificDate) {
           params.append("dateFrom", startOfDay(specificDate).toISOString());
           params.append("dateTo", endOfDay(specificDate).toISOString());
+        }
+        if (hideContextUpdates) {
+          params.append("excludeContextUpdates", "true");
         }
         const res = await fetch(
           `${BACKEND_URL}/api/activity?${params.toString()}`,
@@ -165,9 +242,13 @@ const matchesCategory = (log: AuditLog, filter: string) => {
       }
     }
     load();
-  }, [page, search, specificDate, categoryFilter]);
+  }, [page, search, specificDate, categoryFilter, isSuperAdmin, selectedOrgId, selectedCompanyId, hideContextUpdates]);
 
-  const filteredLogs = logs.filter((log) => matchesCategory(log, categoryFilter));
+  const filteredLogs = logs.filter(
+    (log) =>
+      matchesCategory(log, categoryFilter) &&
+      (!hideContextUpdates || !isContextUpdateLog(log)),
+  );
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -232,9 +313,85 @@ const matchesCategory = (log: AuditLog, filter: string) => {
                 Limpiar fecha
               </Button>
             ) : null}
+            <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+              <Switch
+                id="hide-context-updates"
+                checked={hideContextUpdates}
+                onCheckedChange={(checked) => {
+                  setHideContextUpdates(checked);
+                  setPage(1);
+                }}
+                aria-label="Ocultar actualizaciones de contexto"
+              />
+              <Label htmlFor="hide-context-updates" className="text-xs font-medium">
+                Ocultar actualizaciones de contexto
+              </Label>
+            </div>
           </div>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {isSuperAdmin && orgsError && (
+          <p className="text-sm text-red-600">{orgsError}</p>
+        )}
+        {isSuperAdmin && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Select
+              value={selectedOrgId || "all"}
+              onValueChange={(value) => {
+                const nextValue = value === "all" ? "" : value;
+                setSelectedOrgId(nextValue);
+                setSelectedCompanyId("");
+                setPage(1);
+              }}
+              disabled={orgsLoading}
+            >
+              <SelectTrigger className="w-full sm:w-[260px]">
+                <SelectValue
+                  placeholder={
+                    orgsLoading ? "Cargando organizaciones..." : "Todas las organizaciones"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las organizaciones</SelectItem>
+                {orgOptions.map((org) => (
+                  <SelectItem key={org.id} value={String(org.id)}>
+                    {org.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={selectedCompanyId || "all"}
+              onValueChange={(value) => {
+                const nextValue = value === "all" ? "" : value;
+                setSelectedCompanyId(nextValue);
+                setPage(1);
+              }}
+              disabled={!selectedOrgId || companyOptions.length === 0}
+            >
+              <SelectTrigger className="w-full sm:w-[260px]">
+                <SelectValue
+                  placeholder={
+                    !selectedOrgId
+                      ? "Selecciona una organización"
+                      : companyOptions.length === 0
+                        ? "Sin empresas disponibles"
+                        : "Todas las empresas"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las empresas</SelectItem>
+                {companyOptions.map((company) => (
+                  <SelectItem key={company.id} value={String(company.id)}>
+                    {company.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         {loading ? (
           <p className="text-sm text-slate-500">Cargando...</p>
         ) : filteredLogs.length === 0 ? (
@@ -250,6 +407,8 @@ const matchesCategory = (log: AuditLog, filter: string) => {
                     <TableHead>Accion</TableHead>
                     <TableHead>Entidad</TableHead>
                     <TableHead>ID</TableHead>
+                    <TableHead>Organizaci&oacute;n</TableHead>
+                    <TableHead>Empresa</TableHead>
                     <TableHead>Resumen</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
@@ -262,6 +421,8 @@ const matchesCategory = (log: AuditLog, filter: string) => {
                       <TableCell>{log.action}</TableCell>
                       <TableCell>{log.entityType || "-"}</TableCell>
                       <TableCell>{log.entityId || "-"}</TableCell>
+                      <TableCell>{log.organization?.name ?? "-"}</TableCell>
+                      <TableCell>{log.company?.name ?? "-"}</TableCell>
                       <TableCell>{log.summary || "-"}</TableCell>
                       <TableCell>
                         <ActivityDetailDialog
@@ -307,6 +468,18 @@ const matchesCategory = (log: AuditLog, filter: string) => {
                     <div className="flex items-start justify-between gap-2 text-xs">
                       <span className="font-medium text-foreground">ID:</span>
                       <span className="text-right">{log.entityId || "-"}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-2 text-xs">
+                      <span className="font-medium text-foreground">Organización:</span>
+                      <span className="text-right">
+                        {log.organization?.name ?? "-"}
+                      </span>
+                    </div>
+                    <div className="flex items-start justify-between gap-2 text-xs">
+                      <span className="font-medium text-foreground">Empresa:</span>
+                      <span className="text-right">
+                        {log.company?.name ?? "-"}
+                      </span>
                     </div>
                   </div>
                   {log.summary ? (

@@ -61,3 +61,25 @@ export function updateContextPreferences(
 export function shouldRememberContext(): boolean {
   return getContextPreferences().rememberLastContext
 }
+
+export function clearContextPreferences(): void {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    window.dispatchEvent(
+      new CustomEvent<ContextPreferences>("context-preferences-change", {
+        detail: DEFAULT_PREFERENCES,
+      }),
+    )
+  } catch {
+    /* ignore */
+  }
+}

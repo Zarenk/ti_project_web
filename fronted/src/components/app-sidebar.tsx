@@ -321,6 +321,11 @@ const data: SidebarData = {
       icon: Home,
     },
     {
+      name: "Onboarding",
+      url: "/dashboard/onboarding",
+      icon: Map,
+    },
+    {
       name: "Escaner QR",
       url: "/barcode",
       icon: QrCode,

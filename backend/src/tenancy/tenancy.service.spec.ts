@@ -563,6 +563,66 @@ describe('TenancyService', () => {
     ]);
   });
 
+  it('promotes the owner to super admin when none exists', async () => {
+    const createdAt = new Date('2024-06-10T00:00:00.000Z');
+    const updatedAt = new Date('2024-06-10T00:30:00.000Z');
+
+    prisma.organization.findMany.mockResolvedValue([
+      {
+        id: 99,
+        name: 'Atlas Labs',
+        code: 'ATLAB',
+        status: 'ACTIVE',
+        createdAt,
+        updatedAt,
+        units: [],
+        companies: [],
+        _count: { memberships: 1 },
+      },
+    ]);
+
+    prisma.organizationMembership.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 800,
+        organizationId: 99,
+        role: 'OWNER',
+        userId: 400,
+        user: {
+          id: 400,
+          username: 'carmencita-lara',
+          email: 'carmencita@example.com',
+        },
+      });
+
+    prisma.organizationMembership.update.mockResolvedValue({
+      id: 800,
+      organizationId: 99,
+      role: 'SUPER_ADMIN',
+    });
+
+    prisma.user.findUnique.mockResolvedValue({
+      id: 400,
+      role: 'ADMIN',
+    });
+
+    const result = await service.listCompanies(baseTenant);
+
+    expect(prisma.organizationMembership.update).toHaveBeenCalledWith({
+      where: { id: 800 },
+      data: { role: 'SUPER_ADMIN' },
+    });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 400 },
+      data: { role: 'SUPER_ADMIN_ORG' },
+    });
+    expect(result[0].superAdmin).toEqual({
+      id: 400,
+      username: 'carmencita-lara',
+      email: 'carmencita@example.com',
+    });
+  });
+
   it('retrieves a single organization by id', async () => {
     const createdAt = new Date('2024-05-15T00:00:00.000Z');
     const updatedAt = new Date('2024-05-15T01:00:00.000Z');

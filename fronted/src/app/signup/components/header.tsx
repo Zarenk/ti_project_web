@@ -37,7 +37,7 @@ export default function Header() {
           <div className="hidden md:flex items-center gap-3">
             <ModeToggle />
             <Button asChild variant="ghost">
-              <Link href="/login">Iniciar Sesión</Link>
+              <Link href="/portal/login">Iniciar Sesion</Link>
             </Button>
             <Button asChild>
               <Link href="/signup#signup-form">Probar Gratis</Link>
@@ -67,7 +67,7 @@ export default function Header() {
             <div className="flex flex-col gap-2 pt-2">
               <ModeToggle />
               <Button asChild variant="ghost">
-                <Link href="/login">Iniciar Sesión</Link>
+                <Link href="/portal/login">Iniciar Sesion</Link>
               </Button>
               <Button asChild>
                 <Link href="/signup#signup-form">Probar Gratis</Link>
