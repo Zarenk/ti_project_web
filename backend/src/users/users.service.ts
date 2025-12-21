@@ -191,13 +191,12 @@ export class UsersService {
   }
 
   async login(user: any, req?: Request) {
-    const memberships = await this.prismaService.organizationMembership.findMany(
-      {
+    const memberships =
+      await this.prismaService.organizationMembership.findMany({
         where: { userId: user.id },
         select: { organizationId: true },
         orderBy: { createdAt: 'asc' },
-      },
-    );
+      });
     const organizationIds = memberships
       .map((membership) => membership.organizationId)
       .filter(
@@ -205,13 +204,9 @@ export class UsersService {
       );
 
     const fallbackOrgId =
-      user.lastOrgId ??
-      user.organizationId ??
-      organizationIds[0] ??
-      null;
+      user.lastOrgId ?? user.organizationId ?? organizationIds[0] ?? null;
 
-    let defaultCompanyId: number | null =
-      user.lastCompanyId ?? null;
+    let defaultCompanyId: number | null = user.lastCompanyId ?? null;
     if (!defaultCompanyId && fallbackOrgId) {
       const firstCompany = await this.prismaService.company.findFirst({
         where: { organizationId: fallbackOrgId },
@@ -587,13 +582,11 @@ export class UsersService {
       throw new NotFoundException('Usuario no encontrado');
     }
 
-    let organization:
-      | {
-          id: number;
-          name: string | null;
-          status: string;
-        }
-      | null = null;
+    let organization: {
+      id: number;
+      name: string | null;
+      status: string;
+    } | null = null;
     let membership: { role: OrganizationMembershipRole } | null = null;
 
     try {
@@ -676,22 +669,20 @@ export class UsersService {
       reason: null,
       permissions,
       organization: {
-        id: organization!.id,
-        name: organization!.name?.trim() ?? null,
+        id: organization.id,
+        name: organization.name?.trim() ?? null,
       },
       company: companyPayload,
     };
   }
 
   async getContextSuggestion(userId: number) {
-    const preference =
-      await this.prismaService.userContextPreference.findFirst({
+    const preference = await this.prismaService.userContextPreference.findFirst(
+      {
         where: { userId },
-        orderBy: [
-          { lastSelectedAt: 'desc' },
-          { totalSelections: 'desc' },
-        ],
-      });
+        orderBy: [{ lastSelectedAt: 'desc' }, { totalSelections: 'desc' }],
+      },
+    );
 
     if (!preference) {
       return { orgId: null, companyId: null };
@@ -971,9 +962,9 @@ export class UsersService {
     const now = Date.now();
     const windowStart = now - this.CONTEXT_RATE_LIMIT_WINDOW_MS;
     const attempts =
-      this.contextUpdateAttempts.get(userId)?.filter(
-        (timestamp) => timestamp > windowStart,
-      ) ?? [];
+      this.contextUpdateAttempts
+        .get(userId)
+        ?.filter((timestamp) => timestamp > windowStart) ?? [];
 
     if (attempts.length >= this.CONTEXT_RATE_LIMIT) {
       this.contextPrometheusService.recordRateLimitHit();
@@ -1004,15 +995,12 @@ export class UsersService {
     lastCompanyId: number | null;
     lastContextUpdatedAt: Date | null;
     lastContextHash: string | null;
-  }): Promise<
-    | {
-        orgId: number;
-        companyId: number | null;
-        updatedAt: string;
-        hash?: string | null;
-      }
-    | null
-  > {
+  }): Promise<{
+    orgId: number;
+    companyId: number | null;
+    updatedAt: string;
+    hash?: string | null;
+  } | null> {
     if (!user.lastOrgId || !user.lastContextUpdatedAt) {
       return null;
     }
@@ -1094,22 +1082,20 @@ export class UsersService {
         );
       }
 
-      const membership = await this.prismaService.organizationMembership.findFirst(
-        {
+      const membership =
+        await this.prismaService.organizationMembership.findFirst({
           where: { userId: user.id, organizationId },
           select: { role: true },
-        },
-      );
+        });
 
       return { organization, membership };
     }
 
-    const membership = await this.prismaService.organizationMembership.findFirst(
-      {
+    const membership =
+      await this.prismaService.organizationMembership.findFirst({
         where: { userId: user.id, organizationId },
         select: { role: true },
-      },
-    );
+      });
 
     if (!membership) {
       throw new ForbiddenException(
@@ -1141,9 +1127,7 @@ export class UsersService {
 
     const normalizedStatus = (company.status ?? '').toUpperCase();
     if (normalizedStatus && normalizedStatus !== 'ACTIVE') {
-      throw new ForbiddenException(
-        'La empresa seleccionada no esta activa.',
-      );
+      throw new ForbiddenException('La empresa seleccionada no esta activa.');
     }
 
     return { id: company.id, name: company.name };
@@ -1236,11 +1220,7 @@ export class UsersService {
     });
   }
 
-  async listContextHistory(
-    userId: number,
-    limitValue = 10,
-    cursorId?: number,
-  ) {
+  async listContextHistory(userId: number, limitValue = 10, cursorId?: number) {
     const limit = Math.min(Math.max(limitValue || 10, 1), 50);
     const query: Prisma.UserContextHistoryFindManyArgs = {
       where: { userId },
@@ -1264,11 +1244,7 @@ export class UsersService {
     };
   }
 
-  async restoreFromHistory(
-    userId: number,
-    historyId: number,
-    req?: Request,
-  ) {
+  async restoreFromHistory(userId: number, historyId: number, req?: Request) {
     const entry = await this.prismaService.userContextHistory.findFirst({
       where: { id: historyId, userId },
     });

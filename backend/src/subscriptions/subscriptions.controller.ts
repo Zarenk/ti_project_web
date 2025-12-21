@@ -85,7 +85,10 @@ export class SubscriptionsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ManagePaymentMethodDto,
   ) {
-    return this.subscriptionsService.removePaymentMethod(dto.organizationId, id);
+    return this.subscriptionsService.removePaymentMethod(
+      dto.organizationId,
+      id,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -136,8 +139,22 @@ export class SubscriptionsController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me/summary')
-  getMySummary(@Request() req: { user: { userId: number } }) {
-    return this.subscriptionsService.getSummaryForUser(req.user.userId);
+  getMySummary(
+    @Request() req: { user: { userId: number; role?: string | null } },
+    @Query('organizationId') organizationId?: string,
+  ) {
+    const parsedOrgIdRaw =
+      typeof organizationId === 'string' && organizationId.length
+        ? Number.parseInt(organizationId, 10)
+        : undefined;
+    const parsedOrgId =
+      typeof parsedOrgIdRaw === 'number' && Number.isFinite(parsedOrgIdRaw)
+        ? parsedOrgIdRaw
+        : undefined;
+    return this.subscriptionsService.getSummaryForUser(req.user.userId, {
+      organizationId: parsedOrgId,
+      role: req.user.role ?? null,
+    });
   }
 
   @UseGuards(JwtAuthGuard)

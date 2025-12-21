@@ -9,8 +9,9 @@ export class MercadoPagoWebhookService {
   private readonly paymentApi?: Payment;
 
   constructor(private readonly configService: ConfigService) {
-    const accessToken =
-      this.configService.get<string>('MERCADOPAGO_ACCESS_TOKEN');
+    const accessToken = this.configService.get<string>(
+      'MERCADOPAGO_ACCESS_TOKEN',
+    );
     if (accessToken) {
       const client = new MercadoPagoConfig({ accessToken });
       this.paymentApi = new Payment(client);

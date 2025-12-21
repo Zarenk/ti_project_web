@@ -1,11 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Input } from "@/components/ui/input"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import {
   downloadOrganizationExport,
@@ -14,6 +15,8 @@ import {
   type OrganizationExport,
 } from "../billing.api"
 import { useAccountAccessGuard } from "../use-account-access"
+import { listOrganizationsWithCompanies, type OrganizationCompaniesOverview } from "@/app/dashboard/tenancy/tenancy.api"
+import { useAuth } from "@/context/auth-context"
 
 const EXPORT_STATUS_LABELS: Record<string, string> = {
   PENDING: "Pendiente",
@@ -33,39 +36,121 @@ const CLEANUP_STATUS_LABELS: Record<string, string> = {
 export default function ExportsPage() {
   const accessReady = useAccountAccessGuard()
   const { selection } = useTenantSelection()
+  const { role } = useAuth()
+  const normalizedRole = role?.toUpperCase() ?? ""
+  const isGlobalSuperAdmin = normalizedRole === "SUPER_ADMIN_GLOBAL"
   const [organizationExports, setOrganizationExports] = useState<OrganizationExport[]>([])
   const [exportsLoading, setExportsLoading] = useState(false)
   const [requestingExport, setRequestingExport] = useState(false)
   const [downloadingExportId, setDownloadingExportId] = useState<number | null>(null)
+  const [orgTargets, setOrgTargets] = useState<OrganizationCompaniesOverview[]>([])
+  const [orgTargetsLoading, setOrgTargetsLoading] = useState(false)
+  const [orgTargetsError, setOrgTargetsError] = useState<string | null>(null)
+  const [orgSearch, setOrgSearch] = useState("")
+  const [orgPreview, setOrgPreview] = useState<Record<number, OrganizationExport | null>>({})
+  const [globalSelectedOrgId, setGlobalSelectedOrgId] = useState<number | null>(null)
+  const [globalSelectedOrgName, setGlobalSelectedOrgName] = useState<string | null>(null)
+  const targetOrgId = isGlobalSuperAdmin ? globalSelectedOrgId : selection?.orgId ?? null
 
   const refreshExports = useCallback(() => {
-    if (!selection?.orgId) {
+    if (!targetOrgId) {
       setOrganizationExports([])
       return
     }
     setExportsLoading(true)
-    fetchOrganizationExports(selection.orgId)
+    fetchOrganizationExports(targetOrgId)
       .then((items) => setOrganizationExports(items))
       .catch((error) => {
         console.error(error)
         toast.error(error instanceof Error ? error.message : "No se pudo obtener las exportaciones.")
       })
       .finally(() => setExportsLoading(false))
-  }, [selection?.orgId])
+  }, [targetOrgId])
 
   useEffect(() => {
     if (!accessReady) return
     refreshExports()
   }, [accessReady, refreshExports])
 
+  const refreshOrgTargets = useCallback(async () => {
+    if (!isGlobalSuperAdmin) return
+    setOrgTargetsLoading(true)
+    try {
+      const orgs = await listOrganizationsWithCompanies()
+      setOrgTargets(orgs)
+      const entries = await Promise.all(
+        orgs.map(async (org) => {
+          try {
+            const exports = await fetchOrganizationExports(org.id)
+            const sorted = exports
+              .slice()
+              .sort(
+                (a, b) =>
+                  new Date(b.requestedAt ?? b.completedAt ?? "").getTime() -
+                  new Date(a.requestedAt ?? a.completedAt ?? "").getTime()
+              )
+            return [org.id, sorted[0] ?? null] as const
+          } catch (error) {
+            console.error("[exports] preview", org.id, error)
+            return [org.id, null] as const
+          }
+        })
+      )
+      setOrgPreview(Object.fromEntries(entries))
+      setOrgTargetsError(null)
+    } catch (error) {
+      console.error("[exports] organizations", error)
+      setOrgTargets([])
+      setOrgPreview({})
+      setOrgTargetsError("No pudimos obtener las organizaciones disponibles.")
+    } finally {
+      setOrgTargetsLoading(false)
+    }
+  }, [isGlobalSuperAdmin])
+
+  useEffect(() => {
+    if (!accessReady || !isGlobalSuperAdmin) return
+    refreshOrgTargets()
+  }, [accessReady, isGlobalSuperAdmin, refreshOrgTargets])
+
+  useEffect(() => {
+    if (!isGlobalSuperAdmin) {
+      setGlobalSelectedOrgId(null)
+      setGlobalSelectedOrgName(null)
+      return
+    }
+    if (!globalSelectedOrgId) return
+    const match = orgTargets.find((org) => org.id === globalSelectedOrgId)
+    if (!match) {
+      setGlobalSelectedOrgId(null)
+      setGlobalSelectedOrgName(null)
+    } else {
+      setGlobalSelectedOrgName(match.name)
+    }
+  }, [isGlobalSuperAdmin, orgTargets, globalSelectedOrgId])
+
+  const filteredOrgTargets = useMemo(() => {
+    const needle = orgSearch.trim().toLowerCase()
+    if (!needle) return orgTargets
+    return orgTargets.filter((org) => {
+      const name = org.name.toLowerCase()
+      const code = (org.code ?? "").toLowerCase()
+      const admin = org.superAdmin?.username?.toLowerCase() ?? ""
+      const email = org.superAdmin?.email?.toLowerCase() ?? ""
+      return name.includes(needle) || code.includes(needle) || admin.includes(needle) || email.includes(needle)
+    })
+  }, [orgTargets, orgSearch])
+
+  const targetOrgName = isGlobalSuperAdmin ? globalSelectedOrgName : null
+
   const handleRequest = async () => {
-    if (!selection?.orgId) {
+    if (!targetOrgId) {
       toast.error("Selecciona una organización antes de solicitar la exportación.")
       return
     }
     setRequestingExport(true)
     try {
-      await requestOrganizationExport(selection.orgId)
+      await requestOrganizationExport(targetOrgId)
       toast.success("Estamos preparando tu exportación. Te avisaremos cuando esté lista.")
       refreshExports()
     } catch (error) {
@@ -77,13 +162,13 @@ export default function ExportsPage() {
   }
 
   const handleDownload = async (exportId: number) => {
-    if (!selection?.orgId) {
+    if (!targetOrgId) {
       toast.error("Selecciona una organización activa para descargar la exportación.")
       return
     }
     setDownloadingExportId(exportId)
     try {
-      const blob = await downloadOrganizationExport(selection.orgId, exportId)
+      const blob = await downloadOrganizationExport(targetOrgId, exportId)
       const url = URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = url
@@ -135,16 +220,37 @@ export default function ExportsPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+        {isGlobalSuperAdmin ? (
+          <GlobalExportsAdminCard
+            loading={orgTargetsLoading}
+            error={orgTargetsError}
+            organizations={filteredOrgTargets}
+            previews={orgPreview}
+            search={orgSearch}
+            onSearchChange={setOrgSearch}
+            onRefresh={refreshOrgTargets}
+            selectedOrgId={globalSelectedOrgId}
+            onSelect={(org) => {
+              setGlobalSelectedOrgId(org.id)
+              setGlobalSelectedOrgName(org.name)
+            }}
+          />
+        ) : null}
         <Card className="border-sky-100 shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <CardTitle className="text-slate-800 dark:text-slate-100">Solicitudes recientes</CardTitle>
-            <Button onClick={handleRequest} disabled={!selection?.orgId || requestingExport}>
+            <div>
+              <CardTitle className="text-slate-800 dark:text-slate-100">Solicitudes recientes</CardTitle>
+              {targetOrgName ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400">OrganizaciИn: {targetOrgName}</p>
+              ) : null}
+            </div>
+            <Button onClick={handleRequest} disabled={!targetOrgId || requestingExport}>
               {requestingExport ? "Programando..." : "Solicitar exportación"}
             </Button>
           </CardHeader>
           <CardContent className="space-y-6">
-            {!selection?.orgId ? (
+            {!targetOrgId ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 Selecciona una organización para solicitar o revisar exportaciones.
               </p>
@@ -250,4 +356,155 @@ function ExportsSkeleton() {
       </main>
     </div>
   )
+}
+
+type GlobalExportsAdminCardProps = {
+  loading: boolean
+  error: string | null
+  organizations: OrganizationCompaniesOverview[]
+  previews: Record<number, OrganizationExport | null>
+  search: string
+  onSearchChange: (value: string) => void
+  onRefresh: () => void
+  selectedOrgId: number | null
+  onSelect: (org: OrganizationCompaniesOverview) => void
+}
+
+function GlobalExportsAdminCard({
+  loading,
+  error,
+  organizations,
+  previews,
+  search,
+  onSearchChange,
+  onRefresh,
+  selectedOrgId,
+  onSelect,
+}: GlobalExportsAdminCardProps) {
+  return (
+    <Card className="border-violet-100 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <CardHeader>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle className="text-slate-800 dark:text-slate-100">Supervision de exportaciones</CardTitle>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Elige una organizacion para revisar o programar sus exportaciones de datos.
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Input
+              placeholder="Buscar por organizacion o super admin"
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              className="sm:min-w-[260px]"
+            />
+            <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading} className="cursor-pointer">
+              Actualizar
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={`exports-admin-skeleton-${index}`} className="h-14 w-full rounded-md" />
+            ))}
+          </div>
+        ) : error ? (
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        ) : organizations.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            No encontramos organizaciones con los criterios aplicados.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+                  <th className="py-2 pr-4">Organizacion</th>
+                  <th className="py-2 pr-4">Super admin</th>
+                  <th className="py-2 pr-4">Ultima exportacion</th>
+                  <th className="py-2 pr-4">Estado</th>
+                  <th className="py-2 pr-4 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {organizations.map((org) => {
+                  const preview = previews[org.id] ?? null
+                  const isSelected = selectedOrgId === org.id
+                  const statusLabel = preview ? EXPORT_STATUS_LABELS[preview.status] ?? preview.status : "Sin solicitudes"
+                  return (
+                    <tr
+                      key={org.id}
+                      className={`border-t border-slate-100 text-slate-700 transition-colors hover:bg-sky-50/60 dark:border-slate-800 dark:text-slate-200 dark:hover:bg-slate-800/60 ${
+                        isSelected ? "bg-sky-100/60 dark:bg-slate-800/60" : ""
+                      }`}
+                    >
+                      <td className="py-3 pr-4">
+                        <div className="font-semibold text-slate-800 dark:text-slate-100">{org.name}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          {org.code ? `Codigo ${org.code}` : "Sin codigo"}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-4 text-xs">
+                        {org.superAdmin ? (
+                          <>
+                            <div className="font-medium text-slate-700 dark:text-slate-200">
+                              {org.superAdmin.username}
+                            </div>
+                            <div className="text-slate-500 dark:text-slate-400">{org.superAdmin.email}</div>
+                          </>
+                        ) : (
+                          <span className="text-slate-500">Sin asignar</span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4 text-xs">
+                        {preview ? (
+                          <>
+                            <div>{formatDateTime(preview.requestedAt)}</div>
+                            {preview.completedAt ? (
+                              <div className="text-slate-500 dark:text-slate-400">
+                                Listo: {formatDateTime(preview.completedAt)}
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="text-slate-500 dark:text-slate-400">Sin registros</span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <span className="text-xs font-semibold">
+                          {statusLabel}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-center">
+                        <Button
+                          variant={isSelected ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => onSelect(org)}
+                          className="cursor-pointer"
+                        >
+                          {isSelected ? "Seleccionado" : "Administrar"}
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "—"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return "—"
+  }
+  return date.toLocaleString("es-PE", { dateStyle: "medium", timeStyle: "short" })
 }

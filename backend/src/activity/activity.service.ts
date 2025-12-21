@@ -8,7 +8,9 @@ import { QueryActivityDto } from './dto/query-activity.dto';
 export class ActivityService {
   constructor(private prisma: PrismaService) {}
 
-  private resolveHeaderId(value: string | string[] | undefined): number | undefined {
+  private resolveHeaderId(
+    value: string | string[] | undefined,
+  ): number | undefined {
     const candidate = Array.isArray(value) ? value[0] : value;
     if (typeof candidate !== 'string') {
       return undefined;

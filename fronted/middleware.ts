@@ -34,10 +34,19 @@ export async function middleware(request: NextRequest) {
   return await handlePublicTenant(request)
 }
 
-function handleDashboardGuard(request: NextRequest): NextResponse {
+async function handleDashboardGuard(request: NextRequest): Promise<NextResponse> {
   const token = request.cookies.get('token')?.value
   if (!token) {
-    return NextResponse.redirect(new URL('/unauthorized', request.url))
+    return redirectToLogin(request, 'missing-token')
+  }
+
+  if (isTokenExpired(token)) {
+    return redirectToLogin(request, 'expired-token')
+  }
+
+  const tokenValid = await verifyTokenWithBackend(token)
+  if (!tokenValid) {
+    return redirectToLogin(request, 'invalid-token')
   }
 
   const response = NextResponse.next()
@@ -87,6 +96,82 @@ async function handlePublicTenant(request: NextRequest): Promise<NextResponse> {
     path: '/',
   })
 
+  return response
+}
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = decodeJwt(token) as { exp?: number }
+    if (!payload?.exp) return true
+    const expiresAt = payload.exp * 1000
+    const now = Date.now()
+    const skewMs = 10_000
+    return expiresAt <= now + skewMs
+  } catch {
+    return true
+  }
+}
+
+async function verifyTokenWithBackend(token: string): Promise<boolean> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 3_000)
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/api/me`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      return false
+    }
+    const data = (await response.json().catch(() => null)) as {
+      id?: number | string
+      role?: string
+      error?: unknown
+    } | null
+    if (!data || data.error) {
+      return false
+    }
+    const id = typeof data.id === 'number' ? data.id : Number(data.id)
+    if (!Number.isFinite(id) || !data.role) {
+      return false
+    }
+    return true
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function redirectToLogin(request: NextRequest, reason: string): NextResponse {
+  const loginUrl = new URL('/login', request.url)
+  const returnTo =
+    request.nextUrl.pathname === '/login'
+      ? '/'
+      : `${request.nextUrl.pathname}${request.nextUrl.search}` || '/'
+  loginUrl.searchParams.set('reason', reason)
+  if (returnTo) {
+    loginUrl.searchParams.set('returnTo', returnTo)
+  }
+  const response = NextResponse.redirect(loginUrl)
+  response.cookies.set('token', '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 0,
+    path: '/',
+  })
+  response.cookies.set('refresh_token', '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 0,
+    path: '/',
+  })
   return response
 }
 

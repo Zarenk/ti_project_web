@@ -7,11 +7,9 @@ import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api"
-import { getMonthlySalesTotal, getRecentSales } from "./sales/sales.api"
 import { useModulePermission } from "@/hooks/use-module-permission"
-import { getOrdersCount, getRecentOrders } from "./orders/orders.api"
-import { getAllEntries } from "./entries/entries.api"
+import { getOrdersDashboardOverview } from "./orders/orders.api"
+import { fetchDashboardOverview } from "@/lib/dashboard/overview"
 import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import { UnauthenticatedError } from "@/utils/auth-fetch"
@@ -230,37 +228,47 @@ export default function WelcomeDashboard() {
         const canSales = checkPermission("sales")
         const canOrders = checkPermission("sales")
 
+        const shouldFetchOverview = canInventory || canSales
         const [
-          inventoryData,
-          monthlySalesData,
-          pendingData,
-          recentOrders,
-          entries,
-          recentSales,
-          lowStock,
+          ordersOverview,
+          overviewData,
         ] = await Promise.all([
-          canInventory ? getTotalInventory() : Promise.resolve<any[]>([]),
-          canSales ? getMonthlySalesTotal() : Promise.resolve<{ total: number; growth: number | null } | null>(null),
-          canOrders ? getOrdersCount("PENDING") : Promise.resolve<{ count: number }>({ count: 0 }),
-          canOrders ? getRecentOrders(10) : Promise.resolve<any[]>([]),
-          canInventory ? getAllEntries() : Promise.resolve<any[]>([]),
-          canSales ? getRecentSales() : Promise.resolve<any[]>([]),
-          canInventory ? getLowStockItems() : Promise.resolve<any[]>([]),
+          canOrders
+            ? getOrdersDashboardOverview({ status: "PENDING", limit: 10 })
+            : Promise.resolve<{ pendingCount: number; recentOrders: any[] } | null>(null),
+          shouldFetchOverview
+            ? fetchDashboardOverview()
+            : Promise.resolve({
+                inventoryTotals: [],
+                lowStock: [],
+                recentSales: [],
+                recentEntries: [],
+                monthlySales: { total: 0, growth: null },
+              }),
         ])
 
         if (cancelled) return
 
-        const safeInventory = Array.isArray(inventoryData) ? inventoryData : []
-        const safePendingCount =
-          pendingData && typeof (pendingData as any).count === "number"
-            ? Number((pendingData as any).count)
-            : 0
-        const safeRecentOrders = Array.isArray(recentOrders) ? recentOrders : []
-        const safeEntries = Array.isArray(entries) ? entries : []
-        const safeRecentSales = Array.isArray(recentSales) ? recentSales : []
-        const safeLowStock = Array.isArray(lowStock) ? lowStock : []
+        const safeInventory =
+          shouldFetchOverview && Array.isArray(overviewData?.inventoryTotals)
+            ? overviewData.inventoryTotals
+            : []
+        const safePendingCount = ordersOverview?.pendingCount ?? 0
+        const safeRecentOrders = Array.isArray(ordersOverview?.recentOrders)
+          ? ordersOverview?.recentOrders ?? []
+          : []
+        const safeEntries = Array.isArray(overviewData?.recentEntries)
+          ? overviewData.recentEntries
+          : []
+        const safeRecentSales = Array.isArray(overviewData?.recentSales)
+          ? overviewData.recentSales
+          : []
+        const safeLowStock = Array.isArray(overviewData?.lowStock)
+          ? overviewData.lowStock
+          : []
 
         setTotalInventory(safeInventory)
+        const monthlySalesData = canSales ? overviewData.monthlySales ?? { total: 0, growth: null } : null
         setMonthlySales(monthlySalesData)
         setPendingOrders(safePendingCount)
         setLowStockItems(safeLowStock)

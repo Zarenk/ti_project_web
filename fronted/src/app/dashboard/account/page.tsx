@@ -34,6 +34,7 @@ import { shouldRememberContext, updateContextPreferences } from "@/utils/context
 import { userContextStorage } from "@/utils/user-context-storage"
 import { trackEvent } from "@/lib/analytics"
 import { ACCOUNT_ALLOWED_ROLES } from "./use-account-access"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export default function Page() {
   const [user, setUser] = useState({
@@ -110,7 +111,7 @@ export default function Page() {
       }
     }
     loadProfile()
-  }, [router])
+  }, [allowedRoles, router])
 
   function handleDatosSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -163,6 +164,7 @@ export default function Page() {
       await logout()
       router.push('/login')
     } catch (error) {
+      console.error(error)
       toast("Error: No se pudo actualizar la contraseña.")
     } finally {
       setSavingPass(false)
@@ -285,7 +287,8 @@ export default function Page() {
   }
 
   return (
-    <div className="min-h-[100svh] w-full bg-gradient-to-b from-sky-50 via-cyan-50 to-white dark:from-slate-900 dark:via-slate-900 dark:to-slate-950">
+    <TooltipProvider delayDuration={150}>
+      <div className="min-h-[100svh] w-full bg-gradient-to-b from-sky-50 via-cyan-50 to-white dark:from-slate-900 dark:via-slate-900 dark:to-slate-950">
       <header
         className={cn(
           "w-full border-b",
@@ -331,48 +334,78 @@ export default function Page() {
             <div className="w-full overflow-x-auto md:overflow-visible">
               <div className="flex min-w-max items-center gap-3 py-3 pr-2 md:min-w-full md:flex-wrap md:justify-end lg:flex-nowrap">
                 {activityAllowedRoles.has((user.rol ?? "").toUpperCase()) && (
-                  <Button
-                    variant="outline"
-                    className="rounded-full border-sky-200 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
-                    onClick={() => setShowActividad((v) => !v)}
-                  >
-                    Actividad
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="rounded-full border-sky-200 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                        onClick={() => setShowActividad((v) => !v)}
+                      >
+                        Actividad
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Muestra u oculta tu actividad reciente.</TooltipContent>
+                  </Tooltip>
                 )}
-                <Button
-                  variant="secondary"
-                  className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100"
-                  asChild
-                >
-                  <Link href="/dashboard/account/billing">Facturacion</Link>
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100"
-                  asChild
-                >
-                  <Link href="/dashboard/account/payment-methods">Metodos</Link>
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100"
-                  asChild
-                >
-                  <Link href="/dashboard/account/exports">Exportaciones</Link>
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100"
-                  asChild
-                >
-                  <Link href="/dashboard/account/plan">Consumo</Link>
-                </Button>
-                <Button
-                  className="rounded-full bg-sky-600 text-white hover:bg-sky-700 dark:bg-slate-700 dark:hover:bg-slate-600"
-                  onClick={() => handleDatosSubmit(new Event('submit') as unknown as React.FormEvent)}
-                >
-                  Guardar todo
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100 cursor-pointer"
+                      asChild
+                    >
+                      <Link href="/dashboard/account/billing">Facturación</Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Consulta pagos y comprobantes de tu cuenta.</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100 cursor-pointer"
+                      asChild
+                    >
+                      <Link href="/dashboard/account/payment-methods">Métodos de Pago</Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Administra las tarjetas o cuentas asociadas.</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100 cursor-pointer"
+                      asChild
+                    >
+                      <Link href="/dashboard/account/exports">Exportaciones</Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Descarga respaldos y reportes disponibles.</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      className="rounded-full bg-white text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100 cursor-pointer"
+                      asChild
+                    >
+                      <Link href="/dashboard/account/plan">Consumo</Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Revisa tu uso y capacidad asignada.</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      className="rounded-full bg-sky-600 text-white hover:bg-sky-700 dark:bg-slate-700 dark:hover:bg-slate-600 cursor-pointer"
+                      onClick={() => handleDatosSubmit(new Event('submit') as unknown as React.FormEvent)}
+                    >
+                      Guardar todo
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Guarda cualquier cambio pendiente en tu cuenta.</TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </div>
@@ -458,23 +491,33 @@ export default function Page() {
                         />
                       </div>
                       <div className="sm:col-span-2 flex items-center gap-2">
-                        <Button
-                          type="submit"
-                          disabled={savingDatos}
-                          className="rounded-full bg-sky-600 text-white transition-shadow hover:bg-sky-700 hover:shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600"
-                        >
-                          {savingDatos ? "Guardando..." : "Guardar cambios"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="rounded-full text-sky-700 hover:bg-sky-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                          onClick={() =>
-                            setFormDatos({ nombre: user.nombre, correo: user.correo, telefono: user.telefono })
-                          }
-                        >
-                          Deshacer
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="submit"
+                              disabled={savingDatos}
+                              className="rounded-full bg-sky-600 text-white transition-shadow hover:bg-sky-700 hover:shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600 cursor-pointer"
+                            >
+                              {savingDatos ? "Guardando..." : "Guardar cambios"}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Actualiza tus datos personales.</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="rounded-full text-sky-700 hover:bg-sky-100 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                              onClick={() =>
+                                setFormDatos({ nombre: user.nombre, correo: user.correo, telefono: user.telefono })
+                              }
+                            >
+                              Deshacer
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Restaura la información original del perfil.</TooltipContent>
+                        </Tooltip>
                       </div>
                     </form>
                   </section>
@@ -526,21 +569,31 @@ export default function Page() {
                         />
                       </div>
                       <div className="sm:col-span-2 flex items-center gap-2">
-                        <Button
-                          type="submit"
-                          disabled={savingPass}
-                          className="rounded-full bg-cyan-600 text-white transition-shadow hover:bg-cyan-700 hover:shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600"
-                        >
-                          {savingPass ? "Actualizando..." : "Actualizar contraseña"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="rounded-full text-sky-700 hover:bg-sky-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                          onClick={() => setFormPass({ actual: "", nueva: "", confirmar: "" })}
-                        >
-                          Limpiar
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="submit"
+                              disabled={savingPass}
+                              className="rounded-full bg-cyan-600 text-white transition-shadow hover:bg-cyan-700 hover:shadow-sm dark:bg-slate-700 dark:hover:bg-slate-600 cursor-pointer"
+                            >
+                              {savingPass ? "Actualizando..." : "Actualizar contraseña"}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Guarda tu nueva contraseña segura.</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="rounded-full text-sky-700 hover:bg-sky-100 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                              onClick={() => setFormPass({ actual: "", nueva: "", confirmar: "" })}
+                            >
+                              Limpiar
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Borra los campos del formulario de seguridad.</TooltipContent>
+                        </Tooltip>
                       </div>
                     </form>
                   </section>
@@ -581,20 +634,30 @@ export default function Page() {
                   <CardTitle className="text-slate-800 dark:text-slate-100">Contacto rápido</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-3">
-                  <Button
-                    variant="outline"
-                    className="justify-start rounded-lg hover:bg-sky-50 dark:hover:bg-slate-700"
-                  >
-                    <Mail className="mr-2 size-4 text-sky-700 dark:text-slate-200" />
-                    Enviar correo
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="justify-start rounded-lg hover:bg-sky-50 dark:hover:bg-slate-700"
-                  >
-                    <Phone className="mr-2 size-4 text-sky-700 dark:text-slate-200" />
-                    Llamar
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="justify-start rounded-lg hover:bg-sky-50 dark:hover:bg-slate-700 cursor-pointer"
+                      >
+                        <Mail className="mr-2 size-4 text-sky-700 dark:text-slate-200" />
+                        Enviar correo
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">Inicia un correo con los datos del usuario.</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="justify-start rounded-lg hover:bg-sky-50 dark:hover:bg-slate-700 cursor-pointer"
+                      >
+                        <Phone className="mr-2 size-4 text-sky-700 dark:text-slate-200" />
+                        Llamar
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">Contacta al usuario por teléfono.</TooltipContent>
+                  </Tooltip>
                 </CardContent>
               </Card>
 
@@ -621,35 +684,46 @@ export default function Page() {
                     />
                   </div>
                   <div className="mt-4 flex flex-wrap gap-3">
-                    <Button
-                      className="flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 dark:from-slate-700 dark:to-slate-500"
-                      asChild
-                    >
-                      <Link href="/dashboard/account/context-history">
-                        <BookOpen className="size-4" />
-                        Historial completo
-                      </Link>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex items-center gap-2 rounded-full border-sky-200 px-4 py-2 text-xs font-semibold text-sky-700 transition hover:bg-sky-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
-                      asChild
-                    >
-                      <Link href="/dashboard/account/context-dashboard">
-                        <BarChart3 className="size-4" />
-                        Panel de métricas
-                      </Link>
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          className="flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 dark:from-slate-700 dark:to-slate-500 cursor-pointer"
+                          asChild
+                        >
+                          <Link href="/dashboard/account/context-history">
+                            <BookOpen className="size-4" />
+                            Historial completo
+                          </Link>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Revisa el historial detallado de contextos.</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="flex items-center gap-2 rounded-full border-sky-200 px-4 py-2 text-xs font-semibold text-sky-700 transition hover:bg-sky-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          asChild
+                        >
+                          <Link href="/dashboard/account/context-dashboard">
+                            <BarChart3 className="size-4" />
+                            Panel de métricas
+                          </Link>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Visualiza métricas y patrones del contexto.</TooltipContent>
+                    </Tooltip>
                   </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
 
-        </aside>
-      </>
+            </aside>
+          </>
         )}
       </main>
-    </div>
+      </div>
+    </TooltipProvider>
   )
 }
 

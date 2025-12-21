@@ -68,7 +68,7 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
     } catch (error) {
       const details = (error as any)?.response?.data;
       // Log completo para depurar integraciones con MP
-      // eslint-disable-next-line no-console
+
       console.error('[MercadoPago] preference.create failed', {
         message: (error as Error)?.message,
         details,

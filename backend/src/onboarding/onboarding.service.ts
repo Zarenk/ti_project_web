@@ -1,13 +1,5 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
-import {
-  DemoDataStatus,
-  OnboardingProgress,
-  Prisma,
-} from '@prisma/client';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { DemoDataStatus, OnboardingProgress, Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { TenantContextService } from 'src/tenancy/tenant-context.service';
 import {
@@ -64,10 +56,13 @@ export class OnboardingService {
 
   private readonly stepFieldMap = this.stepDefinitions.reduce<
     Record<OnboardingStepKey, StepDefinition>
-  >((acc, definition) => {
-    acc[definition.key] = definition;
-    return acc;
-  }, {} as Record<OnboardingStepKey, StepDefinition>);
+  >(
+    (acc, definition) => {
+      acc[definition.key] = definition;
+      return acc;
+    },
+    {} as Record<OnboardingStepKey, StepDefinition>,
+  );
 
   constructor(
     private readonly prisma: PrismaService,
@@ -80,9 +75,7 @@ export class OnboardingService {
     return this.ensureProgressRecord(organizationId);
   }
 
-  async updateStep(
-    dto: UpdateOnboardingStepDto,
-  ): Promise<OnboardingProgress> {
+  async updateStep(dto: UpdateOnboardingStepDto): Promise<OnboardingProgress> {
     const organizationId = this.requireOrganizationId();
     const definition = this.stepFieldMap[dto.step];
     if (!definition) {
@@ -218,10 +211,9 @@ export class OnboardingService {
       });
       if (progress) {
         const updatedState = this.appendHistory(
-          this.mergeStepState(
-            this.normalizeStepState(progress.dataImport),
-            { updatedAt: nowIso },
-          ),
+          this.mergeStepState(this.normalizeStepState(progress.dataImport), {
+            updatedAt: nowIso,
+          }),
           {
             action: 'demo-status',
             at: nowIso,
@@ -404,13 +396,14 @@ export class OnboardingService {
     current: OnboardingProgress,
     overrides: Partial<Record<OnboardingStepKey, StepState>> = {},
   ): Record<OnboardingStepKey, StepState> {
-    return this.stepDefinitions.reduce<
-      Record<OnboardingStepKey, StepState>
-    >((acc, def) => {
-      const override = overrides[def.key];
-      acc[def.key] = override ?? this.normalizeStepState(current[def.field]);
-      return acc;
-    }, {} as Record<OnboardingStepKey, StepState>);
+    return this.stepDefinitions.reduce<Record<OnboardingStepKey, StepState>>(
+      (acc, def) => {
+        const override = overrides[def.key];
+        acc[def.key] = override ?? this.normalizeStepState(current[def.field]);
+        return acc;
+      },
+      {} as Record<OnboardingStepKey, StepState>,
+    );
   }
 
   private computeNextCurrentStep(
@@ -468,7 +461,10 @@ export class OnboardingService {
     return result;
   }
 
-  private appendHistory(state: StepState, entry: Record<string, any>): StepState {
+  private appendHistory(
+    state: StepState,
+    entry: Record<string, any>,
+  ): StepState {
     const payload = this.isPlainObject(state.data) ? { ...state.data } : {};
     const history = Array.isArray(payload.history)
       ? payload.history.slice(-9)
@@ -492,16 +488,13 @@ export class OnboardingService {
       };
     }
 
-    const record = value as Record<string, any>;
+    const record = value;
     return {
       completed: Boolean(record.completed),
       completedAt:
         typeof record.completedAt === 'string' ? record.completedAt : null,
-      updatedAt:
-        typeof record.updatedAt === 'string' ? record.updatedAt : null,
-      data: this.isPlainObject(record.data)
-        ? (record.data as Record<string, any>)
-        : null,
+      updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : null,
+      data: this.isPlainObject(record.data) ? record.data : null,
     };
   }
 

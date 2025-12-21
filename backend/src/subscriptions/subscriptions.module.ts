@@ -37,7 +37,9 @@ import { SubscriptionPrometheusService } from './subscription-prometheus.service
     {
       provide: PAYMENT_PROVIDER_TOKEN,
       useFactory: (configService: ConfigService) => {
-        const accessToken = configService.get<string>('MERCADOPAGO_ACCESS_TOKEN');
+        const accessToken = configService.get<string>(
+          'MERCADOPAGO_ACCESS_TOKEN',
+        );
         if (accessToken) {
           return new MercadoPagoPaymentProvider(accessToken);
         }
@@ -55,6 +57,10 @@ import { SubscriptionPrometheusService } from './subscription-prometheus.service
     MercadoPagoWebhookService,
     SubscriptionPrometheusService,
   ],
-  exports: [SubscriptionsService, SubscriptionNotificationsService, SubscriptionPrometheusService],
+  exports: [
+    SubscriptionsService,
+    SubscriptionNotificationsService,
+    SubscriptionPrometheusService,
+  ],
 })
 export class SubscriptionsModule {}

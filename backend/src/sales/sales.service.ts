@@ -460,7 +460,9 @@ export class SalesService {
           });
 
           if (!inventoryRecord) {
-            throw new NotFoundException(`No se encontro la venta con ID ${id}.`);
+            throw new NotFoundException(
+              `No se encontro la venta con ID ${id}.`,
+            );
           }
 
           await prismaTx.storeOnInventory.update({
@@ -586,9 +588,7 @@ export class SalesService {
     });
 
     if (!sale) {
-      throw new NotFoundException(
-        `No se encontro la venta con ID ${saleId}.`,
-      );
+      throw new NotFoundException(`No se encontro la venta con ID ${saleId}.`);
     }
 
     return this.prisma.sunatTransmission.findMany({
@@ -623,9 +623,7 @@ export class SalesService {
     });
 
     if (!sale) {
-      throw new NotFoundException(
-        `No se encontro la venta con ID ${saleId}.`,
-      );
+      throw new NotFoundException(`No se encontro la venta con ID ${saleId}.`);
     }
 
     // Formatear los datos para devolver solo las series vendidas
@@ -1554,17 +1552,15 @@ export class SalesService {
   }
 
   private extractSunatStatus(
-    transmission?:
-      | {
-          id: number;
-          status: string;
-          ticket: string | null;
-          environment?: string | null;
-          errorMessage?: string | null;
-          updatedAt?: Date;
-          createdAt?: Date;
-        }
-      | null,
+    transmission?: {
+      id: number;
+      status: string;
+      ticket: string | null;
+      environment?: string | null;
+      errorMessage?: string | null;
+      updatedAt?: Date;
+      createdAt?: Date;
+    } | null,
   ) {
     if (!transmission) {
       return null;
@@ -1580,6 +1576,3 @@ export class SalesService {
     };
   }
 }
-
-
-

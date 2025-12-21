@@ -39,13 +39,18 @@ function Meter({ label, value, limit, suffix = "" }: MeterProps) {
   )
 }
 
-export function SubscriptionQuotaCard() {
+interface SubscriptionQuotaCardProps {
+  organizationId?: number | null
+}
+
+export function SubscriptionQuotaCard({ organizationId }: SubscriptionQuotaCardProps) {
   const [summary, setSummary] = useState<SubscriptionSummary | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let mounted = true
-    fetchSubscriptionSummary()
+    setLoading(true)
+    fetchSubscriptionSummary(organizationId ?? undefined)
       .then((data) => {
         if (!mounted) return
         setSummary(data)
@@ -60,7 +65,7 @@ export function SubscriptionQuotaCard() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [organizationId])
 
   if (loading) {
     return (

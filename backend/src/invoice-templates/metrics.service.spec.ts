@@ -23,7 +23,9 @@ describe('InvoiceTemplatesMetricsService', () => {
   });
 
   it('filters low confidence samples with threshold', async () => {
-    prisma.invoiceSample.count.mockResolvedValueOnce(10).mockResolvedValueOnce(2);
+    prisma.invoiceSample.count
+      .mockResolvedValueOnce(10)
+      .mockResolvedValueOnce(2);
     prisma.invoiceSample.findMany.mockResolvedValue([
       {
         id: 1,

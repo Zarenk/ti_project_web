@@ -46,9 +46,7 @@ interface InvoiceDunningFinalPayload {
 
 @Injectable()
 export class SubscriptionNotificationsService {
-  private readonly logger = new Logger(
-    SubscriptionNotificationsService.name,
-  );
+  private readonly logger = new Logger(SubscriptionNotificationsService.name);
   private readonly transporter: Transporter | null;
 
   constructor(
@@ -88,9 +86,7 @@ export class SubscriptionNotificationsService {
       ``,
       `Tu organización tiene aún ${payload.daysLeft} día(s) de prueba.`,
       `Fecha de expiración: ${formattedDate}.`,
-      payload.planName
-        ? `Plan actual: ${payload.planName}.`
-        : undefined,
+      payload.planName ? `Plan actual: ${payload.planName}.` : undefined,
       ``,
       `Activa un plan para evitar la suspensión automática.`,
     ]
@@ -114,9 +110,7 @@ export class SubscriptionNotificationsService {
       `Hola 👋,`,
       ``,
       `El periodo de prueba terminó el ${formattedDate}.`,
-      payload.planName
-        ? `Plan de referencia: ${payload.planName}.`
-        : undefined,
+      payload.planName ? `Plan de referencia: ${payload.planName}.` : undefined,
       ``,
       `Ingresa al panel de facturación para activar un plan y reanudar el acceso.`,
     ]
@@ -179,8 +173,7 @@ export class SubscriptionNotificationsService {
     const greeting = payload.fullName
       ? `Hola ${payload.fullName.split(' ')[0]},`
       : 'Hola,';
-    const organization =
-      payload.organizationName?.trim() || 'tu organización';
+    const organization = payload.organizationName?.trim() || 'tu organización';
     const body = [
       greeting,
       '',
@@ -195,11 +188,7 @@ export class SubscriptionNotificationsService {
       'Si no solicitaste esta cuenta puedes ignorar este mensaje.',
     ].join('\n');
 
-    await this.sendEmail(
-      recipients,
-      'Activa tu demo y accede al portal',
-      body,
-    );
+    await this.sendEmail(recipients, 'Activa tu demo y accede al portal', body);
   }
 
   async sendInvoicePaymentFailed(payload: InvoiceFailurePayload) {

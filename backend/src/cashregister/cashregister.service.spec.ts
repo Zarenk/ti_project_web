@@ -466,7 +466,9 @@ describe('CashregisterService (multi-organization)', () => {
       );
 
       expect(records).toHaveLength(1);
-      const saleRecord = records.find((record) => record.type !== 'CLOSURE') as any;
+      const saleRecord = records.find(
+        (record) => record.type !== 'CLOSURE',
+      ) as any;
       expect(saleRecord?.saleItems).toEqual([
         {
           name: 'MANTEQUILLA DE MANÍ 100% 230 GR SPREAD',

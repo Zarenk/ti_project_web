@@ -236,6 +236,29 @@ export class WebSalesController {
     });
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @ModulePermission('sales')
+  @Get('orders/dashboard-overview')
+  async getOrdersDashboardOverview(
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
+    return this.webSalesService.getOrdersDashboardOverview({
+      status,
+      limit: parsedLimit,
+      from,
+      to,
+      organizationId: organizationId ?? undefined,
+      companyId: companyId ?? undefined,
+    });
+  }
+
   @Get(':id')
   async findOne(
     @Param('id', ParseIntPipe) id: number,

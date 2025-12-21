@@ -77,9 +77,7 @@ describe('InvoiceExtractionService corrections', () => {
       quotaService as any,
     );
 
-    jest
-      .spyOn(service, 'appendLog')
-      .mockResolvedValue({} as any);
+    jest.spyOn(service, 'appendLog').mockResolvedValue({} as any);
   });
 
   it('records manual text when provided and logs training', async () => {

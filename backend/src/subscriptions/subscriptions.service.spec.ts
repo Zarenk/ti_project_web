@@ -18,7 +18,9 @@ describe('SubscriptionsService – demo data cleanup automation', () => {
   let service: SubscriptionsService;
   const prisma = {} as PrismaService;
   const paymentProvider = {} as PaymentProvider;
-  const taxRateService = { upsertDefaultRate: jest.fn() } as unknown as TaxRateService;
+  const taxRateService = {
+    upsertDefaultRate: jest.fn(),
+  } as unknown as TaxRateService;
   const sunatService = {} as SunatService;
   const activityService = { log: jest.fn() } as unknown as ActivityService;
   const configService = { get: jest.fn() } as unknown as ConfigService;
@@ -111,24 +113,32 @@ describe('SubscriptionsService – demo data cleanup automation', () => {
     organizationId: number,
     trigger: 'activation' | 'cancellation',
   ) => {
-    await (service as any).autoExportAndCleanupDemoData(organizationId, trigger);
+    await (service as any).autoExportAndCleanupDemoData(
+      organizationId,
+      trigger,
+    );
   };
 
   it('solicita exportación y limpia datos demo al activar plan', async () => {
-    (onboardingService.getProgressForOrganization as jest.Mock).mockResolvedValue({
+    (
+      onboardingService.getProgressForOrganization as jest.Mock
+    ).mockResolvedValue({
       demoStatus: 'SEEDED',
     });
 
     await callHelper(101, 'activation');
 
     expect(exportService.requestExport).toHaveBeenCalledWith(101, null);
-    expect(
-      onboardingService.clearDemoDataForOrganization,
-    ).toHaveBeenCalledWith(101, 'auto-clear-on-activation');
+    expect(onboardingService.clearDemoDataForOrganization).toHaveBeenCalledWith(
+      101,
+      'auto-clear-on-activation',
+    );
   });
 
   it('omite limpieza cuando la demo ya fue limpiada pero exporta para el backup', async () => {
-    (onboardingService.getProgressForOrganization as jest.Mock).mockResolvedValue({
+    (
+      onboardingService.getProgressForOrganization as jest.Mock
+    ).mockResolvedValue({
       demoStatus: 'NONE',
     });
 
@@ -141,9 +151,9 @@ describe('SubscriptionsService – demo data cleanup automation', () => {
   });
 
   it('registra advertencia cuando falla la consulta de progreso', async () => {
-    (onboardingService.getProgressForOrganization as jest.Mock).mockRejectedValue(
-      new Error('boom'),
-    );
+    (
+      onboardingService.getProgressForOrganization as jest.Mock
+    ).mockRejectedValue(new Error('boom'));
 
     await callHelper(77, 'activation');
 
@@ -194,7 +204,9 @@ describe('SubscriptionsService – demo data cleanup automation', () => {
       },
     });
     expect(quotaService.activateGraceLimits).toHaveBeenCalledWith(12);
-    expect(metrics.recordDunningAttempt).toHaveBeenCalledWith('retry_exhausted');
+    expect(metrics.recordDunningAttempt).toHaveBeenCalledWith(
+      'retry_exhausted',
+    );
   });
 
   describe('persistencia de metodos de pago', () => {
@@ -228,8 +240,8 @@ describe('SubscriptionsService – demo data cleanup automation', () => {
         billingCustomerId: 'cus_sync_ui',
       });
 
-      const callArgs =
-        (prisma as any).billingPaymentMethod.upsert.mock.calls[0][0];
+      const callArgs = (prisma as any).billingPaymentMethod.upsert.mock
+        .calls[0][0];
       expect(callArgs.create.metadata.billingCustomerId).toBe('cus_sync_ui');
       expect((prisma as any).subscription.updateMany).toHaveBeenCalledWith({
         where: { organizationId: 44 },
@@ -297,7 +309,10 @@ describe('SubscriptionsService – demo data cleanup automation', () => {
         .mockRejectedValue(new Error('fail'));
 
       await expect(
-        service.handleWebhookEvent({ provider: 'mercadopago', type: 'invoice.paid' }),
+        service.handleWebhookEvent({
+          provider: 'mercadopago',
+          type: 'invoice.paid',
+        }),
       ).rejects.toThrow('fail');
 
       expect(metrics.recordWebhookEvent).toHaveBeenCalledWith(

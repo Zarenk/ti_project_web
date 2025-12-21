@@ -40,10 +40,12 @@ export class TemplateTrainingService {
     'ml',
     'train_template_classifier.py',
   );
-  private readonly minInterval =
-    Number(process.env.TEMPLATE_TRAIN_INTERVAL_MS ?? 1000 * 60 * 30);
-  private readonly minSamples =
-    Number(process.env.TEMPLATE_TRAIN_MIN_SAMPLES ?? 20);
+  private readonly minInterval = Number(
+    process.env.TEMPLATE_TRAIN_INTERVAL_MS ?? 1000 * 60 * 30,
+  );
+  private readonly minSamples = Number(
+    process.env.TEMPLATE_TRAIN_MIN_SAMPLES ?? 20,
+  );
   private isTraining = false;
   private metaCache: TrainingMeta | null = null;
 
@@ -89,7 +91,11 @@ export class TemplateTrainingService {
     }
     data.push(sample);
     await fs.mkdir(path.dirname(this.datasetPath), { recursive: true });
-    await fs.writeFile(this.datasetPath, JSON.stringify(data, null, 2), 'utf-8');
+    await fs.writeFile(
+      this.datasetPath,
+      JSON.stringify(data, null, 2),
+      'utf-8',
+    );
     return data.length;
   }
 
@@ -104,8 +110,7 @@ export class TemplateTrainingService {
       return;
     }
 
-    const datasetSize =
-      currentDatasetSize ?? (await this.getDatasetSize());
+    const datasetSize = currentDatasetSize ?? (await this.getDatasetSize());
     const meta = await this.getMeta();
     const pending = datasetSize - meta.lastTrainingCount;
     if (pending < this.minSamples) {

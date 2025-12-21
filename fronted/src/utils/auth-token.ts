@@ -48,7 +48,7 @@ function readCookieValue(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null
 }
 
-type TenantOverride = {
+export type TenantOverride = {
   orgId?: number | string | null
   companyId?: number | string | null
   tenantSlug?: string | null

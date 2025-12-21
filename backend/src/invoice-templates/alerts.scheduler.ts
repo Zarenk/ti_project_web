@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InvoiceTemplatesAlertsService } from './alerts.service';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes

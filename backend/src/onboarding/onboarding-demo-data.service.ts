@@ -62,8 +62,16 @@ export class OnboardingDemoDataService {
         },
       ],
       clients: [
-        { name: 'Inversiones Demo SAC', email: 'compras@demo-sac.com', phone: '999123456' },
-        { name: 'Retail Partners Demo', email: 'retail@partners.com', phone: '999654321' },
+        {
+          name: 'Inversiones Demo SAC',
+          email: 'compras@demo-sac.com',
+          phone: '999123456',
+        },
+        {
+          name: 'Retail Partners Demo',
+          email: 'retail@partners.com',
+          phone: '999654321',
+        },
       ],
     },
     services: {
@@ -293,7 +301,9 @@ export class OnboardingDemoDataService {
       where: { organizationId, isDemo: true },
       select: { userId: true },
     });
-    const demoUserIds = demoClients.map((client) => client.userId).filter(Boolean);
+    const demoUserIds = demoClients
+      .map((client) => client.userId)
+      .filter(Boolean);
     const salePrefix = this.buildDemoSalePrefix(organizationId);
     const demoSales = await this.prisma.sales.findMany({
       where: {
@@ -339,9 +349,15 @@ export class OnboardingDemoDataService {
           id: { in: saleIds },
         },
       }),
-      this.prisma.client.deleteMany({ where: { organizationId, isDemo: true } }),
-      this.prisma.product.deleteMany({ where: { organizationId, isDemo: true } }),
-      this.prisma.category.deleteMany({ where: { organizationId, isDemo: true } }),
+      this.prisma.client.deleteMany({
+        where: { organizationId, isDemo: true },
+      }),
+      this.prisma.product.deleteMany({
+        where: { organizationId, isDemo: true },
+      }),
+      this.prisma.category.deleteMany({
+        where: { organizationId, isDemo: true },
+      }),
       this.prisma.user.deleteMany({
         where: {
           id: { in: demoUserIds },

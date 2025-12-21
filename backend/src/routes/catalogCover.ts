@@ -212,4 +212,3 @@ export class CatalogCoverController {
     return { cover: null };
   }
 }
-

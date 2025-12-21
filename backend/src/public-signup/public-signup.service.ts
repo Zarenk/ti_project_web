@@ -264,7 +264,8 @@ export class PublicSignupService {
     });
 
     return {
-      message: 'Tu correo fue verificado correctamente. Ya puedes iniciar sesión.',
+      message:
+        'Tu correo fue verificado correctamente. Ya puedes iniciar sesión.',
     };
   }
 
@@ -282,7 +283,8 @@ export class PublicSignupService {
 
     if (user.emailVerifiedAt) {
       return {
-        message: 'Esta cuenta ya fue verificada. Intenta iniciar sesión nuevamente.',
+        message:
+          'Esta cuenta ya fue verificada. Intenta iniciar sesión nuevamente.',
       };
     }
 
@@ -425,9 +427,7 @@ export class PublicSignupService {
     if (!userAgent) {
       return null;
     }
-    return createHash('sha256')
-      .update(userAgent.toLowerCase())
-      .digest('hex');
+    return createHash('sha256').update(userAgent.toLowerCase()).digest('hex');
   }
 
   private buildDisposableDomainList(): Set<string> {
@@ -476,10 +476,7 @@ export class PublicSignupService {
         AND: [
           { OR: clauses },
           {
-            OR: [
-              { blockedUntil: null },
-              { blockedUntil: { gt: now } },
-            ],
+            OR: [{ blockedUntil: null }, { blockedUntil: { gt: now } }],
           },
         ],
       },
@@ -565,8 +562,7 @@ export class PublicSignupService {
     });
     await this.blockSource({
       ip: options.blockIp === false ? undefined : ctx.ip,
-      deviceHash:
-        options.blockDevice === false ? undefined : ctx.deviceHash,
+      deviceHash: options.blockDevice === false ? undefined : ctx.deviceHash,
       domain: options.blockDomain ? ctx.domain : undefined,
       reason,
       durationMs: options.durationMs,
@@ -677,13 +673,10 @@ export class PublicSignupService {
     params.append('secret', secret);
     params.append('response', token);
 
-    const res = await fetch(
-      'https://www.google.com/recaptcha/api/siteverify',
-      {
-        method: 'POST',
-        body: params,
-      },
-    );
+    const res = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      body: params,
+    });
 
     if (!res.ok) {
       throw new BadRequestException('No se pudo verificar el reCAPTCHA');

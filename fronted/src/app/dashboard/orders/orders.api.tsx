@@ -46,6 +46,36 @@ export async function getOrdersCount(status?: string) {
 }
 
 // Fetches the most recent orders...
+export type OrdersDashboardOverview = {
+  pendingCount: number
+  recentOrders: Array<{ id: number; code: string; createdAt: string; status: string }>
+}
+
+export async function getOrdersDashboardOverview(params: { status?: string; limit?: number; from?: string; to?: string } = {}): Promise<OrdersDashboardOverview> {
+  const qs = new URLSearchParams()
+  if (params.status) qs.append("status", params.status)
+  if (params.limit) qs.append("limit", String(params.limit))
+  if (params.from) qs.append("from", params.from)
+  if (params.to) qs.append("to", params.to)
+
+  const res = await authFetch(
+    `${BACKEND_URL}/api/web-sales/orders/dashboard-overview?${qs.toString()}`,
+    { credentials: "include" },
+  )
+
+  if (res.status === 403) {
+    return { pendingCount: 0, recentOrders: [] }
+  }
+
+  if (!res.ok) throw new Error("Error al obtener el resumen de ordenes")
+  const payload = await res.json()
+  const recent = Array.isArray(payload?.recentOrders) ? payload.recentOrders : []
+  return {
+    pendingCount: typeof payload?.pendingCount === "number" ? payload.pendingCount : 0,
+    recentOrders: recent,
+  }
+}
+
 export async function getRecentOrders(limit = 10) {
   const qs = new URLSearchParams();
   qs.append("limit", limit.toString());

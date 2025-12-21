@@ -1,5 +1,5 @@
 import { refreshAuthToken } from "@/utils/auth-refresh"
-import { getAuthHeaders } from "@/utils/auth-token"
+import { getAuthHeaders, type TenantOverride } from "@/utils/auth-token"
 import { wasManualLogoutRecently } from "@/utils/manual-logout"
 import { notifySessionExpired } from "@/utils/session-expired-event"
 
@@ -34,16 +34,21 @@ function normalizeBackendBase(base: string): string {
   return `${trimmed}/api`
 }
 
+type AuthFetchInit = RequestInit & {
+  tenantOverrides?: TenantOverride
+}
+
 export async function authFetch(
   input: RequestInfo | URL,
-  init: RequestInit = {}
+  init: AuthFetchInit = {}
 ): Promise<Response> {
   if (wasManualLogoutRecently()) {
     throw new UnauthenticatedError()
   }
   const url = resolveUrl(input)
-  const headers = new Headers(init.headers || {})
-  const auth = await getAuthHeaders()
+  const { tenantOverrides, ...requestInit } = init
+  const headers = new Headers(requestInit.headers || {})
+  const auth = await getAuthHeaders(tenantOverrides)
   if (Object.keys(auth).length === 0) {
     throw new UnauthenticatedError()
   }
@@ -56,7 +61,7 @@ export async function authFetch(
     })
   }
 
-  let res = await fetch(url, { ...init, headers })
+  let res = await fetch(url, { ...requestInit, headers })
   if (res.status !== 401) return res
 
   if (wasManualLogoutRecently()) {
@@ -68,10 +73,10 @@ export async function authFetch(
     notifySessionExpired()
     throw new UnauthenticatedError()
   }
-  const retryHeaders = new Headers(init.headers || {})
-  const newAuth = await getAuthHeaders()
+  const retryHeaders = new Headers(requestInit.headers || {})
+  const newAuth = await getAuthHeaders(tenantOverrides)
   Object.entries(newAuth).forEach(([k, v]) => retryHeaders.set(k, v as string))
-  res = await fetch(url, { ...init, headers: retryHeaders })
+  res = await fetch(url, { ...requestInit, headers: retryHeaders })
   if (res.status === 401) {
     notifySessionExpired()
     throw new UnauthenticatedError()

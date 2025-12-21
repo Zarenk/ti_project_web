@@ -28,8 +28,9 @@ export default function LoginPage() {
   }, [router]);
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-3">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center p-3">
+      <div className="login-scan-border relative w-full max-w-md rounded-[32px]">
+        <Card className="relative w-full rounded-[28px] border border-slate-200/50 bg-card/95 shadow-xl backdrop-blur dark:border-slate-700/60 dark:bg-slate-900/90">
         <CardHeader className="pb-2">
           <CardTitle className="text-center">Bienvenido</CardTitle>
           <CardDescription className="text-center">
@@ -51,6 +52,7 @@ export default function LoginPage() {
           </Link>
         </CardFooter>
       </Card>
+      </div>
     </div>
   );
 }

@@ -63,10 +63,9 @@ export class ContextMetricsService {
 
     const orgIds = Array.from(
       new Set(
-        [
-          ...topOrgGroups.map((entry) => entry.orgId),
-          lastEntry?.orgId,
-        ].filter((value): value is number => typeof value === 'number'),
+        [...topOrgGroups.map((entry) => entry.orgId), lastEntry?.orgId].filter(
+          (value): value is number => typeof value === 'number',
+        ),
       ),
     );
 
@@ -86,8 +85,9 @@ export class ContextMetricsService {
               where: { id: { in: orgIds } },
               select: { id: true, name: true },
             })
-            .then((records) =>
-              new Map(records.map((record) => [record.id, record.name])),
+            .then(
+              (records) =>
+                new Map(records.map((record) => [record.id, record.name])),
             )
         : Promise.resolve(new Map<number, string | null>()),
       companyIds.length
@@ -96,8 +96,9 @@ export class ContextMetricsService {
               where: { id: { in: companyIds } },
               select: { id: true, name: true },
             })
-            .then((records) =>
-              new Map(records.map((record) => [record.id, record.name])),
+            .then(
+              (records) =>
+                new Map(records.map((record) => [record.id, record.name])),
             )
         : Promise.resolve(new Map<number, string | null>()),
     ]);
@@ -107,7 +108,7 @@ export class ContextMetricsService {
         id: group.orgId,
         name:
           typeof group.orgId === 'number'
-            ? orgLookup.get(group.orgId) ?? null
+            ? (orgLookup.get(group.orgId) ?? null)
             : null,
         count: group._count._all,
       }));
@@ -117,7 +118,7 @@ export class ContextMetricsService {
         id: group.companyId,
         name:
           typeof group.companyId === 'number'
-            ? companyLookup.get(group.companyId) ?? null
+            ? (companyLookup.get(group.companyId) ?? null)
             : null,
         count: group._count._all,
       }));
@@ -140,7 +141,7 @@ export class ContextMetricsService {
             orgName: orgLookup.get(lastEntry.orgId) ?? null,
             companyName:
               typeof lastEntry.companyId === 'number'
-                ? companyLookup.get(lastEntry.companyId) ?? null
+                ? (companyLookup.get(lastEntry.companyId) ?? null)
                 : null,
             device: lastEntry.device,
             createdAt: lastEntry.createdAt,
@@ -201,8 +202,9 @@ export class ContextMetricsService {
               where: { id: { in: orgIds } },
               select: { id: true, name: true },
             })
-            .then((records) =>
-              new Map(records.map((record) => [record.id, record.name])),
+            .then(
+              (records) =>
+                new Map(records.map((record) => [record.id, record.name])),
             )
         : Promise.resolve(new Map<number, string | null>()),
       companyIds.length
@@ -211,8 +213,9 @@ export class ContextMetricsService {
               where: { id: { in: companyIds } },
               select: { id: true, name: true },
             })
-            .then((records) =>
-              new Map(records.map((record) => [record.id, record.name])),
+            .then(
+              (records) =>
+                new Map(records.map((record) => [record.id, record.name])),
             )
         : Promise.resolve(new Map<number, string | null>()),
     ]);
@@ -226,7 +229,7 @@ export class ContextMetricsService {
         const id = group[key] as number | null;
         return {
           id,
-          name: typeof id === 'number' ? lookup.get(id) ?? null : null,
+          name: typeof id === 'number' ? (lookup.get(id) ?? null) : null,
           count: group._count._all,
         };
       });

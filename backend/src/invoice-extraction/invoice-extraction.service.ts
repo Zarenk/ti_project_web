@@ -98,22 +98,25 @@ export class InvoiceExtractionService {
     });
   }
 
-  async markExtractionResult(sampleId: number, payload: ExtractionResultPayload) {
-  await this.ensureSample(sampleId)
+  async markExtractionResult(
+    sampleId: number,
+    payload: ExtractionResultPayload,
+  ) {
+    await this.ensureSample(sampleId);
 
-  const extractionJson: Prisma.InputJsonValue | Prisma.JsonNullValueInput =
-    payload.data === null || payload.data === undefined
-      ? Prisma.JsonNull
-      : (payload.data as Prisma.InputJsonValue)
+    const extractionJson: Prisma.InputJsonValue | Prisma.JsonNullValueInput =
+      payload.data === null || payload.data === undefined
+        ? Prisma.JsonNull
+        : (payload.data as Prisma.InputJsonValue);
 
-  return this.prisma.invoiceSample.update({
-    where: { id: sampleId },
+    return this.prisma.invoiceSample.update({
+      where: { id: sampleId },
       data: {
         extractionStatus: payload.status ?? 'COMPLETED',
         extractionResult: extractionJson,
         updatedAt: new Date(),
       },
-    })
+    });
   }
 
   async attachTemplate(sampleId: number, templateId: number | null) {
@@ -156,16 +159,25 @@ export class InvoiceExtractionService {
       return;
     }
 
-    const match = await this.matchTemplate(sample, textData.text, textData.preview);
+    const match = await this.matchTemplate(
+      sample,
+      textData.text,
+      textData.preview,
+    );
 
     if (match) {
       await this.attachTemplate(sampleId, match.template.id);
       await this.markExtractionResult(sampleId, match.payload);
-      await this.appendLog(sampleId, 'INFO', 'Plantilla detectada automáticamente', {
-        templateId: match.template.id,
-        templateVersion: match.template.version,
-        score: match.score,
-      });
+      await this.appendLog(
+        sampleId,
+        'INFO',
+        'Plantilla detectada automáticamente',
+        {
+          templateId: match.template.id,
+          templateVersion: match.template.version,
+          score: match.score,
+        },
+      );
       this.training
         .recordSample({
           templateId: match.template.id,
@@ -205,10 +217,15 @@ export class InvoiceExtractionService {
 
       if (fallback) {
         await this.markExtractionResult(sampleId, fallback);
-        await this.appendLog(sampleId, 'INFO', 'Extracción completada por servicio ML de respaldo', {
-          provider: fallback.data?.mlProvider ?? 'ml-fallback',
-          confidence: fallback.data?.mlConfidence ?? null,
-        });
+        await this.appendLog(
+          sampleId,
+          'INFO',
+          'Extracción completada por servicio ML de respaldo',
+          {
+            provider: fallback.data?.mlProvider ?? 'ml-fallback',
+            confidence: fallback.data?.mlConfidence ?? null,
+          },
+        );
       } else {
         await this.markExtractionResult(sampleId, {
           status: 'PENDING_TEMPLATE',
@@ -223,7 +240,6 @@ export class InvoiceExtractionService {
         );
       }
     }
-
 
     if (await this.validateEntryData(sample.entryId ?? null, sampleId)) {
       await this.recordApprovalAudit(sampleId, sample, sample.entry ?? null, {
@@ -334,14 +350,14 @@ export class InvoiceExtractionService {
       );
     }
 
-      if (await this.validateEntryData(sample.entryId ?? null, sampleId)) {
-        await this.recordApprovalAudit(
-          sampleId,
-          sample,
-          sample.entry ?? null,
-          sample.entry?.invoice ?? null,
-        );
-      }
+    if (await this.validateEntryData(sample.entryId ?? null, sampleId)) {
+      await this.recordApprovalAudit(
+        sampleId,
+        sample,
+        sample.entry ?? null,
+        sample.entry?.invoice ?? null,
+      );
+    }
     return this.prisma.invoiceSample.findUnique({ where: { id: sampleId } });
   }
   private async matchTemplate(
@@ -463,9 +479,7 @@ export class InvoiceExtractionService {
         if (descriptor) values.push(descriptor);
       }
     } else if (typeof input === 'object') {
-      for (const item of Object.values(
-        input as Record<string, unknown>,
-      )) {
+      for (const item of Object.values(input as Record<string, unknown>)) {
         const descriptor = this.resolvePattern(item);
         if (descriptor) values.push(descriptor);
       }
@@ -500,8 +514,8 @@ export class InvoiceExtractionService {
         typeof rawConfig?.group === 'number'
           ? rawConfig.group
           : typeof rawConfig?.captureGroup === 'number'
-          ? rawConfig.captureGroup
-          : 1;
+            ? rawConfig.captureGroup
+            : 1;
 
       const match = regex.exec(text);
       fields[field] = match?.[group] ?? null;
@@ -521,8 +535,8 @@ export class InvoiceExtractionService {
         typeof record.pattern === 'string'
           ? record.pattern
           : typeof record.regex === 'string'
-          ? record.regex
-          : null;
+            ? record.regex
+            : null;
       if (!pattern) {
         return null;
       }
@@ -530,8 +544,8 @@ export class InvoiceExtractionService {
         typeof record.flags === 'string'
           ? record.flags
           : typeof record.options === 'string'
-          ? record.options
-          : 'i';
+            ? record.options
+            : 'i';
       return { pattern, flags };
     }
 
@@ -568,7 +582,12 @@ export class InvoiceExtractionService {
 
     const modelPath =
       process.env.TEMPLATE_CLASSIFIER_MODEL ??
-      path.resolve(process.cwd(), 'backend', 'ml', 'template_classifier.joblib');
+      path.resolve(
+        process.cwd(),
+        'backend',
+        'ml',
+        'template_classifier.joblib',
+      );
     if (!existsSync(modelPath)) {
       this.logger.debug(
         `Modelo de clasificador no encontrado en ${modelPath}. Ejecuta train_template_classifier.py.`,
@@ -590,13 +609,7 @@ export class InvoiceExtractionService {
     }
 
     const pythonBin = process.env.PYTHON_BIN ?? 'python';
-    const args = [
-      scriptPath,
-      '--model',
-      modelPath,
-      '--text',
-      text,
-    ];
+    const args = [scriptPath, '--model', modelPath, '--text', text];
     candidates.forEach((template) => {
       args.push('--candidate', template.id.toString());
     });
@@ -687,10 +700,7 @@ export class InvoiceExtractionService {
     return sample;
   }
 
-  private async validateEntryData(
-    entryId: number | null,
-    sampleId: number,
-  ) {
+  private async validateEntryData(entryId: number | null, sampleId: number) {
     if (!entryId) {
       await this.appendLog(
         sampleId,
@@ -715,7 +725,8 @@ export class InvoiceExtractionService {
     }
 
     const detailsTotal = entry.details.reduce((sum, detail) => {
-      const lineTotal = Number(detail.price ?? 0) * Number(detail.quantity ?? 0);
+      const lineTotal =
+        Number(detail.price ?? 0) * Number(detail.quantity ?? 0);
       return sum + lineTotal;
     }, 0);
 
@@ -727,10 +738,7 @@ export class InvoiceExtractionService {
 
     const issues: string[] = [];
 
-    if (
-      invoiceTotal !== null &&
-      Math.abs(invoiceTotal - detailsTotal) > 0.01
-    ) {
+    if (invoiceTotal !== null && Math.abs(invoiceTotal - detailsTotal) > 0.01) {
       issues.push(
         `El total del comprobante (${invoiceTotal.toFixed(
           2,
@@ -804,7 +812,7 @@ export class InvoiceExtractionService {
     const mlMetadata =
       typeof sample.extractionResult === 'object' &&
       sample.extractionResult !== null
-        ? (sample.extractionResult as any).mlMetadata ?? null
+        ? ((sample.extractionResult as any).mlMetadata ?? null)
         : null;
 
     const text =
@@ -822,11 +830,16 @@ export class InvoiceExtractionService {
       });
     }
 
-    await this.appendLog(sampleId, 'TRAINING_DATA', 'Corrección manual registrada', {
-      templateId: dto.templateId ?? sample.invoiceTemplateId ?? null,
-      fields: dto.fields,
-      mlMetadata,
-    });
+    await this.appendLog(
+      sampleId,
+      'TRAINING_DATA',
+      'Corrección manual registrada',
+      {
+        templateId: dto.templateId ?? sample.invoiceTemplateId ?? null,
+        fields: dto.fields,
+        mlMetadata,
+      },
+    );
 
     return { success: true, mlMetadata };
   }
@@ -846,7 +859,7 @@ export class InvoiceExtractionService {
         typeof sample.extractionResult === 'object' &&
         sample.extractionResult !== null &&
         'mlMetadata' in sample.extractionResult
-          ? (sample.extractionResult as any).mlMetadata?.source ?? null
+          ? ((sample.extractionResult as any).mlMetadata?.source ?? null)
           : null,
       invoiceType: invoice?.tipoComprobante ?? null,
       organizationId: ctx.organizationId,
@@ -865,10 +878,8 @@ export class InvoiceExtractionService {
         sample.fileSize === null
           ? null
           : typeof sample.fileSize === 'bigint'
-          ? Number(sample.fileSize)
-          : sample.fileSize,
+            ? Number(sample.fileSize)
+            : sample.fileSize,
     };
   }
 }
-
-

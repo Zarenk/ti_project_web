@@ -13,8 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { fetchSubscriptionSummary } from "@/lib/subscription-summary"
+import { cn } from "@/lib/utils"
 import type { SubscriptionSummary, SubscriptionStatus } from "@/types/subscription"
 import {
   cancelSubscription,
@@ -23,6 +26,8 @@ import {
   type SubscriptionPlan,
 } from "../billing.api"
 import { useAccountAccessGuard } from "../use-account-access"
+import { listOrganizationsWithCompanies, type OrganizationCompaniesOverview } from "@/app/dashboard/tenancy/tenancy.api"
+import { useAuth } from "@/context/auth-context"
 
 const STATUS_LABEL: Record<SubscriptionStatus, string> = {
   TRIAL: "Periodo de prueba",
@@ -40,10 +45,33 @@ const CANCEL_REASONS = [
   { value: "other", label: "Otro motivo" },
 ]
 
+type GlobalPlanUsage = {
+  orgId: number
+  orgName: string
+  planName: string
+  planCode: string
+  status: SubscriptionStatus
+  users: UsageMetric
+  invoices: UsageMetric
+  storageMB: UsageMetric
+  alert: string
+  hasIssue: boolean
+  summary: SubscriptionSummary | null
+}
+
+type UsageMetric = {
+  used: number
+  limit: number | null
+  percent: number | null
+}
+
 export default function PlanUsagePage() {
   const accessReady = useAccountAccessGuard()
   const { selection, version } = useTenantSelection()
+  const { role } = useAuth()
   const organizationId = selection?.orgId ?? null
+  const normalizedRole = role?.toUpperCase() ?? ""
+  const isGlobalSuperAdmin = normalizedRole === "SUPER_ADMIN_GLOBAL"
 
   const [summary, setSummary] = useState<SubscriptionSummary | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(true)
@@ -58,6 +86,20 @@ export default function PlanUsagePage() {
   const [cancelNotes, setCancelNotes] = useState("")
   const [cancelImmediately, setCancelImmediately] = useState(false)
   const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [globalUsage, setGlobalUsage] = useState<GlobalPlanUsage[]>([])
+  const [globalUsageLoading, setGlobalUsageLoading] = useState(false)
+  const [globalUsageError, setGlobalUsageError] = useState<string | null>(null)
+  const [globalSearch, setGlobalSearch] = useState("")
+  const [globalPageSize, setGlobalPageSize] = useState(10)
+  const [globalPage, setGlobalPage] = useState(1)
+  const [globalSelectedOrgId, setGlobalSelectedOrgId] = useState<number | null>(null)
+  const [globalSelectedSummary, setGlobalSelectedSummary] = useState<SubscriptionSummary | null>(null)
+
+  const targetOrgId = isGlobalSuperAdmin ? globalSelectedOrgId : organizationId
+  const targetSummary = isGlobalSuperAdmin ? globalSelectedSummary : summary
+  const planOverviewLoading = isGlobalSuperAdmin
+    ? !!globalSelectedOrgId && !globalSelectedSummary
+    : summaryLoading
 
   const loadSummary = useCallback(async () => {
     if (!organizationId) {
@@ -67,7 +109,7 @@ export default function PlanUsagePage() {
     }
     setSummaryLoading(true)
     try {
-      const data = await fetchSubscriptionSummary()
+      const data = await fetchSubscriptionSummary(organizationId)
       setSummary(data)
     } catch (error) {
       console.error(error)
@@ -79,7 +121,7 @@ export default function PlanUsagePage() {
   }, [organizationId])
 
   const loadPlans = useCallback(async () => {
-    if (!organizationId) {
+    if (!organizationId && !isGlobalSuperAdmin) {
       setPlans([])
       setPlansLoading(false)
       return
@@ -90,7 +132,7 @@ export default function PlanUsagePage() {
       setPlans(list)
       setPlanCode((current) => {
         if (current) return current
-        if (summary?.plan?.code) return summary.plan.code
+        if (targetSummary?.plan?.code) return targetSummary.plan.code
         return list[0]?.code ?? ""
       })
     } catch (error) {
@@ -100,7 +142,35 @@ export default function PlanUsagePage() {
     } finally {
       setPlansLoading(false)
     }
-  }, [organizationId, summary?.plan?.code])
+  }, [organizationId, targetSummary?.plan?.code, isGlobalSuperAdmin])
+
+  const refreshGlobalUsage = useCallback(async () => {
+    if (!isGlobalSuperAdmin) return
+    setGlobalUsageLoading(true)
+    try {
+      const organizations = await listOrganizationsWithCompanies()
+      const rows = await Promise.all(
+        organizations.map(async (org) => {
+          try {
+            const summary = await fetchSubscriptionSummary(org.id)
+            return buildGlobalPlanUsage(org, summary)
+          } catch (error) {
+            console.error("[plan] resumen global", org.id, error)
+            return buildGlobalPlanUsage(org, null)
+          }
+        })
+      )
+      rows.sort((a, b) => a.orgName.localeCompare(b.orgName, "es", { sensitivity: "base" }))
+      setGlobalUsage(rows)
+      setGlobalUsageError(null)
+    } catch (error) {
+      console.error("[plan] listado global", error)
+      setGlobalUsage([])
+      setGlobalUsageError("No pudimos consultar las organizaciones.")
+    } finally {
+      setGlobalUsageLoading(false)
+    }
+  }, [isGlobalSuperAdmin])
 
   useEffect(() => {
     if (!accessReady) return
@@ -113,18 +183,34 @@ export default function PlanUsagePage() {
   }, [accessReady, loadPlans, version])
 
   useEffect(() => {
+    if (!accessReady || !isGlobalSuperAdmin) return
+    void refreshGlobalUsage()
+  }, [accessReady, isGlobalSuperAdmin, refreshGlobalUsage])
+
+  useEffect(() => {
+    if (!isGlobalSuperAdmin) {
+      setGlobalUsage([])
+      setGlobalUsageLoading(false)
+      setGlobalUsageError(null)
+      setGlobalSearch("")
+      setGlobalSelectedOrgId(null)
+      setGlobalSelectedSummary(null)
+    }
+  }, [isGlobalSuperAdmin])
+
+  useEffect(() => {
     setPlanLockedToSummary(true)
     setPlanCode("")
-  }, [organizationId])
+  }, [targetOrgId])
 
   useEffect(() => {
     if (!planLockedToSummary) return
-    if (summary?.plan?.code) {
-      setPlanCode(summary.plan.code)
-    } else if (!summary && plans.length > 0 && !planCode) {
+    if (targetSummary?.plan?.code) {
+      setPlanCode(targetSummary.plan.code)
+    } else if (!targetSummary && plans.length > 0 && !planCode) {
       setPlanCode(plans[0].code)
     }
-  }, [planLockedToSummary, summary, plans, planCode])
+  }, [planLockedToSummary, targetSummary, plans, planCode])
 
   const handlePlanSelect = (value: string) => {
     setPlanLockedToSummary(false)
@@ -132,10 +218,65 @@ export default function PlanUsagePage() {
   }
 
   const selectedPlan = useMemo(() => plans.find((plan) => plan.code === planCode), [planCode, plans])
-  const isSamePlan = summary?.plan?.code ? summary.plan.code === planCode : true
+  const isSamePlan = targetSummary?.plan?.code ? targetSummary.plan.code === planCode : true
+
+  const filteredGlobalUsage = useMemo(() => {
+    const needle = globalSearch.trim().toLowerCase()
+    if (!needle) return globalUsage
+    return globalUsage.filter((row) => {
+      return (
+        row.orgName.toLowerCase().includes(needle) ||
+        row.planName.toLowerCase().includes(needle) ||
+        row.planCode.toLowerCase().includes(needle)
+      )
+    })
+  }, [globalUsage, globalSearch])
+
+  useEffect(() => {
+    setGlobalPage(1)
+  }, [globalSearch, globalPageSize])
+
+  useEffect(() => {
+    setGlobalPage(1)
+  }, [filteredGlobalUsage.length])
+
+  const globalTotalPages = Math.max(1, Math.ceil(Math.max(filteredGlobalUsage.length, 1) / globalPageSize))
+
+  useEffect(() => {
+    if (globalPage > globalTotalPages) {
+      setGlobalPage(globalTotalPages)
+    }
+  }, [globalTotalPages, globalPage])
+
+  const globalStartIndex = filteredGlobalUsage.length === 0 ? 0 : (globalPage - 1) * globalPageSize
+  const paginatedGlobalUsage = filteredGlobalUsage.slice(globalStartIndex, globalStartIndex + globalPageSize)
+  const globalRangeStart = filteredGlobalUsage.length === 0 ? 0 : globalStartIndex + 1
+  const globalRangeEnd =
+    filteredGlobalUsage.length === 0 ? 0 : Math.min(globalStartIndex + globalPageSize, filteredGlobalUsage.length)
+
+  const handleGlobalRowSelect = useCallback((row: GlobalPlanUsage) => {
+    setGlobalSelectedOrgId(row.orgId)
+    setGlobalSelectedSummary(row.summary)
+    setPlanLockedToSummary(true)
+    setPlanCode("")
+  }, [])
+
+  useEffect(() => {
+    if (!isGlobalSuperAdmin) return
+    if (!globalSelectedOrgId) return
+    const match = globalUsage.find((row) => row.orgId === globalSelectedOrgId)
+    if (!match) {
+      setGlobalSelectedOrgId(null)
+      setGlobalSelectedSummary(null)
+      return
+    }
+    if (match.summary !== globalSelectedSummary) {
+      setGlobalSelectedSummary(match.summary)
+    }
+  }, [globalUsage, globalSelectedOrgId, globalSelectedSummary, isGlobalSuperAdmin])
 
   const handlePlanChange = async () => {
-    if (!organizationId) {
+    if (!targetOrgId) {
       toast.error("Selecciona una organizacion activa para gestionar el plan.")
       return
     }
@@ -146,7 +287,7 @@ export default function PlanUsagePage() {
     setPlanSubmitting(true)
     try {
       const response = await requestPlanChange({
-        organizationId,
+        organizationId: targetOrgId,
         planCode,
         effectiveImmediately,
       })
@@ -164,7 +305,11 @@ export default function PlanUsagePage() {
       }
 
       setPlanLockedToSummary(true)
-      void loadSummary()
+      if (isGlobalSuperAdmin) {
+        await refreshGlobalUsage()
+      } else {
+        void loadSummary()
+      }
     } catch (error) {
       console.error(error)
       toast.error(error instanceof Error ? error.message : "No pudimos ejecutar el cambio de plan.")
@@ -174,7 +319,7 @@ export default function PlanUsagePage() {
   }
 
   const handleCancelSubscription = async () => {
-    if (!organizationId) {
+    if (!targetOrgId) {
       toast.error("Selecciona una organizacion activa para continuar.")
       return
     }
@@ -189,7 +334,7 @@ export default function PlanUsagePage() {
     setCancelSubmitting(true)
     try {
       await cancelSubscription({
-        organizationId,
+        organizationId: targetOrgId,
         cancelImmediately,
         reasonCategory: cancelReason === "other" ? undefined : cancelReason,
         customReason: cancelReason === "other" ? cancelNotes.trim() : cancelNotes.trim() || undefined,
@@ -198,7 +343,11 @@ export default function PlanUsagePage() {
       setCancelNotes("")
       setCancelReason("")
       setCancelImmediately(false)
-      void loadSummary()
+      if (isGlobalSuperAdmin) {
+        await refreshGlobalUsage()
+      } else {
+        void loadSummary()
+      }
     } catch (error) {
       console.error(error)
       toast.error(error instanceof Error ? error.message : "No pudimos cancelar la suscripcion.")
@@ -237,21 +386,42 @@ export default function PlanUsagePage() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-        {!organizationId ? (
+        {isGlobalSuperAdmin && (
+          <GlobalOrganizationsUsageCard
+            loading={globalUsageLoading}
+            error={globalUsageError}
+            rows={paginatedGlobalUsage}
+            totalRows={filteredGlobalUsage.length}
+            rangeStart={globalRangeStart}
+            rangeEnd={globalRangeEnd}
+            search={globalSearch}
+            onSearchChange={setGlobalSearch}
+            onRefresh={refreshGlobalUsage}
+            page={globalPage}
+            totalPages={globalTotalPages}
+            pageSize={globalPageSize}
+            onPageChange={setGlobalPage}
+            onPageSizeChange={setGlobalPageSize}
+            selectedOrgId={globalSelectedOrgId}
+            onSelect={handleGlobalRowSelect}
+          />
+        )}
+        {!targetOrgId ? (
           <Card className="border-sky-100 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <CardHeader>
               <CardTitle className="text-slate-800 dark:text-slate-100">Selecciona una organizacion</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-slate-600 dark:text-slate-300">
-              Usa el conmutador de equipos para elegir la organizacion que deseas administrar. Luego podras ver su
-              consumo y actualizar el plan.
+              {isGlobalSuperAdmin
+                ? "Elige una organización desde la tabla de supervisión para visualizar y gestionar su plan."
+                : "Usa el conmutador de equipos para elegir la organización que deseas administrar. Luego podrás ver su consumo y actualizar el plan."}
             </CardContent>
           </Card>
         ) : (
           <>
             <section className="grid gap-6 lg:grid-cols-2">
-              <PlanOverviewCard summary={summary} loading={summaryLoading} />
-              <SubscriptionQuotaCard />
+              <PlanOverviewCard summary={targetSummary} loading={planOverviewLoading} />
+              {targetOrgId ? <SubscriptionQuotaCard organizationId={targetOrgId} /> : null}
             </section>
 
             <section className="grid gap-6 lg:grid-cols-2">
@@ -429,6 +599,208 @@ export default function PlanUsagePage() {
   )
 }
 
+type GlobalUsageCardProps = {
+  loading: boolean
+  error: string | null
+  rows: GlobalPlanUsage[]
+  totalRows: number
+  rangeStart: number
+  rangeEnd: number
+  page: number
+  totalPages: number
+  pageSize: number
+  search: string
+  onSearchChange: (value: string) => void
+  onRefresh: () => void
+  onPageChange: (page: number) => void
+  onPageSizeChange: (size: number) => void
+  selectedOrgId: number | null
+  onSelect: (row: GlobalPlanUsage) => void
+}
+
+function GlobalOrganizationsUsageCard({
+  loading,
+  error,
+  rows,
+  totalRows,
+  rangeStart,
+  rangeEnd,
+  page,
+  totalPages,
+  pageSize,
+  search,
+  onSearchChange,
+  onRefresh,
+  onPageChange,
+  onPageSizeChange,
+  selectedOrgId,
+  onSelect,
+}: GlobalUsageCardProps) {
+  return (
+    <Card className="border-violet-100 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <CardHeader>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle className="text-slate-800 dark:text-slate-100">Supervisión del consumo</CardTitle>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Revisa el plan y uso de cada organización para anticipar upgrades o incidencias.
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Input
+              placeholder="Buscar por organización o plan"
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              className="sm:min-w-[260px]"
+            />
+            <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading} className="cursor-pointer">
+              Actualizar
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Skeleton key={`global-plan-skeleton-${index}`} className="h-16 w-full rounded-md" />
+            ))}
+          </div>
+        ) : error ? (
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            No encontramos organizaciones con los criterios actuales.
+          </p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase text-slate-500 dark:text-slate-400">
+                    <th className="py-2 pr-4">Organización</th>
+                    <th className="py-2 pr-4">Plan</th>
+                    <th className="py-2 pr-4">Usuarios</th>
+                    <th className="py-2 pr-4">Facturas</th>
+                    <th className="py-2 pr-4">Almacenamiento</th>
+                    <th className="py-2 pr-4">Estado</th>
+                    <th className="py-2 text-left">Alertas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const statusVariant = row.hasIssue || row.status !== "ACTIVE" ? "secondary" : "outline"
+                    const isSelected = selectedOrgId === row.orgId
+                    return (
+                      <tr
+                        key={row.orgId}
+                        className={cn(
+                          "cursor-pointer border-t border-slate-100 text-slate-700 transition-colors hover:bg-sky-50/60 dark:border-slate-800 dark:text-slate-200 dark:hover:bg-slate-800/60",
+                          isSelected && "bg-sky-100/70 dark:bg-slate-800/70"
+                        )}
+                        onClick={() => onSelect(row)}
+                      >
+                        <td className="py-3 pr-4">
+                          <div className="font-semibold text-slate-800 dark:text-slate-100">{row.orgName}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">ID #{row.orgId}</div>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <div className="font-medium text-slate-800 dark:text-slate-100">{row.planName}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">Código {row.planCode}</div>
+                        </td>
+                        <td className="py-3 pr-4 font-medium">{formatUsageMetric(row.users, "usuarios")}</td>
+                        <td className="py-3 pr-4 font-medium">{formatUsageMetric(row.invoices, "facturas")}</td>
+                        <td className="py-3 pr-4 font-medium">{formatStorageUsage(row.storageMB)}</td>
+                        <td className="py-3 pr-4">
+                          <Badge variant={statusVariant}>{STATUS_LABEL[row.status]}</Badge>
+                        </td>
+                        <td className="py-3">
+                          <span
+                            className={`text-xs font-semibold ${
+                              row.hasIssue
+                                ? "text-amber-600 dark:text-amber-400"
+                                : "text-emerald-600 dark:text-emerald-400"
+                            }`}
+                          >
+                            {row.alert}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400 md:flex-row md:items-center md:justify-between">
+              <div>
+                Mostrando {rangeStart === 0 ? 0 : rangeStart}-{rangeEnd} de {totalRows} organizaciones
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                <div className="flex items-center gap-2">
+                  <span>Ver:</span>
+                  <Select value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))}>
+                    <SelectTrigger className="h-8 w-[100px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[10, 20, 50].map((size) => (
+                        <SelectItem key={size} value={String(size)}>
+                          {size} filas
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => onPageChange(1)}
+                    disabled={page <= 1}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => onPageChange(Math.max(1, page - 1))}
+                    disabled={page <= 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="px-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                    Página {page} de {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+                    disabled={page >= totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => onPageChange(totalPages)}
+                    disabled={page >= totalPages}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function PlanOverviewCard({ summary, loading }: { summary: SubscriptionSummary | null; loading: boolean }) {
   if (loading) {
     return (
@@ -522,6 +894,102 @@ function PlanSkeleton() {
       </main>
     </div>
   )
+}
+
+function buildGlobalPlanUsage(
+  org: OrganizationCompaniesOverview,
+  summary: SubscriptionSummary | null
+): GlobalPlanUsage {
+  const fallbackMetric: UsageMetric = { used: 0, limit: null, percent: null }
+
+  if (!summary) {
+    return {
+      orgId: org.id,
+      orgName: org.name,
+      planName: "Sin datos",
+      planCode: "N/D",
+      status: "ACTIVE",
+      users: fallbackMetric,
+      invoices: fallbackMetric,
+      storageMB: fallbackMetric,
+      alert: "Sin datos disponibles",
+      hasIssue: true,
+      summary: null,
+    }
+  }
+
+  const planStatus = summary.plan.status
+  const users = computeUsageMetric(summary.usage?.users, summary.quotas?.users)
+  const invoices = computeUsageMetric(summary.usage?.invoices, summary.quotas?.invoices)
+  const storageMB = computeUsageMetric(summary.usage?.storageMB, summary.quotas?.storageMB)
+
+  let alert = "Consumo saludable"
+  let hasIssue = false
+
+  const metrics = [users, invoices, storageMB]
+  const exceeded = metrics.some((metric) => metric.percent !== null && metric.percent >= 100)
+  const warning = metrics.some((metric) => metric.percent !== null && metric.percent >= 90)
+
+  if (exceeded) {
+    alert = "Límite excedido en uno de los recursos"
+    hasIssue = true
+  } else if (warning) {
+    alert = "Cerca al límite permitido"
+    hasIssue = true
+  }
+
+  if (planStatus !== "ACTIVE") {
+    alert = `Estado ${STATUS_LABEL[planStatus].toLowerCase()}`
+    hasIssue = true
+  }
+
+  return {
+    orgId: org.id,
+    orgName: org.name,
+    planName: summary.plan.name,
+    planCode: summary.plan.code,
+    status: planStatus,
+    users,
+    invoices,
+    storageMB,
+    alert,
+    hasIssue,
+    summary,
+  }
+}
+
+function computeUsageMetric(used?: number, limit?: number | null): UsageMetric {
+  const safeUsed = typeof used === "number" && Number.isFinite(used) ? used : 0
+  const safeLimit =
+    typeof limit === "number" && Number.isFinite(limit) && limit > 0 ? Math.max(1, Math.floor(limit)) : null
+  const percent = safeLimit ? Math.round((safeUsed / safeLimit) * 100) : null
+  return {
+    used: safeUsed,
+    limit: safeLimit,
+    percent: percent !== null ? Math.min(percent, 999) : null,
+  }
+}
+
+function formatUsageMetric(metric: UsageMetric, label: string) {
+  if (metric.limit === null) {
+    return `${metric.used} ${label} (sin límite)`
+  }
+  const percentText = metric.percent !== null ? ` (${metric.percent}%)` : ""
+  return `${metric.used}/${metric.limit} ${label}${percentText}`
+}
+
+function formatStorageUsage(metric: UsageMetric) {
+  const used = formatStorageValue(metric.used)
+  const total = metric.limit === null ? "sin límite" : formatStorageValue(metric.limit)
+  const percentText = metric.percent !== null ? ` (${metric.percent}%)` : ""
+  return `${used} / ${total}${percentText}`
+}
+
+function formatStorageValue(value: number) {
+  if (value >= 1024) {
+    return `${(value / 1024).toFixed(1)} GB`
+  }
+  return `${value} MB`
 }
 
 function formatPrice(amount: string, currency: string) {

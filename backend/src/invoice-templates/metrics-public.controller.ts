@@ -1,8 +1,4 @@
-import {
-  Controller,
-  Get,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantContextGuard } from 'src/tenancy/tenant-context.guard';
 import { InvoiceTemplatesMetricsService } from './metrics.service';
@@ -14,7 +10,9 @@ import { SkipTenantContextGuard } from 'src/tenancy/skip-tenant-context.decorato
 @SkipTenantContextGuard()
 @UseGuards(JwtAuthGuard, TenantContextGuard)
 export class InvoiceTemplatesMetricsPublicController {
-  constructor(private readonly metricsService: InvoiceTemplatesMetricsService) {}
+  constructor(
+    private readonly metricsService: InvoiceTemplatesMetricsService,
+  ) {}
 
   @Get('metrics-public')
   getPublicMetrics() {

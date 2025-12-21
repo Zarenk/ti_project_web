@@ -301,9 +301,11 @@ export class EntriesController {
       }
 
       const sha256 = await this.computeSha256(absolutePath);
-      const storagePath = path
-        .posix
-        .join('uploads', 'invoices', file.filename.replace(/\\/g, '/'));
+      const storagePath = path.posix.join(
+        'uploads',
+        'invoices',
+        file.filename.replace(/\\/g, '/'),
+      );
 
       const sample = await this.invoiceExtraction.recordSample({
         entryId,
@@ -314,20 +316,14 @@ export class EntriesController {
         sha256,
       });
 
-      await this.invoiceExtraction.appendLog(
-        sample.id,
-        'INFO',
-        'PDF subido',
-        { storagePath },
-      );
+      await this.invoiceExtraction.appendLog(sample.id, 'INFO', 'PDF subido', {
+        storagePath,
+      });
 
       this.invoiceExtraction
         .processSample(sample.id)
         .catch((error) =>
-          console.error(
-            `Error al procesar la muestra ${sample.id}:`,
-            error,
-          ),
+          console.error(`Error al procesar la muestra ${sample.id}:`, error),
         );
     } catch (error) {
       console.error('Error registrando la muestra de factura:', error);

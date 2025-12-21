@@ -30,11 +30,12 @@ export class InvoiceTemplatesMetricsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const confidenceThreshold =
-      Number(process.env.INVOICE_CONFIDENCE_THRESHOLD ?? 0.45);
+    const confidenceThreshold = Number(
+      process.env.INVOICE_CONFIDENCE_THRESHOLD ?? 0.45,
+    );
     const entries = samples.map((sample) => ({
       id: sample.id,
-        providerId: null,
+      providerId: null,
       mlConfidence: this.extractConfidence(sample.extractionResult),
     }));
 
@@ -44,7 +45,8 @@ export class InvoiceTemplatesMetricsService {
 
     const averageConfidence =
       confidences.length > 0
-        ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length
+        ? confidences.reduce((sum, value) => sum + value, 0) /
+          confidences.length
         : null;
 
     const lowConfidenceSamples = entries

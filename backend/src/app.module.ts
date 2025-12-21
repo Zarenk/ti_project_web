@@ -57,6 +57,7 @@ import { InvoiceExtractionModule } from './invoice-extraction/invoice-extraction
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { PublicSignupModule } from './public-signup/public-signup.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -108,6 +109,7 @@ import { OnboardingModule } from './onboarding/onboarding.module';
     SubscriptionsModule,
     PublicSignupModule,
     OnboardingModule,
+    DashboardModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [

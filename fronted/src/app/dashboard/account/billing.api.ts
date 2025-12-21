@@ -67,6 +67,11 @@ export interface UpsertPaymentMethodInput {
   country?: string | null
   isDefault?: boolean
   billingCustomerId?: string | null
+  tokenized?: boolean
+  cardholderName?: string | null
+  cardholderEmail?: string | null
+  identificationType?: string | null
+  identificationNumber?: string | null
 }
 
 export async function fetchBillingInvoices(organizationId: number): Promise<BillingInvoice[]> {

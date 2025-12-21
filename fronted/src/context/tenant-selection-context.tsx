@@ -31,6 +31,8 @@ import { io } from "socket.io-client"
 import { SOCKET_URL } from "@/lib/utils"
 import { getAuthToken } from "@/utils/auth-token"
 
+const DISABLE_CONTEXT_SOCKET = process.env.NEXT_PUBLIC_DISABLE_CONTEXT_SOCKET === "true"
+
 type RestoreStatus =
   | { state: "idle"; message?: string }
   | { state: "restoring"; message?: string }
@@ -78,6 +80,7 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
     message: "Restaurando tu espacio de trabajo...",
   })
   const [socketAttempt, setSocketAttempt] = useState(0)
+  const [socketDisabled, setSocketDisabled] = useState(false)
   const [pendingRefresh, setPendingRefresh] = useState(false)
 
   const resolveReasonMessage = (reason: string | null): string => {
@@ -289,7 +292,7 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
   }, [canQueryOrganizations, status.state, selection])
 
   useEffect(() => {
-    if (!userId) {
+    if (!userId || DISABLE_CONTEXT_SOCKET || socketDisabled) {
       return
     }
     const contextSocket = io(`${SOCKET_URL}/context`, {
@@ -344,8 +347,10 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
       if (connectionErrors >= 3) {
         console.warn("[context-socket] disabling realtime sync after repeated failures")
         enableFallbackPolling()
-        scheduleReconnect()
+        setSocketDisabled(true)
         contextSocket.disconnect()
+      } else {
+        scheduleReconnect()
       }
     }
     contextSocket.on("connect", handleConnect)
@@ -361,7 +366,7 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
         clearTimeout(reconnectTimer)
       }
     }
-  }, [userId, selection.orgId, selection.companyId, resolveSelection, socketAttempt])
+  }, [userId, selection.orgId, selection.companyId, resolveSelection, socketAttempt, socketDisabled])
 
   const value = useMemo<TenantSelectionContextValue>(
     () => ({

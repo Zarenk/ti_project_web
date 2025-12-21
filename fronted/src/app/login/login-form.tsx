@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { signIn } from 'next-auth/react';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { getUserDataFromToken } from '@/lib/auth';
 import { getAuthToken } from '@/utils/auth-token';
@@ -101,6 +101,8 @@ export default function LoginForm() {
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [resendVerificationStatus, setResendVerificationStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [resendVerificationLoading, setResendVerificationLoading] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const router = useRouter();
   const { refreshUser } = useAuth();
 
@@ -248,12 +250,17 @@ export default function LoginForm() {
         router.replace('/users');
         setLoading(false);
       }
-    } catch (error: any) {
-      if (error?.code === 'EMAIL_VERIFICATION_REQUIRED') {
-        const emailForResend = error?.email || normalizedEmail;
+    } catch (caughtError) {
+      const loginError =
+        typeof caughtError === 'object' && caughtError !== null
+          ? (caughtError as { code?: string; email?: string; message?: string })
+          : {};
+
+      if (loginError.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        const emailForResend = loginError.email || normalizedEmail;
         setPendingVerificationEmail(emailForResend);
         setResendVerificationStatus(null);
-        toast.error(error?.message || 'Debes verificar tu correo antes de continuar.');
+        toast.error(loginError.message || 'Debes verificar tu correo antes de continuar.');
         setLoading(false);
         return;
       }
@@ -265,7 +272,7 @@ export default function LoginForm() {
         forcedReset: attemptState?.forcedReset,
       };
 
-      let feedbackMessage = error?.message || 'Error al iniciar sesion';
+      let feedbackMessage = loginError.message || 'Error al iniciar sesion';
 
       if (nextCount === 4) {
         nextState.lockUntil = Date.now() + TEN_MINUTES_MS;
@@ -306,7 +313,7 @@ export default function LoginForm() {
     }
     try {
       await signIn('google', { callbackUrl: '/google-auth' });
-    } catch (error) {
+    } catch {
       toast.error('Error al conectar con Google');
     }
   };
@@ -365,14 +372,22 @@ export default function LoginForm() {
         data?.message || 'Te enviamos un nuevo correo de verificación.';
       setResendVerificationStatus({ type: 'success', message });
       toast.success(message);
-    } catch (error: any) {
+    } catch (caughtError) {
+      const resendError =
+        typeof caughtError === 'object' && caughtError !== null
+          ? (caughtError as { message?: string })
+          : {};
       const message =
-        error?.message || 'No pudimos reenviar el correo de verificación.';
+        resendError.message || 'No pudimos reenviar el correo de verificación.';
       setResendVerificationStatus({ type: 'error', message });
       toast.error(message);
     } finally {
       setResendVerificationLoading(false);
     }
+  };
+
+  const handleCapsLockDetection = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    setCapsLockOn(event.getModifierState?.('CapsLock') ?? false);
   };
 
   return (
@@ -405,10 +420,31 @@ export default function LoginForm() {
             placeholder="Ingresa tu contrasena"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={handleCapsLockDetection}
+            onKeyUp={handleCapsLockDetection}
+            onFocus={(event) => {
+              setPasswordFocused(true);
+              setCapsLockOn(event.getModifierState?.('CapsLock') ?? false);
+            }}
+            onBlur={() => {
+              setPasswordFocused(false);
+              setCapsLockOn(false);
+            }}
             required
             className="mt-1"
             disabled={loading}
           />
+          {passwordFocused && capsLockOn && (
+            <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 via-amber-100 to-white px-3 py-2 text-sm font-medium text-amber-900 shadow-[0_10px_30px_rgba(245,158,11,0.25)] transition-all">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-200/70 text-amber-900 shadow-inner">
+                <AlertTriangle className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="leading-tight">Bloq Mayús activado</p>
+                <p className="text-xs font-normal text-amber-800/80">Desactívalo si tu contraseña distingue entre mayúsculas y minúsculas.</p>
+              </div>
+            </div>
+          )}
         </div>
         {lockMessage && (
           <p

@@ -394,6 +394,44 @@
   }
 }
 
+.login-scan-border {
+  position: relative;
+  overflow: visible;
+  --scan-border-width: 3px;
+  --scan-border-opacity: 0.75;
+}
+
+.login-scan-border::before {
+  content: "";
+  position: absolute;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.login-scan-border::before {
+  inset: -6px;
+  opacity: var(--scan-border-opacity);
+  box-shadow:
+    0 0 15px rgba(59, 130, 246, 0.55),
+    0 0 35px rgba(14, 165, 233, 0.4),
+    0 0 55px rgba(14, 165, 233, 0.25);
+  border: 1px solid rgba(59, 130, 246, 0.45);
+}
+
+.dark .login-scan-border::before {
+  opacity: 0.95;
+  box-shadow:
+    0 0 22px rgba(14, 165, 233, 0.65),
+    0 0 60px rgba(14, 165, 233, 0.4),
+    0 0 90px rgba(14, 165, 233, 0.3);
+  border: 1px solid rgba(147, 197, 253, 0.8);
+}
+
+@media (max-width: 640px) {
+  .login-scan-border { --scan-border-width: 2px; }
+  .login-scan-border::before { inset: -3px; }
+}
+
 /* Smoothly animate custom angle for cross-browser */
 @property --scan-angle {
   syntax: '<angle>';

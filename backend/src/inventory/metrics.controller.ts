@@ -8,7 +8,9 @@ import { InvoiceTemplatesMetricsService } from 'src/invoice-templates/metrics.se
 @UseGuards(JwtAuthGuard, TenantContextGuard, ModulePermissionsGuard)
 export class InventoryMetricsController {
   private readonly logger = new Logger(InventoryMetricsController.name);
-  constructor(private readonly metricsService: InvoiceTemplatesMetricsService) {}
+  constructor(
+    private readonly metricsService: InvoiceTemplatesMetricsService,
+  ) {}
 
   @Get('metrics')
   getMetrics() {

@@ -1,7 +1,11 @@
 import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 
-const TENANT_HEADER_NAMES = ['x-org-id', 'x-company-id', 'x-org-unit-id'] as const;
+const TENANT_HEADER_NAMES = [
+  'x-org-id',
+  'x-company-id',
+  'x-org-unit-id',
+] as const;
 type TenantHeaderName = (typeof TENANT_HEADER_NAMES)[number];
 
 const sanitizeHeader = (
@@ -25,7 +29,7 @@ export class TenantHeaderSanitizerMiddleware implements NestMiddleware {
     headerName: TenantHeaderName,
   ): string | undefined {
     const original = req.headers[headerName];
-    const sanitized = sanitizeHeader(original as string | string[] | undefined);
+    const sanitized = sanitizeHeader(original);
 
     if (sanitized) {
       req.headers[headerName] = sanitized;

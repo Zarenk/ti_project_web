@@ -61,8 +61,7 @@ async function allocateInvoiceSequence(
         companyId,
         documentType: normalizedType,
         serie: lastInvoice?.serie ?? fallbackSerie,
-        nextCorrelative:
-          lastCorrelative !== null ? lastCorrelative + 1 : 1,
+        nextCorrelative: lastCorrelative !== null ? lastCorrelative + 1 : 1,
         correlativeLength: padding,
       },
     });

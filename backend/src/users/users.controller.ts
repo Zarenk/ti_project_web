@@ -131,23 +131,13 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Post('me/context-history/:id/restore')
-  restoreFromHistory(
-    @Request() req,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    return this.usersService.restoreFromHistory(
-      req.user.userId,
-      id,
-      req,
-    );
+  restoreFromHistory(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    return this.usersService.restoreFromHistory(req.user.userId, id, req);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('me/last-context')
-  updateLastContext(
-    @Request() req,
-    @Body() dto: UpdateLastContextDto,
-  ) {
+  updateLastContext(@Request() req, @Body() dto: UpdateLastContextDto) {
     return this.usersService.updateLastContext(req.user.userId, dto, req);
   }
 

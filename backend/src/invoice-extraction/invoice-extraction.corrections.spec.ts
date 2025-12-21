@@ -16,7 +16,10 @@ describe('Invoice corrections integration', () => {
     trainingService = { recordSample: jest.fn() };
 
     const module = await Test.createTestingModule({
-      imports: [ConfigModule.forRoot({ isGlobal: true }), InvoiceExtractionModule],
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true }),
+        InvoiceExtractionModule,
+      ],
     })
       .overrideProvider(TemplateTrainingService)
       .useValue(trainingService)
@@ -97,7 +100,9 @@ describe('Invoice corrections integration', () => {
       fields: { total: '123.45' },
       mlMetadata: { fileHash: 'hash', source: 'donut' },
     });
-    await prisma.invoiceExtractionLog.deleteMany({ where: { sampleId: sample.id } });
+    await prisma.invoiceExtractionLog.deleteMany({
+      where: { sampleId: sample.id },
+    });
     await prisma.invoiceSample.delete({ where: { id: sample.id } });
   });
 });

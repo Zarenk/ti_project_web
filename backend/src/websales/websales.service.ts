@@ -1032,7 +1032,7 @@ export class WebSalesService {
         : null;
 
       if (cleanedSale && 'sunatTransmissions' in cleanedSale) {
-        delete (cleanedSale as any).sunatTransmissions;
+        delete cleanedSale.sunatTransmissions;
       }
 
       return {
@@ -1084,18 +1084,66 @@ export class WebSalesService {
     });
   }
 
+  async getOrdersDashboardOverview(params: {
+    status?: string;
+    limit?: number;
+    from?: string;
+    to?: string;
+    organizationId?: number | null;
+    companyId?: number | null;
+  }) {
+    const baseWhere = buildOrganizationFilter(
+      params.organizationId,
+      params.companyId,
+    ) as Prisma.OrdersWhereInput;
+
+    const dateWhere =
+      params.from && params.to
+        ? {
+            ...baseWhere,
+            createdAt: {
+              gte: new Date(params.from),
+              lte: new Date(params.to),
+            },
+          }
+        : baseWhere;
+
+    const [pendingCount, recentOrders] = await this.prisma.$transaction([
+      this.prisma.orders.count({
+        where: {
+          ...baseWhere,
+          ...(params.status ? { status: params.status as any } : {}),
+        },
+      }),
+      this.prisma.orders.findMany({
+        where: dateWhere,
+        orderBy: { createdAt: 'desc' },
+        take: params.limit ?? 10,
+        select: {
+          id: true,
+          code: true,
+          status: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    return {
+      pendingCount,
+      recentOrders,
+    };
+  }
+
   private buildSunatStatus(
-    transmission?:
-      | {
-          id: number;
-          status: string;
-          ticket: string | null;
-          environment?: string | null;
-          errorMessage?: string | null;
-          updatedAt?: Date;
-          createdAt?: Date;
-        }
-      | null,
+    transmission?: {
+      id: number;
+      status: string;
+      ticket: string | null;
+      environment?: string | null;
+      errorMessage?: string | null;
+      updatedAt?: Date;
+      createdAt?: Date;
+    } | null,
   ) {
     if (!transmission) {
       return null;
@@ -1111,5 +1159,3 @@ export class WebSalesService {
     };
   }
 }
-
-

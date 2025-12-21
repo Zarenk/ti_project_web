@@ -23,7 +23,9 @@ export function buildSuggestionFromDonutResponse(
   const fieldMappings: Record<string, { pattern: string; jsonPath?: string }> =
     {};
 
-  for (const [key, field] of Object.entries(fields as Record<string, DonutField>)) {
+  for (const [key, field] of Object.entries(
+    fields as Record<string, DonutField>,
+  )) {
     const value =
       field?.value ??
       field?.formatted_text ??

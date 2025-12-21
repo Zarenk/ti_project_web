@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Header,
-  Request,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Header, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ContextMetricsService } from './context-metrics.service';
 import { GlobalSuperAdminGuard } from 'src/tenancy/global-super-admin.guard';

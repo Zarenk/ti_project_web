@@ -9,9 +9,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class InvoiceTemplatesAlertsService {
-  private readonly logger = new Logger(
-    InvoiceTemplatesAlertsService.name,
-  );
+  private readonly logger = new Logger(InvoiceTemplatesAlertsService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -212,10 +210,7 @@ export class InvoiceTemplatesAlertsService {
     return `${org}:${company}:${parts.alertType}:${provider}:${entityType}:${entityId}`;
   }
 
-  async getAlerts(
-    organizationId: number | null,
-    companyId: number | null,
-  ) {
+  async getAlerts(organizationId: number | null, companyId: number | null) {
     const reviewDays = Number(process.env.INVOICE_REVIEW_DAYS ?? 30);
     const thresholdDate = new Date(
       Date.now() - reviewDays * 24 * 60 * 60 * 1000,
@@ -291,30 +286,28 @@ export class InvoiceTemplatesAlertsService {
     organizationId: number | null,
     companyId: number | null,
   ) {
-    const providerAlerts =
-      await this.prisma.monitoringAlert.findMany({
-        where: {
-          ...this.buildAlertFilter(
-            organizationId,
-            companyId,
-            'PROVIDER_FAILURE',
-            'ACTIVE',
-          ),
-        },
-        orderBy: { lastFailureAt: 'desc' },
-      });
+    const providerAlerts = await this.prisma.monitoringAlert.findMany({
+      where: {
+        ...this.buildAlertFilter(
+          organizationId,
+          companyId,
+          'PROVIDER_FAILURE',
+          'ACTIVE',
+        ),
+      },
+      orderBy: { lastFailureAt: 'desc' },
+    });
 
-    const reviewDueCount =
-      await this.prisma.monitoringAlert.count({
-        where: {
-          ...this.buildAlertFilter(
-            organizationId,
-            companyId,
-            'TEMPLATE_REVIEW',
-            'ACTIVE',
-          ),
-        },
-      });
+    const reviewDueCount = await this.prisma.monitoringAlert.count({
+      where: {
+        ...this.buildAlertFilter(
+          organizationId,
+          companyId,
+          'TEMPLATE_REVIEW',
+          'ACTIVE',
+        ),
+      },
+    });
 
     return {
       providersOverThreshold: providerAlerts.map((alert) => ({
@@ -465,10 +458,9 @@ export class InvoiceTemplatesAlertsService {
             lookbackHours,
             failureThreshold,
           },
-    });
-  }
-
-}
+        });
+      }
+    }
 
     const activeAlerts = await this.prisma.monitoringAlert.findMany({
       where: { alertType: 'PROVIDER_FAILURE', status: 'ACTIVE' },
@@ -774,9 +766,7 @@ export class InvoiceTemplatesAlertsService {
           alertType: 'CONFIDENCE_DROP',
           status: 'ACTIVE',
           severity: 'WARN',
-          message: `Confianza baja (${
-            (ratio * 100).toFixed(1) ?? '0'
-          }%) para ${
+          message: `Confianza baja (${(ratio * 100).toFixed(1) ?? '0'}%) para ${
             bucket.templateId
               ? `la plantilla ${bucket.documentType ?? bucket.templateId}`
               : `el proveedor ${bucket.providerName ?? 'general'}`
@@ -795,10 +785,9 @@ export class InvoiceTemplatesAlertsService {
       }
     }
 
-    const activeConfidenceAlerts =
-      await this.prisma.monitoringAlert.findMany({
-        where: { alertType: 'CONFIDENCE_DROP', status: 'ACTIVE' },
-      });
+    const activeConfidenceAlerts = await this.prisma.monitoringAlert.findMany({
+      where: { alertType: 'CONFIDENCE_DROP', status: 'ACTIVE' },
+    });
 
     for (const alert of activeConfidenceAlerts) {
       if (!activeConfidenceKeys.has(alert.identifier)) {

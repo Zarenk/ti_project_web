@@ -1,4 +1,8 @@
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ExtractionResultPayload } from './dto/record-invoice-sample.dto';
 import { spawnSync } from 'child_process';
 import path from 'path';
@@ -35,8 +39,7 @@ export class MlExtractionService {
     process.env.ML_EXTRACTION_BIN ?? process.env.PYTHON_BIN ?? 'python';
   private readonly endpoint = process.env.ML_EXTRACTION_ENDPOINT ?? null;
   private readonly apiKey = process.env.ML_EXTRACTION_API_KEY ?? null;
-  private readonly sanitize =
-    process.env.ML_EXTRACTION_SANITIZE !== 'false';
+  private readonly sanitize = process.env.ML_EXTRACTION_SANITIZE !== 'false';
   private readonly donutScript =
     process.env.DONUT_EXTRACTION_SCRIPT ??
     path.resolve(process.cwd(), 'backend', 'ml', 'donut_inference.py');
@@ -280,11 +283,8 @@ export class MlExtractionService {
         fields,
         mlProvider: provider,
         mlConfidence:
-          typeof result?.confidence === 'number'
-            ? result.confidence
-            : null,
-        mlModelVersion:
-          result?.modelVersion ?? result?.version ?? null,
+          typeof result?.confidence === 'number' ? result.confidence : null,
+        mlModelVersion: result?.modelVersion ?? result?.version ?? null,
         mlCompliance: {
           provider: this.complianceProviderName,
           region: this.complianceRegion,
@@ -343,9 +343,7 @@ export class MlExtractionService {
       return JSON.parse(stdout);
     } catch (error) {
       this.logger.warn(
-        `Salida no válida del script ML: ${
-          (error as Error)?.message ?? error
-        }`,
+        `Salida no válida del script ML: ${(error as Error)?.message ?? error}`,
       );
       return null;
     }
@@ -355,10 +353,14 @@ export class MlExtractionService {
     if (!existsSync(this.donutScript)) {
       return null;
     }
-    const proc = spawnSync(this.donutBin, [this.donutScript, '--input', filePath], {
-      encoding: 'utf-8',
-      maxBuffer: 32 * 1024 * 1024,
-    });
+    const proc = spawnSync(
+      this.donutBin,
+      [this.donutScript, '--input', filePath],
+      {
+        encoding: 'utf-8',
+        maxBuffer: 32 * 1024 * 1024,
+      },
+    );
     if (proc.error) {
       this.logger.warn(
         `Error al ejecutar ${this.donutScript}: ${proc.error.message}`,
@@ -393,11 +395,11 @@ export class MlExtractionService {
     }
     try {
       const target = new URL(this.endpoint);
-      const transport = target.protocol === "https:" ? https : http;
+      const transport = target.protocol === 'https:' ? https : http;
       const body = JSON.stringify(payload);
       const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(body).toString(),
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body).toString(),
       };
       if (this.apiKey) {
         headers.Authorization = `Bearer ${this.apiKey}`;
@@ -406,20 +408,20 @@ export class MlExtractionService {
         const req = transport.request(
           target,
           {
-            method: "POST",
+            method: 'POST',
             headers,
           },
           (res) => {
             const chunks: Buffer[] = [];
-            res.on("data", (chunk) => chunks.push(chunk));
-            res.on("end", () => {
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => {
               if (res.statusCode && res.statusCode >= 400) {
                 this.logger.warn(
                   `Servicio ML respondió ${res.statusCode}: ${res.statusMessage}`,
                 );
                 return resolve(null);
               }
-              const raw = Buffer.concat(chunks).toString("utf-8");
+              const raw = Buffer.concat(chunks).toString('utf-8');
               if (!raw) {
                 return resolve(null);
               }
@@ -436,7 +438,7 @@ export class MlExtractionService {
             });
           },
         );
-        req.on("error", (error) => reject(error));
+        req.on('error', (error) => reject(error));
         req.write(body);
         req.end();
       });

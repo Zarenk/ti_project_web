@@ -38,18 +38,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         )
         .filter((id: number) => Number.isFinite(id));
     } else {
-      const memberships = await this.prismaService.organizationMembership.findMany(
-        {
+      const memberships =
+        await this.prismaService.organizationMembership.findMany({
           where: { userId: payload.sub },
           select: { organizationId: true },
           orderBy: { createdAt: 'asc' },
-        },
-      );
+        });
       organizationIds = memberships
         .map((membership) => membership.organizationId)
         .filter(
-          (id): id is number =>
-            typeof id === 'number' && Number.isFinite(id),
+          (id): id is number => typeof id === 'number' && Number.isFinite(id),
         );
     }
 
@@ -62,8 +60,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         user.lastOrgId ??
         user.organizationId ??
         null,
-      defaultCompanyId:
-        payload.defaultCompanyId ?? user.lastCompanyId ?? null,
+      defaultCompanyId: payload.defaultCompanyId ?? user.lastCompanyId ?? null,
       organizations: organizationIds,
       isPublicSignup: Boolean(
         payload.isPublicSignup ?? user.isPublicSignup ?? false,

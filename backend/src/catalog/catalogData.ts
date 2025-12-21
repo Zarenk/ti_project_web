@@ -1,6 +1,8 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaService();
+void prisma.onModuleInit();
 
 export interface CatalogItem {
   name: string;

@@ -175,8 +175,13 @@ export class TenancyService {
     const companyMatches =
       tenant.companyId === company.id || allowedCompanies.includes(company.id);
 
-    const orgAllowed = hasOrgConstraints ? orgMatches : tenant.organizationId === null || tenant.organizationId === company.organizationId;
-    const companyAllowed = hasCompanyConstraints ? companyMatches : tenant.companyId === null || tenant.companyId === company.id;
+    const orgAllowed = hasOrgConstraints
+      ? orgMatches
+      : tenant.organizationId === null ||
+        tenant.organizationId === company.organizationId;
+    const companyAllowed = hasCompanyConstraints
+      ? companyMatches
+      : tenant.companyId === null || tenant.companyId === company.id;
 
     if (!orgAllowed || !companyAllowed) {
       throw new ForbiddenException(
@@ -1038,10 +1043,7 @@ export class TenancyService {
           );
 
         for (const demotedUserId of demotedUserIds) {
-          await this.maybeDemoteOrganizationSuperAdmin(
-            prisma,
-            demotedUserId,
-          );
+          await this.maybeDemoteOrganizationSuperAdmin(prisma, demotedUserId);
         }
 
         const units = await prisma.organizationUnit.findMany({
@@ -1158,15 +1160,16 @@ export class TenancyService {
     }
 
     if (!organization && context.userId !== null) {
-      const membershipWithOrg = await prismaClient.organizationMembership.findFirst({
-        where: { userId: context.userId },
-        orderBy: { createdAt: 'asc' },
-        include: {
-          organization: {
-            include: organizationInclude,
+      const membershipWithOrg =
+        await prismaClient.organizationMembership.findFirst({
+          where: { userId: context.userId },
+          orderBy: { createdAt: 'asc' },
+          include: {
+            organization: {
+              include: organizationInclude,
+            },
           },
-        },
-      });
+        });
       organization = membershipWithOrg?.organization ?? null;
     }
 
@@ -1254,7 +1257,10 @@ export class TenancyService {
       where: { id: ownerMembership.id },
       data: { role: 'SUPER_ADMIN' },
     });
-    await this.promoteUserToOrganizationSuperAdmin(prisma, ownerMembership.user.id);
+    await this.promoteUserToOrganizationSuperAdmin(
+      prisma,
+      ownerMembership.user.id,
+    );
 
     return {
       id: ownerMembership.user.id,
@@ -1813,14 +1819,12 @@ export class TenancyService {
   }
 
   private normalizeDocumentSequencesInput(
-    sequences?:
-      | Array<{
-          documentType?: string | null;
-          serie?: string | null;
-          nextCorrelative?: string | number | null;
-          correlativeLength?: number | null;
-        }>
-      | null,
+    sequences?: Array<{
+      documentType?: string | null;
+      serie?: string | null;
+      nextCorrelative?: string | number | null;
+      correlativeLength?: number | null;
+    }> | null,
   ): NormalizedSequenceInput[] | null {
     if (!Array.isArray(sequences) || sequences.length === 0) {
       return null;
@@ -1834,10 +1838,7 @@ export class TenancyService {
         continue;
       }
 
-      const documentType = entry.documentType
-        ?.toString()
-        .trim()
-        .toUpperCase();
+      const documentType = entry.documentType?.toString().trim().toUpperCase();
       if (!documentType) {
         throw new BadRequestException(
           'El tipo de documento de la serie es obligatorio.',
@@ -1851,9 +1852,7 @@ export class TenancyService {
         );
       }
 
-      const correlativoRaw = entry.nextCorrelative
-        ?.toString()
-        .trim();
+      const correlativoRaw = entry.nextCorrelative?.toString().trim();
       if (!correlativoRaw || !/^[0-9]+$/.test(correlativoRaw)) {
         throw new BadRequestException(
           `El numero correlativo inicial para ${documentType} debe contener solo digitos.`,
@@ -2058,10 +2057,7 @@ export class TenancyService {
       return;
     }
 
-    const normalizedRole = (user.role ?? '')
-      .toString()
-      .trim()
-      .toUpperCase();
+    const normalizedRole = (user.role ?? '').toString().trim().toUpperCase();
 
     if (
       normalizedRole === 'SUPER_ADMIN_GLOBAL' ||
@@ -2089,19 +2085,15 @@ export class TenancyService {
       return;
     }
 
-    const normalizedRole = (user.role ?? '')
-      .toString()
-      .trim()
-      .toUpperCase();
+    const normalizedRole = (user.role ?? '').toString().trim().toUpperCase();
 
     if (normalizedRole === 'SUPER_ADMIN_GLOBAL') {
       return;
     }
 
-    const remainingAssignments =
-      await prisma.organizationMembership.count({
-        where: { userId, role: 'SUPER_ADMIN' },
-      });
+    const remainingAssignments = await prisma.organizationMembership.count({
+      where: { userId, role: 'SUPER_ADMIN' },
+    });
 
     if (remainingAssignments > 0) {
       return;

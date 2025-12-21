@@ -71,7 +71,9 @@ export class InvoiceTemplatesAlertsController {
       return result.length > 0 ? result : undefined;
     };
     const limit =
-      typeof query.limit === 'string' ? Number(query.limit) || undefined : undefined;
+      typeof query.limit === 'string'
+        ? Number(query.limit) || undefined
+        : undefined;
     const fromDate = query.from ? new Date(query.from) : undefined;
     const toDate = query.to ? new Date(query.to) : undefined;
     return this.alertsService.getAlertEvents(
@@ -81,7 +83,8 @@ export class InvoiceTemplatesAlertsController {
         alertTypes: parseArray(query.alertType),
         statuses: parseArray(query.status),
         severities: parseArray(query.severity),
-        from: fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate : undefined,
+        from:
+          fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate : undefined,
         to: toDate && !Number.isNaN(toDate.getTime()) ? toDate : undefined,
         search: query.search?.trim() ?? undefined,
         limit,

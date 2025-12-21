@@ -4,7 +4,12 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, Subscription, SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
+import {
+  Prisma,
+  Subscription,
+  SubscriptionPlan,
+  SubscriptionStatus,
+} from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 export const DEFAULT_GRACE_LIMITS = {
@@ -50,9 +55,7 @@ export class SubscriptionQuotaService {
   constructor(private readonly prisma: PrismaService) {}
   private readonly logger = new Logger(SubscriptionQuotaService.name);
 
-  async getSummaryByOrganization(
-    organizationId: number,
-  ): Promise<QuotaUsage> {
+  async getSummaryByOrganization(organizationId: number): Promise<QuotaUsage> {
     const subscription = await this.getSubscriptionContext(organizationId);
 
     const planName = subscription.plan?.name ?? 'Plan trial';
@@ -152,9 +155,7 @@ export class SubscriptionQuotaService {
     }
   }
 
-  private async aggregateStorageBytes(
-    organizationId: number,
-  ): Promise<number> {
+  private async aggregateStorageBytes(organizationId: number): Promise<number> {
     const result = await this.prisma.invoiceSample.aggregate({
       where: { organizationId },
       _sum: { fileSize: true },
@@ -189,7 +190,9 @@ export class SubscriptionQuotaService {
     });
   }
 
-  private async getSubscriptionContext(organizationId: number): Promise<SubscriptionContext> {
+  private async getSubscriptionContext(
+    organizationId: number,
+  ): Promise<SubscriptionContext> {
     const subscription = await this.prisma.subscription.findUnique({
       where: { organizationId },
       include: { plan: true },

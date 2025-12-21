@@ -10,7 +10,12 @@ import { SiteSettingsModule } from 'src/site-settings/site-settings.module';
 import { InventoryMetricsController } from './metrics.controller';
 
 @Module({
-  imports: [ActivityModule, InvoiceTemplatesModule, TenancyModule, SiteSettingsModule],
+  imports: [
+    ActivityModule,
+    InvoiceTemplatesModule,
+    TenancyModule,
+    SiteSettingsModule,
+  ],
   controllers: [InventoryController, InventoryMetricsController],
   providers: [InventoryService, PrismaService, AccountingHook],
   exports: [InventoryService],

@@ -43,22 +43,14 @@ export class TaxRateService {
     regionCode?: string,
   ): Promise<TaxRateInfo> {
     const country = (countryCode ?? this.defaultCountry).toUpperCase();
-    const normalizedRegion = regionCode
-      ? regionCode.toUpperCase()
-      : null;
+    const normalizedRegion = regionCode ? regionCode.toUpperCase() : null;
 
     const rate = await this.prisma.taxRate.findFirst({
       where: {
         countryCode: country,
-        OR: [
-          { regionCode: normalizedRegion },
-          { regionCode: null },
-        ],
+        OR: [{ regionCode: normalizedRegion }, { regionCode: null }],
       },
-      orderBy: [
-        { regionCode: 'desc' },
-        { isDefault: 'desc' },
-      ],
+      orderBy: [{ regionCode: 'desc' }, { isDefault: 'desc' }],
     });
 
     if (!rate) {

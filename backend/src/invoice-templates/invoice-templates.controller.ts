@@ -88,10 +88,7 @@ export class InvoiceTemplatesController {
   }
 
   @Patch(':id')
-  update(
-    @Param('id') idParam: string,
-    @Body() dto: UpdateInvoiceTemplateDto,
-  ) {
+  update(@Param('id') idParam: string, @Body() dto: UpdateInvoiceTemplateDto) {
     return this.invoiceTemplatesService.update(
       this.parseNumericId(idParam),
       dto,

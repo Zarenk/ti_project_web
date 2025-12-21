@@ -148,9 +148,7 @@ export class InvoiceTemplatesService {
           ? { connect: { id: ctx.organizationId } }
           : undefined,
       company:
-        ctx.companyId !== null
-          ? { connect: { id: ctx.companyId } }
-          : undefined,
+        ctx.companyId !== null ? { connect: { id: ctx.companyId } } : undefined,
       provider: provider ? { connect: { id: provider.id } } : undefined,
       createdBy:
         ctx.userId !== null ? { connect: { id: ctx.userId } } : undefined,
@@ -220,24 +218,24 @@ export class InvoiceTemplatesService {
     return {
       suggestion,
       message: suggestion.regexRules?.serie
-        ? "Se encontraron patrones sugeridos."
-        : "No se detectaron coincidencias fuertes, revisa el texto.",
+        ? 'Se encontraron patrones sugeridos.'
+        : 'No se detectaron coincidencias fuertes, revisa el texto.',
     };
   }
 
   async suggestTemplateFromPdf(file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException("Se requiere un archivo PDF.");
+      throw new BadRequestException('Se requiere un archivo PDF.');
     }
     const scriptPath =
       resolveDonutScript() ??
       (() => {
         throw new InternalServerErrorException(
-          "No se encontró el script Donut. Define DONUT_EXTRACTION_SCRIPT.",
+          'No se encontró el script Donut. Define DONUT_EXTRACTION_SCRIPT.',
         );
       })();
     const pythonBin =
-      process.env.DONUT_EXTRACTION_BIN ?? process.env.PYTHON_BIN ?? "python";
+      process.env.DONUT_EXTRACTION_BIN ?? process.env.PYTHON_BIN ?? 'python';
     try {
       const inference = callDonutInference(file.path, scriptPath, pythonBin);
       if (inference.status === 'FAILED') {
@@ -252,7 +250,7 @@ export class InvoiceTemplatesService {
       const fallbackFieldMappings = Object.fromEntries(
         Object.keys(inference.fields ?? {}).map((key) => [
           key,
-          { pattern: ".*" },
+          { pattern: '.*' },
         ]),
       );
       return {
@@ -268,7 +266,7 @@ export class InvoiceTemplatesService {
     } catch (error) {
       throw new InternalServerErrorException(
         `No se pudo generar sugerencias desde el PDF: ${
-          error instanceof Error ? error.message : "Unknown"
+          error instanceof Error ? error.message : 'Unknown'
         }`,
       );
     } finally {

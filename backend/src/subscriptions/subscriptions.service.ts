@@ -1,3 +1,4 @@
+import axios from 'axios';
 import {
   Injectable,
   NotFoundException,
@@ -146,8 +147,7 @@ export class SubscriptionsService {
         organizationId: dto.organizationId,
         planId: plan.id,
         status: upsertedSubscription.status,
-        trialEndsAt:
-          upsertedSubscription.trialEndsAt?.toISOString() ?? null,
+        trialEndsAt: upsertedSubscription.trialEndsAt?.toISOString() ?? null,
         currentPeriodEnd:
           upsertedSubscription.currentPeriodEnd?.toISOString() ?? null,
       },
@@ -181,7 +181,7 @@ export class SubscriptionsService {
     });
 
     const metadata = {
-      ...(this.coerceJsonRecord(existingSubscription?.metadata ?? {})),
+      ...this.coerceJsonRecord(existingSubscription?.metadata ?? {}),
       pendingCheckout: {
         sessionId: checkoutResult.sessionId,
         planCode: plan.code,
@@ -245,7 +245,9 @@ export class SubscriptionsService {
       include: { plan: true },
     });
     if (!subscription) {
-      throw new NotFoundException('No existe una suscripción para la organización indicada');
+      throw new NotFoundException(
+        'No existe una suscripción para la organización indicada',
+      );
     }
 
     const targetPlan = await this.ensurePlan(dto.planCode);
@@ -310,8 +312,7 @@ export class SubscriptionsService {
   }
 
   async requestPlanChangeForUser(userId: number, dto: ChangePlanSelfDto) {
-    const organizationId =
-      await this.resolveUserOrganizationIdOrThrow(userId);
+    const organizationId = await this.resolveUserOrganizationIdOrThrow(userId);
     return this.requestPlanChange({
       organizationId,
       planCode: dto.planCode,
@@ -328,7 +329,9 @@ export class SubscriptionsService {
     });
 
     if (!subscription) {
-      throw new NotFoundException('No existe una suscripción para la organización indicada');
+      throw new NotFoundException(
+        'No existe una suscripción para la organización indicada',
+      );
     }
 
     const metadata = this.coerceJsonRecord(subscription.metadata);
@@ -488,7 +491,9 @@ export class SubscriptionsService {
     });
 
     if (!record) {
-      throw new NotFoundException('El PDF asociado no se encontró en el sistema');
+      throw new NotFoundException(
+        'El PDF asociado no se encontró en el sistema',
+      );
     }
 
     const path = this.sunatService.getComprobantePdfPath(
@@ -527,7 +532,10 @@ export class SubscriptionsService {
     if (!Number.isFinite(organizationId) || organizationId <= 0) {
       throw new BadRequestException('organizationId invalido');
     }
-    return this.exportService.requestExport(organizationId, requestedBy ?? null);
+    return this.exportService.requestExport(
+      organizationId,
+      requestedBy ?? null,
+    );
   }
 
   async downloadOrganizationExport(organizationId: number, exportId: number) {
@@ -546,57 +554,64 @@ export class SubscriptionsService {
     }
     return this.prisma.billingPaymentMethod.findMany({
       where: { organizationId },
-      orderBy: [
-        { isDefault: 'desc' },
-        { updatedAt: 'desc' },
-      ],
+      orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
     });
   }
 
   async upsertPaymentMethod(dto: UpsertPaymentMethodDto) {
+    let normalizedDto = dto;
+    if (
+      dto.provider === BillingPaymentProvider.MERCADOPAGO &&
+      dto.tokenized
+    ) {
+      normalizedDto = await this.materializeMercadoPagoPaymentMethod(dto);
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const uniqueWhere = {
         organizationId_externalId: {
-          organizationId: dto.organizationId,
-          externalId: dto.externalId,
+          organizationId: normalizedDto.organizationId,
+          externalId: normalizedDto.externalId,
         },
       };
 
       const existingMethod = await tx.billingPaymentMethod.findUnique({
         where: uniqueWhere,
       });
-      const hasCustomerPatch = dto.billingCustomerId !== undefined;
+      const hasCustomerPatch = normalizedDto.billingCustomerId !== undefined;
       const metadataForStorage = hasCustomerPatch
         ? {
             ...this.coerceJsonRecord(existingMethod?.metadata),
-            billingCustomerId: dto.billingCustomerId ?? null,
+            billingCustomerId: normalizedDto.billingCustomerId ?? null,
           }
         : null;
 
       const record = await tx.billingPaymentMethod.upsert({
         where: uniqueWhere,
         create: {
-          organizationId: dto.organizationId,
-          provider: dto.provider,
-          externalId: dto.externalId,
-          brand: dto.brand ?? null,
-          last4: dto.last4 ?? null,
-          expMonth: dto.expMonth ?? null,
-          expYear: dto.expYear ?? null,
-          country: dto.country ?? null,
+          organizationId: normalizedDto.organizationId,
+          provider: normalizedDto.provider,
+          externalId: normalizedDto.externalId,
+          brand: normalizedDto.brand ?? null,
+          last4: normalizedDto.last4 ?? null,
+          expMonth: normalizedDto.expMonth ?? null,
+          expYear: normalizedDto.expYear ?? null,
+          country: normalizedDto.country ?? null,
           status: 'ACTIVE',
-          isDefault: dto.isDefault ?? false,
+          isDefault: normalizedDto.isDefault ?? false,
           ...(metadataForStorage ? { metadata: metadataForStorage } : {}),
         },
         update: {
-          provider: dto.provider,
-          brand: dto.brand ?? null,
-          last4: dto.last4 ?? null,
-          expMonth: dto.expMonth ?? null,
-          expYear: dto.expYear ?? null,
-          country: dto.country ?? null,
+          provider: normalizedDto.provider,
+          brand: normalizedDto.brand ?? null,
+          last4: normalizedDto.last4 ?? null,
+          expMonth: normalizedDto.expMonth ?? null,
+          expYear: normalizedDto.expYear ?? null,
+          country: normalizedDto.country ?? null,
           status: 'ACTIVE',
-          ...(dto.isDefault !== undefined ? { isDefault: dto.isDefault } : {}),
+          ...(normalizedDto.isDefault !== undefined
+            ? { isDefault: normalizedDto.isDefault }
+            : {}),
           ...(metadataForStorage ? { metadata: metadataForStorage } : {}),
         },
       });
@@ -604,25 +619,26 @@ export class SubscriptionsService {
       const hasDefault =
         (await tx.billingPaymentMethod.count({
           where: {
-            organizationId: dto.organizationId,
+            organizationId: normalizedDto.organizationId,
             isDefault: true,
           },
         })) > 0;
 
       const shouldSetDefault =
-        dto.isDefault === true || (!hasDefault && dto.isDefault !== false);
+        normalizedDto.isDefault === true ||
+        (!hasDefault && normalizedDto.isDefault !== false);
 
       if (shouldSetDefault) {
         await this.setDefaultPaymentMethodForOrg(
           tx,
-          dto.organizationId,
+          normalizedDto.organizationId,
           record.id,
-          dto.billingCustomerId ?? null,
+          normalizedDto.billingCustomerId ?? null,
         );
-      } else if (dto.billingCustomerId) {
+      } else if (normalizedDto.billingCustomerId) {
         await tx.subscription.updateMany({
-          where: { organizationId: dto.organizationId },
-          data: { billingCustomerId: dto.billingCustomerId },
+          where: { organizationId: normalizedDto.organizationId },
+          data: { billingCustomerId: normalizedDto.billingCustomerId },
         });
       }
 
@@ -685,6 +701,148 @@ export class SubscriptionsService {
     return { ok: true };
   }
 
+  private async materializeMercadoPagoPaymentMethod(
+    dto: UpsertPaymentMethodDto,
+  ): Promise<UpsertPaymentMethodDto> {
+    const accessToken =
+      this.configService.get<string>('MERCADOPAGO_ACCESS_TOKEN');
+    if (!accessToken) {
+      throw new BadRequestException(
+        'Mercado Pago no esta configurado para tokenizar tarjetas',
+      );
+    }
+
+    const customerId = await this.ensureMercadoPagoCustomer(
+      dto.organizationId,
+      dto.billingCustomerId,
+      {
+        email: dto.cardholderEmail,
+        name: dto.cardholderName,
+        identificationType: dto.identificationType,
+        identificationNumber: dto.identificationNumber,
+      },
+      accessToken,
+    );
+
+    try {
+      const response = await axios.post(
+        `https://api.mercadopago.com/v1/customers/${customerId}/cards`,
+        { token: dto.externalId },
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+
+      const card = response.data;
+      if (!card?.id) {
+        throw new Error('Mercado Pago no devolvio un identificador de tarjeta');
+      }
+
+      return {
+        ...dto,
+        tokenized: false,
+        externalId: card.id,
+        brand:
+          card.payment_method?.id ??
+          card.payment_method?.name ??
+          dto.brand ??
+          null,
+        last4: card.last_four_digits ?? dto.last4 ?? null,
+        expMonth: card.expiration_month ?? dto.expMonth ?? null,
+        expYear: card.expiration_year ?? dto.expYear ?? null,
+        country:
+          card.cardholder?.identification?.type ?? dto.country ?? null,
+        billingCustomerId: customerId,
+      };
+    } catch (error) {
+      const details =
+        axios.isAxiosError(error) && error.response?.data
+          ? ` Detalle: ${JSON.stringify(error.response.data)}`
+          : '';
+      this.logger.error(
+        `No se pudo registrar la tarjeta tokenizada en Mercado Pago para la organizacion ${dto.organizationId}${details}`,
+      );
+      throw new BadRequestException(
+        'Mercado Pago rechazo la tokenizacion de la tarjeta.',
+      );
+    }
+  }
+
+  private async ensureMercadoPagoCustomer(
+    organizationId: number,
+    providedCustomerId: string | null | undefined,
+    holder: {
+      email?: string | null;
+      name?: string | null;
+      identificationType?: string | null;
+      identificationNumber?: string | null;
+    },
+    accessToken: string,
+  ): Promise<string> {
+    if (providedCustomerId) {
+      return providedCustomerId;
+    }
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { organizationId },
+      select: { billingCustomerId: true },
+    });
+    if (subscription?.billingCustomerId) {
+      return subscription.billingCustomerId;
+    }
+
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { organizationId },
+      include: {
+        user: { select: { email: true, username: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const email =
+      holder.email?.trim() ||
+      membership?.user?.email ||
+      `org-${organizationId}@example.invalid`;
+    const name =
+      holder.name?.trim() ||
+      membership?.user?.username ||
+      `Org ${organizationId}`;
+
+    const payload: Record<string, unknown> = {
+      email,
+      first_name: name,
+      description: `Org ${organizationId}`,
+    };
+    if (
+      holder.identificationType?.trim() &&
+      holder.identificationNumber?.trim()
+    ) {
+      payload.identification = {
+        type: holder.identificationType,
+        number: holder.identificationNumber,
+      };
+    }
+
+    const response = await axios.post(
+      'https://api.mercadopago.com/v1/customers',
+      payload,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    const customerId = response.data?.id;
+    if (!customerId) {
+      throw new BadRequestException(
+        'Mercado Pago no devolvio un identificador de cliente',
+      );
+    }
+
+    await this.prisma.subscription.updateMany({
+      where: { organizationId },
+      data: { billingCustomerId: customerId },
+    });
+    return customerId;
+  }
+
   async finalizeCheckoutSession(sessionId: string) {
     const subscription = await this.prisma.subscription.findFirst({
       where: {
@@ -733,10 +891,9 @@ export class SubscriptionsService {
       });
 
       const price = new Prisma.Decimal(plan.price);
-      const taxInfo =
-        await this.taxRateService.getRateForOrganization(
-          subscription.organizationId,
-        );
+      const taxInfo = await this.taxRateService.getRateForOrganization(
+        subscription.organizationId,
+      );
       const taxRateDecimal = new Prisma.Decimal(taxInfo.rate ?? 0);
       const taxAmount = price.mul(taxRateDecimal);
       const totalAmount = price.add(taxAmount);
@@ -817,22 +974,22 @@ export class SubscriptionsService {
             (error as Error)?.message ?? 'error desconocido'
           }`,
         );
-        }
       }
+    }
 
-      await this.autoExportAndCleanupDemoData(
-        subscription.organizationId,
-        'activation',
-      );
+    await this.autoExportAndCleanupDemoData(
+      subscription.organizationId,
+      'activation',
+    );
 
-      if (wasTrial) {
-        this.metrics.recordTrialConverted(plan.code);
-      }
+    if (wasTrial) {
+      this.metrics.recordTrialConverted(plan.code);
+    }
 
-      return {
-        subscriptionId: subscription.id,
-        status: SubscriptionStatus.ACTIVE,
-        currentPeriodEnd: periodEnd,
+    return {
+      subscriptionId: subscription.id,
+      status: SubscriptionStatus.ACTIVE,
+      currentPeriodEnd: periodEnd,
     };
   }
 
@@ -885,12 +1042,11 @@ export class SubscriptionsService {
     const provider = (event.provider ?? '').toLowerCase();
     if (provider === 'mercadopago') {
       this.verifyMercadoPagoSignature(headers);
-      const normalized =
-        await this.mercadoPagoWebhookService.normalizeEvent({
-          provider: 'mercadopago',
-          type: event.type,
-          data: event.data ?? {},
-        });
+      const normalized = await this.mercadoPagoWebhookService.normalizeEvent({
+        provider: 'mercadopago',
+        type: event.type,
+        data: event.data ?? {},
+      });
       return normalized;
     }
 
@@ -937,8 +1093,42 @@ export class SubscriptionsService {
     }
   }
 
-  async getSummaryForUser(userId: number) {
-    const organizationId = await this.resolveUserOrganizationId(userId);
+  async getSummaryForUser(
+    userId: number,
+    options?: { organizationId?: number; role?: string | null },
+  ) {
+    const normalizedRole = options?.role
+      ? `${options.role}`.toUpperCase()
+      : null;
+
+    let organizationId: number | null = null;
+    if (
+      typeof options?.organizationId === 'number' &&
+      Number.isFinite(options.organizationId)
+    ) {
+      if (options.organizationId <= 0) {
+        throw new BadRequestException(
+          'Debes especificar una organizacion valida.',
+        );
+      }
+
+      if (normalizedRole !== 'SUPER_ADMIN_GLOBAL') {
+        const membership = await this.prisma.organizationMembership.findFirst({
+          where: { userId, organizationId: options.organizationId },
+          select: { organizationId: true },
+        });
+        if (!membership) {
+          throw new BadRequestException(
+            'No tienes acceso a la organizacion solicitada.',
+          );
+        }
+      }
+
+      organizationId = options.organizationId;
+    } else {
+      organizationId = await this.resolveUserOrganizationId(userId);
+    }
+
     if (!organizationId) {
       return this.buildFallbackSummary();
     }
@@ -989,7 +1179,9 @@ export class SubscriptionsService {
     ]);
 
     let quotaSummary: Awaited<
-      ReturnType<typeof this.quotaService.getSummaryByOrganization>
+      ReturnType<
+        SubscriptionQuotaService['getSummaryByOrganization']
+      >
     > | null = null;
     if (subscription) {
       try {
@@ -1034,10 +1226,7 @@ export class SubscriptionsService {
     const trialEndsAt = subscription.trialEndsAt?.getTime() ?? null;
     const daysLeft =
       subscription.status === SubscriptionStatus.TRIAL && trialEndsAt
-        ? Math.max(
-            Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24)),
-            0,
-          )
+        ? Math.max(Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24)), 0)
         : null;
 
     const rawQuotas = this.coerceJsonRecord(subscription.plan?.quotas);
@@ -1063,9 +1252,8 @@ export class SubscriptionsService {
     const legacyInfo = {
       isLegacy:
         quotaSummary?.legacy?.isLegacy ??
-        ((subscription.plan?.code ?? '').toLowerCase() === 'legacy'),
-      graceUntil:
-        quotaSummary?.legacy?.graceUntil ?? legacyGraceUntilMeta,
+        (subscription.plan?.code ?? '').toLowerCase() === 'legacy',
+      graceUntil: quotaSummary?.legacy?.graceUntil ?? legacyGraceUntilMeta,
     };
     const usage = quotaSummary?.usage ?? {
       users: usersCount,
@@ -1101,8 +1289,7 @@ export class SubscriptionsService {
       billing: {
         currentPeriodStart:
           subscription.currentPeriodStart?.toISOString() ?? null,
-        currentPeriodEnd:
-          subscription.currentPeriodEnd?.toISOString() ?? null,
+        currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
         canceledAt: subscription.canceledAt?.toISOString() ?? null,
         lastInvoicePaidAt: lastPaidInvoice?.paidAt?.toISOString() ?? null,
@@ -1158,9 +1345,8 @@ export class SubscriptionsService {
     if (!memberships.length) return null;
     const priority = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'MEMBER', 'VIEWER'];
     const selected =
-      memberships.find((membership) =>
-        priority.includes(membership.role),
-      ) ?? memberships[0];
+      memberships.find((membership) => priority.includes(membership.role)) ??
+      memberships[0];
 
     return {
       name: selected.user.username ?? selected.user.email,
@@ -1548,7 +1734,6 @@ export class SubscriptionsService {
       );
       await this.handleExhaustedDunning(invoice, nextState);
     }
-    
   }
 
   private async resolveInvoiceFromPayload(
@@ -1606,9 +1791,7 @@ export class SubscriptionsService {
       ...(existing ?? {}),
       failures,
       lastFailureAt: now.toISOString(),
-      nextAttemptAt: delay
-        ? this.addDays(now, delay).toISOString()
-        : null,
+      nextAttemptAt: delay ? this.addDays(now, delay).toISOString() : null,
       exhausted: !delay,
     };
   }
@@ -1651,11 +1834,7 @@ export class SubscriptionsService {
       this.logger.log(
         `Dunning attempt ${attempts} generado para invoice ${invoice.id}`,
       );
-      await this.notifyDunningScheduled(
-        invoice,
-        attempts,
-        session.checkoutUrl,
-      );
+      await this.notifyDunningScheduled(invoice, attempts, session.checkoutUrl);
       this.metrics.recordDunningAttempt('success');
     } catch (error) {
       dunning.lastAttemptAt = new Date().toISOString();
@@ -1674,13 +1853,15 @@ export class SubscriptionsService {
   }
 
   private verifyMercadoPagoSignature(headers?: Record<string, string>) {
-    const secretKey =
-      this.configService.get<string>('MERCADOPAGO_WEBHOOK_SECRET');
+    const secretKey = this.configService.get<string>(
+      'MERCADOPAGO_WEBHOOK_SECRET',
+    );
     if (!secretKey) {
       return;
     }
 
-    const signatureHeader = headers?.['x-signature'] ?? headers?.['X-Signature'];
+    const signatureHeader =
+      headers?.['x-signature'] ?? headers?.['X-Signature'];
     const userId = headers?.['x-user-id'] ?? headers?.['X-User-Id'];
     const resource =
       headers?.['x-topic'] ??
@@ -1689,7 +1870,9 @@ export class SubscriptionsService {
       headers?.['X-Resource-Id'];
 
     if (!signatureHeader || !userId || !resource) {
-      throw new BadRequestException('Encabezados faltantes para verificar firma');
+      throw new BadRequestException(
+        'Encabezados faltantes para verificar firma',
+      );
     }
 
     const [algo, receivedSignature] = signatureHeader.split(',');
@@ -1751,11 +1934,14 @@ export class SubscriptionsService {
         payload.card?.first_six_digits ??
         undefined,
       last4: payload.card?.last_four_digits ?? undefined,
-      expMonth: this.normalizeNumber(payload.card?.expiration_month) ?? undefined,
+      expMonth:
+        this.normalizeNumber(payload.card?.expiration_month) ?? undefined,
       expYear: this.normalizeNumber(payload.card?.expiration_year) ?? undefined,
       country: payload.card?.cardholder?.identification?.type ?? undefined,
       isDefault: true,
-      billingCustomerId: payload.payer?.id ? String(payload.payer.id) : undefined,
+      billingCustomerId: payload.payer?.id
+        ? String(payload.payer.id)
+        : undefined,
     });
   }
 
@@ -2011,7 +2197,9 @@ export class SubscriptionsService {
       cancelUrl,
       metadata: {
         invoiceId: invoice.id,
-        reason: this.coerceJsonRecord(invoice.metadata).reason ?? 'plan_change_immediate',
+        reason:
+          this.coerceJsonRecord(invoice.metadata).reason ??
+          'plan_change_immediate',
       },
     });
 
@@ -2034,27 +2222,26 @@ export class SubscriptionsService {
   private async getBillingCompanySnapshot(
     organizationId: number,
   ): Promise<BillingCompanySnapshot> {
-    const billingCompany =
-      (await this.prisma.company.findFirst({
-        where: { organizationId },
-        orderBy: { id: 'asc' },
-        select: {
-          id: true,
-          organizationId: true,
-          name: true,
-          taxId: true,
-          sunatRuc: true,
-          sunatEnvironment: true,
-          sunatSolUserBeta: true,
-          sunatSolPasswordBeta: true,
-          sunatCertPathBeta: true,
-          sunatKeyPathBeta: true,
-          sunatSolUserProd: true,
-          sunatSolPasswordProd: true,
-          sunatCertPathProd: true,
-          sunatKeyPathProd: true,
-        },
-      })) as BillingCompanySnapshot | null;
+    const billingCompany = (await this.prisma.company.findFirst({
+      where: { organizationId },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        organizationId: true,
+        name: true,
+        taxId: true,
+        sunatRuc: true,
+        sunatEnvironment: true,
+        sunatSolUserBeta: true,
+        sunatSolPasswordBeta: true,
+        sunatCertPathBeta: true,
+        sunatKeyPathBeta: true,
+        sunatSolUserProd: true,
+        sunatSolPasswordProd: true,
+        sunatCertPathProd: true,
+        sunatKeyPathProd: true,
+      },
+    })) as BillingCompanySnapshot | null;
 
     if (!billingCompany) {
       throw new BadRequestException(
@@ -2222,9 +2409,7 @@ export class SubscriptionsService {
     }
     try {
       const progress =
-        await this.onboardingService.getProgressForOrganization(
-          organizationId,
-        );
+        await this.onboardingService.getProgressForOrganization(organizationId);
       if (progress.demoStatus !== 'SEEDED') {
         return;
       }
@@ -2407,7 +2592,11 @@ export class SubscriptionsService {
       if (normalized.includes('boleta') || normalized === '03') {
         return 'boleta';
       }
-      if (normalized.includes('factura') || normalized === 'invoice' || normalized === '01') {
+      if (
+        normalized.includes('factura') ||
+        normalized === 'invoice' ||
+        normalized === '01'
+      ) {
         return 'factura';
       }
     }
