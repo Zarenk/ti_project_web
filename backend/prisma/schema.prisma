@@ -14,6 +14,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum BusinessVertical {
+  GENERAL
+  RESTAURANTS
+  RETAIL
+  SERVICES
+  MANUFACTURING
+}
+
 model Product {
   id          Int      @id @default(autoincrement())
   name        String
@@ -28,6 +36,8 @@ model Product {
   images      String[]
   organizationId Int?
   companyId      Int?
+  extraAttributes Json?
+  isVerticalMigrated Boolean @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   // Relacion con Brand
@@ -224,6 +234,8 @@ model User {
   memberships OrganizationMembership[]
   createdInvoiceTemplates InvoiceTemplate[] @relation("InvoiceTemplateCreatedBy")
   updatedInvoiceTemplates InvoiceTemplate[] @relation("InvoiceTemplateUpdatedBy")
+  verticalChangeAudits VerticalChangeAudit[]
+  companyVerticalChangeAudits CompanyVerticalChangeAudit[]
   contextPreferences UserContextPreference[]
   contextHistory UserContextHistory[]
   requestedExports OrganizationDataExport[] @relation("OrganizationDataExportsRequestedBy")
@@ -275,6 +287,8 @@ model Organization {
   slug      String?   @unique
   code      String?   @unique
   status    String    @default("ACTIVE")
+  businessVertical BusinessVertical @default(GENERAL)
+  productSchemaEnforced Boolean     @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
@@ -304,38 +318,56 @@ model Organization {
   onboardingProgress OnboardingProgress?
   dataExports   OrganizationDataExport[] @relation("OrganizationDataExports")
   auditLogs   AuditLog[]
+  verticalChangeAudits VerticalChangeAudit[]
+  rollbackSnapshots    VerticalRollbackSnapshot[]
+  verticalOverride     OrganizationVerticalOverride?
+  companyVerticalChangeAudits CompanyVerticalChangeAudit[]
+  companyVerticalRollbackSnapshots CompanyVerticalRollbackSnapshot[]
 
   @@unique([name])
   @@index([status])
+  @@index([businessVertical])
+}
+
+model OrganizationVerticalOverride {
+  id             Int           @id @default(autoincrement())
+  organizationId Int           @unique
+  configJson     Json
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model Company {
-  id             Int           @id @default(autoincrement())
-  organizationId Int
-  name           String
-  legalName      String?
-  taxId          String?       @unique
-  status         String        @default("ACTIVE")
-  sunatEnvironment     String        @default("BETA")
-  sunatRuc             String?
-  sunatBusinessName    String?
-  sunatAddress         String?
-  sunatPhone           String?
-  sunatContactEmail    String?
-  logoUrl        String?
-  primaryColor    String?
-  secondaryColor  String?
-  sunatSolUserBeta     String?
-  sunatSolPasswordBeta String?
-  sunatCertPathBeta    String?
-  sunatKeyPathBeta     String?
-  sunatSolUserProd     String?
-  sunatSolPasswordProd String?
-  sunatCertPathProd    String?
-  sunatKeyPathProd     String?
+  id                    Int            @id @default(autoincrement())
+  organizationId        Int
+  name                  String
+  legalName             String?
+  taxId                 String?        @unique
+  status                String         @default("ACTIVE")
+  businessVertical      BusinessVertical @default(GENERAL)
+  productSchemaEnforced Boolean        @default(false)
+  sunatEnvironment      String         @default("BETA")
+  sunatRuc              String?
+  sunatBusinessName     String?
+  sunatAddress          String?
+  sunatPhone            String?
+  sunatContactEmail     String?
+  logoUrl               String?
+  primaryColor          String?
+  secondaryColor        String?
+  sunatSolUserBeta      String?
+  sunatSolPasswordBeta  String?
+  sunatCertPathBeta     String?
+  sunatKeyPathBeta      String?
+  sunatSolUserProd      String?
+  sunatSolPasswordProd  String?
+  sunatCertPathProd     String?
+  sunatKeyPathProd      String?
   sunatCertificateNotes String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   units          OrganizationUnit[]
@@ -360,6 +392,9 @@ model Company {
   monitoringAlertEvents MonitoringAlertEvent[]
   subscriptionInvoices SubscriptionInvoice[]
   auditLogs     AuditLog[]
+  verticalOverride CompanyVerticalOverride?
+  companyVerticalChangeAudits CompanyVerticalChangeAudit[]
+  companyVerticalRollbackSnapshots CompanyVerticalRollbackSnapshot[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -663,6 +698,81 @@ model OrganizationDataExport {
   requestedByUser User?        @relation("OrganizationDataExportsRequestedBy", fields: [requestedBy], references: [id], onDelete: SetNull)
 
   @@index([organizationId, status])
+}
+
+model VerticalChangeAudit {
+  id             Int              @id @default(autoincrement())
+  organizationId Int
+  userId         Int?
+  oldVertical    BusinessVertical
+  newVertical    BusinessVertical
+  changeReason   String?
+  warningsJson   Json?
+  success        Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([createdAt])
+}
+
+model VerticalRollbackSnapshot {
+  id             String   @id
+  organizationId Int
+  snapshotData   Json
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([expiresAt])
+}
+
+model CompanyVerticalOverride {
+  companyId Int    @id
+  configJson Json?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model CompanyVerticalChangeAudit {
+  id             Int              @id @default(autoincrement())
+  companyId      Int
+  organizationId Int
+  userId         Int?
+  oldVertical    BusinessVertical
+  newVertical    BusinessVertical
+  changeReason   String?
+  warningsJson   Json?
+  success        Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user        User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([organizationId])
+  @@index([createdAt])
+}
+
+model CompanyVerticalRollbackSnapshot {
+  id             String   @id
+  companyId      Int
+  organizationId Int
+  snapshotData   Json
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([organizationId])
+  @@index([expiresAt])
 }
 
 

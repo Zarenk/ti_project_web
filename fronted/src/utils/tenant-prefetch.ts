@@ -48,9 +48,9 @@ async function prefetchRecentActivity() {
 }
 
 async function prefetchSiteSettings(selection: TenantSelection) {
-  const tenantVersion = selection.orgId ?? "global"
+  const tenantVersion = `${selection.orgId ?? "none"}::${selection.companyId ?? "none"}`
   const qs = new URLSearchParams({
-    tenantVersion: String(tenantVersion ?? ""),
+    tenantVersion,
     ts: String(Date.now()),
   })
   await authFetch(`/site-settings?${qs.toString()}`, {

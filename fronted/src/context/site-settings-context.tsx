@@ -379,7 +379,12 @@ export function SiteSettingsProvider({
 }: SiteSettingsProviderProps) {
   const tenantSelection = useOptionalTenantSelection();
   const [manualTenantVersion, setManualTenantVersion] = useState(0);
-  const version = tenantSelection?.version ?? manualTenantVersion;
+  const selectionOrgId = tenantSelection?.selection.orgId ?? null;
+  const selectionCompanyId = tenantSelection?.selection.companyId ?? null;
+  const versionCounter = tenantSelection?.version ?? manualTenantVersion;
+  const tenantVersionKey = `${selectionOrgId ?? "none"}::${
+    selectionCompanyId ?? "none"
+  }::${versionCounter}`;
   const [settings, setSettings] = useState<SiteSettings>(() =>
     withDefaultSettings(initialSettings),
   );
@@ -408,7 +413,9 @@ export function SiteSettingsProvider({
   const refresh = useCallback(async () => {
     setIsLoading(true);
     try {
-      const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}&ts=${Date.now()}`;
+      const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(
+        tenantVersionKey,
+      )}&ts=${Date.now()}`;
       const response = await tenantAwareFetch(url, { cache: "no-store" });
 
       if (!response.ok) {
@@ -437,7 +444,7 @@ export function SiteSettingsProvider({
     } finally {
       setIsLoading(false);
     }
-  }, [tenantAwareFetch, version]);
+  }, [tenantAwareFetch, tenantVersionKey]);
 
   useEffect(() => {
     if (initialSettings) {
@@ -468,12 +475,12 @@ export function SiteSettingsProvider({
     };
   }, [tenantSelection]);
 
-  const previousVersionRef = useRef(version);
+  const previousTenantKeyRef = useRef(tenantVersionKey);
   useEffect(() => {
-    if (previousVersionRef.current === version) {
+    if (previousTenantKeyRef.current === tenantVersionKey) {
       return;
     }
-    previousVersionRef.current = version;
+    previousTenantKeyRef.current = tenantVersionKey;
     setPersistedSettings(withDefaultSettings(null));
     setSettings(withDefaultSettings(null));
     setPersistedUpdatedAt(null);
@@ -482,7 +489,7 @@ export function SiteSettingsProvider({
     refresh().catch((err) => {
       console.error("Error loading site settings for tenant", err);
     });
-  }, [version, refresh]);
+  }, [tenantVersionKey, refresh]);
 
   useIsomorphicLayoutEffect(() => {
     if (typeof document !== "undefined") {
@@ -532,7 +539,9 @@ export function SiteSettingsProvider({
         createdAt: string | null;
       } | null> => {
         try {
-          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}&ts=${Date.now()}`;
+          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(
+            tenantVersionKey,
+          )}&ts=${Date.now()}`;
           const response = await tenantAwareFetch(url, { cache: "no-store" });
           if (!response.ok) {
             return null;
@@ -577,7 +586,7 @@ export function SiteSettingsProvider({
         for (let attempt = 0; attempt < 2; attempt++) {
           applyValidated();
 
-          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}`;
+          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(tenantVersionKey)}`;
           const response = await tenantAwareFetch(url, {
             method: "PUT",
             headers: {
@@ -641,7 +650,13 @@ export function SiteSettingsProvider({
         setIsSaving(false);
       }
     },
-    [persistedSettings, persistedUpdatedAt, persistedCreatedAt, tenantAwareFetch, version],
+    [
+      persistedSettings,
+      persistedUpdatedAt,
+      persistedCreatedAt,
+      tenantAwareFetch,
+      tenantVersionKey,
+    ],
   );
 
   const updateSettings = useCallback(

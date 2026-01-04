@@ -2,28 +2,28 @@
 
 import * as React from "react"
 import dynamic from "next/dynamic"
+import NextLink from "next/link"
 import {
-  AudioWaveform,
   Building2,
-  Banknote,
   BookOpen,
   Bot,
   Command,
   DollarSign,
-  Frame,
   Globe,
   Home,
   HouseIcon,
-  Link,
+  Link as LinkIcon,
   Map,
   Megaphone,
   PieChart,
   QrCode,
-  Settings2,
   Settings2Icon,
   ShoppingCart,
   SquareTerminal,
   Store,
+  Table2,
+  Truck,
+  Utensils,
   UserIcon,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
@@ -38,12 +38,15 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
 import { useMessages } from "@/context/messages-context"
 import { useAuth } from "@/context/auth-context"
 import { useFeatureFlag } from "@/app/hooks/use-feature-flags"
 import { useRBAC } from "@/app/hooks/use-rbac"
 import { useSiteSettings } from "@/context/site-settings-context"
 import { useModulePermission, type ModulePermissionKey } from "@/hooks/use-module-permission"
+import { useVerticalConfig } from "@/hooks/use-vertical-config"
+import type { VerticalFeatures } from "@/app/dashboard/tenancy/tenancy.api"
 
 type NavSubItem = {
   title: string
@@ -259,7 +262,7 @@ const data: SidebarData = {
     {
       title: "Catalogo",
       url: "/dashboard/catalog",
-      icon: Link,
+      icon: LinkIcon,
       permission: "store",
       items: [
         {
@@ -350,6 +353,32 @@ const data: SidebarData = {
   ],
 }
 
+const NAV_FEATURE_REQUIREMENTS: Record<string, keyof VerticalFeatures> = {
+  Almacen: "inventory",
+  Categorias: "inventory",
+  Productos: "inventory",
+  Proveedores: "inventory",
+  Ventas: "sales",
+  Tiendas: "posIntegration",
+  Catalogo: "ecommerceIntegration",
+}
+
+const CUSTOM_MENU_ICONS: Record<string, LucideIcon> = {
+  table: Table2,
+  kitchen: Utensils,
+  "cash-register": SquareTerminal,
+  book: BookOpen,
+  truck: Truck,
+  store: Store,
+  home: Home,
+}
+
+function resolveCustomMenuIcon(name?: string): LucideIcon {
+  if (!name) return Command
+  const key = name.toLowerCase()
+  return CUSTOM_MENU_ICONS[key] ?? Command
+}
+
 const TeamSwitcherLazy = dynamic(
   () =>
     import("@/components/team-switcher").then((mod) => ({
@@ -375,37 +404,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { totalUnread } = useMessages()
   const { settings } = useSiteSettings()
   const checkPermission = useModulePermission()
+  const { info: verticalInfo, migration } = useVerticalConfig()
   const normalizedRoleValue = role?.toString().trim().toUpperCase() ?? ""
-
-  const roleLabel = React.useMemo(() => {
-    if (!normalizedRoleValue) {
-      return "Usuario"
-    }
-
-    const roleMap: Record<string, string> = {
-      SUPER_ADMIN_GLOBAL: "Super Admin Global",
-      SUPER_ADMIN_ORG: "Super Administrador",
-      ADMIN: "Administrador",
-      EMPLOYEE: "Empleado",
-    }
-
-    if (roleMap[normalizedRoleValue]) {
-      return roleMap[normalizedRoleValue]
-    }
-
-    const formatted = normalizedRoleValue
-      .toLowerCase()
-      .split(/[_\s]+/)
-      .filter(Boolean)
-      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-      .join(" ")
-
-    return (
-      formatted ||
-      normalizedRoleValue.charAt(0) +
-        normalizedRoleValue.slice(1).toLowerCase()
-    )
-  }, [normalizedRoleValue])
+  const verticalFeatures = verticalInfo?.config?.features
 
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
   const canAccessAccounting = useRBAC([
@@ -430,6 +431,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const filteredNav = data.navMain
     .filter((item) => {
+      if (verticalFeatures) {
+        const feature = NAV_FEATURE_REQUIREMENTS[item.title]
+        if (feature && verticalFeatures[feature] === false) {
+          return false
+        }
+      }
       if (!checkPermission(item.permission)) {
         return false
       }
@@ -448,6 +455,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     })
     .map((item) => {
       const items = item.items?.filter((subItem) => {
+        if (verticalFeatures) {
+          const feature = NAV_FEATURE_REQUIREMENTS[item.title] ?? NAV_FEATURE_REQUIREMENTS[subItem.title]
+          if (feature && verticalFeatures[feature] === false) {
+            return false
+          }
+        }
         if (!checkPermission(subItem.permission ?? item.permission)) {
           return false
         }
@@ -488,6 +501,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }
       return item
     })
+    if (verticalInfo?.config?.ui?.customMenuItems?.length) {
+      verticalInfo.config.ui.customMenuItems.forEach((menu) => {
+        items.push({
+          title: menu.label,
+          url: menu.path,
+          icon: resolveCustomMenuIcon(menu.icon),
+        })
+      })
+    }
     if (accountingEnabled && canAccessAccounting && checkPermission("accounting")) {
       const accountingItem = {
         title: "Contabilidad",
@@ -539,14 +561,38 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     accountingEnabled,
     canAccessAccounting,
     checkPermission,
-    settings.permissions,
-    role,
+    verticalInfo,
   ])
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
+      <SidebarHeader
+        style={
+          verticalInfo?.config?.ui?.primaryColor
+            ? { borderBottom: `3px solid ${verticalInfo.config.ui.primaryColor}` }
+            : undefined
+        }
+      >
         <TeamSwitcherLazy />
+        {migration && migration.legacy > 0 && (
+          <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-100">
+            <div className="flex items-center justify-between gap-2">
+              <span>
+                {migration.legacy} producto{migration.legacy === 1 ? "" : "s"} sin migrar
+              </span>
+              <Button
+                asChild
+                size="sm"
+                variant="link"
+                className="h-6 p-0 text-xs text-amber-900 dark:text-amber-100"
+              >
+                <NextLink href="/dashboard/products/migration">
+                  Asistente
+                </NextLink>
+              </Button>
+            </div>
+          </div>
+        )}
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMain} />

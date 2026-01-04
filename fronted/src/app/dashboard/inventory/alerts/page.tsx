@@ -24,10 +24,10 @@ interface InventoryMetrics {
 
 export default function InventoryAlertsPage() {
   const { selection, version, loading: tenantLoading } = useTenantSelection();
-  const tenantReady = !tenantLoading && !!selection.orgId && !!selection.companyId;
+  const tenantReady = !tenantLoading && !!selection.companyId;
   const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
+    () => `${selection.companyId ?? "none"}-${version}`,
+    [selection.companyId, version],
   );
 
   const [metrics, setMetrics] = useState<InventoryMetrics | null>(null);
@@ -39,8 +39,8 @@ export default function InventoryAlertsPage() {
   const [reviewingTemplateId, setReviewingTemplateId] = useState<number | null>(null);
 
   const fetchAlertsData = useCallback(async () => {
-    if (!tenantReady || !selection.orgId || !selection.companyId) {
-      setError("Selecciona un tenant para consultar alertas.");
+    if (!tenantReady || !selection.companyId) {
+      setError("Selecciona una empresa para consultar alertas.");
       return;
     }
 
@@ -50,9 +50,9 @@ export default function InventoryAlertsPage() {
 
     try {
       const [metricsResponse, alertsResponse, summaryResponse] = await Promise.all([
-        getInventoryMetrics({ organizationId: selection.orgId, companyId: selection.companyId }),
-        getInventoryAlerts({ organizationId: selection.orgId, companyId: selection.companyId }),
-        getInventoryAlertSummary({ organizationId: selection.orgId, companyId: selection.companyId }),
+        getInventoryMetrics({ companyId: selection.companyId }),
+        getInventoryAlerts({ companyId: selection.companyId }),
+        getInventoryAlertSummary({ companyId: selection.companyId }),
       ]);
 
       setMetrics(metricsResponse);
@@ -69,7 +69,7 @@ export default function InventoryAlertsPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantReady, selection.orgId, selection.companyId]);
+  }, [tenantReady, selection.companyId]);
 
   useEffect(() => {
     if (!tenantReady) {

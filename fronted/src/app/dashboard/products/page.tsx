@@ -1,37 +1,32 @@
-import { getProducts } from '../products/products.api'
-import { DataTable } from './data-table';
-import { columns } from './columns';
+import Link from "next/link"
 
+import { getProducts } from "../products/products.api"
+import { Button } from "@/components/ui/button"
+import { ProductsTable } from "./products-table"
+import type { Products } from "./columns"
 
-
-export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
-
-
+export const dynamic = "force-dynamic"
 
 export default async function Page() {
-
-  //consulta al API
   const products = await getProducts()
-  //console.log(products)
-
-  //para el label chiquito de la categoria
-  const mappedData = products.map((product:any) => ({
+  const mappedData: Products[] = products.map((product: any) => ({
     ...product,
-    category_name: product.category?.name || "Sin categoría", // Agrega category_name a los datos
-  }));
+    category_name: product.category?.name || "Sin categor\u30f4a",
+  }))
 
   return (
-    <>
-      <section className='py-2 sm:py-6'>
-        <div className='container mx-auto px-1 sm:px-6 lg:px-8'>
-          <h1 className='px-5 text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6'>Productos</h1>
-          <div className="overflow-x-auto">
-            <DataTable columns={columns} data={mappedData}></DataTable>
-          </div>          
+    <section className="py-2 sm:py-6">
+      <div className="container mx-auto space-y-4 px-1 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-3 px-5 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Productos</h1>
+          <Button asChild variant="outline">
+            <Link href="/dashboard/products/migration">Asistente de migraci\u041d</Link>
+          </Button>
         </div>
-      </section>
-    </>
+        <div className="overflow-x-auto">
+          <ProductsTable data={mappedData} />
+        </div>
+      </div>
+    </section>
   )
 }
-
-

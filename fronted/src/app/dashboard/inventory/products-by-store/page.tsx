@@ -1,7 +1,9 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getStores } from "../../stores/stores.api";
 import { exportInventoryExcel, getAllProductsByStore, getInventory, getProductsByStore } from "../inventory.api";
@@ -23,6 +25,7 @@ import { useAuth } from "@/context/auth-context";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getBrands } from "../../brands/brands.api";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { useTenantFeatures } from "@/context/tenant-features-context";
 
 type SortKey =
   | "product"
@@ -110,6 +113,11 @@ export default function ProductsByStorePage() {
   const [filteredInventoryValue, setFilteredInventoryValue] = useState(0);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: "asc" | "desc" } | null>(null);
   const { settings } = useSiteSettings();
+  const { productSchema } = useTenantFeatures();
+  const schemaFields = productSchema?.fields ?? []
+  const hasSizeField = schemaFields.some((field) => field.key === "size")
+  const hasColorField = schemaFields.some((field) => field.key === "color")
+  const [viewMode, setViewMode] = useState<"legacy" | "variants">("legacy")
   const { role } = useAuth();
   const normalizedRole = role ? role.toUpperCase() : null;
   const canViewCosts =
@@ -130,6 +138,55 @@ export default function ProductsByStorePage() {
     selectedBrand === 0
       ? "Todas las marcas"
       : brands.find((brand) => brand.id === selectedBrand)?.name || "Selecciona una Marca"
+
+  const variantEntries = useMemo(() => {
+    if (!hasSizeField && !hasColorField) {
+      return []
+    }
+    const map = new Map<string, {
+      key: string
+      productName: string
+      productId: number
+      size: string
+      color: string
+      totalStock: number
+      perStore: Array<{ storeName: string; stock: number }>
+      categoryName: string | null
+      isLegacy: boolean
+    }>()
+    filteredProducts.forEach((item) => {
+      const product = item.inventory?.product
+      if (!product) return
+      const attrs = product.extraAttributes ?? {}
+      const sizeValue = typeof attrs?.size === "string" ? attrs.size : "N/A"
+      const colorValue = typeof attrs?.color === "string" ? attrs.color : "N/A"
+      const key = `${product.id}-${sizeValue}-${colorValue}`
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          productName: product.name ?? "Sin nombre",
+          productId: product.id,
+          size: sizeValue,
+          color: colorValue,
+          totalStock: 0,
+          perStore: [],
+          categoryName: product.category?.name ?? null,
+          isLegacy:
+            product.isVerticalMigrated === false ||
+            !product.extraAttributes ||
+            Object.keys(product.extraAttributes ?? {}).length === 0,
+        })
+      }
+      const entry = map.get(key)!
+      const stock = Number(item.stock ?? 0)
+      entry.totalStock += stock
+      entry.perStore.push({
+        storeName: item.inventory?.store?.name ?? "Tienda",
+        stock,
+      })
+    })
+    return Array.from(map.values())
+  }, [filteredProducts, hasSizeField, hasColorField])
 
   const filtersQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -164,7 +221,7 @@ export default function ProductsByStorePage() {
     );
   }, [selectedBrand, searchTerm, selectedCategory, selectedStore, withStockOnly]);
 
-  const getLastSaleDate = (item: any) => {
+  const getLastSaleDate = useCallback((item: any) => {
     const rawDate = item?.salesDetails?.[0]?.sale?.createdAt;
     if (!rawDate) {
       return null;
@@ -177,9 +234,9 @@ export default function ProductsByStorePage() {
     }
 
     return parsedDate;
-  };
+  }, []);
 
-  const formatLastSaleLabel = (item: any) => {
+  const formatLastSaleLabel = useCallback((item: any) => {
     const lastSaleDate = getLastSaleDate(item);
 
     if (!lastSaleDate) {
@@ -187,13 +244,14 @@ export default function ProductsByStorePage() {
     }
 
     return format(lastSaleDate, "dd/MM/yyyy HH:mm");
-  };
+  }, [getLastSaleDate]);
 
-  const extractSortableValue = (item: any, key: SortKey): string | number | Date | null => {
-    const product = item?.inventory?.product ?? {};
+  const extractSortableValue = useCallback(
+    (item: any, key: SortKey): string | number | Date | null => {
+      const product = item?.inventory?.product ?? {};
 
-    switch (key) {
-      case "product":
+      switch (key) {
+        case "product":
         return product?.name ?? "";
       case "category":
         return product?.category?.name ?? "";
@@ -212,9 +270,11 @@ export default function ProductsByStorePage() {
       default:
         return null;
     }
-  };
+    },
+    [getLastSaleDate],
+  );
 
-  const compareSortableValues = (
+  const compareSortableValues = useCallback((
     valueA: string | number | Date | null,
     valueB: string | number | Date | null,
   ) => {
@@ -237,7 +297,7 @@ export default function ProductsByStorePage() {
     return valueA
       .toString()
       .localeCompare(valueB.toString(), "es", { sensitivity: "base" });
-  };
+  }, []);
 
   const handleSort = useCallback(
     (key: SortKey) => {
@@ -578,6 +638,8 @@ export default function ProductsByStorePage() {
     debouncedSelectedCategory,
     brands,
     sortConfig,
+    extractSortableValue,
+    compareSortableValues,
     withStockOnly,
   ]);
 
@@ -831,160 +893,262 @@ export default function ProductsByStorePage() {
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleSort("product")}
-                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
-                >
-                  Producto
-                  {renderSortIcon("product")}
-                </button>
-              </TableHead>
-              <TableHead className="text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleSort("category")}
-                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
-                >
-                  Categoría
-                  {renderSortIcon("category")}
-                </button>
-              </TableHead>
-              {showPurchaseCost && (
-                <TableHead className="text-xs">
-                  <button
-                    type="button"
-                    onClick={() => handleSort("purchasePrice")}
-                    className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
-                  >
-                    Precio de Compra
-                    {renderSortIcon("purchasePrice")}
-                  </button>
-                </TableHead>
-              )}
-              <TableHead className="text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleSort("salePrice")}
-                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
-                >
-                  Precio de Venta
-                  {renderSortIcon("salePrice")}
-                </button>
-              </TableHead>
-              <TableHead className="text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleSort("stock")}
-                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
-                >
-                  Stock
-                  {renderSortIcon("stock")}
-                </button>
-              </TableHead>
-              <TableHead className="text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleSort("createdAt")}
-                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
-                >
-                  Fecha de Ingreso
-                  {renderSortIcon("createdAt")}
-                </button>
-              </TableHead>
-              <TableHead className="text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleSort("lastSaleAt")}
-                  className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
-                >
-                  Última salida
-                  {renderSortIcon("lastSaleAt")}
-                </button>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredProducts.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell className="text-sm">{item.inventory.product.name}</TableCell>
-                <TableCell className="text-sm">
-                  {item.inventory.product.category?.name || "Sin categoría"}
-                </TableCell>
-                {showPurchaseCost && (
-                  <TableCell className="text-sm">{item.inventory.product.price}</TableCell>
-                )}
-                <TableCell className="text-sm">{item.inventory.product.priceSell}</TableCell>
-                <TableCell className="text-sm">{item.stock}</TableCell>
-                <TableCell className="text-sm">
-                  {format(new Date(item.inventory.product.createdAt), "dd/MM/yyyy")}
-                </TableCell>
-                <TableCell className="text-sm">{formatLastSaleLabel(item)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-
-        <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          {/* Controles izquierda */}
-          <div className="flex items-center space-x-2">
-            <span className="text-sm">Resultados por página:</span>
-            <Select onValueChange={(value) => { setLimit(Number(value)); setCurrentPage(1); }}>
-              <SelectTrigger className="w-[80px] h-8">
-                <SelectValue placeholder={limit.toString()} />
-              </SelectTrigger>
-              <SelectContent>
-                {[5, 10, 20, 50].map((option) => (
-                  <SelectItem key={option} value={option.toString()}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Controles derecha */}
-          <div className="flex items-center space-x-4">
+      {(hasSizeField || hasColorField) && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-white/70 p-3 text-xs dark:border-slate-700 dark:bg-slate-900/60">
+          <span className="text-slate-600 dark:text-slate-300">Vista:</span>
+          <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700">
             <Button
-              variant="outline"
               size="sm"
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
+              variant={viewMode === "legacy" ? "default" : "ghost"}
+              className="rounded-none"
+              onClick={() => setViewMode("legacy")}
             >
-              ← Anterior
+              Tabla legacy
             </Button>
-            <span className="text-sm">
-              Página <strong>{currentPage}</strong> de{" "}
-              <strong>{Math.max(Math.ceil(totalItems / limit), 1)}</strong>
-            </span>
             <Button
-              variant="outline"
               size="sm"
-              onClick={() =>
-                setCurrentPage((prev) =>
-                  Math.min(prev + 1, Math.ceil(totalItems / limit))
-                )
-              }
-              disabled={currentPage >= Math.ceil(totalItems / limit)}
+              variant={viewMode === "variants" ? "default" : "ghost"}
+              className="rounded-none"
+              onClick={() => setViewMode("variants")}
             >
-              Siguiente →
+              Variantes
             </Button>
           </div>
         </div>
-      </div>
+      )}
+
+      {viewMode === "variants" ? (
+        variantEntries.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {variantEntries.map((entry) => (
+              <Card key={entry.key} className="space-y-2 border-slate-200 p-4 dark:border-slate-800">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-slate-800 dark:text-slate-100">{entry.productName}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {entry.categoryName ?? "Sin categor?a"}
+                    </p>
+                  </div>
+                  {!entry.isLegacy && (
+                    <Badge variant="outline" className="text-[11px] uppercase">
+                      Variante
+                    </Badge>
+                  )}
+                  {entry.isLegacy && <Badge variant="destructive">Legacy</Badge>}
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {hasSizeField && (
+                    <Badge variant="secondary" className="bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100">
+                      Talla: {entry.size}
+                    </Badge>
+                  )}
+                  {hasColorField && (
+                    <Badge variant="secondary" className="bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100">
+                      Color: {entry.color}
+                    </Badge>
+                  )}
+                </div>
+                <div className="rounded-md bg-muted/40 p-2 text-xs">
+                  <p className="font-semibold">Stock total: {entry.totalStock}</p>
+                  <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                    {entry.perStore.map((store, index) => (
+                      <li key={`${entry.key}-store-${index}`}>
+                        {store.storeName}: <strong>{store.stock}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                {entry.isLegacy && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                    Completa los atributos desde el asistente de migraci?n para este producto.
+                  </p>
+                )}
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="border-dashed border-slate-200 p-6 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-300">
+            No se encontraron variantes con los filtros actuales.
+          </Card>
+        )
+      ) : (
+        <div className="space-y-6">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("product")}
+                      className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                    >
+                      Producto
+                      {renderSortIcon("product")}
+                    </button>
+                  </TableHead>
+                  {hasSizeField && <TableHead className="text-xs">Talla</TableHead>}
+                  {hasColorField && <TableHead className="text-xs">Color</TableHead>}
+                  <TableHead className="text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("category")}
+                      className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                    >
+                      Categor?a
+                      {renderSortIcon("category")}
+                    </button>
+                  </TableHead>
+                  {showPurchaseCost && (
+                    <TableHead className="text-xs">
+                      <button
+                        type="button"
+                        onClick={() => handleSort("purchasePrice")}
+                        className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                      >
+                        Precio de Compra
+                        {renderSortIcon("purchasePrice")}
+                      </button>
+                    </TableHead>
+                  )}
+                  <TableHead className="text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("salePrice")}
+                      className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                    >
+                      Precio de Venta
+                      {renderSortIcon("salePrice")}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("stock")}
+                      className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                    >
+                      Stock
+                      {renderSortIcon("stock")}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("createdAt")}
+                      className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                    >
+                      Fecha de Ingreso
+                      {renderSortIcon("createdAt")}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("lastSaleAt")}
+                      className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
+                    >
+                      ?ltima salida
+                      {renderSortIcon("lastSaleAt")}
+                    </button>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredProducts.map((item) => {
+                  const product = item.inventory.product
+                  const isLegacy = !product?.isVerticalMigrated || !product?.extraAttributes
+                  const sizeValue =
+                    typeof product?.extraAttributes?.size === "string"
+                      ? product.extraAttributes.size
+                      : "--"
+                  const colorValue =
+                    typeof product?.extraAttributes?.color === "string"
+                      ? product.extraAttributes.color
+                      : "--"
+
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell className="text-sm">
+                        <div className="flex flex-col gap-1">
+                          <span>{product.name}</span>
+                          {isLegacy && (
+                            <Badge
+                              variant="outline"
+                              className="w-fit border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-900/30 dark:text-amber-100"
+                            >
+                              Legacy
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      {hasSizeField && <TableCell className="text-sm">{sizeValue}</TableCell>}
+                      {hasColorField && <TableCell className="text-sm">{colorValue}</TableCell>}
+                      <TableCell className="text-sm">
+                        {product.category?.name || "Sin categor?a"}
+                      </TableCell>
+                      {showPurchaseCost && (
+                        <TableCell className="text-sm">{product.price}</TableCell>
+                      )}
+                      <TableCell className="text-sm">{product.priceSell}</TableCell>
+                      <TableCell className="text-sm">{item.stock}</TableCell>
+                      <TableCell className="text-sm">
+                        {format(new Date(product.createdAt), "dd/MM/yyyy")}
+                      </TableCell>
+                      <TableCell className="text-sm">{formatLastSaleLabel(item)}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm">Resultados por p?gina:</span>
+              <Select
+                onValueChange={(value) => {
+                  setLimit(Number(value))
+                  setCurrentPage(1)
+                }}
+              >
+                <SelectTrigger className="h-8 w-[80px]">
+                  <SelectValue placeholder={limit.toString()} />
+                </SelectTrigger>
+                <SelectContent>
+                  {[5, 10, 20, 50].map((option) => (
+                    <SelectItem key={option} value={option.toString()}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+              >
+                Anterior
+              </Button>
+              <span className="text-sm">
+                P?gina <strong>{currentPage}</strong> de {" "}
+                <strong>{Math.max(Math.ceil(totalItems / limit), 1)}</strong>
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, Math.ceil(totalItems / limit)))
+                }
+                disabled={currentPage >= Math.ceil(totalItems / limit)}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
-
-
-
-
-
-
-
-

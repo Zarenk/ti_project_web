@@ -5,16 +5,26 @@ import { useCallback } from "react"
 import { useAuth } from "@/context/auth-context"
 import { useSiteSettings } from "@/context/site-settings-context"
 import type { SiteSettings } from "@/context/site-settings-schema"
+import { useOptionalTenantFeatures } from "@/context/tenant-features-context"
+import type { VerticalFeatures } from "@/app/dashboard/tenancy/tenancy.api"
 
 export type ModulePermissionKey = keyof SiteSettings["permissions"]
+
+const PERMISSION_FEATURE_MAP: Partial<Record<ModulePermissionKey, keyof VerticalFeatures>> = {
+  sales: "sales",
+  inventory: "inventory",
+}
 
 export function useModulePermission() {
   const { role } = useAuth()
   const { settings } = useSiteSettings()
+  const tenantFeatures = useOptionalTenantFeatures()
   const normalizedRole = role ? role.trim().toUpperCase() : null
   const comparableRole = normalizedRole ? normalizedRole.replace(/\s+/g, "_") : null
   const isSuperAdmin = comparableRole ? comparableRole.includes("SUPER_ADMIN") : false
   const bypassRoles = new Set(["ADMIN", "SUPER_ADMIN", "SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"])
+  const effectivePermissions = tenantFeatures?.permissions ?? settings.permissions
+  const features = tenantFeatures?.features
 
   return useCallback(
     (module?: ModulePermissionKey) => {
@@ -24,8 +34,15 @@ export function useModulePermission() {
         return true
       }
 
-      return settings.permissions?.[module] ?? false
+      if (features) {
+        const mappedFeature = PERMISSION_FEATURE_MAP[module]
+        if (mappedFeature && features[mappedFeature] === false) {
+          return false
+        }
+      }
+
+      return effectivePermissions?.[module] ?? false
     },
-    [comparableRole, isSuperAdmin, settings.permissions]
+    [comparableRole, effectivePermissions, features, isSuperAdmin],
   )
 }

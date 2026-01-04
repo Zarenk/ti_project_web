@@ -904,3 +904,357 @@ export async function retrySunatTransmission(transmissionId: number) {
   return response.json().catch(() => ({}))
 }
 
+export interface CompanyVerticalMigrationStats {
+  total: number
+  migrated: number
+  legacy: number
+  percentage: number
+}
+
+export type OrganizationVerticalMigrationStats = CompanyVerticalMigrationStats
+
+export type VerticalProductFieldType =
+  | "text"
+  | "number"
+  | "select"
+  | "multi-select"
+  | "color"
+  | "textarea"
+
+export interface VerticalProductSchemaField {
+  key: string
+  label: string
+  type: VerticalProductFieldType
+  options?: string[]
+  required?: boolean
+  group?: string
+  generated?: boolean
+}
+
+export interface VerticalProductSchema {
+  inventoryTracking: "by_product" | "by_variant" | "by_ingredient" | "lot_tracking"
+  pricingModel: "uniform" | "by_variant" | "by_modifiers"
+  fields: VerticalProductSchemaField[]
+}
+
+export interface VerticalFeatures {
+  sales: boolean
+  inventory: boolean
+  production: boolean
+  reservations: boolean
+  appointments: boolean
+  multiWarehouse: boolean
+  lotTracking: boolean
+  serialNumbers: boolean
+  tableManagement: boolean
+  kitchenDisplay: boolean
+  workOrders: boolean
+  projectTracking: boolean
+  posIntegration: boolean
+  ecommerceIntegration: boolean
+  deliveryPlatforms: boolean
+}
+
+export interface VerticalUIConfig {
+  theme?: "default" | "restaurant" | "retail" | "services"
+  dashboardLayout: "standard" | "sales-focused" | "production-focused"
+  primaryColor?: string
+  templates: {
+    invoice: string
+    receipt: string
+    report: string
+  }
+  customMenuItems?: Array<{
+    label: string
+    path: string
+    icon: string
+  }>
+}
+
+export interface VerticalConfigPayload {
+  name: string
+  displayName: string
+  description: string
+  features: VerticalFeatures
+  ui: VerticalUIConfig
+  productSchema: VerticalProductSchema
+  alternateSchemas?: Record<string, VerticalProductSchema>
+  version: string
+}
+
+export interface CompanyVerticalInfo {
+  companyId: number
+  organizationId: number
+  businessVertical: VerticalName
+  productSchemaEnforced: boolean
+  migration: CompanyVerticalMigrationStats | null
+  config: VerticalConfigPayload | null
+}
+
+export type OrganizationVerticalInfo = CompanyVerticalInfo
+
+export type VerticalName = "GENERAL" | "RETAIL" | "RESTAURANTS" | "SERVICES" | "MANUFACTURING"
+
+export interface VerticalCompatibilityResult {
+  isCompatible: boolean
+  errors: string[]
+  warnings: string[]
+  requiresMigration: boolean
+  affectedModules: string[]
+  estimatedDowntime: number
+  dataImpact: {
+    tables: Array<{
+      name: string
+      recordCount: number
+      willBeHidden: boolean
+      willBeMigrated: boolean
+      backupRecommended: boolean
+    }>
+    customFields: Array<{
+      entity: string
+      field: string
+      willBeRemoved: boolean
+    }>
+    integrations: string[]
+  }
+}
+
+export interface UpdateVerticalPayloadRequest {
+  vertical: VerticalName
+  reason: string
+  force?: boolean
+}
+
+export interface UpdateCompanyVerticalResponse {
+  companyId: number
+  organizationId: number | null
+  businessVertical: VerticalName
+  warnings: string[]
+}
+
+export async function fetchCompanyVerticalInfo(
+  companyId: number,
+): Promise<CompanyVerticalInfo | null> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    return null
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical`, {
+    headers,
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    return null
+  }
+
+  const data = (await response.json().catch(() => null)) as
+    | {
+        companyId?: number
+        organizationId?: number
+        businessVertical?: string
+        productSchemaEnforced?: boolean
+        migration?: Partial<CompanyVerticalMigrationStats> | null
+        config?: VerticalConfigPayload | null
+      }
+    | null
+
+  if (
+    !data ||
+    typeof data.companyId !== "number" ||
+    typeof data.organizationId !== "number" ||
+    typeof data.businessVertical !== "string"
+  ) {
+    return null
+  }
+
+  const migration =
+    data.migration && typeof data.migration === "object"
+      ? {
+          total: Number(data.migration.total ?? 0),
+          migrated: Number(data.migration.migrated ?? 0),
+          legacy: Number(data.migration.legacy ?? 0),
+          percentage: Number.isFinite(Number(data.migration.percentage))
+            ? Number(data.migration.percentage)
+            : 0,
+        }
+      : null
+
+  return {
+    companyId: data.companyId ?? companyId,
+    organizationId: data.organizationId,
+    businessVertical: (data.businessVertical as VerticalName) ?? "GENERAL",
+    productSchemaEnforced: Boolean(data.productSchemaEnforced),
+    migration,
+    config: data.config ?? null,
+  }
+}
+
+export async function setCompanyProductSchemaEnforced(
+  companyId: number,
+  enforced: boolean,
+): Promise<{ organizationId: number | null; companyId: number; productSchemaEnforced: boolean }> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/companies/${companyId}/vertical/enforce-product-schema`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify({ enforced }),
+    },
+  )
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null)
+    const message =
+      (errorPayload && typeof errorPayload === "object" && "message" in errorPayload
+        ? (errorPayload as { message?: string }).message
+        : undefined) || "No se pudo actualizar la validación estricta"
+    throw new Error(message)
+  }
+
+  const payload = (await response.json().catch(() => null)) as
+    | { organizationId?: number; companyId?: number; productSchemaEnforced?: boolean }
+    | null
+
+  return {
+    organizationId: payload?.organizationId ?? null,
+    companyId: payload?.companyId ?? companyId,
+    productSchemaEnforced: Boolean(payload?.productSchemaEnforced ?? enforced),
+  }
+}
+
+export async function checkCompanyVerticalCompatibility(
+  companyId: number,
+  targetVertical: VerticalName,
+): Promise<VerticalCompatibilityResult> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/companies/${companyId}/vertical/compatibility-check`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify({ targetVertical }),
+    },
+  )
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo validar la compatibilidad del vertical"
+    throw new Error(message)
+  }
+
+  const data = (await response.json().catch(() => null)) as VerticalCompatibilityResult | null
+  if (!data) {
+    throw new Error("Respuesta inesperada del servicio de compatibilidad")
+  }
+  return data
+}
+
+export async function updateCompanyVertical(
+  companyId: number,
+  payload: UpdateVerticalPayloadRequest,
+): Promise<UpdateCompanyVerticalResponse> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const data = contentType.includes("application/json")
+    ? await response.json().catch(() => null)
+    : null
+
+  if (!response.ok) {
+    const message =
+      (data && typeof data === "object" && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo actualizar el vertical"
+    throw new Error(message)
+  }
+
+  const organizationId =
+    data && typeof data === "object" && "organizationId" in data
+      ? Number((data as { organizationId?: number }).organizationId ?? NaN)
+      : NaN
+
+  const companyFromPayload =
+    data && typeof data === "object" && "companyId" in data
+      ? Number((data as { companyId: number }).companyId)
+      : companyId
+
+  return {
+    companyId: companyFromPayload,
+    organizationId: Number.isFinite(organizationId) ? organizationId : null,
+    businessVertical:
+      (data && typeof data === "object" && "businessVertical" in data
+        ? ((data as { businessVertical: string }).businessVertical as VerticalName)
+        : payload.vertical) ?? payload.vertical,
+    warnings:
+      (data && typeof data === "object" && Array.isArray((data as { warnings?: unknown }).warnings)
+        ? ((data as { warnings?: string[] }).warnings ?? [])
+        : []),
+  }
+}
+
+export async function rollbackCompanyVertical(
+  companyId: number,
+): Promise<{ organizationId: number | null; companyId: number; businessVertical: VerticalName }> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/rollback`, {
+    method: "POST",
+    headers,
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo revertir el vertical"
+    throw new Error(message)
+  }
+
+  const data = (await response.json().catch(() => null)) as
+    | { organizationId?: number; companyId?: number; businessVertical?: string }
+    | null
+
+  return {
+    organizationId: data?.organizationId ?? null,
+    companyId: data?.companyId ?? companyId,
+    businessVertical: (data?.businessVertical as VerticalName) ?? "GENERAL",
+  }
+}
+

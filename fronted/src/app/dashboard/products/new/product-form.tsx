@@ -1,23 +1,18 @@
 ﻿"use client"
 
+import Link from 'next/link'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useForm, useFieldArray, Controller } from 'react-hook-form'
+import { toast } from 'sonner'
+import { z } from 'zod'
+import { Loader2 } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useForm, useFieldArray, Controller } from 'react-hook-form'
-import { createProduct, updateProduct } from '../products.api'
-import { uploadProductImage } from '../products.api'
-import { getBrands } from '../../brands/brands.api'
-import { createCategory, getCategories } from '../../categories/categories.api'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useParams, useRouter } from 'next/navigation'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from '@/components/ui/select'
-import { z } from 'zod'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner'
-import { IconName, icons } from '@/lib/icons'
-import { Loader2 } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogClose,
@@ -27,8 +22,46 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { createProduct, updateProduct, uploadProductImage } from '../products.api'
+import { getBrands } from '../../brands/brands.api'
+import { createCategory, getCategories } from '../../categories/categories.api'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useParams, useRouter } from 'next/navigation'
+import { IconName, icons } from '@/lib/icons'
 import { useTenantSelection } from '@/context/tenant-selection-context'
 import { resolveImageUrl } from '@/lib/images'
+import { useVerticalConfig } from '@/hooks/use-vertical-config'
+
+const normalizeImagePath = (input?: string): string => {
+  const raw = input?.trim() ?? ''
+  if (!raw) {
+    return ''
+  }
+
+  try {
+    const parsed = new URL(raw)
+    if (parsed.pathname.startsWith('/uploads')) {
+      return parsed.pathname
+    }
+  } catch {
+    // Ignore parsing errors for relative paths
+  }
+
+  const uploadsIndex = raw.indexOf('/uploads')
+  if (uploadsIndex >= 0) {
+    const relative = raw.slice(uploadsIndex)
+    return relative.startsWith('/') ? relative : `/${relative}`
+  }
+
+  return raw
+}
 
 interface ProductFormProps {
   product: any
@@ -43,6 +76,173 @@ export function ProductForm({
   onSuccess,
   onCancel,
 }: ProductFormProps) {
+  const { info: verticalInfo } = useVerticalConfig()
+  const verticalName = verticalInfo?.businessVertical ?? "GENERAL"
+  const schemaFields = verticalInfo?.config?.productSchema?.fields ?? []
+  const groupedSchemaFields = useMemo(() => {
+    if (!schemaFields.length) return []
+    const groups = new Map<string, typeof schemaFields>()
+    schemaFields.forEach((field) => {
+      const key = field.group ?? "general"
+      const current = groups.get(key) ?? []
+      current.push(field)
+      groups.set(key, current)
+    })
+    return Array.from(groups.entries())
+  }, [schemaFields])
+  const MIGRATION_ASSISTANT_PATH = "/dashboard/products/migration"
+  const isLegacyProduct =
+    Boolean(product?.id) &&
+    (product?.isVerticalMigrated === false ||
+      !product?.extraAttributes ||
+      Object.keys(product.extraAttributes ?? {}).length === 0)
+  const [extraAttributes, setExtraAttributes] = useState<Record<string, unknown>>(
+    () => (product?.extraAttributes ?? {}) as Record<string, unknown>,
+  )
+  const [extraFieldError, setExtraFieldError] = useState<string | null>(null)
+  const handleFieldChange = useCallback(
+    (key: string, value: unknown) => {
+      setExtraAttributes((prev) => {
+        if (value === null || value === undefined || value === '') {
+          const next = { ...prev }
+          delete next[key]
+          return next
+        }
+        return { ...prev, [key]: value }
+      })
+    },
+    [setExtraAttributes],
+  )
+
+  const getFieldValue = useCallback(
+    (key: string): unknown => {
+      return extraAttributes[key]
+    },
+    [extraAttributes],
+  )
+
+  const renderSchemaField = (field: (typeof schemaFields)[number]) => {
+    const value = getFieldValue(field.key)
+    switch (field.type) {
+      case 'select':
+        return (
+          <Select
+            value={typeof value === 'string' ? value : undefined}
+            onValueChange={(next) => handleFieldChange(field.key, next)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={`Selecciona ${field.label}`} />
+            </SelectTrigger>
+            <SelectContent>
+              {(field.options ?? []).map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )
+      case 'multi-select': {
+        const selected = Array.isArray(value) ? value : []
+        return (
+          <div className="flex flex-col gap-2">
+            {(field.options ?? []).map((option) => {
+              const checked = selected.includes(option)
+              return (
+                <label key={option} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(isChecked) => {
+                      const next = isChecked
+                        ? [...selected, option]
+                        : selected.filter((entry) => entry !== option)
+                      handleFieldChange(field.key, next)
+                    }}
+                  />
+                  <span>{option}</span>
+                </label>
+              )
+            })}
+          </div>
+        )
+      }
+      case 'color':
+        return (
+          <Input
+            type="color"
+            value={typeof value === 'string' ? value : '#000000'}
+            onChange={(event) => handleFieldChange(field.key, event.target.value)}
+          />
+        )
+      case 'textarea':
+        return (
+          <Textarea
+            value={typeof value === 'string' ? value : ''}
+            onChange={(event) => handleFieldChange(field.key, event.target.value)}
+          />
+        )
+      case 'number':
+        return (
+          <Input
+            type="number"
+            value={typeof value === 'number' || typeof value === 'string' ? String(value) : ''}
+            onChange={(event) => handleFieldChange(field.key, event.target.value)}
+          />
+        )
+      default:
+        return (
+          <Input
+            value={typeof value === 'string' ? value : ''}
+            onChange={(event) => handleFieldChange(field.key, event.target.value)}
+          />
+        )
+    }
+  }
+
+  const validateAndNormalizeSchemaFields = useCallback(() => {
+    if (!schemaFields.length) {
+      return { value: null }
+    }
+    const normalized: Record<string, unknown> = {}
+    for (const field of schemaFields) {
+      const raw = extraAttributes[field.key]
+      const isEmpty =
+        raw === null ||
+        raw === undefined ||
+        (typeof raw === 'string' && raw.trim().length === 0) ||
+        (Array.isArray(raw) && raw.length === 0)
+      if (field.required && isEmpty) {
+        return { error: `Completa el campo "${field.label}".` }
+      }
+      if (!isEmpty && field.options) {
+        if (field.type === 'multi-select') {
+          const values = Array.isArray(raw) ? raw : []
+          const invalid = values.some(
+            (entry) => typeof entry !== 'string' || !field.options?.includes(entry),
+          )
+          if (invalid) {
+            return { error: `El campo "${field.label}" contiene valores inválidos.` }
+          }
+        } else if (typeof raw === 'string' && !field.options.includes(raw)) {
+          return { error: `El campo "${field.label}" solo admite: ${field.options.join(', ')}.` }
+        }
+      }
+      if (!isEmpty) {
+        if (field.type === 'number') {
+          const parsed = Number(raw)
+          if (Number.isNaN(parsed)) {
+            return { error: `El campo "${field.label}" debe ser numérico.` }
+          }
+          normalized[field.key] = parsed
+        } else if (field.type === 'multi-select') {
+          normalized[field.key] = Array.isArray(raw) ? raw : [raw]
+        } else {
+          normalized[field.key] = raw
+        }
+      }
+    }
+    return { value: Object.keys(normalized).length ? normalized : null }
+  }, [extraAttributes, schemaFields])
 
     //definir el esquema de validacion
     const imageSchema = z
@@ -121,7 +321,10 @@ export function ProductForm({
       }
 
       const images = Array.isArray(source?.images)
-        ? source.images.filter((img: unknown): img is string => typeof img === 'string')
+        ? source.images
+            .filter((img: unknown): img is string => typeof img === 'string')
+            .map((img) => normalizeImagePath(img))
+            .filter((img) => img.length > 0)
         : []
 
       const features = Array.isArray(source?.features)
@@ -352,17 +555,12 @@ export function ProductForm({
     if (!file) return;
     try {
       const { url } = await uploadProductImage(file);
-      // Store relative upload path to avoid stale host/IP issues
-      let toStore = url;
-      try {
-        const u = new URL(url);
-        if (u.pathname.startsWith('/uploads')) {
-          toStore = u.pathname; // persist only the path
-        }
-      } catch {
-        // ignore, keep original
-      }
-      setValue(`images.${index}` as const, toStore);
+      const normalizedPath = normalizeImagePath(url);
+      setValue(`images.${index}` as const, normalizedPath, {
+        shouldDirty: true,
+        shouldValidate: true,
+      })
+      clearErrors(`images.${index}` as const)
     } catch (err) {
       console.error('Error subiendo imagen', err);
     }
@@ -385,8 +583,19 @@ export function ProductForm({
         if (connectivity) spec.connectivity = connectivity
 
         const cleanedImages =
-          productData.images?.map((img) => img.trim()).filter((img) => img.length > 0) ?? []
+          productData.images
+            ?.map((img) => normalizeImagePath(img))
+            .filter((img) => img.length > 0) ?? []
         const brand = productData.brand?.trim().toUpperCase()
+
+        const schemaResult = validateAndNormalizeSchemaFields()
+        if (schemaResult.error) {
+          setExtraFieldError(schemaResult.error)
+          toast.error(schemaResult.error)
+          setIsProcessing(false)
+          return
+        }
+        setExtraFieldError(null)
 
         const payload = {
             ...productData,
@@ -401,6 +610,9 @@ export function ProductForm({
                   description: f.description || undefined,
                 }))
               : undefined,
+        }
+        if (schemaResult.value) {
+          payload.extraAttributes = schemaResult.value
         }
 
         let savedProduct: any = null
@@ -447,6 +659,10 @@ export function ProductForm({
   }
   // solo cuando cambia el id del producto
   }, [product?.id, setValue])
+
+  useEffect(() => {
+    setExtraAttributes((product?.extraAttributes ?? {}) as Record<string, unknown>)
+  }, [product?.id, product?.extraAttributes])
 
   return (
     <div className="container mx-auto max-w-lg grid sm:max-w-md md:max-w-lg lg:max-w-xl">
@@ -541,6 +757,70 @@ export function ProductForm({
                             <p className="text-red-500 text-sm">{form.formState.errors.priceSell.message}</p>
                         )}
                     </div>
+
+                    {schemaFields.length > 0 && (
+                      <div className="mt-4 space-y-4 rounded-lg border bg-muted/30 p-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <Label className="text-sm font-medium">
+                              Campos del vertical ({verticalInfo?.config?.displayName ?? 'Vertical'})
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              Ajusta la información requerida por el esquema {verticalName}.
+                            </p>
+                            {extraFieldError && (
+                              <p className="mt-1 text-xs text-red-500">{extraFieldError}</p>
+                            )}
+                          </div>
+                          {isLegacyProduct && (
+                            <Badge variant="destructive" className="self-start">
+                              Legacy
+                            </Badge>
+                          )}
+                        </div>
+                        {isLegacyProduct && (
+                          <div className="rounded-md bg-amber-50/70 p-3 text-xs text-amber-800">
+                            Este producto aun no se ha migrado al esquema de {verticalName}.{" "}
+                            <Link
+                              href={`${MIGRATION_ASSISTANT_PATH}?productId=${product?.id ?? ""}`}
+                              className="font-semibold underline"
+                            >
+                              Dividir stock / completar datos
+                            </Link>
+                          </div>
+                        )}
+                        {groupedSchemaFields.map(([groupKey, fields]) => (
+                          <div key={groupKey} className="space-y-3 rounded-md border border-dashed p-3">
+                            <div>
+                              <p className="text-sm font-semibold capitalize">
+                                {groupKey === "general"
+                                  ? "Campos generales"
+                                  : groupKey.replace(/[-_]/g, " ")}
+                              </p>
+                              {groupKey === "clothing" && (
+                                <p className="text-xs text-muted-foreground">
+                                  Administra tallas y colores para cada variante.
+                                </p>
+                              )}
+                              {groupKey === "kitchen" && (
+                                <p className="text-xs text-muted-foreground">
+                                  Define estaciones y tiempos de preparación para la cocina.
+                                </p>
+                              )}
+                            </div>
+                            {fields.map((field) => (
+                              <div key={field.key} className="space-y-2">
+                                <Label className="text-sm font-medium">
+                                  {field.label}
+                                  {field.required && <span className="ml-1 text-red-500">*</span>}
+                                </Label>
+                                {renderSchemaField(field)}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     <div className="flex flex-col">
                         {/* CATEGORIA */}

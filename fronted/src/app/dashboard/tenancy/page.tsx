@@ -7,10 +7,15 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Separator } from "@/components/ui/separator"
 import { getAuthHeaders } from "@/utils/auth-token"
 
-import type { OrganizationResponse } from "./tenancy.api"
+import type { OrganizationResponse, OrganizationVerticalInfo } from "./tenancy.api"
+import { fetchCompanyVerticalInfo } from "./tenancy.api"
+import { getTenantSelection } from "@/utils/tenant-preferences"
+import { OrganizationVerticalCard } from "./organization-vertical-card"
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") || "http://localhost:4000"
+const VERTICAL_FEATURE_ENABLED =
+  process.env.NEXT_PUBLIC_VERTICAL_FEATURE_ENABLED === "true"
 
 async function fetchOrganizations(): Promise<OrganizationResponse[]> {
   const headers = await getAuthHeaders()
@@ -57,11 +62,65 @@ async function fetchCurrentUserRole(): Promise<string | null> {
   return data.role.toUpperCase()
 }
 
+type VerticalMapEntry = OrganizationVerticalInfo & {
+  displayName: string
+}
+
+async function fetchOrganizationVerticalMap(
+  organizations: OrganizationResponse[],
+  tenantSelection?: { orgId: number | null; companyId: number | null },
+): Promise<Map<number, VerticalMapEntry>> {
+  const map = new Map<number, VerticalMapEntry>()
+  if (!VERTICAL_FEATURE_ENABLED || organizations.length === 0) {
+    return map
+  }
+
+  const entries = await Promise.all(
+    organizations.map(async (organization) => {
+      let targetCompanyId: number | null = null
+      if (tenantSelection?.orgId === organization.id && tenantSelection.companyId) {
+        targetCompanyId = tenantSelection.companyId
+      } else if (organization.companies && organization.companies.length > 0) {
+        targetCompanyId = organization.companies[0]?.id ?? null
+      }
+      if (!targetCompanyId) {
+        return null
+      }
+      const info = await fetchCompanyVerticalInfo(targetCompanyId).catch(() => null)
+      if (!info) {
+        return null
+      }
+      const displayName =
+        (info.config && typeof info.config === "object" ? info.config.displayName : undefined) ??
+        info.businessVertical
+      return [
+        organization.id,
+        {
+          ...info,
+          displayName,
+        },
+      ] as const
+    }),
+  )
+
+  for (const entry of entries) {
+    if (entry) {
+      map.set(entry[0], entry[1])
+    }
+  }
+
+  return map
+}
+
 export default async function OrganizationsPage() {
-  const [organizations, currentRole] = await Promise.all([
+  const [organizations, currentRole, tenantSelection] = await Promise.all([
     fetchOrganizations(),
     fetchCurrentUserRole(),
+    getTenantSelection(),
   ])
+  const verticalInfoMap = VERTICAL_FEATURE_ENABLED
+    ? await fetchOrganizationVerticalMap(organizations, tenantSelection)
+    : new Map<number, VerticalMapEntry>()
   const canManageOrganizations = currentRole
     ? ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG", "SUPER_ADMIN"].includes(currentRole)
     : false
@@ -100,6 +159,7 @@ export default async function OrganizationsPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           {organizations.map((organization) => {
             const activeUnits = organization.units.filter((unit) => unit.status === "ACTIVE").length
+            const verticalDetails = verticalInfoMap.get(organization.id)
 
             return (
               <Card
@@ -153,6 +213,17 @@ export default async function OrganizationsPage() {
                       </span>
                     )}
                   </div>
+                  {VERTICAL_FEATURE_ENABLED && (organization.companies?.length ?? 0) > 0 && (
+                    <OrganizationVerticalCard
+                      organizationId={organization.id}
+                      companies={organization.companies?.map((company) => ({
+                        id: company.id,
+                        name: company.name,
+                      })) ?? []}
+                      initialInfo={verticalDetails ?? null}
+                      canManage={canManageOrganizations}
+                    />
+                  )}
                   <Separator className="bg-sky-100 dark:bg-slate-700" />
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     {activeUnits} unidad(es) activas actualmente.
@@ -184,4 +255,3 @@ export default async function OrganizationsPage() {
     </div>
   )
 }
-

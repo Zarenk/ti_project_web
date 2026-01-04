@@ -11,6 +11,7 @@ import {
   UploadedFile,
   Req,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuditAction } from '@prisma/client';
@@ -18,6 +19,7 @@ import { ActivityService } from '../activity/activity.service';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { UpdateProductVerticalMigrationDto } from './dto/update-product-vertical-migration.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -107,8 +109,14 @@ export class ProductsController {
 
   @Get()
   @ApiResponse({ status: 200, description: 'Return all products' }) // Swagger
-  findAll() {
-    return this.productsService.findAll();
+  findAll(@Query('migrationStatus') migrationStatus?: string) {
+    const normalized =
+      migrationStatus === 'legacy' || migrationStatus === 'migrated'
+        ? migrationStatus
+        : undefined;
+    return this.productsService.findAll({
+      migrationStatus: normalized,
+    });
   }
 
   @Get(':id')
@@ -245,5 +253,34 @@ export class ProductsController {
       id: numericId,
       categoryId,
     });
+  }
+
+  @Patch(':id/vertical-migration')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  markVerticalMigration(@Param('id') id: string) {
+    const numericId = Number(id);
+    if (!Number.isFinite(numericId)) {
+      throw new BadRequestException('El ID debe ser un número válido.');
+    }
+    return this.productsService.markProductVerticalMigrated(numericId);
+  }
+
+  @Post(':id/vertical-migration')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  async updateVerticalMigration(
+    @Param('id') id: string,
+    @Body() dto: UpdateProductVerticalMigrationDto,
+  ) {
+    const numericId = Number(id);
+    if (!Number.isFinite(numericId)) {
+      throw new BadRequestException('El ID debe ser un número válido.');
+    }
+    return this.productsService.updateProductVerticalMigration(
+      numericId,
+      dto.extraAttributes,
+      dto.markMigrated ?? false,
+    );
   }
 }

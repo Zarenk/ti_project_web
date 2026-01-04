@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { useTenantFeatures } from "@/context/tenant-features-context";
 import { columns } from "./columns"; // Importar las columnas definidas
 import {
   getAllPurchasePrices,
@@ -139,17 +140,16 @@ export default function InventoryPage() {
   const [inStockOnly, setInStockOnly] = useState(false);
   const { selection, version, loading: tenantLoading } = useTenantSelection();
   const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
+    () => `${selection.companyId ?? "none"}-${version}`,
+    [selection.companyId, version],
   );
   const [alertSummary, setAlertSummary] = useState<InventoryAlertSummary | null>(null);
+  const { migration } = useTenantFeatures();
+  const pendingLegacyProducts = migration?.legacy ?? 0;
 
 
   useEffect(() => {
-    if (tenantLoading) {
-      return;
-    }
-    if (!selection.orgId || !selection.companyId) {
+    if (tenantLoading || !selection.companyId) {
       return;
     }
 
@@ -262,7 +262,7 @@ export default function InventoryPage() {
     };
   }, [tenantLoading, selectionKey]);
 
-  const tenantReady = !tenantLoading && !!selection.orgId && !!selection.companyId;
+  const tenantReady = !tenantLoading && !!selection.companyId;
 
   useEffect(() => {
     if (!tenantReady) {
@@ -272,14 +272,13 @@ export default function InventoryPage() {
 
     let cancelled = false;
     const loadSummary = async () => {
-      try {
-        const summary = await getInventoryAlertSummary({
-          organizationId: selection.orgId ?? undefined,
-          companyId: selection.companyId ?? undefined,
-        });
-        if (!cancelled) {
-          setAlertSummary(summary);
-        }
+        try {
+          const summary = await getInventoryAlertSummary({
+            companyId: selection.companyId ?? undefined,
+          });
+          if (!cancelled) {
+            setAlertSummary(summary);
+          }
       } catch (error) {
         console.error("Error al cargar resumen de alertas:", error);
         if (!cancelled) {
@@ -292,7 +291,7 @@ export default function InventoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [tenantReady, selectionKey, selection.orgId, selection.companyId]);
+    }, [tenantReady, selectionKey]);
 
   // Aplicar orden y filtro según controles
   useEffect(() => {
@@ -366,6 +365,20 @@ export default function InventoryPage() {
                   companyId={selection?.companyId ?? null}
                   sampleId={null}
                 />
+                <Button
+                  asChild
+                  variant={pendingLegacyProducts > 0 ? "destructive" : "outline"}
+                  className="inline-flex w-full items-center justify-center gap-2 sm:w-auto"
+                >
+                  <Link href="/dashboard/products/migration">
+                    <Tags className="size-4" />
+                    <span>
+                      {pendingLegacyProducts > 0
+                        ? `Migrar productos (${pendingLegacyProducts})`
+                        : "Asistente de migración"}
+                    </span>
+                  </Link>
+                </Button>
                 <Button
                   asChild
                   className="inline-flex w-full items-center justify-center gap-2 sm:w-auto"

@@ -16,8 +16,25 @@ async function authorizedFetch(url: string, init: RequestInit = {}) {
   return fetch(url, { ...init, headers })
 }
 
-export async function getProducts() {
-  const response = await authorizedFetch(`${BACKEND_URL}/api/products`, {
+type ProductFilters = {
+  migrationStatus?: 'legacy' | 'migrated'
+  includeInactive?: boolean
+}
+
+function normalizeProducts(raw: unknown[]) {
+  return raw.map((product: any) => ({
+    ...product,
+    status: normalizeProductStatus(product?.status ?? null),
+  }))
+}
+
+export async function getProducts(filters?: ProductFilters) {
+  const url = new URL(`${BACKEND_URL}/api/products`)
+  if (filters?.migrationStatus) {
+    url.searchParams.set('migrationStatus', filters.migrationStatus)
+  }
+
+  const response = await authorizedFetch(url.toString(), {
     cache: 'no-store',
   })
 
@@ -26,14 +43,13 @@ export async function getProducts() {
   }
 
   const raw = await response.json()
-  const products = Array.isArray(raw) ? raw : []
+  const products = Array.isArray(raw) ? normalizeProducts(raw) : []
 
-  return products
-    .map((product: any) => ({
-      ...product,
-      status: normalizeProductStatus(product?.status ?? null),
-    }))
-    .filter((product: any) => isProductActive(product.status))
+  if (filters?.includeInactive) {
+    return products
+  }
+
+  return products.filter((product: any) => isProductActive(product.status))
 }
 
 export async function getProduct(id: string) {
@@ -218,4 +234,50 @@ export async function uploadProductImage(file: File) {
   }
 
   return res.json() as Promise<{ url: string }>
+}
+
+export async function getLegacyProducts() {
+  return getProducts({ migrationStatus: 'legacy', includeInactive: true })
+}
+
+export async function markProductAsMigrated(productId: number) {
+  const res = await authorizedFetch(
+    `${BACKEND_URL}/api/products/${productId}/vertical-migration`,
+    { method: 'PATCH' },
+  )
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null)
+    throw new Error(errorData?.message || 'No se pudo marcar el producto')
+  }
+  return res.json()
+}
+
+export type ProductVerticalMigrationPayload = {
+  extraAttributes: Record<string, unknown>
+  markMigrated?: boolean
+}
+
+export async function updateProductVerticalAttributes(
+  productId: number,
+  payload: ProductVerticalMigrationPayload,
+) {
+  const res = await authorizedFetch(
+    `${BACKEND_URL}/api/products/${productId}/vertical-migration`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    },
+  )
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null)
+    throw new Error(
+      errorData?.message || 'No se pudieron guardar los atributos del producto',
+    )
+  }
+
+  return res.json()
 }

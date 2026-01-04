@@ -90,7 +90,7 @@ export async function getAllPurchasePrices() {
 
 export async function getInventoryMetrics(tenant?: TenantHeaders) {
   const payload = ensureTenant(tenant);
-  if (!payload.organizationId || !payload.companyId) {
+  if (!payload.companyId) {
     return null;
   }
   const response = await authFetch(`${BACKEND_URL}/api/inventory/metrics`, {
@@ -112,7 +112,7 @@ export async function getInventoryAlerts(
   tenant?: TenantHeaders,
 ): Promise<InventoryAlertsPayload | null> {
   const payload = ensureTenant(tenant);
-  if (!payload.organizationId || !payload.companyId) {
+  if (!payload.companyId) {
     return null;
   }
   const response = await authFetch(`${BACKEND_URL}/api/inventory-alerts`, {
@@ -133,7 +133,7 @@ export async function getInventoryAlerts(
 
 export async function getInventoryAlertSummary(tenant?: TenantHeaders) {
   const payload = ensureTenant(tenant);
-  if (!payload.organizationId || !payload.companyId) {
+  if (!payload.companyId) {
     return null;
   }
   const response = await authFetch(`${BACKEND_URL}/api/inventory-alerts/summary`, {

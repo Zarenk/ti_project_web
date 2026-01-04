@@ -15,6 +15,7 @@ import DashboardLoading from "./loading";
 import LogoutOverlay from "@/components/logout-overlay";
 import { DashboardCompanyName } from "./dashboard-company-name";
 import { TenantSelectionProvider } from "@/context/tenant-selection-context";
+import { TenantFeaturesProvider } from "@/context/tenant-features-context";
 import { ContextStatusBanner } from "@/components/context-status-banner";
 import { TrialStatusBanner } from "@/components/trial-status-banner";
 import { OnboardingWizardBanner } from "@/components/onboarding-wizard-banner";
@@ -35,31 +36,33 @@ export default async function Page({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
       <TenantSelectionProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <LogoutOverlay />
-          <ContextStatusBanner />
-          <TrialStatusBanner />
-          <OnboardingWizardBanner />
-          <div className="flex items-center gap-2 px-4 py-4">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <SidebarTrigger className="-ml-1" />
-                </TooltipTrigger>
-                <TooltipContent>Abrir/Cerrar Sidebar</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
-            />
-            <DashboardCompanyName />
-          </div>
-          <Suspense fallback={<DashboardLoading />}>
-            {children}
-          </Suspense>
-        </SidebarInset>
+        <TenantFeaturesProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <LogoutOverlay />
+            <ContextStatusBanner />
+            <TrialStatusBanner />
+            <OnboardingWizardBanner />
+            <div className="flex items-center gap-2 px-4 py-4">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarTrigger className="-ml-1" />
+                  </TooltipTrigger>
+                  <TooltipContent>Abrir/Cerrar Sidebar</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Separator
+                orientation="vertical"
+                className="mr-2 data-[orientation=vertical]:h-4"
+              />
+              <DashboardCompanyName />
+            </div>
+            <Suspense fallback={<DashboardLoading />}>
+              {children}
+            </Suspense>
+          </SidebarInset>
+        </TenantFeaturesProvider>
       </TenantSelectionProvider>
     </SidebarProvider>
   );
