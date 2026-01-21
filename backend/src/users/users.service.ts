@@ -744,6 +744,38 @@ export class UsersService {
     });
   }
 
+  async checkExists(data: { email?: string; username?: string }) {
+    const normalizedEmail = data.email?.trim();
+    const normalizedUsername = data.username?.trim();
+
+    const [emailMatch, usernameMatch] = await Promise.all([
+      normalizedEmail
+        ? this.prismaService.user.findFirst({
+            where: {
+              email: { equals: normalizedEmail, mode: Prisma.QueryMode.insensitive },
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      normalizedUsername
+        ? this.prismaService.user.findFirst({
+            where: {
+              username: {
+                equals: normalizedUsername,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      emailExists: Boolean(emailMatch),
+      usernameExists: Boolean(usernameMatch),
+    };
+  }
+
   async update(id: number, data: UpdateUserDto) {
     if (data.organizationId !== undefined) {
       logOrganizationContext({

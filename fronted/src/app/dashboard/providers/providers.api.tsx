@@ -174,3 +174,41 @@ export async function uploadProviderImage(file: File) {
 
   return res.json() as Promise<{ url: string }>;
 }
+
+export async function importProvidersExcelFile(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await authorizedFetch(`${BACKEND_URL}/api/providers/import-excel`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    throw new Error(errorData?.message || "Error al subir el archivo Excel.");
+  }
+
+  return res.json() as Promise<{ message: string; preview: any[] }>;
+}
+
+export async function commitProvidersExcelData(previewData: any[]) {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/providers/import-excel/commit`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ data: previewData }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    const message =
+      errorData?.message ||
+      errorData?.error ||
+      "Error al guardar los proveedores importados.";
+    throw new Error(Array.isArray(errorData?.errors) ? errorData.errors.join(" | ") : message);
+  }
+
+  return res.json() as Promise<{ message: string; count: number }>;
+}

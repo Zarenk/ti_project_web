@@ -182,6 +182,14 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('check')
+  checkAvailability(
+    @Body() body: { email?: string; username?: string },
+  ) {
+    return this.usersService.checkExists(body);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Patch('profile')
   updateProfile(@Request() req, @Body() updateUserDto: UpdateProfileDto) {
     return this.usersService.updateProfile(req.user.userId, updateUserDto);

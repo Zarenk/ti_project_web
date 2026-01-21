@@ -160,3 +160,20 @@ export async function updateManyStores(stores: any[]) {
       throw error; // Lanza el error para que pueda ser manejado en el frontend
     }
 }
+
+export async function uploadStoreImage(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await authorizedFetch(`${BACKEND_URL}/api/clients/upload-image`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    throw new Error(errorData?.message || 'Error al subir la imagen');
+  }
+
+  return res.json() as Promise<{ url: string }>;
+}

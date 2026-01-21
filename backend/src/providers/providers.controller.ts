@@ -9,12 +9,17 @@ import {
   BadRequestException,
   Req,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
 import { Request } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
@@ -52,6 +57,40 @@ export class ProvidersController {
       organizationId === undefined ? undefined : organizationId,
     );
     return { exists };
+  }
+
+  @Post('import-excel')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: join(__dirname, '..', '..', 'excels'),
+        filename: (req, file, cb) => {
+          const randomName = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `${randomName}${extname(file.originalname)}`);
+        },
+      }),
+    }),
+  )
+  async importExcel(@UploadedFile() file: Express.Multer.File) {
+    const data = this.providersService.parseExcel(file.path);
+
+    return {
+      message: 'Archivo procesado con exito',
+      preview: data,
+    };
+  }
+
+  @Post('import-excel/commit')
+  async commitExcelImport(
+    @Body() body: { data: any[] },
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.providersService.processExcelData(
+      body.data,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Get()

@@ -21,6 +21,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import Link from 'next/link'
+import { FileSpreadsheet } from 'lucide-react'
 
 const normalizeProviderImagePath = (input?: string): string => {
   const raw = input?.trim() ?? ""
@@ -556,6 +558,15 @@ export function ProviderForm({provider}: {provider: any}) {
             }
           >
             Limpiar
+          </Button>
+          <Button
+            asChild
+            className="w-full bg-emerald-600 text-white hover:bg-emerald-700 lg:w-auto"
+          >
+            <Link href="/dashboard/providers/excel-upload">
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Subir proveedores desde Excel
+            </Link>
           </Button>
           <Button className='w-full cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600 lg:w-auto lg:min-w-[160px]'>
             {params.id ? 'Actualizar Proveedor' : 'Crear Proveedor'}

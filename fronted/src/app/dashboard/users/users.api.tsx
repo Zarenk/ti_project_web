@@ -161,6 +161,24 @@ export async function createUser(
   return res.json();
 }
 
+export async function checkUserAvailability(payload: {
+  email?: string;
+  username?: string;
+}): Promise<{ emailExists: boolean; usernameExists: boolean }> {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/users/check`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    throw new Error(errorData?.message || "Error al verificar el usuario");
+  }
+
+  return res.json();
+}
+
 export async function updateUser(data: { email?: string; username?: string; password?: string }) {
   const headers = await getAuthHeaders();
   if (!('Authorization' in headers)) {

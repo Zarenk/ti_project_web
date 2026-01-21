@@ -1897,6 +1897,33 @@ const VariantRowItem = memo(function VariantRowItem({
                         )}
                     </div>
 
+                    <div className="flex flex-col lg:col-start-3 lg:row-start-2">
+                        <Label className='py-3'>
+                            Selecciona un estado
+                        </Label>
+                        <Select
+                          value={form.watch("status")}
+                          disabled={isProcessing}
+                          defaultValue={form.getValues("status")}
+                          onValueChange={(value:any) => setValue("status", value as "Activo" | "Inactivo", {shouldValidate: true})}
+                        >
+                            <TooltipProvider delayDuration={150}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <SelectTrigger className="w-full cursor-pointer">
+                                      <SelectValue /> {/*placeholder="Estado" */}
+                                  </SelectTrigger>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Selecciona el estado del producto</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <SelectContent>
+                                <SelectItem value="Activo">Activo</SelectItem>
+                                <SelectItem value="Inactivo">Inactivo</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <div className="grid grid-cols-1 gap-4 lg:col-span-3 lg:row-start-3 lg:grid-cols-[1fr_1fr_1fr_1.35fr]">
                         <div className="flex flex-col">
                             <Label className='py-3'>
@@ -2004,6 +2031,7 @@ const VariantRowItem = memo(function VariantRowItem({
                             </Tooltip>
                           </TooltipProvider>
                     </div>
+                    </div>
 
                     {schemaFields.length > 0 && (
                       <div className="mt-4 space-y-4 rounded-lg border bg-muted/30 p-4 lg:col-span-2 lg:col-start-1 lg:row-start-5 lg:pr-2">
@@ -2087,32 +2115,6 @@ const VariantRowItem = memo(function VariantRowItem({
                       </div>
                     )}
 
-                    <div className="flex flex-col lg:col-start-3 lg:row-start-2">
-                        <Label className='py-3'>
-                            Selecciona un estado
-                        </Label>
-                        <Select
-                          value={form.watch("status")}
-                          disabled={isProcessing}
-                          defaultValue={form.getValues("status")}
-                          onValueChange={(value:any) => setValue("status", value as "Activo" | "Inactivo", {shouldValidate: true})}
-                        >
-                            <TooltipProvider delayDuration={150}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <SelectTrigger className="w-full cursor-pointer">
-                                      <SelectValue /> {/*placeholder="Estado" */}
-                                  </SelectTrigger>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">Selecciona el estado del producto</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <SelectContent>
-                                <SelectItem value="Activo">Activo</SelectItem>
-                                <SelectItem value="Inactivo">Inactivo</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
                     <div className="flex flex-col pt-4 lg:col-start-3 lg:row-start-5 lg:pl-2">
                       <Label className="py-3 font-semibold">
                         Imagenes
@@ -2205,78 +2207,77 @@ const VariantRowItem = memo(function VariantRowItem({
                         </Tooltip>
                       </TooltipProvider>
                     </div>
-                    <div className="mt-4 flex flex-col gap-2 lg:col-span-3">
-                    <Button
-                      className="cursor-pointer transition-colors hover:bg-primary/90 hover:shadow-sm"
-                      disabled={isProcessing || Boolean(editingBatchId)}
-                    >
-                        {currentProductId
-                          ? 'Actualizar Producto'
-                          : batchCount > 0
-                            ? `Crear Productos (${createProductsCount || batchCount})`
-                            : 'Crear Producto'}
-                    </Button>
-                    {!currentProductId && (
-                      <Button
-                        type="button"
-                        className="cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600"
-                        onClick={handleAddAnother}
-                        disabled={isProcessing}
-                      >
-                        {editingBatchId ? "Actualizar producto" : "Agregar otro producto"}
-                      </Button>
-                    )}
-                    <Button
-                    variant="outline"
-                    className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
-                    type="button" // Evita que el boton envie el formulario
-                    onClick={() => {
-                        setEditingBatchId(null)
-                        setExtraAttributes({})
-                        setVariantRows([])
-                        setIngredientRows([])
-                        setExtraFieldError(null)
-                        setNameError(null)
-                        form.reset({
-                            name: "",
-                            description: "",
-                            brand: "",
-                            price: 0.0,
-                            priceSell: 0.0,
-                            initialStock: 0,
-                            images: [""],
-                            status: "Activo",
-                            categoryId: "",
-                            processor: "",
-                            ram: "",
-                            storage: "",
-                            graphics: "",
-                            screen: "",
-                            resolution: "",
-                            refreshRate: "",
-                            connectivity: "",
-                            features: [],
-                        })
-                    }}
-                    >
-                        Limpiar
-                    </Button>
-                    <Button
-                    variant="outline"
-                    className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
-                    type="button" // Evita que el boton envie el formulario
-                    onClick={() => {
-                        if (onCancel) {
-                            onCancel()
-                        } else {
-                            router.back()
-                        }
-                    }} // Regresa a la pagina anterior o ejecuta onCancel
-                    >
-                        Volver
-                    </Button>
-                    </div>
-                  </div>
+          </div>
+          <div className="mt-6 flex flex-col gap-2 lg:flex-row lg:justify-end">
+            <Button
+              className="cursor-pointer transition-colors hover:bg-primary/90 hover:shadow-sm"
+              disabled={isProcessing || Boolean(editingBatchId)}
+            >
+              {currentProductId
+                ? 'Actualizar Producto'
+                : batchCount > 0
+                  ? `Crear Productos (${createProductsCount || batchCount})`
+                  : 'Crear Producto'}
+            </Button>
+            {!currentProductId && (
+              <Button
+                type="button"
+                className="cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600"
+                onClick={handleAddAnother}
+                disabled={isProcessing}
+              >
+                {editingBatchId ? "Actualizar producto" : "Agregar otro producto"}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
+              type="button"
+              onClick={() => {
+                setEditingBatchId(null)
+                setExtraAttributes({})
+                setVariantRows([])
+                setIngredientRows([])
+                setExtraFieldError(null)
+                setNameError(null)
+                form.reset({
+                  name: "",
+                  description: "",
+                  brand: "",
+                  price: 0.0,
+                  priceSell: 0.0,
+                  initialStock: 0,
+                  images: [""],
+                  status: "Activo",
+                  categoryId: "",
+                  processor: "",
+                  ram: "",
+                  storage: "",
+                  graphics: "",
+                  screen: "",
+                  resolution: "",
+                  refreshRate: "",
+                  connectivity: "",
+                  features: [],
+                })
+              }}
+            >
+              Limpiar
+            </Button>
+            <Button
+              variant="outline"
+              className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
+              type="button"
+              onClick={() => {
+                if (onCancel) {
+                  onCancel()
+                } else {
+                  router.back()
+                }
+              }}
+            >
+              Volver
+            </Button>
           </div>
         </fieldset>
       </form>
