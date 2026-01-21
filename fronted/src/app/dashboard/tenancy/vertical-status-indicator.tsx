@@ -58,7 +58,7 @@ export function VerticalStatusIndicator({
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50/60 p-3 text-xs dark:border-slate-700 dark:bg-slate-900/40">
+    <div className="space-y-3 rounded-lg bg-slate-50/60 p-3 text-xs dark:bg-slate-900/40">
       <div className="flex items-center justify-between text-muted-foreground">
         <div>
           <p className="text-xs font-semibold text-slate-600 dark:text-slate-200">
@@ -78,7 +78,7 @@ export function VerticalStatusIndicator({
           style={{ width: `${Math.min(Math.max(migration.percentage, 0), 100)}%` }}
         />
       </div>
-      <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-2 text-slate-600 dark:border-slate-600 dark:bg-slate-950">
+      <div className="flex flex-col gap-2 rounded-md bg-white p-2 text-slate-600 dark:bg-slate-950">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-slate-600 dark:text-slate-200">

@@ -55,6 +55,7 @@ export interface CompanyResponse {
   id: number
   organizationId: number
   name: string
+  businessVertical?: string | null
   legalName: string | null
   taxId: string | null
   status: string
@@ -104,8 +105,8 @@ export interface OrganizationResponse {
 
 export interface CurrentTenantResponse {
   organization: { id: number; name: string } | null
-  company: { id: number; name: string } | null
-  companies: Array<{ id: number; name: string }>
+  company: { id: number; name: string; businessVertical?: string | null } | null
+  companies: Array<{ id: number; name: string; businessVertical?: string | null }>
 }
 
 export interface OrganizationCompaniesOverview {
@@ -920,6 +921,8 @@ export type VerticalProductFieldType =
   | "multi-select"
   | "color"
   | "textarea"
+  | "date"
+  | "json"
 
 export interface VerticalProductSchemaField {
   key: string
@@ -993,7 +996,13 @@ export interface CompanyVerticalInfo {
 
 export type OrganizationVerticalInfo = CompanyVerticalInfo
 
-export type VerticalName = "GENERAL" | "RETAIL" | "RESTAURANTS" | "SERVICES" | "MANUFACTURING"
+export type VerticalName =
+  | "GENERAL"
+  | "COMPUTERS"
+  | "RETAIL"
+  | "RESTAURANTS"
+  | "SERVICES"
+  | "MANUFACTURING"
 
 export interface VerticalCompatibilityResult {
   isCompatible: boolean

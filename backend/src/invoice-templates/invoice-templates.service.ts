@@ -10,6 +10,7 @@ import path from 'path';
 import { existsSync } from 'fs';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { TenantContextService } from 'src/tenancy/tenant-context.service';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 import { CreateInvoiceTemplateDto } from './dto/create-invoice-template.dto';
 import { SuggestInvoiceTemplateDto } from './dto/suggest-invoice-template.dto';
 import { UpdateInvoiceTemplateDto } from './dto/update-invoice-template.dto';
@@ -39,7 +40,16 @@ export class InvoiceTemplatesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
+    private readonly verticalConfig: VerticalConfigService,
   ) {}
+
+  private async ensureBillingFeatureEnabled() {
+    const ctx = this.tenantContext();
+    if (ctx.companyId == null) {
+      return;
+    }
+    await this.verticalConfig.getConfig(ctx.companyId);
+  }
 
   private tenantContext() {
     const ctx = this.tenant.getContext();
@@ -66,6 +76,7 @@ export class InvoiceTemplatesService {
   }
 
   async findAll(includeInactive = false) {
+    await this.ensureBillingFeatureEnabled();
     return this.prisma.invoiceTemplate.findMany({
       where: this.baseWhere(includeInactive),
       orderBy: [{ priority: 'asc' }, { updatedAt: 'desc' }],
@@ -73,6 +84,7 @@ export class InvoiceTemplatesService {
   }
 
   async findOne(id: number) {
+    await this.ensureBillingFeatureEnabled();
     const template = await this.prisma.invoiceTemplate.findFirst({
       where: { id, ...this.baseWhere(true) },
     });
@@ -122,6 +134,7 @@ export class InvoiceTemplatesService {
   }
 
   async create(dto: CreateInvoiceTemplateDto) {
+    await this.ensureBillingFeatureEnabled();
     const ctx = this.tenantContext();
     const provider = await this.ensureProvider(dto.providerId);
     const version =
@@ -174,6 +187,7 @@ export class InvoiceTemplatesService {
   }
 
   async update(id: number, dto: UpdateInvoiceTemplateDto) {
+    await this.ensureBillingFeatureEnabled();
     const template = await this.findOne(id);
     const provider = await this.ensureProvider(dto.providerId);
 
@@ -214,6 +228,7 @@ export class InvoiceTemplatesService {
   }
 
   async suggestTemplate(dto: SuggestInvoiceTemplateDto) {
+    await this.ensureBillingFeatureEnabled();
     const suggestion = buildTemplateSuggestion(dto.sampleText);
     return {
       suggestion,
@@ -224,6 +239,7 @@ export class InvoiceTemplatesService {
   }
 
   async suggestTemplateFromPdf(file: Express.Multer.File) {
+    await this.ensureBillingFeatureEnabled();
     if (!file) {
       throw new BadRequestException('Se requiere un archivo PDF.');
     }
@@ -274,3 +290,4 @@ export class InvoiceTemplatesService {
     }
   }
 }
+

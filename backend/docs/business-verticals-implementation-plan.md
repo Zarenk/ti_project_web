@@ -137,21 +137,22 @@ Casos borde:
 ---
 
 ## 6. Frontend / UX
-1. **Panel Vertical de negocio por empresa** (visible en `/dashboard/companies/:id`):
-   - Muestra vertical actual, selector de objetivo, boton Validar compatibilidad, boton Cambiar vertical.
-   - Modal de confirmacion con motivo obligatorio, eleccion de ejecutar scripts auto/manual, descarga de reporte y casilla Acepto riesgos.
-2. **Aplicacion del cambio**:
-   - Mostrar progreso (Procesando...), invalidar `site-settings`, `TenantFeaturesContext`, `useVerticalConfig`.
-   - Banner post-cambio explicando nuevos campos y ofreciendo link al asistente de migracion.
-3. **UI dinamica**:
-   - `useVerticalConfig(companyId)` expone `features/ui/productSchema`.
-   - Formularios de productos/inventario renderizan campos segun `productSchema`.
+1. **Panel Vertical de negocio por empresa** (visible en /dashboard/companies/:id):
+   - Muestra vertical actual, selector de objetivo, botones Validar compatibilidad y Cambiar vertical.
+   - Modal de confirmacion con motivo obligatorio, seleccion auto/manual de scripts, descarga de reporte y casilla Acepto riesgos.
+2. **Aplicaci�n del cambio**:
+   - Mostrar progreso (Procesando...), invalidar site-settings, TenantFeaturesContext, useVerticalConfig.
+   - Banner post-cambio explicando nuevos campos y, adicionalmente, banner global cuando existan productos legacy pendientes (link al asistente).
+3. **UI din�mica**:
+   - useVerticalConfig(companyId) expone Features/ui/productSchema.
+   - Formularios de productos/inventario renderizan campos segun productSchema.
    - Tablas/listas muestran columnas dinamicas y chips Legacy.
-   - Menus laterales incluyen `customMenuItems` definidos por el vertical.
+   - Menus laterales incluyen customMenuItems definidos por el vertical.
 4. **Inventario / productos**:
    - Vista legacy y vista variantes.
-   - Asistente Dividir stock para variantes (Retail) o Asignar receta (Restaurants).
-   - Indicadores de progreso de migracion por empresa.
+   - Asistente Dividir stock (Retail) o Asignar receta (Restaurants) dentro de la pagina de migracion.
+   - Indicadores de progreso por empresa (panel, chips y banner global).
+   - Pagina /dashboard/products/migration con listado filtrable, seleccion multiple y acciones masivas (dividir stock, asignar receta, marcar migrado). Enlazada desde el panel, el banner y las vistas de inventario/productos.
 
 ---
 
@@ -161,13 +162,18 @@ Casos borde:
 - Endpoints:
   - `POST /api/products/:id/vertical-migration` (guardar atributos en lote).
   - `GET /api/products?companyId=&migrationStatus=legacy|migrated`.
-  - KPI de avance `/api/companies/:id/vertical/status`.
-- Frontend: `ProductsTable` / `Inventory` filtran por `migrationStatus`, muestran chips y botones Ir al asistente.
+  - KPI de avance `/api/companies/:id/vertical/status` (alias liviano del estado de migracion).
+- Frontend:
+  - `ProductsTable` / `Inventory` filtran por `migrationStatus` (todos/legacy/migrados).
+  - Chips "Legacy" y columnas dinamicas segun `productSchema`.
+  - Banner en inventario con enlace al asistente cuando hay pendientes.
+- Pendiente: validacion manual del flujo end-to-end (crear legacy, ver chip/banner/KPI, migrar desde asistente).
 
 ---
 
 ## 8. Consumo en modulos
-- Backend: servicios de ventas, inventario, POS, facturacion consultan `VerticalConfigService(companyId)` en lugar de asumir un esquema global.
+- Backend: ventas y facturacion **siempre deben estar habilitadas**; el vertical solo ajusta captura/estructura de datos (productos/inventario), no bloquea comprobantes.
+- Backend: inventario y POS consultan `VerticalConfigService(companyId)` en lugar de asumir un esquema global.
 - Frontend: `TenantFeaturesContext` combina permisos + vertical actual de la empresa seleccionada.
 - Integraciones: `VerticalCompatibilityService` valida conectores activos (POS, eCommerce, delivery, contabilidad).
 

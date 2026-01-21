@@ -55,6 +55,12 @@ const VERTICAL_OPTIONS: Array<{
     enabled: true,
   },
   {
+    value: "COMPUTERS",
+    label: "Venta de Computadoras/Laptops",
+    description: "Productos con ficha tecnica y especificaciones visibles.",
+    enabled: true,
+  },
+  {
     value: "RETAIL",
     label: "Retail",
     description: "Tiendas fisicas y comercio minorista con variantes.",
@@ -63,8 +69,8 @@ const VERTICAL_OPTIONS: Array<{
   {
     value: "RESTAURANTS",
     label: "Restaurantes",
-    description: "Optimizado para menu, mesas y pedidos de cocina (muy pronto).",
-    enabled: false,
+    description: "Optimizado para menu, mesas y pedidos de cocina.",
+    enabled: true,
   },
   {
     value: "SERVICES",
@@ -94,6 +100,8 @@ type Props = {
 const VERTICAL_EFFECT_MESSAGES: Partial<Record<VerticalName, string>> = {
   GENERAL:
     "Los formularios vuelven al esquema general. Los campos extra del vertical anterior se ocultarán.",
+  COMPUTERS:
+    "Los formularios mostrar n la secci n de especificaciones para computadoras y laptops.",
   RETAIL:
     "Los formularios de productos e inventario ahora solicitarán talla y color por cada variante.",
   RESTAURANTS:
@@ -293,7 +301,7 @@ export function VerticalManagementPanel({ organizationId, companyId, info }: Pro
   }
 
   return (
-    <div className="space-y-4 rounded-lg border border-slate-200 bg-white/70 p-4 text-xs dark:border-slate-700 dark:bg-slate-900/60">
+    <div className="space-y-4 rounded-lg bg-white/70 p-4 text-xs dark:bg-slate-900/60">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -479,7 +487,7 @@ export function VerticalManagementPanel({ organizationId, companyId, info }: Pro
           )}
 
           {compatibilityForSelection.warnings.length > 0 && (
-            <Alert className="border-amber-400 bg-amber-50 text-amber-900">
+            <Alert className="bg-amber-50 text-amber-900">
               <TriangleAlert className="size-4" />
               <AlertTitle>Advertencias</AlertTitle>
               <AlertDescription>
@@ -496,7 +504,7 @@ export function VerticalManagementPanel({ organizationId, companyId, info }: Pro
             <p className="text-[11px] font-semibold uppercase text-slate-500 dark:text-slate-400">
               Impacto en datos
             </p>
-            <ScrollArea className="h-32 rounded-md border border-dashed border-slate-200 p-2 dark:border-slate-700">
+            <ScrollArea className="h-32 rounded-md p-2">
               <div className="space-y-2 text-xs">
                 {compatibilityForSelection.dataImpact.tables.map((table) => (
                   <div

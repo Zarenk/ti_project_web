@@ -14,6 +14,7 @@ import {
   getUserDataFromToken,
   isTokenValid,
   refreshAuthToken,
+  type UserPermissionsMap,
 } from "@/lib/auth"
 import { toast } from 'sonner'
 import { signOut } from "next-auth/react"
@@ -35,6 +36,7 @@ type AuthContextType = {
   userName: string | null
   role: string | null
   isPublicSignup: boolean | null
+  userPermissions: UserPermissionsMap | null
   authPending: boolean
   refreshUser: () => Promise<void>
   logout: (options?: { silent?: boolean }) => Promise<void>
@@ -49,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<number | null>(null)
   const [role, setRole] = useState<string | null>(null)
   const [isPublicSignup, setIsPublicSignup] = useState<boolean | null>(null)
+  const [userPermissions, setUserPermissions] = useState<UserPermissionsMap | null>(null)
   const [authPending, setAuthPending] = useState<boolean>(false)
   const sessionTimerRef = useRef<number | null>(null)
   const autoLogoutTriggeredRef = useRef(false)
@@ -103,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsPublicSignup(
         typeof data.isPublicSignup === "boolean" ? data.isPublicSignup : false,
       )
+      setUserPermissions(data.userPermissions ?? null)
       userContextStorage.setUserHint(resolvedId)
       autoLogoutTriggeredRef.current = false
       sessionExpiryInProgressRef.current = false
@@ -113,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserId(null)
       setRole(null)
       setIsPublicSignup(null)
+      setUserPermissions(null)
       userContextStorage.setUserHint(null)
     }
     if (typeof window !== "undefined") {
@@ -146,8 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setUserName(null)
         setUserId(null)
-        setRole(null)
-        setIsPublicSignup(null)
+       setRole(null)
+       setIsPublicSignup(null)
+        setUserPermissions(null)
         userContextStorage.setUserHint(null)
         clearTenantSelection()
         clearContextPreferences()
@@ -335,7 +341,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ])
 
   return (
-    <AuthContext.Provider value={{ userId, userName, role, isPublicSignup, authPending, refreshUser, logout }}>
+    <AuthContext.Provider value={{ userId, userName, role, isPublicSignup, userPermissions, authPending, refreshUser, logout }}>
       {children}
       {sessionExpiryOverlay && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm text-center px-6">

@@ -26,7 +26,7 @@ export default async function ProductsNewPage({params}: Props) {
   return (
     <div className="flex justify-center items-start min-h-screen p-3">
        
-        <Card className="w-full max-w-lg sm:max-w-md md:max-w-lg lg:max-w-2xl" >
+        <Card className="w-full max-w-lg sm:max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl" >
             <CardHeader className="pb-2 sm:pb-2">
                 {/* Renderizado del componente: Usamos resolvedParams.id para determinar si 
                 stamos creando un producto nuevo o actualizando uno existente. 

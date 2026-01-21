@@ -100,6 +100,19 @@ export function TeamSwitcher(): React.ReactElement | null {
     return `Nivel: ${readable}`
   }, [normalizedRole])
 
+  const resolveVerticalLabel = useCallback((value?: string | null) => {
+    if (!value) return "General"
+    const normalized = value.toString().trim().toUpperCase()
+    const labels: Record<string, string> = {
+      GENERAL: "General",
+      RETAIL: "Retail",
+      RESTAURANTS: "Restaurante",
+      SERVICES: "Servicios",
+      MANUFACTURING: "Manufactura",
+    }
+    return labels[normalized] ?? normalized.toLowerCase()
+  }, [])
+
   const [organizations, setOrganizations] = useState<ExtendedOrganization[]>([])
   const [loading, setLoading] = useState(true)
   const [activeOrgId, setActiveOrgId] = useState<number | null>(null)
@@ -483,6 +496,9 @@ export function TeamSwitcher(): React.ReactElement | null {
     const companyLabel =
       resolvedEmployeeCompany?.name ??
       (selection.companyId != null ? `Empresa ID ${selection.companyId}` : "Sin empresa asociada")
+    const companyVerticalLabel = resolveVerticalLabel(
+      resolvedEmployeeCompany?.businessVertical,
+    )
 
     return (
       <SidebarMenu>
@@ -492,15 +508,18 @@ export function TeamSwitcher(): React.ReactElement | null {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton
                   size="lg"
-                  className="flex-1 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  className="h-auto flex-1 py-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
                   <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                     <Building2 className="size-4" />
                   </div>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{companyLabel}</span>
-                    <span className="truncate text-xs">{organizationLabel}</span>
-                    <span className="truncate text-[11px] text-muted-foreground">{roleLabel}</span>
+                  <div className="grid min-w-0 flex-1 text-left text-sm leading-snug">
+                    <span className="line-clamp-1 font-medium">{companyLabel}</span>
+                    <span className="line-clamp-1 text-xs">{organizationLabel}</span>
+                    <span className="line-clamp-1 text-[10px] text-muted-foreground">
+                      Tipo de empresa: {companyVerticalLabel}
+                    </span>
+                    <span className="line-clamp-1 text-[10px] text-muted-foreground">{roleLabel}</span>
                   </div>
                   <ChevronsUpDown className="ml-auto" />
                 </SidebarMenuButton>
@@ -583,17 +602,20 @@ export function TeamSwitcher(): React.ReactElement | null {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton
                   size="lg"
-                  className="flex-1 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  className="h-auto flex-1 py-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
                   <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                     <Building2 className="size-4" />
                   </div>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
+                  <div className="grid min-w-0 flex-1 text-left text-sm leading-snug">
                     <span className="truncate font-medium">
                       {activeCompany?.name ?? "Sin empresas"}
                     </span>
                     <span className="truncate text-xs">{activeOrganization.name}</span>
-                    <span className="truncate text-[11px] text-muted-foreground">{roleLabel}</span>
+                    <span className="line-clamp-1 text-[10px] text-muted-foreground">
+                      Tipo de empresa: {resolveVerticalLabel(activeCompany?.businessVertical)}
+                    </span>
+                    <span className="line-clamp-1 text-[10px] text-muted-foreground">{roleLabel}</span>
                   </div>
                   <ChevronsUpDown className="ml-auto" />
                 </SidebarMenuButton>

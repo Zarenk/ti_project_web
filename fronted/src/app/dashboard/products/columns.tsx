@@ -32,6 +32,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import type { VerticalProductSchema } from "@/app/dashboard/tenancy/tenancy.api"
 
 type ProductFeature = {
@@ -120,10 +126,40 @@ export function useProductColumns(options: ProductTableOptions = {}) {
             row.original.isVerticalMigrated === false ||
             !row.original.extraAttributes ||
             Object.keys(row.original.extraAttributes ?? {}).length === 0
+          const priceMissing = !Number.isFinite(row.original.price) || row.original.price <= 0
+          const priceSellMissing =
+            !Number.isFinite(row.original.priceSell) || row.original.priceSell <= 0
           return (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-1">
               <span className="font-medium">{name}</span>
-              {isLegacy && <Badge variant="destructive">Legacy</Badge>}
+              {(isLegacy || priceMissing || priceSellMissing) && (
+                <div className="flex flex-col items-start gap-1">
+                  {isLegacy && (
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge variant="destructive" className="cursor-help px-1.5 py-0.5 text-[10px]">
+                            Pendiente de migración
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          Este producto aún no cumple el esquema del vertical.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                  {priceMissing && (
+                    <Badge variant="secondary" className="px-1.5 py-0.5 text-[10px]">
+                      Sin precio compra
+                    </Badge>
+                  )}
+                  {priceSellMissing && (
+                    <Badge variant="secondary" className="px-1.5 py-0.5 text-[10px]">
+                      Sin precio venta
+                    </Badge>
+                  )}
+                </div>
+              )}
             </div>
           )
         },

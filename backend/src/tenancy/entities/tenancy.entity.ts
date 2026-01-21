@@ -30,6 +30,7 @@ export type CompanySnapshot = {
   id: number;
   organizationId: number;
   name: string;
+  businessVertical?: string | null;
   legalName: string | null;
   taxId: string | null;
   status: string;

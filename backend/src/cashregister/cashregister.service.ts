@@ -15,10 +15,21 @@ import { CreateCashTransactionDto } from './dto/create-cashtransactions.dto';
 import { CreateCashClosureDto } from './dto/create-cashclosure.dto';
 import { CreateCashRegisterDto } from './dto/create-cashregister.dto';
 import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 
 @Injectable()
 export class CashregisterService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly verticalConfig: VerticalConfigService,
+  ) {}
+
+  private async ensureSalesFeatureEnabled(companyId?: number | null) {
+    if (!companyId) {
+      return;
+    }
+    await this.verticalConfig.getConfig(companyId);
+  }
   private formatPaymentMethods(
     paymentMethods: Array<
       Prisma.CashTransactionPaymentMethodGetPayload<{
@@ -140,6 +151,8 @@ export class CashregisterService {
       fallbacks: [store.companyId ?? null],
       mismatchMessage: 'La tienda pertenece a otra compania.',
     });
+
+    await this.ensureSalesFeatureEnabled(companyId);
     const existingWhere: Prisma.CashRegisterWhereInput = {
       storeId,
       status: 'ACTIVE',
@@ -182,6 +195,8 @@ export class CashregisterService {
     storeId: number,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const organizationFilter = this.buildOrganizationFilter(
       options?.organizationId,
     ) as Prisma.CashRegisterWhereInput;
@@ -211,6 +226,8 @@ export class CashregisterService {
     endOfDay: Date,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const organizationFilter = this.buildOrganizationFilter(
       options?.organizationId,
     ) as Prisma.CashTransactionWhereInput;
@@ -386,6 +403,8 @@ export class CashregisterService {
     storeId: number,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashRegisterWhereInput = {
       storeId,
       status: 'ACTIVE',
@@ -415,6 +434,8 @@ export class CashregisterService {
     organizationId?: number | null;
     companyId?: number | null;
   }) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashRegisterWhereInput = {
       ...(this.buildOrganizationFilter(
         options?.organizationId,
@@ -440,6 +461,8 @@ export class CashregisterService {
     id: number,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashRegisterWhereInput = {
       id,
       ...(this.buildOrganizationFilter(
@@ -508,6 +531,8 @@ export class CashregisterService {
       mismatchMessage: 'La caja pertenece a otra compania.',
     });
 
+    await this.ensureSalesFeatureEnabled(companyId);
+
     const targetStoreId =
       updatePayload.storeId ?? normalizedExisting.storeId ?? null;
     if (targetStoreId !== null) {
@@ -570,6 +595,8 @@ export class CashregisterService {
       options?.companyId !== undefined
         ? (options.companyId ?? null)
         : (normalizedExisting.store?.companyId ?? null);
+
+    await this.ensureSalesFeatureEnabled(companyId);
     logOrganizationContext({
       service: CashregisterService.name,
       operation: 'remove',
@@ -649,6 +676,8 @@ export class CashregisterService {
       mismatchMessage: 'La caja pertenece a otra compania.',
     });
 
+    await this.ensureSalesFeatureEnabled(companyId);
+
     logOrganizationContext({
       service: CashregisterService.name,
       operation: 'createTransaction',
@@ -718,6 +747,8 @@ export class CashregisterService {
     organizationId?: number | null;
     companyId?: number | null;
   }) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashTransactionWhereInput = {
       ...(this.buildOrganizationFilter(
         options?.organizationId,
@@ -745,6 +776,8 @@ export class CashregisterService {
     cashRegisterId: number,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashTransactionWhereInput = {
       cashRegisterId,
       ...(this.buildOrganizationFilter(
@@ -826,6 +859,8 @@ export class CashregisterService {
         fallbacks: [(cashRegister as any).store?.companyId ?? null],
         mismatchMessage: 'La caja pertenece a otra compania.',
       });
+
+      await this.ensureSalesFeatureEnabled(companyId);
       logOrganizationContext({
         service: CashregisterService.name,
         operation: 'createClosure',
@@ -937,6 +972,8 @@ export class CashregisterService {
     storeId: number,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const organizationFilter = this.buildOrganizationFilter(
       options?.organizationId,
     ) as Prisma.CashClosureWhereInput;
@@ -973,6 +1010,8 @@ export class CashregisterService {
     date: Date,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
@@ -1010,6 +1049,8 @@ export class CashregisterService {
     organizationId?: number | null;
     companyId?: number | null;
   }) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashClosureWhereInput = {
       ...(this.buildOrganizationFilter(
         options?.organizationId,

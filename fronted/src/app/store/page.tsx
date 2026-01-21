@@ -3,10 +3,9 @@
 import Image from "next/image"
 import { getBrandLogoSources, resolveImageUrl } from "@/lib/images"
 import { BrandLogo } from "@/components/BrandLogo"
-import { Search, Filter, Package, PackageOpen, DollarSign, Tag, Loader2 } from "lucide-react"
+import { Search, Filter, Package, PackageOpen, DollarSign, Tag } from "lucide-react"
 import Navbar from "@/components/navbar"
 import { useState, useMemo, useEffect } from "react"
-import { motion } from "framer-motion"
 import { useDebounce } from "@/app/hooks/useDebounce"
 import { useSearchParams } from "next/navigation"
 import type { CheckedState } from "@radix-ui/react-checkbox"
@@ -43,6 +42,11 @@ interface Brand {
   logoPng?: string
 }
 
+type ProductsResponse = Awaited<ReturnType<typeof getProducts>>
+type ProductListItem = ProductsResponse extends Array<infer Item> ? Item : never
+type StoreStockResponse = Awaited<ReturnType<typeof getStoresWithProduct>>
+type StoreStockRecord = StoreStockResponse extends Array<infer Item> ? Item : never
+
 interface Product {
   id: number
   name: string
@@ -65,6 +69,79 @@ interface Product {
   }
 }
 
+const parseNumber = (value: unknown): number | undefined => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
+const extractImages = (images: unknown): string[] => {
+  if (!Array.isArray(images)) {
+    return []
+  }
+  return images.filter((img): img is string => typeof img === "string" && img.length > 0)
+}
+
+const mapBrand = (brand: unknown): Brand | null => {
+  if (!brand || typeof brand !== "object") {
+    return null
+  }
+  const record = brand as Record<string, unknown>
+  const name = typeof record.name === "string" ? record.name : null
+  if (!name) {
+    return null
+  }
+  return {
+    name,
+    logoSvg: typeof record.logoSvg === "string" ? record.logoSvg : undefined,
+    logoPng: typeof record.logoPng === "string" ? record.logoPng : undefined,
+  }
+}
+
+const mapSpecification = (spec: unknown): Product["specification"] | undefined => {
+  if (!spec || typeof spec !== "object") {
+    return undefined
+  }
+  const record = spec as Record<string, unknown>
+  return {
+    processor: typeof record.processor === "string" ? record.processor : undefined,
+    ram: typeof record.ram === "string" ? record.ram : undefined,
+    storage: typeof record.storage === "string" ? record.storage : undefined,
+    graphics: typeof record.graphics === "string" ? record.graphics : undefined,
+    screen: typeof record.screen === "string" ? record.screen : undefined,
+    resolution: typeof record.resolution === "string" ? record.resolution : undefined,
+    refreshRate: typeof record.refreshRate === "string" ? record.refreshRate : undefined,
+    connectivity: typeof record.connectivity === "string" ? record.connectivity : undefined,
+  }
+}
+
+const calculateTotalStock = (stores: StoreStockRecord[]): number =>
+  stores.reduce((sum, store) => sum + (parseNumber(store?.stock) ?? 0), 0)
+
+const normalizeBaseProduct = (product: ProductListItem): Omit<Product, "stock"> => {
+  const price = parseNumber(product?.priceSell) ?? parseNumber(product?.price) ?? 0
+  const categoryName =
+    typeof product?.category?.name === "string" ? product.category.name : "Sin categoría"
+
+  return {
+    id: product.id,
+    name: product.name,
+    description: typeof product.description === "string" ? product.description : "",
+    price,
+    brand: mapBrand(product?.brand ?? null),
+    category: categoryName,
+    images: extractImages(product?.images),
+    stock: null,
+    createdAt: typeof product?.createdAt === "string" ? product.createdAt : null,
+    specification: mapSpecification(product?.specification),
+  }
+}
+
 export default function StorePage() {
   const [products, setProducts] = useState<Product[]>([])
   const { addItem } = useCart()
@@ -78,39 +155,20 @@ export default function StorePage() {
       setIsLoading(true)
       try {
         const fetchedProducts = await getProducts()
+        const productList = Array.isArray(fetchedProducts) ? fetchedProducts : []
         const mapped = await Promise.all(
-          fetchedProducts.map(async (p: any) => {
-            let stock: number | null = null
+          productList.map(async (product) => {
+            const normalized = normalizeBaseProduct(product)
             try {
-              const stores = await getStoresWithProduct(p.id)
-              stock = stores.reduce(
-                (sum: number, item: any) => sum + (item.stock ?? 0),
-                0
-              )
+              const stores = await getStoresWithProduct(product.id)
+              const totalStock = Array.isArray(stores) ? calculateTotalStock(stores) : null
+              return { ...normalized, stock: totalStock }
             } catch (error) {
-              console.error('Error fetching stock:', error)
+              console.error("Error fetching stock:", error)
+              return normalized
             }
-            return {
-              id: p.id,
-              name: p.name,
-              description: p.description || '',
-              price: p.priceSell ?? p.price,
-              brand: p.brand
-                ? {
-                    name: p.brand.name,
-                    logoSvg: p.brand.logoSvg,
-                    logoPng: p.brand.logoPng,
-                  }
-                : null,
-              category: p.category?.name || 'Sin categoría',
-              images: p.images || [],
-              stock,
-              createdAt: p.createdAt ?? null,
-              specification: p.specification ?? undefined,
-            }
-          })
-        ) as Product[]
-        setProducts(mapped)
+          }),
+        )
         if (isMounted) {
           setProducts(mapped)
         }
@@ -119,7 +177,8 @@ export default function StorePage() {
       } finally {
         if (isMounted) {
           setIsLoading(false)
-      }}     
+        }
+      }
     }
 
     fetchProducts()
@@ -149,18 +208,26 @@ export default function StorePage() {
     }
   }, [searchParams])
 
-  // Obtener categorías y marcas únicas ordenadas alfanuméricamente
-  const categories = [...new Set(products.map((p) => p.category))].sort((a, b) =>
-    a.localeCompare(b, undefined, { numeric: true })
+  // Obtener categor�as y marcas �nicas ordenadas alfanum�ricamente
+  const categories = useMemo(
+    () =>
+      [...new Set(products.map((p) => p.category))].sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true }),
+      ),
+    [products],
   )
 
-  const brands = [
-    ...new Set(
-      products
-        .map((p) => p.brand?.name?.trim())
-        .filter((b): b is string => !!b)
-    ),
-  ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  const brands = useMemo(
+    () =>
+      [
+        ...new Set(
+          products
+            .map((p) => p.brand?.name?.trim())
+            .filter((b): b is string => Boolean(b)),
+        ),
+      ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+    [products],
+  )
 
   // Función para manejar filtros de categoría
   const handleCategoryChange = (category: string, checked: CheckedState) => {
@@ -566,11 +633,7 @@ export default function StorePage() {
                       <CardHeader className="p-0">
                         <div className="relative overflow-hidden rounded-t-lg">
                           <Image
-                            src={
-                              product.images[0]
-                                ? resolveImageUrl(product.images[0])
-                                : "/placeholder.svg"
-                            }
+                            src={resolvedPrimaryImage}
                             alt={product.name}
                             width={300}
                             height={300}
@@ -658,7 +721,7 @@ export default function StorePage() {
                               id: product.id,
                               name: product.name,
                               price: product.price,
-                              image: resolveImageUrl(product.images[0]),
+                              image: resolvedPrimaryImage,
                             })
                             toast.success("Producto agregado al carrito")
                           }}

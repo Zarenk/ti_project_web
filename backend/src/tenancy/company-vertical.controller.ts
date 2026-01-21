@@ -30,7 +30,9 @@ import { VerticalMigrationService } from './vertical-migration.service';
 
 const ALLOWED_VERTICALS = new Set<BusinessVertical>([
   BusinessVertical.GENERAL,
+  BusinessVertical.COMPUTERS,
   BusinessVertical.RETAIL,
+  BusinessVertical.RESTAURANTS,
 ]);
 
 @Controller('companies')
@@ -107,6 +109,16 @@ export class CompanyVerticalController {
       productSchemaEnforced: company.productSchemaEnforced,
       migration,
       config,
+    };
+  }
+
+  @Get(':id/vertical/status')
+  async getVerticalStatus(@Param('id', ParseIntPipe) id: number) {
+    await this.getCompanyOrThrow(id);
+    const migration = await this.getMigrationProgress(id);
+    return {
+      companyId: id,
+      ...migration,
     };
   }
 

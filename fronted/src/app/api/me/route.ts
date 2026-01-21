@@ -12,8 +12,8 @@ export async function getCurrentUser(request: Request) {
   }
   if (!token) return null
 
-  const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
-    method: 'POST',
+  const res = await fetch(`${BACKEND_URL}/api/users/me`, {
+    method: 'GET',
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok) return null

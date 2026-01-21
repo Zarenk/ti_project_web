@@ -158,3 +158,19 @@ export async function updateManyProviders(providers: any[]) {
   }
 }
 
+export async function uploadProviderImage(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await authorizedFetch(`${BACKEND_URL}/api/clients/upload-image`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    throw new Error(errorData?.message || "Error al subir la imagen");
+  }
+
+  return res.json() as Promise<{ url: string }>;
+}

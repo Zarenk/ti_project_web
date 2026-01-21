@@ -32,6 +32,7 @@ type MinimalUnit = Pick<
 export interface TenantSelectionCompany {
   id: number;
   name: string;
+  businessVertical?: string | null;
 }
 
 export interface TenantSelectionSummary {
@@ -1112,7 +1113,7 @@ export class TenancyService {
     const organizationInclude = {
       companies: {
         orderBy: { id: 'asc' },
-        select: { id: true, name: true },
+        select: { id: true, name: true, businessVertical: true },
       },
     };
 
@@ -1200,6 +1201,7 @@ export class TenancyService {
     const companies = filteredCompanies.map((company) => ({
       id: company.id,
       name: (company.name ?? '').trim(),
+      businessVertical: company.businessVertical ?? null,
     }));
 
     const selectedCompany =

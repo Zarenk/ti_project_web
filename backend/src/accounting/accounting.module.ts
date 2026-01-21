@@ -18,9 +18,10 @@ import { InventoryAccountingService } from './services/inventory-account.service
 import { PaymentAccountingService } from './services/payment-accounting.service';
 import { DebitNoteAccountingService } from './services/debit-note-accounting.service';
 import { CreditNoteAccountingService } from './services/credit-note-accounting.service';
+import { TenancyModule } from 'src/tenancy/tenancy.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, TenancyModule],
   controllers: [
     AccountingController,
     SalePostedController,

@@ -13,22 +13,41 @@ import { MODULE_PERMISSION_KEY } from '../decorators/module-permission.decorator
 import { SiteSettingsService } from 'src/site-settings/site-settings.service';
 import type { TenantContext } from 'src/tenancy/tenant-context.interface';
 import { SKIP_MODULE_PERMISSION_KEY } from '../decorators/skip-module-permission.decorator';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 
 interface RequestWithUser extends Request {
   user?: {
     role?: string;
+    userId?: number;
   };
   tenantContext?: TenantContext;
 }
 
 @Injectable()
 export class ModulePermissionsGuard implements CanActivate {
+  private static readonly MODULE_KEYS = [
+    'dashboard',
+    'catalog',
+    'store',
+    'inventory',
+    'sales',
+    'purchases',
+    'accounting',
+    'marketing',
+    'providers',
+    'settings',
+    'hidePurchaseCost',
+    'hideDeleteActions',
+  ] as const;
+
   private readonly jwtService: JwtService;
   private readonly logger = new Logger(ModulePermissionsGuard.name);
 
   constructor(
     private readonly reflector: Reflector,
     private readonly siteSettingsService: SiteSettingsService,
+    private readonly prisma: PrismaService,
     configService: ConfigService,
   ) {
     this.jwtService = new JwtService({
@@ -93,7 +112,21 @@ export class ModulePermissionsGuard implements CanActivate {
       throw error;
     }
 
-    const hasAccess = requiredKeys.some((key) => permissions?.[key] !== false);
+    const userOverrides = await this.resolveUserOverrides(
+      request.user?.userId,
+      organizationId,
+    );
+
+    const hasAccess = requiredKeys.some((key) => {
+      const baseAllowed = permissions?.[key] !== false;
+      if (!baseAllowed) {
+        return false;
+      }
+      if (userOverrides && userOverrides[key] === false) {
+        return false;
+      }
+      return true;
+    });
 
     if (!hasAccess) {
       this.logger.warn(
@@ -151,6 +184,45 @@ export class ModulePermissionsGuard implements CanActivate {
     }
 
     return undefined;
+  }
+
+  private async resolveUserOverrides(
+    userId?: number,
+    organizationId?: number | null,
+  ): Promise<Record<string, boolean> | null> {
+    if (!userId || !organizationId) {
+      return null;
+    }
+    const membership =
+      await this.prisma.organizationMembership.findFirst({
+        where: {
+          userId,
+          organizationId,
+        },
+        select: {
+          modulePermissions: true,
+        },
+      });
+    if (!membership?.modulePermissions) {
+      return null;
+    }
+    return this.sanitizeOverrides(membership.modulePermissions);
+  }
+
+  private sanitizeOverrides(
+    value: Prisma.JsonValue | null | undefined,
+  ): Record<string, boolean> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+    const result: Record<string, boolean> = {};
+    for (const key of ModulePermissionsGuard.MODULE_KEYS) {
+      const raw = (value as Record<string, unknown>)[key];
+      if (typeof raw === 'boolean') {
+        result[key] = raw;
+      }
+    }
+    return Object.keys(result).length > 0 ? result : null;
   }
 
   private resolveTenantIds(request: RequestWithUser): {

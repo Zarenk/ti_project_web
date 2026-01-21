@@ -1,6 +1,9 @@
+import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { ColumnDef } from "@tanstack/react-table"
 import { ArrowUpDown } from "lucide-react"
+import type { VerticalProductSchema } from "@/app/dashboard/tenancy/tenancy.api"
 
 // This type is used to define the shape of our data.
 // You can use a Zod schema here if you want.
@@ -10,6 +13,8 @@ interface InventoryItem {
       name: string;
       category: string;
       priceSell: number;
+      extraAttributes?: Record<string, unknown> | null;
+      isVerticalMigrated?: boolean | null;
     };
     stock: number;
     createdAt: Date;
@@ -35,7 +40,20 @@ interface InventoryItem {
     serialNumbers: string[];
 }
 
-export const columns: ColumnDef<InventoryItem>[] = [
+type InventoryColumnsOptions = {
+  productSchema?: VerticalProductSchema | null;
+};
+
+export function useInventoryColumns(options: InventoryColumnsOptions = {}) {
+  const schemaFields = options.productSchema?.fields ?? [];
+  const hasSizeField = schemaFields.some((field) => field.key === "size");
+  const hasColorField = schemaFields.some((field) => field.key === "color");
+  const hasLotField =
+    schemaFields.some((field) => field.key === "lot_number") ||
+    schemaFields.some((field) => field.key === "expiration_date");
+
+  return useMemo<ColumnDef<InventoryItem>[]>(() => {
+    const baseColumns: ColumnDef<InventoryItem>[] = [
     {
       id: "product_name",
       accessorKey: "product.name", // Acceder al nombre del producto
@@ -48,6 +66,18 @@ export const columns: ColumnDef<InventoryItem>[] = [
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
+      cell: ({ row }) => {
+        const isLegacy =
+          row.original.product.isVerticalMigrated === false ||
+          !row.original.product.extraAttributes ||
+          Object.keys(row.original.product.extraAttributes ?? {}).length === 0;
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{row.original.product.name}</span>
+            {isLegacy && <Badge variant="destructive">Legacy</Badge>}
+          </div>
+        );
+      },
     },
     {
       id: "product.category",
@@ -145,4 +175,62 @@ export const columns: ColumnDef<InventoryItem>[] = [
       accessorKey: "serialNumbers",
       header: "Series",
     },
-  ];
+    ];
+
+    const dynamicColumns: ColumnDef<InventoryItem>[] = [];
+
+    if (hasSizeField) {
+      dynamicColumns.push({
+        accessorKey: "product.extraAttributes.size",
+        header: () => <span>Talla</span>,
+        cell: ({ row }) => {
+          const value = row.original.product.extraAttributes?.size;
+          return <div className="text-sm">{typeof value === "string" ? value : "-"}</div>;
+        },
+      });
+    }
+
+    if (hasColorField) {
+      dynamicColumns.push({
+        accessorKey: "product.extraAttributes.color",
+        header: () => <span>Color</span>,
+        cell: ({ row }) => {
+          const value = row.original.product.extraAttributes?.color;
+          if (typeof value !== "string") {
+            return <div className="text-sm">-</div>;
+          }
+          return (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="h-4 w-4 rounded-full border" style={{ backgroundColor: value }} />
+              {value}
+            </div>
+          );
+        },
+      });
+    }
+
+    if (hasLotField) {
+      dynamicColumns.push({
+        accessorKey: "product.extraAttributes.lot_number",
+        header: () => <span>Lote</span>,
+        cell: ({ row }) => {
+          const attrs = row.original.product.extraAttributes ?? {};
+          const lot = typeof attrs.lot_number === "string" ? attrs.lot_number : null;
+          const expiration =
+            typeof attrs.expiration_date === "string" ? attrs.expiration_date : null;
+          if (!lot && !expiration) {
+            return <div className="text-sm">-</div>;
+          }
+          return (
+            <div className="space-y-0.5 text-xs">
+              {lot && <div>Lote: {lot}</div>}
+              {expiration && <div>Vence: {expiration}</div>}
+            </div>
+          );
+        },
+      });
+    }
+
+    return [...baseColumns, ...dynamicColumns];
+  }, [hasSizeField, hasColorField, hasLotField]);
+}

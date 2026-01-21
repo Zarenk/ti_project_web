@@ -400,19 +400,21 @@ export default function VerticalMigrationClient() {
             <Package className="mr-2 h-4 w-4" />
             Dividir stock
           </Button>
-          <Button
-            size="sm"
-            disabled={!isRestaurant || !selectedIds.size}
-            onClick={() => {
-              const product = selectedProducts[0]
-              if (product) {
-                openModal("recipe", product)
-              }
-            }}
-          >
-            <UtensilsCrossed className="mr-2 h-4 w-4" />
-            Asignar receta
-          </Button>
+          {isRestaurant && (
+            <Button
+              size="sm"
+              disabled={!selectedIds.size}
+              onClick={() => {
+                const product = selectedProducts[0]
+                if (product) {
+                  openModal("recipe", product)
+                }
+              }}
+            >
+              <UtensilsCrossed className="mr-2 h-4 w-4" />
+              Asignar receta
+            </Button>
+          )}
           <Button
             size="sm"
             variant="secondary"

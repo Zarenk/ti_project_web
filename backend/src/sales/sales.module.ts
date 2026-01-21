@@ -7,9 +7,10 @@ import { ActivityModule } from 'src/activity/activity.module';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { SunatModule } from 'src/sunat/sunat.module';
 import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
+import { TenancyModule } from 'src/tenancy/tenancy.module';
 
 @Module({
-  imports: [InventoryModule, ActivityModule, SunatModule],
+  imports: [InventoryModule, ActivityModule, SunatModule, TenancyModule],
   controllers: [SalesController],
   providers: [
     SalesService,

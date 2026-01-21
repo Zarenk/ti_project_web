@@ -8,6 +8,14 @@ import { Filter, Tags, CalendarDays, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -19,7 +27,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useTenantFeatures } from "@/context/tenant-features-context";
-import { columns } from "./columns"; // Importar las columnas definidas
+import { useInventoryColumns } from "./columns"; // Importar las columnas definidas
 import {
   getAllPurchasePrices,
   getInventoryWithCurrency,
@@ -56,15 +64,25 @@ interface InventoryItem {
 }
 
 type SortMode = "created" | "updated";
+type MigrationFilter = "all" | "legacy" | "migrated";
 
 interface FilterControlsProps {
   sortMode: SortMode;
   onSortChange: (mode: SortMode) => void;
   inStockOnly: boolean;
   onInStockToggle: (value: boolean) => void;
+  migrationStatus: MigrationFilter;
+  onMigrationChange: (value: MigrationFilter) => void;
 }
 
-function FilterControls({ sortMode, onSortChange, inStockOnly, onInStockToggle }: FilterControlsProps) {
+function FilterControls({
+  sortMode,
+  onSortChange,
+  inStockOnly,
+  onInStockToggle,
+  migrationStatus,
+  onMigrationChange,
+}: FilterControlsProps) {
   const baseButtonClasses =
     "flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition hover:border-primary/60 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
@@ -117,6 +135,21 @@ function FilterControls({ sortMode, onSortChange, inStockOnly, onInStockToggle }
           </button>
         </div>
       </div>
+      <div className="rounded-xl border bg-muted/20 p-4">
+        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Estado de migración
+        </Label>
+        <Select value={migrationStatus} onValueChange={onMigrationChange}>
+          <SelectTrigger className="mt-3 w-full">
+            <SelectValue placeholder="Selecciona un estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="legacy">Legacy</SelectItem>
+            <SelectItem value="migrated">Migrados</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
       <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-4">
         <div>
           <Label htmlFor="in-stock-only" className="text-sm font-medium">
@@ -138,14 +171,16 @@ export default function InventoryPage() {
   const [baseInventory, setBaseInventory] = useState<InventoryItem[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("created");
   const [inStockOnly, setInStockOnly] = useState(false);
+  const [migrationStatus, setMigrationStatus] = useState<MigrationFilter>("all");
   const { selection, version, loading: tenantLoading } = useTenantSelection();
   const selectionKey = useMemo(
     () => `${selection.companyId ?? "none"}-${version}`,
     [selection.companyId, version],
   );
   const [alertSummary, setAlertSummary] = useState<InventoryAlertSummary | null>(null);
-  const { migration } = useTenantFeatures();
+  const { migration, productSchema } = useTenantFeatures();
   const pendingLegacyProducts = migration?.legacy ?? 0;
+  const columns = useInventoryColumns({ productSchema });
 
 
   useEffect(() => {
@@ -301,6 +336,17 @@ export default function InventoryPage() {
       data = data.filter((item) => (item?.stock ?? 0) > 0);
     }
 
+    if (migrationStatus !== "all") {
+      data = data.filter((item) => {
+        const attrs = item.product?.extraAttributes ?? null;
+        const hasAttrs = !!attrs && Object.keys(attrs).length > 0;
+        const migrated = item.product?.isVerticalMigrated === true;
+        const legacy = item.product?.isVerticalMigrated === false || !hasAttrs;
+
+        return migrationStatus === "legacy" ? legacy : migrated && hasAttrs;
+      });
+    }
+
     if (sortMode === "updated") {
       data.sort(
         (a: any, b: any) => new Date(b.updateAt).getTime() - new Date(a.updateAt).getTime()
@@ -312,7 +358,7 @@ export default function InventoryPage() {
     }
 
     setInventory(data);
-  }, [baseInventory, sortMode, inStockOnly]);
+  }, [baseInventory, sortMode, inStockOnly, migrationStatus]);
   
 
   if (loading) {
@@ -356,6 +402,8 @@ export default function InventoryPage() {
                         onSortChange={setSortMode}
                         inStockOnly={inStockOnly}
                         onInStockToggle={(value) => setInStockOnly(!!value)}
+                        migrationStatus={migrationStatus}
+                        onMigrationChange={(value) => setMigrationStatus(value as MigrationFilter)}
                       />
                     </div>
                   </SheetContent>
@@ -412,8 +460,26 @@ export default function InventoryPage() {
                 onSortChange={setSortMode}
                 inStockOnly={inStockOnly}
                 onInStockToggle={(value) => setInStockOnly(!!value)}
+                migrationStatus={migrationStatus}
+                onMigrationChange={(value) => setMigrationStatus(value as MigrationFilter)}
               />
             </div>
+            {pendingLegacyProducts > 0 && (
+              <div className="px-5 pb-4">
+                <Alert className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <AlertTitle>Productos pendientes de migración</AlertTitle>
+                    <AlertDescription>
+                      Hay {pendingLegacyProducts} productos sin migrar. Completa sus atributos
+                      para evitar bloqueos futuros.
+                    </AlertDescription>
+                  </div>
+                  <Button asChild size="sm">
+                    <Link href="/dashboard/products/migration">Ir al asistente</Link>
+                  </Button>
+                </Alert>
+              </div>
+            )}
             <div className="px-2 pb-6 sm:px-5">
               <div className="overflow-x-auto">
                 <DataTable columns={columns} data={inventory} inStockOnly={inStockOnly}></DataTable>

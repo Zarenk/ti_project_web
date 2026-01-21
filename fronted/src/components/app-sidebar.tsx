@@ -574,25 +574,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         }
       >
         <TeamSwitcherLazy />
-        {migration && migration.legacy > 0 && (
-          <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-100">
-            <div className="flex items-center justify-between gap-2">
-              <span>
-                {migration.legacy} producto{migration.legacy === 1 ? "" : "s"} sin migrar
-              </span>
-              <Button
-                asChild
-                size="sm"
-                variant="link"
-                className="h-6 p-0 text-xs text-amber-900 dark:text-amber-100"
-              >
-                <NextLink href="/dashboard/products/migration">
-                  Asistente
-                </NextLink>
-              </Button>
-            </div>
-          </div>
-        )}
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMain} />

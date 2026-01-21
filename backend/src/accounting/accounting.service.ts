@@ -5,6 +5,7 @@ import { zonedTimeToUtc } from 'date-fns-tz';
 import { endOfDay, startOfDay, parse, endOfMonth, format } from 'date-fns';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 
 export interface AccountNode {
   id: number;
@@ -54,7 +55,17 @@ const formatInventoryQuantity = (value: unknown): string => {
 
 @Injectable()
 export class AccountingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly verticalConfig: VerticalConfigService,
+  ) {}
+
+  private async ensureAccountingFeatureEnabled(companyId?: number | null) {
+    if (!companyId) {
+      return;
+    }
+    await this.verticalConfig.getConfig(companyId);
+  }
 
   private emitTenantLog(
     operation: string,
@@ -80,6 +91,8 @@ export class AccountingService {
   async getAccounts(
     tenantContext?: TenantContext | null,
   ): Promise<AccountNode[]> {
+    await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
+
     this.emitTenantLog('getAccounts', tenantContext);
 
     const accounts = await this.prisma.account.findMany({
@@ -131,6 +144,8 @@ export class AccountingService {
     },
     tenantContext?: TenantContext | null,
   ): Promise<AccountNode> {
+    await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
+
     this.emitTenantLog('createAccount', tenantContext, {
       code: data.code,
       parentId: data.parentId ?? null,
@@ -158,6 +173,8 @@ export class AccountingService {
     data: { code: string; name: string; parentId?: number | null },
     tenantContext?: TenantContext | null,
   ): Promise<AccountNode> {
+    await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
+
     this.emitTenantLog('updateAccount', tenantContext, {
       id,
       code: data.code,
@@ -192,6 +209,8 @@ export class AccountingService {
     },
     tenantContext?: TenantContext | null,
   ) {
+    await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
+
     this.emitTenantLog('getLedger.request', tenantContext, {
       accountCode: params.accountCode ?? null,
       from: params.from ?? null,
@@ -297,6 +316,8 @@ export class AccountingService {
   }
 
   async getTrialBalance(period: string, tenantContext?: TenantContext | null) {
+    await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
+
     this.emitTenantLog('getTrialBalance.request', tenantContext, {
       period,
     });
@@ -404,6 +425,8 @@ export class AccountingService {
         (entry.store as any)?.organizationId ??
         null;
       const entryCompanyId = (entry.store as any)?.companyId ?? null;
+
+      await this.ensureAccountingFeatureEnabled(entryCompanyId);
 
       this.emitTenantLog(
         'createJournalForInventoryEntry.entryLoaded',

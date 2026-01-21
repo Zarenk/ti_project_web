@@ -36,6 +36,21 @@ import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.s
 
 @Injectable()
 export class UsersService {
+  private static readonly MODULE_PERMISSION_KEYS = [
+    'dashboard',
+    'catalog',
+    'store',
+    'inventory',
+    'sales',
+    'purchases',
+    'accounting',
+    'marketing',
+    'providers',
+    'settings',
+    'hidePurchaseCost',
+    'hideDeleteActions',
+  ] as const;
+
   private readonly CONTEXT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
   private readonly CONTEXT_RATE_LIMIT = 10;
   private readonly CONTEXT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -437,6 +452,10 @@ export class UsersService {
     }
 
     const lastContext = await this.buildLastContextPayload(user);
+    const userPermissions = await this.resolveUserModulePermissions(
+      user.id,
+      lastContext?.orgId ?? user.organizationId ?? null,
+    );
 
     return {
       id: user.id,
@@ -444,6 +463,7 @@ export class UsersService {
       email: user.email,
       role: user.role,
       lastContext,
+      userPermissions,
     };
   }
 
@@ -956,6 +976,50 @@ export class UsersService {
       status: updated.status,
       createdAt: updated.createdAt,
     };
+  }
+
+  private async resolveUserModulePermissions(
+    userId: number,
+    organizationId: number | null,
+  ): Promise<Record<string, boolean> | null> {
+    if (!organizationId) {
+      return null;
+    }
+
+    const membership =
+      await this.prismaService.organizationMembership.findFirst({
+        where: {
+          userId,
+          organizationId,
+        },
+        select: {
+          modulePermissions: true,
+        },
+      });
+
+    if (!membership?.modulePermissions) {
+      return null;
+    }
+
+    return this.sanitizeModulePermissions(membership.modulePermissions);
+  }
+
+  private sanitizeModulePermissions(
+    value: Prisma.JsonValue | null | undefined,
+  ): Record<string, boolean> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+
+    const result: Record<string, boolean> = {};
+    for (const key of UsersService.MODULE_PERMISSION_KEYS) {
+      const entry = (value as Record<string, unknown>)[key];
+      if (typeof entry === 'boolean') {
+        result[key] = entry;
+      }
+    }
+
+    return Object.keys(result).length > 0 ? result : null;
   }
 
   private enforceContextRateLimit(userId: number): void {

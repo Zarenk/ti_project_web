@@ -37,7 +37,15 @@ export interface VerticalUIConfig {
 export interface VerticalProductSchemaField {
   key: string;
   label: string;
-  type: 'text' | 'number' | 'select' | 'multi-select' | 'color' | 'textarea';
+  type:
+    | 'text'
+    | 'number'
+    | 'select'
+    | 'multi-select'
+    | 'color'
+    | 'textarea'
+    | 'date'
+    | 'json';
   options?: string[];
   required?: boolean;
   group?: string;
@@ -106,6 +114,12 @@ const GENERAL_PRODUCT_SCHEMA: VerticalProductSchema = {
   fields: [],
 };
 
+const COMPUTERS_PRODUCT_SCHEMA: VerticalProductSchema = {
+  inventoryTracking: 'by_product',
+  pricingModel: 'uniform',
+  fields: [],
+};
+
 const RETAIL_PRODUCT_SCHEMA: VerticalProductSchema = {
   inventoryTracking: 'by_variant',
   pricingModel: 'by_variant',
@@ -122,6 +136,19 @@ const RETAIL_PRODUCT_SCHEMA: VerticalProductSchema = {
       key: 'color',
       label: 'Color',
       type: 'color',
+      options: [
+        'Negro',
+        'Blanco',
+        'Azul',
+        'Rojo',
+        'Verde',
+        'Amarillo',
+        'Gris',
+        'Marron',
+        'Rosado',
+        'Morado',
+        'Naranja',
+      ],
       required: true,
       group: 'clothing',
     },
@@ -137,6 +164,12 @@ const RETAIL_PRODUCT_SCHEMA: VerticalProductSchema = {
       label: 'Material',
       type: 'text',
     },
+    {
+      key: 'variants',
+      label: 'Variantes',
+      type: 'json',
+      required: false,
+    },
   ],
 };
 
@@ -144,6 +177,19 @@ const RESTAURANTS_PRODUCT_SCHEMA: VerticalProductSchema = {
   inventoryTracking: 'by_ingredient',
   pricingModel: 'by_modifiers',
   fields: [
+    {
+      key: 'ingredients',
+      label: 'Ingredientes',
+      type: 'json',
+      required: true,
+    },
+    {
+      key: 'ingredient_unit',
+      label: 'Unidad de medida',
+      type: 'select',
+      options: ['UNIDAD', 'KG', 'GR', 'LT', 'ML'],
+      required: true,
+    },
     {
       key: 'prep_time',
       label: 'Tiempo de preparacion (min)',
@@ -166,6 +212,16 @@ const RESTAURANTS_PRODUCT_SCHEMA: VerticalProductSchema = {
     {
       key: 'allergens',
       label: 'Alergenos',
+      type: 'text',
+    },
+    {
+      key: 'expiration_date',
+      label: 'Fecha de caducidad',
+      type: 'date',
+    },
+    {
+      key: 'lot_number',
+      label: 'Numero de lote',
       type: 'text',
     },
   ],
@@ -265,6 +321,49 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
     },
     migrations: {
       onActivate: ['ensure_default_settings'],
+    },
+    requiresDataMigration: false,
+    isActive: true,
+    version: '1.0.0',
+  },
+  [BusinessVertical.COMPUTERS]: {
+    name: BusinessVertical.COMPUTERS,
+    displayName: 'Venta de Computadoras/Laptops',
+    description: 'Optimizado para catalogos de computadoras con especificaciones.',
+    icon: 'laptop',
+    features: {
+      sales: true,
+      inventory: true,
+      production: false,
+      reservations: false,
+      appointments: false,
+      multiWarehouse: true,
+      lotTracking: false,
+      serialNumbers: true,
+      tableManagement: false,
+      kitchenDisplay: false,
+      workOrders: false,
+      projectTracking: false,
+      posIntegration: true,
+      ecommerceIntegration: true,
+      deliveryPlatforms: false,
+    },
+    ui: {
+      theme: 'default',
+      dashboardLayout: 'sales-focused',
+      primaryColor: '#0EA5E9',
+      templates: {
+        invoice: 'standard-invoice',
+        receipt: 'standard-receipt',
+        report: 'inventory-report',
+      },
+    },
+    productSchema: COMPUTERS_PRODUCT_SCHEMA,
+    fiscal: {
+      taxCalculation: 'standard',
+      requiredFields: ['tax_id'],
+      invoiceFormat: 'standard',
+      taxCategories: ['general'],
     },
     requiresDataMigration: false,
     isActive: true,
@@ -374,7 +473,7 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
       ],
     },
     requiresDataMigration: true,
-    isActive: false,
+    isActive: true,
     version: '1.0.0',
   },
   [BusinessVertical.SERVICES]: {

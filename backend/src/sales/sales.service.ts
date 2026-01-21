@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -29,6 +29,7 @@ import {
 import { InventoryHistoryUncheckedCreateInputWithOrganization } from 'src/tenancy/prisma-organization.types';
 import { SunatService } from 'src/sunat/sunat.service';
 import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 
 @Injectable()
 export class SalesService {
@@ -50,9 +51,18 @@ export class SalesService {
     private readonly accountingHook: AccountingHook,
     private readonly sunatService: SunatService,
     private readonly quotaService: SubscriptionQuotaService,
+    private readonly verticalConfig: VerticalConfigService,
   ) {}
 
-  // MÃ©todo para crear una venta
+  private async ensureSalesFeatureEnabled(companyId?: number | null) {
+    if (!companyId) {
+      return;
+    }
+    await this.verticalConfig.getConfig(companyId);
+  }
+
+
+  // Método para crear una venta
   async createSale(data: {
     userId: number;
     storeId: number;
@@ -115,11 +125,13 @@ export class SalesService {
         'La compania proporcionada no coincide con la tienda seleccionada.',
     });
 
+    await this.ensureSalesFeatureEnabled(companyId);
+
     const organizationId = resolveOrganizationId({
       provided: inputOrganizationId ?? null,
       fallbacks: [storeOrganizationId],
       mismatchError:
-        'La organizaciÃ³n proporcionada no coincide con la tienda seleccionada.',
+        'La organización proporcionada no coincide con la tienda seleccionada.',
     });
 
     logOrganizationContext({
@@ -289,6 +301,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const organizationFilter = this.buildSalesWhere(organizationId, companyId);
 
     const sales = await this.prisma.sales.findMany({
@@ -301,14 +315,14 @@ export class SalesService {
           include: {
             entryDetail: {
               include: {
-                product: true, // Incluir el producto a travÃ©s de EntryDetail
+                product: true, // Incluir el producto a través de EntryDetail
               },
             },
             storeOnInventory: {
               include: {
                 inventory: {
                   include: {
-                    product: true, // Incluir el producto a travÃ©s de StoreOnInventory
+                    product: true, // Incluir el producto a través de StoreOnInventory
                   },
                 },
               },
@@ -341,6 +355,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const organizationFilter = this.buildSalesWhere(organizationId, companyId);
     return this.prisma.sales.findMany({
       where: { client: { userId }, ...organizationFilter },
@@ -377,6 +393,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const sale = await this.prisma.sales.findFirst({
       where: { id, ...this.buildSalesWhere(organizationId, companyId) },
       include: {
@@ -398,7 +416,7 @@ export class SalesService {
     });
 
     if (!sale) {
-      throw new NotFoundException(`No se encontr�� la venta con ID ${id}.`);
+      throw new NotFoundException(`No se encontr?? la venta con ID ${id}.`);
     }
 
     return this.mapSaleWithSunatStatus(sale, { includeHistory: true });
@@ -409,6 +427,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const organizationFilter = this.buildSalesWhere(organizationId, companyId);
     const { sale, deletedSale } = await this.prisma.$transaction(
       async (prismaTx) => {
@@ -582,6 +602,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const sale = await this.prisma.sales.findFirst({
       where: { id: saleId, ...this.buildSalesWhere(organizationId, companyId) },
       select: { id: true },
@@ -597,12 +619,14 @@ export class SalesService {
     });
   }
 
-  // MÃ©todo para obtener las series vendidas en una venta especÃ­fica
+  // Método para obtener las series vendidas en una venta específica
   async getSoldSeriesBySale(
     saleId: number,
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     // Buscar la venta con los detalles y las series asociadas
     const sale = await this.prisma.sales.findFirst({
       where: {
@@ -628,7 +652,7 @@ export class SalesService {
 
     // Formatear los datos para devolver solo las series vendidas
     const soldSeries = sale.salesDetails.map((detail) => ({
-      productId: detail.entryDetail.product.id, // Acceder al producto a travÃ©s de EntryDetail
+      productId: detail.entryDetail.product.id, // Acceder al producto a través de EntryDetail
       productName: detail.entryDetail.product.name,
       series: detail.series ?? [],
     }));
@@ -643,6 +667,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfPreviousMonth = new Date(
@@ -650,7 +676,7 @@ export class SalesService {
       now.getMonth() - 1,
       1,
     );
-    const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1); // 1 dÃ­a antes del inicio del mes actual
+    const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1); // 1 día antes del inicio del mes actual
 
     const organizationFilter = this.buildSalesWhere(organizationId, companyId);
 
@@ -726,7 +752,7 @@ export class SalesService {
 
     for (const detail of result) {
       const product = products.find((p) => p.id === detail.productId);
-      const categoryName = product?.category?.name || 'Sin categorÃ­a';
+      const categoryName = product?.category?.name || 'Sin categoría';
       const revenue = (detail.quantity || 0) * (detail.price || 0);
       revenueByCategory[categoryName] =
         (revenueByCategory[categoryName] || 0) + revenue;
@@ -868,6 +894,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const where = buildOrganizationFilter(
       organizationId,
       companyId,
@@ -945,8 +973,12 @@ export class SalesService {
     from?: string,
     to?: string,
     organizationId?: number | null,
-    companyId?: number | null, // â† AÃ‘ADIDO
+    companyId?: number | null, // ← AÑADIDO
+
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
+
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
       select: {
@@ -1199,6 +1231,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfPreviousMonth = new Date(
@@ -1240,6 +1274,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfPreviousMonth = new Date(
@@ -1297,6 +1333,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const timeZone = 'America/Lima';
 
     const organizationFilter = this.buildSalesWhere(organizationId, companyId);
@@ -1307,7 +1345,7 @@ export class SalesService {
       if (from && to) {
         base.createdAt = {
           gte: zonedTimeToUtc(new Date(from), timeZone),
-          lte: zonedTimeToUtc(endOfDay(new Date(to)), timeZone), // ðŸ‘ˆ Asegura fin del dÃ­a
+          lte: zonedTimeToUtc(endOfDay(new Date(to)), timeZone), // 👈 Asegura fin del día
         };
       }
 
@@ -1375,6 +1413,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const timeZone = 'America/Lima';
     const where: Prisma.SalesWhereInput = this.buildSalesWhere(
       organizationId,
@@ -1452,6 +1492,8 @@ export class SalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
     const where: Prisma.SalesWhereInput = this.buildSalesWhere(
       organizationId,
       companyId,

@@ -11,6 +11,7 @@ import type { OrganizationResponse, OrganizationVerticalInfo } from "./tenancy.a
 import { fetchCompanyVerticalInfo } from "./tenancy.api"
 import { getTenantSelection } from "@/utils/tenant-preferences"
 import { OrganizationVerticalCard } from "./organization-vertical-card"
+import { OrganizationFilterBar } from "./organization-filter-bar"
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") || "http://localhost:4000"
@@ -112,12 +113,45 @@ async function fetchOrganizationVerticalMap(
   return map
 }
 
-export default async function OrganizationsPage() {
+export default async function OrganizationsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  const resolvedSearchParams = (await Promise.resolve(searchParams)) ?? {}
   const [organizations, currentRole, tenantSelection] = await Promise.all([
     fetchOrganizations(),
     fetchCurrentUserRole(),
     getTenantSelection(),
   ])
+  const query =
+    typeof resolvedSearchParams.q === "string" ? resolvedSearchParams.q.trim().toLowerCase() : ""
+  const selectedOrgId =
+    typeof resolvedSearchParams.orgId === "string"
+      ? Number(resolvedSearchParams.orgId)
+      : null
+  const pageParam =
+    typeof resolvedSearchParams.page === "string"
+      ? Number(resolvedSearchParams.page)
+      : 1
+  const currentPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1
+  const pageSize = 6
+  const filteredOrganizations = organizations.filter((organization) => {
+    if (selectedOrgId && organization.id !== selectedOrgId) {
+      return false
+    }
+    if (!query) return true
+    const name = organization.name?.toLowerCase() ?? ""
+    const code = organization.code?.toLowerCase() ?? ""
+    return name.includes(query) || code.includes(query)
+  })
+  const totalPages = Math.max(1, Math.ceil(filteredOrganizations.length / pageSize))
+  const safePage = Math.min(currentPage, totalPages)
+  const pageOffset = (safePage - 1) * pageSize
+  const pagedOrganizations = filteredOrganizations.slice(
+    pageOffset,
+    pageOffset + pageSize,
+  )
   const verticalInfoMap = VERTICAL_FEATURE_ENABLED
     ? await fetchOrganizationVerticalMap(organizations, tenantSelection)
     : new Map<number, VerticalMapEntry>()
@@ -142,7 +176,18 @@ export default async function OrganizationsPage() {
         </div>
       </header>
 
-      {organizations.length === 0 ? (
+      <OrganizationFilterBar
+        organizations={organizations.map((org) => ({
+          id: org.id,
+          name: org.name,
+          code: org.code ?? null,
+        }))}
+        selectedOrgId={selectedOrgId}
+        query={query}
+        total={filteredOrganizations.length}
+      />
+
+      {pagedOrganizations.length === 0 ? (
         <Card className="border-dashed border-sky-200 dark:border-slate-700">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base text-slate-700 dark:text-slate-200">
@@ -151,13 +196,14 @@ export default async function OrganizationsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-slate-600 dark:text-slate-300">
-            Crea tu primera organizacion para habilitar el flujo multi-tenant y asigna usuarios
-            maestros desde el formulario correspondiente.
+            {organizations.length === 0
+              ? "Crea tu primera organizacion para habilitar el flujo multi-tenant y asigna usuarios maestros desde el formulario correspondiente."
+              : "No hay organizaciones que coincidan con los filtros actuales."}
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          {organizations.map((organization) => {
+          {pagedOrganizations.map((organization) => {
             const activeUnits = organization.units.filter((unit) => unit.status === "ACTIVE").length
             const verticalDetails = verticalInfoMap.get(organization.id)
 
@@ -250,6 +296,48 @@ export default async function OrganizationsPage() {
               </Card>
             )
           })}
+        </div>
+      )}
+
+      {filteredOrganizations.length > pageSize && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500 dark:text-slate-300">
+          <span>
+            Pagina {safePage} de {totalPages}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={safePage <= 1}
+              asChild
+            >
+              <Link
+                href={`?${new URLSearchParams({
+                  ...(query ? { q: query } : {}),
+                  ...(selectedOrgId ? { orgId: String(selectedOrgId) } : {}),
+                  page: String(Math.max(safePage - 1, 1)),
+                }).toString()}`}
+              >
+                Anterior
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={safePage >= totalPages}
+              asChild
+            >
+              <Link
+                href={`?${new URLSearchParams({
+                  ...(query ? { q: query } : {}),
+                  ...(selectedOrgId ? { orgId: String(selectedOrgId) } : {}),
+                  page: String(Math.min(safePage + 1, totalPages)),
+                }).toString()}`}
+              >
+                Siguiente
+              </Link>
+            </Button>
+          </div>
         </div>
       )}
     </div>

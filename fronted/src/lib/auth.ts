@@ -1,7 +1,41 @@
-import { jwtDecode } from 'jwt-decode'
-import type { JwtPayload } from 'jsonwebtoken'
-import { refreshAuthToken } from '@/utils/auth-refresh'
-import { getAuthToken } from '@/utils/auth-token'
+import { jwtDecode } from "jwt-decode"
+import type { JwtPayload } from "jsonwebtoken"
+
+import type { SiteSettings } from "@/context/site-settings-schema"
+import { refreshAuthToken } from "@/utils/auth-refresh"
+import { getAuthToken } from "@/utils/auth-token"
+
+type ModulePermissionKey = keyof SiteSettings["permissions"]
+export type UserPermissionsMap = Partial<Record<ModulePermissionKey, boolean>>
+const MODULE_PERMISSION_KEYS: ModulePermissionKey[] = [
+  "dashboard",
+  "catalog",
+  "store",
+  "inventory",
+  "sales",
+  "purchases",
+  "accounting",
+  "marketing",
+  "providers",
+  "settings",
+  "hidePurchaseCost",
+  "hideDeleteActions",
+]
+
+function normalizeUserPermissions(value: unknown): UserPermissionsMap | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null
+  }
+  const source = value as Record<string, unknown>
+  const normalized: UserPermissionsMap = {}
+  for (const key of MODULE_PERMISSION_KEYS) {
+    const raw = source[key]
+    if (typeof raw === "boolean") {
+      normalized[key] = raw
+    }
+  }
+  return Object.keys(normalized).length > 0 ? normalized : null
+}
 
 export interface CurrentUser {
   /**
@@ -12,6 +46,7 @@ export interface CurrentUser {
   name: string
   role?: string
   isPublicSignup?: boolean
+  userPermissions?: UserPermissionsMap | null
 }
 
 
@@ -89,11 +124,16 @@ export async function getUserDataFromToken(): Promise<CurrentUser | null> {
       return null
     }
 
+    const userPermissions = normalizeUserPermissions(
+      (data as Record<string, unknown> | undefined)?.["userPermissions"],
+    )
+
     return {
       id,
       name,
       role: data.role,
       isPublicSignup: Boolean((data as any)?.isPublicSignup),
+      userPermissions,
     }
   } catch {
     return null

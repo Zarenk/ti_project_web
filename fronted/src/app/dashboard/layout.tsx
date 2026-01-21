@@ -41,23 +41,26 @@ export default async function Page({ children }: { children: ReactNode }) {
           <SidebarInset>
             <LogoutOverlay />
             <ContextStatusBanner />
-            <TrialStatusBanner />
+            <TrialStatusBanner
+              className="px-4 pt-4"
+              leading={
+                <>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarTrigger className="-ml-1" />
+                      </TooltipTrigger>
+                      <TooltipContent>Abrir/Cerrar Sidebar</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <Separator
+                    orientation="vertical"
+                    className="mr-2 data-[orientation=vertical]:h-4"
+                  />
+                </>
+              }
+            />
             <OnboardingWizardBanner />
-            <div className="flex items-center gap-2 px-4 py-4">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SidebarTrigger className="-ml-1" />
-                  </TooltipTrigger>
-                  <TooltipContent>Abrir/Cerrar Sidebar</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <Separator
-                orientation="vertical"
-                className="mr-2 data-[orientation=vertical]:h-4"
-              />
-              <DashboardCompanyName />
-            </div>
             <Suspense fallback={<DashboardLoading />}>
               {children}
             </Suspense>

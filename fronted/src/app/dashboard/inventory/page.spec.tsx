@@ -44,7 +44,7 @@ jest.mock("@/utils/auth-fetch", () => ({
 jest.mock("@/app/dashboard/inventory/data-table", () => ({
   DataTable: () => <div data-testid="data-table" />,
 }));
-jest.mock("@/app/dashboard/inventory/columns", () => ({ columns: [] }));
+jest.mock("@/app/dashboard/inventory/columns", () => ({ useInventoryColumns: () => [] }));
 jest.mock("@/app/dashboard/inventory/inventory.api", () => ({
   getInventoryWithCurrency: jest.fn().mockResolvedValue([]),
   getAllPurchasePrices: jest.fn().mockResolvedValue([]),

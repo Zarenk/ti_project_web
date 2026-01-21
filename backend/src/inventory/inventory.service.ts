@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   Logger,
@@ -19,6 +20,7 @@ import {
   resolveCompanyId,
   resolveOrganizationId,
 } from 'src/tenancy/organization.utils';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 import {
   InventoryUncheckedCreateInputWithOrganization,
   InventoryHistoryUncheckedCreateInputWithOrganization,
@@ -36,7 +38,23 @@ export class InventoryService {
     private prisma: PrismaService,
     private activityService: ActivityService,
     private readonly accountingHook: AccountingHook,
+    private readonly verticalConfig: VerticalConfigService,
   ) {}
+
+  private async ensureInventoryFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
+      return;
+    }
+
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.inventory === false) {
+      throw new ForbiddenException(
+        'El modulo de inventario no esta habilitado para esta empresa.',
+      );
+    }
+  }
 
   private async assertCompanyMatchesOrganization(
     companyId: number,
@@ -82,6 +100,8 @@ export class InventoryService {
     const resolvedOrganizationId = organizationId ?? null;
     const resolvedCompanyId = companyId ?? null;
     const where: Prisma.InventoryHistoryWhereInput = {};
+
+    await this.ensureInventoryFeatureEnabled(resolvedCompanyId);
 
     logOrganizationContext({
       service: InventoryService.name,
@@ -130,6 +150,8 @@ export class InventoryService {
     const resolvedOrganizationId = organizationId ?? null;
     const resolvedCompanyId = companyId ?? null;
 
+    await this.ensureInventoryFeatureEnabled(resolvedCompanyId);
+
     logOrganizationContext({
       service: InventoryService.name,
       operation: 'findAllHistoryByUser',
@@ -174,6 +196,8 @@ export class InventoryService {
     const entryWhere: Prisma.EntryDetailWhereInput = {};
     const resolvedOrganizationId = organizationId ?? null;
     const resolvedCompanyId = companyId ?? null;
+
+    await this.ensureInventoryFeatureEnabled(resolvedCompanyId);
 
     logOrganizationContext({
       service: InventoryService.name,
@@ -331,6 +355,7 @@ export class InventoryService {
           'Debe indicar una organizacion valida para asociar la transferencia a una compania.',
         );
       }
+      await this.ensureInventoryFeatureEnabled(companyId);
       await this.assertCompanyMatchesOrganization(companyId, organizationId);
     }
 
@@ -493,6 +518,9 @@ export class InventoryService {
     companyId?: number | null,
   ) {
     const resolvedCompanyId = companyId ?? null;
+
+    await this.ensureInventoryFeatureEnabled(resolvedCompanyId);
+
     // Busca las series asociadas al producto en la tienda seleccionada
     const series = await this.prisma.entryDetailSeries.findMany({
       where: {
@@ -523,6 +551,7 @@ export class InventoryService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureInventoryFeatureEnabled(companyId ?? null);
     const where: Prisma.InventoryWhereInput = {};
 
     if (organizationId !== undefined) {
@@ -598,6 +627,7 @@ export class InventoryService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureInventoryFeatureEnabled(companyId ?? null);
     const inventory = await this.getInventoryWithEntries(
       organizationId,
       companyId,
@@ -929,6 +959,7 @@ export class InventoryService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureInventoryFeatureEnabled(companyId ?? null);
     const where: Prisma.InventoryWhereInput = {};
 
     if (organizationId !== undefined) {
@@ -989,6 +1020,7 @@ export class InventoryService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureInventoryFeatureEnabled(companyId ?? null);
     const where: Prisma.InventoryWhereInput = {};
 
     if (organizationId !== undefined) {
@@ -1061,6 +1093,7 @@ export class InventoryService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureInventoryFeatureEnabled(companyId ?? null);
     const categoryFilter: Prisma.ProductWhereInput = categoryId
       ? { categoryId }
       : {};
@@ -1135,6 +1168,7 @@ export class InventoryService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureInventoryFeatureEnabled(companyId ?? null);
     const categoryFilter: Prisma.ProductWhereInput = categoryId
       ? { categoryId }
       : {};
@@ -1222,6 +1256,7 @@ export class InventoryService {
           'Debe indicar una organizacion valida para asociar la importacion a una compania.',
         );
       }
+      await this.ensureInventoryFeatureEnabled(resolvedCompanyId);
       await this.assertCompanyMatchesOrganization(
         resolvedCompanyId,
         resolvedOrganizationId,

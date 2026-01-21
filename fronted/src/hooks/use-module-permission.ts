@@ -16,7 +16,7 @@ const PERMISSION_FEATURE_MAP: Partial<Record<ModulePermissionKey, keyof Vertical
 }
 
 export function useModulePermission() {
-  const { role } = useAuth()
+  const { role, userPermissions } = useAuth()
   const { settings } = useSiteSettings()
   const tenantFeatures = useOptionalTenantFeatures()
   const normalizedRole = role ? role.trim().toUpperCase() : null
@@ -41,8 +41,17 @@ export function useModulePermission() {
         }
       }
 
-      return effectivePermissions?.[module] ?? false
+      const baselineAllowed = effectivePermissions?.[module] ?? false
+      if (!baselineAllowed) {
+        return false
+      }
+
+      if (userPermissions && userPermissions[module] === false) {
+        return false
+      }
+
+      return true
     },
-    [comparableRole, effectivePermissions, features, isSuperAdmin],
+    [comparableRole, effectivePermissions, features, isSuperAdmin, userPermissions],
   )
 }

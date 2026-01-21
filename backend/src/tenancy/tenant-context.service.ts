@@ -278,7 +278,7 @@ export class TenantContextService {
       organizationId,
       companyId,
       organizationUnitId,
-      userId: this.normalizeId(user.id),
+      userId: this.normalizeId(user.id ?? user.userId ?? user.sub),
       isGlobalSuperAdmin,
       isOrganizationSuperAdmin,
       isSuperAdmin: isGlobalSuperAdmin || isOrganizationSuperAdmin,
