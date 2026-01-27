@@ -1,8 +1,9 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { Prisma, SiteSettings } from '@prisma/client';
+import { AuditAction, Prisma, SiteSettings } from '@prisma/client';
 
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateSiteSettingsDto } from './dto/update-site-setting.dto';
+import { ActivityService } from 'src/activity/activity.service';
 
 function cloneJson<T extends Prisma.JsonValue>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -167,7 +168,10 @@ export class SiteSettingsService {
     }
   >();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityService: ActivityService,
+  ) {}
 
   private buildTenantKey(
     organizationId: number | null,
@@ -228,8 +232,12 @@ export class SiteSettingsService {
     dto: UpdateSiteSettingsDto,
     organizationId: number | null,
     companyId: number | null,
+    actor?: { actorId?: number | null; actorEmail?: string | null },
   ): Promise<SiteSettings> {
     const tenantKey = this.buildTenantKey(organizationId, companyId);
+    let previousData: Prisma.JsonValue | null = null;
+    let changeSummary = 'Actualizo la configuracion';
+    let changeDiff: Prisma.JsonValue | null = null;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.siteSettings.findUnique({
@@ -247,6 +255,10 @@ export class SiteSettingsService {
 
       const payload = (dto.data ??
         DEFAULT_SITE_SETTINGS) as Prisma.InputJsonValue;
+
+      if (existing?.data) {
+        previousData = cloneJson(existing.data);
+      }
 
       if (!existing) {
         return tx.siteSettings.create({
@@ -276,6 +288,31 @@ export class SiteSettingsService {
 
     this.setCache(tenantKey, sanitized);
 
+    if (previousData && typeof previousData === 'object') {
+      const nextData = sanitized.data;
+      const changes = this.resolveSettingsChanges(previousData, nextData);
+      if (changes.summary) {
+        changeSummary = changes.summary;
+      }
+      if (changes.diff) {
+        changeDiff = changes.diff;
+      }
+    }
+
+    if (organizationId !== null) {
+      await this.activityService.log({
+        actorId: actor?.actorId ?? null,
+        actorEmail: actor?.actorEmail ?? null,
+        entityType: 'Settings',
+        entityId: tenantKey,
+        action: AuditAction.UPDATED,
+        summary: changeSummary,
+        diff: changeDiff ?? undefined,
+        organizationId,
+        companyId,
+      });
+    }
+
     if (organizationId !== null) {
       const sanitizedPermissions = (sanitized.data as Prisma.JsonObject)
         ?.permissions;
@@ -289,6 +326,66 @@ export class SiteSettingsService {
     }
 
     return this.cloneSettings(sanitized);
+  }
+
+  private resolveSettingsChanges(
+    previous: Prisma.JsonValue,
+    next: Prisma.JsonValue,
+  ): { summary?: string; diff?: Prisma.JsonValue } {
+    if (!isPlainObject(previous) || !isPlainObject(next)) {
+      return {};
+    }
+    const previousPermissions = previous.permissions;
+    const nextPermissions = next.permissions;
+    const permissionChanges: Record<string, { from: unknown; to: unknown }> = {};
+
+    if (
+      previousPermissions !== undefined &&
+      nextPermissions !== undefined &&
+      isPlainObject(previousPermissions) &&
+      isPlainObject(nextPermissions)
+    ) {
+      const keys = new Set([
+        ...Object.keys(previousPermissions),
+        ...Object.keys(nextPermissions),
+      ]);
+      keys.forEach((key) => {
+        const fromValue = previousPermissions[key];
+        const toValue = nextPermissions[key];
+        if (fromValue !== toValue) {
+          permissionChanges[key] = { from: fromValue, to: toValue };
+        }
+      });
+    }
+
+    const changedPermissionKeys = Object.keys(permissionChanges);
+    const changedKeys = Object.keys(next).filter((key) => {
+      return JSON.stringify(previous[key]) !== JSON.stringify(next[key]);
+    });
+
+    const summaryParts: string[] = [];
+    if (changedPermissionKeys.length > 0) {
+      summaryParts.push(
+        `Actualizo permisos: ${changedPermissionKeys.join(', ')}`,
+      );
+    }
+    if (changedKeys.length > 0 && summaryParts.length === 0) {
+      summaryParts.push(
+        `Actualizo configuracion: ${changedKeys.join(', ')}`,
+      );
+    }
+
+    const diff =
+      changedPermissionKeys.length > 0
+        ? ({
+            permissions: permissionChanges,
+          } as Prisma.JsonObject)
+        : undefined;
+
+    return {
+      summary: summaryParts.length > 0 ? summaryParts.join('. ') : undefined,
+      diff,
+    };
   }
 
   private sanitizeSettingsData(data: Prisma.JsonValue): Prisma.JsonValue {

@@ -147,7 +147,7 @@ export async function createUser(
   status: string,
   organizationId?: number | null,
 ) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/users/register`, {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/users/manage/create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, username, password, role, status, organizationId }),

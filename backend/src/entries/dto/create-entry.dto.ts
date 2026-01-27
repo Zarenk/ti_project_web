@@ -31,4 +31,37 @@ export class CreateEntryDto {
 
   @ApiPropertyOptional()
   referenceId?: string;
+
+  @ApiPropertyOptional()
+  guiaSerie?: string;
+
+  @ApiPropertyOptional()
+  guiaCorrelativo?: string;
+
+  @ApiPropertyOptional()
+  guiaFechaEmision?: string;
+
+  @ApiPropertyOptional()
+  guiaFechaEntregaTransportista?: string;
+
+  @ApiPropertyOptional()
+  guiaMotivoTraslado?: string;
+
+  @ApiPropertyOptional()
+  guiaPuntoPartida?: string;
+
+  @ApiPropertyOptional()
+  guiaPuntoLlegada?: string;
+
+  @ApiPropertyOptional()
+  guiaDestinatario?: string;
+
+  @ApiPropertyOptional()
+  guiaPesoBrutoUnidad?: string;
+
+  @ApiPropertyOptional()
+  guiaPesoBrutoTotal?: string;
+
+  @ApiPropertyOptional()
+  guiaTransportista?: string;
 }

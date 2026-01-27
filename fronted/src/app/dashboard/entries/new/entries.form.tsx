@@ -23,7 +23,13 @@ import { SelectedProductsTable } from '../components/entries/SelectedProductsTab
 import { handleFormSubmission } from '../utils/onSubmitHelper'
 import { ActionButtons } from '../components/entries/ActionButtons'
 import { getLatestExchangeRateByCurrency } from '../../exchange/exchange.api'
-import { detectInvoiceProvider, processExtractedText, processInvoiceText } from '../utils/pdfExtractor'
+import {
+  detectGuideDocument,
+  detectInvoiceProvider,
+  processExtractedText,
+  processGuideText,
+  processInvoiceText,
+} from '../utils/pdfExtractor'
 import { numeroALetrasCustom } from '../../sales/components/utils/numeros-a-letras'
 import {
   AlertDialog,
@@ -77,7 +83,18 @@ const entriesSchema = z.object({
   comprobante: z.string({}),
   total_comprobante: z.string({}),
   tipo_moneda: z.string({}),
-  payment_method: z.enum(['CASH', 'CREDIT'])
+  payment_method: z.enum(['CASH', 'CREDIT']),
+  guia_serie: z.string({}),
+  guia_correlativo: z.string({}),
+  guia_fecha_emision: z.string({}),
+  guia_fecha_entrega_transportista: z.string({}),
+  guia_motivo_traslado: z.string({}),
+  guia_punto_partida: z.string({}),
+  guia_punto_llegada: z.string({}),
+  guia_destinatario: z.string({}),
+  guia_peso_bruto_unidad: z.string({}),
+  guia_peso_bruto_total: z.string({}),
+  guia_transportista: z.string({}),
 })
 //inferir el tipo de dato
 export type EntriesType = z.infer<typeof entriesSchema>;
@@ -105,6 +122,17 @@ function buildDefaultEntryValues(entry?: any): EntriesType {
     total_comprobante: entry?.total_comprobante ?? "",
     tipo_moneda: entry?.tipo_moneda ?? "PEN",
     payment_method: entry?.payment_method ?? "CASH",
+    guia_serie: entry?.guia_serie ?? "",
+    guia_correlativo: entry?.guia_correlativo ?? "",
+    guia_fecha_emision: entry?.guia_fecha_emision ?? "",
+    guia_fecha_entrega_transportista: entry?.guia_fecha_entrega_transportista ?? "",
+    guia_motivo_traslado: entry?.guia_motivo_traslado ?? "",
+    guia_punto_partida: entry?.guia_punto_partida ?? "",
+    guia_punto_llegada: entry?.guia_punto_llegada ?? "",
+    guia_destinatario: entry?.guia_destinatario ?? "",
+    guia_peso_bruto_unidad: entry?.guia_peso_bruto_unidad ?? "",
+    guia_peso_bruto_total: entry?.guia_peso_bruto_total ?? "",
+    guia_transportista: entry?.guia_transportista ?? "",
   };
 }
 
@@ -205,6 +233,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // ENVIAR GUIA PDF
   const [pdfGuiaFile, setPdfGuiaFile] = useState<File | null>(null);
+  const [showGuideFields, setShowGuideFields] = useState(false);
 
 
   const entryReferenceIdRef = useRef<string | null>(null);
@@ -241,6 +270,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   // ENVIAR PDF
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [isNewInvoiceBoolean, setIsNewInvoiceBoolean] = useState(false);
+  const [showInvoiceFields, setShowInvoiceFields] = useState(false);
 
   // Estado para manejar el diálogo de confirmación
   const handleConfirm = async () => {
@@ -726,6 +756,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           }
         }
         setIsNewInvoiceBoolean(true);
+        setShowInvoiceFields(true);
         toast.success("Factura subida correctamente.");
       } catch (error) {
         console.error('Error al procesar el archivo PDF:', error);
@@ -740,7 +771,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     
     if (fileGuia) {
       if (fileGuia.type !== "application/pdf") {
-        toast.error("Por favor, sube un archivo PDF válido.");
+        toast.error("Por favor, sube un archivo PDF valido.");
         return;
       }
       if (fileGuia.size > 5 * 1024 * 1024) {
@@ -749,7 +780,21 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       }
       setPdfGuiaFile(fileGuia);
       try {
-        toast.success("Guía de remisión subida correctamente.");
+        const extractedText = await processPDF(fileGuia);
+        if (!extractedText || !extractedText.trim()) {
+          toast.warning(
+            "No se pudo leer texto del PDF. Si es una imagen escaneada, se requiere OCR.",
+          );
+          return;
+        }
+
+        if (!detectGuideDocument(extractedText)) {
+          toast.warning("No se detecto una guia de remision en el PDF.");
+        }
+
+        processGuideText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        setShowGuideFields(true);
+        toast.success("Guia de remision procesada correctamente.");
       } catch (error) {
         console.error('Error al procesar el archivo PDF:', error);
         toast.error('Error al procesar el archivo PDF');
@@ -897,8 +942,12 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     setValueStore('');
     setValueProvider('');
     setPdfGuiaFile(null);
+    setShowGuideFields(false);
     setTipoMoneda('PEN');
     setTipoCambioActual(null);
+    setPdfFile(null);
+    setShowInvoiceFields(false);
+    setIsNewInvoiceBoolean(false);
     form.reset(buildDefaultEntryValues());
   }, [version, form]);
   //
@@ -955,13 +1004,16 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     <div className="mx-auto w-full max-w-5xl px-2 sm:px-4 lg:px-8">
       <form className='relative flex flex-col gap-2' onSubmit={onSubmit}>
         <fieldset disabled={isSubmitting} className='flex flex-col gap-2'>
-                  <div className="flex flex-col sm:flex-row flex-wrap gap-2">
+                  <div className="flex flex-col gap-2">
                     <UploadSection
                       register={register}
+                      watch={form.watch}
                       handlePDFUpload={handlePDFUpload}
                       handlePDFGuiaUpload={handlePDFGuiaUpload}
                       currency={currency}
                       onCurrencyChange={handleCurrencySelection}
+                      showInvoiceFields={showInvoiceFields}
+                      showGuideFields={showGuideFields}
                     />
                     <AdditionalInfoSection
                       register={register}

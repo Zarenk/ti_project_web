@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { AlertTriangle, Check } from "lucide-react"
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -38,6 +39,7 @@ export default function SuperUsersAdminPage() {
   const [organizationsLoading, setOrganizationsLoading] = useState(false)
   const [status, setStatus] = useState("ACTIVO")
   const [submitting, setSubmitting] = useState(false)
+  const [showErrors, setShowErrors] = useState(false)
 
   useEffect(() => {
     if (role !== "SUPER_ADMIN_ORG") {
@@ -60,6 +62,7 @@ export default function SuperUsersAdminPage() {
     setStatus("ACTIVO")
     setOrganizationId("")
     setSubmitting(false)
+    setShowErrors(false)
   }, [version])
 
   useEffect(() => {
@@ -116,16 +119,28 @@ export default function SuperUsersAdminPage() {
         ? ""
         : "none"
 
+  const emailValid =
+    email.trim().length > 0 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
+  const usernameValid = username.trim().length >= 3
+  const passwordValid = password.trim().length >= 8
+  const roleValid = Boolean(role)
+  const organizationValid =
+    !requiresOrganizationSelection || normalizedOrganizationId.length > 0
+
   const canSubmit = useMemo(() => {
-    const basicValid = email.trim().length > 0 && password.trim().length >= 8
-    const organizationValid =
-      !requiresOrganizationSelection || normalizedOrganizationId.length > 0
-    return basicValid && organizationValid
-  }, [email, password, normalizedOrganizationId, requiresOrganizationSelection])
+    return (
+      emailValid &&
+      usernameValid &&
+      passwordValid &&
+      roleValid &&
+      organizationValid
+    )
+  }, [emailValid, usernameValid, passwordValid, roleValid, organizationValid])
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault()
     if (!canSubmit || submitting) {
+      setShowErrors(true)
       return
     }
 
@@ -133,7 +148,7 @@ export default function SuperUsersAdminPage() {
       setSubmitting(true)
       const payload = {
         email: email.trim(),
-        username: username.trim() || undefined,
+        username: username.trim(),
         password,
         role,
         status: status.trim() || undefined,
@@ -169,24 +184,40 @@ export default function SuperUsersAdminPage() {
     }
   }
 
+  const renderRequiredChip = (filled: boolean) => (
+    <span
+      className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        filled
+          ? "border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+          : "border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200"
+      }`}
+    >
+      {filled ? <Check className="mr-1 h-3 w-3" /> : null}
+      {filled ? "Listo" : "Requerido"}
+    </span>
+  )
+
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <Card className="border-sky-100 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+    <div className="container mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-10">
+      <Card className="border-slate-200/70 bg-slate-50/40 shadow-sm dark:border-slate-800/80 dark:bg-slate-900/60">
         <CardHeader>
           <CardTitle className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Crear usuario privilegiado
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+        <CardContent className="space-y-6 text-sm text-slate-600 dark:text-slate-300">
           <p>
             Los super administradores globales pueden crear usuarios con rol <strong>ADMIN</strong> o
             <strong> SUPER_ADMIN_ORG</strong>. Luego, desde la vista de detalle de la organizacion,
             asigna a estos usuarios como super admin unico para el tenant correspondiente.
           </p>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid gap-5 sm:grid-cols-2">
               <div className="sm:col-span-2 space-y-2">
-                <Label htmlFor="email">Correo electronico</Label>
+                <Label htmlFor="email" className="flex items-center">
+                  Correo electronico
+                  {renderRequiredChip(emailValid)}
+                </Label>
                 <Input
                   id="email"
                   type="email"
@@ -195,18 +226,37 @@ export default function SuperUsersAdminPage() {
                   placeholder="usuario@empresa.com"
                   required
                 />
+                {showErrors && !emailValid ? (
+                  <p className="inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Ingresa un correo valido.
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="username">Nombre de usuario (opcional)</Label>
+                <Label htmlFor="username" className="flex items-center">
+                  Nombre de usuario
+                  {renderRequiredChip(usernameValid)}
+                </Label>
                 <Input
                   id="username"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   placeholder="usuario"
+                  required
                 />
+                {showErrors && !usernameValid ? (
+                  <p className="inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    El nombre de usuario debe tener al menos 3 caracteres.
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Contraseña</Label>
+                <Label htmlFor="password" className="flex items-center">
+                  Contrasena
+                  {renderRequiredChip(passwordValid)}
+                </Label>
                 <Input
                   id="password"
                   type="password"
@@ -215,9 +265,18 @@ export default function SuperUsersAdminPage() {
                   placeholder="Minimo 8 caracteres"
                   required
                 />
+                {showErrors && !passwordValid ? (
+                  <p className="inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    La contrasena debe tener al menos 8 caracteres.
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="role">Rol</Label>
+                <Label htmlFor="role" className="flex items-center">
+                  Rol
+                  {renderRequiredChip(roleValid)}
+                </Label>
                 <Select value={role} onValueChange={(value) => setRole(value as typeof role)}>
                   <SelectTrigger id="role">
                     <SelectValue placeholder="Selecciona un rol" />
@@ -232,8 +291,11 @@ export default function SuperUsersAdminPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="organizationId">
+                <Label htmlFor="organizationId" className="flex items-center">
                   {requiresOrganizationSelection ? "Organizacion" : "Organizacion (opcional)"}
+                  {requiresOrganizationSelection
+                    ? renderRequiredChip(organizationValid)
+                    : null}
                 </Label>
                 <Select
                   value={organizationSelectValue === "" ? undefined : organizationSelectValue}
@@ -268,7 +330,12 @@ export default function SuperUsersAdminPage() {
                     )}
                   </SelectContent>
                 </Select>
-                {requiresOrganizationSelection && !organizationsLoading && organizations.length === 0 ? (
+                {requiresOrganizationSelection && showErrors && !organizationValid ? (
+                  <p className="inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Selecciona una organizacion.
+                  </p>
+                ) : requiresOrganizationSelection && !organizationsLoading && organizations.length === 0 ? (
                   <p className="text-xs text-red-600">Crea una organizacion antes de asignarla.</p>
                 ) : null}
               </div>
@@ -283,7 +350,11 @@ export default function SuperUsersAdminPage() {
               </div>
             </div>
             <CardFooter className="px-0 pt-4">
-              <Button type="submit" disabled={!canSubmit || submitting} className="w-full sm:w-auto">
+              <Button
+                type="submit"
+                disabled={!canSubmit || submitting}
+                className="w-full cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-70 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600 sm:w-auto"
+              >
                 {submitting ? "Creando usuario..." : "Crear usuario"}
               </Button>
             </CardFooter>

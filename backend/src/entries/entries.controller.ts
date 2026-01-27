@@ -68,6 +68,19 @@ export class EntriesController {
         total: number;
         fechaEmision: Date;
       };
+      guide?: {
+        serie?: string;
+        correlativo?: string;
+        fechaEmision?: string;
+        fechaEntregaTransportista?: string;
+        motivoTraslado?: string;
+        puntoPartida?: string;
+        puntoLlegada?: string;
+        destinatario?: string;
+        pesoBrutoUnidad?: string;
+        pesoBrutoTotal?: string;
+        transportista?: string;
+      };
     },
     @CurrentTenant('organizationId') organizationId: number | null | undefined,
   ) {

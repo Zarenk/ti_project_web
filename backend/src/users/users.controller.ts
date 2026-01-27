@@ -67,14 +67,65 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, GlobalSuperAdminGuard)
   @Post('admin/create')
   async createManagedUser(@Body() dto: CreateManagedUserDto) {
-    return this.usersService.register({
-      email: dto.email,
-      username: dto.username,
-      password: dto.password,
-      role: dto.role as UserRole,
-      status: dto.status ?? 'ACTIVO',
-      organizationId: dto.organizationId ?? null,
-    });
+    return this.usersService.register(
+      {
+        email: dto.email,
+        username: dto.username,
+        password: dto.password,
+        role: dto.role as UserRole,
+        status: dto.status ?? 'ACTIVO',
+        organizationId: dto.organizationId ?? null,
+      },
+      { bypassQuota: true },
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, TenantContextGuard)
+  @Post('manage/create')
+  async createManagedUserScoped(
+    @Body() dto: CreateManagedUserDto,
+    @CurrentTenant() tenant: TenantContext | null,
+    @Request() req: ExpressRequest,
+  ) {
+    const normalizedRole = (req.user?.role ?? '')
+      .toString()
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '_');
+    const isGlobal =
+      (tenant?.isGlobalSuperAdmin ?? false) ||
+      normalizedRole === 'SUPER_ADMIN_GLOBAL' ||
+      normalizedRole === 'SUPER_ADMIN';
+    const isOrg =
+      (tenant?.isOrganizationSuperAdmin ?? false) ||
+      normalizedRole === 'SUPER_ADMIN_ORG' ||
+      normalizedRole === 'SUPER_ADMIN';
+
+    if (!isGlobal && !isOrg) {
+      throw new ForbiddenException(
+        'Solo los super administradores pueden crear usuarios.',
+      );
+    }
+
+    const organizationId = isGlobal
+      ? dto.organizationId ?? tenant?.organizationId ?? null
+      : tenant?.organizationId ?? null;
+
+    if (!organizationId) {
+      throw new ForbiddenException('Organization scope required');
+    }
+
+    return this.usersService.register(
+      {
+        email: dto.email,
+        username: dto.username,
+        password: dto.password,
+        role: dto.role as UserRole,
+        status: dto.status ?? 'ACTIVO',
+        organizationId,
+      },
+      { bypassQuota: isGlobal },
+    );
   }
 
   // Registro público de usuarios desde la web

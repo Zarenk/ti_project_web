@@ -13,7 +13,7 @@ import { useOptionalTenantFeatures } from "@/context/tenant-features-context"
 import { DashboardCompanyName } from "@/app/dashboard/dashboard-company-name"
 
 const STORAGE_PREFIX = "trial-banner:v1"
-const VERTICAL_NOTICE_STORAGE_PREFIX = "vertical-notice:v1"
+const VERTICAL_NOTICE_STORAGE_PREFIX = "vertical-notice:v2"
 const VERTICAL_NOTICE_EVENT = "vertical-change:notice"
 const MIGRATION_BANNER_STORAGE_PREFIX = "migration-banner:v1"
 const MIGRATION_ASSISTANT_PATH = "/dashboard/products/migration"

@@ -98,6 +98,19 @@ export class EntriesService {
         total: number;
         fechaEmision: Date;
       };
+      guide?: {
+        serie?: string;
+        correlativo?: string;
+        fechaEmision?: string;
+        fechaEntregaTransportista?: string;
+        motivoTraslado?: string;
+        puntoPartida?: string;
+        puntoLlegada?: string;
+        destinatario?: string;
+        pesoBrutoUnidad?: string;
+        pesoBrutoTotal?: string;
+        transportista?: string;
+      };
     },
     organizationIdFromContext?: number | null,
   ) {
@@ -281,6 +294,18 @@ export class EntriesService {
             igvRate,
             organizationId,
             referenceId: data.referenceId ?? null,
+            guiaSerie: data.guide?.serie ?? null,
+            guiaCorrelativo: data.guide?.correlativo ?? null,
+            guiaFechaEmision: data.guide?.fechaEmision ?? null,
+            guiaFechaEntregaTransportista:
+              data.guide?.fechaEntregaTransportista ?? null,
+            guiaMotivoTraslado: data.guide?.motivoTraslado ?? null,
+            guiaPuntoPartida: data.guide?.puntoPartida ?? null,
+            guiaPuntoLlegada: data.guide?.puntoLlegada ?? null,
+            guiaDestinatario: data.guide?.destinatario ?? null,
+            guiaPesoBrutoUnidad: data.guide?.pesoBrutoUnidad ?? null,
+            guiaPesoBrutoTotal: data.guide?.pesoBrutoTotal ?? null,
+            guiaTransportista: data.guide?.transportista ?? null,
             details: {
               create: verifiedProducts.map((product) => ({
                 productId: product.productId,

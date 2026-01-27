@@ -151,6 +151,14 @@ export async function handleFormSubmission({
 
     console.log("Productos actualizados:", updatedProducts);
 
+    const hasInvoice = [
+      data.serie,
+      data.nroCorrelativo,
+      data.comprobante,
+      data.total_comprobante,
+      data.fecha_emision_comprobante,
+    ].some((value: any) => value && String(value).trim().length > 0);
+
     const totalFromInput = parseMonetaryAmount(data.total_comprobante);
     const fallbackDetailsTotal = selectedProducts.reduce(
       (sum: number, product: any) => sum + (Number(product.price) || 0) * (Number(product.quantity) || 0),
@@ -169,14 +177,36 @@ export async function handleFormSubmission({
       paymentTerm: data.payment_method, // Contado/Crédito para asientos contables
       details: updatedProducts,
       totalGross: totalFromInput,
-      invoice: {
-        serie: data.serie,
-        nroCorrelativo: data.nroCorrelativo,
-        tipoComprobante: data.comprobante,
-        tipoMoneda: data.tipo_moneda,
-        total: totalFromInput ?? fallbackDetailsTotal,
-        fechaEmision: new Date(data.fecha_emision_comprobante),
-      },
+      invoice: hasInvoice
+        ? {
+            serie: data.serie,
+            nroCorrelativo: data.nroCorrelativo,
+            tipoComprobante: data.comprobante,
+            tipoMoneda: data.tipo_moneda,
+            total: totalFromInput ?? fallbackDetailsTotal,
+            fechaEmision: new Date(data.fecha_emision_comprobante),
+          }
+        : undefined,
+
+      guide: (() => {
+        const guideValues = {
+          serie: data.guia_serie,
+          correlativo: data.guia_correlativo,
+          fechaEmision: data.guia_fecha_emision,
+          fechaEntregaTransportista: data.guia_fecha_entrega_transportista,
+          motivoTraslado: data.guia_motivo_traslado,
+          puntoPartida: data.guia_punto_partida,
+          puntoLlegada: data.guia_punto_llegada,
+          destinatario: data.guia_destinatario,
+          pesoBrutoUnidad: data.guia_peso_bruto_unidad,
+          pesoBrutoTotal: data.guia_peso_bruto_total,
+          transportista: data.guia_transportista,
+        };
+        const hasGuide = Object.values(guideValues).some(
+          (value) => value && String(value).trim().length > 0,
+        );
+        return hasGuide ? guideValues : undefined;
+      })(),
     };
 
     const createdEntry = await createEntry(payload);

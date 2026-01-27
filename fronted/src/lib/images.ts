@@ -32,6 +32,10 @@ export function resolveImageUrl(path?: string): string {
   // Prefix backend only for upload paths
   if (path.startsWith("/uploads")) return `${backend}${path}`;
   if (path.startsWith("uploads/")) return `${backend}/${path}`;
+  if (path.includes("/uploads/")) {
+    const uploadsIndex = path.indexOf("/uploads/");
+    return `${backend}${path.slice(uploadsIndex)}`;
+  }
 
   // Otherwise return as-is
   return path;

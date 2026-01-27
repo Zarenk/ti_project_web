@@ -2115,7 +2115,7 @@ const VariantRowItem = memo(function VariantRowItem({
                       </div>
                     )}
 
-                    <div className="flex flex-col pt-4 lg:col-start-3 lg:row-start-5 lg:pl-2">
+                    <div className="flex flex-col pt-4 lg:col-span-3 lg:col-start-1 lg:row-start-5">
                       <Label className="py-3 font-semibold">
                         Imagenes
                         {renderOptionalChip(hasImages)}

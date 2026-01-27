@@ -4,7 +4,7 @@ import {
   IsString,
   Min,
   IsDateString,
-  IsBoolean,
+  IsBooleanString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -38,6 +38,18 @@ export class QueryActivityDto {
   action?: string;
 
   @IsOptional()
+  @IsString()
+  severity?: string;
+
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @IsOptional()
+  @IsString()
+  sortDir?: string;
+
+  @IsOptional()
   @IsDateString()
   dateFrom?: string;
 
@@ -46,7 +58,18 @@ export class QueryActivityDto {
   dateTo?: string;
 
   @IsOptional()
-  @Type(() => Boolean)
-  @IsBoolean()
+  @IsBooleanString()
   excludeContextUpdates?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  actionLimit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  entityLimit?: number;
 }

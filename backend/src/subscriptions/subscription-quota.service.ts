@@ -1,5 +1,6 @@
-import {
+﻿import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -150,7 +151,7 @@ export class SubscriptionQuotaService {
             ? 'comprobantes'
             : 'almacenamiento';
       throw new BadRequestException(
-        `Has alcanzado el límite de ${name} para tu plan.`,
+        `Has alcanzado el lÃ­mite de ${name} para tu plan.`,
       );
     }
   }
@@ -199,8 +200,8 @@ export class SubscriptionQuotaService {
     });
 
     if (!subscription) {
-      throw new NotFoundException(
-        'No se encontró una suscripción para la organización actual.',
+      throw new ForbiddenException(
+        'No hay una suscripcion activa para la organizacion. Contacta al administrador global para habilitarla.',
       );
     }
 
@@ -299,7 +300,7 @@ export class SubscriptionQuotaService {
     });
     if (!subscription) {
       throw new NotFoundException(
-        `No se encontrИ la suscripciИn ${subscriptionId}`,
+        `No se encontro la suscripcion ${subscriptionId}. Verifica el ID o si fue eliminada.`,
       );
     }
     const metadata = this.coerceJsonRecord(subscription.metadata);
@@ -335,7 +336,7 @@ export class SubscriptionQuotaService {
     });
     if (!subscription) {
       throw new NotFoundException(
-        `No se encontrИ la suscripciИn ${subscriptionId}`,
+        `No se encontro la suscripcion ${subscriptionId}. Verifica el ID o si fue eliminada.`,
       );
     }
     const metadata = this.coerceJsonRecord(subscription.metadata);
@@ -362,3 +363,5 @@ export class SubscriptionQuotaService {
     return {};
   }
 }
+
+

@@ -15,6 +15,19 @@ export async function createEntry(data: {
   paymentTerm?: 'CASH' | 'CREDIT';
   details: { productId: number; quantity: number; price: number; priceInSoles: number }[];
   invoice?: { serie: string; nroCorrelativo: string; tipoComprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
+  guide?: {
+    serie?: string;
+    correlativo?: string;
+    fechaEmision?: string;
+    fechaEntregaTransportista?: string;
+    motivoTraslado?: string;
+    puntoPartida?: string;
+    puntoLlegada?: string;
+    destinatario?: string;
+    pesoBrutoUnidad?: string;
+    pesoBrutoTotal?: string;
+    transportista?: string;
+  };
   referenceId?: string;
 }) {
     try{

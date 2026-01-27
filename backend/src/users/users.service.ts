@@ -270,14 +270,17 @@ export class UsersService {
     return { message: 'Logged out' };
   }
 
-  async register(data: {
-    email: string;
-    username?: string;
-    password: string;
-    role: string;
-    status?: string;
-    organizationId?: number | null;
-  }) {
+  async register(
+    data: {
+      email: string;
+      username?: string;
+      password: string;
+      role: string;
+      status?: string;
+      organizationId?: number | null;
+    },
+    options?: { bypassQuota?: boolean },
+  ) {
     logOrganizationContext({
       service: UsersService.name,
       operation: 'register',
@@ -300,7 +303,7 @@ export class UsersService {
       throw new BadRequestException('El nombre de usuario ya está registrado');
     }
 
-    if (data.organizationId) {
+    if (data.organizationId && !options?.bypassQuota) {
       await this.quotaService.ensureQuota(data.organizationId, 'users', 1);
     }
 

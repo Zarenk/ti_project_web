@@ -997,6 +997,17 @@ model Entry {
   igvRate      Decimal            @default(0.18)
   pdfUrl       String?
   guiaUrl      String? // URL del PDF de la guia de remision
+  guiaSerie    String?
+  guiaCorrelativo String?
+  guiaFechaEmision String?
+  guiaFechaEntregaTransportista String?
+  guiaMotivoTraslado String?
+  guiaPuntoPartida String?
+  guiaPuntoLlegada String?
+  guiaDestinatario String?
+  guiaPesoBrutoUnidad String?
+  guiaPesoBrutoTotal String?
+  guiaTransportista String?
   organizationId Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

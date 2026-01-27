@@ -99,21 +99,21 @@ type Props = {
 
 const VERTICAL_EFFECT_MESSAGES: Partial<Record<VerticalName, string>> = {
   GENERAL:
-    "Los formularios vuelven al esquema general. Los campos extra del vertical anterior se ocultarán.",
+    "Los formularios vuelven al esquema general. Los campos extra del vertical anterior se ocultaran.",
   COMPUTERS:
-    "Los formularios mostrar n la secci n de especificaciones para computadoras y laptops.",
+    "Los formularios van a mostrar la seccion de especificaciones para computadoras y laptops.",
   RETAIL:
-    "Los formularios de productos e inventario ahora solicitarán talla y color por cada variante.",
+    "Los formularios de productos e inventario ahora solicitaran talla y color por cada variante.",
   RESTAURANTS:
-    "Se habilitarán módulos de mesas y cocina. Configura estaciones y tiempos de preparación.",
+    "Se habilitaran modulos de mesas y cocina. Configura estaciones y tiempos de preparacion.",
   SERVICES:
-    "El inventario pasa a solo lectura y se prioriza la gestión de citas y proyectos.",
+    "El inventario pasa a solo lectura y se prioriza la gestion de citas y proyectos.",
   MANUFACTURING:
-    "Se activan órdenes de trabajo, BOM y paneles de producción.",
+    "Se activan ordenes de trabajo, BOM y paneles de produccion.",
 }
 
 const MIGRATION_ASSISTANT_PATH = "/dashboard/products/migration"
-const VERTICAL_NOTICE_STORAGE_PREFIX = "vertical-notice:v1"
+const VERTICAL_NOTICE_STORAGE_PREFIX = "vertical-notice:v2"
 const VERTICAL_NOTICE_EVENT = "vertical-change:notice"
 const REFRESH_EVENTS = [
   VERTICAL_CONFIG_INVALIDATE_EVENT,
