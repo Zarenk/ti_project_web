@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useForm } from 'react-hook-form'
 import { checkSeries, processPDF } from '../entries.api'
@@ -44,11 +44,11 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTenantSelection } from '@/context/tenant-selection-context'
 
-// Función para obtener el userId del token JWT almacenado en localStorage
+// FunciÃ³n para obtener el userId del token JWT almacenado en localStorage
 async function getUserIdFromToken(): Promise<number | null> {
   const token = await getAuthToken();
   if (!token) {
-    console.error('No se encontró un token de autenticación');
+    console.error('No se encontrÃ³ un token de autenticaciÃ³n');
     return null;
   }
 
@@ -154,7 +154,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const categoryValue = form.watch('category_name');
   const initialCurrency = (form.getValues("tipo_moneda") as 'USD' | 'PEN') || 'PEN';
 
-  // Estado para manejar el envío del formulario
+  // Estado para manejar el envÃ­o del formulario
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingProviders, setLoadingProviders] = useState(true);
@@ -204,10 +204,10 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   // MODAL PARA AGREGAR SERIES
   const [openSeriesModal, setOpenSeriesModal] = useState<number | null>(null);
  
-  // Estado para controlar el diálogo de confirmación del boton REGISTRAR VENTA
+  // Estado para controlar el diÃ¡logo de confirmaciÃ³n del boton REGISTRAR VENTA
   const [isDialogOpen, setIsDialogOpen] = useState(false);
  
-  // Función para manejar el envío del formulario
+  // FunciÃ³n para manejar el envÃ­o del formulario
   const getAllSeriesFromDataTable = (): string[] => {
     // Suponiendo que `selectedProducts` contiene los productos en el DataTable
     return selectedProducts.flatMap((product) => product.series || []);
@@ -222,7 +222,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   //
 
   // ALERT DIALOG PARA AGREGAR TIENDAS
-  const [isDialogOpenStore, setIsDialogOpenStore] = useState(false); // Controla la apertura del diálogo
+  const [isDialogOpenStore, setIsDialogOpenStore] = useState(false); // Controla la apertura del diÃ¡logo
   //
 
   // COMBOBOX DE PRODUCTOS
@@ -250,7 +250,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     return generated;
   };
 
-  // Función para agregar un producto al datatable
+  // FunciÃ³n para agregar un producto al datatable
   const [selectedProducts, setSelectedProducts] = useState<
     { id: number; name: string; price: number; priceSell: number; quantity: number; category_name: string, series?: string[], newSeries?: string }[]
   >([]);
@@ -271,8 +271,28 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [isNewInvoiceBoolean, setIsNewInvoiceBoolean] = useState(false);
   const [showInvoiceFields, setShowInvoiceFields] = useState(false);
+  const invoicePreviewUrl = useMemo(
+    () => (pdfFile ? URL.createObjectURL(pdfFile) : null),
+    [pdfFile],
+  );
+  const guidePreviewUrl = useMemo(
+    () => (pdfGuiaFile ? URL.createObjectURL(pdfGuiaFile) : null),
+    [pdfGuiaFile],
+  );
 
-  // Estado para manejar el diálogo de confirmación
+  useEffect(() => {
+    return () => {
+      if (invoicePreviewUrl) URL.revokeObjectURL(invoicePreviewUrl);
+    };
+  }, [invoicePreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (guidePreviewUrl) URL.revokeObjectURL(guidePreviewUrl);
+    };
+  }, [guidePreviewUrl]);
+
+  // Estado para manejar el diÃ¡logo de confirmaciÃ³n
   const handleConfirm = async () => {
     if (isSubmitting) return;
     setIsDialogOpen(false); // Cierra el modal inmediatamente
@@ -299,17 +319,17 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       try {
         const result = await checkSeries(serial.trim());
         if (result.exists) {
-          toast.error(`La serie "${serial}" ya está asociada a otro producto en el sistema.`);
+          toast.error(`La serie "${serial}" ya estÃ¡ asociada a otro producto en el sistema.`);
           return false; // Detener el proceso si se encuentra una serie duplicada
         }
       } catch (error) {
         console.error(`Error al verificar la serie "${serial}":`, error);
-        toast.error(`Error al verificar la serie "${serial}". Inténtalo nuevamente.`);
+        toast.error(`Error al verificar la serie "${serial}". IntÃ©ntalo nuevamente.`);
         return false; // Detener el proceso si ocurre un error
       }
     }
   
-    return true; // Todas las series son válidas
+    return true; // Todas las series son vÃ¡lidas
   };
   //
 
@@ -350,7 +370,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
     const currencyLabels: Record<string, { singular: string; plural: string }> = {
       PEN: { singular: 'SOL', plural: 'SOLES' },
-      USD: { singular: 'DÓLAR AMERICANO', plural: 'DÓLARES AMERICANOS' },
+      USD: { singular: 'DÃ“LAR AMERICANO', plural: 'DÃ“LARES AMERICANOS' },
       EUR: { singular: 'EURO', plural: 'EUROS' }
     };
 
@@ -443,7 +463,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
           if (!exchangeRate || exchangeRate <= 0) {
             toast.error(
-              'No se pudo obtener un tipo de cambio válido para convertir a dólares.'
+              'No se pudo obtener un tipo de cambio vÃ¡lido para convertir a dÃ³lares.'
             );
             return false;
           }
@@ -489,7 +509,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           form.setValue('priceSell', typeof convertedPriceSell === 'number' ? convertedPriceSell : 0, { shouldValidate: true });
 
           setTipoCambioActual(exchangeRate);
-          toast.success('Los precios se actualizaron a dólares.');
+          toast.success('Los precios se actualizaron a dÃ³lares.');
         } else if (currency === 'USD' && newCurrency === 'PEN') {
           if (!exchangeRate || exchangeRate <= 0) {
             exchangeRate = await getLatestExchangeRateByCurrency('USD');
@@ -497,7 +517,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
           if (!exchangeRate || exchangeRate <= 0) {
             toast.error(
-              'No se pudo obtener un tipo de cambio válido para convertir a soles.'
+              'No se pudo obtener un tipo de cambio vÃ¡lido para convertir a soles.'
             );
             return false;
           }
@@ -598,7 +618,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     setPendingCurrency(null);
   };
 
-  // Función para eliminar un producto del datatable
+  // FunciÃ³n para eliminar un producto del datatable
   const removeProduct = (id: number) => {
     setSelectedProducts((prev) => prev.filter((product) => product.id !== id));
   };
@@ -606,8 +626,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   //handlesubmit para manejar los datos y el ingreso de los productos
   const onSubmit = handleSubmit(async (data) => {
-    if (isSubmitting) return; // ✅ Evita clicks repetidos
-    setIsSubmitting(true); // ✅ Bloquea nuevos intentos
+    if (isSubmitting) return; // âœ… Evita clicks repetidos
+    setIsSubmitting(true); // âœ… Bloquea nuevos intentos
     try {
       const success = await handleFormSubmission({
         data,
@@ -630,7 +650,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
         entryReferenceIdRef.current = null;
       }
     } finally {
-      setIsSubmitting(false); // ✅ Libera el botón cuando termina
+      setIsSubmitting(false); // âœ… Libera el botÃ³n cuando termina
     }
   });
 
@@ -656,22 +676,22 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     let categoryName = form.getValues("category_name");
 
     if (isNewCategoryBoolean) {
-      // Si es una nueva categoría, usa el valor del input
+      // Si es una nueva categorÃ­a, usa el valor del input
       categoryName = form.getValues("category_name");
       if (!categoryName || categoryName.trim() === "") {
-        toast.error("El nombre de la categoría no puede estar vacío.");
-        console.error("El nombre de la categoría está vacío.");
+        toast.error("El nombre de la categorÃ­a no puede estar vacÃ­o.");
+        console.error("El nombre de la categorÃ­a estÃ¡ vacÃ­o.");
         return;
       }
     } else {
-      // Encuentra el nombre de la categoría correspondiente
+      // Encuentra el nombre de la categorÃ­a correspondiente
       const category = categoriesState.find(
         (cat: any) => cat.id === currentProduct.categoryId
       );
-      categoryName = category?.name || "Sin categoría";
+      categoryName = category?.name || "Sin categorÃ­a";
     }
 
-    // Verifica si el producto ya está en la lista
+    // Verifica si el producto ya estÃ¡ en la lista
     const existingProduct = selectedProducts.find(
       (product) => product.id === currentProduct.id
     );
@@ -696,7 +716,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       );
       toast.success("Cantidad actualizada para el producto existente.");
     } else {
-      // Si el producto no existe, agrégalo
+      // Si el producto no existe, agrÃ©galo
       setSelectedProducts((prev) => [
         ...prev,
         {
@@ -705,7 +725,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           price: currentProduct.price,
           priceSell: Number(form.getValues("priceSell") || currentProduct.priceSell),
           quantity,
-          category_name: categoryName || "Sin categoria", // Incluye el nombre de la categoría
+          category_name: categoryName || "Sin categoria", // Incluye el nombre de la categorÃ­a
           series: [...(series || [])], // Agregar series
         },
       ]);
@@ -729,13 +749,30 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   };
   //
 
+  const handlePreviewInvoice = () => {
+    if (invoicePreviewUrl) {
+      window.open(invoicePreviewUrl, "_blank", "noopener,noreferrer");
+    }
+    setShowInvoiceFields(true);
+    setShowGuideFields(false);
+  };
+
+  const handlePreviewGuide = () => {
+    if (guidePreviewUrl) {
+      window.open(guidePreviewUrl, "_blank", "noopener,noreferrer");
+    }
+    setShowGuideFields(true);
+    setShowInvoiceFields(false);
+  };
+  //
+
   const handlePDFUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     
     if (file) {
 
       if (file.type !== "application/pdf") {
-        toast.error("Por favor, sube un archivo PDF válido.");
+        toast.error("Por favor, sube un archivo PDF vÃ¡lido.");
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
@@ -744,7 +781,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       }
       setPdfFile(file);
       try {
-        const extractedText = await processPDF(file); // Llama a la función de la API
+        const extractedText = await processPDF(file); // Llama a la funciÃ³n de la API
         const provider = detectInvoiceProvider(extractedText);
 
         if (provider === "deltron") {
@@ -757,6 +794,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
         }
         setIsNewInvoiceBoolean(true);
         setShowInvoiceFields(true);
+        setShowGuideFields(false);
         toast.success("Factura subida correctamente.");
       } catch (error) {
         console.error('Error al procesar el archivo PDF:', error);
@@ -794,12 +832,51 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
         processGuideText(extractedText, setSelectedProducts, form.setValue, setCurrency);
         setShowGuideFields(true);
+        setShowInvoiceFields(false);
         toast.success("Guia de remision procesada correctamente.");
       } catch (error) {
         console.error('Error al procesar el archivo PDF:', error);
         toast.error('Error al procesar el archivo PDF');
       }
     }
+  };
+  //
+
+  const handleClearForm = () => {
+    setSelectedProducts([]);
+    setSeries([]);
+    setCurrentProduct(null);
+    setQuantity(1);
+    setValueProduct("");
+    setValueProvider("");
+    setValueStore("");
+    setOpen(false);
+    setOpenProvider(false);
+
+    setPdfFile(null);
+    setPdfGuiaFile(null);
+    setIsNewInvoiceBoolean(false);
+
+    // Restablece la UI al estado por defecto: factura visible, guia oculta
+    setShowInvoiceFields(true);
+    setShowGuideFields(false);
+
+    const today = new Date();
+    setSelectedDate(today);
+    setCreatedAt(today);
+    form.setValue("entry_date", today);
+
+    setCurrency("PEN");
+    setTipoMoneda("PEN");
+    setTipoCambioActual(null);
+
+    form.reset(buildDefaultEntryValues());
+
+    // Limpia los inputs file para evitar archivos "pegados"
+    const invoiceInput = document.getElementById("pdf-upload") as HTMLInputElement | null;
+    if (invoiceInput) invoiceInput.value = "";
+    const guideInput = document.getElementById("pdf-guia-upload") as HTMLInputElement | null;
+    if (guideInput) guideInput.value = "";
   };
   //
 
@@ -957,7 +1034,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     if (series.length > quantity) {
       // Ajustar el array de series para que no exceda la nueva cantidad
       setSeries((prev) => prev.slice(0, quantity));
-      toast.error(`La cantidad de series excedía la nueva cantidad (${quantity}). Se eliminaron las últimas series.`);
+      toast.error(`La cantidad de series excedÃ­a la nueva cantidad (${quantity}). Se eliminaron las Ãºltimas series.`);
     }
   }, [quantity]);
 
@@ -1010,6 +1087,10 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       watch={form.watch}
                       handlePDFUpload={handlePDFUpload}
                       handlePDFGuiaUpload={handlePDFGuiaUpload}
+                      onPreviewInvoice={handlePreviewInvoice}
+                      onPreviewGuide={handlePreviewGuide}
+                      invoicePreviewUrl={invoicePreviewUrl}
+                      guidePreviewUrl={guidePreviewUrl}
                       currency={currency}
                       onCurrencyChange={handleCurrencySelection}
                       showInvoiceFields={showInvoiceFields}
@@ -1017,6 +1098,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                     />
                     <AdditionalInfoSection
                       register={register}
+                      watch={form.watch}
                       selectedDate={selectedDate}
                       setSelectedDate={setSelectedDate}
                       createdAt={createdAt}
@@ -1039,6 +1121,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setProviders={setProviders}
                       setValue={form.setValue}
                       register={register}
+                      watch={form.watch}
                     />
                     <StoreSection
                       openStore={openStore}
@@ -1048,6 +1131,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       stores={stores}
                       setValue={form.setValue}
                       register={register}
+                      watch={form.watch}
                       isDialogOpenStore={isDialogOpenStore}
                       setIsDialogOpenStore={setIsDialogOpenStore}
                       setStores={setStores}
@@ -1112,6 +1196,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       isDialogOpen={isDialogOpen}
                       onSubmit={handleConfirm}
                       form={form}
+                      onClear={handleClearForm}
                       setSelectedProducts={setSelectedProducts}
                       setCurrentProduct={setCurrentProduct}
                       setQuantity={setQuantity}
@@ -1146,14 +1231,14 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
               <AlertDialogTitle>Cambiar moneda</AlertDialogTitle>
               <AlertDialogDescription>
                 {selectedProducts.length > 0
-                  ? `Tienes productos agregados. ¿Deseas actualizar sus precios a ${
+                  ? `Tienes productos agregados. Â¿Deseas actualizar sus precios a ${
                       pendingCurrency === 'USD'
-                        ? 'dólares (USD)'
+                        ? 'dÃ³lares (USD)'
                         : pendingCurrency === 'PEN'
                           ? 'soles (PEN)'
                           : 'la moneda seleccionada'
-                    }? Se usará el tipo de cambio más reciente disponible.`
-                  : '¿Deseas cambiar la moneda seleccionada?'}
+                    }? Se usarÃ¡ el tipo de cambio mÃ¡s reciente disponible.`
+                  : 'Â¿Deseas cambiar la moneda seleccionada?'}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1169,7 +1254,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                 </span>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={8}>
-                Mantén la moneda actual sin aplicar cambios
+                MantÃ©n la moneda actual sin aplicar cambios
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -1215,3 +1300,5 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 }
 
 export default EntriesForm
+
+

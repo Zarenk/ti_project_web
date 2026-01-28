@@ -2,13 +2,62 @@ import { create } from 'xmlbuilder2';
 import { CreateGuideDto } from '../dto/create-guide.dto';
 import { format } from 'date-fns';
 
+type AddressData = {
+  direccion?: string;
+  ubigeo?: string;
+  departamento?: string;
+  provincia?: string;
+  distrito?: string;
+  urbanizacion?: string;
+  paisCodigo?: string;
+};
+
+const appendAddress = (
+  parent: any,
+  data: AddressData | undefined,
+  fallbackText?: string,
+) => {
+  const hasStructured =
+    !!data &&
+    (data.direccion ||
+      data.ubigeo ||
+      data.departamento ||
+      data.provincia ||
+      data.distrito ||
+      data.urbanizacion);
+
+  if (data?.ubigeo) parent.ele('cbc:ID').txt(data.ubigeo).up();
+  if (data?.direccion) parent.ele('cbc:StreetName').txt(data.direccion).up();
+  if (data?.urbanizacion)
+    parent.ele('cbc:CitySubdivisionName').txt(data.urbanizacion).up();
+  if (data?.distrito) parent.ele('cbc:District').txt(data.distrito).up();
+  if (data?.provincia) parent.ele('cbc:CityName').txt(data.provincia).up();
+  if (data?.departamento)
+    parent.ele('cbc:CountrySubentity').txt(data.departamento).up();
+  parent
+    .ele('cac:Country')
+    .ele('cbc:IdentificationCode')
+    .txt(data?.paisCodigo ?? 'PE')
+    .up()
+    .up();
+
+  if (!hasStructured && fallbackText) {
+    parent
+      .ele('cac:AddressLine')
+      .ele('cbc:Line')
+      .txt(fallbackText)
+      .up()
+      .up();
+  }
+};
+
 export function generateDespatchXML(
   dto: CreateGuideDto,
   serie: string,
   correlativo: string,
 ): string {
-  const issueDate = format(new Date(dto.fechaTraslado), 'yyyy-MM-dd');
-  const despatchDate = format(new Date(dto.fechaTraslado), 'yyyy-MM-dd');
+  const issueDateSource = dto.fechaEmision ?? dto.fechaTraslado;
+  const issueDate = format(new Date(issueDateSource), 'yyyy-MM-dd');
 
   const doc = create({ version: '1.0', encoding: 'UTF-8' }).ele(
     'DespatchAdvice',
@@ -24,13 +73,12 @@ export function generateDespatchXML(
     },
   );
 
-  // Firma
+  // Firma (ExtensionContent vacío; se reemplaza en el firmado)
   doc.import(
     create()
       .ele('ext:UBLExtensions')
       .ele('ext:UBLExtension')
       .ele('ext:ExtensionContent')
-      .ele('PlaceholderSignature')
       .up()
       .up()
       .up(),
@@ -47,7 +95,7 @@ export function generateDespatchXML(
     .ele('cac:DespatchSupplierParty')
     .ele('cac:Party')
     .ele('cac:PartyIdentification')
-    .ele('cbc:ID')
+    .ele('cbc:ID', { schemeID: dto.tipoDocumentoRemitente })
     .txt(dto.numeroDocumentoRemitente)
     .up()
     .up()
@@ -63,7 +111,7 @@ export function generateDespatchXML(
     .ele('cac:DeliveryCustomerParty')
     .ele('cac:Party')
     .ele('cac:PartyIdentification')
-    .ele('cbc:ID')
+    .ele('cbc:ID', { schemeID: dto.destinatario.tipoDocumento })
     .txt(dto.destinatario.numeroDocumento)
     .up()
     .up()
@@ -77,15 +125,25 @@ export function generateDespatchXML(
 
   const shipment = doc.ele('cac:Shipment');
   shipment.ele('cbc:ID').txt('1').up();
-  shipment.ele('cbc:HandlingCode').txt(dto.motivoTraslado).up();
-  shipment.ele('cbc:GrossWeightMeasure', { unitCode: 'KGM' }).txt('1.0').up();
+  shipment.ele('cbc:HandlingCode').txt(dto.motivoTrasladoCodigo ?? dto.motivoTraslado).up();
+  shipment
+    .ele('cbc:GrossWeightMeasure', {
+      unitCode: dto.pesoBrutoUnidad ?? 'KGM',
+    })
+    .txt(String(dto.pesoBrutoTotal ?? 1))
+    .up();
+  shipment.ele('cbc:TotalTransportHandlingUnitQuantity').txt('1').up();
+  shipment.ele('cbc:HandlingInstructions').txt(dto.motivoTraslado).up();
 
   const shipmentStage = shipment.ele('cac:ShipmentStage');
-  shipmentStage.ele('cbc:TransportModeCode').txt('01').up();
+  shipmentStage
+    .ele('cbc:TransportModeCode')
+    .txt(dto.modalidadTraslado ?? '01')
+    .up();
   shipmentStage
     .ele('cac:CarrierParty')
     .ele('cac:PartyIdentification')
-    .ele('cbc:ID')
+    .ele('cbc:ID', { schemeID: dto.transportista.tipoDocumento })
     .txt(dto.transportista.numeroDocumento)
     .up()
     .up()
@@ -105,21 +163,31 @@ export function generateDespatchXML(
     .up()
     .up();
 
-  shipment
-    .ele('cac:Delivery')
-    .ele('cac:DeliveryAddress')
-    .ele('cbc:ID')
-    .txt(dto.puntoLlegada)
-    .up()
-    .up()
-    .up();
+  const delivery = shipment.ele('cac:Delivery');
+  const deliveryAddress = delivery.ele('cac:DeliveryAddress');
+  appendAddress(deliveryAddress, {
+    direccion: dto.puntoLlegadaDireccion,
+    ubigeo: dto.puntoLlegadaUbigeo,
+    departamento: dto.puntoLlegadaDepartamento,
+    provincia: dto.puntoLlegadaProvincia,
+    distrito: dto.puntoLlegadaDistrito,
+    urbanizacion: dto.puntoLlegadaUrbanizacion,
+    paisCodigo: dto.puntoLlegadaPaisCodigo,
+  }, dto.puntoLlegada);
+  deliveryAddress.up();
+  delivery.up();
 
-  shipment
-    .ele('cac:OriginAddress')
-    .ele('cbc:ID')
-    .txt(dto.puntoPartida)
-    .up()
-    .up();
+  const originAddress = shipment.ele('cac:OriginAddress');
+  appendAddress(originAddress, {
+    direccion: dto.puntoPartidaDireccion,
+    ubigeo: dto.puntoPartidaUbigeo,
+    departamento: dto.puntoPartidaDepartamento,
+    provincia: dto.puntoPartidaProvincia,
+    distrito: dto.puntoPartidaDistrito,
+    urbanizacion: dto.puntoPartidaUrbanizacion,
+    paisCodigo: dto.puntoPartidaPaisCodigo,
+  }, dto.puntoPartida);
+  originAddress.up();
 
   dto.items.forEach((item, index) => {
     doc
@@ -138,6 +206,11 @@ export function generateDespatchXML(
       .ele('cac:Item')
       .ele('cbc:Description')
       .txt(item.descripcion)
+      .up()
+      .ele('cac:SellersItemIdentification')
+      .ele('cbc:ID')
+      .txt(item.codigo)
+      .up()
       .up()
       .up();
   });

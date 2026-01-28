@@ -1,0 +1,21 @@
+﻿{
+  "tipoDocumentoRemitente": "6",
+  "numeroDocumentoRemitente": "",
+  "razonSocialRemitente": "",
+  "puntoPartida": "",
+  "puntoLlegada": "",
+  "motivoTraslado": "",
+  "fechaTraslado": "",
+  "transportista": {
+    "tipoDocumento": "6",
+    "numeroDocumento": "",
+    "razonSocial": "",
+    "numeroPlaca": ""
+  },
+  "destinatario": {
+    "tipoDocumento": "6",
+    "numeroDocumento": "",
+    "razonSocial": ""
+  },
+  "items": []
+}

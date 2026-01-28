@@ -67,14 +67,17 @@ export async function firmarGuiaUBL(
 ): Promise<string> {
   // Asegurar que el nodo raíz tenga el ID "DespatchAdvice"
 
-  const placeholder = '<PlaceholderSignature/>';
+  const extensionContentPattern =
+    /<ext:ExtensionContent(?:\s*\/>|>\s*<\/ext:ExtensionContent>)/;
 
-  if (!xml.includes(placeholder)) {
-    throw new Error('El marcador de firma no fue encontrado en el XML');
+  if (!extensionContentPattern.test(xml)) {
+    throw new Error('No se encontró el ExtensionContent vacío en el XML');
   }
 
-  const [inicioDigest, finDigest] = xml.split(placeholder);
-  const xmlSinFirma = `${inicioDigest}<ext:ExtensionContent></ext:ExtensionContent>${finDigest}`;
+  const xmlSinFirma = xml.replace(
+    extensionContentPattern,
+    '<ext:ExtensionContent></ext:ExtensionContent>',
+  );
   const digestValue = generateDigest(xmlSinFirma);
 
   const signedInfoXml = buildSignedInfoXmlForGuia(digestValue);
@@ -101,7 +104,10 @@ export async function firmarGuiaUBL(
 
   const firmaXml = firmaDoc.end({ headless: true });
 
-  const xmlFirmado = `${inicioDigest}${firmaXml}${finDigest}`;
+  const xmlFirmado = xml.replace(
+    extensionContentPattern,
+    `<ext:ExtensionContent>${firmaXml}</ext:ExtensionContent>`,
+  );
 
   return xmlFirmado;
 }

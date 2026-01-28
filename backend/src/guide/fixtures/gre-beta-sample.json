@@ -1,0 +1,51 @@
+﻿{
+  "serie": "T001",
+  "correlativo": "00012345",
+  "tipoDocumentoRemitente": "6",
+  "numeroDocumentoRemitente": "20519857538",
+  "razonSocialRemitente": "TECNOLOGIA INFORMATICA EMPRESA INDIVIDUAL DE RESPONSABILIDAD LIMITADA",
+  "puntoPartida": "AV. CORONEL MENDOZA NRO. 1945 INT. K367 AS.C.C MERCADILLO BOLOGNESI - TACNA - TACNA - TACNA",
+  "puntoLlegada": "CAL. CALLE MIGUEL GRAU NRO. 535 (SIGNADO CON LA LETRA B) - MOQUEGUA - MARISCAL NIETO - MOQUEGUA",
+  "motivoTraslado": "Traslado entre establecimientos de la misma empresa",
+  "motivoTrasladoCodigo": "01",
+  "fechaEmision": "2026-01-23T01:37:00-05:00",
+  "fechaTraslado": "2026-01-23",
+  "modalidadTraslado": "01",
+  "pesoBrutoUnidad": "KGM",
+  "pesoBrutoTotal": 5,
+  "puntoPartidaDireccion": "AV. CORONEL MENDOZA NRO. 1945 INT. K367 AS.C.C",
+  "puntoPartidaProvincia": "TACNA",
+  "puntoPartidaDepartamento": "TACNA",
+  "puntoPartidaDistrito": "TACNA",
+  "puntoPartidaPaisCodigo": "PE",
+  "puntoLlegadaDireccion": "CAL. CALLE MIGUEL GRAU NRO. 535 (SIGNADO CON LA LETRA B)",
+  "puntoLlegadaProvincia": "MARISCAL NIETO",
+  "puntoLlegadaDepartamento": "MOQUEGUA",
+  "puntoLlegadaDistrito": "MOQUEGUA",
+  "puntoLlegadaPaisCodigo": "PE",
+  "transportista": {
+    "tipoDocumento": "6",
+    "numeroDocumento": "20609523957",
+    "razonSocial": "EMPRESA DE TRANSPORTES PANAMERICANA SUR MOTAC SOCIEDAD ANONIMA",
+    "numeroPlaca": "AAA-123"
+  },
+  "destinatario": {
+    "tipoDocumento": "6",
+    "numeroDocumento": "20519857538",
+    "razonSocial": "TECNOLOGIA INFORMATICA EMPRESA INDIVIDUAL DE RESPONSABILIDAD LIMITADA"
+  },
+  "items": [
+    {
+      "codigo": "NBLEN83DV00F",
+      "descripcion": "NBG LOQ 15 I7-13 12 512 V6G FR SERIE N: 1S83DV00FHLMMP2T3HJA",
+      "cantidad": 1,
+      "unidadMedida": "NIU"
+    },
+    {
+      "codigo": "ITEM-002",
+      "descripcion": "TECLADO GAMER USB TE4068 BK",
+      "cantidad": 1,
+      "unidadMedida": "NIU"
+    }
+  ]
+}

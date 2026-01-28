@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import {
   AlertDialog,
@@ -10,12 +10,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface ConfirmationDialogProps {
   isDialogOpen: boolean
   setIsDialogOpen: (open: boolean) => void
   onSubmit: () => void
-  isSubmitting: boolean // 🆕 nuevo prop
+  isSubmitting: boolean
 }
 
 export const ConfirmationDialog = ({
@@ -31,23 +32,30 @@ export const ConfirmationDialog = ({
           <AlertDialogTitle>Confirmar Registro</AlertDialogTitle>
         </AlertDialogHeader>
         <AlertDialogDescription>
-          Esta acción registrará el ingreso de productos en el sistema. Por favor, confirma si deseas proceder.
+          Esta accion registrara el ingreso de productos en el sistema. Por favor, confirma si deseas proceder.
         </AlertDialogDescription>
-        <p>¿Estás seguro de que deseas registrar este ingreso?</p>
+        <p>Estas seguro de que deseas registrar este ingreso?</p>
         <AlertDialogFooter>
-          <AlertDialogCancel
-            onClick={() => setIsDialogOpen(false)}
-            title="Cancela el registro y vuelve al formulario"
-          >
-            Cancelar
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={onSubmit}  // No cierres el modal aquí, ya lo cierras dentro de handleConfirm
-            disabled={isSubmitting}
-            title="Confirma y guarda el ingreso de productos"
-          >
-            {isSubmitting ? "Registrando..." : "Confirmar"}
-          </AlertDialogAction>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <AlertDialogCancel onClick={() => setIsDialogOpen(false)}>
+                Cancelar
+              </AlertDialogCancel>
+            </TooltipTrigger>
+            <TooltipContent>Cancela el registro y vuelve al formulario.</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <AlertDialogAction
+                onClick={onSubmit}
+                disabled={isSubmitting}
+                className="cursor-pointer"
+              >
+                {isSubmitting ? 'Registrando...' : 'Confirmar'}
+              </AlertDialogAction>
+            </TooltipTrigger>
+            <TooltipContent>Confirma y guarda el ingreso de productos.</TooltipContent>
+          </Tooltip>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
