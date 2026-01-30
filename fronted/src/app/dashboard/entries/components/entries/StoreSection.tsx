@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React from "react";
+import React, { useState, useRef, useLayoutEffect } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,22 @@ export const StoreSection = ({
     stores.find((store) => normalizeOptionValue(store.name) === normalizedSelectedStore) ?? null;
   const displayedStoreName = selectedStoreOption?.name ?? valueStore ?? "";
   const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const storeTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [storeTriggerWidth, setStoreTriggerWidth] = useState<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const updateWidth = () => {
+      setStoreTriggerWidth(storeTriggerRef.current?.offsetWidth);
+    };
+
+    if (typeof window !== "undefined") {
+      updateWidth();
+      window.addEventListener("resize", updateWidth);
+      return () => window.removeEventListener("resize", updateWidth);
+    }
+
+    return undefined;
+  }, []);
 
   const renderStatusChip = (filled: boolean, optional = false) => (
     <span
@@ -101,22 +117,19 @@ export const StoreSection = ({
           <div className="flex justify-between gap-1">
             <Popover open={openStore} onOpenChange={setOpenStore}>
               <PopoverTrigger asChild>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={openStore}
-                      className="w-[260px] cursor-pointer justify-between transition-colors hover:border-border hover:bg-accent hover:text-foreground"
-                    >
-                      {displayedStoreName || "Seleccione una Tienda..."}
-                      <ChevronsUpDown className="opacity-50" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Selecciona la tienda donde registrar el ingreso.</TooltipContent>
-                </Tooltip>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openStore}
+                  className="w-[260px] cursor-pointer justify-between transition-colors hover:border-border hover:bg-accent hover:text-foreground"
+                  ref={storeTriggerRef}
+                  title="Selecciona la tienda donde registrar el ingreso."
+                >
+                  {displayedStoreName || "Seleccione una Tienda..."}
+                  <ChevronsUpDown className="opacity-50" />
+                </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[260px] p-0">
+              <PopoverContent className="p-0" style={{ width: storeTriggerWidth }}>
                 <Command>
                   <CommandInput placeholder="Buscar tienda..." />
                   <CommandList>

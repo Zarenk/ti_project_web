@@ -118,12 +118,17 @@ export class EntriesService {
       console.log('Datos recibidos en createEntry:', data);
 
       if (data.referenceId) {
-        const existingEntry = await this.prisma.entry.findFirst({
-          where: { referenceId: data.referenceId },
-          include: { details: true },
-        });
-        if (existingEntry) {
-          return existingEntry;
+        try {
+          const existingEntry = await this.prisma.entry.findFirst({
+            where: { referenceId: data.referenceId },
+            include: { details: true },
+          });
+          if (existingEntry) {
+            return existingEntry;
+          }
+        } catch (checkErr) {
+          console.error('Prisma check for existing entry by referenceId failed:', checkErr);
+          // If the check fails (e.g., schema mismatch), continue with creation
         }
       }
       // Normalizar y validar para evitar errores de Prisma por tipos inesperados
@@ -276,49 +281,68 @@ export class EntriesService {
         }
 
         // Crear la entrada y los detalles
+        // Construir el payload dinámicamente para evitar pasar campos que el cliente Prisma
+        // no reconozca (por ejemplo si el cliente no está regenerado tras cambios en schema)
+        const createPayload: any = {
+          storeId: data.storeId,
+          userId: data.userId,
+          providerId: data.providerId,
+          date: normalizedDate,
+          description: data.description,
+          tipoMoneda: data.tipoMoneda,
+          tipoCambioId: data.tipoCambioId,
+          paymentMethod: data.paymentMethod,
+          paymentTerm: paymentTerm as any,
+          serie: data.serie,
+          correlativo: data.correlativo,
+          providerName: data.providerName,
+          totalGross,
+          igvRate,
+          organizationId,
+          referenceId: data.referenceId ?? null,
+          details: {
+            create: verifiedProducts.map((product) => ({
+              productId: product.productId,
+              quantity: Number(product.quantity) || 0,
+              price: Number(product.price) || 0,
+              priceInSoles:
+                (product as any).priceInSoles == null ||
+                (product as any).priceInSoles === ''
+                  ? null
+                  : Number((product as any).priceInSoles),
+            })),
+          },
+        };
+
+        // Añadir datos de guia solo si vienen en el payload del frontend y no son undefined
+        if (data.guide) {
+          const guide = data.guide as any;
+          if (guide.serie !== undefined) createPayload.guiaSerie = guide.serie ?? null;
+          if (guide.correlativo !== undefined)
+            createPayload.guiaCorrelativo = guide.correlativo ?? null;
+          if (guide.fechaEmision !== undefined)
+            createPayload.guiaFechaEmision = guide.fechaEmision ?? null;
+          if (guide.fechaEntregaTransportista !== undefined)
+            createPayload.guiaFechaEntregaTransportista =
+              guide.fechaEntregaTransportista ?? null;
+          if (guide.motivoTraslado !== undefined)
+            createPayload.guiaMotivoTraslado = guide.motivoTraslado ?? null;
+          if (guide.puntoPartida !== undefined)
+            createPayload.guiaPuntoPartida = guide.puntoPartida ?? null;
+          if (guide.puntoLlegada !== undefined)
+            createPayload.guiaPuntoLlegada = guide.puntoLlegada ?? null;
+          if (guide.destinatario !== undefined)
+            createPayload.guiaDestinatario = guide.destinatario ?? null;
+          if (guide.pesoBrutoUnidad !== undefined)
+            createPayload.guiaPesoBrutoUnidad = guide.pesoBrutoUnidad ?? null;
+          if (guide.pesoBrutoTotal !== undefined)
+            createPayload.guiaPesoBrutoTotal = guide.pesoBrutoTotal ?? null;
+          if (guide.transportista !== undefined)
+            createPayload.guiaTransportista = guide.transportista ?? null;
+        }
+
         const entry = await prisma.entry.create({
-          data: {
-            storeId: data.storeId,
-            userId: data.userId,
-            providerId: data.providerId,
-            date: normalizedDate,
-            description: data.description,
-            tipoMoneda: data.tipoMoneda,
-            tipoCambioId: data.tipoCambioId,
-            paymentMethod: data.paymentMethod,
-            paymentTerm: paymentTerm as any,
-            serie: data.serie,
-            correlativo: data.correlativo,
-            providerName: data.providerName,
-            totalGross,
-            igvRate,
-            organizationId,
-            referenceId: data.referenceId ?? null,
-            guiaSerie: data.guide?.serie ?? null,
-            guiaCorrelativo: data.guide?.correlativo ?? null,
-            guiaFechaEmision: data.guide?.fechaEmision ?? null,
-            guiaFechaEntregaTransportista:
-              data.guide?.fechaEntregaTransportista ?? null,
-            guiaMotivoTraslado: data.guide?.motivoTraslado ?? null,
-            guiaPuntoPartida: data.guide?.puntoPartida ?? null,
-            guiaPuntoLlegada: data.guide?.puntoLlegada ?? null,
-            guiaDestinatario: data.guide?.destinatario ?? null,
-            guiaPesoBrutoUnidad: data.guide?.pesoBrutoUnidad ?? null,
-            guiaPesoBrutoTotal: data.guide?.pesoBrutoTotal ?? null,
-            guiaTransportista: data.guide?.transportista ?? null,
-            details: {
-              create: verifiedProducts.map((product) => ({
-                productId: product.productId,
-                quantity: Number(product.quantity) || 0,
-                price: Number(product.price) || 0,
-                priceInSoles:
-                  (product as any).priceInSoles == null ||
-                  (product as any).priceInSoles === ''
-                    ? null
-                    : Number((product as any).priceInSoles),
-              })),
-            },
-          } as any,
+          data: createPayload as any,
           include: { details: true },
         });
 

@@ -28,6 +28,7 @@ export function ProductSelection({
   value,
   setValueProduct,
   products,
+  selectedProducts,
   categories,
   setProducts,
   setCategories,
@@ -252,7 +253,7 @@ export function ProductSelection({
           <Label htmlFor="product-combobox" className="text-sm font-medium">
             Ingrese un producto:
           </Label>          
-          {renderStatusChip(Boolean(displayedProductName))}
+          {renderStatusChip(Boolean(selectedProducts && selectedProducts.length > 0))}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

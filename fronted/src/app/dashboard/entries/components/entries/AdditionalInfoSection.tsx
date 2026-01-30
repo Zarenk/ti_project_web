@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import { CalendarIcon, ChevronDown } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -37,6 +37,22 @@ export function AdditionalInfoSection({
   setValue,
 }: AdditionalInfoSectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const calendarTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const [calendarTriggerWidth, setCalendarTriggerWidth] = useState<number | undefined>(undefined)
+
+  useLayoutEffect(() => {
+    const updateWidth = () => {
+      setCalendarTriggerWidth(calendarTriggerRef.current?.offsetWidth)
+    }
+
+    if (typeof window !== 'undefined') {
+      updateWidth()
+      window.addEventListener('resize', updateWidth)
+      return () => window.removeEventListener('resize', updateWidth)
+    }
+
+    return undefined
+  }, [])
 
   const renderStatusChip = (filled: boolean, optional = false) => (
     <span
@@ -108,25 +124,22 @@ export function AdditionalInfoSection({
             </Label>
             <Popover open={openCalendar} onOpenChange={setOpenCalendar}>
               <PopoverTrigger asChild>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        'w-full cursor-pointer justify-start text-left font-normal transition-colors hover:border-border hover:bg-accent hover:text-foreground',
-                        !selectedDate && 'text-muted-foreground'
-                      )}
-                    >
-                      <CalendarIcon />
-                      {selectedDate
-                        ? format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: es })
-                        : 'Selecciona una fecha'}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Selecciona la fecha de compra.</TooltipContent>
-                </Tooltip>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'w-full cursor-pointer justify-start text-left font-normal transition-colors hover:border-border hover:bg-accent hover:text-foreground',
+                    !selectedDate && 'text-muted-foreground'
+                  )}
+                  ref={calendarTriggerRef}
+                  title="Selecciona la fecha de compra."
+                >
+                  <CalendarIcon />
+                  {selectedDate
+                    ? format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: es })
+                    : 'Selecciona una fecha'}
+                </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[260px] p-0">
+              <PopoverContent className="p-0" style={{ width: calendarTriggerWidth }}>
                 <Calendar
                   mode="single"
                   selected={selectedDate || undefined}

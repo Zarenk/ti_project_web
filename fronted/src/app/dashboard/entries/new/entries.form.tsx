@@ -1144,6 +1144,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       value={value}
                       setValueProduct={setValueProduct}
                       products={products}
+                      selectedProducts={selectedProducts}
                       categories={categoriesState}
                       setProducts={setProducts}
                       setCategories={setCategories}

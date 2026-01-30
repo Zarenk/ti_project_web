@@ -1,6 +1,6 @@
 ﻿// components/entries/ProviderSection.tsx
 "use client";
-import { useState } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +43,22 @@ export function ProviderSection({
     providers.find((provider) => normalizeOptionValue(provider.name) === normalizedSelectedProvider) ?? null;
   const displayedProviderName = selectedProviderOption?.name ?? valueProvider ?? "";
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const providerTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [providerTriggerWidth, setProviderTriggerWidth] = useState<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const updateWidth = () => {
+      setProviderTriggerWidth(providerTriggerRef.current?.offsetWidth);
+    };
+
+    if (typeof window !== "undefined") {
+      updateWidth();
+      window.addEventListener("resize", updateWidth);
+      return () => window.removeEventListener("resize", updateWidth);
+    }
+
+    return undefined;
+  }, []);
 
   const renderStatusChip = (filled: boolean, optional = false) => (
     <span
@@ -97,22 +113,19 @@ export function ProviderSection({
           <div className="flex justify-between gap-1">
             <Popover open={openProvider} onOpenChange={setOpenProvider}>
               <PopoverTrigger asChild>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={openProvider}
-                      className="w-[260px] cursor-pointer justify-between transition-colors hover:border-border hover:bg-accent hover:text-foreground"
-                    >
-                      {displayedProviderName || "Selecciona un proveedor..."}
-                      <ChevronsUpDown className="opacity-50" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Busca y selecciona el proveedor del ingreso.</TooltipContent>
-                </Tooltip>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openProvider}
+                  className="w-[260px] cursor-pointer justify-between transition-colors hover:border-border hover:bg-accent hover:text-foreground"
+                  ref={providerTriggerRef}
+                  title="Busca y selecciona el proveedor del ingreso."
+                >
+                  {displayedProviderName || "Selecciona un proveedor..."}
+                  <ChevronsUpDown className="opacity-50" />
+                </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[260px] p-0">
+              <PopoverContent className="p-0" style={{ width: providerTriggerWidth }}>
                 <Command>
                   <CommandInput placeholder="Buscar proveedor..." />
                   <CommandList>
