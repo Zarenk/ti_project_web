@@ -67,8 +67,9 @@ export async function firmarGuiaUBL(
 ): Promise<string> {
   // Asegurar que el nodo raíz tenga el ID "DespatchAdvice"
 
+  // Usar la última ExtensionContent (firma en 2da UBLExtension)
   const extensionContentPattern =
-    /<ext:ExtensionContent(?:\s*\/>|>\s*<\/ext:ExtensionContent>)/;
+    /<ext:ExtensionContent(?:\s*\/>|>\s*<\/ext:ExtensionContent>)(?![\s\S]*<ext:ExtensionContent)/;
 
   if (!extensionContentPattern.test(xml)) {
     throw new Error('No se encontró el ExtensionContent vacío en el XML');
@@ -93,7 +94,7 @@ export async function firmarGuiaUBL(
 
   const firmaDoc = create().ele('ds:Signature', {
     xmlns: 'http://www.w3.org/2000/09/xmldsig#',
-    Id: 'SignatureKG',
+    Id: 'SignatureSP',
   });
 
   firmaDoc.import(signedInfoNode);

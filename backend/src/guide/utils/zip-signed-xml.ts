@@ -20,7 +20,8 @@ export function zipSignedXmlFromString(
   const finalZipName = `${ruc}-${tipoCpe}-${fileNameWithoutExtension}.zip`;
 
   const zip = new AdmZip();
-  zip.addFile(finalXmlName, Buffer.from(xmlContent, 'utf8'));
+  // Keep ISO-8859-1 bytes to match the XML declaration.
+  zip.addFile(finalXmlName, Buffer.from(xmlContent, 'latin1'));
 
   const zipBuffer = zip.toBuffer();
 

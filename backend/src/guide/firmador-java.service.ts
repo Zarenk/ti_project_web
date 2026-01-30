@@ -24,7 +24,8 @@ export class FirmadorJavaService {
     const outputPath = join(tempDir, `${tempId}-firmado.xml`);
 
     // Escribir XML de entrada
-    fs.writeFileSync(inputPath, xmlString, 'utf-8');
+    // Preserve ISO-8859-1 bytes because the XML declaration uses that encoding.
+    fs.writeFileSync(inputPath, xmlString, 'latin1');
 
     // Ejecutar el .jar
     await execFileAsync('java', ['-jar', this.JAR_PATH, inputPath, outputPath]);
@@ -33,7 +34,7 @@ export class FirmadorJavaService {
       throw new Error('❌ No se generó el XML firmado desde el .jar');
     }
 
-    const signedXml = fs.readFileSync(outputPath, 'utf-8');
+    const signedXml = fs.readFileSync(outputPath, 'latin1');
 
     // Limpieza opcional
     fs.unlinkSync(inputPath);

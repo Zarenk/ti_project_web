@@ -75,7 +75,7 @@ export class GuideService {
     // ðŸ§ª Extraer XML DESDE el ZIP y guardarlo
     const testZip = new AdmZip(zipBuffer);
     const zippedXmlBuffer = testZip.getEntries()[0].getData();
-    const zippedXml = zippedXmlBuffer.toString('utf8');
+    const zippedXml = zippedXmlBuffer.toString('latin1');
     this.persistTraceFiles(
       zippedXml,
       zipBuffer,
@@ -86,7 +86,7 @@ export class GuideService {
     );
 
     // ComparaciÃ³n
-    const originalBuffer = Buffer.from(signedXml, 'utf8');
+    const originalBuffer = Buffer.from(signedXml, 'latin1');
     if (!originalBuffer.equals(zippedXmlBuffer)) {
       console.warn('[WARN] XML dentro del ZIP no es idÃ©ntico al XML firmado.');
     }
@@ -273,7 +273,7 @@ export class GuideService {
     const xmlName = `${traceId}.xml`;
     const zipName = `${traceId}.zip`;
     const xmlPath = path.join(tempDir, xmlName);
-    fs.writeFileSync(xmlPath, signedXml, 'utf8');
+    fs.writeFileSync(xmlPath, signedXml, 'latin1');
 
     if (zipBuffer) {
       const zipPath = path.join(tempDir, zipName);
@@ -387,13 +387,16 @@ export class GuideService {
         }
       }
 
+      const disableSoapFallback =
+        process.env.SUNAT_DISABLE_SOAP_FALLBACK === 'true';
       if (lastError?.response?.status === 404) {
+        if (disableSoapFallback) {
+          throw lastError;
+        }
         const tempDir = path.join(process.cwd(), 'temp', 'gre');
         if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
         const zipPath = path.join(tempDir, fileName);
-        if (!fs.existsSync(zipPath)) {
-          fs.writeFileSync(zipPath, signedZipBuffer);
-        }
+        fs.writeFileSync(zipPath, signedZipBuffer);
         return await sendDespatchToSunat(zipPath, fileName, {
           username,
           password,
