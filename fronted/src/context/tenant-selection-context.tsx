@@ -137,7 +137,7 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
         restoration.reason !== "PREFERENCE_DISABLED" &&
         restoration.source !== "session"
       ) {
-        clearTenantSelection()
+        clearTenantSelection({ silent: true })
         setStatus({
           state: "error",
           message: resolveReasonMessage(restoration.reason),
@@ -222,6 +222,32 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
         setLoading(false)
         return
       }
+
+      if (!isGlobalSuperAdmin) {
+        try {
+          setLoading(true)
+          setStatus({
+            state: "restoring",
+            message: "Restaurando tu espacio de trabajo...",
+          })
+          const summary = await getCurrentTenant()
+          const resolvedOrgId = summary.organization?.id ?? null
+          const resolvedCompanyId =
+            summary.company?.id ?? summary.companies?.[0]?.id ?? null
+          applySelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
+          setStatus({ state: "idle" })
+        } catch {
+          setStatus({
+            state: "offline",
+            message:
+              "Trabajando en modo offline. Algunas funciones pueden no estar disponibles.",
+          })
+        } finally {
+          setLoading(false)
+        }
+        return
+      }
+
       try {
         setLoading(true)
         setStatus({
@@ -250,7 +276,7 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
         setLoading(false)
       }
     },
-    [applySelection, ensureDefaultSelection, userId],
+    [applySelection, ensureDefaultSelection, userId, isGlobalSuperAdmin],
   )
 
   useEffect(() => {

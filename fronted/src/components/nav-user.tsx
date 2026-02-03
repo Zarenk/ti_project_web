@@ -44,9 +44,10 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-  const { logout } = useAuth()
+  const { logout, role } = useAuth()
   const [loggingOut, setLoggingOut] = useState(false)
   const router = useRouter()
+  const isGlobalSuperAdmin = role === "SUPER_ADMIN_GLOBAL"
 
   const handleLogout = async () => {
     if (loggingOut) return
@@ -98,7 +99,7 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={() => router.push("/dashboard/plan")}>
                 <Sparkles />
-                Mi Plan
+                {isGlobalSuperAdmin ? "Ver Planes" : "Mi Plan"}
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

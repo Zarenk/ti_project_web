@@ -7,12 +7,14 @@ import {
   Post,
   UseGuards,
   BadRequestException,
+  Request,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { GlobalSuperAdminGuard } from 'src/tenancy/global-super-admin.guard';
 import { SubscriptionsService } from './subscriptions.service';
 import { AdminPlanMigrationDto } from './dto/admin-plan-migration.dto';
 import { ChangePlanDto } from './dto/change-plan.dto';
+import { AdminComplimentaryDto } from './dto/admin-complimentary.dto';
 
 @UseGuards(JwtAuthGuard, GlobalSuperAdminGuard)
 @Controller('admin/subscriptions')
@@ -44,5 +46,19 @@ export class AdminSubscriptionsController {
     );
 
     return this.subscriptionsService.requestPlanChange(payload);
+  }
+
+  @Post(':orgId/complimentary')
+  async grantComplimentary(
+    @Param('orgId', ParseIntPipe) orgId: number,
+    @Body() dto: AdminComplimentaryDto,
+    @Request()
+    req: { user?: { userId?: number; email?: string; username?: string } },
+  ) {
+    return this.subscriptionsService.grantComplimentarySubscription(orgId, dto, {
+      userId: req.user?.userId ?? null,
+      email: req.user?.email ?? null,
+      username: req.user?.username ?? null,
+    });
   }
 }

@@ -52,6 +52,7 @@ describe('SalesService multi-organization support', () => {
   let accountingHook: { postSale: jest.Mock; postPayment: jest.Mock };
   let sunatService: { sendDocument: jest.Mock };
   let quotaService: { ensureQuota: jest.Mock };
+  let verticalConfig: { getConfig: jest.Mock };
 
   const baseSaleInput = {
     userId: 10,
@@ -133,6 +134,8 @@ describe('SalesService multi-organization support', () => {
       ensureQuota: jest.fn().mockResolvedValue(undefined),
     };
 
+    verticalConfig = { getConfig: jest.fn().mockResolvedValue({}) } as any;
+
     (prepareSaleContext as jest.Mock).mockReset();
     (executeSale as jest.Mock).mockReset();
     (logOrganizationContext as jest.Mock).mockReset();
@@ -145,6 +148,7 @@ describe('SalesService multi-organization support', () => {
       accountingHook as unknown as AccountingHook,
       sunatService as any,
       quotaService as any,
+      verticalConfig as any,
     );
   });
 

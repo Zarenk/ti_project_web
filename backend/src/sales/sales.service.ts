@@ -81,6 +81,7 @@ export class SalesService {
     organizationId?: number | null;
     companyId?: number | null;
     referenceId?: string;
+    isSuperAdmin?: boolean;
   }) {
     const {
       userId,
@@ -94,7 +95,10 @@ export class SalesService {
       organizationId: inputOrganizationId,
       companyId: inputCompanyId,
       referenceId,
+      isSuperAdmin = false,
     } = data;
+
+    this.logger.debug(`[createSale] Received data - isSuperAdmin=${isSuperAdmin}, inputOrganizationId=${inputOrganizationId}`);
 
     if (referenceId) {
       const existingSale = await this.prisma.sales.findFirst({
@@ -142,8 +146,11 @@ export class SalesService {
       metadata: { storeId, userId, clientId: clientIdToUse ?? clientId },
     });
 
+    this.logger.debug(`[createSale] isSuperAdmin=${isSuperAdmin}, organizationId=${organizationId}`);
+
+    // Solo validar cuota si no es super admin global
     if (organizationId) {
-      await this.quotaService.ensureQuota(organizationId, 'invoices', 1);
+      await this.quotaService.ensureQuota(organizationId, 'invoices', 1, isSuperAdmin);
     }
 
     // Validar stock, calcular el total y preparar las asignaciones de inventario
@@ -711,6 +718,83 @@ export class SalesService {
     };
   }
 
+  async getMonthlySalesProfit(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
+    const now = new Date();
+    const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfPreviousMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      1,
+    );
+    const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1);
+
+    const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+
+    const [currentMonthSales, previousMonthSales] = await Promise.all([
+      this.prisma.sales.findMany({
+        where: {
+          ...organizationFilter,
+          createdAt: { gte: startOfCurrentMonth, lte: now },
+        },
+        select: {
+          salesDetails: {
+            select: {
+              quantity: true,
+              price: true,
+              entryDetail: { select: { price: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.sales.findMany({
+        where: {
+          ...organizationFilter,
+          createdAt: { gte: startOfPreviousMonth, lte: endOfPreviousMonth },
+        },
+        select: {
+          salesDetails: {
+            select: {
+              quantity: true,
+              price: true,
+              entryDetail: { select: { price: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const calculateProfit = (sales: any[]) => {
+      return sales.reduce((total, sale) => {
+        return (
+          total +
+          sale.salesDetails.reduce((subtotal: number, detail: any) => {
+            const costPrice = detail.entryDetail?.price ?? 0;
+            const profit = (detail.price - costPrice) * detail.quantity;
+            return subtotal + profit;
+          }, 0)
+        );
+      }, 0);
+    };
+
+    const profitCurrent = calculateProfit(currentMonthSales);
+    const profitPrevious = calculateProfit(previousMonthSales);
+
+    const growthPercentage =
+      profitPrevious > 0
+        ? ((profitCurrent - profitPrevious) / profitPrevious) * 100
+        : null;
+
+    return {
+      total: profitCurrent,
+      growth: growthPercentage,
+    };
+  }
+
   async getRevenueByCategory(
     startDate?: Date,
     endDate?: Date,
@@ -888,6 +972,151 @@ export class SalesService {
         lastSale: stats.lastSale,
       };
     });
+  }
+
+  async getProductsProfitByRange(
+    from?: Date,
+    to?: Date,
+    q?: string,
+    page = 1,
+    pageSize = 25,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const timeZone = 'America/Lima';
+
+    const salesWhere: Prisma.SalesWhereInput = this.buildSalesWhere(
+      organizationId,
+      companyId,
+    );
+
+    let salesIds: number[] = [];
+
+    if (from && to) {
+      const zonedFrom = zonedTimeToUtc(new Date(from), timeZone);
+      const zonedTo = zonedTimeToUtc(endOfDay(new Date(to)), timeZone);
+
+      const salesInRange = await this.prisma.sales.findMany({
+        where: { ...salesWhere, createdAt: { gte: zonedFrom, lte: zonedTo } },
+        select: { id: true },
+      });
+      salesIds = salesInRange.map((s) => s.id);
+    }
+
+    const detailsWhere: Prisma.SalesDetailWhereInput = {};
+    if (salesIds.length > 0) {
+      detailsWhere.salesId = { in: salesIds };
+    } else if (from && to) {
+      // If a range was specified but no sales found, return empty
+      return { items: [], total: 0 };
+    }
+
+    const details = await this.prisma.salesDetail.findMany({
+      where: detailsWhere,
+      include: { entryDetail: true },
+    });
+
+    const statsByProduct: Record<
+      number,
+      { soldQty: number; revenue: number; cost: number }
+    > = {};
+
+    for (const d of details) {
+      if (!statsByProduct[d.productId]) {
+        statsByProduct[d.productId] = { soldQty: 0, revenue: 0, cost: 0 };
+      }
+      statsByProduct[d.productId].soldQty += d.quantity;
+      statsByProduct[d.productId].revenue += d.quantity * d.price;
+      const purchasePrice = d.entryDetail?.price ?? 0;
+      statsByProduct[d.productId].cost += d.quantity * purchasePrice;
+    }
+
+    const productIds = Object.keys(statsByProduct).map((k) => Number(k));
+    if (productIds.length === 0) {
+      return { items: [], total: 0 };
+    }
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+    });
+
+    let items = productIds.map((pid) => {
+      const p = products.find((pp) => pp.id === pid);
+      const s = statsByProduct[pid];
+      const profit = s.revenue - s.cost;
+      return {
+        productId: pid,
+        sku: p?.barcode ?? null,
+        name: p?.name ?? 'Producto desconocido',
+        soldQty: s.soldQty,
+        salePriceAvg: s.soldQty > 0 ? s.revenue / s.soldQty : 0,
+        purchasePriceAvg: s.soldQty > 0 ? s.cost / s.soldQty : 0,
+        revenue: s.revenue,
+        cost: s.cost,
+        profit,
+      };
+    });
+
+    if (q && q.trim().length > 0) {
+      const qq = q.trim().toLowerCase();
+      items = items.filter(
+        (it) =>
+          (it.name || '').toLowerCase().includes(qq) ||
+          (it.sku || '').toLowerCase().includes(qq),
+      );
+    }
+
+    // Sort by profit desc
+    items.sort((a, b) => b.profit - a.profit);
+
+    const total = items.length;
+    const start = (page - 1) * pageSize;
+    const paged = items.slice(start, start + pageSize);
+
+    return { items: paged, total };
+  }
+
+  async getDailyProfitByDateRange(
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const timeZone = 'America/Lima';
+
+    const zonedFrom = zonedTimeToUtc(new Date(from), timeZone);
+    const zonedTo = zonedTimeToUtc(new Date(to), timeZone);
+
+    const sales = await this.prisma.sales.findMany({
+      where: {
+        ...this.buildSalesWhere(organizationId, companyId),
+        createdAt: { gte: zonedFrom, lte: zonedTo },
+      },
+      select: {
+        createdAt: true,
+        salesDetails: { select: { quantity: true, price: true, entryDetail: { select: { price: true } } } },
+      },
+    });
+
+    const profitByDate: Record<string, number> = {};
+
+    for (const sale of sales) {
+      const zonedDate = utcToZonedTime(sale.createdAt, timeZone);
+      const dateKey = formatTz(zonedDate, 'yyyy-MM-dd', { timeZone });
+      for (const d of sale.salesDetails) {
+        const purchase = d.entryDetail?.price ?? 0;
+        const profit = (d.price - purchase) * d.quantity;
+        profitByDate[dateKey] = (profitByDate[dateKey] || 0) + profit;
+      }
+    }
+
+    const days = eachDayOfInterval({ start: from, end: to });
+    const result = days.map((date) => {
+      const dateKey = formatTz(utcToZonedTime(date, timeZone), 'yyyy-MM-dd', { timeZone });
+      return { date: dateKey, profit: profitByDate[dateKey] || 0 };
+    });
+
+    return result;
   }
 
   async getProductReportOptions(
@@ -1616,5 +1845,104 @@ export class SalesService {
       errorMessage: transmission.errorMessage ?? null,
       updatedAt: transmission.updatedAt ?? transmission.createdAt ?? null,
     };
+  }
+
+  async getSalesTotalByRange(
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
+    const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+
+    const result = await this.prisma.sales.aggregate({
+      _sum: { total: true },
+      where: {
+        ...organizationFilter,
+        createdAt: { gte: from, lte: to },
+      },
+    });
+
+    return result._sum.total || 0;
+  }
+
+  async getSalesCountByRange(
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
+    const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+
+    return await this.prisma.sales.count({
+      where: {
+        ...organizationFilter,
+        createdAt: { gte: from, lte: to },
+      },
+    });
+  }
+
+  async getClientStatsByRange(
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
+    const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+
+    const clients = await this.prisma.sales.findMany({
+      where: {
+        ...organizationFilter,
+        createdAt: { gte: from, lte: to },
+      },
+      select: { clientId: true },
+      distinct: ['clientId'],
+    });
+
+    return clients.length;
+  }
+
+  async getSalesProfitByRange(
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
+    const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+
+    const sales = await this.prisma.sales.findMany({
+      where: {
+        ...organizationFilter,
+        createdAt: { gte: from, lte: to },
+      },
+      select: {
+        salesDetails: {
+          select: {
+            quantity: true,
+            price: true,
+            entryDetail: { select: { price: true } },
+          },
+        },
+      },
+    });
+
+    let totalProfit = 0;
+    for (const sale of sales) {
+      for (const detail of sale.salesDetails) {
+        const costPrice = detail.entryDetail?.price ?? 0;
+        const profit = (detail.price - costPrice) * detail.quantity;
+        totalProfit += profit;
+      }
+    }
+
+    return totalProfit;
   }
 }

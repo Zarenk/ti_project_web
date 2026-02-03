@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sessionExpiryInProgressRef = useRef(false)
   const [sessionExpiryOverlay, setSessionExpiryOverlay] = useState(false)
   const lastUserIdRef = useRef<number | null>(null)
-  useUserContextSync(userId)
+  useUserContextSync(userId, role)
   const ensureTenantDefaults = useCallback(async (ownerId?: number | null): Promise<boolean> => {
     try {
       const summary = await getCurrentTenant()

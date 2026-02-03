@@ -11,6 +11,10 @@ import {
   Search,
   ShieldCheck,
   UsersRound,
+  CreditCard,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -20,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Progress } from "@/components/progress"
 
 import {
   assignOrganizationSuperAdmin,
@@ -28,6 +33,10 @@ import {
   type OrganizationResponse,
   type UserSummary,
 } from "../tenancy.api"
+import { fetchSubscriptionSummary } from "@/lib/subscription-summary"
+import type { SubscriptionSummary } from "@/types/subscription"
+import { useTenantSelection } from "@/context/tenant-selection-context"
+import { TENANT_SELECTION_EVENT, type TenantSelectionChangeDetail } from "@/utils/tenant-preferences"
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleString(undefined, {
@@ -35,18 +44,74 @@ const formatDate = (value: string) =>
     timeStyle: "short",
   })
 
+const getSubscriptionStatusColor = (status: string) => {
+  switch (status) {
+    case "ACTIVE":
+      return "border-emerald-600 text-emerald-700 dark:border-emerald-400 dark:text-emerald-300"
+    case "TRIAL":
+      return "border-blue-600 text-blue-700 dark:border-blue-400 dark:text-blue-300"
+    case "PAST_DUE":
+      return "border-amber-600 text-amber-700 dark:border-amber-400 dark:text-amber-300"
+    case "CANCELED":
+      return "border-rose-600 text-rose-700 dark:border-rose-400 dark:text-rose-300"
+    default:
+      return "border-slate-600 text-slate-700 dark:border-slate-400 dark:text-slate-300"
+  }
+}
+
+const getSubscriptionStatusLabel = (status: string) => {
+  switch (status) {
+    case "ACTIVE":
+      return "Activa"
+    case "TRIAL":
+      return "Periodo de prueba"
+    case "PAST_DUE":
+      return "Vencida"
+    case "CANCELED":
+      return "Cancelada"
+    default:
+      return status
+  }
+}
+
+const getSubscriptionStatusIcon = (status: string) => {
+  switch (status) {
+    case "ACTIVE":
+      return <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />
+    case "TRIAL":
+      return <Clock className="size-5 text-blue-600 dark:text-blue-400" />
+    case "PAST_DUE":
+      return <AlertCircle className="size-5 text-amber-600 dark:text-amber-400" />
+    case "CANCELED":
+      return <AlertCircle className="size-5 text-rose-600 dark:text-rose-400" />
+    default:
+      return <CreditCard className="size-5 text-slate-600 dark:text-slate-400" />
+  }
+}
+
 export default function OrganizationDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
   const router = useRouter()
+  const { selection } = useTenantSelection()
   const { id } = usePromise(params)
   const organizationId = Number(id)
+  const [manualSelectionOrgId, setManualSelectionOrgId] = useState<number | null>(null)
+  const isRedirecting =
+    Number.isFinite(organizationId) &&
+    manualSelectionOrgId != null &&
+    selection.orgId === manualSelectionOrgId &&
+    selection.orgId !== organizationId
 
   const [organization, setOrganization] = useState<OrganizationResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null)
+  const [subscriptionLoading, setSubscriptionLoading] = useState(true)
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null)
 
   const [searchTerm, setSearchTerm] = useState("")
   const [searchResults, setSearchResults] = useState<UserSummary[]>([])
@@ -54,6 +119,43 @@ export default function OrganizationDetailPage({
   const [assigningUserId, setAssigningUserId] = useState<number | null>(null)
 
   const latestQueryRef = useRef(0)
+  const didMountRef = useRef(false)
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<TenantSelectionChangeDetail>).detail
+      if (detail?.source !== "manual") {
+        return
+      }
+      const nextOrgId = detail.orgId ?? null
+      setManualSelectionOrgId(nextOrgId)
+      if (nextOrgId != null && nextOrgId !== organizationId) {
+        router.replace(`/dashboard/tenancy/${nextOrgId}`)
+      }
+    }
+    window.addEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
+    return () => window.removeEventListener(TENANT_SELECTION_EVENT, handler as EventListener)
+  }, [organizationId, router])
+
+  useEffect(() => {
+    if (!Number.isFinite(organizationId)) {
+      return
+    }
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
+    if (selection.orgId != null && selection.orgId === organizationId) {
+      setManualSelectionOrgId(null)
+      return
+    }
+    if (
+      manualSelectionOrgId != null &&
+      selection.orgId === manualSelectionOrgId &&
+      selection.orgId !== organizationId
+    ) {
+      router.replace(`/dashboard/tenancy/${selection.orgId}`)
+    }
+  }, [organizationId, selection.orgId, manualSelectionOrgId, router])
 
   const loadOrganization = useCallback(async () => {
     if (!Number.isFinite(organizationId)) {
@@ -80,6 +182,32 @@ export default function OrganizationDetailPage({
   useEffect(() => {
     void loadOrganization()
   }, [loadOrganization])
+
+  const loadSubscription = useCallback(async () => {
+    if (!Number.isFinite(organizationId)) {
+      setSubscriptionError("Identificador de organizacion invalido")
+      setSubscriptionLoading(false)
+      return
+    }
+
+    setSubscriptionLoading(true)
+    setSubscriptionError(null)
+
+    try {
+      const data = await fetchSubscriptionSummary(organizationId)
+      setSubscription(data)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo cargar la suscripcion"
+      setSubscriptionError(message)
+      setSubscription(null)
+    } finally {
+      setSubscriptionLoading(false)
+    }
+  }, [organizationId])
+
+  useEffect(() => {
+    void loadSubscription()
+  }, [loadSubscription])
 
   useEffect(() => {
     const trimmed = searchTerm.trim()
@@ -148,8 +276,43 @@ export default function OrganizationDetailPage({
     return `${organization.superAdmin.username} (${organization.superAdmin.email})`
   }, [organization?.superAdmin])
 
+  const subscriptionExpiredAt = useMemo(() => {
+    if (!subscription) {
+      return null
+    }
+    return (
+      subscription.billing.currentPeriodEnd ??
+      subscription.trial.endsAt ??
+      null
+    )
+  }, [subscription])
+
+  const subscriptionPeriodLabel = useMemo(() => {
+    if (!subscription) {
+      return null
+    }
+    const { status } = subscription.plan
+    if (status === "TRIAL") {
+      const endsAt = subscription.trial.endsAt ?? subscription.billing.currentPeriodEnd
+      return endsAt ? `Finaliza: ${formatDate(endsAt)}` : null
+    }
+    if (status === "ACTIVE") {
+      const endsAt = subscription.billing.currentPeriodEnd
+      return endsAt ? `Renueva: ${formatDate(endsAt)}` : null
+    }
+    return null
+  }, [subscription])
+
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      {isRedirecting ? (
+        <Card className="border-dashed border-slate-200 dark:border-slate-700/60">
+          <CardContent className="flex items-center gap-3 py-6 text-sm text-slate-600 dark:text-slate-300">
+            <Loader2 className="size-4 animate-spin" />
+            Actualizando organizacion seleccionada...
+          </CardContent>
+        </Card>
+      ) : (
       <div className="mb-6 flex items-center gap-2">
         <Button
           variant="ghost"
@@ -163,13 +326,14 @@ export default function OrganizationDetailPage({
           Organizaciones
         </Link>
       </div>
+      )}
 
-      {loading ? (
+      {!isRedirecting && loading ? (
         <div className="space-y-6">
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-48 w-full" />
         </div>
-      ) : error ? (
+      ) : !isRedirecting && error ? (
         <Card className="border-dashed border-rose-200 dark:border-rose-700/60">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-rose-600 dark:text-rose-300">
@@ -184,7 +348,7 @@ export default function OrganizationDetailPage({
             </Button>
           </CardContent>
         </Card>
-      ) : organization ? (
+      ) : !isRedirecting && organization ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <section className="space-y-6">
             <Card>
@@ -201,7 +365,7 @@ export default function OrganizationDetailPage({
                       Codigo
                     </p>
                     <p className="font-medium text-slate-800 dark:text-slate-100">
-                      {organization.code ?? "Ã¢â‚¬â€"}
+                      {organization.code ?? "Sin Codigo"}
                     </p>
                   </div>
                   <div>
@@ -371,6 +535,202 @@ export default function OrganizationDetailPage({
                 </div>
               </CardContent>
             </Card>
+
+            {subscriptionLoading ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-slate-100">
+                    <CreditCard className="size-5 text-sky-600 dark:text-slate-100" />
+                    Suscripción
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                </CardContent>
+              </Card>
+            ) : subscriptionError ? (
+              <Card className="border-dashed border-rose-200 dark:border-rose-700/60">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-rose-600 dark:text-rose-300">
+                    <AlertCircle className="size-5" />
+                    Suscripción
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <p className="text-slate-600 dark:text-slate-300">{subscriptionError}</p>
+                  <Button size="sm" onClick={() => void loadSubscription()}>
+                    Reintentar
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : subscription ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-slate-100">
+                    <CreditCard className="size-5 text-sky-600 dark:text-slate-100" />
+                    Suscripción
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Plan Status */}
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Plan actual
+                      </p>
+                      <div className="text-right">
+                        <Badge
+                          variant="outline"
+                          className={`flex items-center gap-2 ${getSubscriptionStatusColor(
+                            subscription.plan.status,
+                          )}`}
+                        >
+                          {getSubscriptionStatusIcon(subscription.plan.status)}
+                          {getSubscriptionStatusLabel(subscription.plan.status)}
+                        </Badge>
+                        {subscription.plan.status === "PAST_DUE" && subscriptionExpiredAt ? (
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Venció: {formatDate(subscriptionExpiredAt)}
+                          </p>
+                        ) : subscriptionPeriodLabel ? (
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {subscriptionPeriodLabel}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <p className="font-medium text-slate-800 dark:text-slate-100">
+                      {subscription.plan.name}
+                    </p>
+                    {subscription.plan.price && (
+                      <p className="text-sm text-slate-600 dark:text-slate-300">
+                        {subscription.plan.currency} {subscription.plan.price} /{" "}
+                        {subscription.plan.interval === "MONTHLY" ? "mes" : "año"}
+                      </p>
+                    )}
+                    <div className="pt-3">
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href={`/dashboard/account/plan?orgId=${organizationId}&focus=plan#plan-selection`}>
+                          Actualizar suscripcion
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Trial Information */}
+                  {subscription.trial.isTrial && (
+                    <>
+                      <div>
+                        <p className="mb-2 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Periodo de prueba
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Clock className="size-4 text-blue-600 dark:text-blue-400" />
+                          <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                            {subscription.trial.daysLeft !== null && subscription.trial.daysLeft > 0
+                              ? `${subscription.trial.daysLeft} días restantes`
+                              : "Prueba finalizada"}
+                          </span>
+                        </div>
+                        {subscription.trial.endsAt && (
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Finaliza: {formatDate(subscription.trial.endsAt)}
+                          </p>
+                        )}
+                      </div>
+
+                      <Separator />
+                    </>
+                  )}
+
+                  {/* Billing Period */}
+                  {subscription.billing.currentPeriodStart && subscription.billing.currentPeriodEnd && (
+                    <>
+                      <div className="space-y-2">
+                        <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Período de facturación
+                        </p>
+                        <div className="text-sm text-slate-600 dark:text-slate-300">
+                          <p>
+                            Desde: <span className="font-medium">{formatDate(subscription.billing.currentPeriodStart)}</span>
+                          </p>
+                          <p>
+                            Hasta: <span className="font-medium">{formatDate(subscription.billing.currentPeriodEnd)}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <Separator />
+                    </>
+                  )}
+
+                  {/* Quotas */}
+                  <div className="space-y-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Uso de recursos
+                    </p>
+
+                    {/* Users Quota */}
+                    {subscription.quotas.users !== null && (
+                      <div>
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-sm text-slate-700 dark:text-slate-200">
+                            Usuarios
+                          </span>
+                          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                            {subscription.usage.users} / {subscription.quotas.users}
+                          </span>
+                        </div>
+                        <Progress
+                          value={(subscription.usage.users / subscription.quotas.users) * 100}
+                          className="h-2"
+                        />
+                      </div>
+                    )}
+
+                    {/* Invoices Quota */}
+                    {subscription.quotas.invoices !== null && (
+                      <div>
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-sm text-slate-700 dark:text-slate-200">
+                            Facturas
+                          </span>
+                          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                            {subscription.usage.invoices} / {subscription.quotas.invoices}
+                          </span>
+                        </div>
+                        <Progress
+                          value={(subscription.usage.invoices / subscription.quotas.invoices) * 100}
+                          className="h-2"
+                        />
+                      </div>
+                    )}
+
+                    {/* Storage Quota */}
+                    {subscription.quotas.storageMB !== null && (
+                      <div>
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-sm text-slate-700 dark:text-slate-200">
+                            Almacenamiento
+                          </span>
+                          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                            {(subscription.usage.storageMB / 1024).toFixed(2)} GB /{" "}
+                            {(subscription.quotas.storageMB / 1024).toFixed(2)} GB
+                          </span>
+                        </div>
+                        <Progress
+                          value={(subscription.usage.storageMB / subscription.quotas.storageMB) * 100}
+                          className="h-2"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
           </aside>
         </div>
       ) : null}

@@ -53,6 +53,20 @@ export interface SubscriptionSummary {
     lastInvoicePaidAt: string | null
     nextDueDate: string | null
   }
+  complimentary?: {
+    isActive: boolean
+    startsAt: string | null
+    endsAt: string | null
+    grantedAt: string | null
+    durationMonths: number | null
+    planCode: string | null
+    reason: string | null
+    grantedBy: {
+      userId: number | null
+      email: string | null
+      username: string | null
+    } | null
+  } | null
   contacts: {
     primary: {
       name: string

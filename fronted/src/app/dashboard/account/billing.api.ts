@@ -165,6 +165,27 @@ export interface PlanChangeResponse {
   invoiceId?: number | null
 }
 
+export interface ComplimentaryGrantResponse {
+  subscriptionId: number
+  organizationId: number
+  planCode: string
+  currentPeriodEnd: string
+  complimentary: {
+    grantedAt: string
+    startsAt: string
+    endsAt: string
+    durationMonths: number
+    planCode: string
+    planId: number
+    reason: string | null
+    grantedBy: {
+      userId: number | null
+      email: string | null
+      username: string | null
+    }
+  }
+}
+
 export async function requestPlanChange(input: {
   organizationId: number
   planCode: string
@@ -178,6 +199,28 @@ export async function requestPlanChange(input: {
   if (!res.ok) {
     const message = await res.text().catch(() => "No se pudo cambiar el plan")
     throw new Error(message || "No se pudo cambiar el plan")
+  }
+  return res.json()
+}
+
+export async function grantComplimentarySubscription(input: {
+  organizationId: number
+  planCode: string
+  durationMonths: number
+  reason?: string
+}): Promise<ComplimentaryGrantResponse> {
+  const res = await authFetch(`/admin/subscriptions/${input.organizationId}/complimentary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      planCode: input.planCode,
+      durationMonths: input.durationMonths,
+      reason: input.reason,
+    }),
+  })
+  if (!res.ok) {
+    const message = await res.text().catch(() => "No se pudo activar la membresia sin pago")
+    throw new Error(message || "No se pudo activar la membresia sin pago")
   }
   return res.json()
 }

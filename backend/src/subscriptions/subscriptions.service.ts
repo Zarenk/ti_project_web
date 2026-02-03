@@ -21,6 +21,7 @@ import { StartTrialDto } from './dto/start-trial.dto';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { ChangePlanDto, ChangePlanSelfDto } from './dto/change-plan.dto';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
+import { AdminComplimentaryDto } from './dto/admin-complimentary.dto';
 import {
   PaymentProvider,
   CheckoutSessionResult,
@@ -44,6 +45,11 @@ const DEFAULT_TRIAL_DAYS = 14;
 const BILLING_CYCLE_DAYS = 30;
 const SYSTEM_AUDIT_ACTOR = 'subscriptions-service';
 const DUNNING_SCHEDULE_DAYS = [1, 3, 5, 7];
+type ComplimentaryActor = {
+  userId: number | null;
+  email: string | null;
+  username: string | null;
+};
 
 type PaymentWebhookEvent = {
   provider: string;
@@ -320,6 +326,117 @@ export class SubscriptionsService {
       successUrl: dto.successUrl,
       cancelUrl: dto.cancelUrl,
     });
+  }
+
+  async grantComplimentarySubscription(
+    organizationId: number,
+    dto: AdminComplimentaryDto,
+    actor: ComplimentaryActor,
+  ) {
+    if (!Number.isFinite(organizationId) || organizationId <= 0) {
+      throw new BadRequestException('organizationId invalido');
+    }
+
+    const plan = await this.ensurePlan(dto.planCode);
+    await this.ensureOrganization(organizationId);
+
+    const now = new Date();
+    const endsAt = this.addMonths(now, dto.durationMonths);
+    const existing = await this.prisma.subscription.findUnique({
+      where: { organizationId },
+    });
+
+    const metadataBase = this.coerceJsonRecord(existing?.metadata ?? {});
+    const history = Array.isArray(metadataBase.complimentaryHistory)
+      ? [...metadataBase.complimentaryHistory]
+      : [];
+    const grantEntry = {
+      grantedAt: now.toISOString(),
+      startsAt: now.toISOString(),
+      endsAt: endsAt.toISOString(),
+      durationMonths: dto.durationMonths,
+      planCode: plan.code,
+      planId: plan.id,
+      reason: dto.reason ?? null,
+      grantedBy: {
+        userId: actor.userId ?? null,
+        email: actor.email ?? null,
+        username: actor.username ?? null,
+      },
+    };
+
+    const metadata: Record<string, any> = {
+      ...metadataBase,
+      complimentary: {
+        ...grantEntry,
+        active: true,
+      },
+      complimentaryHistory: [...history, grantEntry],
+    };
+    delete metadata.pendingCheckout;
+    delete metadata.pendingPlanChange;
+    delete metadata.cancellationRequest;
+
+    const subscription = await this.prisma.subscription.upsert({
+      where: { organizationId },
+      create: {
+        organizationId,
+        planId: plan.id,
+        status: SubscriptionStatus.ACTIVE,
+        trialEndsAt: null,
+        currentPeriodStart: now,
+        currentPeriodEnd: endsAt,
+        cancelAtPeriodEnd: false,
+        canceledAt: null,
+        metadata: metadata as Prisma.InputJsonObject,
+      },
+      update: {
+        planId: plan.id,
+        status: SubscriptionStatus.ACTIVE,
+        trialEndsAt: null,
+        currentPeriodStart: now,
+        currentPeriodEnd: endsAt,
+        cancelAtPeriodEnd: false,
+        canceledAt: null,
+        metadata: metadata as Prisma.InputJsonObject,
+      },
+    });
+
+    await this.logAuditEvent({
+      action: existing ? AuditAction.UPDATED : AuditAction.CREATED,
+      entityType: 'subscription',
+      entityId: subscription.id.toString(),
+      summary: `Membresia sin pago activada (${dto.durationMonths} meses) para la organizacion ${organizationId}`,
+      diff: {
+        organizationId,
+        planId: plan.id,
+        planCode: plan.code,
+        status: SubscriptionStatus.ACTIVE,
+        startsAt: now.toISOString(),
+        endsAt: endsAt.toISOString(),
+        durationMonths: dto.durationMonths,
+        reason: dto.reason ?? null,
+        grantedBy: grantEntry.grantedBy,
+      },
+    });
+
+    try {
+      await this.quotaService.clearGraceLimits(subscription.id);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudieron limpiar las restricciones de gracia para la suscripcion ${subscription.id}: ${
+          (error as Error)?.message ?? error
+        }`,
+      );
+    }
+
+    return {
+      subscriptionId: subscription.id,
+      organizationId,
+      planCode: plan.code,
+      currentPeriodEnd: endsAt,
+      complimentary: grantEntry,
+    };
   }
 
   async requestCancellation(dto: CancelSubscriptionDto) {
@@ -1261,6 +1378,10 @@ export class SubscriptionsService {
       storageMB: 0,
     };
 
+    const complimentaryMeta = this.normalizeComplimentary(
+      subscriptionMetadata?.complimentary ?? null,
+    );
+
     return {
       organization: orgInfo,
       company: companyInfo,
@@ -1298,6 +1419,7 @@ export class SubscriptionsService {
           lastPaidInvoice?.dueDate?.toISOString() ??
           null,
       },
+      complimentary: complimentaryMeta,
       contacts: {
         primary: primaryContact,
       },
@@ -1308,6 +1430,49 @@ export class SubscriptionsService {
       },
       usage,
     };
+  }
+
+  private normalizeComplimentary(value: unknown) {
+    const raw = this.coerceJsonRecord(value ?? {});
+    if (!raw || Object.keys(raw).length === 0) {
+      return null;
+    }
+    return {
+      isActive: Boolean(raw.active),
+      startsAt: typeof raw.startsAt === 'string' ? raw.startsAt : null,
+      endsAt: typeof raw.endsAt === 'string' ? raw.endsAt : null,
+      grantedAt: typeof raw.grantedAt === 'string' ? raw.grantedAt : null,
+      durationMonths:
+        typeof raw.durationMonths === 'number' ? raw.durationMonths : null,
+      planCode: typeof raw.planCode === 'string' ? raw.planCode : null,
+      reason: typeof raw.reason === 'string' ? raw.reason : null,
+      grantedBy:
+        raw.grantedBy && typeof raw.grantedBy === 'object'
+          ? {
+              userId:
+                typeof (raw.grantedBy as Record<string, unknown>).userId ===
+                'number'
+                  ? (raw.grantedBy as Record<string, unknown>).userId
+                  : null,
+              email:
+                typeof (raw.grantedBy as Record<string, unknown>).email ===
+                'string'
+                  ? (raw.grantedBy as Record<string, unknown>).email
+                  : null,
+              username:
+                typeof (raw.grantedBy as Record<string, unknown>).username ===
+                'string'
+                  ? (raw.grantedBy as Record<string, unknown>).username
+                  : null,
+            }
+          : null,
+    };
+  }
+
+  private addMonths(date: Date, months: number) {
+    const value = new Date(date);
+    value.setMonth(value.getMonth() + months);
+    return value;
   }
 
   private async resolveUserOrganizationId(userId: number) {

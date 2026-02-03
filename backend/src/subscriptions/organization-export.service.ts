@@ -243,6 +243,16 @@ export class OrganizationExportService {
       orderBy: { createdAt: 'desc' },
     });
 
+    const subscriptionMetadata =
+      organization.subscription?.metadata &&
+      typeof organization.subscription.metadata === 'object'
+        ? (organization.subscription.metadata as Record<string, unknown>)
+        : null;
+    const complimentary =
+      subscriptionMetadata && typeof subscriptionMetadata.complimentary === 'object'
+        ? subscriptionMetadata.complimentary
+        : null;
+
     const exportData = {
       organization: {
         id: organization.id,
@@ -252,6 +262,7 @@ export class OrganizationExportService {
         updatedAt: organization.updatedAt,
         plan: organization.subscription?.plan?.code ?? null,
         subscriptionStatus: organization.subscription?.status ?? null,
+        complimentary,
       },
       companies: organization.companies,
       members: organization.memberships.map((membership) => ({

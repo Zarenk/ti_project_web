@@ -49,8 +49,7 @@ export type Entryes = {
     details: { product: string; product_name: string; quantity: number; price: number; series: string[] }[];
 }
 
-
-export const columns: ColumnDef<Entryes>[] = [
+export const getColumns = (onView?: (rowData: Entryes) => void): ColumnDef<Entryes>[] => [
     {
     id: "select",
     header: ({ table }) => (
@@ -227,21 +226,6 @@ export const columns: ColumnDef<Entryes>[] = [
         const handleDialogClose = () => {
           setIsDialogOpen(false) // Cierra el diálogo
         }
-        //
-
-        // PARA EL MENSAJE DE VISUALIZACION
-        const [isDialogViewOpen, setIsDialogViewOpen] = useState(false); // Controla el diálogo de eliminación
-        const [isViewDialogOpen, setIsViewDialogOpen] = useState(false); // Controla el diálogo de visualización
-
-        const handleViewClick = () => {
-          setIsViewDialogOpen(true); // Abre el diálogo de visualización
-        };
-
-        const handleDialogViewClose = () => {
-          setIsViewDialogOpen(false); // Cierra el diálogo de visualización
-        };
-  
-        //
 
         return (
           <>
@@ -255,7 +239,11 @@ export const columns: ColumnDef<Entryes>[] = [
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
               <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleViewClick}>
+                <DropdownMenuItem onClick={() => {
+                  if (onView) {
+                    onView(entries);
+                  }
+                }}>
                 Visualizar
                 </DropdownMenuItem>
                 <DeleteActionsGuard>
@@ -297,98 +285,10 @@ export const columns: ColumnDef<Entryes>[] = [
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-
-          {/* Diálogo de Visualización */}
-          <AlertDialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Informacion General</AlertDialogTitle>
-              </AlertDialogHeader>
-              <AlertDialogDescription>               
-              </AlertDialogDescription>
-              <div className="max-h-[80vh] overflow-y-auto space-y-8">
-                <span className="block space-y-2">
-                  <div><strong>Tienda:</strong> {entries.store_name || "Sin tienda"}</div>
-                  <div><strong>Proveedor:</strong> {entries.provider?.name || "Sin proveedor"}</div>
-                  <div><strong>Usuario que registró:</strong> {entries.user?.username || "Sin usuario"}</div>
-                  <div><strong>Observación(es):</strong> {entries.description || "Sin observaciones"}</div>
-                  <div><strong>Fecha de Creación:</strong> {new Date(entries.createdAt).toLocaleDateString()}</div>
-                  <div><strong>Fecha de Compra:</strong> {new Date(entries.date).toLocaleDateString()}</div>
-                  <div><strong>Moneda:</strong> {entries.tipoMoneda}</div>
-                  <div><strong>Total: </strong>
-                    {entries.tipoMoneda === "PEN" ? "S/." : "$"}{" "}
-                    {entries.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0).toFixed(2)}
-                  </div>
-                  {/* Enlace para la factura */}
-                  {entries.pdfUrl && (
-                    <div>
-                      <strong>Factura:</strong>{" "}
-                      <a
-                        href={getPdfUrl(entries.pdfUrl)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-500 underline"
-                      >
-                        Ver Factura
-                      </a>
-                    </div>
-                  )}
-                  {/* Enlace para la factura */}
-                  {entries.guiaUrl && (
-                    <div>
-                      <strong>Guia de Remision:</strong>{" "}
-                      <a
-                        href={getPdfGuiaUrl(entries.guiaUrl)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-500 underline"
-                      >
-                        Ver Guia
-                      </a>
-                    </div>
-                  )}                  
-                </span>
-
-                {/* Tabla de detalles */}
-                <div className="mt-4">
-                  <h3 className="text-lg font-bold">Detalles</h3>
-                  <table className="table-auto w-full border-collapse border border-gray-300 mt-2">
-                    <thead>
-                      <tr>
-                        <th className="border border-gray-300 px-4 py-2">Producto</th>
-                        <th className="border border-gray-300 px-4 py-2">Cant.</th>
-                        <th className="border border-gray-300 px-4 py-2">Precio</th>
-                        <th className="border border-gray-300 px-4 py-2">Series</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {entries.details.map((detail, index) => (
-                        <tr key={index}>
-                          <td className="border border-gray-300 px-4 py-2">{detail.product_name}</td>
-                          <td className="border border-gray-300 px-4 py-2">{detail.quantity}</td>
-                          <td className="border border-gray-300 px-4 py-2">
-                            {entries.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}
-                          </td>
-                          <td className="border border-gray-300 px-4 py-2">
-                            {detail.series && detail.series.length > 0
-                            ? detail.series.join(", ") // Mostrar las series separadas por comas
-                            : "Sin series"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={handleDialogViewClose}>Cerrar</AlertDialogCancel>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
           </>
         )
       },
     },
    
-]
+];
 

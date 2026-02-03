@@ -356,6 +356,86 @@ export async function getMonthlySalesTotal() {
   return response.json();
 }
 
+export async function getMonthlySalesProfit() {
+  const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-profit`, {
+    credentials: "include",
+  });
+
+  if (response.status === 403) {
+    return { total: 0, growth: null };
+  }
+
+  if (!response.ok) {
+    throw new Error("Error al obtener utilidades mensuales");
+  }
+
+  return response.json();
+}
+
+export async function getSalesTotalByDateRange(from: string, to: string) {
+  const response = await authFetch(`${BACKEND_URL}/api/sales/total/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
+    credentials: "include",
+  });
+
+  if (response.status === 403) {
+    return 0;
+  }
+
+  if (!response.ok) {
+    throw new Error("Error al obtener total de ventas por rango");
+  }
+
+  return response.json();
+}
+
+export async function getSalesCountByDateRange(from: string, to: string) {
+  const response = await authFetch(`${BACKEND_URL}/api/sales/count/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
+    credentials: "include",
+  });
+
+  if (response.status === 403) {
+    return 0;
+  }
+
+  if (!response.ok) {
+    throw new Error("Error al obtener conteo de ventas por rango");
+  }
+
+  return response.json();
+}
+
+export async function getClientStatsByDateRange(from: string, to: string) {
+  const response = await authFetch(`${BACKEND_URL}/api/sales/clients/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
+    credentials: "include",
+  });
+
+  if (response.status === 403) {
+    return 0;
+  }
+
+  if (!response.ok) {
+    throw new Error("Error al obtener estadísticas de clientes por rango");
+  }
+
+  return response.json();
+}
+
+export async function getSalesProfitByDateRange(from: string, to: string) {
+  const response = await authFetch(`${BACKEND_URL}/api/sales/profit/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
+    credentials: "include",
+  });
+
+  if (response.status === 403) {
+    return 0;
+  }
+
+  if (!response.ok) {
+    throw new Error("Error al obtener utilidades por rango");
+  }
+
+  return response.json();
+}
+
 export async function getProductsByStore(storeId: number) {
   try {
     const headers = await buildAuthHeaders()
@@ -716,5 +796,31 @@ export async function getSalesTransactions(from?: string, to?: string) {
     { headers },
   )
   if (!res.ok) throw new Error('Error al obtener las transacciones')
+  return res.json()
+}
+
+export async function getProductsProfitByRange(from: string, to: string, q?: string, page = 1, pageSize = 25) {
+  const qs = new URLSearchParams()
+  qs.append('from', from)
+  qs.append('to', to)
+  if (q) qs.append('q', q)
+  qs.append('page', String(page))
+  qs.append('pageSize', String(pageSize))
+  const headers = await getAuthHeaders()
+  if (!('Authorization' in headers)) {
+    throw new Error('No se encontro un token de autenticacion')
+  }
+  const res = await fetch(`${BACKEND_URL}/api/sales/profit/products?${qs.toString()}`, { headers })
+  if (!res.ok) throw new Error('Error al obtener utilidades por producto')
+  return res.json()
+}
+
+export async function getProfitByDate(from: string, to: string) {
+  const headers = await getAuthHeaders()
+  if (!('Authorization' in headers)) {
+    throw new Error('No se encontro un token de autenticacion')
+  }
+  const res = await fetch(`${BACKEND_URL}/api/sales/profit/chart/${encodeURIComponent(from)}/${encodeURIComponent(to)}`, { headers })
+  if (!res.ok) throw new Error('Error al obtener utilidades por fecha')
   return res.json()
 }

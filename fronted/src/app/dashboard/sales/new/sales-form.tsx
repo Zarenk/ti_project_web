@@ -20,7 +20,7 @@ import {jwtDecode} from 'jwt-decode';
 import { getAuthToken } from "@/utils/auth-token";
 import {  getStores } from '../../stores/stores.api'
 import { getCategories } from '../../categories/categories.api'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Calendar } from '@/components/ui/calendar'
 import { format } from 'date-fns'
@@ -115,6 +115,20 @@ function buildDefaultSaleValues(sale?: any): SalesType {
     stock: sale?.stock ?? 0,
   };
 }
+
+const renderStatusChip = (filled: boolean, optional = false) => (
+  <span
+    className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+      filled
+        ? "border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+        : optional
+        ? "border-slate-200/70 bg-slate-50 text-slate-600 dark:border-slate-800/60 dark:bg-slate-900/60 dark:text-slate-300"
+        : "border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200"
+    }`}
+  >
+    {filled ? "Listo" : optional ? "Opcional" : "Requerido"}
+  </span>
+)
 
 export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
@@ -1178,7 +1192,12 @@ const getSaleReferenceId = () => {
         <fieldset disabled={isSubmitting} className="contents">                  
                   <div className="flex flex-wrap gap-4">
                     <div className="flex-1 flex-col border rounded-md p-2">                  
-                        <Label className="text-sm font-medium mb-2">Tipo de Comprobante</Label>
+                        <Label className="text-sm font-medium mb-2">
+                          <div className="flex items-center">
+                            <span>Tipo de Comprobante</span>
+                            {renderStatusChip(Boolean(form.getValues("tipoComprobante")))}
+                          </div>
+                        </Label>
                         <Popover open={openInvoice} onOpenChange={setOpenInvoice}>
                           <PopoverTrigger asChild>
                             <Button
@@ -1198,11 +1217,11 @@ const getSaleReferenceId = () => {
                               <CommandList>
                                 <CommandEmpty>No se encontraron resultados.</CommandEmpty>
                                 <CommandGroup>
-                                  {["SIN COMPROBANTE", "BOLETA", "FACTURA"].map((type) => (
+                                    {["SIN COMPROBANTE", "BOLETA", "FACTURA"].map((type) => (
                                     <CommandItem
                                       key={type}
                                       value={type}
-                                      className="cursor-pointer"
+                                      className="cursor-pointer transition-colors hover:bg-accent/60 rounded-sm px-1"
                                       onSelect={(currentValue) => {
 
                                         if (currentValue === valueInvoice) {
@@ -1227,7 +1246,7 @@ const getSaleReferenceId = () => {
                                         )}
                                       />
                                     </CommandItem>
-                                  ))}
+                                        ))}
                                 </CommandGroup>
                               </CommandList>
                             </Command>
@@ -1307,7 +1326,10 @@ const getSaleReferenceId = () => {
        
                     <div className="flex-1 flex flex-col border rounded-md p-2">
                         <Label htmlFor="provider-combobox" className="text-sm font-medium mb-2">
-                          Ingrese un Cliente:
+                          <div className="flex items-center">
+                            <span>Ingrese un Cliente:</span>
+                            {renderStatusChip(Boolean(form.getValues("client_name")), true)}
+                          </div>
                         </Label>
                         <div className="flex justify-between gap-1">
                           <Popover open={openClient} onOpenChange={setOpenClient}>
@@ -1350,7 +1372,7 @@ const getSaleReferenceId = () => {
                                             <CommandItem
                                               key={client.id ?? client.name}
                                               value={commandValue}
-                                              className="cursor-pointer"
+                                              className="cursor-pointer transition-colors hover:bg-accent/60 rounded-sm px-1"
                                               onSelect={() => {
                                                 if (isSelected) {
                                                   setOpenClient(false);
@@ -1511,7 +1533,10 @@ const getSaleReferenceId = () => {
                                  
                         <div className="flex-1 flex flex-col border border-gray-600 rounded-md p-2">
                         <Label htmlFor="store-combobox" className="text-sm font-medium mb-2">
-                          Ingrese una Tienda:
+                          <div className="flex items-center">
+                            <span>Ingrese una Tienda:</span>
+                            {renderStatusChip(Boolean(form.getValues("store_name")))}
+                          </div>
                         </Label>   
                         <div className="flex justify-between gap-1">
                           <Popover open={openStore} onOpenChange={setOpenStore}>
@@ -1541,9 +1566,9 @@ const getSaleReferenceId = () => {
 
                                         return (
                                           <CommandItem
-                                            key={store.id ?? store.name}
-                                            value={commandValue}
-                                            className="cursor-pointer"
+                                              key={store.id ?? store.name}
+                                                value={commandValue}
+                                                className="cursor-pointer transition-colors hover:bg-accent/60 rounded-sm px-1"
                                             onSelect={() => {
                                               if (isSelected) {
                                                 setOpenStore(false);
@@ -1587,7 +1612,10 @@ const getSaleReferenceId = () => {
                         </div>
                         <div className='flex-1 flex-col border border-gray-600 rounded-md p-2'> 
                           <Label htmlFor="product-combobox" className="text-sm font-medium mb-2">
-                            Ingrese un producto:
+                            <div className="flex items-center">
+                              <span>Ingrese un producto:</span>
+                              {renderStatusChip(selectedProducts.length > 0)}
+                            </div>
                           </Label>
                           <div className="flex gap-1">
                             <Popover open={open} onOpenChange={setOpen}>
@@ -1621,7 +1649,7 @@ const getSaleReferenceId = () => {
                                           <CommandItem
                                             key={product.id ?? product.name}
                                             value={commandValue}
-                                            className="cursor-pointer"
+                                            className="cursor-pointer transition-colors hover:bg-accent/60 rounded-sm px-1"
                                             onSelect={async () => {
                                               if (isSelected) {
                                                 setOpen(false);
@@ -1708,9 +1736,9 @@ const getSaleReferenceId = () => {
                               </PopoverContent>
                             </Popover>
                             <Button className='sm:w-auto sm:ml-2 ml-0
-                            bg-green-700 hover:bg-green-800 text-white cursor-pointer' type="button" onClick={addProduct} title="Agregar el producto seleccionado a la venta">
-                                <span className="hidden sm:block">Agregar</span>
-                                <Plus className="w-2 h-2"/>
+                            bg-green-700 hover:bg-green-800 text-white cursor-pointer transition-colors' type="button" onClick={addProduct} title="Agregar el producto seleccionado a la venta">
+                              <span className="hidden sm:block">Agregar</span>
+                              <Plus className="w-4 h-4"/>
                             </Button>                            
                             {/* Botón para abrir el modal */}
                             <Button
@@ -2016,8 +2044,8 @@ const getSaleReferenceId = () => {
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Confirmar Registro</AlertDialogTitle>
+                            <AlertDialogDescription>¿Estás seguro de que deseas registrar esta venta?</AlertDialogDescription>
                           </AlertDialogHeader>
-                          <p>¿Estás seguro de que deseas registrar esta venta?</p>
                           <AlertDialogFooter>
                             <AlertDialogCancel onClick={() => setIsDialogOpen(false)} className="cursor-pointer" title="Cancelar el registro de la venta">
                               Cancelar

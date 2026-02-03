@@ -181,6 +181,11 @@ const permissionModules: {
     description: "Crear y revisar pedidos y comprobantes.",
   },
   {
+    key: "salesHistory",
+    label: "Historial de ventas",
+    description: "Acceso a los reportes y análisis del historial de ventas.",
+  },
+  {
     key: "purchases",
     label: "Compras",
     description: "Registrar compras y proveedores.",

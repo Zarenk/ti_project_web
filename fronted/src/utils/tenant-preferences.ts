@@ -160,7 +160,7 @@ export function setTenantSelection(
   }
 }
 
-export function clearTenantSelection(): void {
+export function clearTenantSelection(options?: { silent?: boolean }): void {
   if (typeof document === "undefined") {
     return
   }
@@ -173,14 +173,16 @@ export function clearTenantSelection(): void {
   }
 
   if (typeof window !== "undefined") {
-    window.dispatchEvent(
-      new CustomEvent<TenantSelectionChangeDetail>(TENANT_SELECTION_EVENT, {
-        detail: { orgId: null, companyId: null, source: "system" },
-      }),
-    )
+    if (!options?.silent) {
+      window.dispatchEvent(
+        new CustomEvent<TenantSelectionChangeDetail>(TENANT_SELECTION_EVENT, {
+          detail: { orgId: null, companyId: null, source: "system" },
+        }),
+      )
+    }
   }
 
-  userContextStorage.clearContext()
+  userContextStorage.clearContext(options)
 }
 
 export function setManualTenantSelection(

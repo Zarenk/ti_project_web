@@ -1673,7 +1673,7 @@ const VariantRowItem = memo(function VariantRowItem({
           </div>
         )}
         <fieldset disabled={isProcessing} className="contents">
-          <div className="grid grid-cols-1 gap-x-0.5 gap-y-4 md:gap-x-1 md:gap-y-5 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-x-0.5 gap-y-4 md:gap-x-1 md:gap-y-5 lg:grid-cols-3 lg:gap-x-4">
                     <div className='flex flex-col lg:col-start-1 lg:row-start-1'>
                         <Label className='py-3'>
                             Nombre del Producto
@@ -2034,7 +2034,7 @@ const VariantRowItem = memo(function VariantRowItem({
                     </div>
 
                     {schemaFields.length > 0 && (
-                      <div className="mt-4 space-y-4 rounded-lg border bg-muted/30 p-4 lg:col-span-2 lg:col-start-1 lg:row-start-5 lg:pr-2">
+                      <div className="mt-4 space-y-4 rounded-lg border bg-muted/30 p-4 md:col-span-1 lg:col-span-2 lg:col-start-1 lg:row-start-5 lg:pr-6">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <Label className="text-sm font-medium">
@@ -2099,7 +2099,7 @@ const VariantRowItem = memo(function VariantRowItem({
 
                     
                     {showComputerSpecs && (
-                      <div className="flex flex-col pt-4 lg:col-span-3">
+                      <div className="flex flex-col pt-4 md:col-span-1 md:col-start-1 lg:col-span-3 lg:col-start-1 lg:row-start-6">
                           <Label className='py-3 font-semibold'>
                             Especificaciones
                             {renderOptionalChip(hasSpecs)}
@@ -2115,7 +2115,7 @@ const VariantRowItem = memo(function VariantRowItem({
                       </div>
                     )}
 
-                    <div className="flex flex-col pt-4 lg:col-span-3 lg:col-start-1 lg:row-start-5">
+                    <div className="flex flex-col pt-4 md:col-span-1 md:col-start-2 lg:col-span-1 lg:col-start-3 lg:row-start-5 lg:pl-4">
                       <Label className="py-3 font-semibold">
                         Imagenes
                         {renderOptionalChip(hasImages)}

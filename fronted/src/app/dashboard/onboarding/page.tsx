@@ -41,6 +41,7 @@ import {
   updateOnboardingStep,
 } from "@/lib/onboarding-progress"
 import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 
 type StepDefinition = {
   key: OnboardingStepKey
@@ -156,6 +157,11 @@ function formatDate(value?: string | null) {
 }
 
 export default function OnboardingWizardPage() {
+  const { selection, version } = useTenantSelection()
+  const selectionKey = useMemo(
+    () => `${selection.companyId ?? "none"}-${version}`,
+    [selection.companyId, version],
+  )
   const [progress, setProgress] = useState<OnboardingProgress | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -170,7 +176,7 @@ export default function OnboardingWizardPage() {
   useEffect(() => {
     loadProgress()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [selectionKey])
 
   async function loadProgress() {
     try {

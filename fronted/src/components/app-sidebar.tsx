@@ -311,7 +311,7 @@ const data: SidebarData = {
         {
           title: "Ver Historial de Ventas",
           url: "/dashboard/sales/salesdashboard",
-          permission: "sales",
+          permission: "salesHistory",
         },
       ],
     },
@@ -502,7 +502,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       return item
     })
     if (verticalInfo?.config?.ui?.customMenuItems?.length) {
+      const normalizeLabel = (value: string) =>
+        value
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/\p{Diacritic}/gu, "");
+      const excludedCustomLabels = new Set(["pos", "catalogo"]);
       verticalInfo.config.ui.customMenuItems.forEach((menu) => {
+        const normalized = normalizeLabel(menu.label ?? "");
+        if (excludedCustomLabels.has(normalized)) {
+          return;
+        }
         items.push({
           title: menu.label,
           url: menu.path,

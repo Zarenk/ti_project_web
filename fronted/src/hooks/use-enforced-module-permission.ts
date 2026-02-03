@@ -13,6 +13,7 @@ export const MODULE_PERMISSION_LABELS: Record<ModulePermissionKey, string> = {
   store: "Tienda en línea",
   inventory: "Inventario",
   sales: "Ventas",
+  salesHistory: "Historial de ventas",
   purchases: "Compras",
   accounting: "Contabilidad",
   marketing: "Marketing",

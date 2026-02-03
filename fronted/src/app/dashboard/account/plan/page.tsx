@@ -1,7 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 
 import { SubscriptionQuotaCard } from "@/components/subscription-quota-card"
@@ -23,6 +24,7 @@ import {
   cancelSubscription,
   fetchSubscriptionPlans,
   requestPlanChange,
+  grantComplimentarySubscription,
   type SubscriptionPlan,
 } from "../billing.api"
 import { useAccountAccessGuard } from "../use-account-access"
@@ -43,6 +45,13 @@ const CANCEL_REASONS = [
   { value: "not_using", label: "Ya no usamos la plataforma" },
   { value: "data_quality", label: "Problemas con mi informacion" },
   { value: "other", label: "Otro motivo" },
+]
+
+const COMPLIMENTARY_DURATIONS = [
+  { value: "1", label: "1 mes" },
+  { value: "3", label: "3 meses" },
+  { value: "6", label: "6 meses" },
+  { value: "12", label: "1 año" },
 ]
 
 type GlobalPlanUsage = {
@@ -69,9 +78,21 @@ export default function PlanUsagePage() {
   const accessReady = useAccountAccessGuard()
   const { selection, version } = useTenantSelection()
   const { role } = useAuth()
+  const searchParams = useSearchParams()
   const organizationId = selection?.orgId ?? null
   const normalizedRole = role?.toUpperCase() ?? ""
   const isGlobalSuperAdmin = normalizedRole === "SUPER_ADMIN_GLOBAL"
+  const planSectionRef = useRef<HTMLDivElement | null>(null)
+  const cleanedQueryRef = useRef(false)
+  const requestedOrgId = useMemo(() => {
+    const raw = searchParams?.get("orgId") ?? ""
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  }, [searchParams])
+  const shouldAutoFocus = useMemo(() => {
+    const focus = searchParams?.get("focus")
+    return focus === "plan"
+  }, [searchParams])
 
   const [summary, setSummary] = useState<SubscriptionSummary | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(true)
@@ -81,6 +102,10 @@ export default function PlanUsagePage() {
   const [planLockedToSummary, setPlanLockedToSummary] = useState(true)
   const [effectiveImmediately, setEffectiveImmediately] = useState(false)
   const [planSubmitting, setPlanSubmitting] = useState(false)
+  const [complimentaryDuration, setComplimentaryDuration] = useState("1")
+  const [complimentaryReason, setComplimentaryReason] = useState("")
+  const [complimentaryPlanCode, setComplimentaryPlanCode] = useState("")
+  const [complimentarySubmitting, setComplimentarySubmitting] = useState(false)
 
   const [cancelReason, setCancelReason] = useState("")
   const [cancelNotes, setCancelNotes] = useState("")
@@ -188,6 +213,35 @@ export default function PlanUsagePage() {
   }, [accessReady, isGlobalSuperAdmin, refreshGlobalUsage])
 
   useEffect(() => {
+    if (!accessReady || !isGlobalSuperAdmin) return
+    if (!requestedOrgId) return
+    if (globalSelectedOrgId !== requestedOrgId) {
+      setGlobalSelectedOrgId(requestedOrgId)
+      setGlobalSelectedSummary(null)
+    }
+  }, [accessReady, isGlobalSuperAdmin, requestedOrgId, globalSelectedOrgId])
+
+  useEffect(() => {
+    if (!accessReady || !isGlobalSuperAdmin) return
+    if (!shouldAutoFocus && !requestedOrgId) return
+    const target = planSectionRef.current
+    if (!target) return
+    const raf = requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+    if (!cleanedQueryRef.current && (requestedOrgId || shouldAutoFocus)) {
+      cleanedQueryRef.current = true
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
+          const cleanPath = window.location.pathname
+          window.history.replaceState(null, "", cleanPath)
+        }
+      }, 350)
+    }
+    return () => cancelAnimationFrame(raf)
+  }, [accessReady, isGlobalSuperAdmin, shouldAutoFocus, requestedOrgId])
+
+  useEffect(() => {
     if (!isGlobalSuperAdmin) {
       setGlobalUsage([])
       setGlobalUsageLoading(false)
@@ -201,6 +255,7 @@ export default function PlanUsagePage() {
   useEffect(() => {
     setPlanLockedToSummary(true)
     setPlanCode("")
+    setComplimentaryPlanCode((current) => current || targetSummary?.plan?.code || "")
   }, [targetOrgId])
 
   useEffect(() => {
@@ -212,6 +267,17 @@ export default function PlanUsagePage() {
     }
   }, [planLockedToSummary, targetSummary, plans, planCode])
 
+  useEffect(() => {
+    if (complimentaryPlanCode) return
+    if (targetSummary?.plan?.code) {
+      setComplimentaryPlanCode(targetSummary.plan.code)
+      return
+    }
+    if (plans.length > 0) {
+      setComplimentaryPlanCode(plans[0].code)
+    }
+  }, [complimentaryPlanCode, targetSummary?.plan?.code, plans])
+
   const handlePlanSelect = (value: string) => {
     setPlanLockedToSummary(false)
     setPlanCode(value)
@@ -219,6 +285,18 @@ export default function PlanUsagePage() {
 
   const selectedPlan = useMemo(() => plans.find((plan) => plan.code === planCode), [planCode, plans])
   const isSamePlan = targetSummary?.plan?.code ? targetSummary.plan.code === planCode : true
+  const complimentaryPlan = useMemo(
+    () => plans.find((plan) => plan.code === complimentaryPlanCode) ?? null,
+    [plans, complimentaryPlanCode],
+  )
+  const complimentaryPreview = useMemo(() => {
+    const months = Number(complimentaryDuration)
+    if (!Number.isFinite(months) || months <= 0) return null
+    const start = new Date()
+    const end = new Date(start)
+    end.setMonth(end.getMonth() + months)
+    return { start, end, months }
+  }, [complimentaryDuration])
 
   const filteredGlobalUsage = useMemo(() => {
     const needle = globalSearch.trim().toLowerCase()
@@ -264,8 +342,12 @@ export default function PlanUsagePage() {
   useEffect(() => {
     if (!isGlobalSuperAdmin) return
     if (!globalSelectedOrgId) return
+    if (globalUsageLoading) return
     const match = globalUsage.find((row) => row.orgId === globalSelectedOrgId)
     if (!match) {
+      if (requestedOrgId && globalSelectedOrgId === requestedOrgId) {
+        return
+      }
       setGlobalSelectedOrgId(null)
       setGlobalSelectedSummary(null)
       return
@@ -273,7 +355,14 @@ export default function PlanUsagePage() {
     if (match.summary !== globalSelectedSummary) {
       setGlobalSelectedSummary(match.summary)
     }
-  }, [globalUsage, globalSelectedOrgId, globalSelectedSummary, isGlobalSuperAdmin])
+  }, [
+    globalUsage,
+    globalUsageLoading,
+    globalSelectedOrgId,
+    globalSelectedSummary,
+    isGlobalSuperAdmin,
+    requestedOrgId,
+  ])
 
   const handlePlanChange = async () => {
     if (!targetOrgId) {
@@ -315,6 +404,43 @@ export default function PlanUsagePage() {
       toast.error(error instanceof Error ? error.message : "No pudimos ejecutar el cambio de plan.")
     } finally {
       setPlanSubmitting(false)
+    }
+  }
+
+  const handleComplimentaryGrant = async () => {
+    if (!targetOrgId) {
+      toast.error("Selecciona una organizacion activa para continuar.")
+      return
+    }
+    if (!complimentaryPlanCode) {
+      toast.error("Selecciona un plan para activar la membresia.")
+      return
+    }
+    const months = Number(complimentaryDuration)
+    if (!Number.isFinite(months) || months <= 0) {
+      toast.error("Selecciona una duracion valida.")
+      return
+    }
+    setComplimentarySubmitting(true)
+    try {
+      await grantComplimentarySubscription({
+        organizationId: targetOrgId,
+        planCode: complimentaryPlanCode,
+        durationMonths: months,
+        reason: complimentaryReason.trim() || undefined,
+      })
+      toast.success("Membresia sin pago activada correctamente.")
+      setComplimentaryReason("")
+      if (isGlobalSuperAdmin) {
+        await refreshGlobalUsage()
+      } else {
+        void loadSummary()
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : "No se pudo activar la membresia sin pago.")
+    } finally {
+      setComplimentarySubmitting(false)
     }
   }
 
@@ -406,8 +532,9 @@ export default function PlanUsagePage() {
             onSelect={handleGlobalRowSelect}
           />
         )}
-        {!targetOrgId ? (
-          <Card className="border-sky-100 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div id="plan-selection" ref={planSectionRef} className="scroll-mt-28">
+          {!targetOrgId ? (
+            <Card className="border-sky-100 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <CardHeader>
               <CardTitle className="text-slate-800 dark:text-slate-100">Selecciona una organizacion</CardTitle>
             </CardHeader>
@@ -416,13 +543,135 @@ export default function PlanUsagePage() {
                 ? "Elige una organización desde la tabla de supervisión para visualizar y gestionar su plan."
                 : "Usa el conmutador de equipos para elegir la organización que deseas administrar. Luego podrás ver su consumo y actualizar el plan."}
             </CardContent>
-          </Card>
-        ) : (
-          <>
+            </Card>
+          ) : (
+            <>
             <section className="grid gap-6 lg:grid-cols-2">
               <PlanOverviewCard summary={targetSummary} loading={planOverviewLoading} />
               {targetOrgId ? <SubscriptionQuotaCard organizationId={targetOrgId} /> : null}
             </section>
+
+            {isGlobalSuperAdmin ? (
+              <section className="grid gap-6 lg:grid-cols-2">
+                <Card className="border-emerald-100 shadow-sm dark:border-emerald-900/60 dark:bg-slate-900">
+                  <CardHeader>
+                    <CardTitle className="text-slate-800 dark:text-slate-100">
+                      Membresia sin pago (solo Super Admin Global)
+                    </CardTitle>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Activa acceso temporal sin cobro y deja registro para auditoria.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    {targetSummary?.complimentary?.isActive ? (
+                      <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-900/30 dark:text-emerald-100">
+                        <p className="font-semibold">Cortesia activa</p>
+                        <p>
+                          Vence el {targetSummary.complimentary?.endsAt ? formatDate(targetSummary.complimentary.endsAt) : "—"}.
+                        </p>
+                      </div>
+                    ) : null}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="complimentary-plan">Plan a aplicar</Label>
+                      <Select
+                        value={complimentaryPlanCode}
+                        onValueChange={setComplimentaryPlanCode}
+                        disabled={complimentarySubmitting}
+                      >
+                        <SelectTrigger id="complimentary-plan">
+                          <SelectValue placeholder="Selecciona un plan" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {plans.map((plan) => (
+                            <SelectItem key={plan.code} value={plan.code}>
+                              <span className="flex flex-col">
+                                <span className="font-medium">{plan.name}</span>
+                                <span className="text-xs text-slate-500">
+                                  {formatPrice(plan.price, plan.currency)}  {plan.interval.toUpperCase()}
+                                </span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="complimentary-duration">Duracion</Label>
+                      <Select
+                        value={complimentaryDuration}
+                        onValueChange={setComplimentaryDuration}
+                        disabled={complimentarySubmitting}
+                      >
+                        <SelectTrigger id="complimentary-duration">
+                          <SelectValue placeholder="Selecciona una duracion" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {COMPLIMENTARY_DURATIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {complimentaryPreview ? (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Se aplicara desde hoy hasta {formatDate(complimentaryPreview.end.toISOString())}.
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="complimentary-reason">Motivo (opcional)</Label>
+                      <Textarea
+                        id="complimentary-reason"
+                        placeholder="Ej: cortesia comercial, soporte, incidente."
+                        value={complimentaryReason}
+                        onChange={(event) => setComplimentaryReason(event.target.value)}
+                        disabled={complimentarySubmitting}
+                        rows={3}
+                      />
+                    </div>
+
+                    {complimentaryPlan ? (
+                      <div className="rounded-lg border border-dashed border-emerald-100 bg-white/70 p-4 text-sm text-slate-700 shadow-sm dark:border-emerald-900/50 dark:bg-slate-900/60 dark:text-slate-200">
+                        <p className="font-semibold text-slate-800 dark:text-white">{complimentaryPlan.name}</p>
+                        <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          {complimentaryPlan.interval.toUpperCase()}  {formatPrice(complimentaryPlan.price, complimentaryPlan.currency)}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    <Button
+                      className="w-full"
+                      onClick={handleComplimentaryGrant}
+                      disabled={complimentarySubmitting || plansLoading || plans.length === 0}
+                    >
+                      {complimentarySubmitting ? "Activando..." : "Activar membresia sin pago"}
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card className="border-slate-100 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                  <CardHeader>
+                    <CardTitle className="text-slate-800 dark:text-slate-100">Detalles de auditoria</CardTitle>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Esta accion queda registrada en el historial y exportaciones de la organizacion.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
+                    <p>Se registra: plan aplicado, fechas, duracion y usuario administrador que lo activó.</p>
+                    {targetSummary?.complimentary?.grantedAt ? (
+                      <p>
+                        Ultima activacion: {formatDate(targetSummary.complimentary.grantedAt)}.
+                      </p>
+                    ) : (
+                      <p>No hay activaciones registradas para esta organizacion.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </section>
+            ) : null}
 
             <section className="grid gap-6 lg:grid-cols-2">
               <Card className="border-sky-100 shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -592,8 +841,9 @@ export default function PlanUsagePage() {
                 </CardContent>
               </Card>
             </section>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </main>
     </div>
   )
@@ -696,7 +946,8 @@ function GlobalOrganizationsUsageCard({
                         key={row.orgId}
                         className={cn(
                           "cursor-pointer border-t border-slate-100 text-slate-700 transition-colors hover:bg-sky-50/60 dark:border-slate-800 dark:text-slate-200 dark:hover:bg-slate-800/60",
-                          isSelected && "bg-sky-100/70 dark:bg-slate-800/70"
+                          isSelected &&
+                            "bg-sky-100/70 ring-1 ring-sky-300/70 shadow-sm dark:bg-slate-800/80 dark:ring-sky-700/60"
                         )}
                         onClick={() => onSelect(row)}
                       >
@@ -830,7 +1081,7 @@ function PlanOverviewCard({ summary, loading }: { summary: SubscriptionSummary |
     )
   }
 
-  const { plan, trial } = summary
+  const { plan, trial, complimentary } = summary
 
   return (
     <Card className="border-sky-100 shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -842,6 +1093,11 @@ function PlanOverviewCard({ summary, loading }: { summary: SubscriptionSummary |
         <p className="text-sm text-slate-600 dark:text-slate-400">
           Estas usando el plan {plan.name}. Cualquier cambio se reflejara en tu proximo ciclo de facturacion.
         </p>
+        {summary.organization?.name ? (
+          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
+            Organizacion: {summary.organization.name}
+          </div>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         {trial?.isTrial ? (
@@ -851,6 +1107,14 @@ function PlanOverviewCard({ summary, loading }: { summary: SubscriptionSummary |
               {trial.daysLeft !== null
                 ? `Te quedan ${trial.daysLeft} dia(s) antes de que termine la prueba.`
                 : "Tu prueba se encuentra activa. Aprovecha para completar el onboarding."}
+            </p>
+          </div>
+        ) : null}
+        {complimentary?.isActive ? (
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-900/30 dark:text-emerald-100">
+            <p className="font-medium">Membresia sin pago activa</p>
+            <p>
+              Vence el {complimentary.endsAt ? formatDate(complimentary.endsAt) : "—"}.
             </p>
           </div>
         ) : null}

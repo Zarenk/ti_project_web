@@ -42,7 +42,7 @@ import { CalendarDatePicker } from "@/components/calendar-date-picker";
 
 import { Cross2Icon, TrashIcon } from "@radix-ui/react-icons"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { EyeIcon, FileText, PrinterIcon } from "lucide-react"
+import { EyeIcon, FileText, PrinterIcon, Store, User, Calendar, DollarSign, Package, CheckCircle, MapPin } from "lucide-react"
 
 import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
@@ -51,6 +51,7 @@ import { useRouter } from "next/navigation"
 import { DataTableToolbar } from "./data-table-components/data-table-toolbar"
 import { deleteEntries, getPdfGuiaUrl, getPdfUrl } from "./entries.api"
 import { DeleteActionsGuard } from "@/components/delete-actions-guard"
+import { getColumns } from "./columns"
  
 interface DataTableProps<TData extends {
 id:string,
@@ -65,7 +66,6 @@ pdfUrl: string,
 guiaUrl: string,
 details: { product_name: string; quantity: number; price: number; series?: string[]; category_name?: string }[];
 }, TValue> {
-  columns: ColumnDef<TData, TValue>[]
   data: TData[]
 }
  
@@ -82,12 +82,20 @@ pdfUrl: string,
 guiaUrl: string,
 details: { product_name: string; quantity: number; price: number; series?: string[]; category_name?: string }[]; 
 }, TValue>({
-  columns,
   data,
 }: DataTableProps<TData, TValue>) {
 
   const [columnVisibility, setColumnVisibility] =
   React.useState<VisibilityState>({})
+
+  // Callback para abrir el modal individual mejorado
+  const handleViewEntry = (rowData: TData) => {
+    setSelectedRowData(rowData);
+    setIsModalOpen(true);
+  };
+
+  // Generar las columnas con el callback
+  const columns = useMemo(() => getColumns(handleViewEntry), []);
 
   // Ordenar los datos por la fecha de creación en orden descendente
   const sortedData = useMemo(() => {
@@ -627,155 +635,370 @@ details: { product_name: string; quantity: number; price: number; series?: strin
         {/* Modal para mostrar detalles */}
         {isModalOpen && selectedRowData && (
           <AlertDialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Control de Inventario: Ingresos</AlertDialogTitle>
-              </AlertDialogHeader>
-              <AlertDialogDescription>
-              </AlertDialogDescription>
-              <div className="max-h-[80vh] overflow-y-auto space-y-8">
-                <div className="space-y-4">
-                  {/* Información General */}
-                  <h3 className="text-lg font-semibold">Información General</h3>
-                  <div><strong>ID del registro:</strong> {selectedRowData.id}</div>
-                  <div><strong>Tienda:</strong> {selectedRowData.store_name}</div>
-                  <div><strong>Proveedor:</strong> {selectedRowData.provider_name}</div>
-                  <div><strong>Usuario que registro :</strong> {selectedRowData.user_username}</div>
-                  <div><strong>Observacion(es) :</strong> {selectedRowData.description}</div>
-                  <div><strong>Fecha de Creación:</strong> {new Date(selectedRowData.createdAt).toLocaleDateString()}</div>
-                  <div><strong>Fecha de Compra:</strong> {new Date(selectedRowData.date).toLocaleDateString()}</div>
-                  <div><strong>Moneda:</strong> {selectedRowData.tipoMoneda}</div>
-                  <div><strong>Total: </strong>
-                    {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"}{" "}
-                    {selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0).toFixed(2)}
+            <AlertDialogContent className="w-[95vw] sm:w-full sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
+              {/* Header with ID and Status */}
+              <AlertDialogHeader className="pb-6 border-b flex flex-row items-center justify-between">
+                <div className="flex-1">
+                  <AlertDialogTitle className="text-2xl font-bold">Ingreso #ID {selectedRowData.id}</AlertDialogTitle>
+                  <p className="text-sm text-gray-500 mt-1">Control de Inventario: Ingresos</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-700">Completado</span>
                   </div>
-                  {/* Enlace para la factura */}
-                  {selectedRowData.pdfUrl && (
+                  <button
+                    onClick={() => setIsModalOpen(false)}
+                    className="inline-flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer p-1"
+                    title="Cerrar"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-5 w-5 text-slate-600 dark:text-slate-300"
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+              </AlertDialogHeader>
+
+              <AlertDialogDescription className="sr-only">
+                Detalles del ingreso de inventario
+              </AlertDialogDescription>
+
+              <div className="space-y-6 py-4">
+                {/* KPI Cards - Summary */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+                    <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider">Subtotal</p>
+                    <p className="text-2xl font-bold text-blue-900 mt-2">
+                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
+                      {(selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0)).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-lg border border-amber-200">
+                    <p className="text-xs text-amber-600 font-semibold uppercase tracking-wider">IVA (18%)</p>
+                    <p className="text-2xl font-bold text-amber-900 mt-2">
+                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
+                      {(selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0) * 0.18).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
+                    <p className="text-xs text-green-600 font-semibold uppercase tracking-wider">Total</p>
+                    <p className="text-2xl font-bold text-green-900 mt-2">
+                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
+                      {(selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0) * 1.18).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Information Grid - 2x2 Layout */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Tienda */}
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Store className="w-4 h-4 text-slate-600" />
+                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tienda</label>
+                    </div>
+                    <p className="text-base font-semibold text-slate-900">{selectedRowData.store_name}</p>
+                  </div>
+
+                  {/* Proveedor */}
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <MapPin className="w-4 h-4 text-slate-600" />
+                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Proveedor</label>
+                    </div>
+                    <p className="text-base font-semibold text-slate-900">{selectedRowData.provider_name}</p>
+                  </div>
+
+                  {/* Usuario */}
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <User className="w-4 h-4 text-slate-600" />
+                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Usuario Registrador</label>
+                    </div>
+                    <p className="text-base font-semibold text-slate-900">{selectedRowData.user_username}</p>
+                  </div>
+
+                  {/* Moneda */}
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <DollarSign className="w-4 h-4 text-slate-600" />
+                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Moneda</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block bg-slate-200 text-slate-800 px-3 py-1 rounded-full text-sm font-semibold">
+                        {selectedRowData.tipoMoneda}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dates and Description */}
+                <div className="space-y-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <strong>Factura:</strong>{" "}
-                      <a
-                        href={getPdfUrl(selectedRowData.pdfUrl)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-500 underline"
-                      >
-                        Ver Factura
-                      </a>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Calendar className="w-4 h-4 text-slate-600" />
+                        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Fecha de Creación</label>
+                      </div>
+                      <p className="text-sm font-medium text-slate-900">{new Date(selectedRowData.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Calendar className="w-4 h-4 text-slate-600" />
+                        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Fecha de Compra</label>
+                      </div>
+                      <p className="text-sm font-medium text-slate-900">{new Date(selectedRowData.date).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  {selectedRowData.description && (
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider block mb-2">Observaciones</label>
+                      <p className="text-sm text-slate-700 bg-white p-2 rounded border border-slate-200">{selectedRowData.description}</p>
                     </div>
                   )}
-                  {/* Enlace para la factura */}
-                  {selectedRowData.guiaUrl && (
-                    <div>
-                      <strong>Guia de Remision:</strong>{" "}
-                      <a
-                        href={getPdfGuiaUrl(selectedRowData.guiaUrl)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-500 underline"
-                      >
-                        Ver Guia
-                      </a>
+                </div>
+
+                {/* PDFs Section */}
+                {(selectedRowData.pdfUrl || selectedRowData.guiaUrl) && (
+                  <div className="space-y-2 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <label className="text-xs font-semibold text-blue-600 uppercase tracking-wider block mb-3">Documentos Adjuntos</label>
+                    <div className="flex gap-3 flex-wrap">
+                      {selectedRowData.pdfUrl && (
+                        <a
+                          href={getPdfUrl(selectedRowData.pdfUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 bg-white border border-blue-300 text-blue-600 hover:bg-blue-100 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Ver Factura
+                        </a>
+                      )}
+                      {selectedRowData.guiaUrl && (
+                        <a
+                          href={getPdfGuiaUrl(selectedRowData.guiaUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 bg-white border border-blue-300 text-blue-600 hover:bg-blue-100 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Ver Guía de Remisión
+                        </a>
+                      )}
                     </div>
-                  )}
-                  {/* Detalles de Productos */}
-                  <h3 className="text-lg font-semibold">Detalles de Productos:</h3>
-                  <table className="table-auto w-full border-collapse border border-gray-300">
-                    <thead>
-                      <tr>
-                        <th className="border border-gray-300 px-4 py-2">Producto</th>
-                        <th className="border border-gray-300 px-4 py-2">Categoría</th>
-                        <th className="border border-gray-300 px-4 py-2">Cant.</th>
-                        <th className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">Precio</th>
-                        <th className="border border-gray-300 px-4 py-2">Series</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedRowData.details.map((detail: any, index) => (
-                        <tr key={index}>
-                          <td className="border border-gray-300 px-4 py-2">{detail.product_name}</td>
-                          <td className="border border-gray-300 px-4 py-2">{detail.category_name || "Sin categoría"}</td>
-                          <td className="border border-gray-300 px-4 py-2">{detail.quantity}</td>
-                          <td className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">
-                            {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}
-                          </td>
-                          <td className="border border-gray-300 px-4 py-2">
-                          {detail.series && detail.series.length > 0
-                            ? detail.series.join(", ") // Mostrar las series separadas por comas
-                            : "Sin series"}
-                          </td>
+                  </div>
+                )}
+
+                {/* Products Table */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Detalles de Productos</h3>
+                    <span className="ml-auto text-xs bg-slate-200 text-slate-700 px-2 py-1 rounded-full font-semibold">
+                      {selectedRowData.details.length} producto{selectedRowData.details.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-slate-700 to-slate-600">
+                          <th className="px-2 sm:px-4 py-3 text-left text-white font-semibold text-xs sm:text-sm">Producto</th>
+                          <th className="px-2 sm:px-4 py-3 text-left text-white font-semibold text-xs sm:text-sm hidden sm:table-cell">Categoría</th>
+                          <th className="px-2 sm:px-4 py-3 text-center text-white font-semibold text-xs sm:text-sm">Cant.</th>
+                          <th className="px-2 sm:px-4 py-3 text-right text-white font-semibold text-xs sm:text-sm">P. Unitario</th>
+                          <th className="px-2 sm:px-4 py-3 text-right text-white font-semibold text-xs sm:text-sm">Subtotal</th>
+                          <th className="px-2 sm:px-4 py-3 text-left text-white font-semibold text-xs sm:text-sm hidden lg:table-cell">Series</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>    
-              </div>         
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setIsModalOpen(false)}>Cerrar</AlertDialogCancel>
-              </AlertDialogFooter>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {selectedRowData.details.map((detail: any, index) => (
+                          <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                            <td className="px-2 sm:px-4 py-3 font-medium text-slate-900 text-xs sm:text-sm">{detail.product_name}</td>
+                            <td className="px-2 sm:px-4 py-3 text-slate-700 text-xs sm:text-sm hidden sm:table-cell">{detail.category_name || <span className="text-gray-400">Sin cat.</span>}</td>
+                            <td className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-900 text-xs sm:text-sm">{detail.quantity}</td>
+                            <td className="px-2 sm:px-4 py-3 text-right text-slate-900 text-xs sm:text-sm">
+                              {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 text-right font-semibold text-blue-600 text-xs sm:text-sm">
+                              {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} {(detail.price * detail.quantity).toFixed(2)}
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 text-slate-700 text-xs hidden lg:table-cell">
+                              {detail.series && detail.series.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {detail.series.map((s: string, i: number) => (
+                                    <span key={i} className="bg-slate-200 text-slate-700 px-2 py-1 rounded text-xs">
+                                      {s}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 italic">-</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Summary Row */}
+                <div className="bg-gradient-to-r from-slate-100 to-slate-50 p-4 rounded-lg border border-slate-300 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-700 font-medium">Subtotal:</span>
+                    <span className="text-lg font-semibold text-slate-900">
+                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
+                      {selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-700 font-medium">IVA (18%):</span>
+                    <span className="text-lg font-semibold text-slate-900">
+                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
+                      {(selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0) * 0.18).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="border-t border-slate-300 pt-2 flex justify-between items-center">
+                    <span className="text-slate-900 font-bold text-base">TOTAL:</span>
+                    <span className="text-2xl font-bold text-green-600">
+                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
+                      {(selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0) * 1.18).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </AlertDialogContent>
           </AlertDialog>
-          )}
+        )}
 
           {isViewModalOpen && selectedRowsDataVisual &&(
               <AlertDialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Controlo de Inventarios: Ingresos Seleccionados</AlertDialogTitle>
+              <AlertDialogContent className="w-[95vw] sm:w-full sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
+                <AlertDialogHeader className="pb-6 border-b">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <AlertDialogTitle className="text-2xl font-bold">Ingresos Seleccionados</AlertDialogTitle>
+                      <p className="text-sm text-gray-500 mt-1">{selectedRowsDataVisual.length} ingreso{selectedRowsDataVisual.length !== 1 ? 's' : ''} seleccionado{selectedRowsDataVisual.length !== 1 ? 's' : ''}</p>
+                    </div>
+                  </div>
                 </AlertDialogHeader>
-                <AlertDialogDescription>
+                <AlertDialogDescription className="sr-only">
+                  Detalles de múltiples ingresos
                 </AlertDialogDescription>
-                  <div className="max-h-[70vh] overflow-y-auto space-y-8">
-                    {selectedRowsDataVisual.map((entry, entryIndex) => (
-                      <div key={entryIndex} className="space-y-4">
-                        {/* Información General */}
-                        <h3 className="text-lg font-semibold">Información General</h3>
-                        <div><strong>ID del registro:</strong> {entry.id}</div>
-                        <div><strong>Tienda:</strong> {entry.store_name}</div>
-                        <div><strong>Proveedor:</strong> {entry.provider_name}</div>
-                        <div><strong>Usuario que registró:</strong> {entry.user_username}</div>
-                        <div><strong>Observacion(es) :</strong> {entry.description}</div>
-                        <div><strong>Fecha de Creación:</strong> {new Date(entry.createdAt).toLocaleDateString()}</div>
-                        <div><strong>Fecha de Compra:</strong> {new Date(entry.date).toLocaleDateString()}</div>
-                        <div><strong>Moneda:</strong> {entry.tipoMoneda}</div>
-                        <div><strong>Total: </strong>
-                          {entry.tipoMoneda === "PEN" ? "S/." : "$"}{" "}
-                          {entry.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0).toFixed(2)}
+                  <div className="space-y-8 py-4">
+                    {selectedRowsDataVisual.map((entry, entryIndex) => {
+                      const subtotal = entry.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0);
+                      const iva = subtotal * 0.18;
+                      const total = subtotal * 1.18;
+                      return (
+                      <div key={entryIndex} className="border border-slate-200 rounded-lg p-6 space-y-4">
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-4 border-b">
+                          <div>
+                            <h4 className="text-lg font-bold text-slate-900">Ingreso #ID {entry.id}</h4>
+                            <p className="text-sm text-slate-500">{entry.store_name} • {entry.provider_name}</p>
+                          </div>
+                          <div className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+                            <CheckCircle className="w-4 h-4 text-green-600" />
+                            <span className="text-xs font-medium text-green-700">Completado</span>
+                          </div>
                         </div>
-                        {/* Detalles de Productos */}
-                        <h3 className="text-lg font-semibold">Detalles de Productos</h3>
-                        <table className="table-auto w-full border-collapse border border-gray-300">
-                          <thead>
-                            <tr>
-                              <th className="border border-gray-300 px-4 py-2">Producto</th>
-                              <th className="border border-gray-300 px-4 py-2">Categoría</th>
-                              <th className="border border-gray-300 px-4 py-2">Cant.</th>
-                              <th className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">Precio</th>
-                              <th className="border border-gray-300 px-4 py-2">Series</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {entry.details.map((detail:any, detailIndex) => (
-                              <tr key={detailIndex}>
-                                <td className="border border-gray-300 px-4 py-2">{detail.product_name}</td>
-                                <td className="border border-gray-300 px-4 py-2">{detail.category_name || "Sin categoría"}</td>
-                                <td className="border border-gray-300 px-4 py-2">{detail.quantity}</td>
-                                <td className="border border-gray-300 px-4 py-2 w-[200px] max-w-[200px]">
-                                  {entry.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}
-                                </td>
-                                <td className="border border-gray-300 px-4 py-2">
-                                {detail.series && detail.series.length > 0
-                                  ? detail.series.join(", ") // Mostrar las series separadas por comas
-                                  : "Sin series"}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+
+                        {/* KPI Mini Cards */}
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                            <p className="text-xs text-blue-600 font-semibold">Subtotal</p>
+                            <p className="text-xl font-bold text-blue-900 mt-1">
+                              {entry.tipoMoneda === "PEN" ? "S/." : "$"} {subtotal.toFixed(2)}
+                            </p>
+                          </div>
+                          <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
+                            <p className="text-xs text-amber-600 font-semibold">IVA</p>
+                            <p className="text-xl font-bold text-amber-900 mt-1">
+                              {entry.tipoMoneda === "PEN" ? "S/." : "$"} {iva.toFixed(2)}
+                            </p>
+                          </div>
+                          <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                            <p className="text-xs text-green-600 font-semibold">Total</p>
+                            <p className="text-xl font-bold text-green-900 mt-1">
+                              {entry.tipoMoneda === "PEN" ? "S/." : "$"} {total.toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Info Grid */}
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                            <p className="text-xs text-slate-600 font-semibold uppercase">Usuario</p>
+                            <p className="text-slate-900 font-medium mt-1">{entry.user_username}</p>
+                          </div>
+                          <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                            <p className="text-xs text-slate-600 font-semibold uppercase">Moneda</p>
+                            <p className="text-slate-900 font-medium mt-1">{entry.tipoMoneda}</p>
+                          </div>
+                          <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                            <p className="text-xs text-slate-600 font-semibold uppercase">Fecha Creación</p>
+                            <p className="text-slate-900 font-medium mt-1">{new Date(entry.createdAt).toLocaleDateString()}</p>
+                          </div>
+                          <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                            <p className="text-xs text-slate-600 font-semibold uppercase">Fecha Compra</p>
+                            <p className="text-slate-900 font-medium mt-1">{new Date(entry.date).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+
+                        {/* Products Table - Compact */}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                            <Package className="w-4 h-4" />
+                            Productos ({entry.details.length})
+                          </p>
+                          <div className="overflow-x-auto rounded border border-slate-200">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="bg-slate-100">
+                                  <th className="px-2 sm:px-3 py-2 text-left text-slate-700 font-semibold">Producto</th>
+                                  <th className="px-2 sm:px-3 py-2 text-center text-slate-700 font-semibold">Cant.</th>
+                                  <th className="px-2 sm:px-3 py-2 text-right text-slate-700 font-semibold">Precio</th>
+                                  <th className="px-2 sm:px-3 py-2 text-right text-slate-700 font-semibold">Subtotal</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-200">
+                                {entry.details.map((detail: any, detailIndex) => (
+                                  <tr key={detailIndex} className="hover:bg-slate-50">
+                                    <td className="px-2 sm:px-3 py-2 text-slate-900 font-medium">{detail.product_name}</td>
+                                    <td className="px-2 sm:px-3 py-2 text-center font-medium">{detail.quantity}</td>
+                                    <td className="px-2 sm:px-3 py-2 text-right text-slate-700">
+                                      {entry.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}
+                                    </td>
+                                    <td className="px-2 sm:px-3 py-2 text-right font-semibold text-blue-600">
+                                      {entry.tipoMoneda === "PEN" ? "S/." : "$"} {(detail.price * detail.quantity).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>             
-                <AlertDialogFooter>
-                  <AlertDialogCancel onClick={() => setIsModalOpen(false)}>Cerrar</AlertDialogCancel>
+                <AlertDialogFooter className="pt-6 border-t">
+                  <AlertDialogCancel onClick={() => setIsViewModalOpen(false)} className="bg-slate-500 hover:bg-slate-600">
+                    Cerrar
+                  </AlertDialogCancel>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>

@@ -8,7 +8,10 @@ import {
 } from "@/utils/user-context-storage"
 import { shouldRememberContext } from "@/utils/context-preferences"
 
-export function useUserContextSync(currentUserId: number | null) {
+export function useUserContextSync(
+  currentUserId: number | null,
+  role?: string | null,
+) {
   const [rememberEnabled, setRememberEnabled] = useState(() => shouldRememberContext())
 
   useEffect(() => {
@@ -28,6 +31,11 @@ export function useUserContextSync(currentUserId: number | null) {
 
   useEffect(() => {
     if (typeof window === "undefined" || !currentUserId || !rememberEnabled) {
+      return
+    }
+    const normalizedRole = role?.toString().trim().toUpperCase() ?? ""
+    const disallowedRoles = new Set(["EMPLOYEE", "ADMIN", "SUPER_ADMIN_ORG"])
+    if (disallowedRoles.has(normalizedRole)) {
       return
     }
 
@@ -72,6 +80,12 @@ export function useUserContextSync(currentUserId: number | null) {
         if (res.status === 429) {
           throttleUntil = Date.now() + 60_000
           console.warn("[user-context] backend rate limit reached, delaying sync")
+          return
+        }
+        if (res.status === 403) {
+          // Usuario sin permisos para sincronizar contexto: limpiar cache local y parar reintentos.
+          userContextStorage.clearContext({ silent: true })
+          throttleUntil = Date.now() + 5 * 60_000
           return
         }
 

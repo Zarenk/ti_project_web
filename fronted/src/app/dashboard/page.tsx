@@ -633,9 +633,11 @@ export default function WelcomeDashboard() {
                       <p className="text-sm text-muted-foreground">Observa tendencias de ventas y reportes de inventarios</p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/dashboard/sales/salesdashboard">Analizar</Link>
-                  </Button>
+                  {checkPermission("salesHistory") ? (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href="/dashboard/sales/salesdashboard">Analizar</Link>
+                    </Button>
+                  ) : null}
                 </div>
               </CardContent>
               <CardFooter>

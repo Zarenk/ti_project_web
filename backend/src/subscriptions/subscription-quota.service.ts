@@ -111,8 +111,30 @@ export class SubscriptionQuotaService {
     organizationId: number,
     quota: 'users' | 'invoices' | 'storage',
     delta = 1,
+    isSuperAdmin = false,
   ): Promise<void> {
-    const subscription = await this.getSubscriptionContext(organizationId);
+    this.logger.debug(`[ensureQuota] Called with isSuperAdmin=${isSuperAdmin}, organizationId=${organizationId}, quota=${quota}`);
+    
+    // Super admins bypass quota checks
+    if (isSuperAdmin) {
+      this.logger.debug(`[ensureQuota] Super admin detected, bypassing quota check`);
+      return;
+    }
+
+    let subscription: SubscriptionContext;
+    try {
+      subscription = await this.getSubscriptionContext(organizationId);
+    } catch (error) {
+      // Si no hay suscripción, permitir la operación (es mejor permitir que bloquear)
+      // El administrador global debe habilitarla, pero mientras tanto no bloqueamos operaciones
+      const errorMessage = error instanceof Error ? error.message : 'Unknown';
+      this.logger.warn(
+        `[ensureQuota] No active subscription for organization ${organizationId}, but allowing operation. ` +
+        `Error: ${errorMessage}`
+      );
+      return;
+    }
+
     const limit = this.resolveLimit(subscription.quotas, quota);
     if (!limit || limit <= 0) {
       return;
