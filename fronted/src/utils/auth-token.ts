@@ -36,7 +36,7 @@ export async function getAuthToken(): Promise<string | null> {
 }
 
 import { getTenantSelection } from "./tenant-preferences"
-import { parseTenantCookie, TENANT_COOKIE_NAME } from "@/lib/tenant/tenant-shared"
+import { parseTenantCookie, resolveTenantSlugFromHost, TENANT_COOKIE_NAME } from "@/lib/tenant/tenant-shared"
 
 function readCookieValue(name: string): string | null {
   if (typeof document === "undefined") {
@@ -74,7 +74,18 @@ export async function getAuthHeaders(
   }
 
   try {
-    const { orgId, companyId } = await getTenantSelection()
+    let allowStoredSelection = true
+    if (typeof window !== "undefined") {
+      const orgCookie = readCookieValue("tenant_org_id")
+      const companyCookie = readCookieValue("tenant_company_id")
+      if (!orgCookie && !companyCookie) {
+        allowStoredSelection = false
+      }
+    }
+
+    const { orgId, companyId } = allowStoredSelection
+      ? await getTenantSelection()
+      : { orgId: null, companyId: null }
     const sanitizeNumeric = (value: number | null | undefined) => {
       if (value == null) {
         return null
@@ -136,6 +147,10 @@ export async function getAuthHeaders(
       }
       resolvedSlug = cookiePayload.slug
     }
+  }
+
+  if (!resolvedSlug && typeof window !== "undefined") {
+    resolvedSlug = resolveTenantSlugFromHost(window.location.host)
   }
 
   if (resolvedSlug && !headers["x-tenant-slug"]) {

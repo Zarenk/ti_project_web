@@ -27,6 +27,8 @@ export function ProductSelection({
   setOpen,
   value,
   setValueProduct,
+  recentProductIds,
+  onProductSelected,
   products,
   selectedProducts,
   categories,
@@ -131,6 +133,25 @@ export function ProductSelection({
   }, [products, normalizedSelectedProductValue, value])
 
   const displayedProductName = selectedProductOption?.name ?? value ?? ''
+  const recentSet = useMemo(
+    () =>
+      new Set<number>(
+        (Array.isArray(recentProductIds) ? recentProductIds : []).filter(
+          (id: any) => typeof id === 'number',
+        ),
+      ),
+    [recentProductIds],
+  )
+  const orderedProducts = useMemo(() => {
+    if (!Array.isArray(recentProductIds) || recentProductIds.length === 0) {
+      return products
+    }
+    const recent = recentProductIds
+      .map((id: number) => products.find((p: any) => p.id === id))
+      .filter(Boolean) as any[]
+    const rest = products.filter((p: any) => !recentSet.has(p.id))
+    return [...recent, ...rest]
+  }, [products, recentProductIds, recentSet])
   const applyCategoryUpdate = async (
     productId: number,
     category: { id: number; name: string },
@@ -313,7 +334,7 @@ export function ProductSelection({
               <CommandList>
                 <CommandEmpty>No se encontraron productos.</CommandEmpty>
                 <CommandGroup>
-                  {products.map((product: any) => {
+                  {orderedProducts.map((product: any) => {
                     const normalizedProductName = normalizeOptionValue(product.name)
                     const isSelected = normalizedProductName === normalizedSelectedProductValue
                     const commandValue =
@@ -341,6 +362,9 @@ export function ProductSelection({
                           const category = categories.find((cat: any) => cat.id === product.categoryId)
 
                           setValueProduct(product.name || '')
+                          if (typeof onProductSelected === 'function' && typeof product.id === 'number') {
+                            onProductSelected(product.id)
+                          }
                           setCurrentProduct({
                             id: product.id,
                             name: product.name,
@@ -356,7 +380,14 @@ export function ProductSelection({
                           setOpen(false)
                         }}
                       >
-                        {product.name}
+                        <div className="flex items-center gap-2">
+                          <span>{product.name}</span>
+                          {recentSet.has(product.id) && (
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                              Reciente
+                            </span>
+                          )}
+                        </div>
                         <Check className={cn('ml-auto', isSelected ? 'opacity-100' : 'opacity-0')} />
                       </CommandItem>
                     )

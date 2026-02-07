@@ -14,7 +14,7 @@ function generateDigest(xml: string): string {
 /**
  * Construye el nodo SignedInfo.
  */
-function buildSignedInfoXml(digestValue: string): string {
+function buildSignedInfoXml(digestValue: string, referenceId: string): string {
   return create()
     .ele('ds:SignedInfo', { xmlns: 'http://www.w3.org/2000/09/xmldsig#' })
     .ele('ds:CanonicalizationMethod', {
@@ -25,7 +25,7 @@ function buildSignedInfoXml(digestValue: string): string {
       Algorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
     })
     .up()
-    .ele('ds:Reference', { URI: '#Invoice' })
+    .ele('ds:Reference', { URI: `#${referenceId}` })
     .ele('ds:Transforms')
     .ele('ds:Transform', {
       Algorithm: 'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
@@ -65,10 +65,22 @@ export async function firmarDocumentoUBL(
   privateKeyPath: string,
   certificatePath: string,
 ): Promise<string> {
-  xml = xml.replace(
-    /<Invoice([^>]*)(?<!Id="Invoice")>/,
-    (_match, attrs) => `<Invoice${attrs} Id="Invoice">`,
-  );
+  const rootMatch = xml.match(/<([A-Za-z0-9:]+)([^>]*)>/);
+  if (!rootMatch) {
+    throw new Error('No se pudo detectar el nodo raiz del XML.');
+  }
+  const rootTag = rootMatch[1].includes(':')
+    ? rootMatch[1].split(':')[1]
+    : rootMatch[1];
+  const referenceId = rootTag;
+
+  const rootPattern = new RegExp(`<${rootMatch[1]}([^>]*)>`);
+  xml = xml.replace(rootPattern, (_match, attrs) => {
+    if (attrs.includes('Id=')) {
+      return `<${rootMatch[1]}${attrs}>`;
+    }
+    return `<${rootMatch[1]}${attrs} Id="${referenceId}">`;
+  });
 
   const placeholder = '<__raw><!-- Firma digital no disponible --></__raw>';
 
@@ -80,7 +92,7 @@ export async function firmarDocumentoUBL(
   const xmlSinFirma = `${inicioDigest}<ext:ExtensionContent></ext:ExtensionContent>${finDigest}`;
   const digestValue = generateDigest(xmlSinFirma);
 
-  const signedInfoXml = buildSignedInfoXml(digestValue);
+  const signedInfoXml = buildSignedInfoXml(digestValue, referenceId);
   const signatureValue = signWithPrivateKey(signedInfoXml, privateKeyPath);
 
   const cert = fs

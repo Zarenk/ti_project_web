@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   Building2,
@@ -27,16 +27,30 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 import {
   createOrganization,
   type CreateOrganizationPayload,
   type OrganizationUnitInput,
+  validateCompanyFields,
 } from "../tenancy.api"
 import { TENANT_ORGANIZATIONS_EVENT, setTenantSelection } from "@/utils/tenant-preferences"
 
 type MutableUnit = OrganizationUnitInput & { key: string }
+type MutableCompany = {
+  key: string
+  name: string
+  legalName: string
+  taxId: string
+  status: string
+}
 
 const STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Activa" },
@@ -59,6 +73,16 @@ function createUnit(partial: Partial<OrganizationUnitInput> = {}): MutableUnit {
   }
 }
 
+function createCompanyDraft(partial: Partial<MutableCompany> = {}): MutableCompany {
+  return {
+    key: generateUnitKey(),
+    name: partial.name ?? "",
+    legalName: partial.legalName ?? "",
+    taxId: partial.taxId ?? "",
+    status: partial.status ?? STATUS_OPTIONS[0]?.value ?? "ACTIVE",
+  }
+}
+
 export default function NewOrganizationPage() {
   const router = useRouter()
   const [organization, setOrganization] = useState({
@@ -67,11 +91,40 @@ export default function NewOrganizationPage() {
     status: STATUS_OPTIONS[0]?.value ?? "ACTIVE",
   })
   const [units, setUnits] = useState<MutableUnit[]>([createUnit({ name: "General" })])
+  const [companies, setCompanies] = useState<MutableCompany[]>([createCompanyDraft()])
   const [submitting, setSubmitting] = useState(false)
+  const [showErrors, setShowErrors] = useState(false)
+  const [companyValidation, setCompanyValidation] = useState<
+    Record<
+      string,
+      { taxIdStatus?: "idle" | "checking" | "valid" | "invalid"; taxIdMessage?: string }
+    >
+  >({})
+  const companyValidationTimeouts = useRef<Map<string, number>>(new Map())
 
   const activeUnits = useMemo(
     () => units.filter((unit) => unit.status === "ACTIVE").length,
     [units],
+  )
+  const activeCompanies = useMemo(
+    () => companies.filter((company) => company.status === "ACTIVE").length,
+    [companies],
+  )
+
+  const renderFieldChip = (filled: boolean, required?: boolean) => (
+    <span
+      className={cn(
+        "ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+        filled
+          ? "border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+          : required
+            ? "border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200"
+            : "border-border/60 bg-muted/30 text-muted-foreground",
+      )}
+    >
+      {filled ? <CheckCircle2 className="h-3 w-3" /> : null}
+      {filled ? "Listo" : required ? "Requerido" : "Opcional"}
+    </span>
   )
 
   const handleOrganizationChange = (field: "name" | "code" | "status", value: string) => {
@@ -87,12 +140,87 @@ export default function NewOrganizationPage() {
     )
   }
 
+  const handleCompanyChange = (
+    key: string,
+    field: "name" | "legalName" | "taxId" | "status",
+    value: string,
+  ) => {
+    setCompanies((prev) =>
+      prev.map((company) =>
+        company.key === key ? { ...company, [field]: value } : company,
+      ),
+    )
+  }
+
+  const updateCompanyValidation = (
+    key: string,
+    patch: { taxIdStatus?: "idle" | "checking" | "valid" | "invalid"; taxIdMessage?: string },
+  ) => {
+    setCompanyValidation((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], ...patch },
+    }))
+  }
+
+  useEffect(() => {
+    companies.forEach((company) => {
+      const normalizedTaxId = company.taxId.replace(/\D/g, "")
+      const existingTimeout = companyValidationTimeouts.current.get(company.key)
+      if (existingTimeout) {
+        window.clearTimeout(existingTimeout)
+      }
+
+      if (!normalizedTaxId) {
+        updateCompanyValidation(company.key, { taxIdStatus: "idle", taxIdMessage: undefined })
+        return
+      }
+      if (normalizedTaxId.length !== 11) {
+        updateCompanyValidation(company.key, { taxIdStatus: "invalid", taxIdMessage: undefined })
+        return
+      }
+
+      updateCompanyValidation(company.key, { taxIdStatus: "checking", taxIdMessage: undefined })
+      const timeout = window.setTimeout(async () => {
+        try {
+          const result = await validateCompanyFields({ taxId: normalizedTaxId })
+          if (!result.taxIdAvailable) {
+            updateCompanyValidation(company.key, {
+              taxIdStatus: "invalid",
+              taxIdMessage: "Ya existe una empresa con ese RUC/NIT.",
+            })
+            return
+          }
+          updateCompanyValidation(company.key, { taxIdStatus: "valid", taxIdMessage: undefined })
+        } catch (error) {
+          console.error(error)
+          updateCompanyValidation(company.key, { taxIdStatus: "idle", taxIdMessage: undefined })
+        }
+      }, 500)
+
+      companyValidationTimeouts.current.set(company.key, timeout)
+    })
+
+    return () => {
+      companyValidationTimeouts.current.forEach((timeout) => window.clearTimeout(timeout))
+    }
+  }, [companies])
+
   const addUnit = () => {
     setUnits((prev) => [...prev, createUnit()])
   }
 
+  const addCompany = () => {
+    setCompanies((prev) => [...prev, createCompanyDraft()])
+  }
+
   const removeUnit = (key: string) => {
     setUnits((prev) => (prev.length === 1 ? prev : prev.filter((unit) => unit.key !== key)))
+  }
+
+  const removeCompany = (key: string) => {
+    setCompanies((prev) =>
+      prev.length === 1 ? prev : prev.filter((company) => company.key !== key),
+    )
   }
 
   const buildPayload = (): CreateOrganizationPayload => ({
@@ -109,6 +237,14 @@ export default function NewOrganizationPage() {
         }
       })
       .filter((unit) => unit.name.length > 0),
+    companies: companies
+      .map((company) => ({
+        name: company.name.trim(),
+        legalName: company.legalName.trim() || null,
+        taxId: company.taxId.replace(/\D/g, "") || null,
+        status: company.status.trim() || undefined,
+      }))
+      .filter((company) => company.name.length > 0),
   })
 
   const validatePayload = (payload: CreateOrganizationPayload) => {
@@ -118,12 +254,32 @@ export default function NewOrganizationPage() {
     if (!payload.units.length) {
       throw new Error("Debes definir al menos una unidad organizativa con nombre.")
     }
+    companies.forEach((company, index) => {
+      const trimmedName = company.name.trim()
+      const normalizedTaxId = company.taxId.replace(/\D/g, "")
+      if (trimmedName.length === 0) {
+        throw new Error(`La empresa #${index + 1} necesita un nombre comercial.`)
+      }
+      if (normalizedTaxId.length !== 0 && normalizedTaxId.length !== 11) {
+        throw new Error(`El RUC de la empresa #${index + 1} debe tener 11 dÃ­gitos.`)
+      }
+      const validation = companyValidation[company.key]
+      if (validation?.taxIdStatus === "invalid") {
+        throw new Error(`El RUC de la empresa #${index + 1} ya existe en el sistema.`)
+      }
+      if (validation?.taxIdStatus === "checking") {
+        throw new Error(
+          `AÃºn estamos verificando el RUC de la empresa #${index + 1}. Espera un momento.`,
+        )
+      }
+    })
   }
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault()
     if (submitting) return
 
+    setShowErrors(true)
     const payload = buildPayload()
 
     try {
@@ -175,7 +331,11 @@ export default function NewOrganizationPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+      >
         <section className="space-y-6">
           <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
             <CardHeader className="space-y-1">
@@ -198,9 +358,21 @@ export default function NewOrganizationPage() {
                   placeholder="Ej. Corporación Andes"
                   value={organization.name}
                   onChange={(event) => handleOrganizationChange("name", event.target.value)}
-                  required
-                  className="bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600"
+                  aria-invalid={showErrors && !organization.name.trim()}
+                  className={cn(
+                    "bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600",
+                    showErrors &&
+                      !organization.name.trim() &&
+                      "border-rose-400 ring-1 ring-rose-200/70 dark:border-rose-500 dark:ring-rose-500/20",
+                  )}
                 />
+
+                {showErrors && !organization.name.trim() ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-rose-200/70 bg-rose-50/70 px-3 py-2 text-xs text-rose-700 shadow-sm dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200">
+                    <Info className="size-4 text-rose-500" />
+                    Completa este campo para continuar.
+                  </div>
+                ) : null}
               </div>
 
               <div className="space-y-2">
@@ -244,6 +416,227 @@ export default function NewOrganizationPage() {
           <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
             <CardHeader className="space-y-1">
               <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
+                <Building2 className="size-5 text-sky-600 dark:text-slate-100" />
+                Empresas iniciales
+              </CardTitle>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                Registra una o mas empresas junto con la organizacion para agilizar la puesta en
+                marcha del tenant.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4">
+                {companies.map((company, index) => {
+                  const normalizedTaxId = company.taxId.replace(/\D/g, "")
+                  const taxIdValid = normalizedTaxId.length === 0 || normalizedTaxId.length === 11
+                  const validation = companyValidation[company.key]
+                  return (
+                    <div
+                      key={company.key}
+                      className="rounded-lg border border-sky-100 bg-sky-50/50 p-4 shadow-xs transition-colors dark:border-slate-700 dark:bg-slate-900/70"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-100">
+                          <ClipboardList className="size-4 text-sky-600 dark:text-slate-300" />
+                          Empresa #{index + 1}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeCompany(company.key)}
+                          disabled={companies.length === 1}
+                          className="cursor-pointer text-slate-500 hover:text-rose-500 disabled:opacity-50"
+                          aria-label="Eliminar empresa"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label
+                              htmlFor={`company-name-${company.key}`}
+                              className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                            >
+                              Nombre comercial
+                              {renderFieldChip(Boolean(company.name.trim()), true)}
+                            </Label>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex cursor-pointer items-center text-slate-400">
+                                    <Info className="size-4" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="rounded-lg bg-white/95 text-xs text-slate-700 shadow-lg dark:bg-slate-900 dark:text-slate-200">
+                                  Este nombre es visible para los usuarios de la organizaci??n.
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                          <Input
+                            id={`company-name-${company.key}`}
+                            placeholder="Ej. Mi Empresa SAC"
+                            value={company.name}
+                            onChange={(event) =>
+                              handleCompanyChange(company.key, "name", event.target.value)
+                            }
+                            className="cursor-text bg-white focus-visible:ring-sky-300 dark:bg-slate-950 dark:border-slate-700 dark:focus-visible:ring-slate-600"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label
+                              htmlFor={`company-legal-${company.key}`}
+                              className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                            >
+                              Razon social (opcional)
+                              {renderFieldChip(Boolean(company.legalName.trim()))}
+                            </Label>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex cursor-pointer items-center text-slate-400">
+                                    <Info className="size-4" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="rounded-lg bg-white/95 text-xs text-slate-700 shadow-lg dark:bg-slate-900 dark:text-slate-200">
+                                  Raz??n social usada en documentos fiscales.
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                          <Input
+                            id={`company-legal-${company.key}`}
+                            placeholder="Ej. Mi Empresa Sociedad An??nima"
+                            value={company.legalName}
+                            onChange={(event) =>
+                              handleCompanyChange(company.key, "legalName", event.target.value)
+                            }
+                            className="cursor-text bg-white focus-visible:ring-sky-300 dark:bg-slate-950 dark:border-slate-700 dark:focus-visible:ring-slate-600"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label
+                              htmlFor={`company-tax-${company.key}`}
+                              className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                            >
+                              RUC / NIT (opcional)
+                              {renderFieldChip(normalizedTaxId.length === 11)}
+                            </Label>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex cursor-pointer items-center text-slate-400">
+                                    <Info className="size-4" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="rounded-lg bg-white/95 text-xs text-slate-700 shadow-lg dark:bg-slate-900 dark:text-slate-200">
+                                  Solo acepta 11 d??gitos cuando se completa.
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                          <Input
+                            id={`company-tax-${company.key}`}
+                            placeholder="Ingrese el identificador fiscal"
+                            value={normalizedTaxId}
+                            onChange={(event) =>
+                              handleCompanyChange(
+                                company.key,
+                                "taxId",
+                                event.target.value.replace(/\D/g, "").slice(0, 11),
+                              )
+                            }
+                            inputMode="numeric"
+                            maxLength={11}
+                            className={cn(
+                              "cursor-text bg-white focus-visible:ring-sky-300 dark:bg-slate-950 dark:border-slate-700 dark:focus-visible:ring-slate-600",
+                              (!taxIdValid || validation?.taxIdStatus === "invalid") &&
+                                "border-rose-400 dark:border-rose-500",
+                            )}
+                          />
+                          {!taxIdValid ? (
+                            <p className="text-xs text-rose-500">
+                              El RUC debe tener exactamente 11 digitos.
+                            </p>
+                          ) : validation?.taxIdStatus === "checking" ? (
+                            <p className="text-xs text-amber-600">
+                              Verificando RUC...
+                            </p>
+                          ) : validation?.taxIdStatus === "invalid" ? (
+                            <p className="text-xs text-rose-500">
+                              {validation.taxIdMessage ?? "Ya existe una empresa con ese RUC/NIT."}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              Estado
+                              {renderFieldChip(Boolean(company.status), true)}
+                            </Label>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex cursor-pointer items-center text-slate-400">
+                                    <Info className="size-4" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="rounded-lg bg-white/95 text-xs text-slate-700 shadow-lg dark:bg-slate-900 dark:text-slate-200">
+                                  Define si la empresa estar?? activa al crearse.
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                          <Select
+                            value={company.status}
+                            onValueChange={(value) =>
+                              handleCompanyChange(company.key, "status", value)
+                            }
+                          >
+                            <SelectTrigger className="cursor-pointer bg-white focus-visible:ring-sky-300 dark:bg-slate-950 dark:border-slate-700 dark:focus-visible:ring-slate-600">
+                              <SelectValue placeholder="Estado" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATUS_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addCompany}
+                className="w-full cursor-pointer gap-2 rounded-full border-sky-200 bg-white text-sky-700 hover:bg-sky-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                <Plus className="size-4" />
+                Añadir otra empresa
+              </Button>
+            </CardContent>
+            <CardFooter className="text-xs text-slate-500 dark:text-slate-400">
+              {activeCompanies} de {companies.length} empresas quedaran activas al crear la
+              organizacion.
+            </CardFooter>
+          </Card>
+
+          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+            <CardHeader className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
                 <Layers className="size-5 text-sky-600 dark:text-slate-100" />
                 Unidades organizativas
               </CardTitle>
@@ -272,7 +665,7 @@ export default function NewOrganizationPage() {
                         size="icon"
                         onClick={() => removeUnit(unit.key)}
                         disabled={units.length === 1}
-                        className="text-slate-500 hover:text-rose-500 disabled:opacity-50"
+                        className="cursor-pointer text-slate-500 hover:text-rose-500 disabled:opacity-50"
                         aria-label="Eliminar unidad"
                       >
                         <Trash2 className="size-4" />
@@ -340,7 +733,7 @@ export default function NewOrganizationPage() {
                 type="button"
                 variant="outline"
                 onClick={addUnit}
-                className="w-full gap-2 rounded-full border-sky-200 bg-white text-sky-700 hover:bg-sky-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                className="w-full cursor-pointer gap-2 rounded-full border-sky-200 bg-white text-sky-700 hover:bg-sky-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 <Plus className="size-4" />
                 Añadir otra unidad
@@ -423,7 +816,7 @@ export default function NewOrganizationPage() {
               <Button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-full bg-cyan-600 text-white shadow-sm transition hover:bg-cyan-700 hover:shadow dark:bg-slate-700 dark:hover:bg-slate-600"
+                className="group relative w-full cursor-pointer rounded-full bg-cyan-600 text-white shadow-sm transition hover:bg-cyan-700 hover:shadow dark:bg-slate-700 dark:hover:bg-slate-600"
               >
                 {submitting ? "Creando organización..." : "Crear organización"}
               </Button>

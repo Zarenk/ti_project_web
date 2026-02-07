@@ -70,6 +70,7 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
     return new ContextRestoreService()
   }, [isPublicSignup])
   const restoreToastShownRef = useRef(false)
+  const missingCookiesToastShownRef = useRef(false)
   const normalizedRole = role?.toUpperCase() ?? ""
   const isGlobalSuperAdmin = normalizedRole === "SUPER_ADMIN_GLOBAL"
   const isLandingUser =
@@ -82,6 +83,7 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
   const [socketAttempt, setSocketAttempt] = useState(0)
   const [socketDisabled, setSocketDisabled] = useState(false)
   const [pendingRefresh, setPendingRefresh] = useState(false)
+  const manualOverrideUntilRef = useRef(0)
 
   const resolveReasonMessage = (reason: string | null): string => {
     switch (reason) {
@@ -222,6 +224,17 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
         setLoading(false)
         return
       }
+      if (typeof document !== "undefined") {
+        const hasTenantCookies =
+          document.cookie.includes("tenant_org_id=") ||
+          document.cookie.includes("tenant_company_id=")
+        if (!hasTenantCookies && !missingCookiesToastShownRef.current) {
+          missingCookiesToastShownRef.current = true
+          toast.warning(
+            "Se borraron las cookies o el contexto expiró. Selecciona una organización nuevamente.",
+          )
+        }
+      }
 
       if (!isGlobalSuperAdmin) {
         try {
@@ -289,8 +302,12 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<TenantSelectionChangeDetail>).detail
       if (detail?.source === "manual") {
+        manualOverrideUntilRef.current = Date.now() + 3000
         applySelection({ orgId: detail.orgId ?? null, companyId: detail.companyId ?? null })
         setStatus({ state: "idle" })
+        return
+      }
+      if (Date.now() < manualOverrideUntilRef.current) {
         return
       }
       void resolveSelection(detail ?? undefined)

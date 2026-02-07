@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { getUnansweredMessages } from "@/app/dashboard/messages/messages.api";
 import { useAuth } from "./auth-context";
+import { useOptionalTenantSelection } from "@/context/tenant-selection-context";
 
 interface MessagesContextType {
   pendingCounts: Record<number, number>;
@@ -14,7 +15,11 @@ const MessagesContext = createContext<MessagesContextType | undefined>(undefined
 
 export function MessagesProvider({ children }: { children: ReactNode }) {
   const [pendingCounts, setPendingCounts] = useState<Record<number, number>>({});
-   const { userId } = useAuth();
+  const { userId } = useAuth();
+  const tenantSelection = useOptionalTenantSelection();
+  const hasTenant = Boolean(
+    tenantSelection?.selection.orgId || tenantSelection?.selection.companyId,
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -28,11 +33,11 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         console.error(err);
       }
     };
-    if (userId !== null) {
+    if (userId !== null && hasTenant) {
       load();
     }
 
-  }, [userId]);
+  }, [userId, hasTenant]);
 
   const totalUnread = Object.values(pendingCounts).reduce(
     (acc, count) => acc + count,

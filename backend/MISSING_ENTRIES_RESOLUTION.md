@@ -38,7 +38,7 @@ Los scripts de demostración crean productos e inventarios, pero **NO crean las 
 ## 🗄️ Estructura de Datos Requerida
 
 ```
-Entry
+Entryhttps://www.youtube.com/
 ├── id: Int
 ├── storeId: Int (tienda a la que llega el producto)
 ├── userId: Int (usuario que registra la entrada)

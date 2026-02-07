@@ -21,6 +21,7 @@ import {
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 import { BrandsService } from './brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
@@ -32,6 +33,7 @@ const JPEG_MIME_TYPES = ['image/jpeg', 'image/jpg'];
 const ALLOWED_MIME_TYPES = ['image/png', 'image/svg+xml', ...JPEG_MIME_TYPES];
 
 @Controller('brands')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class BrandsController {
   constructor(private readonly brandsService: BrandsService) {}
 

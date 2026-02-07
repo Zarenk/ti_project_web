@@ -1,8 +1,11 @@
-import { Controller, Get, Logger, Req } from '@nestjs/common';
+import { Controller, Get, Logger, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { InvoiceTemplatesMetricsService } from './metrics.service';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('invoice-templates')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class InvoiceTemplatesMetricsController {
   constructor(
     private readonly metricsService: InvoiceTemplatesMetricsService,

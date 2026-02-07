@@ -1,9 +1,12 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { AccReportsService } from './acc-reports.service';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('acc-reports')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class AccReportsController {
   constructor(private readonly service: AccReportsService) {}
 

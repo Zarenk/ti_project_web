@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Req, UseGuards } from '@nestjs/common';
 import { ExchangeService } from './exchange.service';
 import {
   CreateExchangeDto,
@@ -7,8 +7,11 @@ import {
 import { UpdateExchangeDto } from './dto/update-exchange.dto';
 import { Request } from 'express';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('exchange')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class ExchangeController {
   constructor(private readonly exchangeService: ExchangeService) {}
 

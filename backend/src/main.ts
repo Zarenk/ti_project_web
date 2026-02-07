@@ -8,6 +8,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { MetricsService } from './metrics/metrics.service';
 import { TelemetryInterceptor } from './metrics/trace.interceptor';
 import { TenantHeaderSanitizerMiddleware } from './common/middleware/tenant-header.middleware';
+import { PrismaService } from './prisma/prisma.service';
+import { TenantSlugResolverMiddleware } from './common/middleware/tenant-slug-resolver.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -18,13 +20,26 @@ async function bootstrap() {
     await import('./metrics/tracing');
   }
 
-  const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map((o) =>
-    o.trim(),
-  ) || ['http://localhost:3000'];
-  console.log('[CORS]', allowedOrigins)
+  const allowedOrigins =
+    process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()) || [
+      'http://localhost:3000',
+    ];
+  console.log('[CORS]', allowedOrigins);
+
+  const isAllowedOrigin = (origin?: string) => {
+    if (!origin) return true;
+    if (allowedOrigins.includes(origin)) return true;
+    if (/^https?:\/\/[^.]+\.lvh\.me(?::\d+)?$/i.test(origin)) return true;
+    return false;
+  };
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
     allowedHeaders: [
@@ -50,6 +65,10 @@ async function bootstrap() {
 
   const headerSanitizer = new TenantHeaderSanitizerMiddleware();
   app.use('/api', (req, res, next) => headerSanitizer.use(req, res, next));
+
+  const prisma = app.get(PrismaService);
+  const slugResolver = new TenantSlugResolverMiddleware(prisma);
+  app.use('/api', (req, res, next) => slugResolver.use(req, res, next));
 
   // Logging justo antes del ValidationPipe para verificar cómo llegan las cabeceras sanitizadas
   app.use('/api', (req, _res, next) => {

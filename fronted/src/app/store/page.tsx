@@ -27,11 +27,12 @@ import {
   SheetTrigger,
   SheetDescription,
 } from "@/components/ui/sheet"
-import { getProducts } from "../dashboard/products/products.api"
-import { getStoresWithProduct } from "../dashboard/inventory/inventory.api"
+import { getProducts, getPublicProducts } from "../dashboard/products/products.api"
+import { getStoresWithProduct, getPublicStoresWithProduct } from "../dashboard/inventory/inventory.api"
 import Link from "next/link"
 import { toast } from "sonner"
 import { useCart } from "@/context/cart-context"
+import { getAuthToken } from "@/utils/auth-token"
 import { AdminProductImageButton } from "@/components/admin/AdminProductImageButton"
 import { AdminProductEditButton } from "@/components/admin/AdminProductEditButton"
 
@@ -46,7 +47,6 @@ type ProductsResponse = Awaited<ReturnType<typeof getProducts>>
 type ProductListItem = ProductsResponse extends Array<infer Item> ? Item : never
 type StoreStockResponse = Awaited<ReturnType<typeof getStoresWithProduct>>
 type StoreStockRecord = StoreStockResponse extends Array<infer Item> ? Item : never
-
 interface Product {
   id: number
   name: string
@@ -122,12 +122,10 @@ const mapSpecification = (spec: unknown): Product["specification"] | undefined =
 
 const calculateTotalStock = (stores: StoreStockRecord[]): number =>
   stores.reduce((sum, store) => sum + (parseNumber(store?.stock) ?? 0), 0)
-
 const normalizeBaseProduct = (product: ProductListItem): Omit<Product, "stock"> => {
   const price = parseNumber(product?.priceSell) ?? parseNumber(product?.price) ?? 0
   const categoryName =
     typeof product?.category?.name === "string" ? product.category.name : "Sin categorÃ­a"
-
   return {
     id: product.id,
     name: product.name,
@@ -154,13 +152,16 @@ export default function StorePage() {
     async function fetchProducts() {
       setIsLoading(true)
       try {
-        const fetchedProducts = await getProducts()
+        const hasAuth = Boolean(await getAuthToken())
+        const fetchedProducts = hasAuth ? await getProducts() : await getPublicProducts()
         const productList = Array.isArray(fetchedProducts) ? fetchedProducts : []
         const mapped = await Promise.all(
           productList.map(async (product) => {
             const normalized = normalizeBaseProduct(product)
             try {
-              const stores = await getStoresWithProduct(product.id)
+              const stores = hasAuth
+                ? await getStoresWithProduct(product.id)
+                : await getPublicStoresWithProduct(product.id)
               const totalStock = Array.isArray(stores) ? calculateTotalStock(stores) : null
               return { ...normalized, stock: totalStock }
             } catch (error) {
@@ -180,7 +181,6 @@ export default function StorePage() {
         }
       }
     }
-
     fetchProducts()
     return () => {
       isMounted = false
@@ -188,13 +188,11 @@ export default function StorePage() {
   }, [])
 
   const [searchTerm, setSearchTerm] = useState("")
-
   const debouncedSearchTerm = useDebounce(searchTerm, 300)
   const [sortBy, setSortBy] = useState("newest")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedBrands, setSelectedBrands] = useState<string[]>([])
   const [selectedAvailability, setSelectedAvailability] = useState<string[]>([])
-
   const searchParams = useSearchParams()
 
   useEffect(() => {
@@ -208,7 +206,7 @@ export default function StorePage() {
     }
   }, [searchParams])
 
-  // Obtener categorías y marcas únicas ordenadas alfanuméricamente
+  // Obtener categorï¿½as y marcas ï¿½nicas ordenadas alfanumï¿½ricamente
   const categories = useMemo(
     () =>
       [...new Set(products.map((p) => p.category))].sort((a, b) =>
@@ -256,7 +254,6 @@ export default function StorePage() {
       )
     }
   }
-
   // Filtrar y ordenar productos
   const filteredAndSortedProducts = useMemo(() => {
     const filtered = products.filter((product: Product) => {
@@ -267,7 +264,6 @@ export default function StorePage() {
         (product.brand?.name.toLowerCase() || '').includes(
           debouncedSearchTerm.toLowerCase()
         )
-
       // Filtro por categorÃ­a
       const matchesCategory =
         selectedCategories.length === 0 ||
@@ -279,7 +275,6 @@ export default function StorePage() {
             b.toLowerCase() ===
             (product.brand?.name?.trim().toLowerCase() || '')
         )
-
       const matchesAvailability =
         selectedAvailability.length === 0 ||
         (selectedAvailability.includes('stock') &&
@@ -287,7 +282,6 @@ export default function StorePage() {
           product.stock > 0) ||
         (selectedAvailability.includes('noStock') &&
           (product.stock === null || product.stock <= 0))
-
       return (
         matchesSearch &&
         matchesCategory &&
@@ -295,7 +289,6 @@ export default function StorePage() {
         matchesAvailability
       )
     })
-
     // Ordenar productos
     filtered.sort((a: Product, b: Product) => {
       switch (sortBy) {
@@ -318,7 +311,6 @@ export default function StorePage() {
           return 0
       }
     })
-
     return filtered
   }, [
     products,
@@ -330,7 +322,6 @@ export default function StorePage() {
   ])
 
   const totalPages = Math.ceil(filteredAndSortedProducts.length / pageSize) || 1
-
   const paginatedProducts = useMemo(() => {
     const start = (currentPage - 1) * pageSize
     return filteredAndSortedProducts.slice(start, start + pageSize)
@@ -345,7 +336,6 @@ export default function StorePage() {
       setCurrentPage(totalPages)
     }
   }, [totalPages, currentPage])
-
   // FunciÃ³n para limpiar filtros
   const clearFilters = () => {
     setSelectedCategories([])
@@ -354,6 +344,7 @@ export default function StorePage() {
     setSearchTerm("")
     setSortBy("newest")
   }
+
   const handleImageUpdate = (productId: number, nextImages: string[]) => {
     setProducts((prev) =>
       prev.map((item) =>
@@ -373,7 +364,6 @@ export default function StorePage() {
           Limpiar
         </Button>
       </div>
-
       <Accordion
         type="multiple"
         defaultValue={["categories", "brands", "availability"]}
@@ -401,7 +391,6 @@ export default function StorePage() {
             </div>
           </AccordionContent>
         </AccordionItem>
-
         {/* Filtro por marcas */}
         <AccordionItem value="brands">
           <AccordionTrigger className="text-base">Marcas</AccordionTrigger>
@@ -424,7 +413,6 @@ export default function StorePage() {
             </div>
           </AccordionContent>
         </AccordionItem>
-
         {/* Filtro por disponibilidad */}
         <AccordionItem value="availability">
           <AccordionTrigger className="text-base">
@@ -468,7 +456,7 @@ export default function StorePage() {
       </Accordion>
     </>
   )
-
+  
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -495,7 +483,6 @@ export default function StorePage() {
           </div>
         </div>
       </header>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="lg:hidden">
@@ -528,7 +515,6 @@ export default function StorePage() {
               <FiltersContent />
             </div>
           </aside>
-
           {/* Contenido principal */}
           <main className="flex-1">
             {/* Barra de herramientas */}
@@ -540,7 +526,6 @@ export default function StorePage() {
                     ? 'Cargando...'
                     : `${filteredAndSortedProducts.length} productos encontrados`}
                 </div>
-
                 <div className="flex items-center gap-2">
                   <Label htmlFor="sort" className="text-sm font-medium">
                     Ordenar por:
@@ -585,7 +570,6 @@ export default function StorePage() {
                 </div>
               </div>
             </div>
-
             {/* Grid de productos */}
             {isLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -642,7 +626,6 @@ export default function StorePage() {
                           />
                         </div>
                     </CardHeader>
-
                     <CardContent className="p-4">
                         <div className="mb-2">
                           <Badge variant="outline" className="text-xs">
@@ -709,7 +692,6 @@ export default function StorePage() {
                         </div>
                       </CardContent>
                     </Link>
-
                     {product.stock !== null && product.stock > 0 && (
                       <CardFooter
                         className="p-4 pt-0 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 transition-all"

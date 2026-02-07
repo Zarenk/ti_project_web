@@ -34,6 +34,9 @@ jest.mock('src/utils/path-utils', () => ({
 
 jest.mock('fs', () => ({
   existsSync: jest.fn().mockReturnValue(true),
+  mkdirSync: jest.fn(),
+  writeFileSync: jest.fn(),
+  readFileSync: jest.fn(() => 'test'),
 }));
 
 describe('SunatService', () => {

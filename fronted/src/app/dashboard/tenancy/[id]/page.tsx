@@ -15,28 +15,46 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  Check,
+  Plus,
+  Info,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/progress"
 
 import {
   assignOrganizationSuperAdmin,
+  createCompany,
   getOrganization,
   searchUsers,
   type OrganizationResponse,
   type UserSummary,
+  validateCompanyFields,
 } from "../tenancy.api"
 import { fetchSubscriptionSummary } from "@/lib/subscription-summary"
 import type { SubscriptionSummary } from "@/types/subscription"
 import { useTenantSelection } from "@/context/tenant-selection-context"
-import { TENANT_SELECTION_EVENT, type TenantSelectionChangeDetail } from "@/utils/tenant-preferences"
+import {
+  TENANT_SELECTION_EVENT,
+  setManualTenantSelection,
+  type TenantSelectionChangeDetail,
+} from "@/utils/tenant-preferences"
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleString(undefined, {
@@ -113,6 +131,23 @@ export default function OrganizationDetailPage({
   const [subscriptionLoading, setSubscriptionLoading] = useState(true)
   const [subscriptionError, setSubscriptionError] = useState<string | null>(null)
 
+  const [companyDialogOpen, setCompanyDialogOpen] = useState(false)
+  const [companyName, setCompanyName] = useState("")
+  const [companyLegalName, setCompanyLegalName] = useState("")
+  const [companyTaxId, setCompanyTaxId] = useState("")
+  const [companyStatus, setCompanyStatus] = useState("ACTIVE")
+  const [companySubmitting, setCompanySubmitting] = useState(false)
+  const [companyShowErrors, setCompanyShowErrors] = useState(false)
+  const [companyFieldErrors, setCompanyFieldErrors] = useState<{
+    name?: string
+    legalName?: string
+    taxId?: string
+  }>({})
+  const [companyValidation, setCompanyValidation] = useState<{
+    legalName?: "idle" | "checking" | "valid" | "invalid"
+    taxId?: "idle" | "checking" | "valid" | "invalid"
+  }>({})
+
   const [searchTerm, setSearchTerm] = useState("")
   const [searchResults, setSearchResults] = useState<UserSummary[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
@@ -183,6 +218,22 @@ export default function OrganizationDetailPage({
     void loadOrganization()
   }, [loadOrganization])
 
+  useEffect(() => {
+    if (!Number.isFinite(organizationId)) return
+    if (!organization) return
+
+    const desiredCompanyId =
+      organization.companies?.find((company) => company.id === selection.companyId)?.id ??
+      organization.companies?.[0]?.id ??
+      null
+
+    if (selection.orgId === organizationId && selection.companyId === desiredCompanyId) {
+      return
+    }
+
+    setManualTenantSelection({ orgId: organizationId, companyId: desiredCompanyId })
+  }, [organization, organizationId, selection.companyId, selection.orgId])
+
   const loadSubscription = useCallback(async () => {
     if (!Number.isFinite(organizationId)) {
       setSubscriptionError("Identificador de organizacion invalido")
@@ -222,7 +273,7 @@ export default function OrganizationDetailPage({
     const currentQuery = ++latestQueryRef.current
 
     const handle = setTimeout(() => {
-      void searchUsers(trimmed)
+      void searchUsers(trimmed, organizationId)
         .then((users) => {
           if (latestQueryRef.current === currentQuery) {
             setSearchResults(users)
@@ -302,6 +353,194 @@ export default function OrganizationDetailPage({
     }
     return null
   }, [subscription])
+
+  const normalizedTaxId = companyTaxId.replace(/\D/g, "")
+  const isTaxIdValid = normalizedTaxId.length === 0 || normalizedTaxId.length === 11
+  const hasCompanyName = Boolean(companyName.trim())
+  const hasCompanyStatus = Boolean(companyStatus.trim())
+
+  useEffect(() => {
+    if (!companyDialogOpen) return
+    setCompanyShowErrors(false)
+    setCompanyFieldErrors({})
+    setCompanyValidation({})
+  }, [companyDialogOpen])
+
+  useEffect(() => {
+    if (!companyDialogOpen || !organization?.id) return
+    const legalName = companyLegalName.trim()
+    if (!legalName) {
+      setCompanyValidation((prev) => ({ ...prev, legalName: "idle" }))
+      setCompanyFieldErrors((prev) => ({ ...prev, legalName: undefined }))
+      return
+    }
+    setCompanyValidation((prev) => ({ ...prev, legalName: "checking" }))
+    const timeout = window.setTimeout(async () => {
+      try {
+        const result = await validateCompanyFields({
+          organizationId: organization.id,
+          legalName,
+        })
+        setCompanyValidation((prev) => ({
+          ...prev,
+          legalName: result.legalNameAvailable ? "valid" : "invalid",
+        }))
+        if (!result.legalNameAvailable) {
+          setCompanyFieldErrors((prev) => ({
+            ...prev,
+            legalName:
+              "Ya existe una empresa con esa razon social en la organizacion.",
+          }))
+        } else {
+          setCompanyFieldErrors((prev) => ({ ...prev, legalName: undefined }))
+        }
+      } catch (error) {
+        console.error(error)
+      }
+    }, 500)
+    return () => window.clearTimeout(timeout)
+  }, [companyLegalName, companyDialogOpen, organization?.id])
+
+  useEffect(() => {
+    if (!companyDialogOpen || !organization?.id) return
+    if (!normalizedTaxId) {
+      setCompanyValidation((prev) => ({ ...prev, taxId: "idle" }))
+      setCompanyFieldErrors((prev) => ({ ...prev, taxId: undefined }))
+      return
+    }
+    if (normalizedTaxId.length !== 11) {
+      setCompanyValidation((prev) => ({ ...prev, taxId: "invalid" }))
+      return
+    }
+    setCompanyValidation((prev) => ({ ...prev, taxId: "checking" }))
+    const timeout = window.setTimeout(async () => {
+      try {
+        const result = await validateCompanyFields({
+          organizationId: organization.id,
+          taxId: normalizedTaxId,
+        })
+        setCompanyValidation((prev) => ({
+          ...prev,
+          taxId: result.taxIdAvailable ? "valid" : "invalid",
+        }))
+        if (!result.taxIdAvailable) {
+          setCompanyFieldErrors((prev) => ({
+            ...prev,
+            taxId: "Ya existe una empresa con ese RUC/NIT.",
+          }))
+        } else {
+          setCompanyFieldErrors((prev) => ({ ...prev, taxId: undefined }))
+        }
+      } catch (error) {
+        console.error(error)
+      }
+    }, 500)
+    return () => window.clearTimeout(timeout)
+  }, [normalizedTaxId, companyDialogOpen, organization?.id])
+
+  const renderFieldChip = (filled: boolean, required?: boolean) => (
+    <span
+      className={`ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        filled
+          ? "border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+          : required
+            ? "border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200"
+            : "border-border/60 bg-muted/30 text-muted-foreground"
+      }`}
+    >
+      {filled ? <Check className="h-3 w-3" /> : null}
+      {filled ? "Listo" : required ? "Requerido" : "Opcional"}
+    </span>
+  )
+
+  const handleCreateCompany = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      setCompanyShowErrors(true)
+      setCompanyFieldErrors({})
+      if (!organization) {
+        toast.error("Selecciona una organizacion antes de crear empresas.")
+        return
+      }
+      const trimmedName = companyName.trim()
+      if (!trimmedName) {
+        setCompanyFieldErrors({ name: "El nombre de la empresa es obligatorio." })
+        toast.error("El nombre de la empresa es obligatorio.")
+        return
+      }
+      if (!isTaxIdValid) {
+        setCompanyFieldErrors({ taxId: "El RUC debe tener exactamente 11 numeros." })
+        toast.error("El RUC debe tener 11 numeros.")
+        return
+      }
+      if (companyValidation.legalName === "invalid") {
+        setCompanyFieldErrors((prev) => ({
+          ...prev,
+          legalName:
+            prev.legalName ??
+            "Ya existe una empresa con esa razon social en la organizacion.",
+        }))
+        return
+      }
+      if (companyValidation.taxId === "invalid") {
+        setCompanyFieldErrors((prev) => ({
+          ...prev,
+          taxId: prev.taxId ?? "Ya existe una empresa con ese RUC/NIT.",
+        }))
+        return
+      }
+
+      setCompanySubmitting(true)
+      try {
+        const created = await createCompany({
+          name: trimmedName,
+          legalName: companyLegalName.trim() || undefined,
+          taxId: normalizedTaxId || undefined,
+          status: companyStatus.trim() || undefined,
+          organizationId: organization.id,
+        })
+        setOrganization((previous) => {
+          if (!previous) return previous
+          const companies = previous.companies ? [...previous.companies, created] : [created]
+          return { ...previous, companies }
+        })
+        setCompanyDialogOpen(false)
+        setCompanyName("")
+        setCompanyLegalName("")
+        setCompanyTaxId("")
+        setCompanyStatus("ACTIVE")
+        toast.success("Empresa creada correctamente.")
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "No se pudo crear la empresa."
+        const nextErrors: { name?: string; legalName?: string; taxId?: string } = {}
+        const lowerMessage = message.toLowerCase()
+        if (lowerMessage.includes("razon social")) {
+          nextErrors.legalName = message
+        }
+        if (lowerMessage.includes("ruc") || lowerMessage.includes("nit")) {
+          nextErrors.taxId = message
+        }
+        if (lowerMessage.includes("nombre")) {
+          nextErrors.name = message
+        }
+        if (Object.keys(nextErrors).length > 0) {
+          setCompanyFieldErrors(nextErrors)
+        }
+        toast.error(message)
+      } finally {
+        setCompanySubmitting(false)
+      }
+    },
+    [
+      organization,
+      companyLegalName,
+      companyName,
+      companyStatus,
+      normalizedTaxId,
+      isTaxIdValid,
+      companyValidation,
+    ],
+  )
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -416,6 +655,65 @@ export default function OrganizationDetailPage({
                     </p>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-wrap items-start justify-between gap-3">
+                <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-slate-100">
+                  <Building2 className="size-5 text-sky-600 dark:text-slate-100" />
+                  Empresas de la organizacion
+                </CardTitle>
+                <Button
+                  type="button"
+                  onClick={() => setCompanyDialogOpen(true)}
+                  className="gap-2 cursor-pointer"
+                >
+                  <Plus className="size-4" />
+                  Agregar empresa
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+                {!organization.companies || organization.companies.length === 0 ? (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Aun no hay empresas registradas en esta organizacion.
+                  </p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {organization.companies.map((company) => (
+                      <div
+                        key={company.id}
+                        className="rounded-lg border border-slate-200 p-3 dark:border-slate-700"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-medium text-slate-900 dark:text-slate-100">
+                              {company.name}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {company.legalName || "Sin razon social"}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={
+                              company.status === "ACTIVE"
+                                ? "border-emerald-600 text-emerald-700 dark:border-emerald-400 dark:text-emerald-300"
+                                : "border-amber-600 text-amber-700 dark:border-amber-400 dark:text-amber-300"
+                            }
+                          >
+                            {company.status === "ACTIVE" ? "Activa" : company.status}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                          <p>RUC: {company.taxId || "Sin RUC"}</p>
+                          <p>Vertical: {company.businessVertical || "Sin vertical"}</p>
+                          <p>Creada: {formatDate(company.createdAt)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -734,6 +1032,148 @@ export default function OrganizationDetailPage({
           </aside>
         </div>
       ) : null}
+
+      <Dialog open={companyDialogOpen} onOpenChange={setCompanyDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Agregar empresa</DialogTitle>
+            <DialogDescription>
+              La nueva empresa se asociara a la organizacion{" "}
+              <strong>{organization?.name ?? ""}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateCompany} className="mt-2 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="company-name">
+                Nombre comercial
+                {renderFieldChip(hasCompanyName, true)}
+              </Label>
+              <Input
+                id="company-name"
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                placeholder="Mi Empresa S.A."
+                required
+                className={`cursor-text ${
+                  companyShowErrors && companyFieldErrors.name
+                    ? "border-rose-400 ring-1 ring-rose-200/70 dark:border-rose-500 dark:ring-rose-500/20"
+                    : ""
+                }`}
+              />
+              {companyShowErrors && companyFieldErrors.name ? (
+                <div className="flex items-center gap-2 rounded-lg border border-rose-200/70 bg-rose-50/70 px-3 py-2 text-xs text-rose-700 shadow-sm dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200">
+                  <Info className="size-4 text-rose-500" />
+                  {companyFieldErrors.name}
+                </div>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="company-legal-name">
+                Razon social (opcional)
+                {renderFieldChip(Boolean(companyLegalName.trim()))}
+              </Label>
+              <Input
+                id="company-legal-name"
+                value={companyLegalName}
+                onChange={(event) => setCompanyLegalName(event.target.value)}
+                placeholder="Mi Empresa Sociedad Anonima"
+                className={`cursor-text ${
+                  companyShowErrors && companyFieldErrors.legalName
+                    ? "border-rose-400 ring-1 ring-rose-200/70 dark:border-rose-500 dark:ring-rose-500/20"
+                    : ""
+                }`}
+              />
+              {companyValidation.legalName === "checking" ? (
+                <div className="flex items-center gap-2 rounded-lg border border-amber-200/70 bg-amber-50/70 px-3 py-2 text-xs text-amber-700 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
+                  <Info className="size-4 text-amber-500" />
+                  Verificando razon social...
+                </div>
+              ) : companyShowErrors && companyFieldErrors.legalName ? (
+                <div className="flex items-center gap-2 rounded-lg border border-rose-200/70 bg-rose-50/70 px-3 py-2 text-xs text-rose-700 shadow-sm dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200">
+                  <Info className="size-4 text-rose-500" />
+                  {companyFieldErrors.legalName}
+                </div>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="company-tax-id">
+                RUC / NIT (opcional)
+                {renderFieldChip(normalizedTaxId.length === 11)}
+              </Label>
+              <Input
+                id="company-tax-id"
+                value={normalizedTaxId}
+                onChange={(event) =>
+                  setCompanyTaxId(event.target.value.replace(/\D/g, "").slice(0, 11))
+                }
+                placeholder="Ingrese el identificador fiscal"
+                inputMode="numeric"
+                pattern="\d{11}"
+                maxLength={11}
+                aria-invalid={!isTaxIdValid || Boolean(companyFieldErrors.taxId)}
+                className={`cursor-text ${
+                  !isTaxIdValid || (companyShowErrors && companyFieldErrors.taxId)
+                    ? "border-rose-400 ring-1 ring-rose-200/70 dark:border-rose-500 dark:ring-rose-500/20"
+                    : ""
+                }`}
+              />
+              {companyValidation.taxId === "checking" ? (
+                <div className="flex items-center gap-2 rounded-lg border border-amber-200/70 bg-amber-50/70 px-3 py-2 text-xs text-amber-700 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
+                  <Info className="size-4 text-amber-500" />
+                  Verificando RUC...
+                </div>
+              ) : companyShowErrors && !isTaxIdValid ? (
+                <div className="flex items-center gap-2 rounded-lg border border-rose-200/70 bg-rose-50/70 px-3 py-2 text-xs text-rose-700 shadow-sm dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200">
+                  <Info className="size-4 text-rose-500" />
+                  El RUC debe tener exactamente 11 numeros.
+                </div>
+              ) : companyShowErrors && companyFieldErrors.taxId ? (
+                <div className="flex items-center gap-2 rounded-lg border border-rose-200/70 bg-rose-50/70 px-3 py-2 text-xs text-rose-700 shadow-sm dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200">
+                  <Info className="size-4 text-rose-500" />
+                  {companyFieldErrors.taxId}
+                </div>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="company-status">
+                Estado
+                {renderFieldChip(hasCompanyStatus, true)}
+              </Label>
+              <Input
+                id="company-status"
+                value={companyStatus}
+                onChange={(event) => setCompanyStatus(event.target.value)}
+                placeholder="ACTIVE"
+                className="cursor-text"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCompanyDialogOpen(false)}
+                disabled={companySubmitting}
+                className="cursor-pointer"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  companySubmitting ||
+                  companyValidation.legalName === "checking" ||
+                  companyValidation.taxId === "checking" ||
+                  companyValidation.legalName === "invalid" ||
+                  companyValidation.taxId === "invalid"
+                }
+                className="cursor-pointer"
+              >
+                {companySubmitting ? "Creando..." : "Crear empresa"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

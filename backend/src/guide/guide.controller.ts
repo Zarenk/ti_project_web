@@ -9,6 +9,7 @@
   Res,
   StreamableFile,
   InternalServerErrorException,
+  UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { createReadStream } from 'fs';
@@ -17,8 +18,11 @@ import { CreateGuideDto } from './dto/create-guide.dto';
 import { zipSignedXmlFromString } from './utils/zip-signed-xml';
 import { generateDespatchXML } from './utils/generate-despatch-xml';
 import { FirmadorJavaService } from './firmador-java.service';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('guide')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class GuideController {
   constructor(
     private readonly guideService: GuideService,

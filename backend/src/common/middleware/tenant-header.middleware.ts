@@ -65,6 +65,15 @@ export class TenantHeaderSanitizerMiddleware implements NestMiddleware {
       );
     }
 
+    const hasOrg = Boolean(req.headers['x-org-id']);
+    const hasCompany = Boolean(req.headers['x-company-id']);
+    const hasAuth = Boolean(req.headers.authorization);
+    if (!hasOrg && !hasCompany && hasAuth) {
+      this.logger.debug(
+        `[tenant-missing] ${req.method} ${req.originalUrl} missing x-org-id/x-company-id`,
+      );
+    }
+
     next();
   }
 }

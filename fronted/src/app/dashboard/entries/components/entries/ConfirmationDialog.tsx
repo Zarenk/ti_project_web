@@ -10,7 +10,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface ConfirmationDialogProps {
   isDialogOpen: boolean
@@ -36,26 +35,16 @@ export const ConfirmationDialog = ({
         </AlertDialogDescription>
         <p>Estas seguro de que deseas registrar este ingreso?</p>
         <AlertDialogFooter>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <AlertDialogCancel onClick={() => setIsDialogOpen(false)}>
-                Cancelar
-              </AlertDialogCancel>
-            </TooltipTrigger>
-            <TooltipContent>Cancela el registro y vuelve al formulario.</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <AlertDialogAction
-                onClick={onSubmit}
-                disabled={isSubmitting}
-                className="cursor-pointer"
-              >
-                {isSubmitting ? 'Registrando...' : 'Confirmar'}
-              </AlertDialogAction>
-            </TooltipTrigger>
-            <TooltipContent>Confirma y guarda el ingreso de productos.</TooltipContent>
-          </Tooltip>
+          <AlertDialogCancel onClick={() => setIsDialogOpen(false)} className="cursor-pointer">
+            Cancelar
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onSubmit}
+            disabled={isSubmitting}
+            className="cursor-pointer"
+          >
+            {isSubmitting ? 'Registrando...' : 'Confirmar'}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

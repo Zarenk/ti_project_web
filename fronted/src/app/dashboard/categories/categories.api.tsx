@@ -15,6 +15,19 @@ async function authorizedFetch(url: string, init: RequestInit = {}) {
   return fetch(url, { ...init, headers });
 }
 
+async function publicFetch(url: string, init: RequestInit = {}) {
+  const auth = await getAuthHeaders();
+  const headers = new Headers(init.headers ?? {});
+
+  for (const [key, value] of Object.entries(auth)) {
+    if (value != null && value !== "") {
+      headers.set(key, value);
+    }
+  }
+
+  return fetch(url, { ...init, headers });
+}
+
 export async function createCategory(categoryData: any) {
   const res = await authorizedFetch(`${BACKEND_URL}/api/category`, {
     method: "POST",
@@ -172,6 +185,24 @@ export async function getCategoriesWithCount() {
       cache: "no-store",
     });
     if (!response.ok) {
+      throw new Error("Error al obtener las categorias con conteo");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error al obtener las categorias con conteo:", error);
+    return [];
+  }
+}
+
+export async function getPublicCategoriesWithCount() {
+  try {
+    const response = await publicFetch(`${BACKEND_URL}/api/public/category/with-count`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      if (response.status === 400) {
+        return [];
+      }
       throw new Error("Error al obtener las categorias con conteo");
     }
     return await response.json();

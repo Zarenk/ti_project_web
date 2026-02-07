@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, FormEvent, useMemo } from 'react';
+import { useState, useEffect, FormEvent, useMemo, useRef } from 'react';
+import { CheckCircle2, Info } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -91,6 +92,11 @@ export default function BrandsPage() {
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [editing, setEditing] = useState<Brand | null>(null);
+  const [showErrors, setShowErrors] = useState(false);
+  const [svgPreviewUrl, setSvgPreviewUrl] = useState<string | null>(null);
+  const [pngPreviewUrl, setPngPreviewUrl] = useState<string | null>(null);
+  const svgPreviewRef = useRef<string | null>(null);
+  const pngPreviewRef = useRef<string | null>(null);
   const dateFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat('es-ES', {
@@ -99,6 +105,72 @@ export default function BrandsPage() {
     [],
   );
   const { version } = useTenantSelection();
+
+  const hasName = Boolean(name.trim());
+
+  const renderFieldChip = (filled: boolean, required?: boolean) => (
+    <span
+      className={`ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        filled
+          ? "border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+          : required
+            ? "border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200"
+            : "border-border/60 bg-muted/30 text-muted-foreground"
+      }`}
+    >
+      {filled ? <CheckCircle2 className="h-3 w-3" /> : null}
+      {filled ? "Listo" : required ? "Requerido" : "Opcional"}
+    </span>
+  );
+  useEffect(() => {
+    return () => {
+      if (svgPreviewRef.current) {
+        URL.revokeObjectURL(svgPreviewRef.current);
+      }
+      if (pngPreviewRef.current) {
+        URL.revokeObjectURL(pngPreviewRef.current);
+      }
+    };
+  }, []);
+
+  const handleSvgFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    setSvgFile(file);
+  };
+
+  const handlePngFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    setPngFile(file);
+  };
+
+  useEffect(() => {
+    if (svgPreviewRef.current) {
+      URL.revokeObjectURL(svgPreviewRef.current);
+      svgPreviewRef.current = null;
+    }
+    if (svgFile) {
+      const url = URL.createObjectURL(svgFile);
+      svgPreviewRef.current = url;
+      setSvgPreviewUrl(url);
+    } else {
+      setSvgPreviewUrl(null);
+    }
+  }, [svgFile]);
+
+  useEffect(() => {
+    if (pngPreviewRef.current) {
+      URL.revokeObjectURL(pngPreviewRef.current);
+      pngPreviewRef.current = null;
+    }
+    if (pngFile) {
+      const url = URL.createObjectURL(pngFile);
+      pngPreviewRef.current = url;
+      setPngPreviewUrl(url);
+    } else {
+      setPngPreviewUrl(null);
+    }
+  }, [pngFile]);
+
 
   useEffect(() => {
     setPage(1);
@@ -182,6 +254,11 @@ export default function BrandsPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setShowErrors(true);
+    if (!name.trim()) {
+      toast.error('El nombre de la marca es obligatorio');
+      return;
+    }
     let processedPngFile: File | null = pngFile;
 
     try {
@@ -209,7 +286,18 @@ export default function BrandsPage() {
       setName('');
       setSvgFile(null);
       setPngFile(null);
+      if (svgPreviewRef.current) {
+        URL.revokeObjectURL(svgPreviewRef.current);
+        svgPreviewRef.current = null;
+      }
+      if (pngPreviewRef.current) {
+        URL.revokeObjectURL(pngPreviewRef.current);
+        pngPreviewRef.current = null;
+      }
+      setSvgPreviewUrl(null);
+      setPngPreviewUrl(null);
       setEditing(null);
+      setShowErrors(false);
       await fetchBrands();
     } catch (err) {
       console.error(err);
@@ -221,6 +309,16 @@ export default function BrandsPage() {
     setName(brand.name);
     setSvgFile(null);
     setPngFile(null);
+    if (svgPreviewRef.current) {
+      URL.revokeObjectURL(svgPreviewRef.current);
+      svgPreviewRef.current = null;
+    }
+    if (pngPreviewRef.current) {
+      URL.revokeObjectURL(pngPreviewRef.current);
+      pngPreviewRef.current = null;
+    }
+    setSvgPreviewUrl(null);
+    setPngPreviewUrl(null);
   }
 
   async function handleDelete(id: number) {
@@ -279,8 +377,9 @@ export default function BrandsPage() {
                   id="sortNewest"
                   checked={sortByNewest}
                   onCheckedChange={(checked) => setSortByNewest(checked === true)}
+                  className="cursor-pointer"
                 />
-                <Label htmlFor="sortNewest" className="text-sm font-medium leading-tight">
+                <Label htmlFor="sortNewest" className="cursor-pointer text-sm font-medium leading-tight">
                   Ordenar por última marca ingresada
                 </Label>
               </div>
@@ -293,36 +392,99 @@ export default function BrandsPage() {
             <CardTitle className="text-lg font-semibold">{editing ? 'Editar marca' : 'Agregar nueva marca'}</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="name">Nombre</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+                <Label htmlFor="name">
+                  Nombre
+                  {renderFieldChip(hasName, true)}
+                </Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  aria-invalid={showErrors && !name.trim()}
+                  className={
+                    showErrors && !name.trim()
+                      ? "border-rose-400 ring-1 ring-rose-200/70 dark:border-rose-500 dark:ring-rose-500/20"
+                      : ""
+                  }
+                />
+                {showErrors && !name.trim() ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-rose-200/70 bg-rose-50/70 px-3 py-2 text-xs text-rose-700 shadow-sm dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200">
+                    <Info className="size-4 text-rose-500" />
+                    Completa este campo para continuar.
+                  </div>
+                ) : null}
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="svg">Logo SVG</Label>
+                <Label htmlFor="svg">
+                  Logo SVG
+                  {renderFieldChip(Boolean(svgFile))}
+                </Label>
                 <Input
                   id="svg"
                   type="file"
                   accept="image/svg+xml"
-                  onChange={(e) => setSvgFile(e.target.files?.[0] || null)}
+                  onChange={handleSvgFileChange}
+                  className="cursor-pointer"
                 />
+                <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/30 p-3">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/80">
+                    {svgPreviewUrl ? (
+                      <img
+                        src={svgPreviewUrl}
+                        alt="Vista previa SVG"
+                        className="h-12 w-12 rounded bg-white object-contain p-1 shadow-sm"
+                      />
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">Sin vista</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {svgPreviewUrl
+                      ? "Vista previa del SVG seleccionado."
+                      : "Selecciona un SVG para ver la previsualización."}
+                  </div>
+                </div>
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="png">Logo PNG/JPEG</Label>
+                <Label htmlFor="png">
+                  Logo PNG/JPEG
+                  {renderFieldChip(Boolean(pngFile))}
+                </Label>
                 <Input
                   id="png"
                   type="file"
                   accept="image/png, image/jpeg"
-                  onChange={(e) => setPngFile(e.target.files?.[0] || null)}
+                  onChange={handlePngFileChange}
+                  className="cursor-pointer"
                 />
+                <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/30 p-3">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/80">
+                    {pngPreviewUrl ? (
+                      <img
+                        src={pngPreviewUrl}
+                        alt="Vista previa PNG"
+                        className="h-12 w-12 rounded bg-white object-contain p-1 shadow-sm"
+                      />
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">Sin vista</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {pngPreviewUrl
+                      ? "Vista previa del PNG/JPEG seleccionado."
+                      : "Selecciona un PNG/JPEG para ver la previsualización."}
+                  </div>
+                </div>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
                 {editing && (
-                  <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+                  <Button type="button" variant="secondary" onClick={() => setEditing(null)} className="cursor-pointer">
                     Cancelar
                   </Button>
                   )}
-                <Button type="submit" className="sm:min-w-[8rem]">
+                <Button type="submit" className="sm:min-w-[8rem] cursor-pointer">
                   {editing ? 'Actualizar' : 'Guardar'}
                 </Button>
               </div>
@@ -373,11 +535,11 @@ export default function BrandsPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button type="button" size="sm" onClick={() => handleEdit(brand)}>
+                    <Button type="button" size="sm" onClick={() => handleEdit(brand)} className="cursor-pointer">
                       Editar
                     </Button>
                   {brand.logoPng && !brand.logoSvg && (
-                      <Button type="button" size="sm" variant="secondary" onClick={() => handleConvert(brand.id)}>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => handleConvert(brand.id)} className="cursor-pointer">
                         PNG a SVG
                       </Button>
                     )}
@@ -387,6 +549,7 @@ export default function BrandsPage() {
                         size="sm"
                         variant="destructive"
                         onClick={() => handleDelete(brand.id)}
+                        className="cursor-pointer"
                       >
                         Eliminar
                       </Button>
@@ -431,11 +594,11 @@ export default function BrandsPage() {
                         )}
                       </TableCell>
                       <TableCell className="space-x-2 text-right">
-                        <Button type="button" size="sm" onClick={() => handleEdit(brand)}>
+                        <Button type="button" size="sm" onClick={() => handleEdit(brand)} className="cursor-pointer">
                           Editar
                         </Button>
                         {brand.logoPng && !brand.logoSvg && (
-                          <Button type="button" size="sm" variant="secondary" onClick={() => handleConvert(brand.id)}>
+                          <Button type="button" size="sm" variant="secondary" onClick={() => handleConvert(brand.id)} className="cursor-pointer">
                             PNG a SVG
                           </Button>
                         )}
@@ -466,6 +629,7 @@ export default function BrandsPage() {
               size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
+              className="cursor-pointer"
             >
               Anterior
             </Button>
@@ -482,6 +646,7 @@ export default function BrandsPage() {
                 )
               }
               disabled={page >= Math.ceil(total / pageSize)}
+              className="cursor-pointer"
             >
               Siguiente
             </Button>
@@ -497,7 +662,7 @@ export default function BrandsPage() {
                 setPageSize(parseInt(e.target.value));
                 setPage(1);
               }}
-              className="w-full rounded-lg border border-border/70 bg-background px-3 py-2 text-sm text-foreground shadow-sm sm:w-32"
+              className="w-full cursor-pointer rounded-lg border border-border/70 bg-background px-3 py-2 text-sm text-foreground shadow-sm sm:w-32"
             >
               <option value={5}>5</option>
               <option value={10}>10</option>

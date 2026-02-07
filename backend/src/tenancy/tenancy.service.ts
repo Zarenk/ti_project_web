@@ -13,6 +13,7 @@ import {
   OrganizationUnitInputDto,
 } from './dto/create-tenancy.dto';
 import { CreateCompanyDto } from './dto/create-company.dto';
+import { ValidateCompanyDto } from './dto/validate-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import {
@@ -444,12 +445,17 @@ export class TenancyService {
       throw new BadRequestException('El nombre de la empresa es obligatorio.');
     }
 
-    const organizationId = resolveOrganizationId({
-      provided: dto.organizationId ?? null,
-      fallbacks: [tenant.organizationId ?? null],
-      mismatchError:
-        'La organizacion proporcionada no coincide con el contexto actual.',
-    });
+    const providedOrganizationId = dto.organizationId ?? null;
+    const contextOrganizationId = tenant.organizationId ?? null;
+    const organizationId =
+      tenant.isGlobalSuperAdmin && providedOrganizationId
+        ? providedOrganizationId
+        : resolveOrganizationId({
+            provided: providedOrganizationId,
+            fallbacks: [contextOrganizationId],
+            mismatchError:
+              'La organizacion proporcionada no coincide con el contexto actual.',
+          });
 
     if (organizationId === null) {
       throw new BadRequestException(
@@ -507,6 +513,31 @@ export class TenancyService {
       dto.documentSequences,
     );
 
+    if (legalName?.length) {
+      const existingLegalName = await this.prisma.company.findFirst({
+        where: {
+          organizationId,
+          legalName: { equals: legalName, mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      if (existingLegalName) {
+        throw new ConflictException(
+          'Ya existe una empresa con esa razon social en la organizacion.',
+        );
+      }
+    }
+
+    if (taxId?.length) {
+      const existingTaxId = await this.prisma.company.findFirst({
+        where: { taxId },
+        select: { id: true },
+      });
+      if (existingTaxId) {
+        throw new ConflictException('Ya existe una empresa con ese RUC/NIT.');
+      }
+    }
+
     try {
       const company = await this.prisma.$transaction(async (tx) => {
         const created = await tx.company.create({
@@ -554,9 +585,9 @@ export class TenancyService {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           const target = (error.meta?.target ?? []) as string[];
-          if (target.includes('organizationId_name')) {
+          if (target.includes('organizationId_legalName')) {
             throw new ConflictException(
-              'Ya existe una empresa con ese nombre en la organizacion.',
+              'Ya existe una empresa con esa razon social en la organizacion.',
             );
           }
           if (target.includes('taxId')) {
@@ -571,6 +602,84 @@ export class TenancyService {
       }
       throw error;
     }
+  }
+
+  async validateCompanyFields(
+    dto: ValidateCompanyDto,
+    tenant: TenantContext,
+  ): Promise<{ legalNameAvailable: boolean; taxIdAvailable: boolean }> {
+    if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
+      throw new ForbiddenException(
+        'Solo los super administradores pueden validar empresas.',
+      );
+    }
+
+    const providedOrganizationId = dto.organizationId ?? null;
+    const contextOrganizationId = tenant.organizationId ?? null;
+    const organizationId = tenant.isGlobalSuperAdmin
+      ? providedOrganizationId ?? contextOrganizationId
+      : resolveOrganizationId({
+          provided: providedOrganizationId,
+          fallbacks: [contextOrganizationId],
+          mismatchError:
+            'La organizacion proporcionada no coincide con el contexto actual.',
+        });
+
+    if (organizationId !== null && !Number.isFinite(organizationId)) {
+      throw new BadRequestException('Organizacion invalida para la validacion.');
+    }
+
+    if (
+      organizationId !== null &&
+      (tenant.allowedOrganizationIds?.length ?? 0) > 0 &&
+      !tenant.allowedOrganizationIds?.includes(organizationId)
+    ) {
+      throw new ForbiddenException(
+        'No tienes permisos para gestionar empresas de esta organizacion.',
+      );
+    }
+
+    const legalName = dto.legalName?.trim() ?? '';
+    const taxId = dto.taxId?.trim() ?? '';
+    const companyId = dto.companyId ?? null;
+
+    if (companyId !== null && !Number.isFinite(companyId)) {
+      throw new BadRequestException('Empresa invalida para la validacion.');
+    }
+
+    let legalNameAvailable = true;
+    let taxIdAvailable = true;
+
+    try {
+      if (legalName.length > 0 && organizationId !== null) {
+        const existingLegalName = await this.prisma.company.findFirst({
+          where: {
+            organizationId,
+            legalName: { equals: legalName, mode: 'insensitive' },
+            ...(companyId ? { NOT: { id: companyId } } : {}),
+          },
+          select: { id: true },
+        });
+        legalNameAvailable = !existingLegalName;
+      }
+
+      if (taxId.length > 0) {
+        const existingTaxId = await this.prisma.company.findFirst({
+          where: {
+            taxId,
+            ...(companyId ? { NOT: { id: companyId } } : {}),
+          },
+          select: { id: true },
+        });
+        taxIdAvailable = !existingTaxId;
+      }
+    } catch (error) {
+      throw new BadRequestException(
+        'No se pudo validar la empresa. Verifica los datos enviados.',
+      );
+    }
+
+    return { legalNameAvailable, taxIdAvailable };
   }
 
   async listCompanies(tenant: TenantContext): Promise<TenancySnapshot[]> {
@@ -713,14 +822,16 @@ export class TenancyService {
       data.name = trimmed;
     }
 
-    if (dto.legalName !== undefined) {
-      const trimmed = dto.legalName?.trim() ?? '';
-      data.legalName = trimmed.length ? trimmed : null;
+    const nextLegalNameInput =
+      dto.legalName !== undefined ? (dto.legalName?.trim() ?? '') : undefined;
+    if (nextLegalNameInput !== undefined) {
+      data.legalName = nextLegalNameInput.length ? nextLegalNameInput : null;
     }
 
-    if (dto.taxId !== undefined) {
-      const trimmed = dto.taxId?.trim() ?? '';
-      data.taxId = trimmed.length ? trimmed : null;
+    const nextTaxIdInput =
+      dto.taxId !== undefined ? (dto.taxId?.trim() ?? '') : undefined;
+    if (nextTaxIdInput !== undefined) {
+      data.taxId = nextTaxIdInput.length ? nextTaxIdInput : null;
     }
 
     if (dto.status !== undefined) {
@@ -777,6 +888,48 @@ export class TenancyService {
       data.sunatKeyPathProd = sunatKeyPathProd ?? null;
     }
 
+    if (nextLegalNameInput !== undefined) {
+      const nextLegalName =
+        nextLegalNameInput.length > 0 ? nextLegalNameInput : null;
+      const currentLegalName = existing.legalName?.trim() ?? null;
+      if (
+        nextLegalName &&
+        nextLegalName.localeCompare(currentLegalName ?? '', undefined, {
+          sensitivity: 'accent',
+        }) !== 0
+      ) {
+        const existingLegalName = await this.prisma.company.findFirst({
+          where: {
+            organizationId: existing.organizationId,
+            legalName: { equals: nextLegalName, mode: 'insensitive' },
+            NOT: { id: existing.id },
+          },
+          select: { id: true },
+        });
+        if (existingLegalName) {
+          throw new ConflictException(
+            'Ya existe una empresa con esa razon social en la organizacion.',
+          );
+        }
+      }
+    }
+
+    if (nextTaxIdInput !== undefined) {
+      const nextTaxId = nextTaxIdInput.length > 0 ? nextTaxIdInput : null;
+      if (nextTaxId && nextTaxId !== existing.taxId) {
+        const existingTaxId = await this.prisma.company.findFirst({
+          where: {
+            taxId: nextTaxId,
+            NOT: { id: existing.id },
+          },
+          select: { id: true },
+        });
+        if (existingTaxId) {
+          throw new ConflictException('Ya existe una empresa con ese RUC/NIT.');
+        }
+      }
+    }
+
     try {
       const updatedCompany = await this.prisma.$transaction(async (tx) => {
         const updated = await tx.company.update({
@@ -803,9 +956,9 @@ export class TenancyService {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           const target = (error.meta?.target ?? []) as string[];
-          if (target.includes('organizationId_name')) {
+          if (target.includes('organizationId_legalName')) {
             throw new ConflictException(
-              'Ya existe una empresa con ese nombre en la organizacion.',
+              'Ya existe una empresa con esa razon social en la organizacion.',
             );
           }
           if (target.includes('taxId')) {
@@ -1328,21 +1481,14 @@ export class TenancyService {
 
     const prisma = tx as unknown as PrismaService as any;
     const createdCompanies: CompanySnapshot[] = [];
-    const seenNames = new Set<string>();
+    const seenLegalNames = new Set<string>();
+    const seenTaxIds = new Set<string>();
 
     for (const company of companies) {
       const trimmedName = company.name?.trim();
       if (!trimmedName) {
         throw new BadRequestException('Las companias requieren un nombre.');
       }
-
-      const normalizedName = trimmedName.toLowerCase();
-      if (seenNames.has(normalizedName)) {
-        throw new BadRequestException(
-          `La compania "${trimmedName}" esta duplicada en la solicitud.`,
-        );
-      }
-      seenNames.add(normalizedName);
 
       const legalName =
         company.legalName && company.legalName.trim().length > 0
@@ -1352,6 +1498,23 @@ export class TenancyService {
         company.taxId && company.taxId.trim().length > 0
           ? company.taxId.trim()
           : null;
+      const legalNameKey = legalName?.toLowerCase();
+      if (legalNameKey) {
+        if (seenLegalNames.has(legalNameKey)) {
+          throw new BadRequestException(
+            `La razon social "${legalName}" esta duplicada en la solicitud.`,
+          );
+        }
+        seenLegalNames.add(legalNameKey);
+      }
+      if (taxId) {
+        if (seenTaxIds.has(taxId)) {
+          throw new BadRequestException(
+            `El RUC/NIT "${taxId}" esta duplicado en la solicitud.`,
+          );
+        }
+        seenTaxIds.add(taxId);
+      }
       const sunatEnvironment =
         this.normalizeSunatEnvironment(company.sunatEnvironment) ?? 'BETA';
       const sunatRuc = this.normalizeNullableInput(company.sunatRuc);
@@ -1519,21 +1682,31 @@ export class TenancyService {
     }
 
     const prisma = tx as unknown as PrismaService as any;
-    const seenNames = new Set<string>();
+    const seenLegalNames = new Set<string>();
+    const seenTaxIds = new Set<string>();
 
     for (const company of companies) {
-      const normalizedName = this.normalizeCompanyName(company.name);
-      const nameKey = normalizedName.toLowerCase();
-      if (seenNames.has(nameKey)) {
-        throw new BadRequestException(
-          `Duplicate company name "${normalizedName}" in payload`,
-        );
-      }
-      seenNames.add(nameKey);
-
       const normalizedStatus = this.normalizeCompanyStatus(company.status);
+      const normalizedName = this.normalizeCompanyName(company.name);
       const legalName = this.normalizeNullableInput(company.legalName);
       const taxId = this.normalizeNullableInput(company.taxId);
+      if (legalName) {
+        const legalNameKey = legalName.toLowerCase();
+        if (seenLegalNames.has(legalNameKey)) {
+          throw new BadRequestException(
+            `Duplicate company legal name "${legalName}" in payload`,
+          );
+        }
+        seenLegalNames.add(legalNameKey);
+      }
+      if (taxId) {
+        if (seenTaxIds.has(taxId)) {
+          throw new BadRequestException(
+            `Duplicate company tax id "${taxId}" in payload`,
+          );
+        }
+        seenTaxIds.add(taxId);
+      }
       const sunatEnvironment = this.normalizeSunatEnvironment(
         company.sunatEnvironment,
       );

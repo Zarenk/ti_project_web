@@ -4,6 +4,7 @@ import * as React from "react"
 import dynamic from "next/dynamic"
 import NextLink from "next/link"
 import {
+  Boxes,
   Building2,
   BookOpen,
   Bot,
@@ -366,6 +367,7 @@ const NAV_FEATURE_REQUIREMENTS: Record<string, keyof VerticalFeatures> = {
 const CUSTOM_MENU_ICONS: Record<string, LucideIcon> = {
   table: Table2,
   kitchen: Utensils,
+  ingredients: Boxes,
   "cash-register": SquareTerminal,
   book: BookOpen,
   truck: Truck,
@@ -576,13 +578,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader
-        style={
-          verticalInfo?.config?.ui?.primaryColor
-            ? { borderBottom: `3px solid ${verticalInfo.config.ui.primaryColor}` }
-            : undefined
-        }
-      >
+      <SidebarHeader>
         <TeamSwitcherLazy />
       </SidebarHeader>
       <SidebarContent>

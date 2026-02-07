@@ -1,7 +1,9 @@
 import { refreshAuthToken } from "@/utils/auth-refresh"
-import { getAuthHeaders, type TenantOverride } from "@/utils/auth-token"
+import { getAuthHeaders, type TenantOverride, getAuthToken } from "@/utils/auth-token"
 import { wasManualLogoutRecently } from "@/utils/manual-logout"
 import { notifySessionExpired } from "@/utils/session-expired-event"
+import { clearTenantSelection } from "@/utils/tenant-preferences"
+import { jwtDecode } from "jwt-decode"
 
 export class UnauthenticatedError extends Error {
   constructor(message = 'Unauthenticated') {
@@ -62,6 +64,72 @@ export async function authFetch(
   }
 
   let res = await fetch(url, { ...requestInit, headers })
+
+  if (res.status === 403 || res.status === 404 || res.status === 400) {
+    const shouldHandleTenantError = () => {
+      if (typeof window === "undefined") return false
+      try {
+        const last = window.sessionStorage.getItem("tenant-error-lock")
+        const lastTs = last ? Number(last) : 0
+        if (Number.isFinite(lastTs) && Date.now() - lastTs < 10_000) {
+          return false
+        }
+      } catch {
+        /* ignore */
+      }
+      return true
+    }
+
+    if (shouldHandleTenantError()) {
+      try {
+        const cloned = res.clone()
+        const text = await cloned.text()
+        if (
+          /no se encontr[oó] la empresa|contexto de tenant no disponible|org_access_revoked|company_not_found|org_not_found|no tienes permisos para acceder a esta organizaci[oó]n/i.test(
+            text,
+          )
+        ) {
+          clearTenantSelection({ silent: true })
+          if (typeof window !== "undefined") {
+            try {
+              window.sessionStorage.setItem("tenant-error-lock", String(Date.now()))
+            } catch {
+              /* ignore */
+            }
+            try {
+              const path = window.location?.pathname ?? ""
+              if (path.startsWith("/dashboard") && !path.startsWith("/dashboard/tenancy")) {
+                let target = "/dashboard"
+                try {
+                  const token = await getAuthToken()
+                  if (token) {
+                    const decoded = jwtDecode<{ role?: string }>(token)
+                    const role = decoded?.role?.toString().toUpperCase() ?? ""
+                    const canSeeTenancy = new Set([
+                      "SUPER_ADMIN_GLOBAL",
+                      "SUPER_ADMIN_ORG",
+                      "SUPER_ADMIN",
+                    ]).has(role)
+                    if (canSeeTenancy) {
+                      target = "/dashboard/tenancy"
+                    }
+                  }
+                } catch {
+                  /* ignore */
+                }
+                window.location.assign(target)
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   if (res.status !== 401) return res
 
   if (wasManualLogoutRecently()) {

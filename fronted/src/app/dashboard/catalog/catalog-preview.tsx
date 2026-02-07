@@ -17,6 +17,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { ImageUp, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import type { CatalogLayoutMode } from "./catalog-pdf";
 
@@ -66,6 +73,8 @@ interface CatalogPreviewProps {
   onPreviousPriceChange?: (productId: number, value: number | null) => void;
   priceOverrides?: Record<number, number>;
   previousPriceOverrides?: Record<number, number>;
+  onRequestImageUpdate?: (productId: number) => void;
+  updatingImageId?: number | null;
 }
 
 const SPEC_CONFIG: Array<{ key: string; label: string }> = [
@@ -185,6 +194,8 @@ export function CatalogPreview({
   onPreviousPriceChange,
   priceOverrides,
   previousPriceOverrides,
+  onRequestImageUpdate,
+  updatingImageId,
 }: CatalogPreviewProps) {
   const [onlyStock, setOnlyStock] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState("all");
@@ -364,13 +375,14 @@ function getDefaultPreviousPrice(product: Product): number | undefined {
               id="only-stock"
               checked={onlyStock}
               onCheckedChange={(checked) => setOnlyStock(checked === true)}
+              className="cursor-pointer"
             />
-            <Label htmlFor="only-stock">Solo con stock</Label>
+            <Label htmlFor="only-stock" className="cursor-pointer">Solo con stock</Label>
           </div>
           <div className="flex items-center space-x-2">
             <Label>Marca</Label>
             <Select value={selectedBrand} onValueChange={setSelectedBrand}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] cursor-pointer">
                 <SelectValue placeholder="Todas" />
               </SelectTrigger>
               <SelectContent>
@@ -386,7 +398,7 @@ function getDefaultPreviousPrice(product: Product): number | undefined {
           <div className="flex items-center space-x-2">
             <Label>Ordenar</Label>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] cursor-pointer">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -427,37 +439,77 @@ function getDefaultPreviousPrice(product: Product): number | undefined {
                     />
                   ) : undefined;
 
+                const showActions =
+                  productId !== null &&
+                  ((onRemoveProduct !== undefined) ||
+                    (onPriceChange &&
+                      (priceOverrides?.[productId] !== undefined ||
+                        previousPriceOverrides?.[productId] !== undefined)) ||
+                    onRequestImageUpdate !== undefined);
+
                 return (
                   <div key={product.id ?? `${cat}-${index}`} className="relative group space-y-2">
-                    {(productId !== null &&
-                      ((onRemoveProduct !== undefined) ||
-                        (onPriceChange &&
-                          (priceOverrides?.[productId] !== undefined ||
-                            previousPriceOverrides?.[productId] !== undefined)))) && (
-                      <div className="absolute right-3 top-3 z-10 hidden gap-2 group-hover:flex focus-visible:flex">
+                    {showActions && (
+                      <div className="absolute right-3 top-3 z-10 flex gap-2 opacity-0 translate-y-1 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:translate-y-0 group-focus-within:pointer-events-auto">
+                        {productId !== null && onRequestImageUpdate && (
+                          <TooltipProvider delayDuration={120}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="icon"
+                                  className="h-8 w-8 cursor-pointer rounded-full bg-white/90 text-slate-700 shadow-md transition hover:bg-white"
+                                  onClick={() => onRequestImageUpdate(productId)}
+                                  disabled={updatingImageId === productId}
+                                  aria-label="Actualizar imagen"
+                                >
+                                  <ImageUp className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">Actualizar imagen</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
                         {onPriceChange &&
+                          productId !== null &&
                           (priceOverrides?.[productId] !== undefined ||
                             previousPriceOverrides?.[productId] !== undefined) && (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="cursor-pointer rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-md hover:bg-white"
-                            onClick={() => handleResetPricing(product)}
-                          >
-                            Restaurar precios
-                          </Button>
-                        )}
-                        {onRemoveProduct && (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="cursor-pointer rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-md hover:bg-white"
-                            onClick={() => onRemoveProduct(productId)}
-                          >
-                            Ocultar
-                          </Button>
+                            <TooltipProvider delayDuration={120}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    className="cursor-pointer rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-md hover:bg-white"
+                                    onClick={() => handleResetPricing(product)}
+                                  >
+                                    Restaurar precios
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom">Restaurar precios</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        {onRemoveProduct && productId !== null && (
+                          <TooltipProvider delayDuration={120}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="icon"
+                                  className="h-8 w-8 cursor-pointer rounded-full bg-white/90 text-slate-700 shadow-md transition hover:bg-white"
+                                  onClick={() => onRemoveProduct(productId)}
+                                  aria-label="Ocultar producto"
+                                >
+                                  <EyeOff className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">Ocultar producto</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         )}
                       </div>
                     )}

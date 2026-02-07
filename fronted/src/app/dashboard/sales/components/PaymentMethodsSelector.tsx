@@ -51,10 +51,41 @@ export function PaymentMethodsModal({
     { id: -6, name: "OTRO MEDIO DE PAGO" },
   ];
 
+  const totalProductos = useMemo(
+    () => selectedProducts.reduce((sum, p) => sum + (p.price || 0) * (p.quantity || 0), 0),
+    [selectedProducts]
+  );
+
+  const buildInitialPayment = (methods: PaymentMethod[], total: number): TempPayment => {
+    const cashMethod =
+      methods.find((method) => method.name.toUpperCase().includes("EFECTIVO")) ?? methods[0];
+    return {
+      uid: generateUid(),
+      paymentMethodId: cashMethod?.id ?? null,
+      amount: Number(total.toFixed(2)),
+      currency: "PEN",
+    };
+  };
+
   // Abrir forzado
   useEffect(() => {
     if (forceOpen) setOpen(true);
   }, [forceOpen]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (tempPayments.length > 0) return;
+    const existing = (value ?? []).map((p) => ({ ...p, uid: generateUid() }));
+    if (existing.length > 0) {
+      setTempPayments(existing);
+      return;
+    }
+    if (selectedProducts.length === 0) {
+      return;
+    }
+    const sourceMethods = paymentMethods.length ? paymentMethods : defaultPaymentMethods;
+    setTempPayments([buildInitialPayment(sourceMethods, totalProductos)]);
+  }, [open, tempPayments.length, value, selectedProducts.length, paymentMethods, totalProductos]);
 
   // Cargar métodos y unificar por nombre
   useEffect(() => {
@@ -77,7 +108,17 @@ export function PaymentMethodsModal({
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
     if (isOpen) {
-      setTempPayments((value ?? []).map(p => ({ ...p, uid: generateUid() })));
+      const existing = (value ?? []).map((p) => ({ ...p, uid: generateUid() }));
+      if (existing.length > 0) {
+        setTempPayments(existing);
+        return;
+      }
+      if (selectedProducts.length === 0) {
+        setTempPayments([]);
+        return;
+      }
+      const sourceMethods = paymentMethods.length ? paymentMethods : defaultPaymentMethods;
+      setTempPayments([buildInitialPayment(sourceMethods, totalProductos)]);
     }
   };
 
@@ -107,11 +148,6 @@ export function PaymentMethodsModal({
 
   return () => cancelAnimationFrame(id);
   }, [tempPayments.length]);
-
-  const totalProductos = useMemo(
-    () => selectedProducts.reduce((sum, p) => sum + (p.price || 0) * (p.quantity || 0), 0),
-    [selectedProducts]
-  );
 
   const handleAddPayment = () => {
     setTempPayments(prev => {

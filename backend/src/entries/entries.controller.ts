@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { EntriesService } from './entries.service';
 import { CreateEntryDto } from './dto/create-entry.dto';
@@ -25,9 +26,12 @@ import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { InvoiceExtractionService } from 'src/invoice-extraction/invoice-extraction.service';
 import { promises as fs } from 'fs';
 import { createHash } from 'crypto';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @ModulePermission('inventory')
 @Controller('entries')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class EntriesController {
   constructor(
     private readonly entriesService: EntriesService,

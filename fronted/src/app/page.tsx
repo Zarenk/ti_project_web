@@ -25,9 +25,17 @@ import Navbar from "@/components/navbar"
 import { toast } from "sonner"
 import ProductForm from "@/app/dashboard/products/new/product-form"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { getProducts, getProduct } from "./dashboard/products/products.api"
-import { getCategoriesWithCount, getCategories } from "./dashboard/categories/categories.api"
-import { getStoresWithProduct } from "./dashboard/inventory/inventory.api"
+import {
+  getProducts,
+  getProduct,
+  getPublicProducts,
+} from "./dashboard/products/products.api"
+import {
+  getCategoriesWithCount,
+  getCategories,
+  getPublicCategoriesWithCount,
+} from "./dashboard/categories/categories.api"
+import { getStoresWithProduct, getPublicStoresWithProduct } from "./dashboard/inventory/inventory.api"
 import { getRecentEntries } from "./dashboard/entries/entries.api"
 import UltimosIngresosSection from "@/components/home/UltimosIngresosSection"
 import HeroSection from "@/components/home/HeroSection"
@@ -37,6 +45,7 @@ import BenefitsSection from "@/components/home/BenefitsSection"
 import TestimonialsSection from "@/components/home/TestimonialSection"
 import NewsletterSection from "@/components/home/NewsletterSection"
 import { Skeleton } from "@/components/ui/skeleton"
+import { getAuthToken } from "@/utils/auth-token"
 
 type ProductsResponse = Awaited<ReturnType<typeof getProducts>>
 type ProductListItem = ProductsResponse extends Array<infer Item> ? Item : never
@@ -274,6 +283,8 @@ const HOME_TESTIMONIALS = [
 
 export default function Homepage() {
   const sectionsRef = useRef<HTMLDivElement>(null)
+  const authStateRef = useRef<boolean | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
 
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([])
   const [heroProducts, setHeroProducts] = useState<FeaturedProduct[]>([])
@@ -286,9 +297,23 @@ export default function Homepage() {
   const [productCategories, setProductCategories] = useState<CategoryRecord[]>([])
   const [isLoadingProductCategories, setIsLoadingProductCategories] = useState(false)
 
+  const resolveAuthState = useCallback(async () => {
+    if (authStateRef.current !== null) {
+      return authStateRef.current
+    }
+    const token = await getAuthToken()
+    const hasAuth = Boolean(token)
+    authStateRef.current = hasAuth
+    setIsAuthenticated(hasAuth)
+    return hasAuth
+  }, [])
+
   const fetchProductsData = useCallback(async () => {
     try {
-      const productsResponse = await getProducts()
+      const hasAuth = await resolveAuthState()
+      const productsResponse = hasAuth
+        ? await getProducts()
+        : await getPublicProducts()
       const normalizedProducts = Array.isArray(productsResponse) ? productsResponse : []
       const featured = normalizedProducts
         .map(mapProductListItemToFeatured)
@@ -298,7 +323,9 @@ export default function Homepage() {
       const withStockTop = await Promise.all(
         topForStock.map(async (product) => {
           try {
-            const stores = await getStoresWithProduct(product.id)
+            const stores = hasAuth
+              ? await getStoresWithProduct(product.id)
+              : await getPublicStoresWithProduct(product.id)
             const totalStock = Array.isArray(stores) ? calculateTotalStock(stores) : 0
             return { ...product, stock: totalStock }
           } catch {
@@ -312,7 +339,7 @@ export default function Homepage() {
     } catch (error) {
       console.error("Error fetching featured products:", error)
     }
-  }, [])
+  }, [resolveAuthState])
 
   useEffect(() => {
     void fetchProductsData()
@@ -332,7 +359,7 @@ export default function Homepage() {
     } finally {
       setIsLoadingProductToEdit(false)
     }
-  }, [])
+  }, [resolveAuthState])
 
   useEffect(() => {
     if (!isEditDialogOpen) {
@@ -344,6 +371,12 @@ export default function Homepage() {
 
     let isMounted = true
     setIsLoadingProductCategories(true)
+    if (isAuthenticated === false) {
+      setProductCategories([])
+      setIsLoadingProductCategories(false)
+      return
+    }
+
     getCategories()
       .then((data) => {
         if (!isMounted) {
@@ -367,7 +400,7 @@ export default function Homepage() {
     return () => {
       isMounted = false
     }
-  }, [isEditDialogOpen])
+  }, [isEditDialogOpen, isAuthenticated])
 
   const handleProductUpdateSuccess = useCallback(
     async () => {
@@ -378,26 +411,35 @@ export default function Homepage() {
       } catch (error) {
         console.error("Error refreshing products after update:", error)
       }
-      try {
-        const recent = await getRecentEntries(5)
-        const normalized = Array.isArray(recent) ? buildRecentProducts(recent) : []
-        setRecentProducts(normalized)
-      } catch (error) {
-        console.error("Error refreshing recent entries after update:", error)
+      if (isAuthenticated) {
+        try {
+          const recent = await getRecentEntries(5)
+          const normalized = Array.isArray(recent) ? buildRecentProducts(recent) : []
+          setRecentProducts(normalized)
+        } catch (error) {
+          console.error("Error refreshing recent entries after update:", error)
+        }
+      } else {
+        setRecentProducts([])
       }
     },
-    [fetchProductsData],
+    [fetchProductsData, isAuthenticated],
   )
 
   const fetchRecentProducts = useCallback(async () => {
     try {
+      const hasAuth = await resolveAuthState()
+      if (!hasAuth) {
+        setRecentProducts([])
+        return
+      }
       const data = await getRecentEntries(5)
       const normalized = Array.isArray(data) ? buildRecentProducts(data) : []
       setRecentProducts(normalized)
     } catch (error) {
       console.error("Error fetching recent entries:", error)
     }
-  }, [])
+  }, [resolveAuthState])
 
   useEffect(() => {
     void fetchRecentProducts()
@@ -410,7 +452,10 @@ export default function Homepage() {
   useEffect(() => {
     async function fetchCategoriesData() {
       try {
-        const data = await getCategoriesWithCount()
+        const hasAuth = await resolveAuthState()
+        const data = hasAuth
+          ? await getCategoriesWithCount()
+          : await getPublicCategoriesWithCount()
         const mapped = (Array.isArray(data) ? data : []).map((cat: CategoryCountRecord) => ({
           name: cat.name,
           icon: ICON_MAP[cat.name] || HardDrive,

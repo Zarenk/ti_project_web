@@ -1,4 +1,5 @@
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
+import { getAuthHeaders } from "@/utils/auth-token";
 import { BACKEND_URL } from "@/lib/utils";
 
 interface InventoryApiEntryDetail {
@@ -210,6 +211,38 @@ export async function getStoresWithProduct(productId: number) {
     });
 
     if (!response.ok) {
+      throw new Error('Error al obtener las tiendas con stock del producto');
+    }
+
+    return await response.json();
+  } catch (error: any) {
+    console.error('Error al obtener las tiendas con stock del producto:', error.message || error);
+    throw error;
+  }
+}
+
+export async function getPublicStoresWithProduct(productId: number) {
+  try {
+    const auth = await getAuthHeaders();
+    const headers = new Headers({ 'Content-Type': 'application/json' });
+    for (const [key, value] of Object.entries(auth)) {
+      if (value != null && value !== '') {
+        headers.set(key, value);
+      }
+    }
+
+    const response = await fetch(
+      `${BACKEND_URL}/api/public/inventory/stores-with-product/${productId}`,
+      {
+        method: 'GET',
+        headers,
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 400) {
+        return [];
+      }
       throw new Error('Error al obtener las tiendas con stock del producto');
     }
 

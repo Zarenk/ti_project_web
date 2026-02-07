@@ -23,6 +23,43 @@ enum BusinessVertical {
   MANUFACTURING
 }
 
+enum RestaurantTableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  DISABLED
+}
+
+enum RestaurantOrderStatus {
+  OPEN
+  IN_PROGRESS
+  READY
+  SERVED
+  CLOSED
+  CANCELLED
+}
+
+enum RestaurantOrderType {
+  DINE_IN
+  TAKEAWAY
+  DELIVERY
+}
+
+enum KitchenItemStatus {
+  PENDING
+  COOKING
+  READY
+  SERVED
+  CANCELLED
+}
+
+enum IngredientMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  WASTE
+}
+
 model Product {
   id          Int      @id @default(autoincrement())
   name        String
@@ -61,11 +98,13 @@ model Product {
   features      ProductFeature[]
   reviews       Review[]
   favorites     Favorite[]
+  recipeItems   RecipeItem[]
+  restaurantOrderItems RestaurantOrderItem[]
 
   // Relacion con Transfer
   transfers Transfer[] // Relacion con el modelo Transfer
 
-  @@unique([organizationId, name])
+  @@unique([organizationId, legalName])
   @@index([categoryId])
   @@index([name])
   @@index([brandId])
@@ -245,6 +284,8 @@ model User {
   contextPreferences UserContextPreference[]
   contextHistory UserContextHistory[]
   requestedExports OrganizationDataExport[] @relation("OrganizationDataExportsRequestedBy")
+  restaurantOrdersCreated RestaurantOrder[] @relation("RestaurantOrderCreatedBy")
+  ingredientMovements IngredientMovement[]
   @@index([email])
   @@index([username])
   @@index([organizationId, email])
@@ -330,6 +371,12 @@ model Organization {
   verticalOverride     OrganizationVerticalOverride?
   companyVerticalChangeAudits CompanyVerticalChangeAudit[]
   companyVerticalRollbackSnapshots CompanyVerticalRollbackSnapshot[]
+  restaurantTables RestaurantTable[]
+  kitchenStations  KitchenStation[]
+  ingredients      Ingredient[]
+  restaurantOrders RestaurantOrder[]
+  ingredientMovements IngredientMovement[]
+  recipeItems RecipeItem[]
 
   @@unique([name])
   @@index([status])
@@ -402,6 +449,12 @@ model Company {
   verticalOverride CompanyVerticalOverride?
   companyVerticalChangeAudits CompanyVerticalChangeAudit[]
   companyVerticalRollbackSnapshots CompanyVerticalRollbackSnapshot[]
+  restaurantTables RestaurantTable[]
+  kitchenStations  KitchenStation[]
+  ingredients      Ingredient[]
+  restaurantOrders RestaurantOrder[]
+  ingredientMovements IngredientMovement[]
+  recipeItems RecipeItem[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -650,6 +703,10 @@ model SunatTransmission {
   serie          String?
   correlativo    String?
   zipFilePath    String?
+  xmlFilePath    String?
+  cdrFilePath    String?
+  cdrCode        String?
+  cdrDescription String?
   ticket         String?
   status         String   @default("PENDING")
   response       Json?
@@ -859,6 +916,7 @@ model Client {
   company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   // Relacion con Sales
   sales Sales[] // Relacion con el modelo Sales
+  restaurantOrders RestaurantOrder[]
 
   @@index([organizationId, name])
   @@index([companyId])
@@ -1133,6 +1191,7 @@ model Store {
 
   // Relacion con Sales
   sales Sales[] // Relacion con el modelo Sales
+  restaurantOrders RestaurantOrder[]
   company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   // Relacion con la tabla de caja
@@ -1206,6 +1265,181 @@ model Transfer {
   @@index([organizationId, createdAt])
 }
 
+model RestaurantTable {
+  id             Int                  @id @default(autoincrement())
+  organizationId Int?
+  companyId      Int?
+  name           String
+  code           String?
+  capacity       Int?
+  area           String?
+  status         RestaurantTableStatus @default(AVAILABLE)
+  currentOrderId Int?                 @unique
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company        Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  currentOrder   RestaurantOrder?     @relation("RestaurantTableCurrentOrder", fields: [currentOrderId], references: [id], onDelete: SetNull)
+  orders         RestaurantOrder[]    @relation("RestaurantTableOrders")
+
+  @@index([organizationId])
+  @@index([companyId])
+  @@index([status])
+  @@unique([companyId, code])
+}
+
+model KitchenStation {
+  id             Int       @id @default(autoincrement())
+  organizationId Int?
+  companyId      Int?
+  name           String
+  code           String
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  orderItems     RestaurantOrderItem[]
+
+  @@index([organizationId])
+  @@index([companyId])
+  @@unique([companyId, code])
+}
+
+model Ingredient {
+  id             Int      @id @default(autoincrement())
+  organizationId Int?
+  companyId      Int?
+  name           String
+  unit           String
+  stock          Float    @default(0)
+  minStock       Float?   @default(0)
+  cost           Float?
+  status         String?  @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  recipeItems    RecipeItem[]
+  movements      IngredientMovement[]
+
+  @@unique([companyId, name])
+  @@index([organizationId])
+  @@index([companyId])
+}
+
+model RecipeItem {
+  id            Int      @id @default(autoincrement())
+  productId     Int
+  ingredientId  Int
+  quantity      Float
+  unit          String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  organizationId Int?
+  companyId      Int?
+
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ingredient    Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  organization  Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@unique([productId, ingredientId])
+  @@index([ingredientId])
+  @@index([organizationId])
+  @@index([companyId])
+}
+
+model RestaurantOrder {
+  id             Int                   @id @default(autoincrement())
+  organizationId Int?
+  companyId      Int?
+  storeId        Int?
+  tableId        Int?
+  clientId       Int?
+  createdById    Int?
+  status         RestaurantOrderStatus @default(OPEN)
+  orderType      RestaurantOrderType   @default(DINE_IN)
+  subtotal       Float?                @default(0)
+  tax            Float?                @default(0)
+  serviceCharge  Float?                @default(0)
+  total          Float?                @default(0)
+  notes          String?
+  openedAt       DateTime              @default(now())
+  closedAt       DateTime?
+  salesId        Int?                  @unique
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  store          Store?        @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  table          RestaurantTable? @relation("RestaurantTableOrders", fields: [tableId], references: [id], onDelete: SetNull)
+  currentTable   RestaurantTable? @relation("RestaurantTableCurrentOrder")
+  client         Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdBy      User?         @relation("RestaurantOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  sales          Sales?        @relation("RestaurantOrderSale", fields: [salesId], references: [id], onDelete: SetNull)
+  items          RestaurantOrderItem[]
+  ingredientMovements IngredientMovement[]
+
+  @@index([organizationId])
+  @@index([companyId])
+  @@index([storeId])
+  @@index([tableId])
+  @@index([status])
+}
+
+model RestaurantOrderItem {
+  id             Int              @id @default(autoincrement())
+  orderId        Int
+  productId      Int
+  quantity       Float
+  unitPrice      Float
+  notes          String?
+  stationId      Int?
+  status         KitchenItemStatus @default(PENDING)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  order          RestaurantOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  station        KitchenStation? @relation(fields: [stationId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([stationId])
+  @@index([status])
+}
+
+model IngredientMovement {
+  id             Int                  @id @default(autoincrement())
+  ingredientId   Int
+  organizationId Int?
+  companyId      Int?
+  type           IngredientMovementType
+  quantity       Float
+  unit           String
+  orderId        Int?
+  notes          String?
+  createdById    Int?
+  createdAt      DateTime            @default(now())
+
+  ingredient     Ingredient      @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company        Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  order          RestaurantOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdBy      User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([ingredientId])
+  @@index([organizationId])
+  @@index([companyId])
+  @@index([orderId])
+  @@index([type])
+}
+
 model Sales {
   id          Int        @id @default(autoincrement())
   userId      Int // Usuario que realiza la venta
@@ -1230,6 +1464,7 @@ model Sales {
   order              Orders?
   company            Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
   sunatTransmissions SunatTransmission[]
+  restaurantOrder    RestaurantOrder?   @relation("RestaurantOrderSale")
 
   @@index([userId])
   @@index([storeId])

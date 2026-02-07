@@ -8,6 +8,15 @@ import {
 } from "@/utils/user-context-storage"
 import { shouldRememberContext } from "@/utils/context-preferences"
 
+function readCookieValue(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null
+  }
+  const pattern = new RegExp(`(?:^|; )${name}=([^;]*)`)
+  const match = document.cookie.match(pattern)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 export function useUserContextSync(
   currentUserId: number | null,
   role?: string | null,
@@ -34,7 +43,7 @@ export function useUserContextSync(
       return
     }
     const normalizedRole = role?.toString().trim().toUpperCase() ?? ""
-    const disallowedRoles = new Set(["EMPLOYEE", "ADMIN", "SUPER_ADMIN_ORG"])
+    const disallowedRoles = new Set(["EMPLOYEE"])
     if (disallowedRoles.has(normalizedRole)) {
       return
     }
@@ -106,6 +115,20 @@ export function useUserContextSync(
 
     const scheduleSync = (context: StoredUserContext | null) => {
       if (!context || cancelled || !currentUserId || isThrottled()) {
+        return
+      }
+      const orgCookie = readCookieValue("tenant_org_id")
+      const companyCookie = readCookieValue("tenant_company_id")
+      if (!orgCookie || !companyCookie) {
+        return
+      }
+      const orgCookieId = Number(orgCookie)
+      const companyCookieId = Number(companyCookie)
+      if (
+        (Number.isFinite(orgCookieId) && context.orgId !== orgCookieId) ||
+        (Number.isFinite(companyCookieId) &&
+          (context.companyId ?? null) !== companyCookieId)
+      ) {
         return
       }
 

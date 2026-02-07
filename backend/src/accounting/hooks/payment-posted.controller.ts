@@ -1,11 +1,14 @@
-import { Body, Controller, HttpCode, Post, Logger } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, Logger, UseGuards } from '@nestjs/common';
 import { PaymentPostedDto } from './dto/payment-posted.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EntriesService } from '../entries.service';
 import { format } from 'date-fns';
 import { PaymentAccountingService } from '../services/payment-accounting.service';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('accounting/hooks/payment-posted')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class PaymentPostedController {
   private readonly logger = new Logger(PaymentPostedController.name);
 

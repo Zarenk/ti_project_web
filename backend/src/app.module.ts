@@ -1,4 +1,4 @@
-﻿import { Module } from '@nestjs/common';
+﻿import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
 import { DefaultAdminService } from './users/default-admin.service';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
@@ -48,6 +48,7 @@ import { AccReportsModule } from './acc-reports/acc-reports.module';
 import { KeywordsModule } from './keywords/keywords.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { ModulePermissionsGuard } from './common/guards/module-permissions.guard';
+import { TenantRequiredGuard } from './common/guards/tenant-required.guard';
 import { SystemMaintenanceModule } from './system-maintenance/system-maintenance.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { TenantContextGuard } from './tenancy/tenant-context.guard';
@@ -58,6 +59,12 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { PublicSignupModule } from './public-signup/public-signup.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { PublicRateLimitMiddleware } from './common/middleware/public-rate-limit.middleware';
+import { RestaurantTablesModule } from './restaurant-tables/restaurant-tables.module';
+import { KitchenStationsModule } from './kitchen-stations/kitchen-stations.module';
+import { IngredientsModule } from './ingredients/ingredients.module';
+import { RecipeItemsModule } from './recipe-items/recipe-items.module';
+import { RestaurantOrdersModule } from './restaurant-orders/restaurant-orders.module';
 
 @Module({
   imports: [
@@ -110,6 +117,11 @@ import { DashboardModule } from './dashboard/dashboard.module';
     PublicSignupModule,
     OnboardingModule,
     DashboardModule,
+    RestaurantTablesModule,
+    KitchenStationsModule,
+    IngredientsModule,
+    RecipeItemsModule,
+    RestaurantOrdersModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [
@@ -124,7 +136,17 @@ import { DashboardModule } from './dashboard/dashboard.module';
       provide: APP_GUARD,
       useClass: ModulePermissionsGuard,
     },
+    TenantRequiredGuard,
     DefaultAdminService,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(PublicRateLimitMiddleware).forRoutes(
+      { path: 'public/(.*)', method: RequestMethod.ALL },
+      { path: 'contact', method: RequestMethod.ALL },
+      { path: 'newsletter', method: RequestMethod.ALL },
+      { path: 'orders/(.*)', method: RequestMethod.ALL },
+    );
+  }
+}

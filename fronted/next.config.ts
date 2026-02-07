@@ -41,6 +41,44 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: skipStrictChecks,
   },
+  allowedDevOrigins: (() => {
+    const origins = new Set<string>([])
+    const isProd = process.env.NODE_ENV === "production"
+
+    if (!isProd) {
+      origins.add("http://localhost:3000")
+      origins.add("http://127.0.0.1:3000")
+    }
+
+    const rootDomain = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "")
+      .trim()
+      .replace(/^https?:\/\//, "")
+      .replace(/:\d+$/, "")
+      .replace(/\/+$/, "")
+
+    if (rootDomain) {
+      if (!isProd) {
+        origins.add(`http://${rootDomain}:3000`)
+        origins.add(`http://*.${rootDomain}:3000`)
+      }
+      origins.add(`https://${rootDomain}`)
+      if (!isProd) {
+        origins.add(`https://*.${rootDomain}`)
+      }
+    }
+
+    if (isProd) {
+      const extraOrigins = (process.env.NEXT_PUBLIC_ALLOWED_ORIGINS || "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+      for (const origin of extraOrigins) {
+        origins.add(origin)
+      }
+    }
+
+    return Array.from(origins)
+  })(),
   images: {
     domains: imageDomains,
     remotePatterns: imageUrls.map((url) => ({
@@ -49,6 +87,12 @@ const nextConfig: NextConfig = {
       port: url.port || "",
       pathname: "/**",
     })),
+  },
+  async redirects() {
+    return [
+      { source: "/contacto", destination: "/contact", permanent: true },
+      { source: "/productos", destination: "/store", permanent: true },
+    ];
   },
 };
 

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { InventoryController } from './inventory.controller';
+import { InventoryPublicController } from './inventory-public.controller';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityModule } from 'src/activity/activity.module';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
@@ -16,7 +17,11 @@ import { InventoryMetricsController } from './metrics.controller';
     TenancyModule,
     SiteSettingsModule,
   ],
-  controllers: [InventoryController, InventoryMetricsController],
+  controllers: [
+    InventoryController,
+    InventoryMetricsController,
+    InventoryPublicController,
+  ],
   providers: [InventoryService, PrismaService, AccountingHook],
   exports: [InventoryService],
 })

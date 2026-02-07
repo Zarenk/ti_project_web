@@ -8,6 +8,7 @@ import {
   Delete,
   BadRequestException,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { CategoryService } from './category.service';
@@ -15,9 +16,12 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @ModulePermission(['inventory', 'catalog', 'sales'])
 @Controller('category')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 

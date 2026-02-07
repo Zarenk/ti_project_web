@@ -38,6 +38,7 @@ import { pdf } from '@react-pdf/renderer';
 import { PaymentMethodsModal } from '../components/PaymentMethodsSelector'
 import { ProductDetailModal } from '../components/ProductDetailModal'
 import { useTenantSelection } from '@/context/tenant-selection-context'
+import { useAuth } from '@/context/auth-context'
 import { getCompanyDetail, type CompanyDetail } from '../../tenancy/tenancy.api'
 import { UnauthenticatedError } from '@/utils/auth-fetch'
 // @ts-ignore
@@ -141,6 +142,7 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
     form.reset(initialValues);
   }, [form, initialValues]);
   const { selection, version } = useTenantSelection();
+  const { userId } = useAuth();
 
   // Extraer funciones y estados del formulario
   const { handleSubmit, register, setValue, formState: {errors} } = form;
@@ -411,6 +413,21 @@ const getSaleReferenceId = () => {
   // Cargar los clientes al montar el componente
   const [openClient, setOpenClient] = React.useState(false)
   const [valueClient, setValueClient] = React.useState("")
+  const salesContextKey = useMemo(() => {
+    if (!userId || !selection.orgId) return null;
+    const companyKey = selection.companyId ?? 0;
+    return `sales-context:v1:${userId}:${selection.orgId}:${companyKey}`;
+  }, [userId, selection.orgId, selection.companyId]);
+  const [lastInvoiceType, setLastInvoiceType] = useState<string>("");
+  const [lastStoreId, setLastStoreId] = useState<number | null>(null);
+  const [recentClientIds, setRecentClientIds] = useState<number[]>([]);
+  const [recentProductIds, setRecentProductIds] = useState<number[]>([]);
+  const appliedDefaultsRef = useRef({
+    invoice: false,
+    store: false,
+    client: false,
+    product: false,
+  });
   const [categoriesState, setCategoriesState] = useState(categories ?? []);
   useEffect(() => {
     setCategoriesState(categories ?? []);
@@ -567,6 +584,71 @@ const getSaleReferenceId = () => {
   const displayedProductName = selectedProductOption?.name ?? value ?? "";
   const displayedStoreName = selectedStoreOption?.name ?? valueStore ?? "";
   const displayedClientName = selectedClientOption?.name ?? valueClient ?? ""
+  const recentClientSet = useMemo(
+    () => new Set<number>(recentClientIds.filter((id) => typeof id === "number")),
+    [recentClientIds],
+  );
+  const recentProductSet = useMemo(
+    () => new Set<number>(recentProductIds.filter((id) => typeof id === "number")),
+    [recentProductIds],
+  );
+  const filteredClients = useMemo(() => {
+    return clients.filter((client) => {
+      if (valueInvoice === "FACTURA") {
+        return client.type === "RUC";
+      }
+      if (valueInvoice === "BOLETA") {
+        return client.type !== "RUC";
+      }
+      return true;
+    });
+  }, [clients, valueInvoice]);
+  const orderedClients = useMemo(() => {
+    if (recentClientIds.length === 0) {
+      return filteredClients;
+    }
+    const recent = recentClientIds
+      .map((id) => filteredClients.find((client) => client.id === id))
+      .filter(Boolean) as any[];
+    const rest = filteredClients.filter((client) => !recentClientSet.has(client.id));
+    return [...recent, ...rest];
+  }, [filteredClients, recentClientIds, recentClientSet]);
+  const orderedProducts = useMemo(() => {
+    if (recentProductIds.length === 0) {
+      return products;
+    }
+    const recent = recentProductIds
+      .map((id) => products.find((product) => product.id === id))
+      .filter(Boolean) as any[];
+    const rest = products.filter((product) => !recentProductSet.has(product.id));
+    return [...recent, ...rest];
+  }, [products, recentProductIds, recentProductSet]);
+  const persistSalesContext = useCallback(
+    (next: Partial<{
+      lastInvoiceType: string;
+      lastStoreId: number | null;
+      recentClientIds: number[];
+      recentProductIds: number[];
+    }>) => {
+      if (!salesContextKey || typeof window === "undefined") {
+        return;
+      }
+      const payload = {
+        lastInvoiceType,
+        lastStoreId,
+        recentClientIds,
+        recentProductIds,
+        ...next,
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        window.localStorage.setItem(salesContextKey, JSON.stringify(payload));
+      } catch (error) {
+        console.warn("No se pudo guardar el contexto de ventas:", error);
+      }
+    },
+    [salesContextKey, lastInvoiceType, lastStoreId, recentClientIds, recentProductIds],
+  );
 
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
@@ -869,13 +951,17 @@ const getSaleReferenceId = () => {
 
   // Manejar el cambio en el combobox de tipoComprobante
   const handleTipoComprobanteChange = (currentValue: string) => {
-    const selectedValue = currentValue === valueInvoice ? "" : currentValue;
-    setValueInvoice(selectedValue); // Actualiza el estado local
-    form.setValue("tipoComprobante", selectedValue); // Actualiza el formulario
+    if (!currentValue) {
+      return;
+    }
+    setValueInvoice(currentValue); // Actualiza el estado local
+    form.setValue("tipoComprobante", currentValue); // Actualiza el formulario
     setOpenInvoice(false); // Cierra el combobox
+    setLastInvoiceType(currentValue);
+    persistSalesContext({ lastInvoiceType: currentValue });
 
     // Habilitar o deshabilitar el combobox de clientes según el valor seleccionado
-    if (!selectedValue || selectedValue === "SIN COMPROBANTE") {
+    if (currentValue === "SIN COMPROBANTE") {
       setIsClientDisabled(true); // Deshabilita el combobox de clientes
     } else {
       setIsClientDisabled(false); // Habilita el combobox de clientes
@@ -904,6 +990,8 @@ const getSaleReferenceId = () => {
     setSelectedStoreId(nextStore.id);
     setValue("store_name", nextStore.name || "");
     setValue("store_adress", nextStore.adress || "");
+    setLastStoreId(nextStore.id);
+    persistSalesContext({ lastStoreId: nextStore.id });
 
     setSelectedProducts([]);
     setCurrentProduct(null);
@@ -916,6 +1004,87 @@ const getSaleReferenceId = () => {
     setOpenStore(false);
   };
   //
+
+  const recordRecentClient = (clientId: number) => {
+    setRecentClientIds((prev) => {
+      const next = [clientId, ...prev.filter((id) => id !== clientId)].slice(0, 10);
+      persistSalesContext({ recentClientIds: next });
+      return next;
+    });
+  };
+
+  const recordRecentProduct = (productId: number) => {
+    setRecentProductIds((prev) => {
+      const next = [productId, ...prev.filter((id) => id !== productId)].slice(0, 10);
+      persistSalesContext({ recentProductIds: next });
+      return next;
+    });
+  };
+
+  const selectProductForSale = async (selectedProduct: any) => {
+    if (!selectedProduct) {
+      return;
+    }
+
+    setValueProduct(selectedProduct.name || "");
+    if (typeof selectedProduct.id === "number") {
+      recordRecentProduct(selectedProduct.id);
+    }
+
+    const existingProduct = selectedProducts.find((item) => item.id === selectedProduct.id);
+    let simulatedStock = existingProduct
+      ? selectedProduct.stock - existingProduct.quantity
+      : selectedProduct.stock;
+
+    if (selectedStoreId) {
+      try {
+        const series = await getSeriesByProductAndStore(selectedStoreId, selectedProduct.id);
+
+        setCurrentProduct({
+          ...selectedProduct,
+          series,
+        });
+
+        const realStock = await getStockByProductAndStore(selectedStoreId, selectedProduct.id);
+
+        simulatedStock = existingProduct
+          ? realStock - existingProduct.quantity
+          : realStock;
+
+        setStock(simulatedStock > 0 ? simulatedStock : 0);
+
+        if (selectedProduct.price === 0 || selectedProduct.price === null) {
+          setProductWithZeroPrice({
+            id: selectedProduct.id,
+            name: selectedProduct.name,
+          });
+          setIsPriceAlertOpen(true);
+          return;
+        }
+      } catch (error) {
+        console.error("Error al obtener el stock del producto:", error);
+        setCurrentProduct({
+          ...selectedProduct,
+          series: [],
+        });
+        setStock(0);
+      }
+    } else {
+      console.warn("No se ha seleccionado una tienda");
+      setCurrentProduct(null);
+      setStock(0);
+    }
+
+    const category = categoriesState.find((cat: any) => cat.id === selectedProduct.categoryId);
+
+    setValue(
+      "category_name",
+      category?.name || selectedProduct.category_name || "Sin categoria",
+    );
+    setValue("price", selectedProduct.price || 0);
+    setValue("description", selectedProduct.description || "");
+    setOpen(false);
+  };
 
   // Función para eliminar un producto del datatable
   const removeProduct = (id: number) => {
@@ -1172,7 +1341,130 @@ const getSaleReferenceId = () => {
     setProducts([]);
     setClients([]);
     form.reset(buildDefaultSaleValues());
+    appliedDefaultsRef.current = {
+      invoice: false,
+      store: false,
+      client: false,
+      product: false,
+    };
   }, [version, form]);
+
+  useEffect(() => {
+    if (!salesContextKey || typeof window === "undefined") {
+      setLastInvoiceType("");
+      setLastStoreId(null);
+      setRecentClientIds([]);
+      setRecentProductIds([]);
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(salesContextKey);
+      if (!raw) {
+        setLastInvoiceType("");
+        setLastStoreId(null);
+        setRecentClientIds([]);
+        setRecentProductIds([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setLastInvoiceType(typeof parsed?.lastInvoiceType === "string" ? parsed.lastInvoiceType : "");
+      setLastStoreId(typeof parsed?.lastStoreId === "number" ? parsed.lastStoreId : null);
+      setRecentClientIds(
+        Array.isArray(parsed?.recentClientIds)
+          ? parsed.recentClientIds.filter((id: unknown) => typeof id === "number")
+          : [],
+      );
+      setRecentProductIds(
+        Array.isArray(parsed?.recentProductIds)
+          ? parsed.recentProductIds.filter((id: unknown) => typeof id === "number")
+          : [],
+      );
+    } catch (error) {
+      console.warn("No se pudo leer el contexto de ventas:", error);
+      setLastInvoiceType("");
+      setLastStoreId(null);
+      setRecentClientIds([]);
+      setRecentProductIds([]);
+    }
+  }, [salesContextKey]);
+
+  useEffect(() => {
+    if (!salesContextKey) {
+      return;
+    }
+
+    if (!appliedDefaultsRef.current.invoice) {
+      if (!valueInvoice && lastInvoiceType) {
+        handleTipoComprobanteChange(lastInvoiceType);
+      }
+      appliedDefaultsRef.current.invoice = true;
+    }
+
+    if (!appliedDefaultsRef.current.store && stores.length > 0) {
+      if (lastStoreId) {
+        const store = stores.find((item) => item.id === lastStoreId);
+        if (store && !valueStore) {
+          handleStoreChange(store.name || "");
+        }
+      }
+      appliedDefaultsRef.current.store = true;
+    }
+
+    if (!appliedDefaultsRef.current.client && clients.length > 0) {
+      if (!lastInvoiceType || valueInvoice === lastInvoiceType) {
+        if (!valueClient && !isClientDisabled && recentClientIds.length > 0) {
+          const filteredClients = clients.filter((client) => {
+            if (valueInvoice === "FACTURA") {
+              return client.type === "RUC";
+          }
+          if (valueInvoice === "BOLETA") {
+            return client.type !== "RUC";
+          }
+          return true;
+        });
+        const recentClient = recentClientIds
+          .map((id) => filteredClients.find((client) => client.id === id))
+          .find(Boolean);
+          if (recentClient) {
+            setValueClient(recentClient.name || "");
+            setValue("client_name", recentClient.name || "");
+            setValue("client_type", recentClient.type || "");
+            setValue("client_typeNumber", recentClient.typeNumber || "");
+          }
+        }
+      }
+      appliedDefaultsRef.current.client = true;
+    }
+
+    if (!appliedDefaultsRef.current.product && products.length > 0) {
+      if (!value && recentProductIds.length > 0) {
+        const recentProduct = recentProductIds
+          .map((id) => products.find((product) => product.id === id))
+          .find(Boolean);
+        if (recentProduct) {
+          void selectProductForSale(recentProduct);
+        }
+      }
+      appliedDefaultsRef.current.product = true;
+    }
+  }, [
+    salesContextKey,
+    lastInvoiceType,
+    lastStoreId,
+    recentClientIds,
+    recentProductIds,
+    stores,
+    clients,
+    products,
+    valueStore,
+    valueClient,
+    value,
+    valueInvoice,
+    isClientDisabled,
+    handleStoreChange,
+    handleTipoComprobanteChange,
+    setValue,
+  ]);
 
   return (
     <div className="container mx-auto w-full max-w-4xl grid sm:max-w-md md:max-w-lg lg:max-w-4xl">
@@ -1229,13 +1521,8 @@ const getSaleReferenceId = () => {
                                           return;
                                         }
 
-                                        const selectedValue = currentValue === valueInvoice ? "" : currentValue;
-                                        setValueInvoice(selectedValue); // Actualiza el estado local
-                                        form.setValue("tipoComprobante", selectedValue); // Actualiza el formulario
-                                        setOpenInvoice(false); // Cierra el combobox
-
                                         // Llama a la función handleTipoComprobanteChange
-                                        handleTipoComprobanteChange(selectedValue); // Actualiza el estado de habilitación del combobox de clientes
+                                        handleTipoComprobanteChange(currentValue); // Actualiza el estado de habilitación del combobox de clientes
                                       }}
                                     >
                                       {type}
@@ -1353,17 +1640,7 @@ const getSaleReferenceId = () => {
                                   <CommandList>
                                     <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                                     <CommandGroup>
-                                      {clients
-                                        .filter((client) => {
-                                          if (valueInvoice === "FACTURA") {
-                                            return client.type === "RUC";
-                                          }
-                                          if (valueInvoice === "BOLETA") {
-                                            return client.type !== "RUC";
-                                          }
-                                          return true;
-                                        })
-                                        .map((client) => {
+                                      {orderedClients.map((client) => {
                                           const normalizedClientName = normalizeOptionValue(client.name);
                                           const isSelected = normalizedClientName === normalizedSelectedClientValue;
                                           const commandValue = getCommandValue(client.name);
@@ -1383,10 +1660,20 @@ const getSaleReferenceId = () => {
                                                 setValue("client_name", client.name || "");
                                                 setValue("client_type", client.type || "");
                                                 setValue("client_typeNumber", client.typeNumber || "");
+                                                if (typeof client.id === "number") {
+                                                  recordRecentClient(client.id);
+                                                }
                                                 setOpenClient(false);
                                               }}
                                             >
-                                              {client.name}
+                                              <div className="flex items-center gap-2">
+                                                <span>{client.name}</span>
+                                                {recentClientSet.has(client.id) && (
+                                                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                                    Reciente
+                                                  </span>
+                                                )}
+                                              </div>
                                               <Check className={cn("ml-auto", isSelected ? "opacity-100" : "opacity-0")} />
                                             </CommandItem>
                                           );
@@ -1427,8 +1714,7 @@ const getSaleReferenceId = () => {
                             setClients={setClients}
                             setValue={form.setValue} // Pasar la función para actualizar el formulario principal
                             updateTipoComprobante={(tipoComprobante: string) => {
-                              setValueInvoice(tipoComprobante); // Actualiza el estado local del combobox
-                              form.setValue("tipoComprobante", tipoComprobante); // Actualiza el formulario
+                              handleTipoComprobanteChange(tipoComprobante);
                             }}
                             />   
                             <Dialog
@@ -1640,7 +1926,7 @@ const getSaleReferenceId = () => {
                                   <CommandList>
                                     <CommandEmpty>No se encontraron productos.</CommandEmpty>
                                     <CommandGroup>
-                                      {products.map((product) => {
+                                      {orderedProducts.map((product) => {
                                         const normalizedProductName = normalizeOptionValue(product.name);
                                         const isSelected = normalizedProductName === normalizedSelectedProductValue;
                                         const commandValue = getCommandValue(product.name);
@@ -1656,76 +1942,17 @@ const getSaleReferenceId = () => {
                                                 return;
                                               }
 
-                                              setValueProduct(product.name || "");
-
-                                              const selectedProduct = product;
-
-                                              const existingProduct = selectedProducts.find(
-                                                (item) => item.id === selectedProduct.id,
-                                              );
-                                              let simulatedStock = existingProduct
-                                                ? selectedProduct.stock - existingProduct.quantity
-                                                : selectedProduct.stock;
-
-                                              if (selectedStoreId) {
-                                                try {
-                                                  const series = await getSeriesByProductAndStore(
-                                                    selectedStoreId,
-                                                    selectedProduct.id,
-                                                  );
-
-                                                  setCurrentProduct({
-                                                    ...selectedProduct,
-                                                    series,
-                                                  });
-
-                                                  const realStock = await getStockByProductAndStore(
-                                                    selectedStoreId,
-                                                    selectedProduct.id,
-                                                  );
-
-                                                  simulatedStock = existingProduct
-                                                    ? realStock - existingProduct.quantity
-                                                    : realStock;
-
-                                                  setStock(simulatedStock > 0 ? simulatedStock : 0);
-
-                                                  if (selectedProduct.price === 0 || selectedProduct.price === null) {
-                                                    setProductWithZeroPrice({
-                                                      id: selectedProduct.id,
-                                                      name: selectedProduct.name,
-                                                    });
-                                                    setIsPriceAlertOpen(true);
-                                                    return;
-                                                  }
-                                                } catch (error) {
-                                                  console.error("Error al obtener el stock del producto:", error);
-                                                  setCurrentProduct({
-                                                    ...selectedProduct,
-                                                    series: [],
-                                                  });
-                                                  setStock(0);
-                                                }
-                                              } else {
-                                                console.warn("No se ha seleccionado una tienda");
-                                                setCurrentProduct(null);
-                                                setStock(0);
-                                              }
-
-                                              const category = categoriesState.find(
-                                                (cat: any) => cat.id === selectedProduct.categoryId,
-                                              );
-
-                                              setValue(
-                                                "category_name",
-                                                category?.name || selectedProduct.category_name || "Sin categoria",
-                                              );
-                                              setValue("price", selectedProduct.price || 0);
-                                              setValue("description", selectedProduct.description || "");
-                                              setOpen(false);
+                                              await selectProductForSale(product);
                                             }}
                                           >
-                                            {product.name}
+                                            <div className="flex items-center gap-2">
+                                              <span>{product.name}</span>
+                                              {recentProductSet.has(product.id) && (
+                                                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                                  Reciente
+                                                </span>
+                                              )}
+                                            </div>
                                             <Check className={cn("ml-auto", isSelected ? "opacity-100" : "opacity-0")} />
                                           </CommandItem>
                                         );

@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Building2, ChevronsUpDown, Plus } from "lucide-react"
+import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -31,6 +31,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { ModeToggle } from "./mode-toggle"
 import {
   createCompany,
@@ -122,6 +128,26 @@ export function TeamSwitcher(): React.ReactElement | null {
   const [companyLegalName, setCompanyLegalName] = useState("")
   const [companyTaxId, setCompanyTaxId] = useState("")
   const [companyStatus, setCompanyStatus] = useState("ACTIVE")
+
+  const normalizedTaxId = companyTaxId.replace(/\D/g, "")
+  const isTaxIdValid = normalizedTaxId.length === 0 || normalizedTaxId.length === 11
+  const hasCompanyName = Boolean(companyName.trim())
+  const hasCompanyStatus = Boolean(companyStatus.trim())
+
+  const renderFieldChip = (filled: boolean, required?: boolean) => (
+    <span
+      className={`ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        filled
+          ? "border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+          : required
+            ? "border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200"
+            : "border-border/60 bg-muted/30 text-muted-foreground"
+      }`}
+    >
+      {filled ? <Check className="h-3 w-3" /> : null}
+      {filled ? "Listo" : required ? "Requerido" : "Opcional"}
+    </span>
+  )
   const [submitting, setSubmitting] = useState(false)
   const [tenantSummary, setTenantSummary] = useState<CurrentTenantResponse | null>(null)
 
@@ -173,10 +199,20 @@ export function TeamSwitcher(): React.ReactElement | null {
         setActiveOrgId(resolvedOrgId)
         setActiveCompanyId(resolvedCompanyId)
 
-        if (
-          resolvedOrgId !== selection.orgId ||
-          resolvedCompanyId !== selection.companyId
-        ) {
+        const selectionOrg = selection.orgId
+        const selectionCompany = selection.companyId
+        const selectionOrgExists =
+          selectionOrg != null &&
+          normalized.some((org) => org.id === selectionOrg)
+        const selectionCompanyExists =
+          selectionOrgExists &&
+          selectionCompany != null &&
+          normalized
+            .find((org) => org.id === selectionOrg)
+            ?.companies?.some((company) => company.id === selectionCompany)
+
+        const isSelectionValid = selectionOrgExists && selectionCompanyExists
+        if (!isSelectionValid && resolvedOrgId && resolvedCompanyId) {
           setManualTenantSelection({ orgId: resolvedOrgId, companyId: resolvedCompanyId })
         }
       } catch (error) {
@@ -304,7 +340,16 @@ export function TeamSwitcher(): React.ReactElement | null {
       setActiveOrgId(org.id)
       const nextCompanyId = org.companies[0]?.id ?? null
       setActiveCompanyId(nextCompanyId)
-      setManualTenantSelection({ orgId: org.id, companyId: nextCompanyId })
+      const selectionOrgExists = organizations.some((item) => item.id === activeOrgId)
+      const selectionCompanyExists =
+        selectionOrgExists &&
+        activeCompanyId != null &&
+        organizations
+          .find((item) => item.id === activeOrgId)
+          ?.companies?.some((company) => company.id === activeCompanyId)
+      if (!selectionOrgExists || !selectionCompanyExists) {
+        setManualTenantSelection({ orgId: org.id, companyId: nextCompanyId })
+      }
       return
     }
 
@@ -373,12 +418,17 @@ export function TeamSwitcher(): React.ReactElement | null {
         return
       }
 
+      if (!isTaxIdValid) {
+        toast.error("El RUC debe tener 11 numeros.")
+        return
+      }
+
       setSubmitting(true)
       try {
         const payload = {
           name: trimmedName,
           legalName: companyLegalName.trim() || undefined,
-          taxId: companyTaxId.trim() || undefined,
+          taxId: normalizedTaxId || undefined,
           status: companyStatus.trim() || undefined,
           organizationId: activeOrganization.id,
         }
@@ -418,7 +468,14 @@ export function TeamSwitcher(): React.ReactElement | null {
         setSubmitting(false)
       }
     },
-    [activeOrganization, companyLegalName, companyName, companyStatus, companyTaxId],
+    [
+      activeOrganization,
+      companyLegalName,
+      companyName,
+      companyStatus,
+      normalizedTaxId,
+      isTaxIdValid,
+    ],
   )
 
   const canAddCompanies = showGlobalSwitcher && Boolean(activeOrganization)
@@ -497,33 +554,115 @@ export function TeamSwitcher(): React.ReactElement | null {
       resolvedEmployeeCompany?.name ??
       (selection.companyId != null ? `Empresa ID ${selection.companyId}` : "Sin empresa asociada")
     const companyVerticalLabel = resolveVerticalLabel(
-      resolvedEmployeeCompany?.businessVertical,
+      resolvedEmployeeCompany?.businessVertical ??
+        tenantSummary?.company?.businessVertical ??
+        tenantSummary?.organization?.businessVertical,
     )
+    const verticalTone = (
+      resolvedEmployeeCompany?.businessVertical ??
+      tenantSummary?.company?.businessVertical ??
+      tenantSummary?.organization?.businessVertical ??
+      companyVerticalLabel
+    )
+      .toString()
+      .trim()
+      .toUpperCase()
+    const isRestaurantVertical = /RESTAURANT|RESTAURANTE/.test(verticalTone)
+    const isRetailVertical = /RETAIL/.test(verticalTone)
+    const isComputersVertical = /COMPUTER|COMPUTERS/.test(verticalTone)
+    const isGeneralVertical = /GENERAL/.test(verticalTone)
+    const verticalBarClass =
+      isRestaurantVertical
+        ? "bg-amber-400/90"
+        : isRetailVertical || isComputersVertical
+          ? "bg-sky-400/90"
+          : isGeneralVertical
+            ? "bg-emerald-400/90"
+            : "bg-transparent"
 
     return (
       <SidebarMenu>
         <SidebarMenuItem>
           <div className="flex items-center gap-2">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="h-auto flex-1 py-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
-                  <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                    <Building2 className="size-4" />
-                  </div>
-                  <div className="grid min-w-0 flex-1 text-left text-sm leading-snug">
-                    <span className="line-clamp-1 font-medium">{companyLabel}</span>
-                    <span className="line-clamp-1 text-xs">{organizationLabel}</span>
-                    <span className="line-clamp-1 text-[10px] text-muted-foreground">
-                      Tipo de empresa: {companyVerticalLabel}
-                    </span>
-                    <span className="line-clamp-1 text-[10px] text-muted-foreground">{roleLabel}</span>
-                  </div>
-                  <ChevronsUpDown className="ml-auto" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
+              <TooltipProvider>
+                <Tooltip delayDuration={150}>
+                  <TooltipTrigger asChild>
+                    <div className="flex-1">
+                      <DropdownMenuTrigger asChild>
+                        <SidebarMenuButton
+                          size="lg"
+                          className="relative h-auto flex-1 cursor-pointer py-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                        >
+                          <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                            <Building2 className="size-4" />
+                          </div>
+                          <div className="grid min-w-0 flex-1 text-left text-sm leading-snug">
+                            <span className="line-clamp-1 font-medium">{companyLabel}</span>
+                            <span className="line-clamp-1 text-xs">{organizationLabel}</span>
+                            <span className="line-clamp-1 text-[10px] text-muted-foreground">
+                              Tipo de empresa: {companyVerticalLabel}
+                            </span>
+                            <span className="line-clamp-1 text-[10px] text-muted-foreground">
+                              {roleLabel}
+                            </span>
+                          </div>
+                          <ChevronsUpDown className="ml-auto" />
+                          <span
+                            aria-hidden="true"
+                            className={`pointer-events-none absolute inset-x-0 bottom-0 h-0.5 ${verticalBarClass}`}
+                          />
+                        </SidebarMenuButton>
+                      </DropdownMenuTrigger>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="right"
+                    align="start"
+                    sideOffset={12}
+                    className="hidden w-64 rounded-xl border border-slate-200/60 bg-white/95 p-3 text-slate-900 shadow-xl dark:border-slate-700/60 dark:bg-slate-900/95 dark:text-slate-100 md:block"
+                  >
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Empresa
+                        </p>
+                        <p className="font-semibold">{companyLabel}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Organizaci&oacute;n
+                        </p>
+                        <p className="font-semibold">{organizationLabel}</p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Vertical
+                        </span>
+                        <span className="rounded-full border border-slate-200/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide dark:border-slate-700/60">
+                          {companyVerticalLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Rol
+                        </span>
+                        <span className="rounded-full border border-slate-200/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide dark:border-slate-700/60">
+                          {roleLabel.replace("Nivel:", "").trim() || roleLabel}
+                        </span>
+                      </div>
+                      {resolvedEmployeeCompany?.id ? (
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                          <span>ID empresa</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-200">
+                            {resolvedEmployeeCompany.id}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <DropdownMenuContent
                 className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
                 align="start"
@@ -538,7 +677,7 @@ export function TeamSwitcher(): React.ReactElement | null {
                     <DropdownMenuItem
                       key={company.id}
                       onClick={() => handleEmployeeCompanySelect(company.id)}
-                      className="gap-2 p-2"
+                      className="cursor-pointer gap-2 p-2"
                     >
                       <div className="flex size-6 items-center justify-center rounded-md border">
                         <Building2 className="size-3.5 shrink-0" />
@@ -599,27 +738,130 @@ export function TeamSwitcher(): React.ReactElement | null {
         <SidebarMenuItem>
           <div className="flex items-center gap-2">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="h-auto flex-1 py-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
-                  <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                    <Building2 className="size-4" />
-                  </div>
-                  <div className="grid min-w-0 flex-1 text-left text-sm leading-snug">
-                    <span className="truncate font-medium">
-                      {activeCompany?.name ?? "Sin empresas"}
-                    </span>
-                    <span className="truncate text-xs">{activeOrganization.name}</span>
-                    <span className="line-clamp-1 text-[10px] text-muted-foreground">
-                      Tipo de empresa: {resolveVerticalLabel(activeCompany?.businessVertical)}
-                    </span>
-                    <span className="line-clamp-1 text-[10px] text-muted-foreground">{roleLabel}</span>
-                  </div>
-                  <ChevronsUpDown className="ml-auto" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
+              <TooltipProvider>
+                <Tooltip delayDuration={150}>
+                  <TooltipTrigger asChild>
+                    <div className="flex-1">
+                      <DropdownMenuTrigger asChild>
+                        <SidebarMenuButton
+                          size="lg"
+                          className="relative h-auto flex-1 cursor-pointer py-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                        >
+                          <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                            <Building2 className="size-4" />
+                          </div>
+                          <div className="grid min-w-0 flex-1 text-left text-sm leading-snug">
+                            <span className="truncate font-medium">
+                              {activeCompany?.name ?? "Sin empresas"}
+                            </span>
+                            <span className="truncate text-xs">{activeOrganization.name}</span>
+                            <span className="line-clamp-1 text-[10px] text-muted-foreground">
+                              Tipo de empresa: {resolveVerticalLabel(activeCompany?.businessVertical)}
+                            </span>
+                            <span className="line-clamp-1 text-[10px] text-muted-foreground">{roleLabel}</span>
+                          </div>
+                          <ChevronsUpDown className="ml-auto" />
+                          <span
+                            aria-hidden="true"
+                            className={`pointer-events-none absolute inset-x-0 bottom-0 h-0.5 ${
+                              /RESTAURANT|RESTAURANTE/.test(
+                                (
+                                  activeCompany?.businessVertical ??
+                                  activeOrganization?.businessVertical ??
+                                  resolveVerticalLabel(
+                                    activeCompany?.businessVertical ??
+                                      activeOrganization?.businessVertical,
+                                  )
+                                )
+                                  .toString()
+                                  .trim()
+                                  .toUpperCase(),
+                              )
+                                ? "bg-amber-400/90"
+                                : /RETAIL|COMPUTER|COMPUTERS/.test(
+                                      (
+                                        activeCompany?.businessVertical ??
+                                        activeOrganization?.businessVertical ??
+                                        resolveVerticalLabel(
+                                          activeCompany?.businessVertical ??
+                                            activeOrganization?.businessVertical,
+                                        )
+                                      )
+                                        .toString()
+                                        .trim()
+                                        .toUpperCase(),
+                                    )
+                                  ? "bg-sky-400/90"
+                                  : /GENERAL/.test(
+                                        (
+                                          activeCompany?.businessVertical ??
+                                          activeOrganization?.businessVertical ??
+                                          resolveVerticalLabel(
+                                            activeCompany?.businessVertical ??
+                                              activeOrganization?.businessVertical,
+                                          )
+                                        )
+                                          .toString()
+                                          .trim()
+                                          .toUpperCase(),
+                                      )
+                                    ? "bg-emerald-400/90"
+                                    : "bg-transparent"
+                            }`}
+                          />
+                        </SidebarMenuButton>
+                      </DropdownMenuTrigger>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="right"
+                    align="start"
+                    sideOffset={12}
+                    className="hidden w-64 rounded-xl border border-slate-200/60 bg-white/95 p-3 text-slate-900 shadow-xl dark:border-slate-700/60 dark:bg-slate-900/95 dark:text-slate-100 md:block"
+                  >
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Empresa
+                        </p>
+                        <p className="font-semibold">
+                          {activeCompany?.name ?? "Sin empresas"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Organizaci&oacute;n
+                        </p>
+                        <p className="font-semibold">{activeOrganization.name}</p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Vertical
+                        </span>
+                        <span className="rounded-full border border-slate-200/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide dark:border-slate-700/60">
+                          {resolveVerticalLabel(activeCompany?.businessVertical)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Rol
+                        </span>
+                        <span className="rounded-full border border-slate-200/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide dark:border-slate-700/60">
+                          {roleLabel.replace("Nivel:", "").trim() || roleLabel}
+                        </span>
+                      </div>
+                      {activeCompany?.id ? (
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                          <span>ID empresa</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-200">
+                            {activeCompany.id}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <DropdownMenuContent
                 className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
                 align="start"
@@ -636,7 +878,7 @@ export function TeamSwitcher(): React.ReactElement | null {
                         <DropdownMenuItem
                           key={company.id}
                           onClick={() => handleSelectCompany(organization.id, company.id)}
-                          className="gap-2 p-2"
+                          className="cursor-pointer gap-2 p-2"
                         >
                           <div className="flex size-6 items-center justify-center rounded-md border">
                             <Building2 className="size-3.5 shrink-0" />
@@ -651,7 +893,7 @@ export function TeamSwitcher(): React.ReactElement | null {
                     )}
                       {canAddCompanies ? (
                         <DropdownMenuItem
-                          className="gap-2 p-2"
+                          className="cursor-pointer gap-2 p-2"
                           onClick={() => {
                             setActiveOrgId(organization.id)
                             setActiveCompanyId(null)
@@ -684,57 +926,85 @@ export function TeamSwitcher(): React.ReactElement | null {
               <strong>{activeOrganization.name}</strong>.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateCompany} className="mt-2 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="company-name">Nombre comercial</Label>
-              <Input
-                id="company-name"
-                value={companyName}
-                onChange={(event) => setCompanyName(event.target.value)}
-                placeholder="Mi Empresa S.A."
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="company-legal-name">Razon social (opcional)</Label>
-              <Input
-                id="company-legal-name"
-                value={companyLegalName}
-                onChange={(event) => setCompanyLegalName(event.target.value)}
-                placeholder="Mi Empresa Sociedad Anonima"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="company-tax-id">RUC / NIT (opcional)</Label>
-              <Input
-                id="company-tax-id"
-                value={companyTaxId}
-                onChange={(event) => setCompanyTaxId(event.target.value)}
-                placeholder="Ingrese el identificador fiscal"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="company-status">Estado</Label>
-              <Input
-                id="company-status"
-                value={companyStatus}
-                onChange={(event) => setCompanyStatus(event.target.value)}
-                placeholder="ACTIVE"
-              />
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDialogOpen(false)}
-                disabled={submitting}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "Creando..." : "Crear empresa"}
-              </Button>
-            </DialogFooter>
+            <form onSubmit={handleCreateCompany} className="mt-2 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="company-name">
+                  Nombre comercial
+                  {renderFieldChip(hasCompanyName, true)}
+                </Label>
+                <Input
+                  id="company-name"
+                  value={companyName}
+                  onChange={(event) => setCompanyName(event.target.value)}
+                  placeholder="Mi Empresa S.A."
+                  required
+                  className="cursor-text"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company-legal-name">
+                  Razon social (opcional)
+                  {renderFieldChip(Boolean(companyLegalName.trim()))}
+                </Label>
+                <Input
+                  id="company-legal-name"
+                  value={companyLegalName}
+                  onChange={(event) => setCompanyLegalName(event.target.value)}
+                  placeholder="Mi Empresa Sociedad Anonima"
+                  className="cursor-text"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company-tax-id">
+                  RUC / NIT (opcional)
+                  {renderFieldChip(normalizedTaxId.length === 11)}
+                </Label>
+                <Input
+                  id="company-tax-id"
+                  value={normalizedTaxId}
+                  onChange={(event) =>
+                    setCompanyTaxId(event.target.value.replace(/\D/g, "").slice(0, 11))
+                  }
+                  placeholder="Ingrese el identificador fiscal"
+                  inputMode="numeric"
+                  pattern="\d{11}"
+                  maxLength={11}
+                  aria-invalid={!isTaxIdValid}
+                  className={`cursor-text ${!isTaxIdValid ? "border-destructive" : ""}`}
+                />
+                {!isTaxIdValid ? (
+                  <p className="text-xs text-destructive">
+                    El RUC debe tener exactamente 11 numeros.
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company-status">
+                  Estado
+                  {renderFieldChip(hasCompanyStatus, true)}
+                </Label>
+                <Input
+                  id="company-status"
+                  value={companyStatus}
+                  onChange={(event) => setCompanyStatus(event.target.value)}
+                  placeholder="ACTIVE"
+                  className="cursor-text"
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                  disabled={submitting}
+                  className="cursor-pointer"
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={submitting} className="cursor-pointer">
+                  {submitting ? "Creando..." : "Crear empresa"}
+                </Button>
+              </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

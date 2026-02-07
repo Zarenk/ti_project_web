@@ -113,6 +113,7 @@ export function ProductForm({
   const { info: verticalInfo } = useVerticalConfig()
   const verticalName = verticalInfo?.businessVertical ?? "GENERAL"
   const showComputerSpecs = verticalName === "COMPUTERS"
+  const isGeneralVertical = verticalName === "GENERAL"
   const schemaFields = verticalInfo?.config?.productSchema?.fields ?? []
   const inventoryMode = verticalInfo?.config?.productSchema?.inventoryTracking ?? "by_product"
   const isRetail = inventoryMode === "by_variant"
@@ -2099,7 +2100,7 @@ const VariantRowItem = memo(function VariantRowItem({
 
                     
                     {showComputerSpecs && (
-                      <div className="flex flex-col pt-4 md:col-span-1 md:col-start-1 lg:col-span-3 lg:col-start-1 lg:row-start-6">
+                      <div className="flex flex-col pt-4 md:col-span-1 md:col-start-1 lg:col-span-3 lg:col-start-1 lg:row-start-5">
                           <Label className='py-3 font-semibold'>
                             Especificaciones
                             {renderOptionalChip(hasSpecs)}
@@ -2115,7 +2116,15 @@ const VariantRowItem = memo(function VariantRowItem({
                       </div>
                     )}
 
-                    <div className="flex flex-col pt-4 md:col-span-1 md:col-start-2 lg:col-span-1 lg:col-start-3 lg:row-start-5 lg:pl-4">
+                    <div
+                      className={`flex flex-col pt-4 md:col-span-1 md:col-start-2 ${
+                        showComputerSpecs
+                          ? "lg:col-span-3 lg:col-start-1 lg:row-start-6"
+                          : isGeneralVertical
+                            ? "lg:col-span-3 lg:col-start-1 lg:row-start-5"
+                            : "lg:col-span-1 lg:col-start-3 lg:row-start-5"
+                      } ${showComputerSpecs || isGeneralVertical ? "" : "lg:pl-4"}`}
+                    >
                       <Label className="py-3 font-semibold">
                         Imagenes
                         {renderOptionalChip(hasImages)}

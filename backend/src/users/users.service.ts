@@ -497,29 +497,37 @@ export class UsersService {
         throw new NotFoundException('Usuario no encontrado');
       }
 
+      const isAdmin = user.role === UserRole.ADMIN;
+      const effectiveOrgId =
+        isAdmin && user.organizationId && user.organizationId !== dto.orgId
+          ? user.organizationId
+          : dto.orgId;
+      const effectiveCompanyId =
+        effectiveOrgId !== dto.orgId ? null : dto.companyId ?? null;
+
       const { organization } = await this.assertOrganizationAccess(
         user,
-        dto.orgId,
+        effectiveOrgId,
       );
-      const company = dto.companyId
+      const company = effectiveCompanyId
         ? await this.assertCompanyBelongsToOrganization(
-            dto.orgId,
-            dto.companyId,
+            effectiveOrgId,
+            effectiveCompanyId,
           )
         : null;
 
       const now = new Date();
       const contextHash = this.generateContextHash(
         user.id,
-        dto.orgId,
-        dto.companyId ?? null,
+        effectiveOrgId,
+        effectiveCompanyId,
       );
 
       await this.prismaService.user.update({
         where: { id: userId },
         data: {
-          lastOrgId: dto.orgId,
-          lastCompanyId: dto.companyId ?? null,
+          lastOrgId: effectiveOrgId,
+          lastCompanyId: effectiveCompanyId,
           lastContextUpdatedAt: now,
           lastContextHash: contextHash,
         },
@@ -532,8 +540,8 @@ export class UsersService {
           entityType: 'User',
           entityId: user.id.toString(),
           action: AuditAction.UPDATED,
-          summary: `Actualizo el contexto a org ${dto.orgId}${
-            dto.companyId ? ` / company ${dto.companyId}` : ''
+          summary: `Actualizo el contexto a org ${effectiveOrgId}${
+            effectiveCompanyId ? ` / company ${effectiveCompanyId}` : ''
           }`,
           diff: {
             before: {
@@ -541,8 +549,8 @@ export class UsersService {
               companyId: user.lastCompanyId ?? null,
             },
             after: {
-              orgId: dto.orgId,
-              companyId: dto.companyId ?? null,
+              orgId: effectiveOrgId,
+              companyId: effectiveCompanyId,
             },
           } as Prisma.JsonValue,
         },
@@ -550,20 +558,20 @@ export class UsersService {
       );
 
       this.contextEventsGateway.emitContextChanged(user.id, {
-        orgId: dto.orgId,
-        companyId: dto.companyId ?? null,
+        orgId: effectiveOrgId,
+        companyId: effectiveCompanyId,
         updatedAt: now.toISOString(),
       });
       await this.trackContextPreference(
         user.id,
-        dto.orgId,
-        dto.companyId ?? null,
+        effectiveOrgId,
+        effectiveCompanyId,
         now,
       );
       await this.logContextHistory(
         user.id,
-        dto.orgId,
-        dto.companyId ?? null,
+        effectiveOrgId,
+        effectiveCompanyId,
         req,
         now,
       );
@@ -572,8 +580,8 @@ export class UsersService {
       this.contextPrometheusService.recordContextUpdate('success', latency);
 
       return {
-        orgId: dto.orgId,
-        companyId: dto.companyId ?? null,
+        orgId: effectiveOrgId,
+        companyId: effectiveCompanyId,
         updatedAt: now.toISOString(),
         hash: contextHash,
         organization: {
@@ -1165,12 +1173,13 @@ export class UsersService {
 
     const isGlobalAdmin = user.role === UserRole.SUPER_ADMIN_GLOBAL;
     const isOrgAdmin = user.role === UserRole.SUPER_ADMIN_ORG;
+    const isAdmin = user.role === UserRole.ADMIN;
 
     if (isGlobalAdmin) {
       return { organization, membership: null };
     }
 
-    if (isOrgAdmin) {
+    if (isOrgAdmin || isAdmin) {
       if (
         user.organizationId !== null &&
         user.organizationId !== undefined &&

@@ -1,9 +1,12 @@
-import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { AccountingService, AccountNode } from './accounting.service';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('accounting')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class AccountingController {
   constructor(private readonly accountingService: AccountingService) {}
 

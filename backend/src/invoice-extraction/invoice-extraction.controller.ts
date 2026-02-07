@@ -7,12 +7,16 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { InvoiceExtractionService } from './invoice-extraction.service';
 import { AssignTemplateDto } from './dto/assign-template.dto';
 import { SubmitCorrectionDto } from './dto/submit-correction.dto';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('invoice-samples')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class InvoiceExtractionController {
   constructor(
     private readonly invoiceExtractionService: InvoiceExtractionService,

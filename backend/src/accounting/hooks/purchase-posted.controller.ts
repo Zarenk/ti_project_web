@@ -1,13 +1,16 @@
-import { Body, Controller, HttpCode, Post, Logger } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, Logger, UseGuards } from '@nestjs/common';
 import { PurchasePostedDto } from './dto/purchase-posted.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EntriesService } from '../entries.service';
 import { format } from 'date-fns';
 import { PurchaseAccountingService } from '../services/purchase-account.service';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 const IGV_RATE = 0.18;
 
 @Controller('accounting/hooks/purchase-posted')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class PurchasePostedController {
   private readonly logger = new Logger(PurchasePostedController.name);
 

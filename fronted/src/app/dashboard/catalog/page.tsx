@@ -6,7 +6,7 @@ import { exportCatalog } from "./catalog.api";
 import { generateCatalogPdf, type CatalogLayoutMode } from "./catalog-pdf";
 import { deleteCatalogCover, getCatalogCover, uploadCatalogCover, type CatalogCover } from "./catalog-cover.api";
 import { resolveImageUrl } from "@/lib/images";
-import { getProducts } from "../products/products.api";
+import { getProducts, updateProduct, uploadProductImage } from "../products/products.api";
 import { getStoresWithProduct } from "../inventory/inventory.api";
 import CategoryFilter from "./category-filter";
 import CatalogPreview from "./catalog-preview";
@@ -23,6 +23,12 @@ import {
 } from "@/components/ui/select";
 import { getCompanyDetail } from "../tenancy/tenancy.api";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function CatalogPage() {
   const [downloading, setDownloading] = useState<"pdf" | "excel" | null>(null);
@@ -40,6 +46,33 @@ export default function CatalogPage() {
   const [hiddenProductIds, setHiddenProductIds] = useState<number[]>([]);
   const [priceOverrides, setPriceOverrides] = useState<Record<number, number>>({});
   const [previousPriceOverrides, setPreviousPriceOverrides] = useState<Record<number, number>>({});
+  const [updatingImageId, setUpdatingImageId] = useState<number | null>(null);
+  const productImageInputRef = useRef<HTMLInputElement>(null);
+  const productImageTargetRef = useRef<number | null>(null);
+
+  const normalizeImagePath = (input?: string): string => {
+    const raw = input?.trim() ?? "";
+    if (!raw) {
+      return "";
+    }
+
+    try {
+      const parsed = new URL(raw);
+      if (parsed.pathname.startsWith("/uploads")) {
+        return parsed.pathname;
+      }
+    } catch {
+      // Ignore parsing errors for relative paths
+    }
+
+    const uploadsIndex = raw.indexOf("/uploads");
+    if (uploadsIndex >= 0) {
+      const relative = raw.slice(uploadsIndex);
+      return relative.startsWith("/") ? relative : `/${relative}`;
+    }
+
+    return raw;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -339,12 +372,78 @@ export default function CatalogPage() {
     setLayoutMode("grid");
   }
 
+  function handleSelectProductImage(productId: number) {
+    productImageTargetRef.current = productId;
+    productImageInputRef.current?.click();
+  }
+
+  async function handleProductImageSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    const productId = productImageTargetRef.current;
+    if (!file || !productId) {
+      return;
+    }
+
+    const allowed = ["image/jpeg", "image/png"];
+    if (!allowed.includes(file.type)) {
+      toast.error("Solo se permiten imagenes JPG o PNG");
+      event.target.value = "";
+      productImageTargetRef.current = null;
+      return;
+    }
+
+    try {
+      setUpdatingImageId(productId);
+      const { url } = await uploadProductImage(file);
+      const normalizedPath = normalizeImagePath(url);
+      const updated = await updateProduct(String(productId), {
+        images: [normalizedPath],
+      });
+
+      setCatalogProducts((prev) =>
+        prev.map((product: any) =>
+          product.id === productId
+            ? {
+                ...product,
+                ...updated,
+                image: updated?.image ?? normalizedPath,
+                imageUrl: updated?.imageUrl ?? normalizedPath,
+                images: updated?.images ?? [normalizedPath],
+              }
+            : product,
+        ),
+      );
+      setProducts((prev) =>
+        prev.map((product: any) =>
+          product.id === productId
+            ? {
+                ...product,
+                ...updated,
+                image: updated?.image ?? normalizedPath,
+                imageUrl: updated?.imageUrl ?? normalizedPath,
+                images: updated?.images ?? [normalizedPath],
+              }
+            : product,
+        ),
+      );
+      toast.success("Imagen actualizada");
+    } catch (error) {
+      console.error("Error updating product image:", error);
+      toast.error("No se pudo actualizar la imagen");
+    } finally {
+      setUpdatingImageId(null);
+      event.target.value = "";
+      productImageTargetRef.current = null;
+    }
+  }
+
   const coverUrl = cover?.imageUrl || cover?.imagePath
     ? resolveImageUrl(cover?.imageUrl ?? cover?.imagePath)
     : null;
 
   return (
-    <div className="p-6 space-y-4">
+    <TooltipProvider delayDuration={120}>
+      <div className="p-6 space-y-4">
       <h1 className="text-2xl font-bold">Exportar Catálogo</h1>
       <CategoryFilter
         categories={categories}
@@ -365,38 +464,56 @@ export default function CatalogPage() {
                 className="flex items-center gap-2"
               >
                 <span className="text-xs font-semibold">{product.name}</span>
-                <button
-                  type="button"
-                  className="text-[11px] font-semibold text-primary underline"
-                  onClick={() => handleRestoreProduct(product.id)}
-                >
-                  Mostrar
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="text-[11px] font-semibold text-primary underline cursor-pointer"
+                      onClick={() => handleRestoreProduct(product.id)}
+                    >
+                      Mostrar
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Volver a mostrar</TooltipContent>
+                </Tooltip>
               </Badge>
             ))}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleRestoreAllHidden}
-              className="ml-auto text-xs font-medium"
-            >
-              Restaurar todos
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRestoreAllHidden}
+                  className="ml-auto text-xs font-medium cursor-pointer"
+                >
+                  Restaurar todos
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Mostrar todos los productos ocultos</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-4">
-        <Button
-          variant="outline"
-          onClick={handleSelectCover}
-          disabled={uploadingCover}
-        >
-          {uploadingCover
-            ? "Guardando caratula..."
-            : cover
-            ? "Actualizar caratula"
-            : "Agregar caratula"}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              onClick={handleSelectCover}
+              disabled={uploadingCover}
+              className="cursor-pointer"
+            >
+              {uploadingCover
+                ? "Guardando caratula..."
+                : cover
+                ? "Actualizar caratula"
+                : "Agregar caratula"}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {cover ? "Actualizar caratula" : "Agregar caratula"}
+          </TooltipContent>
+        </Tooltip>
         {coverUrl && (
           <div className="flex items-center gap-2">
             <div className="relative h-16 w-32">
@@ -405,16 +522,20 @@ export default function CatalogPage() {
                 alt="Caratula del catalogo"
                 className="h-full w-full rounded border object-cover"
               />
-              <button
-                type="button"
-                onClick={handleRemoveCover}
-                disabled={removingCover}
-                className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-xs font-bold text-white shadow"
-                aria-label="Eliminar caratula"
-                title="Eliminar caratula"
-              >
-                ×
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleRemoveCover}
+                    disabled={removingCover}
+                    className="absolute -right-2 -top-2 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-destructive text-xs font-bold text-white shadow"
+                    aria-label="Eliminar caratula"
+                  >
+                    ×
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Eliminar caratula</TooltipContent>
+              </Tooltip>
             </div>
             <span className="text-sm text-muted-foreground">
               {removingCover ? 'Eliminando...' : 'Vista previa'}
@@ -429,6 +550,13 @@ export default function CatalogPage() {
         className="hidden"
         onChange={handleCoverSelected}
       />
+      <input
+        ref={productImageInputRef}
+        type="file"
+        accept="image/jpeg,image/png"
+        className="hidden"
+        onChange={handleProductImageSelected}
+      />
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
@@ -439,7 +567,7 @@ export default function CatalogPage() {
               value={layoutMode}
               onValueChange={(value) => setLayoutMode(value as CatalogLayoutMode)}
             >
-              <SelectTrigger id="layout-mode" className="w-[200px]">
+              <SelectTrigger id="layout-mode" className="w-[200px] cursor-pointer">
                 <SelectValue placeholder="Selecciona un modo" />
               </SelectTrigger>
               <SelectContent>
@@ -449,39 +577,68 @@ export default function CatalogPage() {
             </Select>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={() => handleDownload("pdf")} disabled={downloading === "pdf"}>
-              {downloading === "pdf" ? "Generando..." : "Descargar PDF"}
-            </Button>
-            <Button onClick={() => handleDownload("excel")} disabled={downloading === "excel"}>
-              {downloading === "excel" ? "Generando..." : "Descargar Excel"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleResetCatalogOptions}
-              className="group relative overflow-hidden border-primary/40 text-primary transition-all duration-200 hover:border-primary hover:bg-primary hover:text-white"
-            >
-              <span className="relative z-10">Limpiar configuración</span>
-              <span className="absolute inset-0 translate-y-full bg-primary/80 transition-all duration-200 group-hover:translate-y-0" />
-            </Button>
-          </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => handleDownload("pdf")}
+                  disabled={downloading === "pdf"}
+                  className="cursor-pointer"
+                >
+                  {downloading === "pdf" ? "Generando..." : "Descargar PDF"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Descargar catalogo en PDF</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => handleDownload("excel")}
+                  disabled={downloading === "excel"}
+                  className="cursor-pointer"
+                >
+                  {downloading === "excel" ? "Generando..." : "Descargar Excel"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Descargar catalogo en Excel</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleResetCatalogOptions}
+                  className="group relative cursor-pointer overflow-hidden border-primary/40 text-primary transition-all duration-200 hover:border-primary hover:bg-primary hover:text-white"
+                >
+                  <span className="relative z-10">Limpiar configuración</span>
+                  <span className="absolute inset-0 translate-y-full bg-primary/80 transition-all duration-200 group-hover:translate-y-0" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Restablecer opciones del catalogo</TooltipContent>
+            </Tooltip>
+</div>
         </div>
       </div>
       {visibleProducts.length > 0 ? (
-        <CatalogPreview
-          products={visibleProducts}
-          layout={layoutMode}
-          onRemoveProduct={handleHideProduct}
-          onPriceChange={handlePriceChange}
-          onPreviousPriceChange={handlePreviousPriceChange}
-          priceOverrides={priceOverrides}
-          previousPriceOverrides={previousPriceOverrides}
-        />
+          <CatalogPreview
+            products={visibleProducts}
+            layout={layoutMode}
+            onRemoveProduct={handleHideProduct}
+            onPriceChange={handlePriceChange}
+            onPreviousPriceChange={handlePreviousPriceChange}
+            priceOverrides={priceOverrides}
+            previousPriceOverrides={previousPriceOverrides}
+            onRequestImageUpdate={handleSelectProductImage}
+            updatingImageId={updatingImageId}
+          />
       ) : (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
           Selecciona categorias y deja visibles los productos que quieres incluir.
         </div>
       )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
+
+
+

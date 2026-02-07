@@ -10,8 +10,28 @@ const listeners = new Set<(event: AnalyticsEvent) => void>()
 
 const ANALYTICS_ENDPOINT =
   process.env.NEXT_PUBLIC_ANALYTICS_URL?.trim() || null
+const DEV_DEDUP_WINDOW_MS = 1500
+const devRecentEvents = new Map<string, number>()
+
+function buildDedupeKey(name: string, data?: Record<string, unknown>) {
+  if (!data) return name
+  const relevant = ["source", "orgId", "companyId", "reason", "variant"]
+    .filter((key) => key in data)
+    .map((key) => `${key}:${String(data[key])}`)
+    .join("|")
+  return relevant ? `${name}|${relevant}` : name
+}
 
 export function trackEvent(name: string, data?: Record<string, unknown>) {
+  if (process.env.NODE_ENV !== "production") {
+    const key = buildDedupeKey(name, data)
+    const last = devRecentEvents.get(key)
+    const now = Date.now()
+    if (last && now - last < DEV_DEDUP_WINDOW_MS) {
+      return
+    }
+    devRecentEvents.set(key, now)
+  }
   const event: AnalyticsEvent = {
     name,
     payload: data ?? {},

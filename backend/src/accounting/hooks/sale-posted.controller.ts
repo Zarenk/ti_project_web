@@ -1,12 +1,15 @@
-import { Body, Controller, HttpCode, Post, Logger, Res } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, Logger, Res, UseGuards } from '@nestjs/common';
 import { SalePostedDto } from './dto/sale-posted.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EntriesService } from '../entries.service';
 import { format } from 'date-fns';
 import { SaleAccountingService } from '../services/sale-accounting.service';
 import { Response } from 'express';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('accounting/hooks/sale-posted')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class SalePostedController {
   private readonly logger = new Logger(SalePostedController.name);
 

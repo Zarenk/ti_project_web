@@ -98,9 +98,9 @@ const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
     subtitle: 'Descubre todo lo que tenemos para ti',
     ctaLabel: 'Comenzar',
     ctaHref: '',
-    enableCarousel: false,
+    enableCarousel: true,
     speed: 5,
-    particles: false,
+    particles: true,
   },
   components: {
     cardStyle: 'shadow',

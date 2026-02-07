@@ -1,10 +1,13 @@
-import { Body, Controller, HttpCode, Post, Logger } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, Logger, UseGuards } from '@nestjs/common';
 import { format } from 'date-fns';
 import { InventoryAdjustedDto } from './dto/inventory-adjusted.dto';
 import { EntriesService } from '../entries.service';
 import { InventoryAccountingService } from '../services/inventory-account.service';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('accounting/hooks/inventory-adjusted')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class InventoryAdjustedController {
   private readonly logger = new Logger(InventoryAdjustedController.name);
 

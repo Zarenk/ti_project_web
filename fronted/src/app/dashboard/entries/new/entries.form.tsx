@@ -43,6 +43,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTenantSelection } from '@/context/tenant-selection-context'
+import { useAuth } from '@/context/auth-context'
+import { normalizeOptionValue } from '@/lib/utils'
 
 // FunciÃ³n para obtener el userId del token JWT almacenado en localStorage
 async function getUserIdFromToken(): Promise<number | null> {
@@ -160,7 +162,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [loadingStores, setLoadingStores] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(!categories?.length);
-  const { version } = useTenantSelection();
+  const { version, selection } = useTenantSelection();
+  const { userId } = useAuth();
 
   // MODAL DE PRODUCTOS
   const [categoriesState, setCategories] = useState<{ id: number; name: string }[]>(categories ?? []);
@@ -341,6 +344,22 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   // Estado para rastrear si el combobox de proveedores ha sido tocado
   const [isProviderComboTouched, setIsProviderComboTouched] = useState(false);
 
+  const entryContextKey = useMemo(() => {
+    if (!userId || !selection.orgId) return null;
+    return `entry-context:v1:${userId}:${selection.orgId}`;
+  }, [userId, selection.orgId]);
+  const [entryDefaults, setEntryDefaults] = useState<{
+    storeId?: number | null;
+    providerId?: number | null;
+    productId?: number | null;
+  } | null>(null);
+  const hasAppliedDefaultsRef = useRef(false);
+  const recentProductsKey = useMemo(() => {
+    if (!userId || !selection.orgId) return null;
+    return `entry-recent-products:v1:${userId}:${selection.orgId}`;
+  }, [userId, selection.orgId]);
+  const [recentProductIds, setRecentProductIds] = useState<number[]>([]);
+
   // CONTROLAR LA MONEDA
   const [currency, setCurrency] = useState<'USD' | 'PEN'>(initialCurrency);
   const [isCurrencyDialogOpen, setIsCurrencyDialogOpen] = useState(false);
@@ -348,6 +367,27 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [isConvertingCurrency, setIsConvertingCurrency] = useState(false);
 
   const normalizedCurrency = currency === 'USD' ? 'USD' : 'PEN';
+
+  const selectedStoreId = useMemo(() => {
+    if (!valueStore) return null;
+    const normalized = normalizeOptionValue(valueStore);
+    const match = stores.find((store) => normalizeOptionValue(store.name) === normalized);
+    return match?.id ?? null;
+  }, [stores, valueStore]);
+
+  const selectedProviderId = useMemo(() => {
+    if (!valueProvider) return null;
+    const normalized = normalizeOptionValue(valueProvider);
+    const match = providers.find((provider) => normalizeOptionValue(provider.name) === normalized);
+    return match?.id ?? null;
+  }, [providers, valueProvider]);
+
+  const selectedProductId = useMemo(() => {
+    if (!value) return null;
+    const normalized = normalizeOptionValue(value);
+    const match = products.find((product) => normalizeOptionValue(product.name) === normalized);
+    return match?.id ?? null;
+  }, [products, value]);
 
   const totalAmount = useMemo(() => {
     return selectedProducts.reduce((sum, product) => {
@@ -880,6 +920,24 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   };
   //
 
+  const handleRecentProductSelection = (productId: number) => {
+    if (!recentProductsKey || typeof window === "undefined") {
+      return;
+    }
+    setRecentProductIds((prev) => {
+      const next = [productId, ...prev.filter((id) => id !== productId)].slice(0, 10);
+      try {
+        window.localStorage.setItem(
+          recentProductsKey,
+          JSON.stringify({ productIds: next, updatedAt: new Date().toISOString() }),
+        );
+      } catch (error) {
+        console.warn("No se pudo guardar productos recientes:", error);
+      }
+      return next;
+    });
+  };
+
   // Actualizar el estado local cuando cambie el valor del formulario
   useEffect(() => {
     const subscription = form.watch((value) => {
@@ -947,6 +1005,57 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     };
   }, [version]);
   //
+
+  useEffect(() => {
+    if (!entryContextKey) {
+      setEntryDefaults(null);
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(entryContextKey);
+      if (!raw) {
+        setEntryDefaults(null);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setEntryDefaults({
+        storeId: typeof parsed?.storeId === "number" ? parsed.storeId : null,
+        providerId: typeof parsed?.providerId === "number" ? parsed.providerId : null,
+        productId: typeof parsed?.productId === "number" ? parsed.productId : null,
+      });
+    } catch (error) {
+      console.warn("No se pudo leer el contexto de entradas:", error);
+      setEntryDefaults(null);
+    }
+  }, [entryContextKey]);
+
+  useEffect(() => {
+    if (!recentProductsKey) {
+      setRecentProductIds([]);
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(recentProductsKey);
+      if (!raw) {
+        setRecentProductIds([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      const ids = Array.isArray(parsed?.productIds)
+        ? parsed.productIds.filter((id: unknown) => typeof id === "number")
+        : [];
+      setRecentProductIds(ids);
+    } catch (error) {
+      console.warn("No se pudo leer productos recientes:", error);
+      setRecentProductIds([]);
+    }
+  }, [recentProductsKey]);
 
   // Cargar los proveedores al montar el componente
   useEffect(() => {
@@ -1026,8 +1135,112 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     setShowInvoiceFields(false);
     setIsNewInvoiceBoolean(false);
     form.reset(buildDefaultEntryValues());
+    hasAppliedDefaultsRef.current = false;
   }, [version, form]);
   //
+
+  useEffect(() => {
+    if (!entryDefaults || hasAppliedDefaultsRef.current) {
+      return;
+    }
+    if (loadingStores || loadingProviders || loadingProducts) {
+      return;
+    }
+
+    let applied = false;
+
+    if (!valueStore && entryDefaults.storeId) {
+      const store = stores.find((item) => item.id === entryDefaults.storeId);
+      if (store) {
+        setValueStore(store.name || "");
+        setValue("store_name", store.name || "");
+        setValue("store_adress", store.adress || "");
+        applied = true;
+      }
+    }
+
+    if (!valueProvider && entryDefaults.providerId) {
+      const provider = providers.find((item) => item.id === entryDefaults.providerId);
+      if (provider) {
+        setValueProvider(provider.name || "");
+        setValue("provider_name", provider.name || "");
+        setValue("provider_adress", provider.adress || "");
+        setValue("provider_documentNumber", provider.documentNumber || "");
+        applied = true;
+      }
+    }
+
+    if (!value && entryDefaults.productId) {
+      const product = products.find((item) => item.id === entryDefaults.productId);
+      if (product) {
+        const purchasePrice =
+          currency === "USD" && tipoCambioActual && tipoCambioActual > 0
+            ? Number((product.price / tipoCambioActual).toFixed(2))
+            : Number((product.price || 0).toFixed(2));
+        const category = categoriesState.find((cat) => cat.id === product.categoryId);
+
+        setValueProduct(product.name || "");
+        setCurrentProduct({
+          id: product.id,
+          name: product.name,
+          price: purchasePrice,
+          priceSell: product.priceSell,
+          categoryId: product.categoryId,
+          category_name: category?.name || product.category_name || "Sin categoria",
+        });
+        setValue("category_name", category?.name || product.category_name || "Sin categoria");
+        setValue("price", purchasePrice || 0);
+        setValue("priceSell", product.priceSell || 0);
+        setValue("description", product.description || "");
+        applied = true;
+      }
+    }
+
+    if (applied || entryDefaults) {
+      hasAppliedDefaultsRef.current = true;
+    }
+  }, [
+    entryDefaults,
+    loadingStores,
+    loadingProviders,
+    loadingProducts,
+    valueStore,
+    valueProvider,
+    value,
+    stores,
+    providers,
+    products,
+    categoriesState,
+    currency,
+    tipoCambioActual,
+    setValue,
+    setValueProduct,
+    setCurrentProduct,
+    setValueStore,
+    setValueProvider,
+  ]);
+
+  useEffect(() => {
+    if (!entryContextKey || typeof window === "undefined") {
+      return;
+    }
+    if (!selectedStoreId && !selectedProviderId && !selectedProductId) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(
+        entryContextKey,
+        JSON.stringify({
+          storeId: selectedStoreId ?? null,
+          providerId: selectedProviderId ?? null,
+          productId: selectedProductId ?? null,
+          updatedAt: new Date().toISOString(),
+        }),
+      );
+    } catch (error) {
+      console.warn("No se pudo guardar el contexto de entradas:", error);
+    }
+  }, [entryContextKey, selectedStoreId, selectedProviderId, selectedProductId]);
 
   // Efecto para ajustar las series cuando cambia la cantidad
   useEffect(() => {
@@ -1138,11 +1351,13 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setIsProviderComboTouched={setIsProviderComboTouched}
                       valueProvider={valueProvider}
                     />
-                     <ProductSelection
+                    <ProductSelection
                       open={open}
                       setOpen={setOpen}
                       value={value}
                       setValueProduct={setValueProduct}
+                      recentProductIds={recentProductIds}
+                      onProductSelected={handleRecentProductSelection}
                       products={products}
                       selectedProducts={selectedProducts}
                       categories={categoriesState}

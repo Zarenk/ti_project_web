@@ -15,6 +15,12 @@ export interface CreateOrganizationPayload {
   code?: string
   status?: string
   units: OrganizationUnitInput[]
+  companies?: Array<{
+    name: string
+    legalName?: string | null
+    taxId?: string | null
+    status?: string
+  }>
 }
 
 export interface UpdateOrganizationPayload {
@@ -511,13 +517,20 @@ export async function listOrganizations(): Promise<OrganizationResponse[]> {
   return data as OrganizationResponse[]
 }
 
-export async function searchUsers(search: string): Promise<UserSummary[]> {
+export async function searchUsers(
+  search: string,
+  orgId?: number | null,
+  companyId?: number | null,
+): Promise<UserSummary[]> {
   const trimmed = search.trim()
   if (!trimmed) {
     return []
   }
 
-  const headers = await getAuthHeaders()
+  const headers = await getAuthHeaders({
+    orgId: orgId ?? undefined,
+    companyId: companyId ?? undefined,
+  })
   if (!headers.Authorization) {
     return []
   }
@@ -561,6 +574,49 @@ export interface CreateCompanyPayload {
   taxId?: string | null
   status?: string
   organizationId?: number
+}
+
+export interface ValidateCompanyPayload {
+  organizationId?: number | null
+  companyId?: number | null
+  legalName?: string | null
+  taxId?: string | null
+}
+
+export async function validateCompanyFields(
+  payload: ValidateCompanyPayload,
+): Promise<{ legalNameAvailable: boolean; taxIdAvailable: boolean }> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/validate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo validar la empresa"
+    throw new Error(message)
+  }
+
+  return {
+    legalNameAvailable: Boolean((data as any).legalNameAvailable),
+    taxIdAvailable: Boolean((data as any).taxIdAvailable),
+  }
 }
 
 export async function createCompany(

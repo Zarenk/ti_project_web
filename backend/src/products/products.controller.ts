@@ -28,9 +28,11 @@ import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @ModulePermission(['inventory', 'catalog'])
 @Controller('products')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,

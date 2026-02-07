@@ -6,12 +6,16 @@ import {
   Patch,
   Param,
   Delete,
+  UseGuards,
 } from '@nestjs/common';
 import { CatalogexportService } from './catalogexport.service';
 import { CreateCatalogexportDto } from './dto/create-catalogexport.dto';
 import { UpdateCatalogexportDto } from './dto/update-catalogexport.dto';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('catalogexport')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class CatalogexportController {
   constructor(private readonly catalogexportService: CatalogexportService) {}
 

@@ -8,6 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   CommandDialog,
   CommandInput,
   CommandList,
@@ -52,7 +58,8 @@ export function CategoryFilter({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <TooltipProvider delayDuration={120}>
+      <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         {selected.map((id) => {
           const cat = categories.find((c) => c.id === id);
@@ -70,14 +77,19 @@ export function CategoryFilter({
           );
         })}
 
-        <Button variant="outline" onClick={() => setOpen(true)}>
-          Seleccionar categorías
-          {selected.length > 0 && (
-            <span className="ml-2 text-muted-foreground">
-              ({selected.length})
-            </span>
-          )}
-        </Button>
+                <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" onClick={() => setOpen(true)} className="cursor-pointer">
+              Seleccionar categorías
+              {selected.length > 0 && (
+                <span className="ml-2 text-muted-foreground">
+                  ({selected.length})
+                </span>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Elegir categorías del catálogo</TooltipContent>
+        </Tooltip>
       </div>
 
       <CommandDialog
@@ -93,9 +105,14 @@ export function CategoryFilter({
           <span>Seleccionadas: {selected.length}</span>
 
           {selected.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => onChange([])}>
-              Limpiar
-            </Button>
+                        <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => onChange([])} className="cursor-pointer">
+                  Limpiar
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Quitar todas las categorías</TooltipContent>
+            </Tooltip>
           )}
         </div>
 
@@ -112,7 +129,7 @@ export function CategoryFilter({
                 value={cat.name}
                 onSelect={() => toggle(cat.id)}
                 className={cn(
-                  "flex items-center justify-between rounded-md border p-2",
+                  "flex items-center justify-between rounded-md border p-2 cursor-pointer",
                   isSelected && "bg-accent text-accent-foreground"
                 )}
               >
@@ -134,15 +151,19 @@ export function CategoryFilter({
                   </div>
 
                   {/* Checkbox como indicador visual controlado */}
-                  <Checkbox checked={isSelected} />
+                  <Checkbox checked={isSelected} className="cursor-pointer" />
                 </motion.div>
               </CommandItem>
             );
           })}
         </CommandList>
       </CommandDialog>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
 
 export default CategoryFilter;
+
+
+

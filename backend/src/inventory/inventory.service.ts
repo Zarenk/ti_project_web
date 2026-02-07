@@ -72,6 +72,42 @@ export class InventoryService {
     }
   }
 
+  async getStoresWithProduct(
+    productId: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const id = Number(productId);
+    if (!Number.isFinite(id)) {
+      throw new BadRequestException(
+        'El ID del producto debe ser un numero valido',
+      );
+    }
+
+    const organizationFilter = organizationId ?? undefined;
+    const companyFilter = companyId ?? undefined;
+    const storeWhere: Record<string, unknown> = {};
+    if (organizationFilter !== undefined) {
+      storeWhere.organizationId = organizationFilter;
+    }
+    if (companyFilter !== undefined) {
+      storeWhere.companyId = companyFilter;
+    }
+
+    return this.prisma.storeOnInventory.findMany({
+      where: {
+        inventory: {
+          productId: id,
+          ...(organizationFilter !== undefined
+            ? { organizationId: organizationFilter }
+            : {}),
+        },
+        ...(Object.keys(storeWhere).length > 0 ? { store: storeWhere } : {}),
+      },
+      include: { store: true },
+    });
+  }
+
   parseExcel(filePath: string): any[] {
     const workbook = xlsx.readFile(filePath);
     const sheetName = workbook.SheetNames[0];

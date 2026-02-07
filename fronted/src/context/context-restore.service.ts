@@ -179,6 +179,15 @@ const defaultDependencies: RestoreDependencies = {
     }),
 }
 
+function readCookieValue(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null
+  }
+  const pattern = new RegExp(`(?:^|; )${name}=([^;]*)`)
+  const match = document.cookie.match(pattern)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 export class ContextRestoreService {
   private readonly deps: RestoreDependencies
   private readonly strategy: ContextStrategy
@@ -292,7 +301,10 @@ export class ContextRestoreService {
   ): Promise<ContextCandidate[]> {
     const candidates: ContextCandidate[] = []
     const local = this.deps.storage.getLocalContext()
-    if (local && this.isFresh(local)) {
+    const hasTenantCookies =
+      readCookieValue("tenant_org_id") != null ||
+      readCookieValue("tenant_company_id") != null
+    if (local && this.isFresh(local) && hasTenantCookies) {
       candidates.push({
         orgId: local.orgId,
         companyId: local.companyId ?? null,

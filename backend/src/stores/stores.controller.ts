@@ -8,6 +8,7 @@ import {
   Delete,
   BadRequestException,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { StoresService } from './stores.service';
@@ -15,8 +16,11 @@ import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('stores')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class StoresController {
   constructor(private readonly storesService: StoresService) {}
 
@@ -42,6 +46,11 @@ export class StoresController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
+    if (!organizationId && !companyId) {
+      throw new BadRequestException(
+        'Contexto de tenant no disponible para listar tiendas.',
+      );
+    }
     return this.storesService.findAll(
       organizationId === undefined ? undefined : organizationId,
       companyId === undefined ? undefined : companyId,
@@ -57,6 +66,11 @@ export class StoresController {
     const numericId = parseInt(id, 10);
     if (Number.isNaN(numericId)) {
       throw new BadRequestException('El ID debe ser un numero valido.');
+    }
+    if (!organizationId && !companyId) {
+      throw new BadRequestException(
+        'Contexto de tenant no disponible para consultar tiendas.',
+      );
     }
     return this.storesService.findOne(
       numericId,

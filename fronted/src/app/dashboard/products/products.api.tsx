@@ -16,6 +16,19 @@ async function authorizedFetch(url: string, init: RequestInit = {}) {
   return fetch(url, { ...init, headers })
 }
 
+async function publicFetch(url: string, init: RequestInit = {}) {
+  const auth = await getAuthHeaders()
+  const headers = new Headers(init.headers ?? {})
+
+  for (const [key, value] of Object.entries(auth)) {
+    if (value != null && value !== '') {
+      headers.set(key, value)
+    }
+  }
+
+  return fetch(url, { ...init, headers })
+}
+
 type ProductFilters = {
   migrationStatus?: 'legacy' | 'migrated'
   includeInactive?: boolean
@@ -39,6 +52,9 @@ export async function getProducts(filters?: ProductFilters) {
   })
 
   if (!response.ok) {
+    if (response.status === 400) {
+      return []
+    }
     throw new Error(`Error al obtener productos: ${response.status}`)
   }
 
@@ -50,6 +66,53 @@ export async function getProducts(filters?: ProductFilters) {
   }
 
   return products.filter((product: any) => isProductActive(product.status))
+}
+
+export async function getPublicProducts(filters?: ProductFilters) {
+  const url = new URL(`${BACKEND_URL}/api/public/products`)
+  if (filters?.migrationStatus) {
+    url.searchParams.set('migrationStatus', filters.migrationStatus)
+  }
+
+  const response = await publicFetch(url.toString(), {
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    if (response.status === 400) {
+      return []
+    }
+    throw new Error(`Error al obtener productos: ${response.status}`)
+  }
+
+  const raw = await response.json()
+  const products = Array.isArray(raw) ? normalizeProducts(raw) : []
+
+  if (filters?.includeInactive) {
+    return products
+  }
+
+  return products.filter((product: any) => isProductActive(product.status))
+}
+
+export async function getPublicProduct(id: string) {
+  const response = await publicFetch(`${BACKEND_URL}/api/public/products/${id}`, {
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Error al obtener el producto ${id}: ${response.status}`)
+  }
+
+  const json = await response.json()
+
+  const formattedProduct = {
+    ...json,
+    status: normalizeProductStatus(json.status),
+    createAt: new Date(json.createdAt),
+  }
+
+  return formattedProduct
 }
 
 export async function getProduct(id: string) {

@@ -11,6 +11,7 @@ import {
   Query,
   UploadedFile,
   UseInterceptors,
+  UseGuards,
 } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -22,9 +23,12 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @ModulePermission(['inventory', 'purchases', 'providers'])
 @Controller('providers')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
 
@@ -99,6 +103,11 @@ export class ProvidersController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @Query('search') search?: string,
   ) {
+    if (!organizationId) {
+      throw new BadRequestException(
+        'Contexto de tenant no disponible para listar proveedores.',
+      );
+    }
     const trimmedSearch =
       typeof search === 'string' ? search.trim() : undefined;
     const hasSearch = Boolean(trimmedSearch);

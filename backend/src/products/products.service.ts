@@ -106,6 +106,7 @@ export class ProductsService {
     const normalizedFeatures = this.sanitizeFeatureInputs(features);
     const schemaResolution = await this.resolveCreateSchemaState(
       ctx.organizationId ?? null,
+      ctx.companyId ?? null,
       extraAttributes,
     );
 
@@ -308,6 +309,7 @@ export class ProductsService {
     const normalizedFeatures = this.sanitizeFeatureInputs(features);
     const schemaResolution = await this.resolveUpdateSchemaState(
       ctx.organizationId ?? null,
+      ctx.companyId ?? null,
       extraAttributes,
       existing.extraAttributes,
       existing.isVerticalMigrated,
@@ -399,6 +401,7 @@ export class ProductsService {
 
     const resolution = await this.resolveUpdateSchemaState(
       ctx.organizationId ?? null,
+      ctx.companyId ?? null,
       extraAttributes,
       existing.extraAttributes,
       existing.isVerticalMigrated,
@@ -529,20 +532,22 @@ export class ProductsService {
   }
 
   private async resolveCreateSchemaState(
-    organizationId: number | null,
+    _organizationId: number | null,
+    companyId: number | null,
     extraAttributes: unknown,
   ): Promise<SchemaResolution> {
-    const state = await this.resolveVerticalState(organizationId);
+    const state = await this.resolveVerticalState(_organizationId, companyId);
     return this.applySchemaRules(state, extraAttributes ?? null, false);
   }
 
   private async resolveUpdateSchemaState(
-    organizationId: number | null,
+    _organizationId: number | null,
+    companyId: number | null,
     incomingExtraAttributes: unknown,
     fallbackExtraAttributes: unknown,
     currentMigrated: boolean,
   ): Promise<SchemaResolution> {
-    const state = await this.resolveVerticalState(organizationId);
+    const state = await this.resolveVerticalState(_organizationId, companyId);
     const source =
       incomingExtraAttributes !== undefined
         ? incomingExtraAttributes
@@ -552,15 +557,34 @@ export class ProductsService {
 
   private async resolveVerticalState(
     organizationId: number | null,
+    companyId: number | null,
   ): Promise<VerticalSchemaState> {
-    if (!organizationId) {
+    if (!companyId) {
       return {
         vertical: BusinessVertical.GENERAL,
         enforceSchema: false,
         schema: null,
       };
     }
-    const config = await this.verticalConfigService.getConfig(organizationId);
+    let config: Awaited<ReturnType<VerticalConfigService["getConfig"]>> | null =
+      null;
+    try {
+      config = await this.verticalConfigService.getConfig(companyId);
+    } catch (error) {
+      if (organizationId) {
+        const fallback = await this.prismaService.company.findFirst({
+          where: { organizationId },
+          select: { id: true },
+          orderBy: { id: "asc" },
+        });
+        if (fallback?.id) {
+          config = await this.verticalConfigService.getConfig(fallback.id);
+        }
+      }
+      if (!config) {
+        throw error;
+      }
+    }
     return {
       vertical: config.name,
       enforceSchema: config.enforcedProductSchema,
