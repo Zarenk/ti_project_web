@@ -158,6 +158,31 @@ export async function updateManyProviders(providers: any[]) {
   }
 }
 
+export async function validateProviderFields(payload: {
+  name?: string;
+  documentNumber?: string;
+  providerId?: number;
+}): Promise<{ nameAvailable: boolean; documentAvailable: boolean }> {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/providers/validate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    const message =
+      errorData?.message ||
+      errorData?.error ||
+      "Error al validar proveedor.";
+    throw new Error(message);
+  }
+
+  return res.json();
+}
+
 export async function uploadProviderImage(file: File) {
   const formData = new FormData();
   formData.append('file', file);

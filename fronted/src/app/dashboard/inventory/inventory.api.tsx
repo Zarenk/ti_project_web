@@ -326,6 +326,7 @@ export async function getProductEntries(productId: number) {
   }
   catch(error: any) {
     console.error('Error al obtener las entradas del producto:', error.message || error);
+    return [];
   }
 }
 
@@ -403,22 +404,36 @@ export async function getProductByInventoryId(inventoryId: number) {
 } 
 
 export async function getProductSales(productId: number) {
-  const response = await authFetch(`${BACKEND_URL}/api/inventory/product-sales/${productId}`);
-  if (!response.ok) {
-    throw new Error('Error al obtener las salidas del producto');
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/product-sales/${productId}`);
+    if (response.status === 404) {
+      return [];
+    }
+    if (!response.ok) {
+      throw new Error('Error al obtener las salidas del producto');
+    }
+    return response.json();
+  } catch (error) {
+    console.error('Error al obtener las salidas del producto:', error);
+    return [];
   }
-  return response.json();
 }
 
 export async function getCategoriesFromInventory(): Promise<string[]> {
   try {
-    const response = await authFetch(`${BACKEND_URL}/api/inventory/categories`);
+    const response = await authFetch(`${BACKEND_URL}/api/category`);
     if (!response.ok) {
-      throw new Error('Error al obtener las categorías');
+      throw new Error('Error al obtener las categor?as');
     }
-    return await response.json();
+    const data = await response.json();
+    if (!Array.isArray(data)) {
+      return [];
+    }
+    return data
+      .map((category: any) => category?.name)
+      .filter((name: any): name is string => typeof name === 'string' && name.trim().length > 0);
   } catch (error) {
-    console.error('Error al cargar las categorías:', error);
+    console.error('Error al cargar las categor?as:', error);
     return [];
   }
 }

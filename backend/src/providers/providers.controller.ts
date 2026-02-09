@@ -17,6 +17,7 @@ import { ProvidersService } from './providers.service';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
+import { ValidateProviderFieldsDto } from './dto/validate-provider-fields.dto';
 import { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -61,6 +62,17 @@ export class ProvidersController {
       organizationId === undefined ? undefined : organizationId,
     );
     return { exists };
+  }
+
+  @Post('validate')
+  async validateProviderFields(
+    @Body() dto: ValidateProviderFieldsDto,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.providersService.validateProviderFields(
+      dto,
+      organizationId === undefined ? undefined : organizationId,
+    );
   }
 
   @Post('import-excel')

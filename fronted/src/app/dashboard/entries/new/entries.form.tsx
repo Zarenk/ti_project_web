@@ -1453,8 +1453,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                         : pendingCurrency === 'PEN'
                           ? 'soles (PEN)'
                           : 'la moneda seleccionada'
-                    }? Se usarÃ¡ el tipo de cambio mÃ¡s reciente disponible.`
-                  : 'Â¿Deseas cambiar la moneda seleccionada?'}
+                    }? Se usara el tipo de cambio mas reciente disponible.`
+                  : '¿Deseas cambiar la moneda seleccionada?'}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1470,7 +1470,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                 </span>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={8}>
-                MantÃ©n la moneda actual sin aplicar cambios
+                Mantiene la moneda actual sin aplicar cambios
               </TooltipContent>
             </Tooltip>
             <Tooltip>

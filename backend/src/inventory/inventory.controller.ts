@@ -154,4 +154,137 @@ export class InventoryController {
       companyId ?? undefined,
     );
   }
+
+
+  @Get('/product-entries/:productId')
+  async getProductEntries(
+    @Param('productId') productId: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const id = Number(productId);
+    if (!Number.isFinite(id)) {
+      throw new BadRequestException('El ID del producto debe ser un numero valido');
+    }
+    return this.inventoryService.getProductEntries(
+      id,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('/series-by-product-and-store/:storeId/:productId')
+  async getSeriesByProductAndStore(
+    @Param('storeId') storeId: string,
+    @Param('productId') productId: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const storeIdValue = Number(storeId);
+    const productIdValue = Number(productId);
+    if (!Number.isFinite(storeIdValue) || !Number.isFinite(productIdValue)) {
+      throw new BadRequestException('Los IDs deben ser numeros validos');
+    }
+    return this.inventoryService.getSeriesByProductAndStore(
+      storeIdValue,
+      productIdValue,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('/product-by-inventory/:inventoryId')
+  async getProductByInventoryId(
+    @Param('inventoryId') inventoryId: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const id = Number(inventoryId);
+    if (!Number.isFinite(id)) {
+      throw new BadRequestException('El ID del inventario debe ser un numero valido');
+    }
+    return this.inventoryService.getProductByInventoryId(
+      id,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('/product-sales/:productId')
+  async getProductSales(
+    @Param('productId') productId: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const id = Number(productId);
+    if (!Number.isFinite(id)) {
+      throw new BadRequestException('El ID del producto debe ser un numero valido');
+    }
+    return this.inventoryService.getProductSales(
+      id,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('/stock-by-product-and-store/:storeId/:productId')
+  async getStockByProductAndStore(
+    @Param('storeId') storeId: string,
+    @Param('productId') productId: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const storeIdValue = Number(storeId);
+    const productIdValue = Number(productId);
+    if (!Number.isFinite(storeIdValue) || !Number.isFinite(productIdValue)) {
+      throw new BadRequestException('Los IDs deben ser numeros validos');
+    }
+    return this.inventoryService.getStockByProductAndStore(
+      storeIdValue,
+      productIdValue,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+
+  @Get('/products-by-store/:storeId')
+  async getProductsByStore(
+    @Param('storeId') storeId: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+    @Query('categoryId') categoryId?: string,
+    @Query('search') search?: string,
+  ) {
+    const id = Number(storeId);
+    if (!Number.isFinite(id)) {
+      throw new BadRequestException('El ID de la tienda debe ser un numero valido');
+    }
+    return this.inventoryService.getProductsByStore(
+      id,
+      categoryId ? Number(categoryId) : undefined,
+      search,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('/all-products-by-store/:storeId')
+  async getAllProductsByStore(
+    @Param('storeId') storeId: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+    @Query('categoryId') categoryId?: string,
+  ) {
+    const id = Number(storeId);
+    if (!Number.isFinite(id)) {
+      throw new BadRequestException('El ID de la tienda debe ser un numero valido');
+    }
+    return this.inventoryService.getAllProductsByStore(
+      id,
+      categoryId ? Number(categoryId) : undefined,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
 }

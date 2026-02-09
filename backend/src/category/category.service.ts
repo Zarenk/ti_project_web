@@ -153,6 +153,34 @@ export class CategoryService {
     });
   }
 
+  async validateCategoryName(
+    name: string,
+    categoryId?: number,
+  ): Promise<{ nameAvailable: boolean }> {
+    const orgId = this.orgId();
+    if (orgId === null) {
+      throw new BadRequestException(
+        'No se puede validar la categoria sin organizacion activa.',
+      );
+    }
+
+    const trimmed = String(name ?? '').trim();
+    if (!trimmed) {
+      return { nameAvailable: true };
+    }
+
+    const existing = await this.prismaService.category.findFirst({
+      where: {
+        organizationId: orgId,
+        name: { equals: trimmed, mode: 'insensitive' },
+        ...(categoryId ? { id: { not: categoryId } } : {}),
+      },
+      select: { id: true },
+    });
+
+    return { nameAvailable: !existing };
+  }
+
   findAll() {
     const orgId = this.orgId();
     return this.prismaService.category.findMany({

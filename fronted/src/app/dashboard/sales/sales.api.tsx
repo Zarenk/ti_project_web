@@ -442,14 +442,17 @@ export async function getProductsByStore(storeId: number) {
     const response = await fetch(`${BACKEND_URL}/api/inventory/products-by-store/${storeId}`, {
       headers,
     });
+    if (response.status === 404 || response.status === 403) {
+      return [];
+    }
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Error al obtener los productos por tienda: ${response.status} - ${errorText}`);
     }
     return await response.json();
   } catch (error) {
-    console.error('Error al obtener los productos por tienda:', error);
-    throw error;
+    console.warn('No se pudieron cargar productos por tienda:', error);
+    return [];
   }
 }
 

@@ -419,6 +419,9 @@ const getSaleReferenceId = () => {
     return `sales-context:v1:${userId}:${selection.orgId}:${companyKey}`;
   }, [userId, selection.orgId, selection.companyId]);
   const [lastInvoiceType, setLastInvoiceType] = useState<string>("");
+  const [invoiceTypeUsage, setInvoiceTypeUsage] = useState<Record<string, number>>({});
+  const lastInvoiceTypeRef = useRef(lastInvoiceType);
+  const invoiceTypeUsageRef = useRef(invoiceTypeUsage);
   const [lastStoreId, setLastStoreId] = useState<number | null>(null);
   const [recentClientIds, setRecentClientIds] = useState<number[]>([]);
   const [recentProductIds, setRecentProductIds] = useState<number[]>([]);
@@ -428,6 +431,21 @@ const getSaleReferenceId = () => {
     client: false,
     product: false,
   });
+  const preferredInvoiceType = useMemo(() => {
+    const entries = Object.entries(invoiceTypeUsage);
+    if (entries.length === 0) {
+      return lastInvoiceType;
+    }
+    let bestType = lastInvoiceType || entries[0][0];
+    let bestCount = -Infinity;
+    for (const [key, value] of entries) {
+      if (value > bestCount) {
+        bestType = key;
+        bestCount = value;
+      }
+    }
+    return bestType;
+  }, [invoiceTypeUsage, lastInvoiceType]);
   const [categoriesState, setCategoriesState] = useState(categories ?? []);
   useEffect(() => {
     setCategoriesState(categories ?? []);
@@ -626,6 +644,7 @@ const getSaleReferenceId = () => {
   const persistSalesContext = useCallback(
     (next: Partial<{
       lastInvoiceType: string;
+      invoiceTypeUsage: Record<string, number>;
       lastStoreId: number | null;
       recentClientIds: number[];
       recentProductIds: number[];
@@ -635,6 +654,7 @@ const getSaleReferenceId = () => {
       }
       const payload = {
         lastInvoiceType,
+        invoiceTypeUsage,
         lastStoreId,
         recentClientIds,
         recentProductIds,
@@ -647,7 +667,7 @@ const getSaleReferenceId = () => {
         console.warn("No se pudo guardar el contexto de ventas:", error);
       }
     },
-    [salesContextKey, lastInvoiceType, lastStoreId, recentClientIds, recentProductIds],
+    [salesContextKey, lastInvoiceType, invoiceTypeUsage, lastStoreId, recentClientIds, recentProductIds],
   );
 
   //handlesubmit para manejar los datos
@@ -958,7 +978,14 @@ const getSaleReferenceId = () => {
     form.setValue("tipoComprobante", currentValue); // Actualiza el formulario
     setOpenInvoice(false); // Cierra el combobox
     setLastInvoiceType(currentValue);
-    persistSalesContext({ lastInvoiceType: currentValue });
+    setInvoiceTypeUsage((prev) => {
+      const next = {
+        ...prev,
+        [currentValue]: (prev[currentValue] ?? 0) + 1,
+      };
+      persistSalesContext({ lastInvoiceType: currentValue, invoiceTypeUsage: next });
+      return next;
+    });
 
     // Habilitar o deshabilitar el combobox de clientes según el valor seleccionado
     if (currentValue === "SIN COMPROBANTE") {
@@ -1052,6 +1079,12 @@ const getSaleReferenceId = () => {
           : realStock;
 
         setStock(simulatedStock > 0 ? simulatedStock : 0);
+
+        if (realStock <= 0) {
+          toast("Stock no disponible en esta tienda.", {
+            description: "Selecciona otra tienda o registra un ingreso de inventario.",
+          });
+        }
 
         if (selectedProduct.price === 0 || selectedProduct.price === null) {
           setProductWithZeroPrice({
@@ -1350,8 +1383,17 @@ const getSaleReferenceId = () => {
   }, [version, form]);
 
   useEffect(() => {
+    lastInvoiceTypeRef.current = lastInvoiceType;
+  }, [lastInvoiceType]);
+
+  useEffect(() => {
+    invoiceTypeUsageRef.current = invoiceTypeUsage;
+  }, [invoiceTypeUsage]);
+
+  useEffect(() => {
     if (!salesContextKey || typeof window === "undefined") {
       setLastInvoiceType("");
+      setInvoiceTypeUsage({});
       setLastStoreId(null);
       setRecentClientIds([]);
       setRecentProductIds([]);
@@ -1360,7 +1402,10 @@ const getSaleReferenceId = () => {
     try {
       const raw = window.localStorage.getItem(salesContextKey);
       if (!raw) {
-        setLastInvoiceType("");
+        if (!lastInvoiceTypeRef.current && Object.keys(invoiceTypeUsageRef.current).length === 0) {
+          setLastInvoiceType("");
+          setInvoiceTypeUsage({});
+        }
         setLastStoreId(null);
         setRecentClientIds([]);
         setRecentProductIds([]);
@@ -1368,6 +1413,17 @@ const getSaleReferenceId = () => {
       }
       const parsed = JSON.parse(raw);
       setLastInvoiceType(typeof parsed?.lastInvoiceType === "string" ? parsed.lastInvoiceType : "");
+      if (parsed?.invoiceTypeUsage && typeof parsed.invoiceTypeUsage === "object") {
+        const nextUsage: Record<string, number> = {};
+        for (const [key, value] of Object.entries(parsed.invoiceTypeUsage)) {
+          if (typeof value === "number" && Number.isFinite(value)) {
+            nextUsage[key] = value;
+          }
+        }
+        setInvoiceTypeUsage(nextUsage);
+      } else {
+        setInvoiceTypeUsage({});
+      }
       setLastStoreId(typeof parsed?.lastStoreId === "number" ? parsed.lastStoreId : null);
       setRecentClientIds(
         Array.isArray(parsed?.recentClientIds)
@@ -1381,7 +1437,10 @@ const getSaleReferenceId = () => {
       );
     } catch (error) {
       console.warn("No se pudo leer el contexto de ventas:", error);
-      setLastInvoiceType("");
+      if (!lastInvoiceTypeRef.current && Object.keys(invoiceTypeUsageRef.current).length === 0) {
+        setLastInvoiceType("");
+        setInvoiceTypeUsage({});
+      }
       setLastStoreId(null);
       setRecentClientIds([]);
       setRecentProductIds([]);
@@ -1389,15 +1448,34 @@ const getSaleReferenceId = () => {
   }, [salesContextKey]);
 
   useEffect(() => {
+    if (!salesContextKey || typeof window === "undefined") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(salesContextKey);
+      if (!raw && (lastInvoiceTypeRef.current || Object.keys(invoiceTypeUsageRef.current).length > 0)) {
+        persistSalesContext({
+          lastInvoiceType: lastInvoiceTypeRef.current,
+          invoiceTypeUsage: invoiceTypeUsageRef.current,
+        });
+      }
+    } catch (error) {
+      console.warn("No se pudo sincronizar el contexto de ventas:", error);
+    }
+  }, [salesContextKey, persistSalesContext]);
+
+  useEffect(() => {
     if (!salesContextKey) {
       return;
     }
 
     if (!appliedDefaultsRef.current.invoice) {
-      if (!valueInvoice && lastInvoiceType) {
-        handleTipoComprobanteChange(lastInvoiceType);
+      if (!valueInvoice && preferredInvoiceType) {
+        handleTipoComprobanteChange(preferredInvoiceType);
+        appliedDefaultsRef.current.invoice = true;
+      } else if (valueInvoice) {
+        appliedDefaultsRef.current.invoice = true;
       }
-      appliedDefaultsRef.current.invoice = true;
     }
 
     if (!appliedDefaultsRef.current.store && stores.length > 0) {
@@ -1411,7 +1489,7 @@ const getSaleReferenceId = () => {
     }
 
     if (!appliedDefaultsRef.current.client && clients.length > 0) {
-      if (!lastInvoiceType || valueInvoice === lastInvoiceType) {
+      if (!preferredInvoiceType || valueInvoice === preferredInvoiceType) {
         if (!valueClient && !isClientDisabled && recentClientIds.length > 0) {
           const filteredClients = clients.filter((client) => {
             if (valueInvoice === "FACTURA") {
@@ -1449,7 +1527,7 @@ const getSaleReferenceId = () => {
     }
   }, [
     salesContextKey,
-    lastInvoiceType,
+    preferredInvoiceType,
     lastStoreId,
     recentClientIds,
     recentProductIds,

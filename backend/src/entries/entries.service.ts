@@ -289,7 +289,7 @@ export class EntriesService {
           providerId: data.providerId,
           date: normalizedDate,
           description: data.description,
-          tipoMoneda: data.tipoMoneda,
+          tipoMoneda: data.tipoMoneda ?? 'PEN',
           tipoCambioId: data.tipoCambioId,
           paymentMethod: data.paymentMethod,
           paymentTerm: paymentTerm as any,

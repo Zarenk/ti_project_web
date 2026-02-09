@@ -619,6 +619,45 @@ export async function validateCompanyFields(
   }
 }
 
+export interface ValidateOrganizationNamePayload {
+  name: string
+}
+
+export async function validateOrganizationName(
+  payload: ValidateOrganizationNamePayload,
+): Promise<{ nameAvailable: boolean }> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/tenancy/validate-name`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo validar la organizacion"
+    throw new Error(message)
+  }
+
+  return {
+    nameAvailable: Boolean((data as any).nameAvailable),
+  }
+}
+
 export async function createCompany(
   payload: CreateCompanyPayload,
 ): Promise<CompanyResponse> {

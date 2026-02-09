@@ -8,6 +8,7 @@ import {
   Building2,
   BookOpen,
   Bot,
+  ClipboardList,
   Command,
   DollarSign,
   Globe,
@@ -225,18 +226,18 @@ const data: SidebarData = {
       ],
     },
     {
-      title: "Tiendas",
+      title: "Tiendas/Sucursales",
       url: "#",
       icon: Store,
       permission: "store",
       items: [
         {
-          title: "Nueva Tienda",
+          title: "Nueva Tienda/Sucursal",
           url: "/dashboard/stores/new",
           permission: "store",
         },
         {
-          title: "Ver Tiendas",
+          title: "Ver Tiendas/Sucursales",
           url: "/dashboard/stores",
           permission: "store",
         },
@@ -370,6 +371,7 @@ const CUSTOM_MENU_ICONS: Record<string, LucideIcon> = {
   ingredients: Boxes,
   "cash-register": SquareTerminal,
   book: BookOpen,
+  orders: ClipboardList,
   truck: Truck,
   store: Store,
   home: Home,
@@ -517,8 +519,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         }
         items.push({
           title: menu.label,
-          url: menu.path,
+          url: "#",
           icon: resolveCustomMenuIcon(menu.icon),
+          items: [
+            {
+              title: menu.label,
+              url: menu.path,
+            },
+          ],
         })
       })
     }

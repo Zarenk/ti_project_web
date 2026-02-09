@@ -14,6 +14,7 @@ import { Request } from 'express';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { ValidateCategoryNameDto } from './dto/validate-category-name.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
@@ -42,6 +43,14 @@ export class CategoryController {
   @Post('verify')
   async verifyCategories(@Body() categories: { name: string }[]) {
     return this.categoryService.verifyCategories(categories);
+  }
+
+  @ModulePermission(['inventory', 'catalog'])
+  @Post('validate-name')
+  async validateCategoryName(
+    @Body() dto: ValidateCategoryNameDto,
+  ): Promise<{ nameAvailable: boolean }> {
+    return this.categoryService.validateCategoryName(dto.name, dto.categoryId);
   }
 
   @Get()

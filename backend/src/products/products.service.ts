@@ -102,6 +102,13 @@ export class ProductsService {
     } = createProductDto as any;
 
     const ctx = this.tenantContext.getContext();
+    const trimmedName = String(createProductDto?.name ?? '').trim();
+    if (!trimmedName) {
+      throw new BadRequestException('El nombre del producto es obligatorio.');
+    }
+    if (!ctx.organizationId) {
+      throw new BadRequestException('Organizacion no definida para el producto.');
+    }
     const normalizedStatus = this.normalizeStatus(status);
     const normalizedFeatures = this.sanitizeFeatureInputs(features);
     const schemaResolution = await this.resolveCreateSchemaState(
@@ -122,6 +129,17 @@ export class ProductsService {
     }
 
     try {
+      const existingByName = await this.prismaService.product.findFirst({
+        where: {
+          organizationId: ctx.organizationId,
+          name: { equals: trimmedName, mode: 'insensitive' },
+        },
+      });
+      if (existingByName) {
+        throw new ConflictException(
+          `El producto con el nombre "${trimmedName}" ya existe en esta organizacion.`,
+        );
+      }
       let brandEntity: Brand | null = null;
       if (!brandId && brand) {
         brandEntity = await this.brandsService.findOrCreateByName(brand);
@@ -134,6 +152,7 @@ export class ProductsService {
       const createdProduct = await this.prismaService.product.create({
         data: {
           ...data,
+          name: trimmedName,
           extraAttributes: schemaResolution.extraAttributes,
           isVerticalMigrated: schemaResolution.isVerticalMigrated,
           status: normalizedStatus,
@@ -316,6 +335,23 @@ export class ProductsService {
     );
 
     try {
+      if (updateProductDto.name) {
+        const nextName = updateProductDto.name.trim();
+        if (nextName) {
+          const duplicate = await this.prismaService.product.findFirst({
+            where: {
+              organizationId: ctx.organizationId ?? null,
+              name: { equals: nextName, mode: 'insensitive' },
+              NOT: { id: Number(id) },
+            },
+          });
+          if (duplicate) {
+            throw new ConflictException(
+              `El producto con el nombre "${nextName}" ya existe en esta organizacion.`,
+            );
+          }
+        }
+      }
       let brandEntity: Brand | null = null;
       if (!brandId && brand) {
         brandEntity = await this.brandsService.findOrCreateByName(brand);
@@ -384,6 +420,28 @@ export class ProductsService {
       }
       throw error;
     }
+  }
+
+  async validateProductName(
+    name: string,
+    excludeId?: number,
+  ): Promise<{ nameAvailable: boolean }> {
+    const ctx = this.tenantContext.getContext();
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      return { nameAvailable: true };
+    }
+    if (!ctx.organizationId) {
+      throw new BadRequestException('Organizacion no definida para el producto.');
+    }
+    const existing = await this.prismaService.product.findFirst({
+      where: {
+        organizationId: ctx.organizationId,
+        name: { equals: trimmedName, mode: 'insensitive' },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+    });
+    return { nameAvailable: !existing };
   }
 
   async updateProductVerticalMigration(

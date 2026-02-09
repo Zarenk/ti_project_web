@@ -22,7 +22,8 @@ import {
 import { resolveImageUrl } from '@/lib/images'
 import { useTenantSelection } from '@/context/tenant-selection-context'
 
-import { createCategory, updateCategory } from '../categories.api'
+import { createCategory, updateCategory, validateCategoryName } from '../categories.api'
+import { useDebounce } from '@/app/hooks/useDebounce'
 import { uploadProviderImage } from '@/app/dashboard/providers/providers.api'
 
 const normalizeCategoryImagePath = (input?: string): string => {
@@ -100,14 +101,20 @@ export function CategoryForm({ product }: any) {
 
   const router = useRouter()
   const params = useParams<{ id: string }>()
+  const currentCategoryId = params?.id ? Number(params.id) : undefined
 
   const [nameError, setNameError] = useState<string | null>(null)
+  const [nameValidation, setNameValidation] = useState<{
+    status?: 'idle' | 'checking' | 'valid' | 'invalid'
+    message?: string
+  }>({})
   const [isImageUploading, setIsImageUploading] = useState(false)
   const initializedVersion = useRef(false)
 
   useEffect(() => {
     form.reset(mapCategoryToFormValues)
     setNameError(null)
+    setNameValidation({ status: 'idle', message: undefined })
   }, [form, mapCategoryToFormValues])
 
   useEffect(() => {
@@ -117,12 +124,67 @@ export function CategoryForm({ product }: any) {
     }
 
     setNameError(null)
+    setNameValidation({ status: 'idle', message: undefined })
     form.reset(emptyFormValues)
     router.refresh()
   }, [version, form, emptyFormValues, router])
 
+  const watchedName = form.watch('name')
+  const watchedDescription = form.watch('description')
+  const watchedImage = form.watch('image')
+  const statusValue = form.watch('status') ?? 'Activo'
+  const debouncedNameValidation = useDebounce(watchedName ?? '', 1000)
+
+  useEffect(() => {
+    const trimmedName = String(debouncedNameValidation ?? '').trim()
+    if (trimmedName.length < 3) {
+      setNameValidation({ status: 'idle', message: undefined })
+      return
+    }
+
+    let active = true
+    setNameValidation({ status: 'checking', message: undefined })
+    validateCategoryName({
+      name: trimmedName,
+      categoryId: currentCategoryId,
+    })
+      .then((result) => {
+        if (!active) return
+        if (!result.nameAvailable) {
+          setNameValidation({
+            status: 'invalid',
+            message: 'Ya existe una categoria con ese nombre.',
+          })
+        } else {
+          setNameValidation({ status: 'valid', message: undefined })
+        }
+      })
+      .catch((error) => {
+        if (!active) return
+        console.warn('[categories] no se pudo validar nombre', error)
+        setNameValidation({ status: 'idle', message: undefined })
+      })
+
+    return () => {
+      active = false
+    }
+  }, [debouncedNameValidation, currentCategoryId])
+
+  useEffect(() => {
+    if (!nameError) return
+    setNameError(null)
+  }, [watchedName])
+
   const onSubmit = handleSubmit(async (data) => {
     try {
+      if (nameValidation.status === 'checking') {
+        toast.error('Aun estamos validando el nombre de la categoria.')
+        return
+      }
+      if (nameValidation.status === 'invalid') {
+        toast.error(nameValidation.message ?? 'El nombre de la categoria ya existe.')
+        return
+      }
       if (params?.id) {
         await updateCategory(params.id, {
           ...data,
@@ -140,18 +202,15 @@ export function CategoryForm({ product }: any) {
       }
     } catch (error: any) {
       if (error.response?.status === 409 || error.response?.data?.message.includes('ya existe')) {
-        setNameError(error.response?.data?.message || 'El nombre de la categoria ya existe.')
+        const message = error.response?.data?.message || 'El nombre de la categoria ya existe.'
+        setNameError(message)
+        setNameValidation({ status: 'invalid', message })
         console.log('Estado nameError actualizado:', error.response?.data?.message)
       } else {
         console.error('Error inesperado:', error.message)
       }
     }
   })
-
-  const watchedName = form.watch('name')
-  const watchedDescription = form.watch('description')
-  const watchedImage = form.watch('image')
-  const statusValue = form.watch('status') ?? 'Activo'
 
   const hasName = Boolean(watchedName?.trim())
   const hasDescription = Boolean(watchedDescription?.trim())
@@ -170,6 +229,40 @@ export function CategoryForm({ product }: any) {
       {filled ? 'Listo' : 'Opcional'}
     </span>
   )
+
+  const renderRequiredValidationChip = (
+    status: 'idle' | 'checking' | 'valid' | 'invalid' | undefined,
+    hasValue: boolean,
+  ) => {
+    if (status === 'checking') {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-amber-200/70 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          Validando
+        </span>
+      )
+    }
+
+    if (status === 'invalid') {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-rose-200/70 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+          Ya existe
+        </span>
+      )
+    }
+
+    return (
+      <span
+        className={`ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+          hasValue
+            ? 'border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
+            : 'border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200'
+        }`}
+      >
+        {hasValue ? <Check className="h-3 w-3" /> : null}
+        {hasValue ? 'Listo' : 'Requerido'}
+      </span>
+    )
+  }
 
   const handleImageFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -199,18 +292,16 @@ export function CategoryForm({ product }: any) {
           <div className="flex flex-col lg:col-span-2">
             <Label className="py-3">
               Nombre de la Categoria
-              <span
-                className={`ml-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                  hasName
-                    ? 'border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
-                    : 'border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200'
-                }`}
-              >
-                {hasName ? <Check className="mr-1 h-3 w-3" /> : null}
-                {hasName ? 'Listo' : 'Requerido'}
-              </span>
+              {renderRequiredValidationChip(nameValidation.status, hasName)}
             </Label>
             <Input {...register('name')} />
+            {nameValidation.status === 'checking' ? (
+              <p className="mt-2 text-xs text-amber-600">Validando nombre...</p>
+            ) : nameValidation.status === 'invalid' ? (
+              <p className="mt-2 text-xs text-rose-500">
+                {nameValidation.message ?? 'Ya existe una categoria con ese nombre.'}
+              </p>
+            ) : null}
             {form.formState.errors.name && (
               <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
                 <AlertTriangle className="h-3.5 w-3.5" />

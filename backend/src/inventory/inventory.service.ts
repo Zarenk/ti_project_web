@@ -582,6 +582,40 @@ export class InventoryService {
     return series.map((serie) => serie.serial); // Devuelve un array de números de serie
   }
 
+  // Obtener el stock de un producto en una tienda especÃ­fica
+  async getStockByProductAndStore(
+    storeId: number,
+    productId: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    await this.ensureInventoryFeatureEnabled(companyId ?? null);
+
+    const storeWhere: Prisma.StoreWhereInput = {};
+    if (organizationId !== undefined) {
+      storeWhere.organizationId = organizationId ?? null;
+    }
+    if (companyId !== undefined) {
+      storeWhere.companyId = companyId ?? null;
+    }
+
+    const inventory = await this.prisma.storeOnInventory.findFirst({
+      where: {
+        storeId,
+        inventory: {
+          productId,
+          ...(organizationId !== undefined
+            ? { organizationId: organizationId ?? null }
+            : {}),
+        },
+        ...(Object.keys(storeWhere).length > 0 ? { store: storeWhere } : {}),
+      },
+      select: { stock: true },
+    });
+
+    return inventory?.stock ?? 0;
+  }
+
   // Obtener el inventario con detalles de entradas y tiendas
   async getInventoryWithEntries(
     organizationId?: number | null,

@@ -4,7 +4,7 @@ export type RestaurantTable = {
   id: number
   name: string
   code: string
-  status: "AVAILABLE" | "OCCUPIED" | "RESERVED" | "CLEANING"
+  status: "AVAILABLE" | "OCCUPIED" | "RESERVED" | "DISABLED"
   capacity: number | null
   location?: string | null
   notes?: string | null

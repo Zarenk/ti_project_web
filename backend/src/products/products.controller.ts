@@ -20,6 +20,7 @@ import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateProductVerticalMigrationDto } from './dto/update-product-vertical-migration.dto';
+import { ValidateProductNameDto } from './dto/validate-product-name.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -77,6 +78,15 @@ export class ProductsController {
     }[],
   ) {
     return this.productsService.verifyOrCreateProducts(products);
+  }
+
+  @Post('validate-name')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  async validateProductName(
+    @Body() dto: ValidateProductNameDto,
+  ): Promise<{ nameAvailable: boolean }> {
+    return this.productsService.validateProductName(dto.name, dto.productId);
   }
 
   @Post('upload-image')

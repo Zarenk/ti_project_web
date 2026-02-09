@@ -86,7 +86,7 @@ export function ActionButtons({
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Abre la confirmaciÃ³n para registrar el ingreso.</TooltipContent>
+        <TooltipContent>Abre la confirmacion para registrar el ingreso.</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -105,7 +105,7 @@ export function ActionButtons({
               : `Convertir a ${currency === "PEN" ? "USD" : "PEN"}`}
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Convierte los montos entre soles y dÃ³lares.</TooltipContent>
+        <TooltipContent>Convierte los montos entre soles y dolares.</TooltipContent>
       </Tooltip>
 
       <Tooltip>

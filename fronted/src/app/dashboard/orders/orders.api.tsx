@@ -111,3 +111,104 @@ export async function updateOrderSeries(
   }
   return res.json();
 }
+
+export async function getRestaurantOrders(params: { status?: string } = {}) {
+  const qs = new URLSearchParams()
+  if (params.status) qs.append("status", params.status)
+  const query = qs.toString()
+  const res = await authFetch(`/restaurant-orders${query ? `?${query}` : ""}`, {
+    credentials: "include",
+  })
+
+  if (res.status === 403) {
+    return []
+  }
+
+  if (!res.ok) {
+    let message = "Error al obtener las ordenes del restaurante"
+    try {
+      message = await res.text()
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message)
+  }
+
+  return res.json()
+}
+
+export async function getRestaurantOrder(id: number | string) {
+  const res = await authFetch(`/restaurant-orders/${id}`, {
+    credentials: "include",
+  })
+
+  if (!res.ok) {
+    let message = "Error al obtener la orden del restaurante"
+    try {
+      message = await res.text()
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message)
+  }
+
+  return res.json()
+}
+
+export type CreateRestaurantOrderPayload = {
+  storeId?: number | null
+  tableId?: number | null
+  clientId?: number | null
+  notes?: string
+  orderType: "DINE_IN" | "TAKEAWAY" | "DELIVERY"
+  items: Array<{
+    productId: number
+    quantity: number
+    unitPrice: number
+    notes?: string
+    stationId?: number
+  }>
+}
+
+export async function createRestaurantOrder(payload: CreateRestaurantOrderPayload) {
+  const res = await authFetch("/restaurant-orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    let message = "Error al crear la orden de restaurante"
+    try {
+      message = await res.text()
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message)
+  }
+
+  return res.json()
+}
+
+export async function updateRestaurantOrder(
+  id: number | string,
+  payload: Partial<CreateRestaurantOrderPayload> & { status?: string },
+) {
+  const res = await authFetch(`/restaurant-orders/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    let message = "Error al actualizar la orden del restaurante"
+    try {
+      message = await res.text()
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message)
+  }
+
+  return res.json()
+}

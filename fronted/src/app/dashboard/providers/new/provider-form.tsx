@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useForm } from 'react-hook-form'
-import { createProvider, updateProvider, uploadProviderImage } from '../providers.api'
+import { createProvider, updateProvider, uploadProviderImage, validateProviderFields } from '../providers.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { SelectTrigger, SelectValue } from '@radix-ui/react-select'
 import { Select, SelectContent, SelectItem } from '@/components/ui/select'
 import { z } from 'zod'
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { useDebounce } from '@/app/hooks/useDebounce'
 import { toast } from 'sonner'
 import { useTenantSelection } from '@/context/tenant-selection-context'
 import { AlertTriangle, Check } from 'lucide-react'
@@ -130,17 +131,36 @@ export function ProviderForm({provider}: {provider: any}) {
   const watchedWebsite = form.watch("website");
   const watchedImage = form.watch("image");
   const [isImageUploading, setIsImageUploading] = useState(false);
+  const trimmedDocumentNumber = (watchedDocumentNumber ?? '').trim()
+  const normalizedDocumentNumber = trimmedDocumentNumber.replace(/\D/g, '')
+  const documentValidationTarget =
+    selectedDocumentType === "Otro Documento"
+      ? trimmedDocumentNumber.replace(/\s+/g, '')
+      : normalizedDocumentNumber
+  const debouncedNameValidation = useDebounce(watchedName ?? '', 1000)
+  const debouncedDocumentValidation = useDebounce(documentValidationTarget, 1000)
 
   const router = useRouter();
   const params = useParams<{id: string}>();
+  const currentProviderId = params?.id ? Number(params.id) : undefined;
 
   // Estado para manejar el error del nombre si se repite
   const [nameError, setNameError] = useState<string | null>(null);
+  const [nameValidation, setNameValidation] = useState<{
+    status?: "idle" | "checking" | "valid" | "invalid"
+    message?: string
+  }>({})
+  const [documentValidation, setDocumentValidation] = useState<{
+    status?: "idle" | "checking" | "valid" | "invalid"
+    message?: string
+  }>({})
   const initializedVersion = useRef(false);
 
   useEffect(() => {
     form.reset(mapProviderToFormValues);
     setNameError(null);
+    setNameValidation({ status: "idle", message: undefined })
+    setDocumentValidation({ status: "idle", message: undefined })
   }, [form, mapProviderToFormValues]);
 
   useEffect(() => {
@@ -150,13 +170,109 @@ export function ProviderForm({provider}: {provider: any}) {
     }
 
     setNameError(null);
+    setNameValidation({ status: "idle", message: undefined })
+    setDocumentValidation({ status: "idle", message: undefined })
     form.reset(emptyFormValues);
     router.refresh();
   }, [version, form, emptyFormValues, router]);
 
+  useEffect(() => {
+    const trimmedName = String(debouncedNameValidation ?? "").trim()
+    if (trimmedName.length < 3) {
+      setNameValidation({ status: "idle", message: undefined })
+      return
+    }
+
+    let active = true
+    setNameValidation({ status: "checking", message: undefined })
+    validateProviderFields({
+      name: trimmedName,
+      providerId: currentProviderId,
+    })
+      .then((result) => {
+        if (!active) return
+        if (!result.nameAvailable) {
+          setNameValidation({
+            status: "invalid",
+            message: "Ya existe un proveedor con ese nombre.",
+          })
+        } else {
+          setNameValidation({ status: "valid", message: undefined })
+        }
+      })
+      .catch((error) => {
+        if (!active) return
+        console.warn("[providers] no se pudo validar nombre", error)
+        setNameValidation({ status: "idle", message: undefined })
+      })
+
+    return () => {
+      active = false
+    }
+  }, [debouncedNameValidation, currentProviderId])
+
+  useEffect(() => {
+    const target = String(debouncedDocumentValidation ?? "").trim()
+    const expectedLength =
+      selectedDocumentType === "DNI"
+        ? 8
+        : selectedDocumentType === "RUC"
+          ? 11
+          : 3
+
+    if (target.length < expectedLength) {
+      setDocumentValidation({ status: "idle", message: undefined })
+      return
+    }
+
+    let active = true
+    setDocumentValidation({ status: "checking", message: undefined })
+    validateProviderFields({
+      documentNumber: target,
+      providerId: currentProviderId,
+    })
+      .then((result) => {
+        if (!active) return
+        if (!result.documentAvailable) {
+          setDocumentValidation({
+            status: "invalid",
+            message: "Ya existe un proveedor con ese documento.",
+          })
+        } else {
+          setDocumentValidation({ status: "valid", message: undefined })
+        }
+      })
+      .catch((error) => {
+        if (!active) return
+        console.warn("[providers] no se pudo validar documento", error)
+        setDocumentValidation({ status: "idle", message: undefined })
+      })
+
+    return () => {
+      active = false
+    }
+  }, [debouncedDocumentValidation, currentProviderId, selectedDocumentType])
+
+  useEffect(() => {
+    if (!nameError) return
+    setNameError(null)
+  }, [watchedName, watchedDocumentNumber, selectedDocumentType])
+
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
     try{
+        if (nameValidation.status === "checking" || documentValidation.status === "checking") {
+            toast.error("Aun estamos validando los datos del proveedor.");
+            return;
+        }
+        if (nameValidation.status === "invalid") {
+            toast.error(nameValidation.message ?? "El nombre del proveedor ya existe.");
+            return;
+        }
+        if (documentValidation.status === "invalid") {
+            toast.error(documentValidation.message ?? "El documento del proveedor ya existe.");
+            return;
+        }
         if (!data.documentNumber){
             toast.error("El numero de documento es obligatorio.");
             return;
@@ -187,8 +303,17 @@ export function ProviderForm({provider}: {provider: any}) {
     }
     catch(error: any){
 
-        if (error.response?.status === 409 || error.response?.data?.message.includes("ya existe")) {
-            setNameError(error.response?.data?.message || "El Nro de documento del proveedor ya existe.");
+        if (error.response?.status === 409 || error.response?.data?.message?.includes("ya existe")) {
+            const message =
+              error.response?.data?.message ||
+              "El proveedor ya existe en la organizacion.";
+            setNameError(message);
+            if (message.toLowerCase().includes("nombre")) {
+              setNameValidation({ status: "invalid", message })
+            }
+            if (message.toLowerCase().includes("ruc") || message.toLowerCase().includes("documento")) {
+              setDocumentValidation({ status: "invalid", message })
+            }
             console.log("Estado nameError actualizado:", error.response?.data?.message);
         } else {
             console.error("Error inesperado:", error.message);
@@ -199,7 +324,6 @@ export function ProviderForm({provider}: {provider: any}) {
 
   const hasName = Boolean(watchedName?.trim())
   const hasDocument = Boolean(selectedDocumentType?.trim())
-  const normalizedDocumentNumber = (watchedDocumentNumber ?? '').replace(/\D/g, '')
   const hasDocumentNumber = (() => {
     if (selectedDocumentType === "DNI") {
       return normalizedDocumentNumber.length === 8
@@ -251,6 +375,40 @@ export function ProviderForm({provider}: {provider: any}) {
     </span>
   )
 
+  const renderRequiredValidationChip = (
+    status: "idle" | "checking" | "valid" | "invalid" | undefined,
+    hasValue: boolean,
+  ) => {
+    if (status === "checking") {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-amber-200/70 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          Validando
+        </span>
+      )
+    }
+
+    if (status === "invalid") {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-rose-200/70 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+          Ya existe
+        </span>
+      )
+    }
+
+    return (
+      <span
+        className={`ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+          hasValue
+            ? 'border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
+            : 'border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200'
+        }`}
+      >
+        {hasValue ? <Check className="h-3 w-3" /> : null}
+        {hasValue ? 'Listo' : 'Requerido'}
+      </span>
+    )
+  }
+
   return (
     <div className="container mx-auto grid w-full max-w-2xl sm:max-w-2xl md:max-w-5xl lg:max-w-6xl xl:max-w-none">
       <form className='flex flex-col gap-2' onSubmit={onSubmit}>
@@ -258,21 +416,19 @@ export function ProviderForm({provider}: {provider: any}) {
           <div className='flex flex-col lg:col-span-1'>
             <Label className='py-3'>
               Nombre del Proveedor
-              <span
-                className={`ml-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                  hasName
-                    ? 'border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
-                    : 'border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200'
-                }`}
-              >
-                {hasName ? <Check className="mr-1 h-3 w-3" /> : null}
-                {hasName ? 'Listo' : 'Requerido'}
-              </span>
+              {renderRequiredValidationChip(nameValidation.status, hasName)}
             </Label>
             <Input
               {...register('name')}
               maxLength={50} // Limita a 50 caracteres
             />
+            {nameValidation.status === "checking" ? (
+              <p className="mt-2 text-xs text-amber-600">Validando nombre...</p>
+            ) : nameValidation.status === "invalid" ? (
+              <p className="mt-2 text-xs text-rose-500">
+                {nameValidation.message ?? "Ya existe un proveedor con ese nombre."}
+              </p>
+            ) : null}
             {form.formState.errors.name && (
               <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
                 <AlertTriangle className="h-3.5 w-3.5" />
@@ -331,16 +487,7 @@ export function ProviderForm({provider}: {provider: any}) {
           <div className="flex flex-col lg:col-span-1">
             <Label className='py-3'>
               Numero del Documento
-              <span
-                className={`ml-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                  hasDocumentNumber
-                    ? 'border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
-                    : 'border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200'
-                }`}
-              >
-                {hasDocumentNumber ? <Check className="mr-1 h-3 w-3" /> : null}
-                {hasDocumentNumber ? 'Listo' : 'Requerido'}
-              </span>
+              {renderRequiredValidationChip(documentValidation.status, hasDocumentNumber)}
             </Label>
             <Input
               type="text"
@@ -363,6 +510,13 @@ export function ProviderForm({provider}: {provider: any}) {
                 {form.formState.errors.documentNumber.message}
               </p>
             )}
+            {documentValidation.status === "checking" ? (
+              <p className="mt-2 text-xs text-amber-600">Validando documento...</p>
+            ) : documentValidation.status === "invalid" ? (
+              <p className="mt-2 text-xs text-rose-500">
+                {documentValidation.message ?? "Ya existe un proveedor con ese documento."}
+              </p>
+            ) : null}
             {nameError && (
               <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
                 <AlertTriangle className="h-3.5 w-3.5" />

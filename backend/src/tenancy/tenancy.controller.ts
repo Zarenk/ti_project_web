@@ -17,6 +17,7 @@ import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import { TenancySnapshot } from './entities/tenancy.entity';
 import { GlobalSuperAdminGuard } from './global-super-admin.guard';
 import { AssignSuperAdminDto } from './dto/assign-super-admin.dto';
+import { ValidateOrganizationNameDto } from './dto/validate-organization-name.dto';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantContextService } from './tenant-context.service';
 import type { Request } from 'express';
@@ -86,6 +87,14 @@ export class TenancyController {
   @Post()
   create(@Body() createTenancyDto: CreateTenancyDto): Promise<TenancySnapshot> {
     return this.tenancyService.create(createTenancyDto);
+  }
+
+  @UseGuards(GlobalSuperAdminGuard)
+  @Post('validate-name')
+  async validateOrganizationName(
+    @Body() dto: ValidateOrganizationNameDto,
+  ): Promise<{ nameAvailable: boolean }> {
+    return this.tenancyService.validateOrganizationName(dto.name);
   }
 
   @UseGuards(GlobalSuperAdminGuard)

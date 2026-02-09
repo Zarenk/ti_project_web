@@ -29,6 +29,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useAuth } from "@/context/auth-context";
 
 export default function CatalogPage() {
   const [downloading, setDownloading] = useState<"pdf" | "excel" | null>(null);
@@ -40,6 +41,7 @@ export default function CatalogPage() {
   const [removingCover, setRemovingCover] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { version, selection } = useTenantSelection();
+  const { userId } = useAuth();
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [layoutMode, setLayoutMode] = useState<CatalogLayoutMode>("grid");
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
@@ -49,6 +51,39 @@ export default function CatalogPage() {
   const [updatingImageId, setUpdatingImageId] = useState<number | null>(null);
   const productImageInputRef = useRef<HTMLInputElement>(null);
   const productImageTargetRef = useRef<number | null>(null);
+
+  const catalogLayoutStorageKey = useMemo(() => {
+    if (!selection?.orgId) return null;
+    const suffix = typeof userId === "number" ? `:${userId}` : "";
+    return `catalog_layout_mode_v1:${selection.orgId}${suffix}`;
+  }, [selection?.orgId, userId]);
+
+  useEffect(() => {
+    if (!catalogLayoutStorageKey) {
+      setLayoutMode("grid");
+      return;
+    }
+    try {
+      const stored = localStorage.getItem(catalogLayoutStorageKey);
+      if (stored === "grid" || stored === "list") {
+        setLayoutMode(stored as CatalogLayoutMode);
+      } else {
+        setLayoutMode("grid");
+      }
+    } catch (error) {
+      console.warn("[catalog] No se pudo leer la preferencia de distribución:", error);
+      setLayoutMode("grid");
+    }
+  }, [catalogLayoutStorageKey]);
+
+  useEffect(() => {
+    if (!catalogLayoutStorageKey) return;
+    try {
+      localStorage.setItem(catalogLayoutStorageKey, layoutMode);
+    } catch (error) {
+      console.warn("[catalog] No se pudo guardar la preferencia de distribución:", error);
+    }
+  }, [catalogLayoutStorageKey, layoutMode]);
 
   const normalizeImagePath = (input?: string): string => {
     const raw = input?.trim() ?? "";
@@ -370,6 +405,13 @@ export default function CatalogPage() {
     setPriceOverrides({});
     setPreviousPriceOverrides({});
     setLayoutMode("grid");
+    if (catalogLayoutStorageKey) {
+      try {
+        localStorage.removeItem(catalogLayoutStorageKey);
+      } catch (error) {
+        console.warn("[catalog] No se pudo limpiar la preferencia de distribución:", error);
+      }
+    }
   }
 
   function handleSelectProductImage(productId: number) {

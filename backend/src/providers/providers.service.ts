@@ -249,6 +249,46 @@ export class ProvidersService {
         metadata: { providerName: createProviderDto.name },
       });
 
+      const normalizedName = String(providerPayload?.name ?? '').trim();
+      if (normalizedName) {
+        const nameExists = await this.prismaService.provider.findFirst({
+          where: {
+            name: { equals: normalizedName, mode: 'insensitive' },
+            ...buildOrganizationFilter(
+              resolvedOrganizationId ?? organizationIdFromContext,
+            ),
+          },
+          select: { id: true },
+        });
+        if (nameExists) {
+          throw new ConflictException(
+            'Ya existe un proveedor con ese nombre en esta organizaciÃ³n.',
+          );
+        }
+      }
+
+      const normalizedDocumentNumber = String(
+        providerPayload?.documentNumber ?? '',
+      )
+        .trim()
+        .replace(/\s+/g, '');
+      if (normalizedDocumentNumber) {
+        const docExists = await this.prismaService.provider.findFirst({
+          where: {
+            documentNumber: normalizedDocumentNumber,
+            ...buildOrganizationFilter(
+              resolvedOrganizationId ?? organizationIdFromContext,
+            ),
+          },
+          select: { id: true },
+        });
+        if (docExists) {
+          throw new ConflictException(
+            `El proveedor con el RUC "${normalizedDocumentNumber}" ya existe.`,
+          );
+        }
+      }
+
       const provider = await this.prismaService.provider.create({
         data: {
           ...providerPayload,
@@ -408,6 +448,66 @@ export class ProvidersService {
     return !!provider; // Devuelve true si el proveedor existe, false si no
   }
 
+  async validateProviderFields(
+    dto: { name?: string; documentNumber?: string; providerId?: number },
+    organizationIdFromContext?: number | null,
+  ) {
+    const organizationFilter = buildOrganizationFilter(
+      organizationIdFromContext,
+    ) as Prisma.ProviderWhereInput;
+    const providerId = dto.providerId ? Number(dto.providerId) : undefined;
+
+    const normalizedName = dto.name?.trim();
+    let nameAvailable = true;
+    if (normalizedName) {
+      const existingByName = await this.prismaService.provider.findFirst({
+        where: {
+          ...organizationFilter,
+          name: { equals: normalizedName, mode: 'insensitive' },
+          ...(providerId ? { id: { not: providerId } } : {}),
+        },
+        select: { id: true },
+      });
+      nameAvailable = !existingByName;
+    }
+
+    const normalizedDocumentNumber = dto.documentNumber
+      ? dto.documentNumber.trim().replace(/\s+/g, '')
+      : '';
+    let documentAvailable = true;
+    if (normalizedDocumentNumber) {
+      const existingByDocument = await this.prismaService.provider.findFirst({
+        where: {
+          ...organizationFilter,
+          documentNumber: normalizedDocumentNumber,
+          ...(providerId ? { id: { not: providerId } } : {}),
+        },
+        select: { id: true },
+      });
+      documentAvailable = !existingByDocument;
+    }
+
+    logOrganizationContext({
+      service: ProvidersService.name,
+      operation: 'validateProviderFields',
+      organizationId:
+        organizationIdFromContext === undefined
+          ? undefined
+          : organizationIdFromContext,
+      metadata: {
+        nameChecked: Boolean(normalizedName),
+        documentChecked: Boolean(normalizedDocumentNumber),
+        nameAvailable,
+        documentAvailable,
+      },
+    });
+
+    return {
+      nameAvailable,
+      documentAvailable,
+    };
+  }
+
   async update(
     id: number,
     updateProviderDto: UpdateProviderDto,
@@ -454,6 +554,48 @@ export class ProvidersService {
         mismatchError:
           'La organización del proveedor no coincide con el contexto actual.',
       });
+
+      const normalizedName = String(providerPayload?.name ?? '').trim();
+      if (normalizedName) {
+        const nameExists = await this.prismaService.provider.findFirst({
+          where: {
+            name: { equals: normalizedName, mode: 'insensitive' },
+            ...buildOrganizationFilter(
+              resolvedOrganizationId ?? organizationIdFromContext,
+            ),
+            id: { not: providerId },
+          },
+          select: { id: true },
+        });
+        if (nameExists) {
+          throw new ConflictException(
+            'Ya existe un proveedor con ese nombre en esta organizacion.',
+          );
+        }
+      }
+
+      const normalizedDocumentNumber = String(
+        providerPayload?.documentNumber ?? '',
+      )
+        .trim()
+        .replace(/\s+/g, '');
+      if (normalizedDocumentNumber) {
+        const docExists = await this.prismaService.provider.findFirst({
+          where: {
+            documentNumber: normalizedDocumentNumber,
+            ...buildOrganizationFilter(
+              resolvedOrganizationId ?? organizationIdFromContext,
+            ),
+            id: { not: providerId },
+          },
+          select: { id: true },
+        });
+        if (docExists) {
+          throw new ConflictException(
+            `El proveedor con el RUC "${normalizedDocumentNumber}" ya existe.`,
+          );
+        }
+      }
 
       if (organizationId !== undefined) {
         logOrganizationContext({

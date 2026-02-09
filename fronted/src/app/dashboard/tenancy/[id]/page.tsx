@@ -369,7 +369,7 @@ export default function OrganizationDetailPage({
   useEffect(() => {
     if (!companyDialogOpen || !organization?.id) return
     const legalName = companyLegalName.trim()
-    if (!legalName) {
+    if (!legalName || legalName.length < 3) {
       setCompanyValidation((prev) => ({ ...prev, legalName: "idle" }))
       setCompanyFieldErrors((prev) => ({ ...prev, legalName: undefined }))
       return
@@ -408,8 +408,8 @@ export default function OrganizationDetailPage({
       setCompanyFieldErrors((prev) => ({ ...prev, taxId: undefined }))
       return
     }
-    if (normalizedTaxId.length !== 11) {
-      setCompanyValidation((prev) => ({ ...prev, taxId: "invalid" }))
+    if (normalizedTaxId.length < 11) {
+      setCompanyValidation((prev) => ({ ...prev, taxId: "checking" }))
       return
     }
     setCompanyValidation((prev) => ({ ...prev, taxId: "checking" }))
@@ -452,6 +452,36 @@ export default function OrganizationDetailPage({
       {filled ? "Listo" : required ? "Requerido" : "Opcional"}
     </span>
   )
+
+  const renderValidationChip = (
+    status: "idle" | "checking" | "valid" | "invalid" | undefined,
+    fallbackFilled = false,
+  ) => {
+    if (status === "invalid") {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-rose-200/70 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+          <AlertCircle className="h-3 w-3" />
+          Ya existe
+        </span>
+      )
+    }
+    if (status === "checking") {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-amber-200/70 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          <span className="flex items-center gap-0.5">
+            <span className="h-1 w-1 animate-pulse rounded-full bg-amber-600" />
+            <span className="h-1 w-1 animate-pulse rounded-full bg-amber-600 [animation-delay:120ms]" />
+            <span className="h-1 w-1 animate-pulse rounded-full bg-amber-600 [animation-delay:240ms]" />
+          </span>
+          Validando
+        </span>
+      )
+    }
+    if (status === "valid") {
+      return renderFieldChip(true)
+    }
+    return renderFieldChip(fallbackFilled)
+  }
 
   const handleCreateCompany = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -1070,7 +1100,7 @@ export default function OrganizationDetailPage({
             <div className="space-y-2">
               <Label htmlFor="company-legal-name">
                 Razon social (opcional)
-                {renderFieldChip(Boolean(companyLegalName.trim()))}
+                {renderValidationChip(companyValidation.legalName, Boolean(companyLegalName.trim()))}
               </Label>
               <Input
                 id="company-legal-name"
@@ -1098,7 +1128,7 @@ export default function OrganizationDetailPage({
             <div className="space-y-2">
               <Label htmlFor="company-tax-id">
                 RUC / NIT (opcional)
-                {renderFieldChip(normalizedTaxId.length === 11)}
+                {renderValidationChip(companyValidation.taxId, normalizedTaxId.length === 11)}
               </Label>
               <Input
                 id="company-tax-id"

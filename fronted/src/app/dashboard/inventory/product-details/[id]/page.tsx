@@ -11,28 +11,44 @@ interface Props {
 
 export default async function ProductDetails({ params, searchParams }: Props) {
 
-  const resolvedParams = await params; // ✅ igual que en categorías
+  const resolvedParams = await params; // ??? igual que en categor??as
   const id = resolvedParams.id;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const idNumber = parseInt(id, 10);
 
-  const [inventoryData, stockDetailsData, purchasePrices, productEntries] = await Promise.all([
+  const [inventoryData, stockDetailsData, purchasePrices] = await Promise.all([
     getInventoryWithCurrency(),
     getStockDetailsByStoreAndCurrency(),
     getAllPurchasePrices(),
-    getProductEntries(parseInt(id, 10)), // Obtener las entradas del producto
   ]);
 
-  // Reunir todos los registros de inventario que correspondan al producto
-  const productInventories = inventoryData.filter(
-    (item: any) => item.product.id === parseInt(id, 10)
-  );
+  const selectedInventory = inventoryData.find((item: any) => item.id === idNumber);
+  const fallbackInventories = selectedInventory
+    ? []
+    : inventoryData.filter((item: any) => item.product?.id === idNumber);
+  const productId =
+    selectedInventory?.product?.id ??
+    (fallbackInventories.length ? fallbackInventories[0].product?.id : null);
+  const productEntries = productId != null ? await getProductEntries(productId) : [];
 
-  const product = productInventories[0];
-  const stockDetails = stockDetailsData.find((item: any) => item.productId === parseInt(id, 10));
-  const priceInfo = purchasePrices.find((p: any) => p.productId === parseInt(id, 10));
+  // Reunir todos los registros de inventario que correspondan al producto
+  const productInventories =
+    productId != null
+      ? inventoryData.filter((item: any) => item.product?.id === productId)
+      : [];
+
+  const product = productInventories[0] ?? selectedInventory;
+  const stockDetails =
+    productId != null
+      ? stockDetailsData.find((item: any) => item.productId === productId)
+      : null;
+  const priceInfo =
+    productId != null
+      ? purchasePrices.find((p: any) => p.productId === productId)
+      : null;
 
   // Validar si los datos existen
-   if (!productInventories.length || !priceInfo) {
+   if (!product) {
     return (
       <div className="p-4">
         <h1 className="text-2xl font-bold mb-4">Producto no encontrado</h1>
@@ -41,40 +57,47 @@ export default async function ProductDetails({ params, searchParams }: Props) {
     );
   }
 
-  // Calcular el precio mínimo y máximo en soles
-  const lowestPurchasePrice = priceInfo.lowestPurchasePrice || 0;
-  const highestPurchasePrice = priceInfo.highestPurchasePrice || 0;
+  // Calcular el precio m??nimo y m??ximo en soles
+  const lowestPurchasePrice = priceInfo?.lowestPurchasePrice || 0;
+  const highestPurchasePrice = priceInfo?.highestPurchasePrice || 0;
 
   // Obtener las series por tienda
   const series = stockDetails
     ? await Promise.all(
         Object.keys(stockDetails.stockByStoreAndCurrency).map(async (storeId) => {
-          const storeSeries = await getSeriesByProductAndStore(parseInt(storeId, 10), parseInt(id, 10));
+          const storeSeries = await getSeriesByProductAndStore(
+            parseInt(storeId, 10),
+            productId ?? 0
+          );
           return { storeId: parseInt(storeId, 10), series: storeSeries };
         })
       )
   : [];
 
-  const aggregatedStoreOnInventory = productInventories.flatMap(
-    (inv: any) => inv.storeOnInventory
-  );
+  const aggregatedStoreOnInventory = productInventories.length
+    ? productInventories.flatMap((inv: any) => inv.storeOnInventory)
+    : (product?.storeOnInventory ?? []);
 
   const totalStock = aggregatedStoreOnInventory.reduce(
     (acc: number, store: any) => acc + store.stock,
     0
   );
 
-  const createdAt = productInventories.reduce(
-    (earliest: Date, inv: any) =>
-      new Date(inv.createdAt) < new Date(earliest) ? inv.createdAt : earliest,
-    productInventories[0].createdAt
-  );
+  const createdAt = productInventories.length
+    ? productInventories.reduce(
+        (earliest: Date, inv: any) =>
+          new Date(inv.createdAt) < new Date(earliest) ? inv.createdAt : earliest,
+        productInventories[0].createdAt
+      )
+    : product.createdAt;
 
-  const updateAt = productInventories.reduce(
-    (latest: Date, inv: any) =>
-      new Date(inv.updatedAt) > new Date(latest) ? inv.updatedAt : latest,
-    productInventories[0].updatedAt
-  );
+  const updateAt = productInventories.length
+    ? productInventories.reduce(
+        (latest: Date, inv: any) =>
+          new Date(inv.updatedAt) > new Date(latest) ? inv.updatedAt : latest,
+        productInventories[0].updatedAt
+      )
+    : product.updatedAt;
 
   const productFormatted = {
     id: product.product.id,

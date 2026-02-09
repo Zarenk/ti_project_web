@@ -194,6 +194,30 @@ export async function getCategoriesWithCount() {
   }
 }
 
+export async function validateCategoryName(payload: {
+  name: string;
+  categoryId?: number;
+}): Promise<{ nameAvailable: boolean }> {
+  const res = await authorizedFetch(`${BACKEND_URL}/api/category/validate-name`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    const message =
+      errorData?.message ||
+      errorData?.error ||
+      "Error al validar la categoria.";
+    throw new Error(message);
+  }
+
+  return res.json();
+}
+
 export async function getPublicCategoriesWithCount() {
   try {
     const response = await publicFetch(`${BACKEND_URL}/api/public/category/with-count`, {

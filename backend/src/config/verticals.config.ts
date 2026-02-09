@@ -455,8 +455,11 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
       },
       customMenuItems: [
         { label: 'Mesas', path: '/dashboard/tables', icon: 'table' },
-        { label: 'Cocina', path: '/dashboard/kitchen', icon: 'kitchen' },
+        { label: 'Comanda', path: '/dashboard/kitchen', icon: 'kitchen' },
         { label: 'Insumos', path: '/dashboard/ingredients', icon: 'ingredients' },
+        { label: 'Platos', path: '/dashboard/products', icon: 'book' },
+        { label: 'Órdenes', path: '/dashboard/restaurant-orders', icon: 'orders' },
+        { label: 'Caja', path: '/dashboard/cashregister', icon: 'cash-register' },
       ],
     },
     productSchema: RESTAURANTS_PRODUCT_SCHEMA,

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
+import { useVerticalConfig } from "@/hooks/use-vertical-config";
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth";
 import { DEFAULT_STORE_ID } from "@/lib/config";
 import { getProductsByStore, getStockByProductAndStore, createWebOrder } from "@/app/dashboard/sales/sales.api";
@@ -16,6 +17,8 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Search } from "lucide-react";
 import { getClients } from "@/app/dashboard/clients/clients.api";
+import { createRestaurantOrder } from "@/app/dashboard/orders/orders.api";
+import { getRestaurantTables, type RestaurantTable } from "@/app/dashboard/tables/tables.api";
 import { getCategories } from "@/app/dashboard/categories/categories.api";
 import { regions } from "@/lib/region";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -285,6 +288,8 @@ type OrderItem = {
 export default function NewOrderPage() {
   const router = useRouter();
   const { version } = useTenantSelection();
+  const { info: verticalInfo } = useVerticalConfig();
+  const isRestaurant = verticalInfo?.businessVertical === "RESTAURANTS";
   const [authChecked, setAuthChecked] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -293,6 +298,11 @@ export default function NewOrderPage() {
   const [storeId, setStoreId] = useState<number>(DEFAULT_STORE_ID);
   const [stores, setStores] = useState<{ id: number; name: string }[]>([]);
   const [products, setProducts] = useState<ProductOption[]>([]);
+  const [orderType, setOrderType] = useState<"DINE_IN" | "TAKEAWAY" | "DELIVERY">("DINE_IN");
+  const [tables, setTables] = useState<RestaurantTable[]>([]);
+  const [tablesLoading, setTablesLoading] = useState(true);
+  const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
+  const [orderNotes, setOrderNotes] = useState("");
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number>(0); // 0 = Todas
   const [selectedStock, setSelectedStock] = useState<number | null>(null);
@@ -424,6 +434,31 @@ export default function NewOrderPage() {
     loadStores();
   }, [version]);
 
+  useEffect(() => {
+    if (!isRestaurant) {
+      setTables([]);
+      setTablesLoading(false);
+      return;
+    }
+    async function loadTables() {
+      setTablesLoading(true);
+      try {
+        const data = await getRestaurantTables();
+        const list = Array.isArray(data) ? data : [];
+        setTables(list);
+        if (orderType === "DINE_IN" && list.length > 0) {
+          setSelectedTableId((prev) => prev ?? list[0].id);
+        }
+      } catch (err) {
+        console.error("Error loading tables", err);
+        setTables([]);
+      } finally {
+        setTablesLoading(false);
+      }
+    }
+    loadTables();
+  }, [version, isRestaurant, orderType]);
+
   // Load categories once
   useEffect(() => {
     async function loadCats() {
@@ -496,6 +531,18 @@ export default function NewOrderPage() {
 
   useEffect(() => {
     async function loadProducts() {
+      if (storesLoading) return;
+      if (!storeId || stores.length === 0) {
+        setProducts([]);
+        setProductsLoading(false);
+        return;
+      }
+      const storeExists = stores.some((store) => store.id === storeId);
+      if (!storeExists) {
+        setProducts([]);
+        setProductsLoading(false);
+        return;
+      }
       try {
         const data = await getProductsByStore(storeId);
         const opts: ProductOption[] = Array.isArray(data)
@@ -525,8 +572,7 @@ export default function NewOrderPage() {
               .filter((p) => !!p?.id && !!p?.name)
           : [];
         setProducts(opts);
-      } catch (err) {
-        console.error("Error loading products", err);
+      } catch {
         setProducts([]);
       } finally {
         setProductsLoading(false);
@@ -538,7 +584,7 @@ export default function NewOrderPage() {
     setSelectedProductId(null);
     setSelectedPrice(0);
     setQuantity(1);
-  }, [storeId, version]);
+  }, [storeId, version, storesLoading, stores]);
 
   useEffect(() => {
     async function loadClients() {
@@ -638,6 +684,37 @@ export default function NewOrderPage() {
     setItems((prev) => prev.filter((i) => i.productId !== id));
   }, [])
 
+  async function handleCreateRestaurantOrder() {
+    if (!authChecked || !userId) return;
+    if (items.length === 0) {
+      toast.error("Agrega al menos un item a la orden.");
+      return;
+    }
+    if (orderType === "DINE_IN" && !selectedTableId) {
+      toast.error("Selecciona una mesa para continuar.");
+      return;
+    }
+    try {
+      await createRestaurantOrder({
+        storeId: storeId || null,
+        tableId: orderType === "DINE_IN" ? selectedTableId : null,
+        clientId: selectedClientId ?? null,
+        notes: orderNotes.trim() || undefined,
+        orderType,
+        items: items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.price,
+        })),
+      });
+      toast.success("Orden creada correctamente");
+      router.push('/dashboard/orders');
+    } catch (err: any) {
+      console.error('Error al crear orden restaurante', err);
+      toast.error(err?.message || "No se pudo crear la orden");
+    }
+  }
+
   async function handleCreateOrder() {
     if (!authChecked || !userId) return;
     const formData = {
@@ -718,7 +795,12 @@ export default function NewOrderPage() {
     }
   }
 
-  const isPageLoading = !authChecked || storesLoading || productsLoading || clientsLoading;
+  const isPageLoading =
+    !authChecked ||
+    storesLoading ||
+    productsLoading ||
+    clientsLoading ||
+    (isRestaurant && tablesLoading);
   if (isPageLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-gray-900 dark:to-gray-950">
@@ -810,6 +892,196 @@ export default function NewOrderPage() {
         </div>
       </div>
     );
+  if (isRestaurant) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="container mx-auto px-4 py-6">
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Restaurante</p>
+              <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Nueva orden</h1>
+              <p className="text-sm text-muted-foreground">
+                Registra una orden de mesa, para llevar o delivery con productos del menu.
+              </p>
+            </div>
+            <Badge variant="outline" className="border-primary/30 text-primary">
+              {orderType === "DINE_IN" ? "Mesa" : orderType === "TAKEAWAY" ? "Para llevar" : "Delivery"}
+            </Badge>
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-6 max-w-7xl">
+            <div className="lg:col-span-2 space-y-6">
+              <Card className="border-white/10 bg-background/60">
+                <CardHeader className="px-4 pt-4 pb-2">
+                  <CardTitle>Tipo de orden</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Button
+                      type="button"
+                      variant={orderType === "DINE_IN" ? "default" : "outline"}
+                      onClick={() => setOrderType("DINE_IN")}
+                    >
+                      Mesa
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={orderType === "TAKEAWAY" ? "default" : "outline"}
+                      onClick={() => setOrderType("TAKEAWAY")}
+                    >
+                      Para llevar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={orderType === "DELIVERY" ? "default" : "outline"}
+                      onClick={() => setOrderType("DELIVERY")}
+                    >
+                      Delivery
+                    </Button>
+                  </div>
+
+                  {orderType === "DINE_IN" && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Mesa</Label>
+                        <Select
+                          value={selectedTableId ? String(selectedTableId) : ""}
+                          onValueChange={(value) => setSelectedTableId(Number(value))}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder={tablesLoading ? "Cargando mesas..." : "Selecciona una mesa"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {tables.map((table) => (
+                              <SelectItem key={table.id} value={String(table.id)}>
+                                {table.code} - {table.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Cliente</Label>
+                        <ClientCombobox
+                          clients={clientsWithKey}
+                          selectedId={selectedClientId}
+                          selectedLabel={selectedClientLabel}
+                          onPick={handleClientPick}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {orderType !== "DINE_IN" && (
+                    <div className="space-y-2">
+                      <Label>Cliente</Label>
+                      <ClientCombobox
+                        clients={clientsWithKey}
+                        selectedId={selectedClientId}
+                        selectedLabel={selectedClientLabel}
+                        onPick={handleClientPick}
+                      />
+                    </div>
+                  )}
+
+                  {!tablesLoading && orderType === "DINE_IN" && tables.length === 0 && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                      No hay mesas configuradas. Crea una mesa para habilitar ordenes en sala.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <ProductsSection
+                storeId={storeId}
+                stores={stores}
+                setStoreId={setStoreId}
+                categories={categories}
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+                selectedProductId={selectedProductId}
+                products={products}
+                handleProductPick={handleProductPick}
+                selectedStock={selectedStock}
+                remainingStock={remainingStock}
+                quantity={quantity}
+                setQuantity={setQuantity}
+                selectedPrice={selectedPrice}
+                setSelectedPrice={setSelectedPrice}
+                addItem={addItem}
+                items={items}
+                removeItem={removeItem}
+              />
+
+              {!storesLoading && stores.length === 0 && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                  No hay tiendas configuradas. Crea una tienda para habilitar la carga de productos.
+                </div>
+              )}
+
+              <Card className="border-white/10 bg-background/60">
+                <CardHeader className="px-4 pt-4 pb-2">
+                  <CardTitle>Notas adicionales</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
+                  <Textarea
+                    value={orderNotes}
+                    onChange={(event) => setOrderNotes(event.target.value)}
+                    placeholder="Notas para cocina o el salon"
+                    className="min-h-[90px]"
+                  />
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="lg:col-span-1">
+              <Card className="border-white/10 bg-background/70 sticky top-8">
+                <CardHeader className="px-4 pt-4 pb-2">
+                  <CardTitle>Resumen de la orden</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 space-y-3">
+                  <div className="space-y-2">
+                    {items.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Agrega productos para ver el resumen.</p>
+                    ) : (
+                      items.map((item) => (
+                        <div key={item.productId} className="flex items-center justify-between text-sm">
+                          <div>
+                            <p className="font-medium">{item.name}</p>
+                            <p className="text-xs text-muted-foreground">{item.quantity} x S/. {item.price.toFixed(2)}</p>
+                          </div>
+                          <span className="font-semibold">S/. {(item.quantity * item.price).toFixed(2)}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <Separator />
+                  <div className="space-y-1 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span>S/. {subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-base font-semibold">
+                      <span>Total</span>
+                      <span>S/. {total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={handleCreateRestaurantOrder}
+                    disabled={items.length === 0 || (orderType === "DINE_IN" && !selectedTableId)}
+                  >
+                    Crear orden
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   }
 
   return (
@@ -1004,6 +1276,11 @@ export default function NewOrderPage() {
               items={items}
               removeItem={removeItem}
             />
+            {!storesLoading && stores.length === 0 && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                No hay tiendas configuradas. Crea una tienda para habilitar la carga de productos.
+              </div>
+            )}
           </div>
 
           {/* Right: Summary */}

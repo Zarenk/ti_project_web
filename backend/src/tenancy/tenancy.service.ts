@@ -196,6 +196,19 @@ export class TenancyService {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const prisma = tx as unknown as PrismaService as any;
+        const trimmedOrgName = createTenancyDto.name?.trim() ?? '';
+        if (!trimmedOrgName) {
+          throw new BadRequestException('El nombre de la organizacion es obligatorio.');
+        }
+
+        const existingByName = await prisma.organization.findFirst({
+          where: {
+            name: { equals: trimmedOrgName, mode: 'insensitive' },
+          },
+        });
+        if (existingByName) {
+          throw new BadRequestException('Ya existe una organizacion con ese nombre.');
+        }
 
         const organizationSlug = await this.ensureOrganizationSlug(
           prisma,
@@ -212,7 +225,7 @@ export class TenancyService {
 
         const organization = await prisma.organization.create({
           data: {
-            name: createTenancyDto.name.trim(),
+            name: trimmedOrgName,
             slug: organizationSlug,
             code: organizationCode ?? null,
             status: createTenancyDto.status ?? 'ACTIVE',
@@ -336,6 +349,25 @@ export class TenancyService {
         const effectiveName = trimmedName?.length
           ? trimmedName
           : currentOrganization.name;
+
+        if (
+          trimmedName?.length &&
+          trimmedName.localeCompare(currentOrganization.name, undefined, {
+            sensitivity: 'base',
+          }) !== 0
+        ) {
+          const existingByName = await prisma.organization.findFirst({
+            where: {
+              name: { equals: trimmedName, mode: 'insensitive' },
+              NOT: { id },
+            },
+          });
+          if (existingByName) {
+            throw new BadRequestException(
+              'Ya existe una organizacion con ese nombre.',
+            );
+          }
+        }
 
         let slugValue: string | undefined;
         if (updateTenancyDto.slug !== undefined || !currentOrganization.slug) {
@@ -970,6 +1002,23 @@ export class TenancyService {
       }
       throw error;
     }
+  }
+
+  async validateOrganizationName(
+    name: string,
+    excludeId?: number | null,
+  ): Promise<{ nameAvailable: boolean }> {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      return { nameAvailable: true };
+    }
+    const existing = await this.prisma.organization.findFirst({
+      where: {
+        name: { equals: trimmedName, mode: 'insensitive' },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+    });
+    return { nameAvailable: !existing };
   }
 
   async updateCompanyLogo(

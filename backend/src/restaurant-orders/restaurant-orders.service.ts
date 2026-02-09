@@ -121,6 +121,22 @@ export class RestaurantOrdersService {
     });
   }
 
+  async findOne(
+    id: number,
+    organizationIdFromContext?: number | null,
+    companyIdFromContext?: number | null,
+  ) {
+    await this.ensureOrder(id, organizationIdFromContext, companyIdFromContext);
+    return this.prisma.restaurantOrder.findUnique({
+      where: { id },
+      include: {
+        table: true,
+        items: { include: { product: true, station: true } },
+        client: true,
+      },
+    });
+  }
+
   findKitchenQueue(
     organizationIdFromContext?: number | null,
     companyIdFromContext?: number | null,

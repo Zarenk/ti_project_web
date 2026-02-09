@@ -40,6 +40,7 @@ import {
   type CreateOrganizationPayload,
   type OrganizationUnitInput,
   validateCompanyFields,
+  validateOrganizationName,
 } from "../tenancy.api"
 import { TENANT_ORGANIZATIONS_EVENT, setTenantSelection } from "@/utils/tenant-preferences"
 
@@ -94,13 +95,24 @@ export default function NewOrganizationPage() {
   const [companies, setCompanies] = useState<MutableCompany[]>([createCompanyDraft()])
   const [submitting, setSubmitting] = useState(false)
   const [showErrors, setShowErrors] = useState(false)
+  const [organizationNameValidation, setOrganizationNameValidation] = useState<{
+    status?: "idle" | "checking" | "valid" | "invalid"
+    message?: string
+  }>({})
   const [companyValidation, setCompanyValidation] = useState<
     Record<
       string,
-      { taxIdStatus?: "idle" | "checking" | "valid" | "invalid"; taxIdMessage?: string }
+      {
+        taxIdStatus?: "idle" | "checking" | "valid" | "invalid"
+        taxIdMessage?: string
+        legalNameStatus?: "idle" | "checking" | "valid" | "invalid"
+        legalNameMessage?: string
+      }
     >
   >({})
   const companyValidationTimeouts = useRef<Map<string, number>>(new Map())
+  const organizationValidationTimeout = useRef<number | null>(null)
+  const VALIDATION_DEBOUNCE_MS = 1000
 
   const activeUnits = useMemo(
     () => units.filter((unit) => unit.status === "ACTIVE").length,
@@ -126,6 +138,66 @@ export default function NewOrganizationPage() {
       {filled ? "Listo" : required ? "Requerido" : "Opcional"}
     </span>
   )
+
+  const renderValidationChip = (
+    status: "idle" | "checking" | "valid" | "invalid" | undefined,
+    fallbackFilled = false,
+  ) => {
+    if (status === "invalid") {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-rose-200/70 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+          <Info className="h-3 w-3" />
+          Ya existe
+        </span>
+      )
+    }
+    if (status === "checking") {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-amber-200/70 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          <span className="flex items-center gap-0.5">
+            <span className="h-1 w-1 animate-pulse rounded-full bg-amber-600" />
+            <span className="h-1 w-1 animate-pulse rounded-full bg-amber-600 [animation-delay:120ms]" />
+            <span className="h-1 w-1 animate-pulse rounded-full bg-amber-600 [animation-delay:240ms]" />
+          </span>
+          Validando
+        </span>
+      )
+    }
+    if (status === "valid") {
+      return renderFieldChip(true)
+    }
+    return renderFieldChip(fallbackFilled)
+  }
+
+  const renderRequiredValidationChip = (
+    status: "idle" | "checking" | "valid" | "invalid" | undefined,
+    filled: boolean,
+  ) => {
+    if (status === "invalid") {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-rose-200/70 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+          <Info className="h-3 w-3" />
+          Ya existe
+        </span>
+      )
+    }
+    if (status === "checking") {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-amber-200/70 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          <span className="flex items-center gap-0.5">
+            <span className="h-1 w-1 animate-pulse rounded-full bg-amber-600" />
+            <span className="h-1 w-1 animate-pulse rounded-full bg-amber-600 [animation-delay:120ms]" />
+            <span className="h-1 w-1 animate-pulse rounded-full bg-amber-600 [animation-delay:240ms]" />
+          </span>
+          Validando
+        </span>
+      )
+    }
+    if (status === "valid") {
+      return renderFieldChip(true, true)
+    }
+    return renderFieldChip(filled, true)
+  }
 
   const handleOrganizationChange = (field: "name" | "code" | "status", value: string) => {
     setOrganization((prev) => ({
@@ -154,7 +226,12 @@ export default function NewOrganizationPage() {
 
   const updateCompanyValidation = (
     key: string,
-    patch: { taxIdStatus?: "idle" | "checking" | "valid" | "invalid"; taxIdMessage?: string },
+    patch: {
+      taxIdStatus?: "idle" | "checking" | "valid" | "invalid"
+      taxIdMessage?: string
+      legalNameStatus?: "idle" | "checking" | "valid" | "invalid"
+      legalNameMessage?: string
+    },
   ) => {
     setCompanyValidation((prev) => ({
       ...prev,
@@ -163,39 +240,134 @@ export default function NewOrganizationPage() {
   }
 
   useEffect(() => {
+    const trimmedName = organization.name.trim()
+    if (organizationValidationTimeout.current) {
+      window.clearTimeout(organizationValidationTimeout.current)
+    }
+
+    if (trimmedName.length < 3) {
+      setOrganizationNameValidation({ status: "idle", message: undefined })
+      return
+    }
+
+    organizationValidationTimeout.current = window.setTimeout(async () => {
+      try {
+        setOrganizationNameValidation({ status: "checking", message: undefined })
+        const result = await validateOrganizationName({ name: trimmedName })
+        if (!result.nameAvailable) {
+          setOrganizationNameValidation({
+            status: "invalid",
+            message: "Ya existe una organizacion con ese nombre.",
+          })
+        } else {
+          setOrganizationNameValidation({ status: "valid", message: undefined })
+        }
+      } catch (error) {
+        console.error(error)
+        setOrganizationNameValidation({ status: "idle", message: undefined })
+      }
+    }, VALIDATION_DEBOUNCE_MS)
+
+    return () => {
+      if (organizationValidationTimeout.current) {
+        window.clearTimeout(organizationValidationTimeout.current)
+      }
+    }
+  }, [organization.name])
+
+  useEffect(() => {
     companies.forEach((company) => {
       const normalizedTaxId = company.taxId.replace(/\D/g, "")
+      const legalNameInput = company.legalName.trim()
       const existingTimeout = companyValidationTimeouts.current.get(company.key)
       if (existingTimeout) {
         window.clearTimeout(existingTimeout)
       }
 
-      if (!normalizedTaxId) {
-        updateCompanyValidation(company.key, { taxIdStatus: "idle", taxIdMessage: undefined })
-        return
-      }
-      if (normalizedTaxId.length !== 11) {
-        updateCompanyValidation(company.key, { taxIdStatus: "invalid", taxIdMessage: undefined })
-        return
+      const hasLegalNameInput = legalNameInput.length >= 3
+      const hasTaxIdInput = normalizedTaxId.length > 0
+
+      if (!hasLegalNameInput) {
+        updateCompanyValidation(company.key, {
+          legalNameStatus: "idle",
+          legalNameMessage: undefined,
+        })
+      } else {
+        updateCompanyValidation(company.key, {
+          legalNameStatus: "idle",
+          legalNameMessage: undefined,
+        })
       }
 
-      updateCompanyValidation(company.key, { taxIdStatus: "checking", taxIdMessage: undefined })
+      if (!hasTaxIdInput) {
+        updateCompanyValidation(company.key, { taxIdStatus: "idle", taxIdMessage: undefined })
+      } else if (normalizedTaxId.length < 11) {
+        updateCompanyValidation(company.key, {
+          taxIdStatus: "idle",
+          taxIdMessage: undefined,
+        })
+      }
+
+      const shouldValidateTaxId = normalizedTaxId.length === 11
+      const shouldValidateLegalName = hasLegalNameInput
+      if (!shouldValidateTaxId && !shouldValidateLegalName) {
+        return
+      }
       const timeout = window.setTimeout(async () => {
         try {
-          const result = await validateCompanyFields({ taxId: normalizedTaxId })
-          if (!result.taxIdAvailable) {
+          const payload: { taxId?: string; legalName?: string } = {}
+          if (shouldValidateTaxId) payload.taxId = normalizedTaxId
+          if (shouldValidateLegalName) payload.legalName = legalNameInput
+          if (shouldValidateTaxId) {
             updateCompanyValidation(company.key, {
-              taxIdStatus: "invalid",
-              taxIdMessage: "Ya existe una empresa con ese RUC/NIT.",
+              taxIdStatus: "checking",
+              taxIdMessage: undefined,
             })
-            return
           }
-          updateCompanyValidation(company.key, { taxIdStatus: "valid", taxIdMessage: undefined })
+          if (shouldValidateLegalName) {
+            updateCompanyValidation(company.key, {
+              legalNameStatus: "checking",
+              legalNameMessage: undefined,
+            })
+          }
+          const result = await validateCompanyFields(payload)
+          if (shouldValidateTaxId) {
+            if (!result.taxIdAvailable) {
+              updateCompanyValidation(company.key, {
+                taxIdStatus: "invalid",
+                taxIdMessage: "Ya existe una empresa con ese RUC/NIT.",
+              })
+            } else {
+              updateCompanyValidation(company.key, {
+                taxIdStatus: "valid",
+                taxIdMessage: undefined,
+              })
+            }
+          }
+          if (shouldValidateLegalName) {
+            if (!result.legalNameAvailable) {
+              updateCompanyValidation(company.key, {
+                legalNameStatus: "invalid",
+                legalNameMessage:
+                  "Ya existe una empresa con esa razon social en la organizacion.",
+              })
+            } else {
+              updateCompanyValidation(company.key, {
+                legalNameStatus: "valid",
+                legalNameMessage: undefined,
+              })
+            }
+          }
         } catch (error) {
           console.error(error)
-          updateCompanyValidation(company.key, { taxIdStatus: "idle", taxIdMessage: undefined })
+          updateCompanyValidation(company.key, {
+            taxIdStatus: "idle",
+            taxIdMessage: undefined,
+            legalNameStatus: "idle",
+            legalNameMessage: undefined,
+          })
         }
-      }, 500)
+      }, VALIDATION_DEBOUNCE_MS)
 
       companyValidationTimeouts.current.set(company.key, timeout)
     })
@@ -251,6 +423,12 @@ export default function NewOrganizationPage() {
     if (!payload.name) {
       throw new Error("El nombre de la organización es obligatorio.")
     }
+    if (organizationNameValidation.status === "invalid") {
+      throw new Error("El nombre de la organizaci?n ya existe en el sistema.")
+    }
+    if (organizationNameValidation.status === "checking") {
+      throw new Error("A?n estamos verificando el nombre de la organizaci?n. Espera un momento.")
+    }
     if (!payload.units.length) {
       throw new Error("Debes definir al menos una unidad organizativa con nombre.")
     }
@@ -260,7 +438,7 @@ export default function NewOrganizationPage() {
       if (trimmedName.length === 0) {
         throw new Error(`La empresa #${index + 1} necesita un nombre comercial.`)
       }
-      if (normalizedTaxId.length !== 0 && normalizedTaxId.length !== 11) {
+      if (normalizedTaxId.length !== 0 && normalizedTaxId.length < 11) {
         throw new Error(`El RUC de la empresa #${index + 1} debe tener 11 dÃ­gitos.`)
       }
       const validation = companyValidation[company.key]
@@ -270,6 +448,14 @@ export default function NewOrganizationPage() {
       if (validation?.taxIdStatus === "checking") {
         throw new Error(
           `AÃºn estamos verificando el RUC de la empresa #${index + 1}. Espera un momento.`,
+        )
+      }
+      if (validation?.legalNameStatus === "invalid") {
+        throw new Error(`La razon social de la empresa #${index + 1} ya existe en el sistema.`)
+      }
+      if (validation?.legalNameStatus === "checking" && company.legalName.trim().length >= 3) {
+        throw new Error(
+          `AÃºn estamos verificando la razon social de la empresa #${index + 1}. Espera un momento.`,
         )
       }
     })
@@ -350,9 +536,27 @@ export default function NewOrganizationPage() {
             </CardHeader>
             <CardContent className="grid gap-6 sm:grid-cols-2">
               <div className="sm:col-span-2 space-y-2">
-                <Label htmlFor="org-name" className="text-slate-700 dark:text-slate-200">
-                  Nombre <span className="text-rose-500">*</span>
-                </Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="org-name" className="text-slate-700 dark:text-slate-200">
+                    Nombre <span className="text-rose-500">*</span>
+                    {renderRequiredValidationChip(
+                      organizationNameValidation.status,
+                      Boolean(organization.name.trim()),
+                    )}
+                  </Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex cursor-pointer items-center text-slate-400">
+                          <Info className="size-4" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="rounded-lg bg-white/95 text-xs text-slate-700 shadow-lg dark:bg-slate-900 dark:text-slate-200">
+                        Nombre visible para los usuarios del tenant.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Input
                   id="org-name"
                   placeholder="Ej. Corporación Andes"
@@ -360,12 +564,23 @@ export default function NewOrganizationPage() {
                   onChange={(event) => handleOrganizationChange("name", event.target.value)}
                   aria-invalid={showErrors && !organization.name.trim()}
                   className={cn(
-                    "bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600",
+                    "cursor-text bg-white focus-visible:ring-sky-300 dark:bg-slate-900 dark:border-slate-700 dark:focus-visible:ring-slate-600",
                     showErrors &&
                       !organization.name.trim() &&
                       "border-rose-400 ring-1 ring-rose-200/70 dark:border-rose-500 dark:ring-rose-500/20",
+                    organizationNameValidation.status === "invalid" &&
+                      "border-rose-400 ring-1 ring-rose-200/70 dark:border-rose-500 dark:ring-rose-500/20",
                   )}
                 />
+
+                {organizationNameValidation.status === "checking" ? (
+                  <p className="text-xs text-amber-600">Validando nombre...</p>
+                ) : organizationNameValidation.status === "invalid" ? (
+                  <p className="text-xs text-rose-500">
+                    {organizationNameValidation.message ??
+                      "Ya existe una organizacion con ese nombre."}
+                  </p>
+                ) : null}
 
                 {showErrors && !organization.name.trim() ? (
                   <div className="flex items-center gap-2 rounded-lg border border-rose-200/70 bg-rose-50/70 px-3 py-2 text-xs text-rose-700 shadow-sm dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200">
@@ -427,10 +642,10 @@ export default function NewOrganizationPage() {
             <CardContent className="space-y-5">
               <div className="grid gap-4">
                 {companies.map((company, index) => {
-                  const normalizedTaxId = company.taxId.replace(/\D/g, "")
-                  const taxIdValid = normalizedTaxId.length === 0 || normalizedTaxId.length === 11
-                  const validation = companyValidation[company.key]
-                  return (
+      const normalizedTaxId = company.taxId.replace(/\D/g, "")
+      const taxIdValid = normalizedTaxId.length === 0 || normalizedTaxId.length === 11
+      const validation = companyValidation[company.key]
+      return (
                     <div
                       key={company.key}
                       className="rounded-lg border border-sky-100 bg-sky-50/50 p-4 shadow-xs transition-colors dark:border-slate-700 dark:bg-slate-900/70"
@@ -493,7 +708,10 @@ export default function NewOrganizationPage() {
                               className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
                             >
                               Razon social (opcional)
-                              {renderFieldChip(Boolean(company.legalName.trim()))}
+                              {renderValidationChip(
+                                validation?.legalNameStatus,
+                                Boolean(company.legalName.trim()),
+                              )}
                             </Label>
                             <TooltipProvider>
                               <Tooltip>
@@ -508,16 +726,28 @@ export default function NewOrganizationPage() {
                               </Tooltip>
                             </TooltipProvider>
                           </div>
-                          <Input
-                            id={`company-legal-${company.key}`}
-                            placeholder="Ej. Mi Empresa Sociedad An??nima"
-                            value={company.legalName}
-                            onChange={(event) =>
-                              handleCompanyChange(company.key, "legalName", event.target.value)
-                            }
-                            className="cursor-text bg-white focus-visible:ring-sky-300 dark:bg-slate-950 dark:border-slate-700 dark:focus-visible:ring-slate-600"
-                          />
-                        </div>
+                        <Input
+                          id={`company-legal-${company.key}`}
+                          placeholder="Ej. Mi Empresa Sociedad An??nima"
+                          value={company.legalName}
+                          onChange={(event) =>
+                            handleCompanyChange(company.key, "legalName", event.target.value)
+                          }
+                          className={cn(
+                            "cursor-text bg-white focus-visible:ring-sky-300 dark:bg-slate-950 dark:border-slate-700 dark:focus-visible:ring-slate-600",
+                            validation?.legalNameStatus === "invalid" &&
+                              "border-rose-400 dark:border-rose-500",
+                          )}
+                        />
+                        {validation?.legalNameStatus === "checking" ? (
+                          <p className="text-xs text-amber-600">Validando razon social...</p>
+                        ) : validation?.legalNameStatus === "invalid" ? (
+                          <p className="text-xs text-rose-500">
+                            {validation.legalNameMessage ??
+                              "Ya existe una empresa con esa razon social."}
+                          </p>
+                        ) : null}
+                      </div>
 
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
@@ -526,7 +756,10 @@ export default function NewOrganizationPage() {
                               className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
                             >
                               RUC / NIT (opcional)
-                              {renderFieldChip(normalizedTaxId.length === 11)}
+                              {renderValidationChip(
+                                validation?.taxIdStatus,
+                                normalizedTaxId.length === 11,
+                              )}
                             </Label>
                             <TooltipProvider>
                               <Tooltip>

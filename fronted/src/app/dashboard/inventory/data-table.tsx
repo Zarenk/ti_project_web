@@ -190,13 +190,22 @@ const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
   // Cargar las categorÃ­as desde el backend
   useEffect(() => {
     async function loadCategories() {
-      const products = await getCategoriesFromInventory();
-      const categories = Array.from(new Set(products.map((product:any) => product.product.category)));
-      setCategoryOptions(categories);
+      try {
+        const categories = await getCategoriesFromInventory();
+        setCategoryOptions(Array.isArray(categories) ? categories : []);
+      } catch (error) {
+        console.error('Error al cargar las categorías:', error);
+        setCategoryOptions([]);
+      }
     }
     async function loadStores() {
-      const stores = await getAllStores();
-      setStoreOptions(stores);
+      try {
+        const stores = await getAllStores();
+        setStoreOptions(Array.isArray(stores) ? stores : []);
+      } catch (error) {
+        console.error('Error al cargar las tiendas:', error);
+        setStoreOptions([]);
+      }
     }
     loadCategories();
     loadStores();

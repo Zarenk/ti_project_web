@@ -74,6 +74,23 @@ export class RestaurantOrdersController {
     );
   }
 
+  @Get(':id')
+  findOne(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const numericId = parseInt(id, 10);
+    if (Number.isNaN(numericId)) {
+      throw new BadRequestException('El ID debe ser un numero valido.');
+    }
+    return this.service.findOne(
+      numericId,
+      organizationId === undefined ? undefined : organizationId,
+      companyId === undefined ? undefined : companyId,
+    );
+  }
+
   @Patch(':id')
   update(
     @Param('id') id: string,

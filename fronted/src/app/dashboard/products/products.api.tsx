@@ -299,6 +299,35 @@ export async function uploadProductImage(file: File) {
   return res.json() as Promise<{ url: string }>
 }
 
+export async function validateProductName(payload: {
+  name: string
+  productId?: number | null
+}): Promise<{ nameAvailable: boolean }> {
+  const response = await authorizedFetch(`${BACKEND_URL}/api/products/validate-name`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo validar el producto"
+    throw new Error(message)
+  }
+
+  return {
+    nameAvailable: Boolean((data as any).nameAvailable),
+  }
+}
+
 export async function getLegacyProducts() {
   return getProducts({ migrationStatus: 'legacy', includeInactive: true })
 }
