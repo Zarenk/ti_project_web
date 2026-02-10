@@ -1,5 +1,7 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { KmsService } from '../common/security/kms.service';
 import { encryptCredentialsMiddleware } from '../common/security/credentials.middleware';
 
@@ -50,16 +52,18 @@ export class PrismaService
       return existingInstance;
     }
 
+    // Prisma 7.x requires driver adapters
     const pooledUrl = buildPooledDatabaseUrl();
-    if (pooledUrl) {
-      super({
-        datasources: {
-          db: { url: pooledUrl },
-        },
-      });
-    } else {
-      super();
+    const connectionString = pooledUrl || process.env.DATABASE_URL;
+
+    if (!connectionString) {
+      throw new Error('DATABASE_URL environment variable is not set');
     }
+
+    const pool = new Pool({ connectionString });
+    const adapter = new PrismaPg(pool);
+
+    super({ adapter });
 
     PrismaService.instance = this;
     globalForPrisma.__TI_GLOBAL_PRISMA__ = this;
@@ -90,7 +94,12 @@ export class PrismaService
       !PrismaService.middlewareConfigured &&
       !globalForPrisma.__TI_PRISMA_MIDDLEWARE__
     ) {
-      this.$use(encryptCredentialsMiddleware(this.kms));
+      // Prisma 7.x uses $extends instead of $use
+      const extendedClient = (this as any).$extends(
+        encryptCredentialsMiddleware(this.kms),
+      );
+      // Copy extended methods back to this instance
+      Object.assign(this, extendedClient);
       PrismaService.middlewareConfigured = true;
       globalForPrisma.__TI_PRISMA_MIDDLEWARE__ = true;
     }
