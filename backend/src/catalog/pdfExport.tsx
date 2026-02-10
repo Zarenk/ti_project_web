@@ -1,3 +1,4 @@
+import 'dotenv/config'; // Load environment variables first
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import CatalogTemplate from './catalog-template';

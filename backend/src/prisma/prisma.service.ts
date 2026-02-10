@@ -53,17 +53,19 @@ export class PrismaService
     }
 
     // Prisma 7.x requires driver adapters
+    // Note: DATABASE_URL might not be loaded yet if this is imported before NestJS init
     const pooledUrl = buildPooledDatabaseUrl();
     const connectionString = pooledUrl || process.env.DATABASE_URL;
 
-    if (!connectionString) {
-      throw new Error('DATABASE_URL environment variable is not set');
+    if (connectionString) {
+      const pool = new Pool({ connectionString });
+      const adapter = new PrismaPg(pool);
+      super({ adapter });
+    } else {
+      // Fallback: will be initialized in onModuleInit when env vars are loaded
+      // This handles cases where PrismaService is imported before NestJS loads .env
+      super({} as any);
     }
-
-    const pool = new Pool({ connectionString });
-    const adapter = new PrismaPg(pool);
-
-    super({ adapter });
 
     PrismaService.instance = this;
     globalForPrisma.__TI_GLOBAL_PRISMA__ = this;
@@ -90,6 +92,13 @@ export class PrismaService
   }
 
   async onModuleInit() {
+    // Verify DATABASE_URL is now available (should be loaded by NestJS ConfigModule)
+    if (!process.env.DATABASE_URL) {
+      throw new Error(
+        'DATABASE_URL environment variable is not set. Please check your .env file.',
+      );
+    }
+
     if (
       !PrismaService.middlewareConfigured &&
       !globalForPrisma.__TI_PRISMA_MIDDLEWARE__
