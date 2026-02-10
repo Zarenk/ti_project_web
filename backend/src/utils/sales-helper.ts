@@ -231,6 +231,11 @@ export async function executeSale(
   } = params;
 
   const saleOrganizationId = organizationId ?? null;
+  const igvRate = 0.18;
+  const taxableTotal = total;
+  const exemptTotal = 0;
+  const unaffectedTotal = 0;
+  const igvTotal = Number((taxableTotal * igvRate).toFixed(2));
 
   const sale = await prisma.$transaction(async (prismaTx) => {
     const sale = await prismaTx.sales.create({
@@ -239,6 +244,10 @@ export async function executeSale(
         storeId,
         clientId,
         total,
+        taxableTotal,
+        exemptTotal,
+        unaffectedTotal,
+        igvTotal,
         description,
         source,
         organizationId: organizationId ?? null,

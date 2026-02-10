@@ -402,6 +402,10 @@ export class OnboardingDemoDataService {
       const product = params.productRecords[i % params.productRecords.length];
       const quantity = (i % 3) + 1;
       const total = Number((product.price * quantity).toFixed(2));
+      const taxableTotal = total;
+      const exemptTotal = 0;
+      const unaffectedTotal = 0;
+      const igvTotal = Number((taxableTotal * 0.18).toFixed(2));
       const timestamp = now - i * 6 * 60 * 60 * 1000;
       const saleDate = new Date(timestamp);
 
@@ -411,6 +415,10 @@ export class OnboardingDemoDataService {
           storeId: params.storeId,
           clientId,
           total,
+          taxableTotal,
+          exemptTotal,
+          unaffectedTotal,
+          igvTotal,
           description: `Venta demo de ${product.name} (x${quantity})`,
           source: SaleSource.POS,
           organizationId: params.organizationId,

@@ -630,6 +630,43 @@ export async function getRevenueByCategoryByRange(from: string, to: string) {
   }
 }
 
+export async function getSalesTaxByRange(from: string, to: string) {
+  try {
+    const headers = await getAuthHeaders();
+    if (!('Authorization' in headers)) {
+      throw new Error('No se encontro un token de autenticacion');
+    }
+    const res = await fetch(
+      `${BACKEND_URL}/api/sales/taxes/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`,
+      { headers },
+    );
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        return {
+          total: 0,
+          taxableTotal: 0,
+          exemptTotal: 0,
+          unaffectedTotal: 0,
+          igvTotal: 0,
+        };
+      }
+      throw new Error('Error al obtener impuestos de ventas');
+    }
+    return res.json();
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError || error?.message?.includes('No se encontro un token')) {
+      return {
+        total: 0,
+        taxableTotal: 0,
+        exemptTotal: 0,
+        unaffectedTotal: 0,
+        igvTotal: 0,
+      };
+    }
+    throw error;
+  }
+}
+
 export async function getSalesByDateParams(from: string, to: string) {
   try {
     const headers = await getAuthHeaders()
@@ -906,6 +943,25 @@ export async function getSaleById(id: number | string) {
       return null;
     }
     throw error;
+  }
+}
+
+export async function getRecentSalesByRange(from: string, to: string) {
+  try {
+    const res = await authFetch(
+      `${BACKEND_URL}/api/sales/recent/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
+    )
+    if (res.status === 403) {
+      return []
+    }
+    if (!res.ok) throw new Error("Error al obtener ventas recientes")
+    const data = await res.json()
+    return Array.isArray(data) ? data : []
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
   }
 }
 

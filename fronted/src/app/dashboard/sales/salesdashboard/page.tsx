@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Calendar, DollarSign, ShoppingCart, TrendingUp, Users, BarChart3 } from "lucide-react"
+import { Calendar, DollarSign, ShoppingCart, TrendingUp, Users, BarChart3, Receipt } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,7 +14,7 @@ import { RevenueByCategory } from "./revenue-by-category"
 import { SalesTable } from "./sales-table"
 import { SalesChart } from "./sales-chart"
 import { DateRange } from "react-day-picker"
-import { getMonthlyClientsStats, getMonthlySalesCount, getMonthlySalesTotal, getMonthlySalesProfit, getSalesTransactions, getSalesTotalByDateRange, getSalesCountByDateRange, getClientStatsByDateRange, getSalesProfitByDateRange } from "../sales.api"
+import { getMonthlyClientsStats, getMonthlySalesCount, getMonthlySalesTotal, getMonthlySalesProfit, getSalesTransactions, getSalesTotalByDateRange, getSalesCountByDateRange, getClientStatsByDateRange, getSalesProfitByDateRange, getSalesTaxByRange } from "../sales.api"
 import { TopProductsTable } from "./top-products-table"
 import { TopClientsTable } from "./top-clients-table"
 import { endOfDay } from "date-fns"
@@ -46,6 +46,17 @@ export default function SalesDashboard() {
     const [profitGrowth, setProfitGrowth] = useState<number | null>(null);
     const [conversionRate, setConversionRate] = useState<number>(0);
     const [transactions, setTransactions] = useState<any[]>([]);
+    const [taxTotals, setTaxTotals] = useState({
+        total: 0,
+        taxableTotal: 0,
+        exemptTotal: 0,
+        unaffectedTotal: 0,
+        igvTotal: 0,
+      });
+    const [taxDetailOpen, setTaxDetailOpen] = useState(false);
+    const [activeTaxDetail, setActiveTaxDetail] = useState<"igv" | "ir" | null>(null);
+    const [cardPageStart, setCardPageStart] = useState(0);
+    const [visibleCardCount, setVisibleCardCount] = useState(5);
 
     useEffect(() => {
       if (permissionLoading) return
@@ -188,6 +199,40 @@ export default function SalesDashboard() {
         }
       }, [dateRange, selectionKey, tenantLoading, permissionLoading, historyAllowed]);
 
+      useEffect(() => {
+        if (tenantLoading || permissionLoading || !historyAllowed) return
+        if (!dateRange?.from || !dateRange?.to) return
+        const from = dateRange.from.toISOString()
+        const to = endOfDay(dateRange.to).toISOString()
+        getSalesTaxByRange(from, to)
+          .then((data) => setTaxTotals({
+            total: Number(data?.total ?? 0),
+            taxableTotal: Number(data?.taxableTotal ?? 0),
+            exemptTotal: Number(data?.exemptTotal ?? 0),
+            unaffectedTotal: Number(data?.unaffectedTotal ?? 0),
+            igvTotal: Number(data?.igvTotal ?? 0),
+          }))
+          .catch(console.error)
+      }, [dateRange, selectionKey, tenantLoading, permissionLoading, historyAllowed]);
+
+      useEffect(() => {
+        const totalCards = 7;
+        const update = () => {
+          const width = window.innerWidth;
+          const nextCount = width >= 1280 ? 5 : width >= 1024 ? 4 : width >= 768 ? 2 : 1;
+          setVisibleCardCount((prev) => {
+            if (prev !== nextCount) {
+              setCardPageStart((start) => Math.min(start, Math.max(0, totalCards - nextCount)));
+            }
+            return nextCount;
+          });
+        };
+
+        update();
+        window.addEventListener("resize", update);
+        return () => window.removeEventListener("resize", update);
+      }, []);
+
   return (
     <div className="flex flex-col gap-5 p-6">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -204,110 +249,89 @@ export default function SalesDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ingresos Totales</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-                S/ {monthlyTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
-            </div>
-            <p
-                className={`text-xs ${
-                monthlyGrowth === null
-                    ? "text-muted-foreground"
-                    : monthlyGrowth > 0
-                    ? "text-green-500"
-                    : "text-red-500"
-                }`}
-            >
-                {monthlyGrowth !== null
-                ? `${monthlyGrowth > 0 ? "+" : ""}${monthlyGrowth.toFixed(1)}% desde el último mes`
-                : "Sin datos del mes anterior"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ventas</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{monthlyCount}</div>
-            <p
-                className={`text-xs ${
-                countGrowth === null
-                    ? "text-muted-foreground"
-                    : countGrowth > 0
-                    ? "text-green-500"
-                    : "text-red-500"
-                }`}
-            >
-                {countGrowth !== null
-                ? `${countGrowth > 0 ? "+" : ""}${countGrowth.toFixed(1)}% desde el último mes`
-                : "Sin datos del mes anterior"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Clientes Activos</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{monthlyClients}</div>
-                <p className={`text-xs ${
-                clientGrowth === null
-                    ? "text-muted-foreground"
-                    : clientGrowth > 0
-                    ? "text-green-500"
-                    : "text-red-500"
-                }`}>
-                {clientGrowth !== null
-                    ? `${clientGrowth > 0 ? "+" : ""}${clientGrowth.toFixed(1)}% desde el último mes`
-                    : "Sin datos del mes anterior"}
-                </p>
-            </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Utilidades</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-                S/ {monthlyProfit.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
-            </div>
-            <p className={`text-xs ${
-                profitGrowth === null
-                    ? "text-muted-foreground"
-                    : profitGrowth > 0
-                    ? "text-green-500"
-                    : "text-red-500"
-                }`}>
-                {profitGrowth !== null
-                ? `${profitGrowth > 0 ? "+" : ""}${profitGrowth.toFixed(1)}% desde el último mes`
-                : "Sin datos del mes anterior"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Porcentaje de Conversión</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{conversionRate.toFixed(2)}%</div>
-            <p className="text-xs text-muted-foreground">
-              {monthlyTotal > 0 
-                ? `${monthlyCount} ventas de ${(monthlyTotal / 1).toLocaleString("es-PE", { maximumFractionDigits: 0 })} soles`
-                : "Sin datos disponibles"}
-            </p>
-          </CardContent>
-        </Card>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 rounded-full border border-white/10 bg-background/60 text-muted-foreground hover:text-foreground"
+          onClick={() => setCardPageStart((prev) => Math.max(0, prev - visibleCardCount))}
+          disabled={cardPageStart === 0}
+        >
+          <span className="text-lg">&lt;</span>
+        </Button>
+        <div className="flex-1 overflow-hidden">
+          <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${visibleCardCount}, minmax(0, 1fr))` }}>
+            {cardsToRender}
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 rounded-full border border-white/10 bg-background/60 text-muted-foreground hover:text-foreground"
+          onClick={() =>
+            setCardPageStart((prev) => Math.min(prev + visibleCardCount, Math.max(0, totalCards - visibleCardCount)))
+          }
+          disabled={cardPageStart >= Math.max(0, totalCards - visibleCardCount)}
+        >
+          <span className="text-lg">&gt;</span>
+        </Button>
       </div>
+
+      {taxDetailOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-background/95 p-6 shadow-2xl backdrop-blur">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold">
+                  {activeTaxDetail === "igv" ? "Detalle de IGV" : "Detalle de IR estimado"}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {activeTaxDetail === "igv"
+                    ? "Calculado sobre la base gravada del periodo seleccionado."
+                    : "Estimado sobre el total de ventas del periodo seleccionado."}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setTaxDetailOpen(false)}>
+                Cerrar
+              </Button>
+            </div>
+
+            <div className="mt-5 grid gap-3 text-sm">
+              {activeTaxDetail === "igv" ? (
+                <>
+                  <div className="flex items-center justify-between rounded-xl border border-white/10 bg-muted/30 px-4 py-3">
+                    <span className="text-muted-foreground">Base gravada</span>
+                    <span className="font-semibold">
+                      S/ {taxTotals.taxableTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3">
+                    <span className="text-emerald-200">IGV estimado (18%)</span>
+                    <span className="font-semibold text-emerald-100">
+                      S/ {taxTotals.igvTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between rounded-xl border border-white/10 bg-muted/30 px-4 py-3">
+                    <span className="text-muted-foreground">Total ventas</span>
+                    <span className="font-semibold">
+                      S/ {taxTotals.total.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-3">
+                    <span className="text-sky-200">IR estimado (2%)</span>
+                    <span className="font-semibold text-sky-100">
+                      S/ {(taxTotals.total * 0.02).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="overflow-x-auto whitespace-nowrap scrollbar-hide flex w-full gap-1 px-1">

@@ -10,7 +10,16 @@
       "Bash(npm update:*)",
       "Bash(npm view:*)",
       "Bash(npx prisma:*)",
-      "Bash(npm outdated:*)"
+      "Bash(npm outdated:*)",
+      "Bash(powershell:*)",
+      "Bash($timestamp = Get-Date -Format \"yyyyMMdd_HHmmss\")",
+      "Bash($backupDir = \"backups\\\\prisma-upgrade-$timestamp\")",
+      "Bash(New-Item -ItemType Directory -Path $backupDir -Force)",
+      "Bash(Out-Null)",
+      "Bash(Copy-Item \"backend\\\\package.json\" \"$backupDir\\\\package.json.bak\")",
+      "Bash(Copy-Item \"backend\\\\prisma\\\\schema.prisma\" \"$backupDir\\\\schema.prisma.bak\")",
+      "Bash(Copy-Item \"backend\\\\src\\\\prisma\\\\prisma.service.ts\" \"$backupDir\\\\prisma.service.ts.bak\")",
+      "Bash(Write-Host \"Backup creado en: $backupDir\")"
     ]
   }
 }

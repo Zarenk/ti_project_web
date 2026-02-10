@@ -144,6 +144,21 @@ export class SalesController {
     );
   }
 
+  @Get('taxes/from/:from/to/:to')
+  async getSalesTaxByRange(
+    @Param('from') from: string,
+    @Param('to') to: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getSalesTaxByRange(
+      new Date(from),
+      new Date(to),
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
   @Get('clients/from/:from/to/:to')
   async getClientStatsByRange(
     @Param('from') from: string,

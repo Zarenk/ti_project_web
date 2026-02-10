@@ -1,0 +1,8 @@
+-- DropIndex
+DROP INDEX "Product_organizationId_name_idx";
+
+-- AlterTable
+ALTER TABLE "Sales" ADD COLUMN     "exemptTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "igvTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "taxableTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "unaffectedTotal" DOUBLE PRECISION NOT NULL DEFAULT 0;

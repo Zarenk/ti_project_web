@@ -1886,6 +1886,39 @@ export class SalesService {
     });
   }
 
+  async getSalesTaxByRange(
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    await this.ensureSalesFeatureEnabled(companyId ?? null);
+
+    const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+
+    const result = await this.prisma.sales.aggregate({
+      _sum: {
+        total: true,
+        taxableTotal: true,
+        exemptTotal: true,
+        unaffectedTotal: true,
+        igvTotal: true,
+      },
+      where: {
+        ...organizationFilter,
+        createdAt: { gte: from, lte: to },
+      },
+    });
+
+    return {
+      total: result._sum.total || 0,
+      taxableTotal: result._sum.taxableTotal || 0,
+      exemptTotal: result._sum.exemptTotal || 0,
+      unaffectedTotal: result._sum.unaffectedTotal || 0,
+      igvTotal: result._sum.igvTotal || 0,
+    };
+  }
+
   async getClientStatsByRange(
     from: Date,
     to: Date,

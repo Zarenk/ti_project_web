@@ -1445,6 +1445,10 @@ model Sales {
   storeId     Int // Tienda donde se realiza la venta
   clientId    Int // Cliente asociado a la venta
   total       Float // Total de la venta
+  taxableTotal   Float     @default(0) // Total gravado (base imponible)
+  exemptTotal    Float     @default(0) // Total exonerado
+  unaffectedTotal Float    @default(0) // Total inafecto
+  igvTotal        Float    @default(0) // IGV calculado
   description String? // Descripcion opcional
   source      SaleSource @default(POS)
   organizationId Int?

@@ -54,11 +54,11 @@ export function ActionButtons({
   isConvertingCurrency,
 }: ActionButtonsProps) {
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-2">
+    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            className="flex cursor-pointer items-center gap-2 transition-colors hover:border-border hover:bg-accent hover:text-foreground"
+            className="flex w-full cursor-pointer items-center gap-2 transition-colors hover:border-border hover:bg-accent hover:text-foreground sm:w-auto"
             type="button"
             onClick={() => setIsDialogOpen(true)}
             disabled={isSubmitting}
@@ -95,7 +95,7 @@ export function ActionButtons({
             type="button"
             onClick={onCurrencyToggle}
             disabled={isSubmitting || isConvertingCurrency}
-            className="flex cursor-pointer items-center justify-center gap-2 rounded-md bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_20px_-12px_rgba(59,130,246,0.7)] transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_20px_35px_-15px_rgba(59,130,246,0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_20px_-12px_rgba(59,130,246,0.7)] transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_20px_35px_-15px_rgba(59,130,246,0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
           >
             <RefreshCcw
               className={`h-4 w-4 transition-transform duration-200 ${isConvertingCurrency ? "animate-spin" : ""}`}
@@ -114,7 +114,7 @@ export function ActionButtons({
             type="button"
             onClick={onClear}
             disabled={isSubmitting}
-            className="cursor-pointer transition-colors hover:border-border hover:bg-accent hover:text-foreground"
+            className="w-full cursor-pointer transition-colors hover:border-border hover:bg-accent hover:text-foreground sm:w-auto"
           >
             Limpiar
           </Button>
@@ -128,7 +128,7 @@ export function ActionButtons({
             type="button"
             onClick={() => router.back()}
             disabled={isSubmitting}
-            className="cursor-pointer transition-colors hover:border-border hover:bg-accent hover:text-foreground"
+            className="w-full cursor-pointer transition-colors hover:border-border hover:bg-accent hover:text-foreground sm:w-auto"
           >
             Volver
           </Button>
@@ -145,4 +145,3 @@ export function ActionButtons({
     </div>
   )
 }
-

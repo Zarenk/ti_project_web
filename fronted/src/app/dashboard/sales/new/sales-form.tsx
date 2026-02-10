@@ -1872,20 +1872,25 @@ const getSaleReferenceId = () => {
                         </Label>
                         <Popover open={openInvoice} onOpenChange={setOpenInvoice}>
                           <PopoverTrigger asChild>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  aria-expanded={openInvoice}
-                                  className="w-[260px] justify-between text-xs cursor-pointer"
-                                >
-                                  {valueInvoice || "Selecciona un tipo de comprobante..."}
-                                  <ChevronsUpDown className="opacity-50" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top">Selecciona el tipo de comprobante</TooltipContent>
-                            </Tooltip>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={openInvoice}
+                              className="w-[260px] justify-between text-xs cursor-pointer"
+                            >
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="flex w-full items-center justify-between">
+                                    {valueInvoice || "Selecciona un tipo de comprobante..."}
+                                    <ChevronsUpDown className="opacity-50" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  Selecciona el tipo de comprobante
+                                </TooltipContent>
+                              </Tooltip>
+                            </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-[260px] p-0">
                             <Command>
@@ -2111,21 +2116,24 @@ const getSaleReferenceId = () => {
                         <div className="flex justify-between gap-1">
                           <Popover open={openClient} onOpenChange={setOpenClient}>
                               <PopoverTrigger asChild>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      role="combobox"
-                                      aria-expanded={openClient}
-                                      className="w-[260px] justify-between cursor-pointer"
-                                      disabled={isClientDisabled}
-                                    >
-                                      {displayedClientName || "Selecciona un cliente..."}
-                                      <ChevronsUpDown className="opacity-50" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">Selecciona el cliente que realizará la compra</TooltipContent>
-                                </Tooltip>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={openClient}
+                                  className="w-[260px] justify-between cursor-pointer"
+                                  disabled={isClientDisabled}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="flex w-full items-center justify-between">
+                                        {displayedClientName || "Selecciona un cliente..."}
+                                        <ChevronsUpDown className="opacity-50" />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">Selecciona el cliente que realizar? la compra</TooltipContent>
+                                  </Tooltip>
+                                </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-[260px] p-0">
                                 <Command>
@@ -2329,20 +2337,23 @@ const getSaleReferenceId = () => {
                         <div className="flex justify-between gap-1">
                           <Popover open={openStore} onOpenChange={setOpenStore}>
                               <PopoverTrigger asChild>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      role="combobox"
-                                      aria-expanded={openStore}
-                                      className="w-[260px] justify-between cursor-pointer"
-                                    >
-                                      {displayedStoreName || "Seleccione una Tienda..."}
-                                      <ChevronsUpDown className="opacity-50" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">Selecciona la tienda para la venta</TooltipContent>
-                                </Tooltip>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={openStore}
+                                  className="w-[260px] justify-between cursor-pointer"
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="flex w-full items-center justify-between">
+                                        {valueStore || "Selecciona una tienda..."}
+                                        <ChevronsUpDown className="opacity-50" />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">Selecciona la tienda donde se registrar? la venta</TooltipContent>
+                                  </Tooltip>
+                                </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-[260px] p-0">
                                 <Command>
@@ -2413,25 +2424,29 @@ const getSaleReferenceId = () => {
                             <div className="min-w-0 flex-1">
                               <Popover open={open} onOpenChange={setOpen}>
                                 <PopoverTrigger asChild>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="outline"
-                                        role="combobox"
-                                        aria-expanded={open}
-                                        className="w-full justify-between cursor-pointer"
-                                      >
-                                        <span className="truncate max-w-[80%] block">
-                                          {displayedProductName || "Selecciona un producto..."}
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={open}
+                                    className="w-full justify-between cursor-pointer"
+                                  >
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="flex w-full items-center justify-between">
+                                          {value || "Selecciona un producto..."}
+                                          <ChevronsUpDown className="opacity-50" />
                                         </span>
-                                        <ChevronsUpDown className="opacity-50" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top">Selecciona un producto para agregarlo a la venta</TooltipContent>
-                                  </Tooltip>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">Selecciona el producto para la venta</TooltipContent>
+                                    </Tooltip>
+                                  </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                <Command>
+                                <PopoverContent
+                                  className="min-w-0 max-w-none p-0"
+                                  style={{ width: "var(--radix-popover-trigger-width)" }}
+                                >
+                                  <Command className="w-full">
                                   {selectedStoreId && (
                                     <div className="flex items-center justify-between border-b px-2 py-1 text-[11px] text-muted-foreground">
                                       <span>
@@ -2448,7 +2463,7 @@ const getSaleReferenceId = () => {
                                   )}
                                   <CommandInput 
                                   placeholder="Buscar producto..."/>
-                                  <CommandList>
+                                    <CommandList className="w-full">
                                     <CommandEmpty>No se encontraron productos.</CommandEmpty>
                                     {suggestedOutOfStockProduct && (
                                       <CommandGroup heading="Sugerido (sin stock)">
@@ -2907,14 +2922,14 @@ const getSaleReferenceId = () => {
                         <TooltipTrigger asChild>
                           <Button
                             type="button"
-                            className="inline-flex items-center justify-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
+                            className="inline-flex items-center justify-center gap-2 cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
                             onClick={() => setIsDialogOpen(true)}
                           >
                             Registrar Venta
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          Abre la confirmaci?n para registrar la venta
+                          Abre la confirmacion para registrar la venta
                         </TooltipContent>
                       </Tooltip>
                       <Tooltip>
@@ -2994,34 +3009,20 @@ const getSaleReferenceId = () => {
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Confirmar Registro</AlertDialogTitle>
-                            <AlertDialogDescription>?Est?s seguro de que deseas registrar esta venta?</AlertDialogDescription>
+                            <AlertDialogDescription>Estas seguro de que deseas registrar esta venta?</AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <AlertDialogCancel onClick={() => setIsDialogOpen(false)} className="cursor-pointer">
-                                  Cancelar
-                                </AlertDialogCancel>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                Cancelar el registro de la venta
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <AlertDialogAction className="cursor-pointer"
-                                  onClick={() => {
-                                    setIsDialogOpen(false); // Cerrar el di?logo
-                                    onSubmit(); // Llamar a la funci?n de env?o
-                                  }}
-                                >
-                                  Confirmar
-                                </AlertDialogAction>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                Confirmar y registrar la venta
-                              </TooltipContent>
-                            </Tooltip>
+                            <AlertDialogCancel onClick={() => setIsDialogOpen(false)} className="cursor-pointer">
+                              Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction className="cursor-pointer"
+                              onClick={() => {
+                                setIsDialogOpen(false); // Cerrar el di?logo
+                                onSubmit(); // Llamar a la funci?n de env?o
+                              }}
+                            >
+                              Confirmar
+                            </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
