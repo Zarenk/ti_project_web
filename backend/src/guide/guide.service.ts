@@ -313,13 +313,6 @@ export class GuideService {
     const username = process.env.SUNAT_USERNAME;
     const password = process.env.SUNAT_PASSWORD;
 
-    console.log({
-      clientId: process.env.SUNAT_CLIENT_ID,
-      clientSecret: process.env.SUNAT_CLIENT_SECRET,
-      username: process.env.SUNAT_USERNAME,
-      password: process.env.SUNAT_PASSWORD,
-    });
-
     // Paso 1: Obtener el token OAuth 2.0
     const authResponse = await firstValueFrom(
       this.httpService.post(
@@ -344,7 +337,6 @@ export class GuideService {
 
     try {
       const token = authResponse.data.access_token;
-      console.log('ðŸ”‘ TOKEN?', token);
 
       // Paso 2: Enviar el ZIP firmado
       const baseEndpoint =

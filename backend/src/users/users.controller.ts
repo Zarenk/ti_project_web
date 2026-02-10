@@ -38,14 +38,12 @@ export class UsersController {
     @Body() body: { email: string; password: string },
     @Request() req: ExpressRequest,
   ) {
-    console.log('Solicitud de login recibida:', body);
     const user = await this.usersService.validateUser(
       body.email,
       body.password,
       req,
     );
     const token = await this.usersService.login(user, req);
-    console.log('Token generado:', token);
     return token;
   }
 
