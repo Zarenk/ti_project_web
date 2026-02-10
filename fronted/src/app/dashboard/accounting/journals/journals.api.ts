@@ -1,6 +1,7 @@
 import axios from "axios";
 import { BACKEND_URL } from "@/lib/utils";
 import { getAuthHeaders } from "@/utils/auth-token";
+import { UnauthenticatedError } from "@/utils/auth-fetch";
 
 export interface Journal {
   id: string;
@@ -11,14 +12,21 @@ export interface Journal {
 }
 
 export async function fetchJournals(): Promise<Journal[]> {
-  const headers = await getAuthHeaders();
-  const res = await axios.get(`${BACKEND_URL}/api/accounting/journals`, {
-    headers,
-  });
-  const data = res.data as Journal[];
-  return data.sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
+  try {
+    const headers = await getAuthHeaders();
+    const res = await axios.get(`${BACKEND_URL}/api/accounting/journals`, {
+      headers,
+    });
+    const data = res.data as Journal[];
+    return data.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  } catch (error: any) {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      throw new UnauthenticatedError();
+    }
+    throw error;
+  }
 }
 
 export async function createJournal(data: Omit<Journal, "id">) {

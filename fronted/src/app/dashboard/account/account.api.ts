@@ -1,19 +1,25 @@
+import { authFetch, UnauthenticatedError } from '@/utils/auth-fetch';
 import { getAuthHeaders } from '@/utils/auth-token';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 export async function getProfile() {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
-    method: 'POST',
-    headers,
-    credentials: 'include',
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    throw new Error('Error al obtener el perfil');
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/users/profile`, {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      throw new Error('Error al obtener el perfil');
+    }
+    return res.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
   }
-  return res.json();
 }
 
 export async function updateProfile(data: { username?: string; email?: string; phone?: string; image?: string }) {

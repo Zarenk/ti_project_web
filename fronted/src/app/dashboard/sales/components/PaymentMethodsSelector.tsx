@@ -22,11 +22,15 @@ export function PaymentMethodsModal({
   onChange,
   selectedProducts,
   forceOpen,
+  hideTrigger,
+  onOpenChange,
 }: {
   value: SelectedPayment[];
   onChange: (payments: SelectedPayment[]) => void;
   selectedProducts: { id: number; name: string; price: number; quantity: number }[];
   forceOpen?: boolean;
+  hideTrigger?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [tempPayments, setTempPayments] = useState<TempPayment[]>([]);
@@ -55,6 +59,19 @@ export function PaymentMethodsModal({
     () => selectedProducts.reduce((sum, p) => sum + (p.price || 0) * (p.quantity || 0), 0),
     [selectedProducts]
   );
+  const totalPagos = useMemo(
+    () => tempPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0),
+    [tempPayments]
+  );
+  const totalDiff = useMemo(() => {
+    const diff = Number((totalPagos - totalProductos).toFixed(2));
+    const abs = Math.abs(diff).toFixed(2);
+    return {
+      diff,
+      abs,
+      label: diff === 0 ? "Cuadrado" : diff > 0 ? `Sobra S/ ${abs}` : `Falta S/ ${abs}`,
+    };
+  }, [totalPagos, totalProductos]);
 
   const buildInitialPayment = (methods: PaymentMethod[], total: number): TempPayment => {
     const cashMethod =
@@ -69,8 +86,11 @@ export function PaymentMethodsModal({
 
   // Abrir forzado
   useEffect(() => {
-    if (forceOpen) setOpen(true);
-  }, [forceOpen]);
+    if (forceOpen) {
+      setOpen(true);
+      onOpenChange?.(true);
+    }
+  }, [forceOpen, onOpenChange]);
 
   useEffect(() => {
     if (!open) return;
@@ -107,6 +127,7 @@ export function PaymentMethodsModal({
   // Copiar valor existente al abrir
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
+    onOpenChange?.(isOpen);
     if (isOpen) {
       const existing = (value ?? []).map((p) => ({ ...p, uid: generateUid() }));
       if (existing.length > 0) {
@@ -220,6 +241,20 @@ export function PaymentMethodsModal({
       toast.error("Debe agregar un monto o eliminar el método de pago.");
       return;
     }
+    const totalPagos = tempPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+    const precision = 0.01;
+    if (tempPayments.length > 0 && Math.abs(totalPagos - totalProductos) > precision) {
+      const diff = Number((totalPagos - totalProductos).toFixed(2));
+      const absDiff = Math.abs(diff).toFixed(2);
+      const detail =
+        diff > 0
+          ? `Sobra S/ ${absDiff}`
+          : `Falta S/ ${absDiff}`;
+      toast.error(
+        `Los métodos de pago deben sumar S/ ${totalProductos.toFixed(2)}. Actualmente suman S/ ${totalPagos.toFixed(2)}. ${detail}.`,
+      );
+      return;
+    }
     onChange(tempPayments.map(({ uid, ...p }) => p));
     setOpen(false);
     toast.success("Los métodos han sido guardados correctamente");
@@ -236,11 +271,13 @@ export function PaymentMethodsModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="bg-blue-600 text-white hover:bg-blue-700">
-          Métodos de Pago
-        </Button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button variant="outline" className="bg-blue-600 text-white hover:bg-blue-700">
+            Métodos de Pago
+          </Button>
+        </DialogTrigger>
+      )}
 
       <DialogContent className="max-w-2xl">
         <DialogHeader>
@@ -341,6 +378,27 @@ export function PaymentMethodsModal({
           >
             + Agregar Método de Pago
           </Button>
+          {tempPayments.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-background/60 px-3 py-2 text-xs">
+              <span className="font-semibold">Total:</span>
+              <span>S/ {totalProductos.toFixed(2)}</span>
+              <span className="text-muted-foreground">•</span>
+              <span className="font-semibold">Pagos:</span>
+              <span>S/ {totalPagos.toFixed(2)}</span>
+              <span className="text-muted-foreground">•</span>
+              <span
+                className={`font-semibold ${
+                  totalDiff.diff === 0
+                    ? "text-emerald-500"
+                    : totalDiff.diff > 0
+                    ? "text-amber-500"
+                    : "text-red-500"
+                }`}
+              >
+                {totalDiff.label}
+              </span>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

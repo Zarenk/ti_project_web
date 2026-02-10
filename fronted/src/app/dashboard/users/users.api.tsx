@@ -1,9 +1,21 @@
 import { getAuthHeaders } from '@/utils/auth-token';
+import { authFetch, UnauthenticatedError } from '@/utils/auth-fetch';
 
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 async function authorizedFetch(url: string, init: RequestInit = {}) {
-  const auth = await getAuthHeaders();
+  let auth: Record<string, string> = {};
+  try {
+    auth = await getAuthHeaders();
+  } catch (error: any) {
+    if (
+      error instanceof UnauthenticatedError ||
+      error?.message?.includes('No se encontro un token')
+    ) {
+      throw new UnauthenticatedError();
+    }
+    throw error;
+  }
   const headers = new Headers(init.headers ?? {});
 
   for (const [key, value] of Object.entries(auth)) {
@@ -64,7 +76,18 @@ export async function loginUser(email: string, password: string) {
 
 // Función para obtener el perfil del usuario autenticado
 export async function getUserProfile() {
-  const headers = await getAuthHeaders();
+  let headers: Record<string, string>;
+  try {
+    headers = await getAuthHeaders();
+  } catch (error: any) {
+    if (
+      error instanceof UnauthenticatedError ||
+      error?.message?.includes('No se encontro un token')
+    ) {
+      return null;
+    }
+    throw error;
+  }
   if (Object.keys(headers).length === 0) {
     return null;
   }
@@ -93,9 +116,20 @@ export async function getUserProfile() {
 }
 
 export async function getUserProfileId() {
-  const headers = await getAuthHeaders();
+  let headers: Record<string, string>;
+  try {
+    headers = await getAuthHeaders();
+  } catch (error: any) {
+    if (
+      error instanceof UnauthenticatedError ||
+      error?.message?.includes('No se encontro un token')
+    ) {
+      return null;
+    }
+    throw error;
+  }
   if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación');
+    return null;
   }
 
   try {
@@ -105,6 +139,9 @@ export async function getUserProfileId() {
     });
 
     if (!response.ok) {
+      if (response.status == 401) {
+        return null;
+      }
       throw new Error('Error al obtener el perfil del usuario');
     }
 
@@ -114,6 +151,7 @@ export async function getUserProfileId() {
     throw error;
   }
 }
+
 
 export interface DashboardUser {
   id: number;
@@ -127,16 +165,23 @@ export interface DashboardUser {
 export type UserRole = "ADMIN" | "EMPLOYEE";
 
 export async function getUsers(): Promise<DashboardUser[]> {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/users`, {
-    cache: 'no-store',
-  });
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/users`, {
+      cache: 'no-store',
+    });
 
-  if (!res.ok) {
-    throw new Error('Error al obtener usuarios');
+    if (!res.ok) {
+      throw new Error('Error al obtener usuarios');
+    }
+
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
   }
-
-  const data = await res.json();
-  return Array.isArray(data) ? data : [];
 }
 
 export async function createUser(

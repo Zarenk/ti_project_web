@@ -24,10 +24,20 @@ export default function Actividad() {
     async function load() {
       try {
         const headers = await getAuthHeaders()
+        if (!("Authorization" in headers)) {
+          setData([])
+          setError(null)
+          return
+        }
         const res = await fetch(`${BACKEND_URL}/api/clients/activity`, {
           headers,
           credentials: "include",
         })
+        if (res.status === 401) {
+          setData([])
+          setError(null)
+          return
+        }
         if (!res.ok) throw new Error("Error")
         const json = await res.json()
         setData(json as ActivityItem[])

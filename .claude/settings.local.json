@@ -6,7 +6,11 @@
       "Bash(PGPASSWORD=jzYPokr7X29RIST5Y_8USEn1cTi1JJYf \"/c/Program Files/PostgreSQL/17/bin/psql.exe\" -U postgres -h localhost -c \"SELECT version\\(\\);\" -t)",
       "WebFetch(domain:github.com)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm update:*)",
+      "Bash(npm view:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npm outdated:*)"
     ]
   }
 }

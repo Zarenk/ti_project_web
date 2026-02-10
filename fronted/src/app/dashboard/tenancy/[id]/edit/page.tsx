@@ -23,7 +23,12 @@ async function fetchOrganizationById(id: string): Promise<OrganizationResponse |
 }
 
 async function fetchCurrentUserRole(): Promise<string | null> {
-  const headers = await getAuthHeaders()
+  let headers: Record<string, string>
+  try {
+    headers = await getAuthHeaders()
+  } catch {
+    return null
+  }
   if (!headers.Authorization) {
     return null
   }

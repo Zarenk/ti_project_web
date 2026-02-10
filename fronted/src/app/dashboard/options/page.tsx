@@ -79,6 +79,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 import { getAuthHeaders } from "@/utils/auth-token";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -548,10 +549,8 @@ export default function SettingsPage() {
   const handleGenerateBackup = useCallback(async () => {
     setIsBackupPending(true);
     try {
-      const headers = await getAuthHeaders();
-      const response = await fetch("/api/system/backups", {
+      const response = await authFetch("/api/system/backups", {
         method: "POST",
-        headers,
       });
 
       if (!response.ok) {
@@ -575,6 +574,9 @@ export default function SettingsPage() {
         description: "Se descargó un archivo con los datos actuales del sistema.",
       });
     } catch (error) {
+      if (error instanceof UnauthenticatedError) {
+        return;
+      }
       console.error(error);
       toast.error(
         error instanceof Error
@@ -588,10 +590,8 @@ export default function SettingsPage() {
 
   const handlePurgeData = useCallback(async () => {
     try {
-      const headers = await getAuthHeaders();
-      const response = await fetch("/api/system/purge", {
+      const response = await authFetch("/api/system/purge", {
         method: "POST",
-        headers,
       });
 
       const data = (await response
@@ -607,6 +607,9 @@ export default function SettingsPage() {
       toast.success(data?.message || "Datos del sistema purgados correctamente.");
       router.refresh();
     } catch (error) {
+      if (error instanceof UnauthenticatedError) {
+        return;
+      }
       console.error(error);
       toast.error(
         error instanceof Error

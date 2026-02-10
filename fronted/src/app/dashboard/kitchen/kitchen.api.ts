@@ -1,4 +1,4 @@
-import { authFetch } from "@/utils/auth-fetch"
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch"
 
 export type KitchenStation = {
   id: number
@@ -53,7 +53,15 @@ async function parseErrorMessage(res: Response, fallback: string) {
 }
 
 export async function getKitchenStations(): Promise<KitchenStation[]> {
-  const res = await authFetch("/kitchen-stations", { cache: "no-store" })
+  let res: Response
+  try {
+    res = await authFetch("/kitchen-stations", { cache: "no-store" })
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
+  }
   if (!res.ok) {
     throw new Error(await parseErrorMessage(res, "No se pudieron cargar las estaciones."))
   }
@@ -82,9 +90,17 @@ export async function deleteKitchenStation(id: number) {
 
 export async function getKitchenQueue(stationId?: number): Promise<KitchenOrder[]> {
   const query = stationId ? `?stationId=${stationId}` : ""
-  const res = await authFetch(`/restaurant-orders/kitchen${query}`, {
-    cache: "no-store",
-  })
+  let res: Response
+  try {
+    res = await authFetch(`/restaurant-orders/kitchen${query}`, {
+      cache: "no-store",
+    })
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
+  }
   if (!res.ok) {
     throw new Error(await parseErrorMessage(res, "No se pudo cargar la comanda."))
   }

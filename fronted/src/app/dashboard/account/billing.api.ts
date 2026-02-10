@@ -1,4 +1,4 @@
-import { authFetch } from "@/utils/auth-fetch"
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch"
 
 export interface BillingInvoice {
   id: number
@@ -75,15 +75,22 @@ export interface UpsertPaymentMethodInput {
 }
 
 export async function fetchBillingInvoices(organizationId: number): Promise<BillingInvoice[]> {
-  const params = new URLSearchParams({ organizationId: String(organizationId) })
-  const res = await authFetch(`/subscriptions/invoices?${params.toString()}`, {
-    cache: "no-store",
-  })
-  if (!res.ok) {
-    const message = await res.text().catch(() => "No se pudo obtener las facturas")
-    throw new Error(message || "No se pudo obtener las facturas")
+  try {
+    const params = new URLSearchParams({ organizationId: String(organizationId) })
+    const res = await authFetch(`/subscriptions/invoices?${params.toString()}`, {
+      cache: "no-store",
+    })
+    if (!res.ok) {
+      const message = await res.text().catch(() => "No se pudo obtener las facturas")
+      throw new Error(message || "No se pudo obtener las facturas")
+    }
+    return res.json()
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
   }
-  return res.json()
 }
 
 export async function retryBillingInvoice(organizationId: number, invoiceId: number) {
@@ -99,27 +106,41 @@ export async function retryBillingInvoice(organizationId: number, invoiceId: num
 }
 
 export async function downloadBillingInvoicePdf(organizationId: number, invoiceId: number) {
-  const params = new URLSearchParams({ organizationId: String(organizationId) })
-  const res = await authFetch(`/subscriptions/invoices/${invoiceId}/pdf?${params.toString()}`, {
-    cache: "no-store",
-  })
-  if (!res.ok) {
-    const message = await res.text().catch(() => "PDF no disponible")
-    throw new Error(message || "PDF no disponible")
+  try {
+    const params = new URLSearchParams({ organizationId: String(organizationId) })
+    const res = await authFetch(`/subscriptions/invoices/${invoiceId}/pdf?${params.toString()}`, {
+      cache: "no-store",
+    })
+    if (!res.ok) {
+      const message = await res.text().catch(() => "PDF no disponible")
+      throw new Error(message || "PDF no disponible")
+    }
+    return res.blob()
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return new Blob()
+    }
+    throw error
   }
-  return res.blob()
 }
 
 export async function fetchOrganizationExports(organizationId: number): Promise<OrganizationExport[]> {
-  const params = new URLSearchParams({ organizationId: String(organizationId) })
-  const res = await authFetch(`/subscriptions/exports?${params.toString()}`, {
-    cache: "no-store",
-  })
-  if (!res.ok) {
-    const message = await res.text().catch(() => "No se pudo obtener las exportaciones")
-    throw new Error(message || "No se pudo obtener las exportaciones")
+  try {
+    const params = new URLSearchParams({ organizationId: String(organizationId) })
+    const res = await authFetch(`/subscriptions/exports?${params.toString()}`, {
+      cache: "no-store",
+    })
+    if (!res.ok) {
+      const message = await res.text().catch(() => "No se pudo obtener las exportaciones")
+      throw new Error(message || "No se pudo obtener las exportaciones")
+    }
+    return res.json()
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
   }
-  return res.json()
 }
 
 export async function requestOrganizationExport(organizationId: number) {
@@ -135,24 +156,38 @@ export async function requestOrganizationExport(organizationId: number) {
 }
 
 export async function downloadOrganizationExport(organizationId: number, exportId: number) {
-  const params = new URLSearchParams({ organizationId: String(organizationId) })
-  const res = await authFetch(`/subscriptions/exports/${exportId}/download?${params.toString()}`, {
-    cache: "no-store",
-  })
-  if (!res.ok) {
-    const message = await res.text().catch(() => "No se pudo descargar la exportacion")
-    throw new Error(message || "No se pudo descargar la exportacion")
+  try {
+    const params = new URLSearchParams({ organizationId: String(organizationId) })
+    const res = await authFetch(`/subscriptions/exports/${exportId}/download?${params.toString()}`, {
+      cache: "no-store",
+    })
+    if (!res.ok) {
+      const message = await res.text().catch(() => "No se pudo descargar la exportacion")
+      throw new Error(message || "No se pudo descargar la exportacion")
+    }
+    return res.blob()
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return new Blob()
+    }
+    throw error
   }
-  return res.blob()
 }
 
 export async function fetchSubscriptionPlans(): Promise<SubscriptionPlan[]> {
-  const res = await authFetch(`/subscriptions/plans`, { cache: "no-store" })
-  if (!res.ok) {
-    const message = await res.text().catch(() => "No se pudieron obtener los planes")
-    throw new Error(message || "No se pudieron obtener los planes")
+  try {
+    const res = await authFetch(`/subscriptions/plans`, { cache: "no-store" })
+    if (!res.ok) {
+      const message = await res.text().catch(() => "No se pudieron obtener los planes")
+      throw new Error(message || "No se pudieron obtener los planes")
+    }
+    return res.json()
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
   }
-  return res.json()
 }
 
 export interface PlanChangeResponse {
@@ -244,13 +279,20 @@ export async function cancelSubscription(input: {
 }
 
 export async function fetchPaymentMethods(organizationId: number): Promise<BillingPaymentMethod[]> {
-  const params = new URLSearchParams({ organizationId: String(organizationId) })
-  const res = await authFetch(`/subscriptions/payment-methods?${params.toString()}`, { cache: "no-store" })
-  if (!res.ok) {
-    const message = await res.text().catch(() => "No se pudieron obtener los metodos de pago")
-    throw new Error(message || "No se pudieron obtener los metodos de pago")
+  try {
+    const params = new URLSearchParams({ organizationId: String(organizationId) })
+    const res = await authFetch(`/subscriptions/payment-methods?${params.toString()}`, { cache: "no-store" })
+    if (!res.ok) {
+      const message = await res.text().catch(() => "No se pudieron obtener los metodos de pago")
+      throw new Error(message || "No se pudieron obtener los metodos de pago")
+    }
+    return res.json()
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
   }
-  return res.json()
 }
 
 export async function upsertPaymentMethod(input: UpsertPaymentMethodInput) {

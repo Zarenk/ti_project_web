@@ -599,10 +599,15 @@ export default function JournalsPage() {
     const loadDaily = async () => {
       setDailyLoading(true);
       try {
-        const headers = await getAuthHeaders();
+        let headers: Record<string, string>;
+        try {
+          headers = await getAuthHeaders();
+        } catch {
+          setDailyLines([]);
+          return;
+        }
         if (!headers.Authorization) {
           setDailyLines([]);
-          router.push("/login");
           return;
         }
         const from = new Date(`${selectedDate}T00:00:00.000Z`).toISOString();

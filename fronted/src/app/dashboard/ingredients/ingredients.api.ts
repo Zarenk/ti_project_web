@@ -1,4 +1,4 @@
-import { authFetch } from "@/utils/auth-fetch"
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch"
 
 export type Ingredient = {
   id: number
@@ -32,7 +32,15 @@ async function parseErrorMessage(res: Response, fallback: string) {
 }
 
 export async function getIngredients(): Promise<Ingredient[]> {
-  const res = await authFetch("/ingredients", { cache: "no-store" })
+  let res: Response
+  try {
+    res = await authFetch("/ingredients", { cache: "no-store" })
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
+  }
   if (!res.ok) {
     throw new Error(await parseErrorMessage(res, "No se pudieron cargar los insumos."))
   }

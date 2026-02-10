@@ -4,7 +4,18 @@ import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
 async function authorizedFetch(url: string, init: RequestInit = {}) {
-  const auth = await getAuthHeaders();
+  let auth: Record<string, string> = {};
+  try {
+    auth = await getAuthHeaders();
+  } catch (error: any) {
+    if (
+      error instanceof UnauthenticatedError ||
+      error?.message?.includes("No se encontro un token")
+    ) {
+      throw new UnauthenticatedError();
+    }
+    throw error;
+  }
   const headers = new Headers(init.headers ?? {});
 
   for (const [key, value] of Object.entries(auth)) {
@@ -53,9 +64,17 @@ export async function getProviders() {
 }
 
 export async function getProvider(id: string) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/providers/${id}`, {
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await authorizedFetch(`${BACKEND_URL}/api/providers/${id}`, {
+      cache: "no-store",
+    });
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
+  }
 
   if (!res.ok) {
     throw new Error(`Error al obtener el proveedor ${id}: ${res.status}`);

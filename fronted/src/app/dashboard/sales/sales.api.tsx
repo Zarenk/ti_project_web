@@ -3,7 +3,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:400
 import { DateRange } from "react-day-picker"
 import { getAuthHeaders } from "@/utils/auth-token"
 import { getTenantSelection } from "@/utils/tenant-preferences"
-import { authFetch } from "@/utils/auth-fetch";
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
 async function buildAuthHeaders(
   init: HeadersInit = {},
@@ -13,7 +13,7 @@ async function buildAuthHeaders(
   const authHeaders = await getAuthHeaders()
 
   if (requireAuth && !Object.prototype.hasOwnProperty.call(authHeaders, "Authorization")) {
-    throw new Error("No se encontro un token de autenticacion")
+    throw new UnauthenticatedError()
   }
 
   for (const [key, value] of Object.entries(authHeaders)) {
@@ -301,13 +301,9 @@ export async function getOrdersByDni(dni: string) {
 }
 
 export async function getSales() {
-  const headers = await getAuthHeaders()
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontro un token de autenticacion')
-  }
   try {
-    const response = await fetch(`${BACKEND_URL}/api/sales`, {
-      headers,
+    const response = await authFetch(`${BACKEND_URL}/api/sales`, {
+      credentials: "include",
     })
     if (!response.ok) {
       if (response.status === 403) {
@@ -317,6 +313,9 @@ export async function getSales() {
     }
     return await response.json()
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
     console.error('Error al obtener las ventas:', error)
     throw error
   }
@@ -324,7 +323,7 @@ export async function getSales() {
 
 export async function getMySales() {
   try {
-    const response = await fetch('/api/sales/my', {
+    const response = await authFetch('/api/sales/my', {
       credentials: 'include',
     })
     if (!response.ok) {
@@ -335,112 +334,150 @@ export async function getMySales() {
     }
     return await response.json()
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
     console.error('Error al obtener las ventas:', error)
     throw error
   }
 }
 
 export async function getMonthlySalesTotal() {
-  const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-total`, {
-    credentials: "include",
-  });
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-total`, {
+      credentials: "include",
+    });
 
-  if (response.status === 403) {
-    return { total: 0, growth: null };
+    if (response.status === 403) {
+      return { total: 0, growth: null };
+    }
+
+    if (!response.ok) {
+      throw new Error("Error al obtener ventas mensuales");
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return { total: 0, growth: null };
+    }
+    throw error;
   }
-
-  if (!response.ok) {
-    throw new Error("Error al obtener ventas mensuales");
-  }
-
-  return response.json();
 }
-
 export async function getMonthlySalesProfit() {
-  const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-profit`, {
-    credentials: "include",
-  });
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-profit`, {
+      credentials: "include",
+    });
 
-  if (response.status === 403) {
-    return { total: 0, growth: null };
+    if (response.status === 403) {
+      return { profit: 0, growth: null };
+    }
+
+    if (!response.ok) {
+      throw new Error("Error al obtener utilidades mensuales");
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return { profit: 0, growth: null };
+    }
+    throw error;
   }
-
-  if (!response.ok) {
-    throw new Error("Error al obtener utilidades mensuales");
-  }
-
-  return response.json();
 }
-
 export async function getSalesTotalByDateRange(from: string, to: string) {
-  const response = await authFetch(`${BACKEND_URL}/api/sales/total/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
-    credentials: "include",
-  });
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/sales/total/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
+      credentials: "include",
+    });
 
-  if (response.status === 403) {
-    return 0;
+    if (response.status === 403) {
+      return { total: 0, growth: null };
+    }
+
+    if (!response.ok) {
+      throw new Error("Error al obtener ventas por rango");
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return { total: 0, growth: null };
+    }
+    throw error;
   }
-
-  if (!response.ok) {
-    throw new Error("Error al obtener total de ventas por rango");
-  }
-
-  return response.json();
 }
-
 export async function getSalesCountByDateRange(from: string, to: string) {
-  const response = await authFetch(`${BACKEND_URL}/api/sales/count/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
-    credentials: "include",
-  });
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/sales/count/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
+      credentials: "include",
+    });
 
-  if (response.status === 403) {
-    return 0;
+    if (response.status === 403) {
+      return { count: 0, growth: null };
+    }
+
+    if (!response.ok) {
+      throw new Error("Error al obtener cantidad de ventas por rango");
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return { count: 0, growth: null };
+    }
+    throw error;
   }
-
-  if (!response.ok) {
-    throw new Error("Error al obtener conteo de ventas por rango");
-  }
-
-  return response.json();
 }
-
 export async function getClientStatsByDateRange(from: string, to: string) {
-  const response = await authFetch(`${BACKEND_URL}/api/sales/clients/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
-    credentials: "include",
-  });
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/sales/clients/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
+      credentials: "include",
+    });
 
-  if (response.status === 403) {
-    return 0;
+    if (response.status === 403) {
+      return { total: 0, growth: null };
+    }
+
+    if (!response.ok) {
+      throw new Error("Error al obtener clientes por rango");
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return { total: 0, growth: null };
+    }
+    throw error;
   }
-
-  if (!response.ok) {
-    throw new Error("Error al obtener estadísticas de clientes por rango");
-  }
-
-  return response.json();
 }
-
 export async function getSalesProfitByDateRange(from: string, to: string) {
-  const response = await authFetch(`${BACKEND_URL}/api/sales/profit/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
-    credentials: "include",
-  });
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/sales/profit/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`, {
+      credentials: "include",
+    });
 
-  if (response.status === 403) {
-    return 0;
+    if (response.status === 403) {
+      return 0;
+    }
+
+    if (!response.ok) {
+      throw new Error("Error al obtener utilidades por rango");
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return 0;
+    }
+    throw error;
   }
-
-  if (!response.ok) {
-    throw new Error("Error al obtener utilidades por rango");
-  }
-
-  return response.json();
 }
-
 export async function getProductsByStore(storeId: number) {
   try {
-    const headers = await buildAuthHeaders()
-    const response = await fetch(`${BACKEND_URL}/api/inventory/products-by-store/${storeId}`, {
-      headers,
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/products-by-store/${storeId}`, {
+      credentials: 'include',
     });
     if (response.status === 404 || response.status === 403) {
       return [];
@@ -451,23 +488,27 @@ export async function getProductsByStore(storeId: number) {
     }
     return await response.json();
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.warn('No se pudieron cargar productos por tienda:', error);
     return [];
   }
 }
 
 export async function getStockByProductAndStore(storeId: number, productId: number) {
-  try{
-    const headers = await buildAuthHeaders()
-    const response = await fetch(`${BACKEND_URL}/api/inventory/stock-by-product-and-store/${storeId}/${productId}`, {
-      headers,
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/stock-by-product-and-store/${storeId}/${productId}`, {
+      credentials: 'include',
     });
     if (!response.ok) {
       throw new Error('Error al obtener el stock del producto en la tienda');
     }
     return await response.json();
-  }catch(error)
-  {  
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return 0;
+    }
     console.error('Error al obtener el stock del producto en la tienda:', error);
     throw error;
   }
@@ -475,9 +516,8 @@ export async function getStockByProductAndStore(storeId: number, productId: numb
 
 export async function fetchSeriesByProductAndStore(storeId: number, productId: number) {
   try {
-    const headers = await buildAuthHeaders()
-    const response = await fetch(`${BACKEND_URL}/api/inventory/series-by-product-and-store/${storeId}/${productId}`, {
-      headers,
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/series-by-product-and-store/${storeId}/${productId}`, {
+      credentials: 'include',
     });
     if (!response.ok) {
       throw new Error("Error al obtener las series del producto en la tienda");
@@ -485,6 +525,9 @@ export async function fetchSeriesByProductAndStore(storeId: number, productId: n
     const data = await response.json();
     return data; // Devuelve las series disponibles
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error("Error al obtener las series:", error);
     return [];
   }
@@ -492,9 +535,8 @@ export async function fetchSeriesByProductAndStore(storeId: number, productId: n
 
 export async function getSeriesByProductAndStore(storeId: number, productId: number) {
   try {
-    const headers = await buildAuthHeaders()
-    const response = await fetch(`${BACKEND_URL}/api/inventory/series-by-product-and-store/${storeId}/${productId}`, {
-      headers,
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/series-by-product-and-store/${storeId}/${productId}`, {
+      credentials: 'include',
     });
     if (!response.ok) {
       throw new Error("Error al obtener las series del producto en la tienda");
@@ -502,6 +544,9 @@ export async function getSeriesByProductAndStore(storeId: number, productId: num
     const data = await response.json();
     return data; // Devuelve las series disponibles
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error("Error al obtener las series:", error);
     return [];
   }
@@ -561,31 +606,53 @@ export async function getPaymentMethods() {
 }
 
 export async function getRevenueByCategoryByRange(from: string, to: string) {
-  const headers = await getAuthHeaders()
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontro un token de autenticacion')
+  try {
+    const headers = await getAuthHeaders()
+    if (!('Authorization' in headers)) {
+      throw new Error('No se encontro un token de autenticacion')
+    }
+    const response = await fetch(
+      `${BACKEND_URL}/api/sales/revenue-by-category/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`,
+      { headers },
+      );
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        return []
+      }
+      throw new Error("Error al obtener los ingresos por categoria");
+    }
+    return response.json();
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError || error?.message?.includes('No se encontro un token')) {
+      return []
+    }
+    throw error
   }
-  const response = await fetch(
-    `${BACKEND_URL}/api/sales/revenue-by-category/from/${encodeURIComponent(from)}/to/${encodeURIComponent(to)}`,
-    { headers },
-    );
-  if (!response.ok) {
-    throw new Error("Error al obtener los ingresos por categoria");
-  }
-  return response.json();
 }
 
 export async function getSalesByDateParams(from: string, to: string) {
-  const headers = await getAuthHeaders()
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontro un token de autenticacion')
+  try {
+    const headers = await getAuthHeaders()
+    if (!('Authorization' in headers)) {
+      throw new Error('No se encontro un token de autenticacion')
+    }
+    const response = await fetch(
+      `${BACKEND_URL}/api/sales/chart/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
+      { headers },
+    );
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        return []
+      }
+      throw new Error('Error al obtener grafico de ventas');
+    }
+    return response.json();
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError || error?.message?.includes('No se encontro un token')) {
+      return []
+    }
+    throw error
   }
-  const response = await fetch(
-    `${BACKEND_URL}/api/sales/chart/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
-    { headers },
-  );
-  if (!response.ok) throw new Error('Error al obtener grafico de ventas');
-  return response.json();
 }
 
 export async function getTopProducts(params: { from?: string; to?: string; type?: string }) {
@@ -601,135 +668,176 @@ export async function getTopProducts(params: { from?: string; to?: string; type?
     throw new Error("Faltan parametros: se requiere 'type' o 'from' y 'to'");
   }
 
-  const headers = await getAuthHeaders()
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontro un token de autenticacion')
-  }
-  const response = await fetch(`${BACKEND_URL}${endpoint}`, { headers });
+  try {
+    const headers = await getAuthHeaders()
+    if (!('Authorization' in headers)) {
+      throw new Error('No se encontro un token de autenticacion')
+    }
+    const response = await fetch(`${BACKEND_URL}${endpoint}`, { headers });
 
-  if (!response.ok) {
-    throw new Error("Error al obtener top de productos");
-  }
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        return []
+      }
+      throw new Error("Error al obtener top de productos");
+    }
 
-  // [{ productId, name, sales, revenue, lastSale }]
-  return await response.json();
+    // [{ productId, name, sales, revenue, lastSale }]
+    return await response.json();
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError || error?.message?.includes('No se encontro un token')) {
+      return []
+    }
+    throw error
+  }
 }
 
 export async function getMonthlySalesCount() {
-  const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-count`, {
-    credentials: "include",
-  });
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-count`, {
+      credentials: "include",
+    });
 
-  if (response.status === 403) {
-    return { count: 0, growth: null };
+    if (response.status === 403) {
+      return { count: 0, growth: null };
+    }
+
+    if (!response.ok) {
+      throw new Error("Error al obtener el conteo mensual de ventas");
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return { count: 0, growth: null };
+    }
+    throw error;
   }
-
-  if (!response.ok) {
-    throw new Error("Error al obtener el conteo mensual de ventas");
-  }
-
-  return response.json();
 }
-
 export async function getMonthlyClientsStats() {
-  const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-clients`, {
-    credentials: "include",
-  });
-  if (response.status === 403) {
-    return { total: 0, growth: null };
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/sales/monthly-clients`, {
+      credentials: "include",
+    });
+    if (response.status === 403) {
+      return { total: 0, growth: null };
+    }
+    if (!response.ok) {
+      throw new Error("Error al obtener estadisticas de clientes");
+    }
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return { total: 0, growth: null };
+    }
+    throw error;
   }
-  if (!response.ok) {
-    throw new Error("Error al obtener estadisticas de clientes");
-  }
-  return response.json();
 }
-
 export async function getTopClients(params: { from?: string; to?: string }) {
   let query = '';
   if (params.from && params.to) {
     query = `?from=${encodeURIComponent(params.from)}&to=${encodeURIComponent(params.to)}`;
   }
-  const headers = await getAuthHeaders()
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontro un token de autenticacion')
+  try {
+    const headers = await getAuthHeaders()
+    if (!('Authorization' in headers)) {
+      throw new Error('No se encontro un token de autenticacion')
+    }
+    const res = await fetch(`${BACKEND_URL}/api/sales/top-clients${query}`, {
+      headers,
+    });
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        return []
+      }
+      throw new Error('Error al obtener top clientes');
+    }
+    return res.json();
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError || error?.message?.includes('No se encontro un token')) {
+      return []
+    }
+    throw error
   }
-  const res = await fetch(`${BACKEND_URL}/api/sales/top-clients${query}`, {
-    headers,
-  });
-  if (!res.ok) throw new Error('Error al obtener top clientes');
-  return res.json();
 }
 
 export async function getProductSalesReport(
   productId: number,
   params: { from?: string; to?: string } = {},
 ) {
-  const headers = await getAuthHeaders();
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontro un token de autenticacion');
-  }
-
-  const searchParams = new URLSearchParams();
-  if (params.from) {
-    searchParams.set('from', params.from);
-  }
-  if (params.to) {
-    searchParams.set('to', params.to);
-  }
-
-  const query = searchParams.toString();
-  const endpoint = `${BACKEND_URL}/api/sales/product-report/${productId}${
-    query ? `?${query}` : ''
-  }`;
-
-  const res = await fetch(endpoint, { headers });
-
-  if (!res.ok) {
-    let message = 'Error al obtener el reporte de producto';
-    try {
-      const errorData = await res.json();
-      if (errorData?.message) {
-        message = errorData.message;
-      }
-    } catch {
-      // ignore parse errors
+  try {
+    const headers = await getAuthHeaders();
+    if (!('Authorization' in headers)) {
+      throw new Error('No se encontro un token de autenticacion');
     }
-    throw new Error(message);
-  }
 
-  return res.json();
+    const searchParams = new URLSearchParams();
+    if (params.from) {
+      searchParams.set('from', params.from);
+    }
+    if (params.to) {
+      searchParams.set('to', params.to);
+    }
+
+    const query = searchParams.toString();
+    const endpoint = `${BACKEND_URL}/api/sales/product-report/${productId}${
+      query ? `?${query}` : ''
+    }`;
+
+    const res = await fetch(endpoint, { headers });
+
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        return null;
+      }
+      let message = 'Error al obtener el reporte de producto';
+      try {
+        const errorData = await res.json();
+        if (errorData?.message) {
+          message = errorData.message;
+        }
+      } catch {
+        // ignore parse errors
+      }
+      throw new Error(message);
+    }
+
+    return res.json();
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError || error?.message?.includes('No se encontro un token')) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function getProductReportOptions() {
-  const headers = await getAuthHeaders();
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontro un token de autenticacion');
+  try {
+    const headers = await getAuthHeaders();
+    if (!('Authorization' in headers)) {
+      throw new Error('No se encontro un token de autenticacion');
+    }
+
+    const res = await fetch(`${BACKEND_URL}/api/sales/product-report-options`, {
+      headers,
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        return [];
+      }
+      throw new Error(`Error al obtener productos: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError || error?.message?.includes('No se encontro un token')) {
+      return [];
+    }
+    throw error;
   }
-
-  const res = await fetch(`${BACKEND_URL}/api/sales/product-report-options`, {
-    headers,
-    cache: 'no-store',
-  });
-
-  if (!res.ok) {
-    throw new Error(`Error al obtener productos: ${res.status}`);
-  }
-
-  const data = await res.json();
-  return Array.isArray(data) ? data : [];
-}
-
-export async function getRecentSalesByRange(from: string, to: string) {
-  const headers = await getAuthHeaders()
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontro un token de autenticacion')
-  }
-  const res = await fetch(
-    `${BACKEND_URL}/api/sales/recent/${encodeURIComponent(from)}/${encodeURIComponent(to)}`,
-    { headers },
-  );
-  if (!res.ok) throw new Error("Error al obtener ventas recientes");
-  return res.json();
 }
 
 export async function getRecentSales(limit = 10) {
@@ -737,17 +845,23 @@ export async function getRecentSales(limit = 10) {
   const fromDate = new Date()
   fromDate.setMonth(fromDate.getMonth() - 1)
   const from = fromDate.toISOString()
-  const res = await authFetch(
-    `${BACKEND_URL}/api/sales/recent/${encodeURIComponent(from)}/${encodeURIComponent(to)}`
-  )
-  if (res.status === 403) {
-    return []
+  try {
+    const res = await authFetch(
+      `${BACKEND_URL}/api/sales/recent/${encodeURIComponent(from)}/${encodeURIComponent(to)}`
+    )
+    if (res.status === 403) {
+      return []
+    }
+    if (!res.ok) throw new Error("Error al obtener ventas recientes")
+    const data = await res.json()
+    return Array.isArray(data) ? data.slice(0, limit) : []
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
   }
-  if (!res.ok) throw new Error("Error al obtener ventas recientes")
-  const data = await res.json()
-  return Array.isArray(data) ? data.slice(0, limit) : []
 }
-
 export async function deleteSale(id: number) {
   const headers = await getAuthHeaders();
   if (!('Authorization' in headers)) {
@@ -774,13 +888,25 @@ export async function deleteSale(id: number) {
 }
 
 export async function getSaleById(id: number | string) {
-  const headers = await getAuthHeaders()
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontro un token de autenticacion')
+  try {
+    const headers = await getAuthHeaders()
+    if (!('Authorization' in headers)) {
+      throw new Error('No se encontro un token de autenticacion')
+    }
+    const res = await fetch(`${BACKEND_URL}/api/sales/${id}`, { headers });
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        return null;
+      }
+      throw new Error('Error al obtener la venta');
+    }
+    return res.json();
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError || error?.message?.includes('No se encontro un token')) {
+      return null;
+    }
+    throw error;
   }
-  const res = await fetch(`${BACKEND_URL}/api/sales/${id}`, { headers });
-  if (!res.ok) throw new Error('Error al obtener la venta');
-  return res.json();
 }
 
 export async function getWebSaleById(id: number | string) {
@@ -793,13 +919,25 @@ export async function getSalesTransactions(from?: string, to?: string) {
   const qs = new URLSearchParams()
   if (from) qs.append('from', from)
   if (to) qs.append('to', to)
-  const headers = await getAuthHeaders()
-  const res = await fetch(
-    `${BACKEND_URL}/api/sales/transactions${qs.toString() ? `?${qs.toString()}` : ''}`,
-    { headers },
-  )
-  if (!res.ok) throw new Error('Error al obtener las transacciones')
-  return res.json()
+  try {
+    const headers = await getAuthHeaders()
+    const res = await fetch(
+      `${BACKEND_URL}/api/sales/transactions${qs.toString() ? `?${qs.toString()}` : ''}`,
+      { headers },
+    )
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        return []
+      }
+      throw new Error('Error al obtener las transacciones')
+    }
+    return res.json()
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError || error?.message?.includes('No se encontro un token')) {
+      return []
+    }
+    throw error
+  }
 }
 
 export async function getProductsProfitByRange(from: string, to: string, q?: string, page = 1, pageSize = 25) {
@@ -809,21 +947,45 @@ export async function getProductsProfitByRange(from: string, to: string, q?: str
   if (q) qs.append('q', q)
   qs.append('page', String(page))
   qs.append('pageSize', String(pageSize))
-  const headers = await getAuthHeaders()
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontro un token de autenticacion')
+  try {
+    const headers = await getAuthHeaders()
+    if (!('Authorization' in headers)) {
+      throw new Error('No se encontro un token de autenticacion')
+    }
+    const res = await fetch(`${BACKEND_URL}/api/sales/profit/products?${qs.toString()}`, { headers })
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        return { items: [], total: 0 }
+      }
+      throw new Error('Error al obtener utilidades por producto')
+    }
+    return res.json()
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError || error?.message?.includes('No se encontro un token')) {
+      return { items: [], total: 0 }
+    }
+    throw error
   }
-  const res = await fetch(`${BACKEND_URL}/api/sales/profit/products?${qs.toString()}`, { headers })
-  if (!res.ok) throw new Error('Error al obtener utilidades por producto')
-  return res.json()
 }
 
 export async function getProfitByDate(from: string, to: string) {
-  const headers = await getAuthHeaders()
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontro un token de autenticacion')
+  try {
+    const headers = await getAuthHeaders()
+    if (!('Authorization' in headers)) {
+      throw new Error('No se encontro un token de autenticacion')
+    }
+    const res = await fetch(`${BACKEND_URL}/api/sales/profit/chart/${encodeURIComponent(from)}/${encodeURIComponent(to)}`, { headers })
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        return []
+      }
+      throw new Error('Error al obtener utilidades por fecha')
+    }
+    return res.json()
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError || error?.message?.includes('No se encontro un token')) {
+      return []
+    }
+    throw error
   }
-  const res = await fetch(`${BACKEND_URL}/api/sales/profit/chart/${encodeURIComponent(from)}/${encodeURIComponent(to)}`, { headers })
-  if (!res.ok) throw new Error('Error al obtener utilidades por fecha')
-  return res.json()
 }

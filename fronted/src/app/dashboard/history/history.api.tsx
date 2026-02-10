@@ -1,4 +1,4 @@
-import { authFetch } from '@/utils/auth-fetch';
+import { authFetch, UnauthenticatedError } from '@/utils/auth-fetch';
 
 export const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
@@ -16,9 +16,20 @@ async function parseJsonResponse<T>(
   }
 }
 
+async function authFetchOrNull(input: RequestInfo | URL, init: RequestInit = {}) {
+  try {
+    return await authFetch(input, init)
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null
+    }
+    throw error
+  }
+}
+
 
 export async function getUserHistory(userId: number) {
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/inventory/history/users/${userId}`,
     {
       credentials: 'include',
@@ -31,7 +42,7 @@ export async function getUserHistory(userId: number) {
 }
 
 export async function getUserActivity(userId: number) {
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/${userId}`,
     {
       credentials: 'include',
@@ -44,7 +55,7 @@ export async function getUserActivity(userId: number) {
 }
 
 export async function getOrganizationHistory() {
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/inventory/history`,
     {
       credentials: 'include',
@@ -82,13 +93,14 @@ export async function getOrganizationActivity(params?: {
   if (params?.sortBy) search.set("sortBy", params.sortBy);
   if (params?.sortDir) search.set("sortDir", params.sortDir);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: 'include',
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error('Error al obtener la actividad de la organizacion');
   }
@@ -107,13 +119,14 @@ export async function getActivitySummary(params?: {
   if (params?.excludeContextUpdates) search.set('excludeContextUpdates', 'true');
   const suffix = search.toString();
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/summary${suffix ? `?${suffix}` : ''}`,
     {
       credentials: 'include',
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error('Error al obtener el resumen de actividad');
   }
@@ -149,13 +162,14 @@ export async function getGlobalActivity(params?: {
   if (params?.sortBy) search.set("sortBy", params.sortBy);
   if (params?.sortDir) search.set("sortDir", params.sortDir);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error("Error al obtener el historial global");
   }
@@ -187,13 +201,14 @@ export async function exportGlobalActivity(params?: {
   if (params?.sortBy) search.set("sortBy", params.sortBy);
   if (params?.sortDir) search.set("sortDir", params.sortDir);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/export${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error("Error al exportar movimientos");
   }
@@ -212,13 +227,14 @@ export async function getActivityTimeSeries(params?: {
   if (params?.excludeContextUpdates) search.set('excludeContextUpdates', 'true');
   const suffix = search.toString();
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/timeseries${suffix ? `?${suffix}` : ''}`,
     {
       credentials: 'include',
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error('Error al obtener la serie temporal de actividad');
   }
@@ -242,13 +258,14 @@ export async function getActivityActors(params?: {
   if (params?.entityType) search.set("entityType", params.entityType);
   if (params?.severity) search.set("severity", params.severity);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/actors${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error("Error al obtener usuarios con movimientos");
   }
@@ -275,13 +292,14 @@ export async function getUserActivitySummary(
   if (params?.action) search.set("action", params.action);
   if (params?.entityType) search.set("entityType", params.entityType);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/${userId}/summary${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return {}
   if (!res.ok) {
     throw new Error("Error al obtener el resumen del usuario");
   }
@@ -308,13 +326,14 @@ export async function getUserActivityTimeSeries(
   if (params?.action) search.set("action", params.action);
   if (params?.entityType) search.set("entityType", params.entityType);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/${userId}/timeseries${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error("Error al obtener la serie temporal del usuario");
   }
@@ -341,13 +360,14 @@ export async function getUserActivityHeatmap(
   if (params?.action) search.set("action", params.action);
   if (params?.entityType) search.set("entityType", params.entityType);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/${userId}/heatmap${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     if (res.status === 404) return [];
     throw new Error("Error al obtener el mapa de calor del usuario");
@@ -375,13 +395,14 @@ export async function getUserActivityBreakdown(
   if (params?.action) search.set("action", params.action);
   if (params?.entityType) search.set("entityType", params.entityType);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/${userId}/breakdown${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return { actions: [], entities: [] }
   if (!res.ok) {
     throw new Error("Error al obtener el desglose del usuario");
   }
@@ -406,13 +427,14 @@ export async function getUserActivityOptions(
   if (params?.actionLimit) search.set("actionLimit", String(params.actionLimit));
   if (params?.entityLimit) search.set("entityLimit", String(params.entityLimit));
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/${userId}/options${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return { actions: [], entities: [] }
   if (!res.ok) {
     throw new Error("Error al obtener opciones de filtros del usuario");
   }
@@ -436,13 +458,14 @@ export async function getOrganizationActivitySummary(params?: {
   if (params?.action) search.set("action", params.action);
   if (params?.entityType) search.set("entityType", params.entityType);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/summary${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error("Error al obtener el resumen de la organizacion");
   }
@@ -466,13 +489,14 @@ export async function getOrganizationActivityTimeSeries(params?: {
   if (params?.action) search.set("action", params.action);
   if (params?.entityType) search.set("entityType", params.entityType);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/timeseries${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error("Error al obtener la serie temporal de la organizacion");
   }
@@ -496,13 +520,14 @@ export async function getOrganizationActivityHeatmap(params?: {
   if (params?.action) search.set("action", params.action);
   if (params?.entityType) search.set("entityType", params.entityType);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/heatmap${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     if (res.status === 404) return [];
     throw new Error("Error al obtener el mapa de calor de la organizacion");
@@ -527,13 +552,14 @@ export async function getOrganizationActivityBreakdown(params?: {
   if (params?.action) search.set("action", params.action);
   if (params?.entityType) search.set("entityType", params.entityType);
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/breakdown${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error("Error al obtener el desglose de la organizacion");
   }
@@ -555,13 +581,14 @@ export async function getOrganizationActivityOptions(params?: {
   if (params?.actionLimit) search.set("actionLimit", String(params.actionLimit));
   if (params?.entityLimit) search.set("entityLimit", String(params.entityLimit));
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/options${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error("Error al obtener opciones de filtros de la organizacion");
   }
@@ -580,7 +607,7 @@ export async function getUserActivityActors(
   if (params?.q) search.set("q", params.q);
   if (params?.excludeContextUpdates) search.set("excludeContextUpdates", "true");
 
-  const res = await authFetch(
+  const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/users/actors${search.toString() ? `?${search.toString()}` : ""}`,
     {
       credentials: "include",
@@ -588,6 +615,7 @@ export async function getUserActivityActors(
     },
   );
 
+  if (!res) return []
   if (!res.ok) {
     throw new Error("Error al obtener usuarios con movimientos");
   }

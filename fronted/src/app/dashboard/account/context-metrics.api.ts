@@ -1,4 +1,4 @@
-import { authFetch } from "@/utils/auth-fetch"
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch"
 
 export type ContextMetricsResponse = {
   totalSelections: number
@@ -48,11 +48,39 @@ async function parseResponse<T>(res: Response): Promise<T> {
 }
 
 export async function fetchMyContextMetrics(): Promise<ContextMetricsResponse> {
-  const res = await authFetch("/context-metrics/me", { cache: "no-store" })
-  return parseResponse<ContextMetricsResponse>(res)
+  try {
+    const res = await authFetch("/context-metrics/me", { cache: "no-store" })
+    return parseResponse<ContextMetricsResponse>(res)
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return {
+        totalSelections: 0,
+        selectionsLast30Days: 0,
+        preferenceCount: 0,
+        lastSelection: null,
+        topOrganizations: [],
+        topCompanies: [],
+        deviceBreakdown: [],
+      }
+    }
+    throw error
+  }
 }
 
 export async function fetchGlobalContextMetrics(): Promise<ContextMetricsSummary> {
-  const res = await authFetch("/context-metrics/summary", { cache: "no-store" })
-  return parseResponse<ContextMetricsSummary>(res)
+  try {
+    const res = await authFetch("/context-metrics/summary", { cache: "no-store" })
+    return parseResponse<ContextMetricsSummary>(res)
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return {
+        totalSelections: 0,
+        selectionsLast24h: 0,
+        uniqueUsers: 0,
+        topOrganizations: [],
+        topCompanies: [],
+      }
+    }
+    throw error
+  }
 }

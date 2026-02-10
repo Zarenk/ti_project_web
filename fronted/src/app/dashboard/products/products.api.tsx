@@ -5,7 +5,18 @@ import { isProductActive, normalizeProductStatus } from './status.utils'
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
 
 async function authorizedFetch(url: string, init: RequestInit = {}) {
-  const auth = await getAuthHeaders()
+  let auth: Record<string, string> = {}
+  try {
+    auth = await getAuthHeaders()
+  } catch (error: any) {
+    if (
+      error instanceof UnauthenticatedError ||
+      error?.message?.includes('No se encontro un token')
+    ) {
+      throw new UnauthenticatedError()
+    }
+    throw error
+  }
   const headers = new Headers(init.headers ?? {})
 
   for (const [key, value] of Object.entries(auth)) {
@@ -18,7 +29,18 @@ async function authorizedFetch(url: string, init: RequestInit = {}) {
 }
 
 async function publicFetch(url: string, init: RequestInit = {}) {
-  const auth = await getAuthHeaders()
+  let auth: Record<string, string> = {}
+  try {
+    auth = await getAuthHeaders()
+  } catch (error: any) {
+    if (
+      error instanceof UnauthenticatedError ||
+      error?.message?.includes('No se encontro un token')
+    ) {
+      throw new UnauthenticatedError()
+    }
+    throw error
+  }
   const headers = new Headers(init.headers ?? {})
 
   for (const [key, value] of Object.entries(auth)) {
@@ -83,9 +105,17 @@ export async function getPublicProducts(filters?: ProductFilters) {
     url.searchParams.set('migrationStatus', filters.migrationStatus)
   }
 
-  const response = await publicFetch(url.toString(), {
-    cache: 'no-store',
-  })
+  let response: Response
+  try {
+    response = await publicFetch(url.toString(), {
+      cache: 'no-store',
+    })
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
+  }
 
   if (!response.ok) {
     if (response.status === 400) {
@@ -105,9 +135,17 @@ export async function getPublicProducts(filters?: ProductFilters) {
 }
 
 export async function getPublicProduct(id: string) {
-  const response = await publicFetch(`${BACKEND_URL}/api/public/products/${id}`, {
-    cache: 'no-store',
-  })
+  let response: Response
+  try {
+    response = await publicFetch(`${BACKEND_URL}/api/public/products/${id}`, {
+      cache: 'no-store',
+    })
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null
+    }
+    throw error
+  }
 
   if (!response.ok) {
     throw new Error(`Error al obtener el producto ${id}: ${response.status}`)
@@ -125,9 +163,17 @@ export async function getPublicProduct(id: string) {
 }
 
 export async function getProduct(id: string) {
-  const response = await authorizedFetch(`${BACKEND_URL}/api/products/${id}`, {
-    cache: 'no-store',
-  })
+  let response: Response
+  try {
+    response = await authorizedFetch(`${BACKEND_URL}/api/products/${id}`, {
+      cache: 'no-store',
+    })
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null
+    }
+    throw error
+  }
 
   if (!response.ok) {
     throw new Error(`Error al obtener el producto ${id}: ${response.status}`)

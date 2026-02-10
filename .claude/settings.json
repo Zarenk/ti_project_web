@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(psql:*)"
+      "Bash(psql:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }

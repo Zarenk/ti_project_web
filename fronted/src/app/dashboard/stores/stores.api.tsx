@@ -3,7 +3,18 @@ import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 async function authorizedFetch(url: string, init: RequestInit = {}) {
-  const auth = await getAuthHeaders();
+  let auth: Record<string, string> = {};
+  try {
+    auth = await getAuthHeaders();
+  } catch (error: any) {
+    if (
+      error instanceof UnauthenticatedError ||
+      error?.message?.includes("No se encontro un token")
+    ) {
+      throw new UnauthenticatedError();
+    }
+    throw error;
+  }
   const headers = new Headers(init.headers ?? {});
 
   for (const [key, value] of Object.entries(auth)) {
@@ -52,9 +63,17 @@ export async function getStores(){
 }
 
 export async function getStore(id: string){
-    const data = await authorizedFetch(`${BACKEND_URL}/api/stores/${id}`, {
-        'cache': 'no-store',
-    });
+    let data: Response;
+    try {
+        data = await authorizedFetch(`${BACKEND_URL}/api/stores/${id}`, {
+            'cache': 'no-store',
+        });
+    } catch (error) {
+        if (error instanceof UnauthenticatedError) {
+            return null;
+        }
+        throw error;
+    }
 
     const json = await data.json();
 

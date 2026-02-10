@@ -65,7 +65,7 @@ export async function getAllEntries() {
     return await response.json();
   }catch(error) {
     if (error instanceof UnauthenticatedError) {
-      return null;
+      return [];
     }
     console.error("Error al obtener las entradas:", error); 
     throw error;
@@ -74,15 +74,22 @@ export async function getAllEntries() {
 
 // Obtener una entrada específica por ID
 export async function getEntryById(id: string) {
-  const response = await authFetch(`${BACKEND_URL}/api/entries/by-id/${id}`, {
-    method: 'GET',
-  });
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/by-id/${id}`, {
+      method: 'GET',
+    });
 
-  if (!response.ok) {
-    throw new Error('Error al obtener la entrada');
+    if (!response.ok) {
+      throw new Error('Error al obtener la entrada');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
   }
-
-  return await response.json();
 }
 
 // Eliminar Entrada
@@ -418,7 +425,7 @@ export const checkSeries = async (serial: string): Promise<{ exists: boolean }> 
     return (await response.json()) as { exists: boolean };
   } catch (error: any) {
     if (error instanceof UnauthenticatedError) {
-      throw error;
+      return { exists: false };
     }
     console.error('Error al verificar la serie:', error);
     throw error;

@@ -204,6 +204,12 @@ const isContextUpdateLog = (log: AuditLog) => {
               }
             : undefined;
         const headers = await getAuthHeaders(overrides);
+        if (!("Authorization" in headers)) {
+          setLogs([]);
+          setTotal(0);
+          setError(null);
+          return;
+        }
         const params = new URLSearchParams({
           page: String(page),
           pageSize: String(pageSize),
@@ -223,7 +229,11 @@ const isContextUpdateLog = (log: AuditLog) => {
             credentials: "include",
           },
         );
-        if (res.status === 403) {
+        if (res.status === 401) {
+          setLogs([]);
+          setTotal(0);
+          setError(null);
+        } else if (res.status === 403) {
           setError("No tienes permisos para ver esta sección.");
           setLogs([]);
           setTotal(0);

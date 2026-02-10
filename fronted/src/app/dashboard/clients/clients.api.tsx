@@ -1,25 +1,47 @@
-import { authFetch } from "@/utils/auth-fetch";
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 export async function getClients(){
-  const data = await authFetch(`/clients`, {
-    cache: 'no-store',
-  });
-  return data.json();
+  try {
+    const data = await authFetch(`/clients`, {
+      cache: 'no-store',
+    });
+    return data.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function getRegisteredClients(){
-  const data = await authFetch(`/clients/registered`, {
-    cache: 'no-store',
-  });
-  return data.json();
+  try {
+    const data = await authFetch(`/clients/registered`, {
+      cache: 'no-store',
+    });
+    return data.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function getClient(id: string){
-  const data = await authFetch(`/clients/${id}`, {
-    cache: 'force-cache',
-  });
+  let data: Response;
+  try {
+    data = await authFetch(`/clients/${id}`, {
+      cache: 'force-cache',
+    });
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
+  }
 
   const json = await data.json();
 

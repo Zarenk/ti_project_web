@@ -104,11 +104,10 @@ model Product {
   // Relacion con Transfer
   transfers Transfer[] // Relacion con el modelo Transfer
 
-  @@unique([organizationId, legalName])
+  @@unique([organizationId, name])
   @@index([categoryId])
   @@index([name])
   @@index([brandId])
-  @@index([organizationId, name])
   @@index([organizationId, companyId]) // Indice para filtros eficientes
   @@index([companyId])
 }

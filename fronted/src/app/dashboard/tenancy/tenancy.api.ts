@@ -353,13 +353,12 @@ export async function updateOrganization(
 }
 
 export async function getCurrentTenant(): Promise<CurrentTenantResponse> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    return { organization: null, company: null, companies: [] }
+  }
+
   const performRequest = async () => {
-    const headers = await getAuthHeaders()
-
-    if (!headers.Authorization) {
-      throw new Error("No se encontro un token de autenticacion")
-    }
-
     const response = await fetch(`${BACKEND_URL}/api/tenancy/current`, {
       headers,
       cache: "no-store",
@@ -388,6 +387,10 @@ export async function getCurrentTenant(): Promise<CurrentTenantResponse> {
 
   if (response.ok) {
     return data as CurrentTenantResponse
+  }
+
+  if (response.status === 401) {
+    return { organization: null, company: null, companies: [] }
   }
 
   if (response.status === 400) {
@@ -490,7 +493,7 @@ export async function listOrganizations(): Promise<OrganizationResponse[]> {
   const headers = await getAuthHeaders()
 
   if (!headers.Authorization) {
-    throw new Error("No se encontro un token de autenticacion")
+    return []
   }
 
   const response = await fetch(`${BACKEND_URL}/api/tenancy`, {
@@ -503,6 +506,9 @@ export async function listOrganizations(): Promise<OrganizationResponse[]> {
   const data = isJson ? await response.json() : await response.text()
 
   if (!response.ok) {
+    if (response.status === 401) {
+      return []
+    }
     const message =
       (typeof data === "object" && data && "message" in data
         ? (data as { message?: string }).message
@@ -903,7 +909,7 @@ export async function getCompanySunatTransmissions(
   const headers = await getAuthHeaders()
 
   if (!headers.Authorization) {
-    throw new Error("No se encontro un token de autenticacion")
+    return []
   }
 
   const response = await fetch(
@@ -915,6 +921,9 @@ export async function getCompanySunatTransmissions(
   )
 
   if (!response.ok) {
+    if (response.status === 401) {
+      return []
+    }
     throw new Error("No se pudieron obtener los envios SUNAT")
   }
 
@@ -946,7 +955,7 @@ export async function getSunatStoredPdfs(): Promise<SunatStoredPdf[]> {
   const headers = await getAuthHeaders()
 
   if (!headers.Authorization) {
-    throw new Error("No se encontro un token de autenticacion")
+    return []
   }
 
   const response = await fetch(`${BACKEND_URL}/api/sunat/pdfs`, {
@@ -955,6 +964,9 @@ export async function getSunatStoredPdfs(): Promise<SunatStoredPdf[]> {
   })
 
   if (!response.ok) {
+    if (response.status === 401) {
+      return []
+    }
     throw new Error("No se pudieron obtener los PDFs almacenados")
   }
 

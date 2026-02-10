@@ -1,4 +1,4 @@
-import { authFetch } from "@/utils/auth-fetch";
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
 export interface Account {
   id: string;
@@ -9,9 +9,17 @@ export interface Account {
 }
 
 export async function fetchAccounts(): Promise<Account[]> {
-  const res = await authFetch("/api/accounting/accounts", {
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await authFetch("/api/accounting/accounts", {
+      cache: "no-store",
+    });
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
+  }
   if (!res.ok) {
     throw new Error("No se pudieron obtener las cuentas contables");
   }

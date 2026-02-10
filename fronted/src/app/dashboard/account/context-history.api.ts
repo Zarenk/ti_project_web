@@ -1,4 +1,4 @@
-import { authFetch } from "@/utils/auth-fetch"
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch"
 
 export type ContextHistoryEntry = {
   id: number
@@ -25,9 +25,17 @@ export async function fetchContextHistory(params?: {
     searchParams.set("cursor", String(params.cursor))
   }
   const query = searchParams.toString()
-  const res = await authFetch(
-    `/users/me/context-history${query ? `?${query}` : ""}`,
-  )
+  let res: Response
+  try {
+    res = await authFetch(
+      `/users/me/context-history${query ? `?${query}` : ""}`,
+    )
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return { items: [], nextCursor: null }
+    }
+    throw error
+  }
   if (!res.ok) {
     const message = await extractError(res)
     throw new Error(message || "No se pudo obtener el historial de contexto")
@@ -59,9 +67,17 @@ export async function fetchContextHistory(params?: {
 }
 
 export async function restoreContextHistoryEntry(id: number): Promise<void> {
-  const res = await authFetch(`/users/me/context-history/${id}/restore`, {
-    method: "POST",
-  })
+  let res: Response
+  try {
+    res = await authFetch(`/users/me/context-history/${id}/restore`, {
+      method: "POST",
+    })
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return
+    }
+    throw error
+  }
   if (!res.ok) {
     const message = await extractError(res)
     throw new Error(message || "No se pudo restaurar el contexto seleccionado")
