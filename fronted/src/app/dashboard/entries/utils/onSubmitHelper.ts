@@ -1,7 +1,13 @@
 import { toast } from "sonner";
 import { createProvider } from "../../providers/providers.api";
 import { verifyOrCreateProducts } from "../../products/products.api";
-import { createEntry, uploadGuiaPdf, uploadPdf } from "../entries.api";
+import {
+  attachDraftGuiaPdf,
+  attachDraftPdf,
+  createEntry,
+  uploadGuiaPdf,
+  uploadPdf,
+} from "../entries.api";
 import { updateProductPriceSell } from "../../inventory/inventory.api";
 import { UnauthenticatedError } from "@/utils/auth-fetch";
 
@@ -45,11 +51,13 @@ export async function handleFormSubmission({
   selectedProducts,
   isNewInvoiceBoolean,
   validateSeriesBeforeSubmit,
-  categories,
-  pdfFile,
-  pdfGuiaFile,
-  router,
-  getUserIdFromToken,
+    categories,
+    pdfFile,
+    pdfGuiaFile,
+    draftPdfId,
+    draftGuiaId,
+    router,
+    getUserIdFromToken,
   tipoMoneda, // Nuevo parÃ¡metro
   tipoCambioActual, // Nuevo parÃ¡metro
   referenceId,
@@ -212,8 +220,17 @@ export async function handleFormSubmission({
     const createdEntry = await createEntry(payload);
     if (!createdEntry?.id) throw new Error("No se pudo obtener el ID de la entrada creada.");
 
-    if (pdfFile) await uploadPdf(createdEntry.id, pdfFile);
-    if (pdfGuiaFile) await uploadGuiaPdf(createdEntry.id, pdfGuiaFile);
+    if (draftPdfId) {
+      await attachDraftPdf(createdEntry.id, draftPdfId);
+    } else if (pdfFile) {
+      await uploadPdf(createdEntry.id, pdfFile);
+    }
+
+    if (draftGuiaId) {
+      await attachDraftGuiaPdf(createdEntry.id, draftGuiaId);
+    } else if (pdfGuiaFile) {
+      await uploadGuiaPdf(createdEntry.id, pdfGuiaFile);
+    }
 
     toast.success("Se registro la informacion correctamente.");
     router.push("/dashboard/entries");

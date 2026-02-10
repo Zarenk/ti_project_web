@@ -11,6 +11,7 @@ import {
   UploadedFile,
   Query,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { EntriesService } from './entries.service';
 import { CreateEntryDto } from './dto/create-entry.dto';
@@ -24,10 +25,11 @@ import path from 'path';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { InvoiceExtractionService } from 'src/invoice-extraction/invoice-extraction.service';
-import { promises as fs } from 'fs';
+import { promises as fs, existsSync, mkdirSync } from 'fs';
 import { createHash } from 'crypto';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import type { Request } from 'express';
 
 @ModulePermission('inventory')
 @Controller('entries')
@@ -179,6 +181,58 @@ export class EntriesController {
     return this.entriesService.updateEntryPdf(entryId, pdfUrl);
   }
 
+  @Post('draft/upload-pdf')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const target = './uploads/entries-drafts/invoices';
+          if (!existsSync(target)) {
+            mkdirSync(target, { recursive: true });
+          }
+          cb(null, target);
+        },
+        filename: (req, file, cb) => {
+          const orgId = (req as any).tenantContext?.organizationId ?? 'org';
+          const userId = (req as any).user?.userId ?? 'user';
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = path.extname(file.originalname);
+          cb(null, `draft-${orgId}-${userId}-${uniqueSuffix}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.originalname.match(/\.(pdf)$/)) {
+          return cb(
+            new BadRequestException('Solo se permiten archivos PDF'),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadDraftPdf(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No se proporcionó un archivo PDF.');
+    }
+    const userId = (req as any).user?.userId ?? null;
+    if (!userId) {
+      throw new BadRequestException('Usuario inválido.');
+    }
+    const draftId = file.filename;
+    return {
+      draftId,
+      url: `/uploads/entries-drafts/invoices/${draftId}`,
+      organizationId,
+      userId,
+    };
+  }
+
   // Endpoint para actualizar una entrada con un PDF GUIA
   @Post(':id/upload-pdf-guia')
   @UseInterceptors(
@@ -212,6 +266,138 @@ export class EntriesController {
     }
 
     const pdfUrl = `/uploads/guides/${file.filename}`;
+    return this.entriesService.updateEntryPdfGuia(Number(id), pdfUrl);
+  }
+
+  @Post('draft/upload-pdf-guia')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const target = './uploads/entries-drafts/guides';
+          if (!existsSync(target)) {
+            mkdirSync(target, { recursive: true });
+          }
+          cb(null, target);
+        },
+        filename: (req, file, cb) => {
+          const orgId = (req as any).tenantContext?.organizationId ?? 'org';
+          const userId = (req as any).user?.userId ?? 'user';
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = path.extname(file.originalname);
+          cb(null, `draft-${orgId}-${userId}-${uniqueSuffix}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.originalname.match(/\.(pdf)$/)) {
+          return cb(
+            new BadRequestException('Solo se permiten archivos PDF'),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadDraftGuidePdf(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No se proporcionó un archivo PDF.');
+    }
+    const userId = (req as any).user?.userId ?? null;
+    if (!userId) {
+      throw new BadRequestException('Usuario inválido.');
+    }
+    const draftId = file.filename;
+    return {
+      draftId,
+      url: `/uploads/entries-drafts/guides/${draftId}`,
+      organizationId,
+      userId,
+    };
+  }
+
+  @Post(':id/attach-draft-pdf')
+  async attachDraftPdf(
+    @Param('id') id: string,
+    @Body('draftId') draftId: string,
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    if (!draftId || typeof draftId !== 'string') {
+      throw new BadRequestException('draftId inválido.');
+    }
+    const userId = (req as any).user?.userId ?? null;
+    if (!userId) {
+      throw new BadRequestException('Usuario inválido.');
+    }
+    const orgPart = organizationId ?? 'org';
+    if (!draftId.startsWith(`draft-${orgPart}-${userId}-`)) {
+      throw new BadRequestException('draftId no autorizado.');
+    }
+
+    const sourceDir = './uploads/entries-drafts/invoices';
+    const targetDir = './uploads/invoices';
+    if (!existsSync(targetDir)) {
+      mkdirSync(targetDir, { recursive: true });
+    }
+    const sourcePath = path.resolve(sourceDir, draftId);
+    const targetPath = path.resolve(targetDir, draftId);
+
+    await fs.rename(sourcePath, targetPath);
+
+    const pdfUrl = `/uploads/invoices/${draftId}`;
+    const entryId = Number(id);
+    const stats = await fs.stat(targetPath);
+    await this.registerInvoiceSample(entryId, {
+      destination: targetDir,
+      filename: draftId,
+      path: targetPath,
+      originalname: draftId,
+      mimetype: 'application/pdf',
+      size: stats.size,
+      fieldname: 'file',
+      encoding: '7bit',
+      stream: null as any,
+      buffer: null as any,
+    } as Express.Multer.File);
+    return this.entriesService.updateEntryPdf(entryId, pdfUrl);
+  }
+
+  @Post(':id/attach-draft-pdf-guia')
+  async attachDraftGuidePdf(
+    @Param('id') id: string,
+    @Body('draftId') draftId: string,
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    if (!draftId || typeof draftId !== 'string') {
+      throw new BadRequestException('draftId inválido.');
+    }
+    const userId = (req as any).user?.userId ?? null;
+    if (!userId) {
+      throw new BadRequestException('Usuario inválido.');
+    }
+    const orgPart = organizationId ?? 'org';
+    if (!draftId.startsWith(`draft-${orgPart}-${userId}-`)) {
+      throw new BadRequestException('draftId no autorizado.');
+    }
+
+    const sourceDir = './uploads/entries-drafts/guides';
+    const targetDir = './uploads/guides';
+    if (!existsSync(targetDir)) {
+      mkdirSync(targetDir, { recursive: true });
+    }
+    const sourcePath = path.resolve(sourceDir, draftId);
+    const targetPath = path.resolve(targetDir, draftId);
+
+    await fs.rename(sourcePath, targetPath);
+
+    const pdfUrl = `/uploads/guides/${draftId}`;
     return this.entriesService.updateEntryPdfGuia(Number(id), pdfUrl);
   }
 

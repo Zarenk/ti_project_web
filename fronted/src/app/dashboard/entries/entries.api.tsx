@@ -208,6 +208,90 @@ export function getPdfGuiaUrl(pdfPath: string): string {
 }
 //
 
+export async function uploadDraftGuiaPdf(pdfFile: File): Promise<{ draftId: string; url: string }> {
+  const formData = new FormData();
+  formData.append('file', pdfFile);
+
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/draft/upload-pdf-guia`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al subir el archivo PDF');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error al subir el borrador de la guía PDF:', error);
+    throw error;
+  }
+}
+
+export async function attachDraftGuiaPdf(entryId: number, draftId: string): Promise<void> {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/${entryId}/attach-draft-pdf-guia`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ draftId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al adjuntar el borrador de guía');
+    }
+  } catch (error) {
+    console.error('Error al adjuntar el borrador de guía PDF:', error);
+    throw error;
+  }
+}
+
+export async function uploadDraftPdf(pdfFile: File): Promise<{ draftId: string; url: string }> {
+  const formData = new FormData();
+  formData.append('file', pdfFile);
+
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/draft/upload-pdf`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al subir el archivo PDF');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error al subir el borrador del PDF:', error);
+    throw error;
+  }
+}
+
+export async function attachDraftPdf(entryId: number, draftId: string): Promise<void> {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/${entryId}/attach-draft-pdf`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ draftId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al adjuntar el borrador PDF');
+    }
+  } catch (error) {
+    console.error('Error al adjuntar el borrador PDF:', error);
+    throw error;
+  }
+}
+
 export interface InvoiceExtractionLog {
   id: number;
   level: string;

@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useFieldArray, Controller, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
-import { AlertTriangle, Check, Loader2, Plus, X } from 'lucide-react'
+import { AlertTriangle, Check, Loader2, Plus, X, Trash2, Boxes, LocateFixed, XCircle, CheckCircle2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -109,6 +109,8 @@ type BatchCartItem = {
 }
 
 const BATCH_CART_STORAGE_KEY = "product-batch-cart:v1"
+const BATCH_ASSIGNMENTS_STORAGE_KEY = "product-batch-assignments:v1"
+const BATCH_UI_STATE_STORAGE_KEY = "product-batch-ui-state:v1"
 
 export function ProductForm({
   product,
@@ -217,14 +219,32 @@ export function ProductForm({
       }
     >
   >({})
-  const [applyAllStoreId, setApplyAllStoreId] = useState('')
-  const [applyAllProviderId, setApplyAllProviderId] = useState('')
-  const [batchTemplateName, setBatchTemplateName] = useState('')
-  const [batchTemplates, setBatchTemplates] = useState<
-    { id: string; name: string; storeId: string; providerId: string; currency: 'PEN' | 'USD'; price?: number }[]
-  >([])
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
   const [dragOverStoreId, setDragOverStoreId] = useState<string | null>(null)
+  const [dragOverProviderId, setDragOverProviderId] = useState<string | null>(null)
+  const [hoveredBatchId, setHoveredBatchId] = useState<string | null>(null)
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null)
+  const [isBatchDragActive, setIsBatchDragActive] = useState(false)
+  const [batchDragCursor, setBatchDragCursor] = useState<{ x: number; y: number } | null>(null)
+  const batchDialogRef = useRef<HTMLDivElement | null>(null)
+  const batchCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const [batchPanelPosition, setBatchPanelPosition] = useState<{ left: number; top: number } | null>(null)
+  const batchCartHydratedRef = useRef(false)
+  const [floatingPanelPosition, setFloatingPanelPosition] = useState<{ x: number; y: number } | null>(null)
+  const [isFloatingPanelDragging, setIsFloatingPanelDragging] = useState(false)
+  const floatingDragOffsetRef = useRef({ x: 0, y: 0 })
+  const floatingDragFrameRef = useRef<number | null>(null)
+  const floatingDragPointRef = useRef<{ x: number; y: number } | null>(null)
+  const floatingPanelRef = useRef<HTMLDivElement | null>(null)
+  const floatingPanelPinnedRef = useRef(false)
+  const getDefaultPanelPosition = useCallback(() => {
+    const panel = floatingPanelRef.current
+    const panelWidth = panel?.offsetWidth ?? 280
+    const panelHeight = panel?.offsetHeight ?? 200
+    const x = Math.max(0, window.innerWidth - panelWidth - 24)
+    const y = Math.max(0, window.innerHeight - panelHeight - 24)
+    return { x, y }
+  }, [])
   const handleFieldChange = useCallback(
     (key: string, value: unknown) => {
       setExtraAttributes((prev) => {
@@ -924,23 +944,59 @@ const VariantRowItem = memo(function VariantRowItem({
     if (!Number.isFinite(numberValue)) return null;
     return `S/ ${numberValue.toFixed(2)}`;
   };
-  const watchedName = useWatch({ control, name: 'name' })
-  const watchedCategoryId = useWatch({ control, name: 'categoryId' })
-  const watchedBrand = useWatch({ control, name: 'brand' })
-  const watchedDescription = useWatch({ control, name: 'description' })
-  const watchedPrice = useWatch({ control, name: 'price' })
-  const watchedPriceSell = useWatch({ control, name: 'priceSell' })
-  const watchedInitialStock = useWatch({ control, name: 'initialStock' })
-  const watchedImages = useWatch({ control, name: 'images' })
-  const watchedFeatures = useWatch({ control, name: 'features' })
-  const watchedProcessor = useWatch({ control, name: 'processor' })
-  const watchedRam = useWatch({ control, name: 'ram' })
-  const watchedStorage = useWatch({ control, name: 'storage' })
-  const watchedGraphics = useWatch({ control, name: 'graphics' })
-  const watchedScreen = useWatch({ control, name: 'screen' })
-  const watchedResolution = useWatch({ control, name: 'resolution' })
-  const watchedRefreshRate = useWatch({ control, name: 'refreshRate' })
-  const watchedConnectivity = useWatch({ control, name: 'connectivity' })
+  const watchedValues = useWatch({
+    control,
+    name: showComputerSpecs
+      ? [
+          'name',
+          'categoryId',
+          'brand',
+          'description',
+          'price',
+          'priceSell',
+          'initialStock',
+          'images',
+          'features',
+          'processor',
+          'ram',
+          'storage',
+          'graphics',
+          'screen',
+          'resolution',
+          'refreshRate',
+          'connectivity',
+        ]
+      : [
+          'name',
+          'categoryId',
+          'brand',
+          'description',
+          'price',
+          'priceSell',
+          'initialStock',
+          'images',
+          'features',
+        ],
+  }) as unknown[]
+  const [
+    watchedName,
+    watchedCategoryId,
+    watchedBrand,
+    watchedDescription,
+    watchedPrice,
+    watchedPriceSell,
+    watchedInitialStock,
+    watchedImages,
+    watchedFeatures,
+    watchedProcessor = '',
+    watchedRam = '',
+    watchedStorage = '',
+    watchedGraphics = '',
+    watchedScreen = '',
+    watchedResolution = '',
+    watchedRefreshRate = '',
+    watchedConnectivity = '',
+  ] = watchedValues
   const hasName = Boolean(watchedName?.trim())
   const hasCategory = Boolean(watchedCategoryId)
   const hasBrand = Boolean(watchedBrand?.trim())
@@ -969,7 +1025,7 @@ const VariantRowItem = memo(function VariantRowItem({
       watchedConnectivity?.trim(),
   )
   const debouncedName = useDebounce(watchedName ?? '', 250)
-  const debouncedNameValidation = useDebounce(watchedName ?? '', 1000)
+  const debouncedNameValidation = useDebounce(watchedName ?? '', 1200)
 
   useEffect(() => {
     if (currentProductId) {
@@ -1050,6 +1106,50 @@ const VariantRowItem = memo(function VariantRowItem({
       const assignment = batchAssignments[item.id]
       return !assignment || !assignment.storeId || !assignment.providerId || assignment.quantity <= 0
     }).length
+  }, [batchAssignments, batchCart])
+
+  useEffect(() => {
+    if (!isBatchStockDialogOpen || !activeBatchId) {
+      setBatchPanelPosition(null)
+      return
+    }
+    const dialogEl = batchDialogRef.current
+    const cardEl = batchCardRefs.current[activeBatchId]
+    if (!dialogEl || !cardEl) return
+    const dialogRect = dialogEl.getBoundingClientRect()
+    const cardRect = cardEl.getBoundingClientRect()
+    const panelWidth = 240
+    const panelHeight = 110
+    const gap = 8
+    let left = cardRect.left - dialogRect.left
+    let top = cardRect.bottom - dialogRect.top + gap
+    if (left + panelWidth > dialogRect.width - 12) {
+      left = Math.max(12, dialogRect.width - panelWidth - 12)
+    }
+    if (top + panelHeight > dialogRect.height - 12) {
+      top = Math.max(12, cardRect.top - dialogRect.top - panelHeight - gap)
+    }
+    setBatchPanelPosition({ left, top })
+  }, [activeBatchId, isBatchStockDialogOpen, batchCart.length])
+  const storeAssignmentCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    batchCart.forEach((item) => {
+      const storeId = batchAssignments[item.id]?.storeId
+      if (storeId) {
+        counts[storeId] = (counts[storeId] ?? 0) + 1
+      }
+    })
+    return counts
+  }, [batchAssignments, batchCart])
+  const providerAssignmentCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    batchCart.forEach((item) => {
+      const providerId = batchAssignments[item.id]?.providerId
+      if (providerId) {
+        counts[providerId] = (counts[providerId] ?? 0) + 1
+      }
+    })
+    return counts
   }, [batchAssignments, batchCart])
   const suppressInlineErrors =
     batchCart.length > 0 && !currentProductId && !hasDraftData;
@@ -1514,63 +1614,6 @@ const VariantRowItem = memo(function VariantRowItem({
     [],
   )
 
-  const applyAssignmentsToAll = useCallback(() => {
-    if (!applyAllStoreId && !applyAllProviderId) {
-      return
-    }
-    setBatchAssignments((prev) => {
-      const next = { ...prev }
-      batchCart.forEach((item) => {
-        const existing = next[item.id] ?? {
-          storeId: '',
-          providerId: '',
-          quantity: 0,
-          price: Number(item.payload?.price ?? 0),
-          currency: 'PEN' as const,
-        }
-        next[item.id] = {
-          ...existing,
-          storeId: applyAllStoreId || existing.storeId,
-          providerId: applyAllProviderId || existing.providerId,
-        }
-      })
-      return next
-    })
-  }, [applyAllProviderId, applyAllStoreId, batchCart])
-
-  const handleApplyTemplate = useCallback(
-    (templateId: string) => {
-      const template = batchTemplates.find((item) => item.id === templateId)
-      if (!template) return
-      setApplyAllStoreId(template.storeId)
-      setApplyAllProviderId(template.providerId)
-      setBatchAssignments((prev) => {
-        const next = { ...prev }
-        batchCart.forEach((item) => {
-          const existing = next[item.id] ?? {
-            storeId: '',
-            providerId: '',
-            quantity: 0,
-            price: Number(item.payload?.price ?? 0),
-            currency: 'PEN' as const,
-          }
-          next[item.id] = {
-            ...existing,
-            storeId: template.storeId || existing.storeId,
-            providerId: template.providerId || existing.providerId,
-            currency: template.currency ?? existing.currency,
-            price:
-              typeof template.price === 'number'
-                ? template.price
-                : existing.price,
-          }
-        })
-        return next
-      })
-    },
-    [batchCart, batchTemplates],
-  )
-
   const handleCreateBatchWithAssignments = useCallback(async () => {
     if (!batchCart.length) return
     if (batchMissingAssignmentsCount > 0) {
@@ -1631,50 +1674,6 @@ const VariantRowItem = memo(function VariantRowItem({
     }
   }, [batchAssignments, batchCart, batchMissingAssignmentsCount, onSuccess, router, userId])
 
-  const handleSaveBatchTemplate = useCallback(() => {
-    const name = batchTemplateName.trim()
-    if (!name) {
-      toast.error("Ingresa un nombre para la plantilla.")
-      return
-    }
-    if (!applyAllStoreId || !applyAllProviderId) {
-      toast.error("Selecciona una tienda y proveedor antes de guardar la plantilla.")
-      return
-    }
-    const id =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}`
-    setBatchTemplates((prev) => [
-      ...prev,
-      {
-        id,
-        name,
-        storeId: applyAllStoreId,
-        providerId: applyAllProviderId,
-        currency: "PEN",
-      },
-    ])
-    setBatchTemplateName('')
-    toast.success("Plantilla guardada.")
-  }, [applyAllProviderId, applyAllStoreId, batchTemplateName])
-
-  useEffect(() => {
-    const raw = localStorage.getItem('product-batch-assign-templates:v1')
-    if (!raw) return
-    try {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) {
-        setBatchTemplates(parsed)
-      }
-    } catch (error) {
-      console.warn("No se pudieron cargar las plantillas de asignación.", error)
-    }
-  }, [])
-
-  useEffect(() => {
-    localStorage.setItem('product-batch-assign-templates:v1', JSON.stringify(batchTemplates))
-  }, [batchTemplates])
 
   const handleAddAnother = useCallback(async () => {
     if (currentProductId) {
@@ -1917,8 +1916,10 @@ const VariantRowItem = memo(function VariantRowItem({
 
   useEffect(() => {
     const raw = localStorage.getItem(BATCH_CART_STORAGE_KEY)
-    if (!raw) return
     try {
+      if (!raw) {
+        return
+      }
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) {
         const deduped = parsed.filter((item, index, self) => {
@@ -1933,12 +1934,158 @@ const VariantRowItem = memo(function VariantRowItem({
       }
     } catch (error) {
       console.warn("No se pudo leer el carrito de productos.", error)
+    } finally {
+      // Evita sobrescribir el storage con un estado vacio en el primer render.
+      queueMicrotask(() => {
+        batchCartHydratedRef.current = true
+      })
     }
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(BATCH_CART_STORAGE_KEY, JSON.stringify(batchCart))
+    if (!batchCartHydratedRef.current) return
+    try {
+      localStorage.setItem(BATCH_CART_STORAGE_KEY, JSON.stringify(batchCart))
+    } catch (error) {
+      console.warn("No se pudo guardar el carrito de productos.", error)
+    }
   }, [batchCart])
+
+  useEffect(() => {
+    const raw = localStorage.getItem(BATCH_ASSIGNMENTS_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === "object") {
+        setBatchAssignments(parsed as typeof batchAssignments)
+      }
+    } catch (error) {
+      console.warn("No se pudieron leer las asignaciones del lote.", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!batchCart.length) {
+      localStorage.removeItem(BATCH_ASSIGNMENTS_STORAGE_KEY)
+      return
+    }
+    localStorage.setItem(BATCH_ASSIGNMENTS_STORAGE_KEY, JSON.stringify(batchAssignments))
+  }, [batchAssignments, batchCart.length])
+
+  useEffect(() => {
+    const raw = localStorage.getItem(BATCH_UI_STATE_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed?.panel && typeof parsed.panel.x === "number" && typeof parsed.panel.y === "number") {
+        setFloatingPanelPosition({ x: parsed.panel.x, y: parsed.panel.y })
+      }
+      if (parsed?.batchStockDialogOpen === true) {
+        setIsBatchStockDialogOpen(true)
+      }
+    } catch (error) {
+      console.warn("No se pudo leer el estado de UI del lote.", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!batchCart.length) {
+      localStorage.removeItem(BATCH_UI_STATE_STORAGE_KEY)
+      return
+    }
+    const payload = {
+      panel: floatingPanelPosition ?? { x: 0, y: 0 },
+      batchStockDialogOpen: isBatchStockDialogOpen,
+    }
+    localStorage.setItem(BATCH_UI_STATE_STORAGE_KEY, JSON.stringify(payload))
+  }, [batchCart.length, floatingPanelPosition, isBatchStockDialogOpen])
+
+  useEffect(() => {
+    if (!batchCart.length || currentProductId) return
+    if (floatingPanelPinnedRef.current) return
+    if (floatingPanelPosition) return
+    setFloatingPanelPosition(getDefaultPanelPosition())
+    floatingPanelPinnedRef.current = true
+  }, [batchCart.length, currentProductId, floatingPanelPosition, getDefaultPanelPosition])
+
+  useEffect(() => {
+    if (!isBatchStockDialogOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (isBatchStockDialogOpen) {
+          setIsBatchStockDialogOpen(false)
+        }
+        setActiveBatchId(null)
+        setHoveredBatchId(null)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isBatchStockDialogOpen])
+
+  useEffect(() => {
+    if (!isBatchDragActive) {
+      setBatchDragCursor(null)
+      return
+    }
+    const handleMove = (event: MouseEvent) => {
+      setBatchDragCursor({ x: event.clientX, y: event.clientY })
+    }
+    window.addEventListener("mousemove", handleMove)
+    return () => {
+      window.removeEventListener("mousemove", handleMove)
+    }
+  }, [isBatchDragActive])
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isFloatingPanelDragging) return
+      floatingDragPointRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+      }
+      if (floatingDragFrameRef.current != null) {
+        return
+      }
+      floatingDragFrameRef.current = window.requestAnimationFrame(() => {
+        const point = floatingDragPointRef.current
+        if (!point) {
+          floatingDragFrameRef.current = null
+          return
+        }
+        const panel = floatingPanelRef.current
+        const panelWidth = panel?.offsetWidth ?? 280
+        const panelHeight = panel?.offsetHeight ?? 200
+        const maxX = Math.max(0, window.innerWidth - panelWidth)
+        const maxY = Math.max(0, window.innerHeight - panelHeight)
+        const nextX = point.x - floatingDragOffsetRef.current.x
+        const nextY = point.y - floatingDragOffsetRef.current.y
+        setFloatingPanelPosition({
+          x: Math.min(Math.max(0, nextX), maxX),
+          y: Math.min(Math.max(0, nextY), maxY),
+        })
+        floatingDragFrameRef.current = null
+      })
+    }
+
+    const handlePointerUp = () => {
+      if (!isFloatingPanelDragging) return
+      setIsFloatingPanelDragging(false)
+    }
+
+    window.addEventListener("pointermove", handlePointerMove)
+    window.addEventListener("pointerup", handlePointerUp)
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointerup", handlePointerUp)
+      if (floatingDragFrameRef.current != null) {
+        window.cancelAnimationFrame(floatingDragFrameRef.current)
+        floatingDragFrameRef.current = null
+      }
+    }
+  }, [isFloatingPanelDragging])
 
   useEffect(() => {
     if (!isBatchStockDialogOpen) return
@@ -2305,12 +2452,46 @@ const VariantRowItem = memo(function VariantRowItem({
                                 Precio de Compra
                                 {renderOptionalChip(hasPrice)}
                             </Label>
-                            <Input 
-                            step="0.01" // Permite valores con dos decimales
-                            min={0} // Valor minimo permitido
-                            max={99999999.99} // Valor maximo permitido
-                            type="number" 
-                            {...register('price', {valueAsNumber: true})}></Input>
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2 py-1">
+                              <Input
+                                step="0.01"
+                                min={0}
+                                max={99999999.99}
+                                type="number"
+                                className="h-8 flex-1 border-0 bg-transparent px-0 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                {...register('price', { valueAsNumber: true })}
+                              />
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7 border-sky-500/60 bg-sky-50 text-sky-700 hover:border-sky-500/80 hover:text-sky-800 dark:border-sky-400/40 dark:bg-transparent dark:text-sky-200 dark:hover:border-sky-300/70 dark:hover:text-sky-100"
+                                  aria-label="Disminuir precio de compra"
+                                  onClick={() => {
+                                    const current = Number(form.getValues('price') ?? 0)
+                                    const next = Math.max(0, current - 1)
+                                    setValue('price', next, { shouldDirty: true, shouldValidate: true })
+                                  }}
+                                >
+                                  −
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7 border-sky-500/60 bg-sky-50 text-sky-700 hover:border-sky-500/80 hover:text-sky-800 dark:border-sky-400/40 dark:bg-transparent dark:text-sky-200 dark:hover:border-sky-300/70 dark:hover:text-sky-100"
+                                  aria-label="Aumentar precio de compra"
+                                  onClick={() => {
+                                    const current = Number(form.getValues('price') ?? 0)
+                                    const next = current + 1
+                                    setValue('price', next, { shouldDirty: true, shouldValidate: true })
+                                  }}
+                                >
+                                  +
+                                </Button>
+                              </div>
+                            </div>
                             {form.formState.errors.price && (
                                 <p className="text-red-500 text-sm">{form.formState.errors.price.message}</p>
                             )}
@@ -2321,12 +2502,46 @@ const VariantRowItem = memo(function VariantRowItem({
                                 Precio de Venta
                                 {renderOptionalChip(hasPriceSell)}
                             </Label>
-                            <Input 
-                            step="0.01" // Permite valores con dos decimales
-                            min={0} // Valor minimo permitido
-                            max={99999999.99} // Valor maximo permitido
-                            type="number"
-                            {...register('priceSell', {valueAsNumber: true})}></Input>
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2 py-1">
+                              <Input
+                                step="0.01"
+                                min={0}
+                                max={99999999.99}
+                                type="number"
+                                className="h-8 flex-1 border-0 bg-transparent px-0 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                {...register('priceSell', { valueAsNumber: true })}
+                              />
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7 border-emerald-500/60 bg-emerald-50 text-emerald-700 hover:border-emerald-500/80 hover:text-emerald-800 dark:border-emerald-400/40 dark:bg-transparent dark:text-emerald-200 dark:hover:border-emerald-300/70 dark:hover:text-emerald-100"
+                                  aria-label="Disminuir precio de venta"
+                                  onClick={() => {
+                                    const current = Number(form.getValues('priceSell') ?? 0)
+                                    const next = Math.max(0, current - 1)
+                                    setValue('priceSell', next, { shouldDirty: true, shouldValidate: true })
+                                  }}
+                                >
+                                  −
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7 border-emerald-500/60 bg-emerald-50 text-emerald-700 hover:border-emerald-500/80 hover:text-emerald-800 dark:border-emerald-400/40 dark:bg-transparent dark:text-emerald-200 dark:hover:border-emerald-300/70 dark:hover:text-emerald-100"
+                                  aria-label="Aumentar precio de venta"
+                                  onClick={() => {
+                                    const current = Number(form.getValues('priceSell') ?? 0)
+                                    const next = current + 1
+                                    setValue('priceSell', next, { shouldDirty: true, shouldValidate: true })
+                                  }}
+                                >
+                                  +
+                                </Button>
+                              </div>
+                            </div>
                             {form.formState.errors.priceSell && (
                                 <p className="text-red-500 text-sm">{form.formState.errors.priceSell.message}</p>
                             )}
@@ -2337,12 +2552,46 @@ const VariantRowItem = memo(function VariantRowItem({
                                 Cantidad / Stock inicial
                                 {renderOptionalChip(hasInitialStock)}
                             </Label>
-                            <Input
-                            step="1"
-                            min={0}
-                            max={99999999.99}
-                            type="number"
-                            {...register('initialStock', {valueAsNumber: true})}></Input>
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2 py-1">
+                              <Input
+                                step="1"
+                                min={0}
+                                max={99999999.99}
+                                type="number"
+                                className="h-8 flex-1 border-0 bg-transparent px-0 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                {...register('initialStock', { valueAsNumber: true })}
+                              />
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7 border-indigo-500/60 bg-indigo-50 text-indigo-700 hover:border-indigo-500/80 hover:text-indigo-800 dark:border-indigo-400/40 dark:bg-transparent dark:text-indigo-200 dark:hover:border-indigo-300/70 dark:hover:text-indigo-100"
+                                  aria-label="Disminuir stock inicial"
+                                  onClick={() => {
+                                    const current = Number(form.getValues('initialStock') ?? 0)
+                                    const next = Math.max(0, current - 1)
+                                    setValue('initialStock', next, { shouldDirty: true, shouldValidate: true })
+                                  }}
+                                >
+                                  −
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7 border-indigo-500/60 bg-indigo-50 text-indigo-700 hover:border-indigo-500/80 hover:text-indigo-800 dark:border-indigo-400/40 dark:bg-transparent dark:text-indigo-200 dark:hover:border-indigo-300/70 dark:hover:text-indigo-100"
+                                  aria-label="Aumentar stock inicial"
+                                  onClick={() => {
+                                    const current = Number(form.getValues('initialStock') ?? 0)
+                                    const next = current + 1
+                                    setValue('initialStock', next, { shouldDirty: true, shouldValidate: true })
+                                  }}
+                                >
+                                  +
+                                </Button>
+                              </div>
+                            </div>
                             {form.formState.errors.initialStock && (
                               <p className="text-red-500 text-sm">{form.formState.errors.initialStock.message}</p>
                             )}
@@ -2665,8 +2914,29 @@ const VariantRowItem = memo(function VariantRowItem({
         </fieldset>
       </form>
       {batchCart.length > 0 && !currentProductId && (
-        <div className="fixed bottom-6 right-6 z-40 w-[280px] rounded-xl border border-border/60 bg-card/95 p-4 shadow-lg backdrop-blur">
-          <div className="flex items-center justify-between">
+        <div
+          ref={floatingPanelRef}
+          className={`fixed z-40 w-[280px] rounded-xl border border-border/60 bg-card/95 p-4 shadow-lg backdrop-blur ${
+            isFloatingPanelDragging ? "cursor-grabbing" : ""
+          }`}
+          style={{
+            left: floatingPanelPosition?.x ?? 0,
+            top: floatingPanelPosition?.y ?? 0,
+          }}
+        >
+          <div
+            className={`flex items-center justify-between ${
+              isFloatingPanelDragging ? "cursor-grabbing" : "cursor-grab"
+            }`}
+            onPointerDown={(event) => {
+              setIsFloatingPanelDragging(true)
+              floatingPanelPinnedRef.current = true
+              floatingDragOffsetRef.current = {
+                x: event.clientX - (floatingPanelPosition?.x ?? 0),
+                y: event.clientY - (floatingPanelPosition?.y ?? 0),
+              }
+            }}
+          >
             <p className="text-sm font-semibold">Productos agregados</p>
             <Badge variant="secondary">{batchCart.length}</Badge>
           </div>
@@ -2743,42 +3013,82 @@ const VariantRowItem = memo(function VariantRowItem({
                         </p>
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="cursor-pointer text-rose-500 hover:text-rose-600 dark:text-rose-300 dark:hover:text-rose-200"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setBatchCart((prev) =>
-                          prev.filter((entry) => entry.id !== item.id),
-                        )
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                          className="h-8 w-8 cursor-pointer border-rose-500/60 bg-rose-50 text-rose-700 transition-all duration-200 hover:scale-105 hover:border-rose-500/80 hover:text-rose-800 hover:shadow-[0_0_18px_rgba(244,63,94,0.25)] dark:border-rose-400/40 dark:bg-transparent dark:text-rose-200 dark:hover:border-rose-300/70 dark:hover:text-rose-100 dark:hover:shadow-[0_0_18px_rgba(244,63,94,0.35)]"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setBatchCart((prev) =>
+                                prev.filter((entry) => entry.id !== item.id),
+                              )
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Quitar producto</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                 )
               })}
           </div>
-          <div className="mt-4 flex flex-col gap-2">
-            <Button
-              type="button"
-              className="cursor-pointer bg-primary/10 text-primary hover:bg-primary/20"
-              onClick={() => setIsBatchStockDialogOpen(true)}
-              disabled={isProcessing}
-            >
-              Asignar stock por tienda
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="cursor-pointer text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white"
-              onClick={() => setBatchCart([])}
-              disabled={isProcessing}
-            >
-              Vaciar
-            </Button>
+          <div className="mt-4 flex items-center gap-2">
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 cursor-pointer border-emerald-500/60 bg-emerald-50 text-emerald-700 transition-all duration-200 hover:scale-105 hover:border-emerald-500/80 hover:text-emerald-800 hover:shadow-[0_0_18px_rgba(16,185,129,0.25)] dark:border-emerald-400/40 dark:bg-transparent dark:text-emerald-200 dark:hover:border-emerald-300/70 dark:hover:text-emerald-100 dark:hover:shadow-[0_0_18px_rgba(16,185,129,0.35)]"
+                    onClick={() => setIsBatchStockDialogOpen(true)}
+                    disabled={isProcessing}
+                  >
+                    <Boxes className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Asignar stock por tienda</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 cursor-pointer border-sky-500/60 bg-sky-50 text-sky-700 transition-all duration-200 hover:scale-105 hover:border-sky-500/80 hover:text-sky-800 hover:shadow-[0_0_18px_rgba(56,189,248,0.25)] dark:border-sky-400/40 dark:bg-transparent dark:text-sky-200 dark:hover:border-sky-300/70 dark:hover:text-sky-100 dark:hover:shadow-[0_0_18px_rgba(56,189,248,0.35)]"
+                    onClick={() => {
+                      setFloatingPanelPosition(getDefaultPanelPosition())
+                      floatingPanelPinnedRef.current = true
+                    }}
+                    disabled={isProcessing}
+                  >
+                    <LocateFixed className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Restaurar posición</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 cursor-pointer border-rose-500/60 bg-rose-50 text-rose-700 transition-all duration-200 hover:scale-105 hover:border-rose-500/80 hover:text-rose-800 hover:shadow-[0_0_18px_rgba(244,63,94,0.25)] dark:border-rose-400/40 dark:bg-transparent dark:text-rose-200 dark:hover:border-rose-300/70 dark:hover:text-rose-100 dark:hover:shadow-[0_0_18px_rgba(244,63,94,0.35)]"
+                    onClick={() => setBatchCart([])}
+                    disabled={isProcessing}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Vaciar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       )}
@@ -2816,11 +3126,18 @@ const VariantRowItem = memo(function VariantRowItem({
           <DialogHeader>
             <DialogTitle>Crear productos agregados</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            El formulario actual no est&aacute; completo. Puedes crear los{" "}
-            <span className="font-semibold text-foreground">{batchCart.length}</span>{" "}
-            producto(s) del carrito y continuar editando luego.
-          </p>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              El formulario actual no est&aacute; completo. Puedes crear los{" "}
+              <span className="font-semibold text-foreground">{batchCart.length}</span>{" "}
+              producto(s) del carrito y continuar editando luego.
+            </p>
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              Faltan asignaciones de <span className="font-semibold">tienda/proveedor</span>.
+              Se crear&aacute;n los productos <span className="font-semibold">sin stock</span> hasta que
+              registres las cantidades en el inventario.
+            </div>
+          </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
@@ -2849,236 +3166,393 @@ const VariantRowItem = memo(function VariantRowItem({
           setIsBatchStockDialogOpen(open)
           if (!open) {
             setBatchStockError(null)
-            setApplyAllProviderId('')
-            setApplyAllStoreId('')
+            setActiveBatchId(null)
+            setIsBatchDragActive(false)
           }
         }}
       >
-        <DialogContent className="max-w-4xl bg-card/95">
+        {isBatchDragActive && batchDragCursor ? (
+          <div
+            className="pointer-events-none fixed z-[70] inline-flex items-center gap-2 rounded-full border border-amber-500/60 bg-amber-200/40 px-2 py-1 text-[10px] text-amber-900 shadow-[0_8px_20px_rgba(0,0,0,0.25)] backdrop-blur dark:border-amber-400/40 dark:bg-amber-500/10 dark:text-amber-200"
+            style={{
+              left: batchDragCursor.x + 12,
+              top: batchDragCursor.y + 12,
+            }}
+          >
+            <span className="text-[11px] text-amber-900 dark:text-amber-200">↕</span>
+          </div>
+        ) : null}
+        <DialogContent
+          ref={batchDialogRef}
+          className="max-w-5xl bg-card/95"
+          onClick={() => {
+            setActiveBatchId(null)
+            setHoveredBatchId(null)
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Asignar stock por tienda y proveedor</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Asigna tienda y proveedor a cada producto. Puedes arrastrar productos a una tienda y aplicar plantillas.
+          <p className="text-sm text-slate-600 dark:text-muted-foreground">
+            Arrastra cada producto hacia su tienda y proveedor. Mant&eacute;n el movimiento simple:
+            el stock y precio se ajustan desde cada tarjeta.
           </p>
-          <div className="mt-4 grid gap-3 rounded-lg border border-border/40 bg-muted/10 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              Plantillas
-            </p>
-            <div className="grid gap-2 md:grid-cols-3">
-              <Select onValueChange={handleApplyTemplate}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Aplicar plantilla" />
-                </SelectTrigger>
-                <SelectContent>
-                  {batchTemplates.length === 0 ? (
-                    <SelectItem value="__empty__" disabled>
-                      No hay plantillas
-                    </SelectItem>
-                  ) : (
-                    batchTemplates.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              <Input
-                placeholder="Nombre de plantilla"
-                value={batchTemplateName}
-                onChange={(event) => setBatchTemplateName(event.target.value)}
-              />
-              <Button type="button" variant="outline" onClick={handleSaveBatchTemplate}>
-                Guardar plantilla
-              </Button>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-3 rounded-lg border border-border/40 bg-muted/10 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              Aplicar a todos
-            </p>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-1">
-                <Label>Tienda</Label>
-                <Select value={applyAllStoreId} onValueChange={setApplyAllStoreId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecciona tienda" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.map((store: any) => (
-                      <SelectItem key={store.id} value={String(store.id)}>
+          <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr]">
+            <div className="space-y-3 rounded-lg border border-border/40 bg-muted/10 p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 dark:text-muted-foreground">
+                  Tiendas
+                </p>
+                <span className="text-[10px] text-slate-500 dark:text-muted-foreground">
+                  {stores.length} registradas
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {stores.length ? stores.map((store: any) => {
+                  const assignedCount = storeAssignmentCounts[String(store.id)] ?? 0
+                  return (
+                  <div
+                    key={store.id}
+                    className={`rounded-lg border px-3 py-2 text-[10px] tracking-[0.03em] transition-all cursor-pointer ${
+                      dragOverStoreId === String(store.id)
+                        ? "border-emerald-300/70 bg-emerald-100/60 shadow-[0_0_18px_rgba(16,185,129,0.18)] dark:bg-emerald-400/10"
+                        : "border-slate-300/70 bg-white text-slate-700 hover:border-emerald-400/50 dark:border-border/50 dark:bg-background/40 dark:text-muted-foreground"
+                    }`}
+                    onDragOver={(event) => {
+                      event.preventDefault()
+                      setDragOverStoreId(String(store.id))
+                    }}
+                    onDragLeave={() => setDragOverStoreId(null)}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      setDragOverStoreId(null)
+                      const droppedId =
+                        event.dataTransfer.getData("text/plain") || draggingItemId
+                      if (droppedId) {
+                        updateBatchAssignment(droppedId, { storeId: String(store.id) })
+                      }
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="line-clamp-2 text-slate-700 dark:text-muted-foreground">
                         {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </span>
+                      {assignedCount > 0 && (
+                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-emerald-300/60 bg-emerald-100 px-1 text-[10px] text-emerald-700 dark:border-emerald-300/40 dark:bg-emerald-500/20 dark:text-emerald-200">
+                          {assignedCount}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}) : (
+                  <div className="rounded-lg border border-dashed border-slate-300/70 px-3 py-6 text-center text-[11px] text-slate-500 dark:border-border/50 dark:text-muted-foreground">
+                    No hay tiendas registradas.
+                  </div>
+                )}
               </div>
-              <div className="space-y-1">
-                <Label>Proveedor</Label>
-                <Select value={applyAllProviderId} onValueChange={setApplyAllProviderId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecciona proveedor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providers.map((provider: any) => (
-                      <SelectItem key={provider.id} value={String(provider.id)}>
+            </div>
+            <div className="space-y-3 rounded-lg border border-border/40 bg-muted/10 p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 dark:text-muted-foreground">
+                  Proveedores
+                </p>
+                <span className="text-[10px] text-slate-500 dark:text-muted-foreground">
+                  {providers.length} registrados
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {providers.length ? providers.map((provider: any) => {
+                  const assignedCount = providerAssignmentCounts[String(provider.id)] ?? 0
+                  return (
+                  <div
+                    key={provider.id}
+                    className={`rounded-lg border px-3 py-2 text-[10px] tracking-[0.03em] transition-all cursor-pointer ${
+                      dragOverProviderId === String(provider.id)
+                        ? "border-sky-300/70 bg-sky-100/60 shadow-[0_0_18px_rgba(56,189,248,0.18)] dark:bg-sky-400/10"
+                        : "border-slate-300/70 bg-white text-slate-700 hover:border-sky-400/50 dark:border-border/50 dark:bg-background/40 dark:text-muted-foreground"
+                    }`}
+                    onDragOver={(event) => {
+                      event.preventDefault()
+                      setDragOverProviderId(String(provider.id))
+                    }}
+                    onDragLeave={() => setDragOverProviderId(null)}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      setDragOverProviderId(null)
+                      const droppedId =
+                        event.dataTransfer.getData("text/plain") || draggingItemId
+                      if (droppedId) {
+                        updateBatchAssignment(droppedId, { providerId: String(provider.id) })
+                      }
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="line-clamp-2 text-slate-700 dark:text-muted-foreground">
                         {provider.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end">
-                <Button type="button" variant="outline" onClick={applyAssignmentsToAll}>
-                  Aplicar
-                </Button>
+                      </span>
+                      {assignedCount > 0 && (
+                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-sky-300/60 bg-sky-100 px-1 text-[10px] text-sky-700 dark:border-sky-300/40 dark:bg-sky-500/20 dark:text-sky-200">
+                          {assignedCount}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}) : (
+                  <div className="rounded-lg border border-dashed border-slate-300/70 px-3 py-6 text-center text-[11px] text-slate-500 dark:border-border/50 dark:text-muted-foreground">
+                    No hay proveedores registrados.
+                  </div>
+                )}
               </div>
             </div>
           </div>
-          <div className="mt-4 grid gap-2 rounded-lg border border-border/40 bg-muted/10 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              Arrastra productos a una tienda
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {stores.map((store: any) => (
-                <div
-                  key={store.id}
-                  className={`rounded-lg border px-3 py-2 text-xs transition-colors ${
-                    dragOverStoreId === String(store.id)
-                      ? "border-primary/70 bg-primary/10"
-                      : "border-border/60 bg-background/40"
-                  }`}
-                  onDragOver={(event) => {
-                    event.preventDefault()
-                    setDragOverStoreId(String(store.id))
-                  }}
-                  onDragLeave={() => setDragOverStoreId(null)}
-                  onDrop={(event) => {
-                    event.preventDefault()
-                    setDragOverStoreId(null)
-                    if (draggingItemId) {
-                      updateBatchAssignment(draggingItemId, { storeId: String(store.id) })
-                    }
-                  }}
-                >
-                  <p className="text-[11px] font-semibold uppercase text-muted-foreground">
-                    {store.name}
-                  </p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
-                    Suelta aqu&iacute; para asignar.
-                  </p>
-                </div>
-              ))}
+          <div className="mt-4 rounded-lg border border-border/40 bg-muted/10 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 dark:text-muted-foreground">
+                Productos
+              </p>
+              <span className="text-[10px] text-slate-500 dark:text-muted-foreground">
+                Arrastra un producto hacia una tienda y proveedor.
+              </span>
             </div>
-          </div>
-          <div className="mt-4 max-h-[360px] space-y-3 overflow-auto">
-            {batchCart.map((item) => {
-              const assignment = batchAssignments[item.id]
-              const priceValue = Number(assignment?.price ?? item.payload?.price ?? 0)
-              return (
-                <div
-                  key={item.id}
-                  className="rounded-lg border border-border/40 bg-card/60 p-3"
-                  draggable
-                  onDragStart={() => setDraggingItemId(item.id)}
-                  onDragEnd={() => setDraggingItemId(null)}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Drag</span>
-                      <p className="text-sm font-semibold">{item.name}</p>
-                    </div>
-                    {assignment?.quantity > 0 &&
-                    assignment?.storeId &&
-                    assignment?.providerId ? (
-                      <Badge variant="secondary">Listo</Badge>
-                    ) : (
-                      <Badge variant="outline">Pendiente</Badge>
-                    )}
-                  </div>
-                  <div className="mt-3 grid gap-3 md:grid-cols-5">
-                    <div className="space-y-1 md:col-span-2">
-                      <Label>Tienda</Label>
-                      <Select
-                        value={assignment?.storeId ?? ''}
-                        onValueChange={(value) => updateBatchAssignment(item.id, { storeId: value })}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Selecciona tienda" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {stores.map((store: any) => (
-                            <SelectItem key={store.id} value={String(store.id)}>
-                              {store.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1 md:col-span-2">
-                      <Label>Proveedor</Label>
-                      <Select
-                        value={assignment?.providerId ?? ''}
-                        onValueChange={(value) =>
-                          updateBatchAssignment(item.id, { providerId: value })
-                        }
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Selecciona proveedor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {providers.map((provider: any) => (
-                            <SelectItem key={provider.id} value={String(provider.id)}>
-                              {provider.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Cantidad</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={Number.isFinite(assignment?.quantity) ? assignment?.quantity : 0}
-                        onChange={(event) =>
-                          updateBatchAssignment(item.id, { quantity: Number(event.target.value || 0) })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Precio compra</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={Number.isFinite(priceValue) ? priceValue : 0}
-                        onChange={(event) =>
-                          updateBatchAssignment(item.id, { price: Number(event.target.value || 0) })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Moneda</Label>
-                      <Select
-                        value={assignment?.currency ?? 'PEN'}
-                        onValueChange={(value) =>
-                          updateBatchAssignment(item.id, { currency: value as 'PEN' | 'USD' })
-                        }
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Moneda" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="PEN">PEN</SelectItem>
-                          <SelectItem value="USD">USD</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+            {isBatchDragActive && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/60 bg-amber-200/40 px-3 py-2 text-[11px] text-amber-900 dark:border-amber-400/40 dark:bg-amber-500/10 dark:text-amber-200">
+              <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-amber-700 dark:bg-amber-300" />
+              Arrastrando: suelta el producto sobre una tienda o proveedor.
+            </div>
+            )}
+            <div className="mt-3 grid gap-3 overflow-visible sm:grid-cols-2 lg:grid-cols-4">
+              {batchCart.map((item) => {
+                const assignment = batchAssignments[item.id]
+                const priceValue = Number(assignment?.price ?? item.payload?.price ?? 0)
+                const isReady =
+                  assignment?.quantity > 0 && assignment?.storeId && assignment?.providerId
+                const storeName =
+                  stores.find((s: any) => String(s.id) === assignment?.storeId)?.name ?? ""
+                const providerName =
+                  providers.find((p: any) => String(p.id) === assignment?.providerId)?.name ?? ""
+                const isActive = activeBatchId === item.id
+                return (
+                  <TooltipProvider key={item.id} delayDuration={200}>
+                    <Tooltip open={!isBatchDragActive && !activeBatchId && hoveredBatchId === item.id}>
+                      <TooltipTrigger asChild>
+                        <div
+                          ref={(node) => {
+                            batchCardRefs.current[item.id] = node
+                          }}
+                          className={`group relative flex h-40 w-full flex-col justify-between rounded-xl border px-3 py-3 text-xs transition-[border-color,box-shadow,background-color] duration-200 cursor-grab active:cursor-grabbing hover:z-10 ${
+                            isReady
+                              ? "border-emerald-400/40 bg-emerald-400/10 shadow-[0_0_18px_rgba(16,185,129,0.2)]"
+                              : "border-slate-300/60 bg-white text-slate-700 hover:border-emerald-400/30 dark:border-border/50 dark:bg-background/40 dark:text-foreground"
+                          }`}
+                          draggable
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setActiveBatchId(item.id)
+                          }}
+                          onDragStart={(event) => {
+                            event.dataTransfer.setData("text/plain", item.id)
+                            event.dataTransfer.effectAllowed = "move"
+                            setDraggingItemId(item.id)
+                            setIsBatchDragActive(true)
+                            setActiveBatchId(null)
+                            setHoveredBatchId(null)
+                          }}
+                          onDragEnd={() => {
+                            setDraggingItemId(null)
+                            setIsBatchDragActive(false)
+                          }}
+                          onMouseEnter={() => {
+                            if (!activeBatchId || activeBatchId === item.id) {
+                              setHoveredBatchId(item.id)
+                            }
+                          }}
+                          onMouseLeave={() => {
+                            if (!activeBatchId || activeBatchId === item.id) {
+                              setHoveredBatchId((prev) => (prev === item.id ? null : prev))
+                            }
+                          }}
+                        >
+                          <div className="flex min-h-[46px] flex-col items-center gap-1 text-center">
+                            {isReady ? (
+                              <Badge variant="secondary">Listo</Badge>
+                            ) : (
+                              <Badge variant="outline">Pendiente</Badge>
+                            )}
+                            <p
+                              className="w-full max-w-[140px] truncate text-[10px] font-semibold text-slate-800 dark:text-foreground"
+                              title={item.name}
+                            >
+                              {item.name}
+                            </p>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-1 text-[10px]">
+                            {storeName ? (
+                              <span className="rounded-full border border-slate-300/70 bg-white px-2 py-0.5 text-slate-600 dark:border-border/40 dark:bg-transparent dark:text-muted-foreground">
+                                {storeName}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-rose-600/50 bg-rose-600/15 px-2 py-0.5 text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
+                                <AlertTriangle className="h-3 w-3" />
+                                Sin Tienda
+                              </span>
+                            )}
+                            {providerName ? (
+                              <span className="rounded-full border border-slate-300/70 bg-white px-2 py-0.5 text-slate-600 dark:border-border/40 dark:bg-transparent dark:text-muted-foreground">
+                                {providerName}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-rose-600/50 bg-rose-600/15 px-2 py-0.5 text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
+                                <AlertTriangle className="h-3 w-3" />
+                                Sin Proveedor
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <div className="space-y-1 text-xs">
+                          <p className="font-semibold">{item.name}</p>
+                          <p>
+                            Tienda:{" "}
+                            <span className="font-semibold">
+                              {storeName || "-"}
+                            </span>
+                          </p>
+                          <p>
+                            Proveedor:{" "}
+                            <span className="font-semibold">
+                              {providerName || "-"}
+                            </span>
+                          </p>
+                          <p>
+                            Stock: <span className="font-semibold">{assignment?.quantity ?? 0}</span>
+                          </p>
+                          <p>
+                            Precio compra:{" "}
+                            <span className="font-semibold">S/. {priceValue.toFixed(2)}</span>
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )
+              })}
+            </div>
+            <div
+              className={`absolute z-20 w-60 rounded-xl border border-slate-300/70 bg-white/95 px-3 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.28)] backdrop-blur transition-all duration-300 ease-out dark:border-border/60 dark:bg-background/95 ${
+                !isBatchDragActive && activeBatchId && batchPanelPosition
+                  ? "opacity-100 translate-y-0"
+                  : "pointer-events-none opacity-0 translate-y-2"
+              }`}
+              style={{
+                left: batchPanelPosition?.left ?? 0,
+                top: batchPanelPosition?.top ?? 0,
+              }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              {activeBatchId && batchPanelPosition
+                ? (() => {
+                    const activeItem = batchCart.find((entry) => entry.id === activeBatchId)
+                    const assignment = activeItem ? batchAssignments[activeItem.id] : undefined
+                    const priceValue = Number(assignment?.price ?? activeItem?.payload?.price ?? 0)
+                    if (!activeItem) return null
+                    return (
+                      <div className="grid gap-2">
+                      <div className="flex items-center gap-2 rounded-md border border-emerald-300/60 bg-emerald-50/70 px-2.5 py-2 dark:border-border/40 dark:bg-background/40">
+                        <Boxes className="h-4 w-4 text-emerald-700 dark:text-emerald-200" />
+                          <Input
+                            type="number"
+                            min={0}
+                            className="h-7 flex-1 border-0 bg-transparent px-0 text-[12px] [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            placeholder="Stock"
+                            value={Number.isFinite(assignment?.quantity) ? assignment?.quantity : 0}
+                            onChange={(event) =>
+                              updateBatchAssignment(activeItem.id, {
+                                quantity: Number(event.target.value || 0),
+                              })
+                            }
+                          />
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6 border-emerald-400/40 text-emerald-200 hover:border-emerald-300/70 hover:text-emerald-100"
+                              aria-label="Disminuir stock"
+                              onClick={() =>
+                                updateBatchAssignment(activeItem.id, {
+                                  quantity: Math.max(0, (assignment?.quantity ?? 0) - 1),
+                                })
+                              }
+                            >
+                              −
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6 border-emerald-400/40 text-emerald-200 hover:border-emerald-300/70 hover:text-emerald-100"
+                              aria-label="Aumentar stock"
+                              onClick={() =>
+                                updateBatchAssignment(activeItem.id, {
+                                  quantity: (assignment?.quantity ?? 0) + 1,
+                                })
+                              }
+                            >
+                              +
+                            </Button>
+                          </div>
+                        </div>
+                      <div className="flex items-center gap-2 rounded-md border border-sky-300/60 bg-sky-50/70 px-2.5 py-2 dark:border-border/40 dark:bg-background/40">
+                        <span className="text-[12px] font-semibold text-sky-700 dark:text-sky-200">S/</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            className="h-7 flex-1 border-0 bg-transparent px-0 text-[12px] [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            placeholder="Compra"
+                            value={Number.isFinite(priceValue) ? priceValue : 0}
+                            onChange={(event) =>
+                              updateBatchAssignment(activeItem.id, {
+                                price: Number(event.target.value || 0),
+                              })
+                            }
+                          />
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6 border-sky-400/40 text-sky-200 hover:border-sky-300/70 hover:text-sky-100"
+                              aria-label="Disminuir precio"
+                              onClick={() =>
+                                updateBatchAssignment(activeItem.id, {
+                                  price: Math.max(0, (assignment?.price ?? priceValue ?? 0) - 1),
+                                })
+                              }
+                            >
+                              −
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6 border-sky-400/40 text-sky-200 hover:border-sky-300/70 hover:text-sky-100"
+                              aria-label="Aumentar precio"
+                              onClick={() =>
+                                updateBatchAssignment(activeItem.id, {
+                                  price: (assignment?.price ?? priceValue ?? 0) + 1,
+                                })
+                              }
+                            >
+                              +
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()
+                : null}
+            </div>
           </div>
           {batchStockError && (
             <p className="text-xs text-rose-500">{batchStockError}</p>
@@ -3088,20 +3562,24 @@ const VariantRowItem = memo(function VariantRowItem({
               {batchMissingAssignmentsCount} producto(s) sin stock asignado.
             </p>
           )}
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-3 sm:gap-3">
             <Button
               type="button"
               variant="outline"
+              className="border-slate-300/80 text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:border-white/20 dark:text-slate-200 dark:hover:bg-white/10"
               onClick={() => setIsBatchStockDialogOpen(false)}
               disabled={isProcessing}
             >
+              <XCircle className="mr-2 h-4 w-4" />
               Cerrar
             </Button>
             <Button
               type="button"
+              className="bg-emerald-500 text-emerald-950 hover:bg-emerald-400 dark:bg-emerald-400 dark:text-emerald-950 dark:hover:bg-emerald-300"
               onClick={handleCreateBatchWithAssignments}
               disabled={isProcessing || batchMissingAssignmentsCount > 0}
             >
+              <CheckCircle2 className="mr-2 h-4 w-4" />
               Crear productos y stock
             </Button>
           </DialogFooter>

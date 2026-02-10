@@ -1,4 +1,5 @@
 import { getAuthHeaders } from "@/utils/auth-token";
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
@@ -33,15 +34,22 @@ export async function createProvider(providerData: any) {
 }
 
 export async function getProviders() {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/providers`, {
-    cache: "no-store",
-  });
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/providers`, {
+      cache: "no-store",
+    });
 
-  if (!res.ok) {
-    throw new Error(`Error al obtener proveedores: ${res.status}`);
+    if (!res.ok) {
+      throw new Error(`Error al obtener proveedores: ${res.status}`);
+    }
+
+    return res.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
   }
-
-  return res.json();
 }
 
 export async function getProvider(id: string) {

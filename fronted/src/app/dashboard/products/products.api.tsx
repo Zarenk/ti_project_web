@@ -1,4 +1,5 @@
 import { getAuthHeaders } from '@/utils/auth-token'
+import { authFetch, UnauthenticatedError } from '@/utils/auth-fetch'
 import { isProductActive, normalizeProductStatus } from './status.utils'
 
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
@@ -47,9 +48,17 @@ export async function getProducts(filters?: ProductFilters) {
     url.searchParams.set('migrationStatus', filters.migrationStatus)
   }
 
-  const response = await authorizedFetch(url.toString(), {
-    cache: 'no-store',
-  })
+  let response: Response
+  try {
+    response = await authFetch(url.toString(), {
+      cache: 'no-store',
+    })
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
+  }
 
   if (!response.ok) {
     if (response.status === 400) {

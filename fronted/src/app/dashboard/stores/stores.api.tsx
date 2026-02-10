@@ -1,4 +1,5 @@
 import { getAuthHeaders } from "@/utils/auth-token";
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
 async function authorizedFetch(url: string, init: RequestInit = {}) {
@@ -33,10 +34,21 @@ export async function createStore(storeData: any){
 }
 
 export async function getStores(){
-    const data = await authorizedFetch(`${BACKEND_URL}/api/stores`, {
-        'cache': 'no-store',
-    });
-    return data.json()
+    try {
+        const data = await authFetch(`${BACKEND_URL}/api/stores`, {
+            cache: 'no-store',
+        });
+        if (!data.ok) {
+            throw new Error(`Error al obtener tiendas: ${data.status}`);
+        }
+        return await data.json();
+    } catch (error) {
+        if (error instanceof UnauthenticatedError) {
+            return [];
+        }
+        console.error("Error al obtener tiendas:", error);
+        return [];
+    }
 }
 
 export async function getStore(id: string){

@@ -1,4 +1,5 @@
 import { getAuthHeaders } from "@/utils/auth-token";
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
@@ -69,7 +70,7 @@ export async function createCategoryDefault() {
 
 export async function getCategories() {
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/category`, {
+    const response = await authFetch(`${BACKEND_URL}/api/category`, {
       cache: "no-store",
     });
 
@@ -85,6 +86,9 @@ export async function getCategories() {
     const data = await response.json();
     return data;
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error("Error al obtener categorias:", error);
     return [];
   }
