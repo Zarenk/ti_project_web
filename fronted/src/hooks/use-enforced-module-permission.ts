@@ -23,7 +23,7 @@ export const MODULE_PERMISSION_LABELS: Record<ModulePermissionKey, string> = {
 
 export function useEnforcedModulePermission(module: ModulePermissionKey) {
   const checkPermission = useModulePermission()
-  const { role } = useAuth()
+  const { role, authPending, sessionExpiring } = useAuth()
   const { isLoading } = useSiteSettings()
 
   const { allowed, loading } = useMemo(() => {
@@ -32,11 +32,15 @@ export function useEnforcedModulePermission(module: ModulePermissionKey) {
       return { allowed: false, loading: true }
     }
 
+    if (authPending || sessionExpiring) {
+      return { allowed: false, loading: true }
+    }
+
     return {
       allowed: checkPermission(module),
       loading: isLoading,
     }
-  }, [checkPermission, module, role, isLoading])
+  }, [checkPermission, module, role, isLoading, authPending, sessionExpiring])
 
   return { allowed, loading }
 }

@@ -38,8 +38,10 @@ type AuthContextType = {
   isPublicSignup: boolean | null
   userPermissions: UserPermissionsMap | null
   authPending: boolean
+  sessionExpiring: boolean
   refreshUser: () => Promise<void>
   logout: (options?: { silent?: boolean }) => Promise<void>
+  logoutAndRedirect: (options?: { silent?: boolean; returnTo?: string }) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -60,6 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sessionExpiryInProgressRef = useRef(false)
   const [sessionExpiryOverlay, setSessionExpiryOverlay] = useState(false)
   const lastUserIdRef = useRef<number | null>(null)
+  const authRedirectInProgressRef = useRef(false)
+  const lastPathKey = "ti.lastPath"
   useUserContextSync(userId, role)
   const ensureTenantDefaults = useCallback(async (ownerId?: number | null): Promise<boolean> => {
     try {
@@ -169,18 +173,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const redirectToLogin = useCallback(() => {
+    if (authRedirectInProgressRef.current) {
+      return
+    }
+    authRedirectInProgressRef.current = true
     if (typeof window === "undefined") {
       router.replace('/login')
       return
     }
     const { pathname, search, hash } = window.location
     if (pathname.startsWith('/login')) {
-      router.refresh()
       return
     }
-    const returnTo = `${pathname}${search}${hash}` || '/'
-    router.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`)
-    router.refresh()
+    let returnTo = `${pathname}${search}${hash}` || '/'
+    try {
+      const stored = window.sessionStorage.getItem(lastPathKey)
+      if (stored && stored.startsWith('/')) {
+        returnTo = returnTo || stored
+      }
+    } catch {
+      /* ignore */
+    }
+    const target = `/login?returnTo=${encodeURIComponent(returnTo)}`
+    router.replace(target)
+    window.setTimeout(() => {
+      try {
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.assign(target)
+        }
+      } catch {
+        /* ignore */
+      }
+    }, 800)
   }, [router])
 
   const forceLogoutDueToExpiry = useCallback(async () => {
@@ -193,9 +217,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       toast.error('Tu sesión ha expirado. Redirigiendo al inicio de sesión.')
     } catch {}
-    await logout({ silent: true })
-    redirectToLogin()
+    try {
+      await logout({ silent: true })
+    } finally {
+      redirectToLogin()
+    }
   }, [logout, redirectToLogin])
+
+  const logoutAndRedirect = useCallback(
+    async ({ silent = false, returnTo }: { silent?: boolean; returnTo?: string } = {}) => {
+      if (returnTo && typeof window !== "undefined") {
+        try {
+          if (returnTo.startsWith('/')) {
+            window.sessionStorage.setItem(lastPathKey, returnTo)
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      await logout({ silent })
+      redirectToLogin()
+    },
+    [logout, redirectToLogin],
+  )
 
   const scheduleSessionCheck = useCallback(async () => {
     if (typeof window === 'undefined' || !userId) {
@@ -270,6 +314,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser])
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+    const { pathname: currentPath, search, hash } = window.location
+    if (!currentPath || currentPath.startsWith('/login')) {
+      return
+    }
+    const current = `${currentPath}${search}${hash}`
+    try {
+      window.sessionStorage.setItem(lastPathKey, current)
+    } catch {
+      /* ignore */
+    }
+  }, [pathname])
+
+  useEffect(() => {
     if (!sessionExpiryOverlay) {
       return
     }
@@ -341,7 +401,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ])
 
   return (
-    <AuthContext.Provider value={{ userId, userName, role, isPublicSignup, userPermissions, authPending, refreshUser, logout }}>
+    <AuthContext.Provider value={{ userId, userName, role, isPublicSignup, userPermissions, authPending, sessionExpiring: sessionExpiryOverlay, refreshUser, logout, logoutAndRedirect }}>
       {children}
       {sessionExpiryOverlay && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm text-center px-6">

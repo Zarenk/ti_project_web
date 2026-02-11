@@ -525,6 +525,9 @@ export class TenancyService {
       dto.secondaryColor,
       'secondaryColor',
     );
+    const defaultQuoteMargin = this.normalizeMarginInput(
+      dto.defaultQuoteMargin,
+    );
     const sunatSolUserBeta = this.normalizeNullableInput(dto.sunatSolUserBeta);
     const sunatSolPasswordBeta = this.normalizeNullableInput(
       dto.sunatSolPasswordBeta,
@@ -587,6 +590,7 @@ export class TenancyService {
             logoUrl: logoUrl ?? null,
             primaryColor: primaryColor ?? null,
             secondaryColor: secondaryColor ?? null,
+            defaultQuoteMargin: defaultQuoteMargin ?? undefined,
             sunatSolUserBeta: sunatSolUserBeta ?? null,
             sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
             sunatCertPathBeta: sunatCertPathBeta ?? null,
@@ -824,6 +828,9 @@ export class TenancyService {
       dto.secondaryColor,
       'secondaryColor',
     );
+    const defaultQuoteMargin = this.normalizeMarginInput(
+      dto.defaultQuoteMargin,
+    );
     const sunatSolUserBeta = this.normalizeNullableInput(dto.sunatSolUserBeta);
     const sunatSolPasswordBeta = this.normalizeNullableInput(
       dto.sunatSolPasswordBeta,
@@ -894,6 +901,10 @@ export class TenancyService {
     }
     if (dto.secondaryColor !== undefined) {
       data.secondaryColor = secondaryColor ?? null;
+    }
+    if (dto.defaultQuoteMargin !== undefined) {
+      data.defaultQuoteMargin =
+        defaultQuoteMargin ?? existing.defaultQuoteMargin;
     }
     if (dto.sunatSolUserBeta !== undefined) {
       data.sunatSolUserBeta = sunatSolUserBeta ?? null;
@@ -1581,6 +1592,9 @@ export class TenancyService {
         company.secondaryColor,
         'secondaryColor',
       );
+      const defaultQuoteMargin = this.normalizeMarginInput(
+        company.defaultQuoteMargin,
+      );
       const sunatSolUserBeta = this.normalizeNullableInput(
         company.sunatSolUserBeta,
       );
@@ -1621,6 +1635,7 @@ export class TenancyService {
           logoUrl: logoUrl ?? null,
           primaryColor: primaryColor ?? null,
           secondaryColor: secondaryColor ?? null,
+          defaultQuoteMargin: defaultQuoteMargin ?? undefined,
           sunatSolUserBeta: sunatSolUserBeta ?? null,
           sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
           sunatCertPathBeta: sunatCertPathBeta ?? null,
@@ -1774,6 +1789,9 @@ export class TenancyService {
         company.secondaryColor,
         'secondaryColor',
       );
+      const defaultQuoteMargin = this.normalizeMarginInput(
+        company.defaultQuoteMargin,
+      );
       const sunatSolUserBeta = this.normalizeNullableInput(
         company.sunatSolUserBeta,
       );
@@ -1849,6 +1867,10 @@ export class TenancyService {
         if (company.secondaryColor !== undefined) {
           updateData.secondaryColor = secondaryColor ?? null;
         }
+        if (company.defaultQuoteMargin !== undefined) {
+          updateData.defaultQuoteMargin =
+            defaultQuoteMargin ?? existing.defaultQuoteMargin;
+        }
         if (company.sunatSolUserBeta !== undefined) {
           updateData.sunatSolUserBeta = sunatSolUserBeta ?? null;
         }
@@ -1900,6 +1922,7 @@ export class TenancyService {
           logoUrl: logoUrl ?? null,
           primaryColor: primaryColor ?? null,
           secondaryColor: secondaryColor ?? null,
+          defaultQuoteMargin: defaultQuoteMargin ?? undefined,
           sunatSolUserBeta: sunatSolUserBeta ?? null,
           sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
           sunatCertPathBeta: sunatCertPathBeta ?? null,
@@ -1982,6 +2005,28 @@ export class TenancyService {
       );
     }
     return normalized.toUpperCase();
+  }
+
+  private normalizeMarginInput(
+    value: number | null | undefined,
+  ): number | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value === null) {
+      return null;
+    }
+    if (Number.isNaN(value) || !Number.isFinite(value)) {
+      throw new BadRequestException(
+        'El margen de cotización debe ser un número válido.',
+      );
+    }
+    if (value < 0 || value > 1) {
+      throw new BadRequestException(
+        'El margen de cotización debe estar entre 0 y 1.',
+      );
+    }
+    return value;
   }
 
   private normalizeCompanyStatus(

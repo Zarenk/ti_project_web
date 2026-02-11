@@ -991,6 +991,13 @@ export class EntriesService {
   // Actualizar una entrada con un PDF
   async updateEntryPdf(entryId: number, pdfUrl: string) {
     try {
+      // Validar que entryId sea un número válido
+      if (!entryId || isNaN(entryId) || !Number.isInteger(entryId)) {
+        throw new BadRequestException(
+          `ID de entrada inválido: ${entryId}. Debe ser un número entero válido.`
+        );
+      }
+
       const entry = await this.prisma.entry.findUnique({
         where: { id: entryId },
       });
@@ -1014,6 +1021,13 @@ export class EntriesService {
   // Actualizar una entrada con un PDF_GUIA
   async updateEntryPdfGuia(entryId: number, guiaUrl: string) {
     try {
+      // Validar que entryId sea un número válido
+      if (!entryId || isNaN(entryId) || !Number.isInteger(entryId)) {
+        throw new BadRequestException(
+          `ID de entrada inválido: ${entryId}. Debe ser un número entero válido.`
+        );
+      }
+
       const entry = await this.prisma.entry.findUnique({
         where: { id: entryId },
       });

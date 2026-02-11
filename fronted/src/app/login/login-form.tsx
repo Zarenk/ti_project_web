@@ -221,6 +221,12 @@ export default function LoginForm() {
             setLoading(false)
             return
           }
+          const lastPath = window.sessionStorage.getItem("ti.lastPath")
+          if (lastPath && lastPath.startsWith('/') && !['/login', '/unauthorized'].includes(lastPath)) {
+            router.replace(lastPath)
+            setLoading(false)
+            return
+          }
         } catch {}
       }
 

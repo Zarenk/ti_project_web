@@ -14,6 +14,7 @@ import { getAllEntries } from "../entries/entries.api";
 import { getLowStockItems } from "../inventory/inventory.api";
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth";
 import { UnauthenticatedError } from "@/utils/auth-fetch";
+import { useAuth } from "@/context/auth-context";
 
 export default function ActivityPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -22,9 +23,11 @@ export default function ActivityPage() {
   const { allowed: dashboardAllowed, loading: permissionLoading } = useEnforcedModulePermission("dashboard");
   const permissionToastShown = useRef(false);
   const authErrorShown = useRef(false);
+  const { authPending, sessionExpiring } = useAuth();
 
   const handleAuthError = async (err: unknown) => {
     if (authErrorShown.current) return true;
+    if (authPending || sessionExpiring) return true;
     if (err instanceof UnauthenticatedError) {
       authErrorShown.current = true;
       if (await isTokenValid()) {
@@ -40,7 +43,7 @@ export default function ActivityPage() {
   };
 
   useEffect(() => {
-    if (permissionLoading) return;
+    if (permissionLoading || authPending || sessionExpiring) return;
 
     if (!dashboardAllowed) {
       if (!permissionToastShown.current) {
@@ -51,16 +54,22 @@ export default function ActivityPage() {
     } else {
       permissionToastShown.current = false;
     }
-  }, [dashboardAllowed, permissionLoading, router]);
+  }, [dashboardAllowed, permissionLoading, router, authPending, sessionExpiring]);
 
   useEffect(() => {
-    if (permissionLoading || !dashboardAllowed) {
+    if (permissionLoading || authPending || sessionExpiring || !dashboardAllowed) {
       return;
     }
 
     async function fetchData() {
+      if (authPending || sessionExpiring) {
+        return;
+      }
       const data = await getUserDataFromToken();
       if (!data || !(await isTokenValid()) || (!['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE'].includes(data.role))) {
+        if (authPending || sessionExpiring) {
+          return;
+        }
         router.push('/unauthorized');
         return;
       }
@@ -145,6 +154,9 @@ export default function ActivityPage() {
         setActivities(items);
       } catch (error: unknown) {
         if (!(await handleAuthError(error))) {
+          if (authPending || sessionExpiring) {
+            return;
+          }
           if (error instanceof Error && error.message === 'Unauthorized') {
             router.push('/unauthorized');
           } else {
@@ -156,9 +168,9 @@ export default function ActivityPage() {
       }
     }
     fetchData();
-  }, [dashboardAllowed, permissionLoading, router]);
+  }, [dashboardAllowed, permissionLoading, router, authPending, sessionExpiring]);
 
-  if (permissionLoading || !dashboardAllowed) {
+  if (permissionLoading || authPending || sessionExpiring || !dashboardAllowed) {
     return null;
   }
 

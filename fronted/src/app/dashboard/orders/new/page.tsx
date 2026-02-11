@@ -28,6 +28,7 @@ import ProductsSection from "./ProductsSection";
 import SummaryCard from "./SummaryCard";
 import ClientCombobox from "./ClientCombobox";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { useAuth } from "@/context/auth-context";
 
 // (Combos de bÃƒÂºsqueda se aislaron en componentes)
 
@@ -288,6 +289,7 @@ type OrderItem = {
 export default function NewOrderPage() {
   const router = useRouter();
   const { version } = useTenantSelection();
+  const { authPending, sessionExpiring } = useAuth();
   const { info: verticalInfo } = useVerticalConfig();
   const isRestaurant = verticalInfo?.businessVertical === "RESTAURANTS";
   const [authChecked, setAuthChecked] = useState(false);
@@ -398,6 +400,9 @@ export default function NewOrderPage() {
 
   useEffect(() => {
     async function guard() {
+      if (authPending || sessionExpiring) {
+        return;
+      }
       const user = await getUserDataFromToken();
       const valid = await isTokenValid();
       const normalizedRole = user?.role ? user.role.trim().toUpperCase().replace(/\s+/g, "_") : null;
@@ -414,7 +419,7 @@ export default function NewOrderPage() {
       setAuthChecked(true);
     }
     guard();
-  }, [router, version]);
+  }, [router, version, authPending, sessionExpiring]);
 
   useEffect(() => {
     async function loadStores() {

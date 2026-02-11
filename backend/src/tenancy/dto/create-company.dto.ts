@@ -6,7 +6,9 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { CompanyDocumentSequenceDto } from './company-document-sequence.dto';
@@ -76,6 +78,12 @@ export class CreateCompanyDto {
   @IsString()
   @MaxLength(20)
   secondaryColor?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  defaultQuoteMargin?: number;
 
   @IsOptional()
   @IsString()

@@ -586,3 +586,50 @@
   .animate-fade-in { animation: fade-in 0.6s ease-out both; }
   .animate-fade-in-up { animation: fade-in-up 0.75s ease-out both; }
 }
+
+/* Sales dashboard scoped tokens */
+.sales-dashboard-theme {
+  --background: oklch(0.985 0.004 255);
+  --foreground: oklch(0.2 0.03 255);
+  --card: oklch(0.992 0.003 255);
+  --card-foreground: oklch(0.2 0.03 255);
+  --popover: oklch(0.992 0.003 255);
+  --popover-foreground: oklch(0.2 0.03 255);
+  --primary: oklch(0.28 0.05 255);
+  --primary-foreground: oklch(0.985 0.004 255);
+  --secondary: oklch(0.95 0.006 255);
+  --secondary-foreground: oklch(0.22 0.03 255);
+  --muted: oklch(0.945 0.006 255);
+  --muted-foreground: oklch(0.48 0.03 255);
+  --accent: oklch(0.95 0.006 255);
+  --accent-foreground: oklch(0.22 0.03 255);
+  --border: oklch(0.9 0.006 255);
+  --input: oklch(0.9 0.006 255);
+  --ring: oklch(0.58 0.04 255);
+  --chart-1: oklch(0.5 0.12 155);
+  --chart-2: oklch(0.55 0.12 225);
+  --chart-3: oklch(0.42 0.05 255);
+}
+
+.dark .sales-dashboard-theme {
+  --background: oklch(0.16 0.03 255);
+  --foreground: oklch(0.97 0.004 255);
+  --card: oklch(0.2 0.03 255);
+  --card-foreground: oklch(0.97 0.004 255);
+  --popover: oklch(0.2 0.03 255);
+  --popover-foreground: oklch(0.97 0.004 255);
+  --primary: oklch(0.86 0.02 255);
+  --primary-foreground: oklch(0.22 0.03 255);
+  --secondary: oklch(0.24 0.03 255);
+  --secondary-foreground: oklch(0.97 0.004 255);
+  --muted: oklch(0.24 0.03 255);
+  --muted-foreground: oklch(0.7 0.02 255);
+  --accent: oklch(0.24 0.03 255);
+  --accent-foreground: oklch(0.97 0.004 255);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.6 0.03 255);
+  --chart-1: oklch(0.66 0.14 150);
+  --chart-2: oklch(0.7 0.14 225);
+  --chart-3: oklch(0.6 0.08 255);
+}

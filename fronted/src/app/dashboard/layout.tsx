@@ -1,5 +1,6 @@
 import { Suspense, type ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -26,7 +27,14 @@ export default async function Page({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/unauthorized");
+    const hdrs = headers();
+    const rawPath =
+      hdrs.get("x-next-url") ||
+      hdrs.get("x-original-url") ||
+      hdrs.get("x-forwarded-uri") ||
+      "/dashboard";
+    const safePath = rawPath.startsWith("/") ? rawPath : "/dashboard";
+    redirect(`/login?returnTo=${encodeURIComponent(safePath)}`);
   }
 
   if (user.role === "CLIENT") {

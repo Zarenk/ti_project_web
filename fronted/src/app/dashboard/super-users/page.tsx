@@ -21,6 +21,7 @@ import { isTokenValid, getUserDataFromToken } from "@/lib/auth"
 import { createManagedUser } from "./super-users.api"
 import { listOrganizations, type OrganizationResponse } from "../tenancy/tenancy.api"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { useAuth } from "@/context/auth-context"
 
 const ROLE_OPTIONS = [
   { value: "ADMIN", label: "Administrador" },
@@ -30,6 +31,7 @@ const ROLE_OPTIONS = [
 export default function SuperUsersAdminPage() {
   const router = useRouter()
   const { version } = useTenantSelection()
+  const { authPending, sessionExpiring } = useAuth()
   const [email, setEmail] = useState("")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -69,6 +71,9 @@ export default function SuperUsersAdminPage() {
     let cancelled = false
 
     async function checkAccess() {
+      if (authPending || sessionExpiring) {
+        return
+      }
       if (!cancelled) {
         setOrganizations([])
         setOrganizationsLoading(true)
@@ -108,7 +113,7 @@ export default function SuperUsersAdminPage() {
     return () => {
       cancelled = true
     }
-  }, [router, version])
+  }, [router, version, authPending, sessionExpiring])
 
   const requiresOrganizationSelection = role === "SUPER_ADMIN_ORG"
   const normalizedOrganizationId = organizationId.trim()

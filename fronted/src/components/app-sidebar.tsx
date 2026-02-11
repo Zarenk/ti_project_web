@@ -411,6 +411,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { info: verticalInfo, migration } = useVerticalConfig()
   const normalizedRoleValue = role?.toString().trim().toUpperCase() ?? ""
   const verticalFeatures = verticalInfo?.config?.features
+  const isComputerVertical = verticalInfo?.businessVertical === "COMPUTERS"
 
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
   const canAccessAccounting = useRBAC([
@@ -496,9 +497,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const navMain = React.useMemo(() => {
     const items = filteredNav.map((item) => {
       if (item.title === "Ventas") {
+        const canAccessQuotes = isComputerVertical && checkPermission("sales")
         return {
           ...item,
-          items: item.items?.map((sub) =>
+          items: [
+            ...(item.items ?? []),
+            ...(canAccessQuotes
+              ? [
+                  {
+                    title: "Cotizaciones",
+                    url: "/dashboard/quotes",
+                    permission: "sales" as const,
+                  },
+                ]
+              : []),
+          ].map((sub) =>
             sub.title === "Mensajes" ? { ...sub, badge: totalUnread } : sub
           ),
         }
@@ -582,6 +595,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     canAccessAccounting,
     checkPermission,
     verticalInfo,
+    isComputerVertical,
   ])
 
   return (

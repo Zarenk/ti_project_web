@@ -233,42 +233,8 @@ export class EntriesController {
     };
   }
 
-  // Endpoint para actualizar una entrada con un PDF GUIA
-  @Post(':id/upload-pdf-guia')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './uploads/guides', // Carpeta donde se guardarán los PDFs
-        filename: (req, file, cb) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = path.extname(file.originalname);
-          cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
-        },
-      }),
-      fileFilter: (req, file, cb) => {
-        if (!file.originalname.match(/\.(pdf)$/)) {
-          return cb(
-            new BadRequestException('Solo se permiten archivos PDF'),
-            false,
-          );
-        }
-        cb(null, true);
-      },
-    }),
-  )
-  async uploadGuidePdf(
-    @Param('id') id: string,
-    @UploadedFile() file: Express.Multer.File,
-  ) {
-    if (!file) {
-      throw new BadRequestException('No se proporcionó un archivo PDF.');
-    }
-
-    const pdfUrl = `/uploads/guides/${file.filename}`;
-    return this.entriesService.updateEntryPdfGuia(Number(id), pdfUrl);
-  }
-
+  // Optimized: Moved draft/upload-pdf-guia BEFORE :id/upload-pdf-guia
+  // NestJS matches routes in order, so specific routes must come before dynamic routes
   @Post('draft/upload-pdf-guia')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -319,6 +285,42 @@ export class EntriesController {
       organizationId,
       userId,
     };
+  }
+
+  // Endpoint para actualizar una entrada con un PDF GUIA (con :id específico)
+  @Post(':id/upload-pdf-guia')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads/guides', // Carpeta donde se guardarán los PDFs
+        filename: (req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = path.extname(file.originalname);
+          cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.originalname.match(/\.(pdf)$/)) {
+          return cb(
+            new BadRequestException('Solo se permiten archivos PDF'),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadGuidePdf(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No se proporcionó un archivo PDF.');
+    }
+
+    const pdfUrl = `/uploads/guides/${file.filename}`;
+    return this.entriesService.updateEntryPdfGuia(Number(id), pdfUrl);
   }
 
   @Post(':id/attach-draft-pdf')

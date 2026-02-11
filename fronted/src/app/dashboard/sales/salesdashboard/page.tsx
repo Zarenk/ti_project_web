@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Calendar, DollarSign, ShoppingCart, TrendingUp, Users, BarChart3, Receipt } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -17,18 +17,20 @@ import { DateRange } from "react-day-picker"
 import { getMonthlyClientsStats, getMonthlySalesCount, getMonthlySalesTotal, getMonthlySalesProfit, getSalesTransactions, getSalesTotalByDateRange, getSalesCountByDateRange, getClientStatsByDateRange, getSalesProfitByDateRange, getSalesTaxByRange } from "../sales.api"
 import { TopProductsTable } from "./top-products-table"
 import { TopClientsTable } from "./top-clients-table"
-import { endOfDay } from "date-fns"
+import { endOfDay, differenceInCalendarDays, subDays } from "date-fns"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import TransactionHistoryTable from "../components/TransactionHistoryTable"
 import { ProfitProductsTable } from "./profit-products-table"
 import { DailyProfitChart } from "./daily-profit-chart"
 import { MODULE_PERMISSION_LABELS, useEnforcedModulePermission } from "@/hooks/use-enforced-module-permission"
+import { useAuth } from "@/context/auth-context"
 
 export default function SalesDashboard() {
     const router = useRouter()
     const { allowed: historyAllowed, loading: permissionLoading } = useEnforcedModulePermission("salesHistory")
     const permissionToastShown = useRef(false)
     const { selection, version, loading: tenantLoading } = useTenantSelection();
+    const { authPending, sessionExpiring } = useAuth()
     const selectionKey = `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`;
 
     const [dateRange, setDateRange] = useState<DateRange>({
@@ -53,13 +55,18 @@ export default function SalesDashboard() {
         unaffectedTotal: 0,
         igvTotal: 0,
       });
+    const [prevTaxTotals, setPrevTaxTotals] = useState<typeof taxTotals | null>(null);
     const [taxDetailOpen, setTaxDetailOpen] = useState(false);
     const [activeTaxDetail, setActiveTaxDetail] = useState<"igv" | "ir" | null>(null);
+    const [showTaxBreakdown, setShowTaxBreakdown] = useState(false);
     const [cardPageStart, setCardPageStart] = useState(0);
     const [visibleCardCount, setVisibleCardCount] = useState(5);
+    const [cardDirection, setCardDirection] = useState<"next" | "prev" | null>(null);
+    const [cardAnimating, setCardAnimating] = useState(false);
+    const [hoveredTaxCard, setHoveredTaxCard] = useState<"igv" | "ir" | null>(null);
 
     useEffect(() => {
-      if (permissionLoading) return
+      if (permissionLoading || authPending || sessionExpiring) return
       if (!historyAllowed) {
         if (!permissionToastShown.current) {
           permissionToastShown.current = true
@@ -69,7 +76,7 @@ export default function SalesDashboard() {
       } else {
         permissionToastShown.current = false
       }
-    }, [historyAllowed, permissionLoading, router])
+    }, [historyAllowed, permissionLoading, router, authPending, sessionExpiring])
 
     useEffect(() => {
       if (tenantLoading || permissionLoading || !historyAllowed) return
@@ -121,7 +128,7 @@ export default function SalesDashboard() {
               setCountGrowth(null);
             }
           } catch (error) {
-            console.error("Error al obtener número de ventas:", error);
+            console.error("Error al obtener nÃºmero de ventas:", error);
           }
         };
         fetchSalesCount();
@@ -180,7 +187,7 @@ export default function SalesDashboard() {
       }, [selectionKey, tenantLoading, dateRange, permissionLoading, historyAllowed]);
 
       useEffect(() => {
-        // Calcular tasa de conversión dinámicamente
+        // Calcular tasa de conversiÃ³n dinÃ¡micamente
         if (monthlyTotal > 0) {
           setConversionRate((monthlyCount / monthlyTotal) * 100);
         } else {
@@ -213,7 +220,21 @@ export default function SalesDashboard() {
             igvTotal: Number(data?.igvTotal ?? 0),
           }))
           .catch(console.error)
+
+        const days = Math.max(1, differenceInCalendarDays(endOfDay(dateRange.to), dateRange.from) + 1)
+        const prevFrom = subDays(dateRange.from, days)
+        const prevTo = subDays(endOfDay(dateRange.to), days)
+        getSalesTaxByRange(prevFrom.toISOString(), prevTo.toISOString())
+          .then((data) => setPrevTaxTotals({
+            total: Number(data?.total ?? 0),
+            taxableTotal: Number(data?.taxableTotal ?? 0),
+            exemptTotal: Number(data?.exemptTotal ?? 0),
+            unaffectedTotal: Number(data?.unaffectedTotal ?? 0),
+            igvTotal: Number(data?.igvTotal ?? 0),
+          }))
+          .catch(() => setPrevTaxTotals(null))
       }, [dateRange, selectionKey, tenantLoading, permissionLoading, historyAllowed]);
+
 
       useEffect(() => {
         const totalCards = 7;
@@ -226,6 +247,7 @@ export default function SalesDashboard() {
             }
             return nextCount;
           });
+
         };
 
         update();
@@ -233,8 +255,248 @@ export default function SalesDashboard() {
         return () => window.removeEventListener("resize", update);
       }, []);
 
+
+      useEffect(() => {
+        const id = requestAnimationFrame(() => setCardAnimating(true));
+        return () => cancelAnimationFrame(id);
+      }, [cardPageStart, cardDirection]);
+
+    const cards = [
+      (
+        <Card key="total" className="cursor-pointer transition-all duration-200 hover:border-white/30 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ingresos Totales</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+                S/ {monthlyTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+            </div>
+            <p
+                className={`text-xs ${
+                monthlyGrowth === null
+                    ? "text-muted-foreground"
+                    : monthlyGrowth > 0
+                    ? "text-green-500"
+                    : "text-red-500"
+                }`}
+            >
+                {monthlyGrowth !== null
+                ? `${monthlyGrowth > 0 ? "+" : ""}${monthlyGrowth.toFixed(1)}% desde el ultimo mes`
+                : "Sin datos del mes anterior"}
+            </p>
+          </CardContent>
+        </Card>
+      ),
+      (
+        <Card key="count" className="cursor-pointer transition-all duration-200 hover:border-white/30 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ventas</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{monthlyCount}</div>
+            <p
+                className={`text-xs ${
+                countGrowth === null
+                    ? "text-muted-foreground"
+                    : countGrowth > 0
+                    ? "text-green-500"
+                    : "text-red-500"
+                }`}
+            >
+                {countGrowth !== null
+                ? `${countGrowth > 0 ? "+" : ""}${countGrowth.toFixed(1)}% desde el ultimo mes`
+                : "Sin datos del mes anterior"}
+            </p>
+          </CardContent>
+        </Card>
+      ),
+      (
+        <Card key="clients" className="cursor-pointer transition-all duration-200 hover:border-white/30 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Clientes Activos</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{monthlyClients}</div>
+            <p className={`text-xs ${
+                clientGrowth === null
+                    ? "text-muted-foreground"
+                    : clientGrowth > 0
+                    ? "text-green-500"
+                    : "text-red-500"
+                }`}>
+                {clientGrowth !== null
+                    ? `${clientGrowth > 0 ? "+" : ""}${clientGrowth.toFixed(1)}% desde el ultimo mes`
+                    : "Sin datos del mes anterior"}
+            </p>
+          </CardContent>
+        </Card>
+      ),
+      (
+        <Card key="profit" className="cursor-pointer transition-all duration-200 hover:border-white/30 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Utilidades</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground transition-colors duration-300 group-hover:text-emerald-200" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+                S/ {monthlyProfit.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+            </div>
+            <p className={`text-xs ${
+                profitGrowth === null
+                    ? "text-muted-foreground"
+                    : profitGrowth > 0
+                    ? "text-green-500"
+                    : "text-red-500"
+                }`}>
+                {profitGrowth !== null
+                ? `${profitGrowth > 0 ? "+" : ""}${profitGrowth.toFixed(1)}% desde el ultimo mes`
+                : "Sin datos del mes anterior"}
+            </p>
+          </CardContent>
+        </Card>
+      ),
+      (
+        <Card key="conversion" className="cursor-pointer transition-all duration-200 hover:border-white/30 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Porcentaje de Conversion</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{conversionRate.toFixed(2)}%</div>
+            <p className="text-xs text-muted-foreground">
+              {monthlyTotal > 0 
+                ? `${monthlyCount} ventas de ${(monthlyTotal / 1).toLocaleString("es-PE", { maximumFractionDigits: 0 })} soles`
+                : "Sin datos disponibles"}
+            </p>
+          </CardContent>
+        </Card>
+      ),
+      (
+        <Card
+          key="igv"
+          className={`group cursor-pointer transition-all duration-300 hover:border-emerald-400/60 hover:shadow-[0_0_0_1px_rgba(16,185,129,0.35)] hover:drop-shadow-[0_0_12px_rgba(16,185,129,0.35)] ${
+            hoveredTaxCard === "igv" ? "bg-emerald-500/10" : ""
+          }`}
+          onMouseEnter={() => setHoveredTaxCard("igv")}
+          onMouseLeave={() => setHoveredTaxCard(null)}
+          onClick={() => {
+            setActiveTaxDetail("igv")
+            setTaxDetailOpen(true)
+          }}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{hoveredTaxCard === "igv" ? "Detalle de IGV" : "IGV estimado"}</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              <span
+                className={`inline-block transition-all duration-300 ${
+                  hoveredTaxCard === "igv" ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-90"
+                }`}
+              >
+                {hoveredTaxCard === "igv" 
+                  ? `S/ ${taxTotals.taxableTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}`
+                  : `S/ ${taxTotals.igvTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}`}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              <span
+                className={`inline-block transition-all duration-300 ${
+                  hoveredTaxCard === "igv" ? "translate-y-0 opacity-100" : "translate-y-1 opacity-90"
+                }`}
+              >
+                {hoveredTaxCard === "igv"
+                  ? `IGV estimado (18%): S/ ${taxTotals.igvTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}`
+                  : `Base gravada: S/ ${taxTotals.taxableTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}`}
+              </span>
+            </p>
+          </CardContent>
+        </Card>
+      ),
+      (
+        <Card
+          key="ir"
+          className={`group cursor-pointer transition-all duration-300 hover:border-sky-400/60 hover:shadow-[0_0_0_1px_rgba(56,189,248,0.35)] hover:drop-shadow-[0_0_12px_rgba(56,189,248,0.35)] ${
+            hoveredTaxCard === "ir" ? "bg-sky-500/10" : ""
+          }`}
+          onMouseEnter={() => setHoveredTaxCard("ir")}
+          onMouseLeave={() => setHoveredTaxCard(null)}
+          onClick={() => {
+            setActiveTaxDetail("ir")
+            setTaxDetailOpen(true)
+          }}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{hoveredTaxCard === "ir" ? "Detalle de IR (2%)" : "IR estimado (2%)"}</CardTitle>
+            <Receipt className="h-4 w-4 text-muted-foreground transition-colors duration-300 group-hover:text-sky-200" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              <span
+                className={`inline-block transition-all duration-300 ${
+                  hoveredTaxCard === "ir" ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-90"
+                }`}
+              >
+                {hoveredTaxCard === "ir"
+                  ? `S/ ${taxTotals.total.toLocaleString("es-PE", { minimumFractionDigits: 2 })}`
+                  : `S/ ${(taxTotals.total * 0.02).toLocaleString("es-PE", { minimumFractionDigits: 2 })}`}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              <span
+                className={`inline-block transition-all duration-300 ${
+                  hoveredTaxCard === "ir" ? "translate-y-0 opacity-100" : "translate-y-1 opacity-90"
+                }`}
+              >
+                {hoveredTaxCard === "ir"
+                  ? `IR estimado (2%): S/ ${(taxTotals.total * 0.02).toLocaleString("es-PE", { minimumFractionDigits: 2 })}`
+                  : `Total ventas: S/ ${taxTotals.total.toLocaleString("es-PE", { minimumFractionDigits: 2 })}`}
+              </span>
+            </p>
+          </CardContent>
+        </Card>
+      ),
+    ];
+
+    const totalCards = cards.length;
+    const cardsToRender = cards.slice(cardPageStart, cardPageStart + visibleCardCount);
+
+    const dailyTaxRows = useMemo(() => {
+      if (!Array.isArray(transactions) || !transactions.length) return []
+      const bucket = new Map()
+      for (const tx of transactions) {
+        if (!tx?.date || typeof tx.total !== "number") continue
+        const dayKey = new Date(tx.date).toLocaleDateString("es-PE")
+        const current = bucket.get(dayKey) || { date: dayKey, total: 0 }
+        current.total += tx.total
+        bucket.set(dayKey, current)
+      }
+      const rows = Array.from(bucket.values()).map((row) => ({
+        date: row.date,
+        total: row.total,
+        igv: row.total * 0.18,
+        ir: row.total * 0.02,
+      }))
+      rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      return rows
+    }, [transactions])
+
+    const buildDelta = (current: number, previous: number | null) => {
+      if (previous === null) return null
+      if (previous === 0) return null
+      return ((current - previous) / previous) * 100
+    }
+
+    const igvDelta = buildDelta(taxTotals.igvTotal, prevTaxTotals?.igvTotal ?? null)
+    const irDelta = buildDelta(taxTotals.total * 0.02, prevTaxTotals?.total != null ? prevTaxTotals.total * 0.02 : null)
+    const taxableDelta = buildDelta(taxTotals.taxableTotal, prevTaxTotals?.taxableTotal ?? null)
+
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="sales-dashboard-theme flex w-full max-w-full flex-col gap-5 p-6 overflow-x-hidden">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Ventas</h1>
@@ -249,33 +511,40 @@ export default function SalesDashboard() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 w-full min-w-0 max-w-full overflow-x-hidden">
         <Button
           variant="ghost"
           size="icon"
-          className="h-10 w-10 rounded-full border border-white/10 bg-background/60 text-muted-foreground hover:text-foreground"
-          onClick={() => setCardPageStart((prev) => Math.max(0, prev - visibleCardCount))}
+          className="h-10 w-10 cursor-pointer rounded-full border border-white/10 bg-background/60 text-muted-foreground transition-colors hover:text-foreground"
+          onClick={() => {
+            setCardDirection("prev")
+            setCardAnimating(false)
+            setCardPageStart((prev) => Math.max(0, prev - visibleCardCount))
+          }}
           disabled={cardPageStart === 0}
         >
           <span className="text-lg">&lt;</span>
         </Button>
-        <div className="flex-1 overflow-hidden">
-          <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${visibleCardCount}, minmax(0, 1fr))` }}>
+        <div className="flex-1 overflow-hidden min-w-0 max-w-full">
+          <div className="grid gap-4 transition-all duration-300 ease-out" style={{ gridTemplateColumns: `repeat(${visibleCardCount}, minmax(0, 1fr))`, transform: cardAnimating ? "translateX(0)" : cardDirection === "next" ? "translateX(12px)" : "translateX(-12px)", opacity: cardAnimating ? 1 : 0.7 }}>
             {cardsToRender}
           </div>
         </div>
         <Button
           variant="ghost"
           size="icon"
-          className="h-10 w-10 rounded-full border border-white/10 bg-background/60 text-muted-foreground hover:text-foreground"
-          onClick={() =>
+          className="h-10 w-10 cursor-pointer rounded-full border border-white/10 bg-background/60 text-muted-foreground transition-colors hover:text-foreground"
+          onClick={() => {
+            setCardDirection("next")
+            setCardAnimating(false)
             setCardPageStart((prev) => Math.min(prev + visibleCardCount, Math.max(0, totalCards - visibleCardCount)))
-          }
+          }}
           disabled={cardPageStart >= Math.max(0, totalCards - visibleCardCount)}
         >
           <span className="text-lg">&gt;</span>
         </Button>
       </div>
+
 
       {taxDetailOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
@@ -346,7 +615,7 @@ export default function SalesDashboard() {
             <Card className="lg:col-span-4">
               <CardHeader>
                 <CardTitle>Resumen de Ventas</CardTitle>
-                <CardDescription>Rendimiento de ventas diarias durante el período seleccionado</CardDescription>
+                <CardDescription>Rendimiento de ventas diarias durante el perÃ­odo seleccionado</CardDescription>
               </CardHeader>
               <CardContent className="px-2">
                 <SalesChart dateRange={dateRange} />
@@ -365,7 +634,7 @@ export default function SalesDashboard() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
             <Card className="lg:col-span-3">
               <CardHeader>
-                <CardTitle>Ingresos por categoría</CardTitle>
+                <CardTitle>Ingresos por categoria</CardTitle>
                 <CardDescription>Distribucion de ventas entre categorias de productos</CardDescription>
               </CardHeader>
               <CardContent>
@@ -381,6 +650,137 @@ export default function SalesDashboard() {
                 <SalesTable dateRange={dateRange} />
               </CardContent>
             </Card>
+          </div>
+          <div className="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm backdrop-blur">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-[15px] font-semibold tracking-tight text-foreground">Resumen contable</h3>
+                <p className="text-[12px] leading-4 text-muted-foreground">
+                  Estimaciones basadas en el rango seleccionado.
+                </p>
+                <p className="text-[11px] leading-4 text-muted-foreground">
+                  Estimado referencial, no reemplaza calculo contable oficial.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="rounded-full border border-border/60 px-2 py-0.5">IGV 18% / IR 2%</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowTaxBreakdown((prev) => !prev)}
+                >
+                  {showTaxBreakdown ? "Ocultar detalle" : "Ver detalle"}
+                </Button>
+                <Button variant="outline" size="sm">
+                  Exportar resumen
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">
+              <span className="rounded-full border border-emerald-500/30 bg-emerald-50/70 px-2 py-0.5 text-emerald-900 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-100">
+                IGV: {igvDelta !== null ? `${igvDelta >= 0 ? "+" : ""}${igvDelta.toFixed(1)}% vs periodo anterior` : "Sin periodo anterior"}
+              </span>
+              <span className="rounded-full border border-sky-500/30 bg-sky-50/70 px-2 py-0.5 text-sky-900 dark:border-sky-400/20 dark:bg-sky-500/10 dark:text-sky-100">
+                IR: {irDelta !== null ? `${irDelta >= 0 ? "+" : ""}${irDelta.toFixed(1)}% vs periodo anterior` : "Sin periodo anterior"}
+              </span>
+              <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5">
+                Base gravada: {taxableDelta !== null ? `${taxableDelta >= 0 ? "+" : ""}${taxableDelta.toFixed(1)}%` : "Sin periodo anterior"}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 text-emerald-950 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-100">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-900/80 dark:text-emerald-200/80">Base gravada</div>
+                <div className="text-lg font-semibold tabular-nums">
+                  S/ {taxTotals.taxableTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 text-emerald-950 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-100">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-900/80 dark:text-emerald-200/80">IGV estimado</div>
+                <div className="text-lg font-semibold tabular-nums">
+                  S/ {taxTotals.igvTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div className="rounded-xl border border-sky-500/30 bg-sky-50/60 px-4 py-3 text-sky-950 dark:border-sky-400/20 dark:bg-sky-500/10 dark:text-sky-100">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-900/80 dark:text-sky-200/80">IR estimado (2%)</div>
+                <div className="text-lg font-semibold tabular-nums">
+                  S/ {(taxTotals.total * 0.02).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Exonerado</div>
+                <div className="text-lg font-semibold tabular-nums text-foreground">
+                  S/ {taxTotals.exemptTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Inafecto</div>
+                <div className="text-lg font-semibold tabular-nums text-foreground">
+                  S/ {taxTotals.unaffectedTotal.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Total ventas</div>
+                <div className="text-lg font-semibold tabular-nums text-foreground">
+                  S/ {taxTotals.total.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 dark:border-emerald-400/20 dark:bg-emerald-500/10">
+                <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.1em] text-emerald-900/80 dark:text-emerald-100/80">
+                  <span>IGV vs total ventas</span>
+                  <span className="tabular-nums">{taxTotals.total > 0 ? ((taxTotals.igvTotal / taxTotals.total) * 100).toFixed(1) : "0.0"}%</span>
+                </div>
+                <div className="mt-2 h-2 w-full rounded-full bg-emerald-200/70 dark:bg-emerald-900/40">
+                  <div
+                    className="h-2 rounded-full bg-emerald-500/80 dark:bg-emerald-400/80 transition-all"
+                    style={{ width: `${taxTotals.total > 0 ? (taxTotals.igvTotal / taxTotals.total) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+              <div className="rounded-xl border border-sky-500/30 bg-sky-50/60 px-4 py-3 dark:border-sky-400/20 dark:bg-sky-500/10">
+                <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.1em] text-sky-900/80 dark:text-sky-100/80">
+                  <span>IR vs total ventas</span>
+                  <span className="tabular-nums">{taxTotals.total > 0 ? ((taxTotals.total * 0.02 / taxTotals.total) * 100).toFixed(1) : "0.0"}%</span>
+                </div>
+                <div className="mt-2 h-2 w-full rounded-full bg-sky-200/70 dark:bg-sky-900/40">
+                  <div
+                    className="h-2 rounded-full bg-sky-500/80 dark:bg-sky-400/80 transition-all"
+                    style={{ width: `${taxTotals.total > 0 ? ((taxTotals.total * 0.02) / taxTotals.total) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              {showTaxBreakdown && (
+                <div className="mt-3 overflow-hidden rounded-xl border border-white/10">
+                  <div className="grid grid-cols-4 gap-2 bg-muted/30 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    <span>Fecha</span>
+                    <span>Total ventas</span>
+                    <span>IGV (18%)</span>
+                    <span>IR (2%)</span>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto">
+                    {dailyTaxRows.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-muted-foreground">Sin datos para el rango.</div>
+                    ) : (
+                      dailyTaxRows.map((row) => (
+                        <div key={row.date} className="grid grid-cols-4 gap-2 px-4 py-2 text-sm">
+                          <span className="tabular-nums">{row.date}</span>
+                          <span className="tabular-nums">S/ {row.total.toLocaleString("es-PE", { minimumFractionDigits: 2 })}</span>
+                          <span className="tabular-nums">S/ {row.igv.toLocaleString("es-PE", { minimumFractionDigits: 2 })}</span>
+                          <span className="tabular-nums">S/ {row.ir.toLocaleString("es-PE", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </TabsContent>
         <TabsContent value="products" className="space-y-4">

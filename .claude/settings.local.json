@@ -19,7 +19,15 @@
       "Bash(Copy-Item \"backend\\\\package.json\" \"$backupDir\\\\package.json.bak\")",
       "Bash(Copy-Item \"backend\\\\prisma\\\\schema.prisma\" \"$backupDir\\\\schema.prisma.bak\")",
       "Bash(Copy-Item \"backend\\\\src\\\\prisma\\\\prisma.service.ts\" \"$backupDir\\\\prisma.service.ts.bak\")",
-      "Bash(Write-Host \"Backup creado en: $backupDir\")"
+      "Bash(Write-Host \"Backup creado en: $backupDir\")",
+      "Bash(git tag:*)",
+      "Bash(git checkout:*)",
+      "Bash(npm install:*)",
+      "Bash(node:*)",
+      "Bash(npm:*)",
+      "Bash(nvm version:*)",
+      "Bash(where:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

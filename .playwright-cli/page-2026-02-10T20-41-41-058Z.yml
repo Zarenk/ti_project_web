@@ -1,0 +1,16 @@
+- generic [active] [ref=e1]:
+  - region "Notifications alt+T"
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - generic: Protegida nuestra web
+    - generic [ref=e5]:
+      - heading "Acceso no autorizado" [level=1] [ref=e6]
+      - paragraph [ref=e7]: No tienes permisos para ver esta sección.
+      - link "Volver a iniciar sesión" [ref=e8] [cursor=pointer]:
+        - /url: /login
+  - link [ref=e10] [cursor=pointer]:
+    - /url: https://wa.me/51949426294
+    - img [ref=e12]
+  - button "Logo" [ref=e16] [cursor=pointer]:
+    - img [ref=e17]
+    - img "Logo" [ref=e20]

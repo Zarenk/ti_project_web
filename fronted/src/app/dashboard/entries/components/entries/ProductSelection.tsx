@@ -568,22 +568,72 @@ export function ProductSelection({
       <div className="flex justify-between gap-1">
             <div className="flex flex-col flex-grow">
               <Label className="text-sm font-medium py-2">Cantidad</Label>
-              <Input
-                type="text"
-                placeholder="Cantidad"
-                value={quantity.toString()}
-                maxLength={10}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
-                    setQuantity(Number(value));
-                  }
-                }}
-                onBlur={() => {
-                  const numericValue = parseFloat(String(quantity));
-                  setQuantity(!isNaN(numericValue) ? numericValue : 1);
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  placeholder="Cantidad"
+                  className="h-9 flex-1 text-sm"
+                  value={quantity.toString()}
+                  maxLength={10}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
+                      const next = Number(value);
+                      setQuantity(Number.isNaN(next) ? 1 : Math.max(1, next));
+                    }
+                  }}
+                  onBlur={() => {
+                    const numericValue = parseFloat(String(quantity));
+                    if (!Number.isNaN(numericValue) && numericValue > 0) {
+                      setQuantity(numericValue);
+                    } else {
+                      setQuantity(1);
+                    }
+                  }}
+                />
+                <div className="flex items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 cursor-pointer border-rose-600 bg-rose-600 text-white hover:border-rose-700 hover:bg-rose-700 dark:border-rose-400 dark:bg-rose-400 dark:text-rose-950 dark:hover:border-rose-300 dark:hover:bg-rose-300"
+                        aria-label="Disminuir cantidad"
+                        onClick={() => {
+                          setQuantity((prev: number) => {
+                            const current = Number(prev) || 0;
+                            return Math.max(1, current - 1);
+                          });
+                        }}
+                      >
+                        -
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Disminuir cantidad</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 cursor-pointer border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 dark:border-emerald-400 dark:bg-emerald-400 dark:text-emerald-950 dark:hover:border-emerald-300 dark:hover:bg-emerald-300"
+                        aria-label="Aumentar cantidad"
+                        onClick={() => {
+                          setQuantity((prev: number) => {
+                            const current = Number(prev) || 0;
+                            return Math.max(1, current + 1);
+                          });
+                        }}
+                      >
+                        +
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Aumentar cantidad</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
             </div>
             <div className="flex flex-col flex-grow">
               <Label className="text-sm font-medium py-2">Precio Total Unitario</Label>

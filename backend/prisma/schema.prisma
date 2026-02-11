@@ -399,6 +399,7 @@ model Company {
   status                String         @default("ACTIVE")
   businessVertical      BusinessVertical @default(GENERAL)
   productSchemaEnforced Boolean        @default(false)
+  defaultQuoteMargin    Float          @default(0.12)
   sunatEnvironment      String         @default("BETA")
   sunatRuc              String?
   sunatBusinessName     String?

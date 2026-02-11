@@ -4,6 +4,7 @@ import { toast } from "sonner";
 // Listas de patrones para identificar proveedores por diseño de comprobante
 // Se pueden agregar más nombres o RUCs en cada lista para extender el soporte
 const DELTRON_PATTERNS: (string | RegExp)[] = ["20212331377"];
+const INGRAM_PATTERNS: (string | RegExp)[] = ["20267163228", /ingram\s+micro/i];
 const TEMPLATE_PROVIDER_PATTERNS: (string | RegExp)[] = [
   /gozu gaming/i,
   /2060\d{7}/, // RUC de GOZU y similares que comparten el mismo diseño
@@ -11,7 +12,7 @@ const TEMPLATE_PROVIDER_PATTERNS: (string | RegExp)[] = [
   "20519078520", // RUC del nuevo proveedor
 ];
 
-type InvoiceProvider = "deltron" | "template" | "unknown";
+type InvoiceProvider = "deltron" | "template" | "ingram" | "unknown";
 
 type GuideItem = { name: string; quantity: number; series?: string[] };
 
@@ -28,6 +29,10 @@ export function detectInvoiceProvider(text: string): InvoiceProvider {
 
   if (matches(DELTRON_PATTERNS)) {
     return "deltron";
+  }
+
+  if (matches(INGRAM_PATTERNS)) {
+    return "ingram";
   }
 
   if (matches(TEMPLATE_PROVIDER_PATTERNS)) {
@@ -952,5 +957,307 @@ export function processGuideText(
     );
   } else {
     toast.warning("No se encontraron productos en la guia de remision.");
+  }
+}
+
+// =====================================================================
+// DELTRON GUIDE PROCESSOR
+// Handles "Guía de Remisión Remitente Electrónica" from GRUPO DELTRON
+// Format: BIENES A TRASLADAR with CÓDIGO, DESCRIPCIÓN, series on next lines
+// =====================================================================
+
+export function processDeltronGuideText(
+  text: string,
+  setSelectedProducts: Function,
+  setValue: Function,
+  setCurrency: Function
+) {
+  const normalized = text.replace(/\u00a0/g, " ");
+  const lines = normalized
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const fullText = lines.join("\n");
+
+  // --- SERIE / CORRELATIVO ---
+  // Format: N°: T029-00004430 or N°: T0A1-00012345
+  const serieMatch = fullText.match(
+    /N[°º]?\s*:?\s*([A-Z0-9]{3,5})\s*-\s*(\d{4,})/i
+  );
+  if (serieMatch) {
+    setValue("guia_serie", serieMatch[1].trim());
+    setValue("guia_correlativo", serieMatch[2].trim());
+  }
+
+  // --- RUC EMISOR ---
+  const rucMatch = fullText.match(
+    /R\.?U\.?C\.?\s*(?:N[°º]?)?\s*:?\s*(\d{11})/i
+  );
+  if (rucMatch) {
+    setValue("ruc", rucMatch[1]);
+    setValue("provider_documentNumber", rucMatch[1]);
+  }
+
+  // --- FECHA DE EMISIÓN ---
+  // Format: FECHA DE EMISIÓN: 06-01-2026
+  const fechaEmisionMatch = fullText.match(
+    /FECHA\s+DE\s+EMISI[ÓO]N\s*:\s*([0-9\/.\-]+)/i
+  );
+  if (fechaEmisionMatch) {
+    setValue("guia_fecha_emision", fechaEmisionMatch[1].trim());
+    setValue("fecha_emision_comprobante", fechaEmisionMatch[1].trim());
+  }
+
+  // --- INICIO TRASLADO ---
+  // Format: INICIO TRASLADO: 06/01/2026
+  const inicioTrasladoMatch = fullText.match(
+    /INICIO\s+(?:DE\s+)?TRASLADO\s*:\s*([0-9\/.\-]+)/i
+  );
+  if (inicioTrasladoMatch) {
+    setValue("guia_fecha_entrega_transportista", inicioTrasladoMatch[1].trim());
+  }
+
+  // --- MOTIVO DE TRASLADO ---
+  const motivoMatch = fullText.match(
+    /MOTIVO\s+DE\s+TRASLADO\s*:\s*([^\n]+)/i
+  );
+  if (motivoMatch) {
+    setValue("guia_motivo_traslado", motivoMatch[1].trim());
+  }
+
+  // --- PUNTO DE PARTIDA ---
+  // Format: PUNTO DE PARTIDA\nDIRECCIÓN: AV. EJERCITO NRO. 839 ...
+  const partidaBlock = fullText.match(
+    /PUNTO\s+DE\s+PARTIDA\s*\n\s*DIRECCI[ÓO]N\s*:\s*([\s\S]*?)(?=UBIGEO|PUNTO\s+DE\s+LLEGADA|C[ÓO]DIGO\s*:|$)/i
+  );
+  if (partidaBlock) {
+    const addr = partidaBlock[1].replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+    setValue("guia_punto_partida", addr);
+  }
+
+  // --- PUNTO DE LLEGADA ---
+  const llegadaBlock = fullText.match(
+    /PUNTO\s+DE\s+LLEGADA\s*\n\s*DIRECCI[ÓO]N\s*:\s*([\s\S]*?)(?=UBIGEO|DESTINATARIO|C[ÓO]DIGO\s*:|$)/i
+  );
+  if (llegadaBlock) {
+    const addr = llegadaBlock[1].replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+    setValue("guia_punto_llegada", addr);
+  }
+
+  // --- DESTINATARIO ---
+  const destinatarioMatch = fullText.match(
+    /RAZ[ÓO]N\s+SOCIAL\s*:\s*([^\n]+)/i
+  );
+  if (destinatarioMatch) {
+    setValue("guia_destinatario", destinatarioMatch[1].trim());
+  }
+
+  // --- PESO BRUTO ---
+  // Format: PESO BRUTO TOTAL CARGA: 8.6 KGM
+  const pesoMatch = fullText.match(
+    /PESO\s+BRUTO\s+TOTAL\s+(?:CARGA|DE\s+LA\s+CARGA)\s*:\s*([0-9.,]+)\s*([A-Z]{2,5})/i
+  );
+  if (pesoMatch) {
+    setValue("guia_peso_bruto_total", pesoMatch[1].replace(",", ".").trim());
+    setValue("guia_peso_bruto_unidad", pesoMatch[2].trim());
+  }
+
+  // --- TRANSPORTISTA ---
+  // pdf-parse may merge empty fields onto one line (e.g. "RAZÓN SOCIAL:No. IDENTIDAD:")
+  // Only set if the captured value is a real name, not another field label
+  const transportistaBlock = fullText.match(
+    /DATOS\s+DEL\s+TRANSPORTISTA[\s\S]*?RAZ[ÓO]N\s+SOCIAL\s*:\s*([^\n]+)/i
+  );
+  if (transportistaBlock) {
+    const val = transportistaBlock[1].trim();
+    const isFieldLabel = /^(No\.\s*IDENTIDAD|PLACA|CONDUCTOR|DOCUMENTO|LICENCIA|INICIO|MODALIDAD)\s*:/i.test(val);
+    if (val && !isFieldLabel) {
+      setValue("guia_transportista", val);
+    }
+  }
+
+  // --- DOCUMENTO RELACIONADO (factura asociada) ---
+  // pdf-parse may merge columns: "F103-01080358Factura20212331377"
+  const docRelMatch = fullText.match(
+    /DOCUMENTOS\s+RELACIONADOS[\s\S]*?([A-Z]\d{2,3}-\d{5,})\s*(Factura|Boleta)/i
+  );
+  if (docRelMatch) {
+    setValue("serie", docRelMatch[1].trim());
+    setValue("comprobante", docRelMatch[2].toUpperCase() === "FACTURA" ? "FACTURA" : "BOLETA");
+  }
+
+  // --- COMPROBANTE TYPE ---
+  setValue("comprobante", "GUIA DE REMISION");
+  setCurrency("PEN");
+  setValue("tipo_moneda", "PEN");
+
+  // --- DESCRIPCIÓN ---
+  const descParts: string[] = [];
+  if (motivoMatch) descParts.push(motivoMatch[1].trim());
+  if (inicioTrasladoMatch) descParts.push(inicioTrasladoMatch[1].trim());
+  if (descParts.length > 0) {
+    setValue("entry_description", descParts.join(" - "));
+  }
+
+  // --- BIENES A TRASLADAR ---
+  // pdf-parse output format (columns merged, NO spaces between row/code/description):
+  //   Line 1: "{N}{CODE}{DESCRIPTION}       ------- {WARRANTY}"
+  //           e.g. "1KBMSWBKTE4071STECLADO+MOUSE STD W. TE4071       ------- 12 MESES (C/S PGE) DE GARANTIA"
+  //   Line 2: "{SERIES}" (space-separated serial numbers)
+  //           e.g. "KCJT2506031016 KCJT2506031017"
+  //   Line 3: "NIU{QTY}" (unit + quantity, NO space)
+  //           e.g. "NIU2"
+  const items: GuideItem[] = [];
+
+  const itemsSectionIdx = lines.findIndex((line) =>
+    /BIENES\s+A\s+TRASLADAR/i.test(line)
+  );
+  const footerIdx = lines.findIndex((line, idx) =>
+    idx > itemsSectionIdx &&
+    /REPRESENTACI[ÓO]N\s+IMPRESA|RECIB[ÍI]\s+CONFORME|LA\s+MERCADER[ÍI]A\s+VIAJA|P[áa]gina\s+\d+\s+de/i.test(line)
+  );
+  const endIdx = footerIdx >= 0 ? footerIdx : lines.length;
+
+  // Known product description prefixes to separate code from description
+  // when pdf-parse merges them (e.g. "KBMSWBKTE4071STECLADO+MOUSE...")
+  const productPrefixes = [
+    "TECLADO", "MOUSE", "FUENTE", "COOLER", "MEMORIA", "PLACA",
+    "TARJETA", "DISCO", "CABLE", "ADAPTADOR", "CARGADOR", "FUNDA",
+    "PARLANTE", "IMPRESORA", "ROUTER", "WEBCAM", "AUDIFONO", "HEADSET",
+    "PANTALLA", "LAPTOP", "REGULADOR", "ESTABILIZADOR", "FORZA",
+    "MONITOR", "PROCESADOR", "SERVIDOR", "SWITCH", "ACCESS", "BATERIA",
+    "CINTA", "TONER", "CARTUCHO", "RACK", "GABINETE", "VENTILADOR",
+    "MON ", "NB ", "SSD ", "PROC ", "CASE ", "PAD ", "KB ", "MS ",
+    "PC ", "KIT ", "HUB ", "UPS ",
+  ];
+
+  /** Extract product description from merged {CODE}{DESCRIPTION} text */
+  const extractDescription = (raw: string): string => {
+    let desc = raw;
+    // Strategy 1: Match a known product prefix in the text (most reliable)
+    const upper = desc.toUpperCase();
+    for (const prefix of productPrefixes) {
+      const idx = upper.indexOf(prefix);
+      if (idx >= 6) { // Code is at least 6 chars, skip it
+        return desc.slice(idx).trim();
+      }
+    }
+    // Strategy 2: Find boundary after last digit + 1 letter in the code
+    const codeMatch = desc.match(/^([A-Z0-9]*\d[A-Z])([A-Z].+)/i);
+    if (codeMatch && codeMatch[2].length >= 5) {
+      return codeMatch[2].trim();
+    }
+    // Strategy 3: Split at first non-alphanumeric boundary
+    const boundary = desc.search(/[^A-Za-z0-9]/);
+    if (boundary > 6) {
+      return desc.slice(boundary).replace(/^[^A-Za-z]+/, "").trim();
+    }
+    // Fallback: return as-is (includes code but at least captures the item)
+    return desc.trim();
+  };
+
+  if (itemsSectionIdx >= 0) {
+    const itemLines: string[] = [];
+    for (let k = itemsSectionIdx + 1; k < endIdx; k++) {
+      const line = lines[k];
+      // Skip merged table headers: "N°CÓDIGO", "CÓDIGO", "SUNAT", "DESCRIPCIÓNUNIDADCANTIDAD"
+      if (/^(?:N[°º]?\s*)?C[ÓO]DIGO|^DESCRIPCI[ÓO]N|^UNIDAD\b|^CANTIDAD\b|^SUNAT\b/i.test(line)) continue;
+      itemLines.push(line);
+    }
+
+    console.log("[DELTRON Guide] Items section lines:", itemLines);
+
+    let pendingName = "";
+    let pendingSeries: string[] = [];
+
+    for (let i = 0; i < itemLines.length; i++) {
+      const line = itemLines[i];
+
+      // Quantity line: "NIU2", "NIU 5", "UND3" (pdf-parse merges unit+qty with NO space)
+      const qtyLineMatch = line.match(/^(?:NIU|UND|PZA|SET|UN)\s*(\d+(?:[.,]\d+)?)\s*$/i);
+      if (qtyLineMatch && pendingName) {
+        items.push({
+          name: pendingName,
+          quantity: parseFloat(qtyLineMatch[1].replace(",", ".")),
+          series: pendingSeries.length > 0 ? [...pendingSeries] : undefined,
+        });
+        pendingName = "";
+        pendingSeries = [];
+        continue;
+      }
+
+      // Description line: contains "-------" separator between description and warranty
+      if (line.includes("-------")) {
+        let desc = line.split("-------")[0].trim();
+        // Remove leading row number (merged, no space): "1KBMS..." → "KBMS..."
+        desc = desc.replace(/^\d{1,3}/, "");
+        desc = extractDescription(desc);
+
+        if (desc && desc.length >= 3) {
+          if (pendingName) {
+            items.push({ name: pendingName, quantity: 1, series: pendingSeries.length > 0 ? [...pendingSeries] : undefined });
+            pendingSeries = [];
+          }
+          pendingName = desc;
+        }
+        continue;
+      }
+
+      // Full merged line: "{N}{CODE}{DESC}...NIU{QTY}" all on one line
+      const fullLineMatch = line.match(
+        /^\d{1,3}[A-Z][A-Z0-9]{5,}.+?(?:NIU|UND|PZA|SET|UN)\s*(\d+(?:[.,]\d+)?)\s*$/i
+      );
+      if (fullLineMatch) {
+        let desc = line.replace(/(?:NIU|UND|PZA|SET|UN)\s*\d+(?:[.,]\d+)?\s*$/i, "").trim();
+        desc = desc.replace(/^\d{1,3}/, "");
+        desc = desc.replace(/\s*-{2,}\s*.*/, "").trim();
+        desc = extractDescription(desc);
+
+        if (pendingName) {
+          items.push({ name: pendingName, quantity: 1, series: pendingSeries.length > 0 ? [...pendingSeries] : undefined });
+          pendingSeries = [];
+        }
+        items.push({
+          name: desc || line,
+          quantity: parseFloat(fullLineMatch[1].replace(",", ".")),
+          series: undefined,
+        });
+        pendingName = "";
+        continue;
+      }
+
+      // Series numbers: alphanumeric codes 5+ chars, space-separated
+      if (pendingName) {
+        const tokens = line.split(/\s+/).filter(Boolean);
+        const seriesTokens = tokens.filter(
+          (t) => /^[A-Z0-9]{5,}$/i.test(t) && !/^(NIU|UND|PZA|SET|UN)$/i.test(t)
+        );
+        if (seriesTokens.length > 0) {
+          pendingSeries.push(...seriesTokens);
+        }
+      }
+    }
+
+    // Push last pending item
+    if (pendingName) {
+      items.push({ name: pendingName, quantity: 1, series: pendingSeries.length > 0 ? [...pendingSeries] : undefined });
+    }
+  }
+
+  // --- SET PRODUCTS ---
+  if (items.length > 0) {
+    setSelectedProducts(
+      items.map((item, index) => ({
+        id: index + 1,
+        name: item.name,
+        quantity: item.quantity,
+        price: 0,
+        priceSell: 0,
+        category_name: "Sin categoria",
+        series: item.series ?? [],
+      }))
+    );
+  } else {
+    toast.warning("No se encontraron productos en la guía de remisión DELTRON.");
   }
 }

@@ -69,11 +69,14 @@ export default function Page() {
   const allowedRoles = ACCOUNT_ALLOWED_ROLES
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const { logout } = useAuth()
+  const { authPending, sessionExpiring, logoutAndRedirect } = useAuth()
 
   useEffect(() => {
     async function loadProfile() {
       setLoading(true)
+      if (authPending || sessionExpiring) {
+        return
+      }
       const session = await getUserDataFromToken()
       if (!session || !(await isTokenValid())) {
         router.replace('/login')
@@ -111,7 +114,7 @@ export default function Page() {
       }
     }
     loadProfile()
-  }, [allowedRoles, router])
+  }, [allowedRoles, authPending, router, sessionExpiring])
 
   function handleDatosSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -161,8 +164,7 @@ export default function Page() {
       await changePassword(formPass.actual, formPass.nueva)
       setFormPass({ actual: "", nueva: "", confirmar: "" })
       toast("Tu contraseña se ha actualizado correctamente.")
-      await logout()
-      router.push('/login')
+      await logoutAndRedirect()
     } catch (error) {
       console.error(error)
       toast("Error: No se pudo actualizar la contraseña.")

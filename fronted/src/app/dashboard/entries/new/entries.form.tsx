@@ -27,6 +27,7 @@ import {
   detectGuideDocument,
   detectInvoiceProvider,
   processExtractedText,
+  processDeltronGuideText,
   processGuideText,
   processInvoiceText,
 } from '../utils/pdfExtractor'
@@ -923,7 +924,13 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           toast.warning("No se detecto una guia de remision en el PDF.");
         }
 
-        processGuideText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        // Route to provider-specific guide processor
+        const guideProvider = detectInvoiceProvider(extractedText);
+        if (guideProvider === "deltron") {
+          processDeltronGuideText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        } else {
+          processGuideText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        }
         setShowGuideFields(true);
         setShowInvoiceFields(false);
         toast.success("Guia de remision procesada correctamente.");

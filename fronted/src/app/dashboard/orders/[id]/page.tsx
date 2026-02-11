@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useAuth } from "@/context/auth-context";
 
 // Icons
 import {
@@ -99,6 +100,7 @@ export default function OrderDetailPage() {
   // Routing / params
   const params = useParams();
   const router = useRouter();
+  const { authPending, sessionExpiring } = useAuth();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
   // State
@@ -122,6 +124,9 @@ export default function OrderDetailPage() {
 
   // Guard + fetch order/sale
   useEffect(() => {
+    if (authPending || sessionExpiring) {
+      return;
+    }
     async function fetchData() {
       const user = await getUserDataFromToken();
       if (!user || !(await isTokenValid()) || user.role !== "ADMIN") {
@@ -144,7 +149,7 @@ export default function OrderDetailPage() {
       }
     }
     if (id) fetchData();
-  }, [id, router]);
+  }, [authPending, id, router, sessionExpiring]);
 
   // Fetch products for the order/sale
   useEffect(() => {

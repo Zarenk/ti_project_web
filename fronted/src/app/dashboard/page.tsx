@@ -57,11 +57,12 @@ export default function WelcomeDashboard() {
   const router = useRouter()
   const authErrorShown = useRef(false)
   const { selection, version } = useTenantSelection()
-  const { role: authRole } = useAuth()
+  const { role: authRole, authPending, sessionExpiring } = useAuth()
   const userRole = authRole ?? null
 
   const handleAuthError = useCallback(async (err: unknown) => {
     if (authErrorShown.current) return true
+    if (authPending || sessionExpiring) return true
     if (err instanceof UnauthenticatedError) {
       if (wasManualLogoutRecently()) {
         authErrorShown.current = true
@@ -78,7 +79,7 @@ export default function WelcomeDashboard() {
       return true
     }
     return false
-  }, [router])
+  }, [router, authPending, sessionExpiring])
 
   const isGlobalSuperAdmin = userRole === "SUPER_ADMIN_GLOBAL"
 
@@ -109,6 +110,9 @@ export default function WelcomeDashboard() {
   )
 
   useEffect(() => {
+    if (authPending || sessionExpiring) {
+      return
+    }
     if (!userRole) {
       return
     }
@@ -178,7 +182,7 @@ export default function WelcomeDashboard() {
     return () => {
       cancelled = true
     }
-  }, [router, userRole])
+  }, [router, userRole, authPending, sessionExpiring])
 
   useEffect(() => {
     if (!bootstrapReady || userRole === null) return
@@ -188,6 +192,9 @@ export default function WelcomeDashboard() {
   }, [bootstrapReady, selection.orgId, selectedOrgId, userRole])
 
   useEffect(() => {
+    if (authPending || sessionExpiring) {
+      return
+    }
     if (!bootstrapReady || userRole === null) return
 
     if (userRole === "EMPLOYEE") {
@@ -364,6 +371,9 @@ export default function WelcomeDashboard() {
         setRecentActivity(activities.slice(0, 10))
       } catch (error: unknown) {
         if (!(await handleAuthError(error))) {
+          if (authPending || sessionExpiring) {
+            return
+          }
           if (error instanceof Error && error.message === "Unauthorized") {
             router.push("/unauthorized")
           } else {
@@ -394,6 +404,8 @@ export default function WelcomeDashboard() {
     router,
     version,
     userRole,
+    authPending,
+    sessionExpiring,
   ])
 
   const showOrganizationSelector =

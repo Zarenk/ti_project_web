@@ -31,6 +31,7 @@ import SimplePagination from "@/components/simple-pagination"
 import { motion } from "framer-motion"
 import { getFavorites } from "../favorites/favorite.api"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useAuth } from "@/context/auth-context"
 
 export default function UserPanel() {
   const [isEditing, setIsEditing] = useState(false)
@@ -42,9 +43,13 @@ export default function UserPanel() {
   const [lastAccess, setLastAccess] = useState<string>('')
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
+  const { authPending, sessionExpiring } = useAuth()
 
   useEffect(() => {
     async function check() {
+      if (authPending || sessionExpiring) {
+        return
+      }
       const data = await getUserDataFromToken()
       if (!data || !(await isTokenValid())) {
         router.replace('/login')
@@ -56,7 +61,7 @@ export default function UserPanel() {
       }
     }
     check()
-  }, [router])
+  }, [router, authPending, sessionExpiring])
 
   const documentTypes = ["DNI", "CARNET DE EXTRANJERIA", "OTRO"] as const
 
@@ -147,6 +152,9 @@ export default function UserPanel() {
 
   useEffect(() => {
     async function loadData() {
+      if (authPending || sessionExpiring) {
+        return
+      }
       setIsLoading(true)
       const session = await getUserDataFromToken()
       if (!session || !(await isTokenValid())) {
@@ -233,6 +241,9 @@ export default function UserPanel() {
         const favs = await getFavorites()
         setFavorites(favs)
       } catch (error: any) {
+        if (authPending || sessionExpiring) {
+          return
+        }
         if (error.message === 'Unauthorized') {
           router.push('/unauthorized')
         } else {
@@ -243,7 +254,7 @@ export default function UserPanel() {
       }
     }
     loadData()
-  }, [])
+  }, [authPending, sessionExpiring, router])
 
   const getStatusColor = (status: string) => {
     switch (status) {

@@ -34,6 +34,7 @@ export type CompanySnapshot = {
   legalName: string | null;
   taxId: string | null;
   status: string;
+  defaultQuoteMargin?: number | null;
   sunatEnvironment: string;
   sunatRuc: string | null;
   sunatBusinessName: string | null;

@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
+import { useAuth } from "@/context/auth-context"
 
 export const ACCOUNT_ALLOWED_ROLES = new Set(["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG", "ADMIN", "EMPLOYEE"])
 
 export function useAccountAccessGuard() {
   const router = useRouter()
   const [ready, setReady] = useState(false)
+  const { authPending, sessionExpiring } = useAuth()
 
   useEffect(() => {
     let mounted = true
@@ -22,6 +24,9 @@ export function useAccountAccessGuard() {
 
     async function guard() {
       try {
+        if (authPending || sessionExpiring) {
+          return
+        }
         const valid = await isTokenValid()
         if (!valid) {
           router.replace("/login")
@@ -47,7 +52,7 @@ export function useAccountAccessGuard() {
     return () => {
       mounted = false
     }
-  }, [router])
+  }, [authPending, router, sessionExpiring])
 
   return ready
 }

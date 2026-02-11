@@ -65,6 +65,7 @@ export interface CompanyResponse {
   legalName: string | null
   taxId: string | null
   status: string
+  defaultQuoteMargin?: number | null
   sunatEnvironment: SunatEnvironment
   sunatRuc: string | null
   sunatBusinessName: string | null
@@ -145,6 +146,7 @@ export interface UpdateCompanyPayload {
   logoUrl?: string | null
   primaryColor?: string | null
   secondaryColor?: string | null
+  defaultQuoteMargin?: number | null
   sunatSolUserBeta?: string | null
   sunatSolPasswordBeta?: string | null
   sunatSolUserProd?: string | null
@@ -189,6 +191,8 @@ function mapCompanyResponse(data: any): CompanyResponse {
     legalName: data.legalName ?? null,
     taxId: data.taxId ?? null,
     status: String(data.status ?? ""),
+    defaultQuoteMargin:
+      typeof data.defaultQuoteMargin === "number" ? data.defaultQuoteMargin : null,
     sunatEnvironment: (data.sunatEnvironment === "PROD" ? "PROD" : "BETA") as SunatEnvironment,
     sunatRuc: data.sunatRuc ?? null,
     sunatBusinessName: data.sunatBusinessName ?? null,

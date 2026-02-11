@@ -70,6 +70,31 @@ type SelectedPayment = {
   amount: number;
   currency: string;
 };
+type SalesDraft = {
+  version: 1;
+  updatedAt: string;
+  values: SalesType;
+  selectedProducts: {
+    id: number;
+    name: string;
+    price: number;
+    quantity: number;
+    category_name: string;
+    series?: string[];
+    newSeries?: string;
+  }[];
+  payments: SelectedPayment[];
+  currency: string;
+  valueStore: string;
+  valueClient: string;
+  valueInvoice: string;
+  selectedStoreId: number | null;
+  selectedDate: string | null;
+  createdAt: string | null;
+  showOutOfStock: boolean;
+  autoSyncPayment: boolean;
+  quickPaymentMethodId: number | null;
+};
 type PaymentMethodOption = { id: number; name: string };
 const defaultPaymentMethods: PaymentMethodOption[] = [
   { id: -1, name: "EN EFECTIVO" },
@@ -541,6 +566,15 @@ const getSaleReferenceId = () => {
     const companyKey = selection.companyId ?? 0;
     return `sales-context:v1:${userId}:${selection.orgId}:${companyKey}`;
   }, [userId, selection.orgId, selection.companyId]);
+  const salesDraftKey = useMemo(() => {
+    if (!userId || !selection.orgId) return null;
+    const companyKey = selection.companyId ?? 0;
+    return `sales-draft:v1:${userId}:${selection.orgId}:${companyKey}`;
+  }, [userId, selection.orgId, selection.companyId]);
+  const [draftPromptOpen, setDraftPromptOpen] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<SalesDraft | null>(null);
+  const draftSaveTimerRef = useRef<number | null>(null);
+  const draftAppliedRef = useRef(false);
   const [lastInvoiceType, setLastInvoiceType] = useState<string>("");
   const [invoiceTypeUsage, setInvoiceTypeUsage] = useState<Record<string, number>>({});
   const lastInvoiceTypeRef = useRef(lastInvoiceType);
@@ -876,6 +910,139 @@ const getSaleReferenceId = () => {
     ],
   );
 
+  const isDraftMeaningful = useCallback((draft: SalesDraft | null) => {
+    if (!draft) return false;
+    if (draft.selectedProducts.length > 0) return true;
+    if (draft.payments.length > 0) return true;
+    if (draft.valueStore || draft.valueClient || draft.valueInvoice) return true;
+    const values = draft.values;
+    return Boolean(
+      values?.description ||
+      values?.client_name ||
+      values?.client_typeNumber ||
+      values?.store_name ||
+      values?.tipoComprobante ||
+      values?.total_comprobante
+    );
+  }, []);
+
+  const buildDraftSnapshot = useCallback((): SalesDraft | null => {
+    if (!salesDraftKey || typeof window === "undefined") {
+      return null;
+    }
+    const values = form.getValues();
+    const draft: SalesDraft = {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      values,
+      selectedProducts,
+      payments,
+      currency,
+      valueStore,
+      valueClient,
+      valueInvoice,
+      selectedStoreId,
+      selectedDate: selectedDate ? selectedDate.toISOString() : null,
+      createdAt: createdAt ? createdAt.toISOString() : null,
+      showOutOfStock,
+      autoSyncPayment,
+      quickPaymentMethodId,
+    };
+    return isDraftMeaningful(draft) ? draft : null;
+  }, [
+    salesDraftKey,
+    form,
+    selectedProducts,
+    payments,
+    currency,
+    valueStore,
+    valueClient,
+    valueInvoice,
+    selectedStoreId,
+    selectedDate,
+    createdAt,
+    showOutOfStock,
+    autoSyncPayment,
+    quickPaymentMethodId,
+    isDraftMeaningful,
+  ]);
+
+  const persistSalesDraft = useCallback(
+    (draft: SalesDraft | null) => {
+      if (!salesDraftKey || typeof window === "undefined") {
+        return;
+      }
+      try {
+        if (!draft) {
+          window.localStorage.removeItem(salesDraftKey);
+          return;
+        }
+        window.localStorage.setItem(salesDraftKey, JSON.stringify(draft));
+      } catch (error) {
+        console.warn("No se pudo guardar el borrador de venta:", error);
+      }
+    },
+    [salesDraftKey],
+  );
+
+  const scheduleDraftSave = useCallback(() => {
+    if (!salesDraftKey || typeof window === "undefined") {
+      return;
+    }
+    if (draftSaveTimerRef.current) {
+      window.clearTimeout(draftSaveTimerRef.current);
+    }
+    draftSaveTimerRef.current = window.setTimeout(() => {
+      persistSalesDraft(buildDraftSnapshot());
+    }, 400);
+  }, [salesDraftKey, buildDraftSnapshot, persistSalesDraft]);
+
+  const applyDraft = useCallback(
+    (draft: SalesDraft) => {
+      draftAppliedRef.current = true;
+      const mergedValues = {
+        ...form.getValues(),
+        ...draft.values,
+      };
+      form.reset(mergedValues);
+      setSelectedProducts(draft.selectedProducts ?? []);
+      setPayments(draft.payments ?? []);
+      setCurrency(draft.currency ?? "PEN");
+      setValueStore(draft.valueStore ?? "");
+      setValueClient(draft.valueClient ?? "");
+      setValueInvoice(draft.valueInvoice ?? "");
+      setSelectedStoreId(draft.selectedStoreId ?? null);
+      setSelectedDate(draft.selectedDate ? new Date(draft.selectedDate) : new Date());
+      setCreatedAt(draft.createdAt ? new Date(draft.createdAt) : null);
+      setShowOutOfStock(Boolean(draft.showOutOfStock));
+      setAutoSyncPayment(Boolean(draft.autoSyncPayment));
+      setQuickPaymentMethodId(draft.quickPaymentMethodId ?? null);
+      setOpen(false);
+      setOpenClient(false);
+      setOpenStore(false);
+      setOpenInvoice(false);
+    },
+    [
+      form,
+      setSelectedProducts,
+      setPayments,
+      setCurrency,
+      setValueStore,
+      setValueClient,
+      setValueInvoice,
+      setSelectedStoreId,
+      setSelectedDate,
+      setCreatedAt,
+      setShowOutOfStock,
+      setAutoSyncPayment,
+      setQuickPaymentMethodId,
+      setOpen,
+      setOpenClient,
+      setOpenStore,
+      setOpenInvoice,
+    ],
+  );
+
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
 
@@ -1067,6 +1234,7 @@ const getSaleReferenceId = () => {
         }
  
         saleReferenceIdRef.current = null;
+        persistSalesDraft(null);
         toast.success("Se registro la informacion correctamente."); // Notificaci??n de ?xito
  
 
@@ -1726,6 +1894,67 @@ const getSaleReferenceId = () => {
       console.warn("No se pudo sincronizar el contexto de ventas:", error);
     }
   }, [salesContextKey, persistSalesContext]);
+
+  useEffect(() => {
+    if (!salesDraftKey || typeof window === "undefined") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(salesDraftKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as SalesDraft;
+      if (!parsed || parsed.version !== 1 || !isDraftMeaningful(parsed)) {
+        window.localStorage.removeItem(salesDraftKey);
+        return;
+      }
+      if (draftAppliedRef.current) return;
+      setPendingDraft(parsed);
+      setDraftPromptOpen(true);
+    } catch (error) {
+      console.warn("No se pudo leer el borrador de venta:", error);
+    }
+  }, [salesDraftKey, isDraftMeaningful]);
+
+  useEffect(() => {
+    if (!salesDraftKey) {
+      return;
+    }
+    scheduleDraftSave();
+  }, [
+    salesDraftKey,
+    selectedProducts,
+    payments,
+    currency,
+    valueStore,
+    valueClient,
+    valueInvoice,
+    selectedStoreId,
+    selectedDate,
+    createdAt,
+    showOutOfStock,
+    autoSyncPayment,
+    quickPaymentMethodId,
+    scheduleDraftSave,
+  ]);
+
+  useEffect(() => {
+    if (!salesDraftKey) {
+      return;
+    }
+    const subscription = form.watch(() => scheduleDraftSave());
+    return () => subscription.unsubscribe();
+  }, [salesDraftKey, form, scheduleDraftSave]);
+
+  useEffect(() => {
+    if (!salesDraftKey || typeof window === "undefined") {
+      return;
+    }
+    const handleBeforeUnload = () => {
+      persistSalesDraft(buildDraftSnapshot());
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [salesDraftKey, buildDraftSnapshot, persistSalesDraft]);
 
   useEffect(() => {
     if (!salesContextKey) {
@@ -2980,6 +3209,7 @@ const getSaleReferenceId = () => {
                         setOpenClient(false); // Cierra el combobox de clientes
                         setOpenStore(false); // Cierra el combobox de tiendas
                         setOpenInvoice(false); // Cierra el combobox de tipo de comprobantes
+                        persistSalesDraft(null);
                     }}  // Restablece los campos del formulario
                           >
                             Limpiar 
@@ -3004,6 +3234,40 @@ const getSaleReferenceId = () => {
                         </TooltipContent>
                       </Tooltip>
                     </div>
+                      <AlertDialog open={draftPromptOpen} onOpenChange={setDraftPromptOpen}>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Venta en progreso</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Encontramos una venta sin finalizar. ¿Deseas restaurar la información guardada?
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel
+                              className="cursor-pointer"
+                              onClick={() => {
+                                persistSalesDraft(null);
+                                setPendingDraft(null);
+                                setDraftPromptOpen(false);
+                              }}
+                            >
+                              Descartar
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                              className="cursor-pointer"
+                              onClick={() => {
+                                if (pendingDraft) {
+                                  applyDraft(pendingDraft);
+                                }
+                                setPendingDraft(null);
+                                setDraftPromptOpen(false);
+                              }}
+                            >
+                              Restaurar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                       {/* Di?logo de confirmaci?n */}
                       <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                         <AlertDialogContent>

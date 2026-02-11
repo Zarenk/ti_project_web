@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 import { useDebounce } from "@/app/hooks/useDebounce";
+import { useAuth } from "@/context/auth-context";
 
 type RestaurantOrderStatus =
   | "OPEN"
@@ -93,6 +94,7 @@ export default function OrdersPage() {
   const { version, selection } = useTenantSelection();
   const [verticalName, setVerticalName] = useState("GENERAL");
   const [verticalResolved, setVerticalResolved] = useState(false);
+  const { authPending, sessionExpiring } = useAuth();
 
   const handleStatusUpdate = useCallback((id: number, status: string) => {
     setOrders((prev) =>
@@ -164,6 +166,9 @@ export default function OrdersPage() {
     if (!verticalResolved || isRestaurant) {
       return;
     }
+    if (authPending || sessionExpiring) {
+      return;
+    }
     setIsLoading(true);
     setOrders([]);
     setStoresMap({});
@@ -176,6 +181,9 @@ export default function OrdersPage() {
       const roleAllowed = normalizedRole ? (isSuperAdmin || allowedRoles.has(normalizedRole)) : false;
 
       if (!user || !isValid || !roleAllowed) {
+        if (authPending || sessionExpiring) {
+          return;
+        }
         router.replace("/unauthorized");
         return;
       }
@@ -228,7 +236,7 @@ export default function OrdersPage() {
       }
     }
     fetchData();
-  }, [router, version, isRestaurant, verticalResolved]);
+  }, [router, version, isRestaurant, verticalResolved, authPending, sessionExpiring]);
 
   const restaurantStatusCounts = useMemo(() => {
     const base = {

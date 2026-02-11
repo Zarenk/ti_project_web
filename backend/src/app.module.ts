@@ -65,6 +65,7 @@ import { KitchenStationsModule } from './kitchen-stations/kitchen-stations.modul
 import { IngredientsModule } from './ingredients/ingredients.module';
 import { RecipeItemsModule } from './recipe-items/recipe-items.module';
 import { RestaurantOrdersModule } from './restaurant-orders/restaurant-orders.module';
+import { QuotesModule } from './quotes/quotes.module';
 
 @Module({
   imports: [
@@ -122,6 +123,7 @@ import { RestaurantOrdersModule } from './restaurant-orders/restaurant-orders.mo
     IngredientsModule,
     RecipeItemsModule,
     RestaurantOrdersModule,
+    QuotesModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [

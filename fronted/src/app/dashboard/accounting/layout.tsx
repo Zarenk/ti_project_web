@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { useFeatureFlag } from "@/app/hooks/use-feature-flags"
 import { useRBAC } from "@/app/hooks/use-rbac"
 import { MODULE_PERMISSION_LABELS, useEnforcedModulePermission } from "@/hooks/use-enforced-module-permission"
+import { useAuth } from "@/context/auth-context"
 
 const MODULE_KEY = "accounting"
 const RBAC_ALLOWED_ROLES = [
@@ -22,8 +23,9 @@ export default function AccountingLayout({ children }: { children: ReactNode }) 
   const enabled = useFeatureFlag("ACCOUNTING_ENABLED")
   const canRead = useRBAC(RBAC_ALLOWED_ROLES)
   const hasWarnedRef = useRef(false)
+  const { authPending, sessionExpiring } = useAuth()
 
-  const isPending = loading || canRead === undefined
+  const isPending = loading || canRead === undefined || authPending || sessionExpiring
   const allowed = moduleAllowed && enabled && canRead === true
 
   useEffect(() => {
