@@ -7,7 +7,7 @@
 
 export interface QueryValidation {
   isValid: boolean
-  reason?: "generic" | "complaint" | "off-topic" | "too-short" | "gibberish"
+  reason?: "generic" | "complaint" | "off-topic" | "too-short" | "gibberish" | "section-question"
   suggestedResponse?: string
 }
 
@@ -43,12 +43,24 @@ const COMPLAINT_PATTERNS = [
   /no\s+te\s+(pregunte|pregunt[eé]|pedi|ped[ií])/i,
   /eso\s+no\s+(es|era|fue)/i,
   /no\s+(queria|quer[ií]a|necesito|necesitaba)\s+eso/i,
-  /no\s+me\s+est[aá]s\s+entendiendo/i,
+  /no\s+me\s+(est[aá]s\s+)?(entendiendo|respondiendo|ayudando)/i,
+  /no\s+(me\s+)?has\s+respondido/i, // FIX: "NO ME HAS RESPONDIDO"
   /no\s+entiendes/i,
   /est[aá]s\s+(mal|equivocado|confundido)/i,
   /no\s+sirve/i,
   /est[aá]\s+respondiendo\s+(mal|cualquier\s+cosa)/i,
   /respuesta\s+(incorrecta|mala|equivocada)/i,
+  /otra\s+vez\s+lo\s+mismo/i,
+  /deja\s+de\s+(decir|responder)/i,
+]
+
+/** Patrones que preguntan sobre la sección actual */
+const SECTION_QUESTION_PATTERNS = [
+  /^(que|qué)\s+(hace|es|sirve|significa)\s+(esta|la)\s+(seccion|sección|parte|página)/i,
+  /^para\s+qu[eé]\s+(es|sirve)\s+(esta|la)\s+(seccion|sección|parte)/i,
+  /^(donde|dónde)\s+estoy/i,
+  /^qu[eé]\s+(hago|puedo\s+hacer)\s+aqu[ií]/i,
+  /^(ayuda|explicame|explícame)\s+(esta|la)\s+(seccion|sección|parte)/i,
 ]
 
 /** Patrones de preguntas muy cortas que necesitan más contexto */
@@ -76,6 +88,16 @@ export function validateQuery(query: string, section?: string, userId?: string):
       isValid: false,
       reason: "off-topic",
       suggestedResponse: `Has alcanzado el límite de ${rateLimitCheck.limit} preguntas por minuto. Por favor, espera ${rateLimitCheck.resetIn} segundos antes de hacer otra pregunta.`
+    }
+  }
+
+  // 0.5. Detectar preguntas sobre la sección actual (FIX: "que hace esta seccion")
+  if (isSectionQuestion(normalized)) {
+    const sectionName = section || "general"
+    return {
+      isValid: false, // No procesar como query normal
+      reason: "section-question",
+      suggestedResponse: generateSectionExplanation(sectionName)
     }
   }
 
@@ -232,6 +254,62 @@ export function generateNoMatchResponse(query: string, section: string): string 
     `• "¿Dónde veo...?"\n` +
     `• "¿Cómo cambio...?"\n\n` +
     `O puedes navegar por las preguntas frecuentes de la sección.`
+}
+
+/**
+ * Genera explicación de la sección actual
+ */
+export function generateSectionExplanation(section: string): string {
+  const sectionDescriptions: Record<string, string> = {
+    inventory: "**Inventario** te permite gestionar el stock de tus productos:\n• Ver stock actual de cada producto\n• Actualizar precios y cantidades\n• Identificar productos con stock bajo\n• Ver historial de movimientos",
+
+    products: "**Productos** es donde gestionas tu catálogo:\n• Crear y editar productos\n• Agregar imágenes y descripciones\n• Configurar precios y variantes\n• Organizar por categorías y marcas",
+
+    sales: "**Ventas** te permite registrar y gestionar las ventas:\n• Registrar nuevas ventas\n• Imprimir facturas y boletas\n• Ver historial de ventas\n• Anular o modificar ventas",
+
+    entries: "**Ingresos** es donde registras la mercadería que ingresa:\n• Registrar nuevos ingresos de productos\n• Subir guías de remisión\n• Ver ingresos pendientes y completados\n• Asociar ingresos con proveedores",
+
+    accounting: "**Contabilidad** gestiona tus registros contables:\n• Crear asientos contables\n• Ver libro diario y mayor\n• Generar balances\n• Gestionar plan de cuentas",
+
+    quotes: "**Cotizaciones** te permite crear cotizaciones para clientes:\n• Crear nuevas cotizaciones\n• Convertir cotizaciones en ventas\n• Enviar cotizaciones por WhatsApp o email\n• Ver historial de cotizaciones",
+
+    catalog: "**Catálogo** muestra tus productos en formato visual:\n• Exportar catálogo a PDF\n• Personalizar portada\n• Compartir catálogo con clientes\n• Vista previa antes de exportar",
+
+    clients: "**Clientes** gestiona tu base de datos de clientes:\n• Registrar nuevos clientes\n• Ver historial de compras\n• Importar clientes desde Excel\n• Gestionar información de contacto",
+
+    providers: "**Proveedores** gestiona tus proveedores:\n• Registrar nuevos proveedores\n• Ver historial de compras\n• Gestionar información de contacto\n• Asociar productos a proveedores",
+
+    cashregister: "**Caja Registradora** controla el flujo de efectivo:\n• Abrir caja al inicio del día\n• Registrar ingresos y egresos\n• Hacer cierre de caja\n• Ver historial de movimientos",
+
+    users: "**Usuarios** gestiona los usuarios del sistema:\n• Crear nuevos usuarios\n• Asignar roles y permisos\n• Activar/desactivar usuarios\n• Ver historial de actividad",
+
+    settings: "**Configuración** permite personalizar el sistema:\n• Configurar datos de la empresa\n• Cambiar logo y colores\n• Activar módulos y funcionalidades\n• Gestionar facturación electrónica",
+
+    stores: "**Tiendas** gestiona tus puntos de venta:\n• Crear nuevas tiendas\n• Asignar productos a tiendas\n• Ver stock por tienda\n• Gestionar transferencias entre tiendas",
+
+    brands: "**Marcas** organiza tus productos por marca:\n• Crear nuevas marcas\n• Asignar productos a marcas\n• Filtrar productos por marca",
+
+    categories: "**Categorías** organiza tus productos:\n• Crear nuevas categorías\n• Asignar productos a categorías\n• Crear jerarquías de categorías",
+
+    exchange: "**Cambio de Divisas** gestiona tipos de cambio:\n• Registrar nuevos tipos de cambio\n• Ver historial de cambios\n• Usar en ventas multidivisa",
+
+    reports: "**Reportes** muestra estadísticas y análisis:\n• Ver reportes de ventas\n• Analizar inventario\n• Exportar reportes a Excel\n• Gráficos y dashboards",
+  }
+
+  const description = sectionDescriptions[section]
+
+  if (!description) {
+    return `Estás en la sección de **${section}**. ¿En qué puedo ayudarte específicamente?`
+  }
+
+  return `📍 ${description}\n\n**¿Necesitas ayuda con algo específico de esta sección?**`
+}
+
+/**
+ * Detecta si la query es sobre la sección actual
+ */
+export function isSectionQuestion(query: string): boolean {
+  return SECTION_QUESTION_PATTERNS.some(pattern => pattern.test(query))
 }
 
 /**
