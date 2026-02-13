@@ -55,11 +55,20 @@ import {
   isMetaQuestion,
   generateMetaResponse,
 } from "@/data/help/query-validation"
+import {
+  detectCurrentSection,
+  getSectionDisplayName,
+  generateContextualGreeting,
+  getContextualSuggestions,
+  prioritizeCurrentSection,
+  type RouteContext,
+} from "@/data/help/route-detection"
 
 type MascotState = "idle" | "waving" | "thinking" | "responding"
 
 interface HelpAssistantContextType {
   currentSection: string
+  routeContext: RouteContext // DETECCIÓN AUTOMÁTICA: Contexto completo de la ruta
   sectionMeta: HelpSection | undefined
   isOpen: boolean
   setIsOpen: (open: boolean) => void
@@ -208,14 +217,22 @@ function matchLocalEnhanced(
   }
 
   // Fallback to enhanced matcher with expanded vocabulary
-  const results = findMatchingEntries(text, allHelpEntries, 0.6)
+  let results = findMatchingEntries(text, allHelpEntries, 0.6)
 
   if (results.length === 0) return null
 
-  // Prefer matches from current section (boost score)
+  // PRIORIZACIÓN AUTOMÁTICA: Boost entries de la sección actual
+  // Esto hace que respuestas relevantes a la ubicación actual tengan prioridad
+  results = prioritizeCurrentSection(results.map(r => ({
+    ...r,
+    section: r.entry.section
+  })), currentSection, 0.15)
+
+  // Re-ordenar por score después del boost
+  results.sort((a, b) => b.score - a.score)
+
   const topMatch = results[0]
-  const isCurrentSection = topMatch.entry.route?.includes(currentSection)
-  const adjustedScore = isCurrentSection ? topMatch.score * 1.1 : topMatch.score
+  const adjustedScore = topMatch.score
 
   // Only return if we have a strong match (>=0.6 after adjustment)
   if (adjustedScore >= 0.6) {
@@ -282,7 +299,11 @@ function backendToChat(msg: BackendMessage): ChatMessage {
 
 export function HelpAssistantProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const currentSection = useMemo(() => resolveSection(pathname), [pathname])
+
+  // NUEVA DETECCIÓN AUTOMÁTICA: Detecta sección desde la URL
+  const routeContext = useMemo<RouteContext>(() => detectCurrentSection(pathname), [pathname])
+  const currentSection = routeContext.section
+
   const sectionMeta = useMemo(
     () => getSectionById(currentSection),
     [currentSection],
@@ -621,6 +642,7 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
   const value = useMemo<HelpAssistantContextType>(
     () => ({
       currentSection,
+      routeContext, // DETECCIÓN AUTOMÁTICA: Contexto de ruta completo
       sectionMeta,
       isOpen,
       setIsOpen,
@@ -634,6 +656,7 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
     }),
     [
       currentSection,
+      routeContext,
       sectionMeta,
       isOpen,
       mascotState,
