@@ -1,0 +1,265 @@
+import type { HelpSection } from "../types"
+
+export const cashregisterSection: HelpSection = {
+  id: "cashregister",
+  label: "Caja",
+  description: "Controla las operaciones de caja, arqueos y flujo de efectivo diario.",
+  welcomeMessage:
+    "Estas en Caja. Controla las operaciones de caja y el flujo de efectivo.",
+  quickActions: [
+    "cashregister-open",
+    "cashregister-close",
+    "cashregister-count",
+    "cashregister-movements",
+    "cashregister-balance",
+  ],
+  entries: [
+    {
+      id: "cashregister-open",
+      question: "Como abro la caja?",
+      aliases: [
+        "abrir caja",
+        "apertura de caja",
+        "iniciar caja",
+        "abrir caja registradora",
+      ],
+      answer:
+        "Para abrir la caja, ve a la seccion de Caja y haz clic en 'Abrir Caja'. Ingresa el monto inicial con el que comienzas el turno, que corresponde al efectivo disponible en la caja fisica. Este monto sirve como base para calcular el cierre al final del dia. Solo puede haber una caja abierta por usuario a la vez.",
+      keywords: ["abro", "caja", "abrir", "seccion", "haz", "clic", "'abrir", "caja'", "ingresa", "monto", "inicial", "comienzas", "turno", "corresponde", "efectivo"],
+      steps: [
+        { text: "Ve al menu lateral 'Ventas' y haz clic en 'Caja'", image: "/help/cashregister/step1-menu-caja.png" },
+        { text: "Ingresa el monto inicial de efectivo en la caja", image: "/help/cashregister/step2-monto-inicial.png" },
+        { text: "Haz clic en 'Abrir Caja' para iniciar el turno", image: "/help/cashregister/step3-abrir.png" },
+      ],
+      relatedActions: ["cashregister-close", "cashregister-movements"],
+    },
+    {
+      id: "cashregister-close",
+      question: "Como cierro la caja?",
+      aliases: [
+        "cerrar caja",
+        "cierre de caja",
+        "finalizar caja",
+        "cerrar turno de caja",
+      ],
+      answer:
+        "Para cerrar la caja, haz clic en 'Cerrar Caja' en la parte superior de la pantalla. El sistema te pedira que ingreses el monto final en efectivo que hay en la caja fisica. Automaticamente se comparara con el monto esperado segun los movimientos registrados y se mostrara la diferencia si la hubiera. Al confirmar, la caja quedara cerrada y se generara un resumen del turno.",
+      keywords: ["cierro", "caja", "cerrar", "haz", "clic", "'cerrar", "caja'", "parte", "superior", "pantalla", "sistema", "pedira", "ingreses", "monto", "final"],
+      relatedActions: ["cashregister-open", "cashregister-count"],
+    },
+    {
+      id: "cashregister-count",
+      question: "Como hago un arqueo de caja?",
+      aliases: [
+        "arqueo de caja",
+        "contar caja",
+        "conteo de efectivo",
+        "verificar caja",
+        "cuadrar caja",
+      ],
+      answer:
+        "El arqueo de caja te permite verificar que el efectivo fisico coincida con lo registrado en el sistema. Desde la caja abierta, selecciona 'Arqueo' e ingresa las cantidades de cada denominacion de billete y moneda. El sistema calculara el total y lo comparara con el saldo esperado, indicando si hay sobrante o faltante.",
+      keywords: ["hago", "arqueo", "caja", "permite", "verificar", "efectivo", "fisico", "coincida", "registrado", "sistema", "desde", "abierta", "selecciona", "'arqueo'", "ingresa"],
+      relatedActions: ["cashregister-close", "cashregister-balance"],
+    },
+    {
+      id: "cashregister-movements",
+      question: "Como registro movimientos en la caja?",
+      aliases: [
+        "movimientos de caja",
+        "registrar ingreso caja",
+        "registrar egreso caja",
+        "entrada de efectivo",
+        "salida de efectivo",
+      ],
+      answer:
+        "Los movimientos de caja se registran automaticamente con cada venta cobrada en efectivo. Para registrar movimientos manuales como ingresos o egresos adicionales, utiliza los botones 'Entrada' o 'Salida' en la pantalla de caja. Indica el monto, selecciona el concepto y agrega una descripcion para mantener un registro claro de cada operacion.",
+      keywords: ["registro", "movimientos", "caja", "registran", "automaticamente", "cada", "venta", "cobrada", "efectivo", "registrar", "manuales", "ingresos", "egresos", "adicionales", "utiliza"],
+      relatedActions: ["cashregister-open", "cashregister-balance"],
+    },
+    {
+      id: "cashregister-balance",
+      question: "Como veo el saldo actual de la caja?",
+      aliases: [
+        "saldo de caja",
+        "balance de caja",
+        "cuanto hay en caja",
+        "efectivo disponible",
+      ],
+      answer:
+        "El saldo actual de la caja se muestra en la parte superior de la pantalla de Caja cuando hay una caja abierta. Este saldo refleja el monto inicial mas todos los ingresos y menos todos los egresos registrados durante el turno. Tambien puedes ver el desglose detallado de cada movimiento que compone el saldo actual.",
+      keywords: ["veo", "saldo", "actual", "caja", "muestra", "parte", "superior", "pantalla", "hay", "abierta", "refleja", "monto", "inicial", "mas", "todos"],
+      relatedActions: ["cashregister-movements", "cashregister-count"],
+    },
+    {
+      id: "cashregister-history",
+      question: "Donde veo el historial de cajas?",
+      aliases: [
+        "historial de caja",
+        "cajas anteriores",
+        "registro de cajas cerradas",
+        "ver cajas pasadas",
+      ],
+      answer:
+        "El historial de cajas se encuentra en la seccion de Caja, en la pestana 'Historial'. Alli podras ver todas las cajas cerradas con su fecha de apertura, cierre, monto inicial, monto final y la diferencia. Puedes hacer clic en cualquier registro para ver el detalle completo de todos los movimientos de ese turno.",
+      keywords: ["veo", "historial", "cajas", "encuentra", "seccion", "caja", "pestana", "'historial'", "alli", "podras", "ver", "todas", "cerradas", "fecha", "apertura"],
+      relatedActions: ["cashregister-close"],
+    },
+    {
+      id: "cashregister-daily-report",
+      question: "Como genero el reporte diario de caja?",
+      aliases: [
+        "reporte diario",
+        "informe de caja",
+        "resumen diario caja",
+        "reporte de caja del dia",
+      ],
+      answer:
+        "El reporte diario se genera automaticamente al cerrar la caja y resume todas las operaciones del turno. Incluye el desglose de ventas en efectivo, entradas y salidas manuales, el monto esperado y el monto real contado. Puedes acceder a reportes de dias anteriores desde el historial de cajas y exportarlos si lo necesitas.",
+      keywords: ["genero", "reporte", "diario", "caja", "genera", "automaticamente", "cerrar", "resume", "todas", "operaciones", "turno", "incluye", "desglose", "ventas", "efectivo"],
+      relatedActions: ["cashregister-history", "cashregister-close"],
+    },
+    {
+      id: "cashregister-difference",
+      question: "Que hago si hay una diferencia en el cierre de caja?",
+      aliases: [
+        "diferencia de caja",
+        "faltante de caja",
+        "sobrante de caja",
+        "descuadre de caja",
+      ],
+      answer:
+        "Cuando el monto contado no coincide con el esperado, el sistema muestra la diferencia como sobrante o faltante. Debes registrar esta diferencia al cerrar la caja indicando una observacion o justificacion. Las diferencias quedan registradas en el historial para su revision posterior. Si las diferencias son recurrentes, revisa los movimientos manuales y las ventas del periodo.",
+      keywords: ["hago", "hay", "diferencia", "cierre", "caja", "monto", "contado", "coincide", "esperado", "sistema", "muestra", "sobrante", "faltante", "debes", "registrar"],
+      relatedActions: ["cashregister-count", "cashregister-close"],
+    },
+    {
+      id: "cashregister-petty-cash",
+      question: "Como manejo la caja chica?",
+      aliases: [
+        "caja chica",
+        "gastos menores",
+        "fondo fijo",
+        "caja menor",
+      ],
+      answer:
+        "La caja chica se gestiona mediante salidas de efectivo desde la caja principal. Registra cada gasto menor con su concepto y monto utilizando el boton 'Salida'. Al final del periodo puedes revisar todos los gastos de caja chica filtrando por concepto en el historial de movimientos. Esto te permite llevar un control detallado de los gastos operativos diarios.",
+      keywords: ["manejo", "caja", "chica", "gestiona", "mediante", "salidas", "efectivo", "desde", "principal", "registra", "cada", "gasto", "menor", "concepto", "monto"],
+      relatedActions: ["cashregister-movements", "cashregister-balance"],
+    },
+    {
+      id: "cashregister-permissions",
+      question: "Quien puede abrir y cerrar la caja?",
+      aliases: [
+        "permisos de caja",
+        "acceso a caja",
+        "quien maneja la caja",
+        "roles de caja",
+      ],
+      answer:
+        "Los permisos de caja se configuran desde la seccion de Usuarios. Solo los usuarios con el rol de cajero o administrador pueden abrir y cerrar cajas. Los administradores tambien pueden ver el historial completo de todos los usuarios y realizar ajustes en cajas cerradas. Un usuario regular solo puede consultar el historial de sus propias cajas.",
+      keywords: ["quien", "puede", "abrir", "cerrar", "caja", "permisos", "configuran", "desde", "seccion", "usuarios", "solo", "rol", "cajero", "administrador", "pueden"],
+      relatedActions: ["cashregister-open", "cashregister-history"],
+    },
+    {
+      id: "cashregister-payment-methods",
+      question: "¿Cómo registro transacciones con múltiples métodos de pago?",
+      aliases: [
+        "métodos de pago",
+        "pago mixto",
+        "varios métodos de pago",
+        "combinar pagos",
+        "efectivo y tarjeta",
+        "yape y efectivo",
+      ],
+      answer:
+        "Al registrar un ingreso o egreso en la caja, puedes usar múltiples métodos de pago para una sola transacción. Después de ingresar el monto total, utiliza el selector 'Métodos de Pago' donde puedes agregar:\n\n• **Efectivo** - Pago en billetes y monedas\n• **Transferencia Bancaria** - Transferencias electrónicas\n• **Visa/Mastercard** - Tarjetas de crédito/débito\n• **Yape** - App de pagos móviles\n• **Plin** - App de pagos móviles\n• **Otras tarjetas** - Otros sistemas de pago\n\nPara cada método, especifica el monto. La suma de todos los métodos debe coincidir con el monto total de la transacción. No puedes repetir el mismo método de pago en una transacción.",
+      keywords: ["métodos", "pago", "múltiples", "mixto", "efectivo", "tarjeta", "yape", "plin", "transferencia", "visa", "combinar", "varios"],
+      steps: [
+        { text: "Ingresa el monto total de la transacción", image: "/help/cashregister/step1-amount.png" },
+        { text: "En 'Métodos de Pago', haz clic en 'Agregar método'", image: "/help/cashregister/step2-add-method.png" },
+        { text: "Selecciona el método (Efectivo, Yape, Visa, etc.)", image: "/help/cashregister/step3-select-method.png" },
+        { text: "Ingresa el monto para ese método específico", image: "/help/cashregister/step4-method-amount.png" },
+        { text: "Repite para agregar más métodos si necesitas", image: "/help/cashregister/step5-multiple-methods.png" },
+        { text: "Verifica que la suma coincida con el total y guarda", image: "/help/cashregister/step6-verify-total.png" },
+      ],
+      relatedActions: ["cashregister-movements", "cashregister-balance"],
+      route: "/dashboard/cashregister",
+      section: "cashregister",
+    },
+    {
+      id: "cashregister-client-info",
+      question: "¿Cómo registro la información del cliente en una transacción?",
+      aliases: [
+        "datos del cliente",
+        "nombre del cliente",
+        "documento del cliente",
+        "DNI en transacción",
+        "cliente en movimiento",
+      ],
+      answer:
+        "Al registrar ingresos o egresos manuales en caja, puedes asociar la transacción con un cliente específico:\n\n1. En el formulario de transacción, encontrarás los campos:\n   • **Nombre del Cliente** - Nombre completo del cliente\n   • **Documento del Cliente** - DNI, RUC u otro documento\n\n2. Estos campos son opcionales para transacciones internas, pero útiles para:\n   • Llevar un registro de cobros a clientes\n   • Asociar pagos a proveedores\n   • Mantener trazabilidad de transacciones importantes\n   • Generar reportes por cliente\n\n3. Las ventas regulares del sistema registran automáticamente el cliente, estos campos son para transacciones manuales adicionales.",
+      keywords: ["cliente", "datos", "nombre", "documento", "dni", "ruc", "transacción", "registro", "información", "asociar"],
+      steps: [
+        { text: "Al crear un ingreso o egreso manual, ve a los campos de cliente", image: "/help/cashregister/step1-client-fields.png" },
+        { text: "Ingresa el nombre completo del cliente", image: "/help/cashregister/step2-client-name.png" },
+        { text: "Ingresa el número de documento (DNI/RUC)", image: "/help/cashregister/step3-client-doc.png" },
+        { text: "Completa el resto de la transacción normalmente", image: "/help/cashregister/step4-complete.png" },
+        { text: "La transacción quedará asociada al cliente en el historial", image: "/help/cashregister/step5-history-client.png" },
+      ],
+      relatedActions: ["cashregister-movements", "cashregister-history"],
+      route: "/dashboard/cashregister",
+      section: "cashregister",
+    },
+    {
+      id: "cashregister-date-filter",
+      question: "¿Cómo filtro las transacciones por fecha?",
+      aliases: [
+        "filtrar por fecha",
+        "ver transacciones de otra fecha",
+        "cambiar fecha",
+        "historial por día",
+        "transacciones de ayer",
+      ],
+      answer:
+        "En la sección de **Historial de Transacciones**, puedes filtrar los movimientos por fecha específica:\n\n1. En la parte superior del historial, encontrarás un selector de fecha con un ícono de calendario\n2. Haz clic en el calendario para abrir el selector de fechas\n3. Selecciona el día que deseas consultar\n4. Las transacciones se actualizarán automáticamente para mostrar solo los movimientos de esa fecha\n\nEl sistema carga por defecto las transacciones del día actual. Puedes navegar a cualquier fecha pasada para revisar el historial completo. Si una fecha no tiene transacciones, verás un mensaje indicándolo.",
+      keywords: ["filtrar", "fecha", "día", "calendario", "transacciones", "historial", "ver", "cambiar", "seleccionar", "específica"],
+      steps: [
+        { text: "Ve a la pestaña 'Historial de Transacciones' en Caja", image: "/help/cashregister/step1-history-tab.png" },
+        { text: "Localiza el selector de fecha en la parte superior", image: "/help/cashregister/step2-date-selector.png" },
+        { text: "Haz clic en el ícono del calendario", image: "/help/cashregister/step3-calendar-icon.png" },
+        { text: "Selecciona la fecha que deseas consultar", image: "/help/cashregister/step4-pick-date.png" },
+        { text: "El historial se actualiza con las transacciones de esa fecha", image: "/help/cashregister/step5-filtered-results.png" },
+      ],
+      relatedActions: ["cashregister-history", "cashregister-daily-report"],
+      route: "/dashboard/cashregister",
+      section: "cashregister",
+    },
+    {
+      id: "cashregister-export",
+      question: "¿Cómo exporto los reportes de caja a Excel o PDF?",
+      aliases: [
+        "exportar reporte",
+        "descargar reporte",
+        "generar excel",
+        "generar pdf",
+        "exportar a excel",
+        "exportar a pdf",
+      ],
+      answer:
+        "Puedes exportar los reportes de caja en dos formatos:\n\n**📊 Exportar a Excel:**\n1. Asegúrate de tener transacciones en la fecha seleccionada\n2. Haz clic en el botón 'Exportar Excel' (ícono de hoja de cálculo)\n3. Se descargará un archivo .xlsx con el detalle completo de:\n   • Todas las transacciones del día\n   • Desglose por tipo (ingresos/egresos)\n   • Métodos de pago utilizados\n   • Información de clientes\n   • Totales y saldos\n\n**📄 Exportar a PDF:**\n1. Haz clic en el botón 'Exportar PDF' (ícono de documento)\n2. El sistema genera un PDF profesional con:\n   • Encabezado con datos de la empresa\n   • Resumen del cierre de caja\n   • Tabla detallada de todas las operaciones\n   • Totales por método de pago\n   • Firmas y observaciones si aplica\n\nAmbos reportes se generan con los datos de la fecha actualmente seleccionada en el filtro.",
+      keywords: ["exportar", "excel", "pdf", "descargar", "reporte", "generar", "archivo", "xlsx", "documento", "informe"],
+      steps: [
+        { text: "Selecciona la fecha del reporte que deseas exportar", image: "/help/cashregister/step1-select-date-export.png" },
+        { text: "Verifica que haya transacciones en esa fecha", image: "/help/cashregister/step2-verify-data.png" },
+        { text: "Para Excel: Haz clic en 'Exportar Excel'", image: "/help/cashregister/step3-excel-button.png" },
+        { text: "Para PDF: Haz clic en 'Exportar PDF'", image: "/help/cashregister/step4-pdf-button.png" },
+        { text: "El archivo se descarga automáticamente a tu carpeta de Descargas", image: "/help/cashregister/step5-download.png" },
+        { text: "Abre el archivo para verificar el contenido del reporte", image: "/help/cashregister/step6-open-file.png" },
+      ],
+      relatedActions: ["cashregister-daily-report", "cashregister-history", "cashregister-close"],
+      route: "/dashboard/cashregister",
+      section: "cashregister",
+    },
+  ],
+}
