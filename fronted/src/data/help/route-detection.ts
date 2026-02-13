@@ -48,6 +48,9 @@ const ROUTE_TO_SECTION_MAP: Record<string, string> = {
   '/dashboard/catalog': 'catalog',
 
   // Reportes
+  '/dashboard/accounting/reports/trial-balance': 'reports',
+  '/dashboard/accounting/reports/ledger': 'reports',
+  '/dashboard/sales/product-report': 'reports',
   '/dashboard/reports': 'reports',
 
   // Clientes
