@@ -71,7 +71,10 @@ export function isFollowUpQuestion(query: string): boolean {
   return false
 }
 
-/** Analyze conversation context and provide contextual matching */
+/**
+ * Analyze conversation context using sliding window with weighted messages
+ * Recent messages have more weight than older ones
+ */
 export function analyzeConversationContext(
   query: string,
   conversationHistory: ChatMessage[],
@@ -86,37 +89,59 @@ export function analyzeConversationContext(
     }
   }
 
-  // Get last assistant message and its topic
-  const lastAssistantMessage = conversationHistory
-    .slice()
-    .reverse()
-    .find(msg => msg.role === "assistant")
+  // Use sliding window of last 5 messages with decreasing weights
+  const WINDOW_SIZE = 5
+  const WEIGHTS = [0.10, 0.15, 0.20, 0.25, 0.30] // More recent = more weight
 
-  if (!lastAssistantMessage) {
+  // Get last N user messages
+  const recentUserMessages = conversationHistory
+    .filter(msg => msg.role === "user")
+    .slice(-WINDOW_SIZE)
+
+  if (recentUserMessages.length === 0) {
     return {
       isFollowUp: true,
       relatedEntries: [],
     }
   }
 
-  // Get the last user question
-  const lastUserMessage = conversationHistory
-    .slice()
-    .reverse()
-    .find(msg => msg.role === "user")
+  // Extract topics from recent messages with weights
+  const topicScores = new Map<string, number>()
+  const contextTopics = new Set<string>()
 
-  const previousTopic = lastUserMessage ? extractTopic(lastUserMessage.content) : undefined
+  recentUserMessages.forEach((msg, idx) => {
+    const topic = extractTopic(msg.content)
+    if (topic && topic.length > 3) {
+      contextTopics.add(topic)
 
-  // Find related entries based on previous topic
+      // Apply weight based on position (newer = higher weight)
+      const weight = WEIGHTS[idx] || 0.10
+      const currentScore = topicScores.get(topic) || 0
+      topicScores.set(topic, currentScore + weight)
+    }
+  })
+
+  // Get most relevant topic (highest weighted score)
+  let previousTopic: string | undefined
+  let maxScore = 0
+
+  topicScores.forEach((score, topic) => {
+    if (score > maxScore) {
+      maxScore = score
+      previousTopic = topic
+    }
+  })
+
+  // Find related entries based on weighted context
   let relatedEntries: HelpEntry[] = []
   let previousEntry: HelpEntry | undefined
 
   if (previousTopic) {
-    // Find the entry that matches the previous question
+    // Find the entry that matches the most relevant topic
     previousEntry = allEntries.find(entry => {
       const normalizedQuestion = entry.question.toLowerCase()
-      return normalizedQuestion.includes(previousTopic) ||
-        entry.aliases.some(alias => alias.toLowerCase().includes(previousTopic))
+      return normalizedQuestion.includes(previousTopic!) ||
+        entry.aliases.some(alias => alias.toLowerCase().includes(previousTopic!))
     })
 
     // Get related entries using relatedActions
@@ -125,12 +150,22 @@ export function analyzeConversationContext(
         previousEntry?.relatedActions?.includes(entry.id)
       )
     }
+
+    // Also find entries matching any of the context topics
+    const contextMatches = allEntries.filter(entry => {
+      const entryText = (entry.question + ' ' + entry.aliases.join(' ')).toLowerCase()
+      return Array.from(contextTopics).some(topic => entryText.includes(topic))
+    })
+
+    // Merge and deduplicate
+    relatedEntries = Array.from(new Set([...relatedEntries, ...contextMatches]))
   }
 
-  // Generate contextual prefix
+  // Generate contextual prefix with confidence
   let contextPrefix: string | undefined
   if (previousTopic) {
-    contextPrefix = `📌 *Relacionado con tu pregunta anterior sobre "${previousTopic}"*\n\n`
+    const confidence = Math.round(maxScore * 100)
+    contextPrefix = `📌 *Relacionado con "${previousTopic}" (confianza: ${confidence}%)*\n\n`
   }
 
   return {

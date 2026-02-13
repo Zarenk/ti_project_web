@@ -67,13 +67,33 @@ function calculateSimilarity(a: string, b: string): number {
 }
 
 /**
+ * Obtener threshold adaptativo basado en el tipo de match
+ * Matches más precisos requieren mayor confianza
+ */
+function getAdaptiveThreshold(matchType: MatchResult["matchType"]): number {
+  const thresholds: Record<MatchResult["matchType"], number> = {
+    exact: 0.95,      // Matches exactos deben ser muy precisos
+    alias: 0.90,      // Aliases también muy precisos
+    autocorrect: 0.85, // Autocorrección debe ser confiable
+    synonym: 0.80,    // Sinónimos buenos pero no perfectos
+    keyword: 0.75,    // Keywords permiten más flexibilidad
+    intent: 0.70,     // Intención puede ser más amplia
+    fuzzy: 0.65,      // Fuzzy matching más permisivo
+  }
+
+  return thresholds[matchType] ?? 0.65
+}
+
+/**
  * Buscar entradas que coincidan con la consulta usando múltiples estrategias
  * incluyendo autocorrección de errores
+ *
+ * NOTA: Usa threshold adaptativo - cada tipo de match tiene su propio threshold
  */
 export function findMatchingEntries(
   query: string,
   entries: HelpEntry[],
-  minScore: number = 0.65 // FIX: Aumentado de 0.3 a 0.65 para evitar matches incorrectos
+  minScore: number = 0.65 // Threshold base para fuzzy matching
 ): MatchResult[] {
   const results: MatchResult[] = [];
 
@@ -194,8 +214,13 @@ export function findMatchingEntries(
       bestMatchType = "autocorrect" as MatchResult["matchType"];
     }
 
-    // Solo incluir si supera el umbral mínimo
-    if (bestScore >= minScore) {
+    // Obtener threshold adaptativo para este tipo de match
+    const adaptiveThreshold = getAdaptiveThreshold(bestMatchType)
+
+    // Solo incluir si supera el threshold adaptativo
+    // Esto permite que matches de alta calidad (exact, alias) sean más estrictos
+    // mientras que matches fuzzy pueden ser más permisivos
+    if (bestScore >= adaptiveThreshold) {
       const matchResult: MatchResult = {
         entry,
         score: bestScore,

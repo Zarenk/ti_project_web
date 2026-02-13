@@ -11,6 +11,21 @@ export interface QueryValidation {
   suggestedResponse?: string
 }
 
+export interface RejectedQuery {
+  query: string
+  reason: string
+  timestamp: number
+  section?: string
+}
+
+export interface NoMatchQuery {
+  query: string
+  section?: string
+  timestamp: number
+  topScore?: number
+  topMatchId?: string
+}
+
 /** Patrones de preguntas genéricas que requieren clarificación */
 const GENERIC_PATTERNS = [
   /^(que|qué)\s+(mas|más|otra|otro)\s+/i,
@@ -48,13 +63,25 @@ const STOP_WORDS = new Set([
 
 /**
  * Valida si una query es válida y debe ser procesada
+ * Log rejected queries for analytics
  */
-export function validateQuery(query: string): QueryValidation {
+export function validateQuery(query: string, section?: string, userId?: string): QueryValidation {
   const trimmed = query.trim()
   const normalized = trimmed.toLowerCase()
 
+  // 0. Check rate limit (prevent spam/abuse)
+  const rateLimitCheck = checkRateLimit(userId)
+  if (!rateLimitCheck.allowed) {
+    return {
+      isValid: false,
+      reason: "off-topic",
+      suggestedResponse: `Has alcanzado el límite de ${rateLimitCheck.limit} preguntas por minuto. Por favor, espera ${rateLimitCheck.resetIn} segundos antes de hacer otra pregunta.`
+    }
+  }
+
   // 1. Detectar quejas del usuario
   if (COMPLAINT_PATTERNS.some(pattern => pattern.test(normalized))) {
+    logRejectedQuery(query, "complaint", section)
     return {
       isValid: false,
       reason: "complaint",
@@ -64,6 +91,7 @@ export function validateQuery(query: string): QueryValidation {
 
   // 2. Detectar preguntas genéricas
   if (GENERIC_PATTERNS.some(pattern => pattern.test(normalized))) {
+    logRejectedQuery(query, "generic", section)
     return {
       isValid: false,
       reason: "generic",
@@ -80,6 +108,7 @@ export function validateQuery(query: string): QueryValidation {
   // 3. Detectar queries muy cortas sin contexto
   const words = normalized.split(/\s+/).filter(w => !STOP_WORDS.has(w))
   if (words.length === 0 || trimmed.length < TOO_SHORT_THRESHOLD) {
+    logRejectedQuery(query, "too-short", section)
     return {
       isValid: false,
       reason: "too-short",
@@ -91,6 +120,7 @@ export function validateQuery(query: string): QueryValidation {
   const alphaCount = (trimmed.match(/[a-záéíóúñü]/gi) || []).length
   const alphaRatio = alphaCount / trimmed.length
   if (alphaRatio < 0.6) {
+    logRejectedQuery(query, "gibberish", section)
     return {
       isValid: false,
       reason: "gibberish",
@@ -230,4 +260,239 @@ export function generateMetaResponse(): string {
     "• '¿Cómo registro una venta?'\n" +
     "• '¿Cómo agrego productos?'\n" +
     "• '¿Dónde veo mi inventario?'"
+}
+
+/**
+ * LOGGING & ANALYTICS
+ * Track rejected queries and no-matches for system improvement
+ */
+
+const REJECTED_QUERIES_KEY = "adslab_rejected_queries"
+const NO_MATCH_QUERIES_KEY = "adslab_no_match_queries"
+const MAX_LOG_ENTRIES = 100 // Mantener solo últimas 100
+
+/**
+ * RATE LIMITING
+ * Prevent spam and abuse
+ */
+
+const QUERY_RATE_LIMIT = 10 // Queries por minuto
+const RATE_LIMIT_WINDOW = 60 * 1000 // 1 minuto en ms
+const userQueryTimestamps = new Map<string, number[]>()
+
+/**
+ * Check if user has exceeded rate limit
+ * Returns true if within limit, false if exceeded
+ */
+export function checkRateLimit(userId: string = "anonymous"): {
+  allowed: boolean
+  queriesInWindow: number
+  limit: number
+  resetIn: number // seconds until reset
+} {
+  const now = Date.now()
+
+  // Get user's query timestamps
+  let timestamps = userQueryTimestamps.get(userId) || []
+
+  // Filter to keep only timestamps within current window
+  timestamps = timestamps.filter(time => now - time < RATE_LIMIT_WINDOW)
+
+  // Check if limit exceeded
+  const allowed = timestamps.length < QUERY_RATE_LIMIT
+
+  if (allowed) {
+    // Add current timestamp
+    timestamps.push(now)
+    userQueryTimestamps.set(userId, timestamps)
+  }
+
+  // Calculate when the oldest query will expire
+  const oldestQuery = timestamps[0] || now
+  const resetIn = Math.ceil((RATE_LIMIT_WINDOW - (now - oldestQuery)) / 1000)
+
+  return {
+    allowed,
+    queriesInWindow: timestamps.length,
+    limit: QUERY_RATE_LIMIT,
+    resetIn: Math.max(0, resetIn)
+  }
+}
+
+/**
+ * Reset rate limit for a user (admin only)
+ */
+export function resetRateLimit(userId: string = "anonymous"): void {
+  userQueryTimestamps.delete(userId)
+}
+
+/**
+ * Get rate limit status for current user
+ */
+export function getRateLimitStatus(userId: string = "anonymous"): {
+  queriesRemaining: number
+  resetIn: number
+} {
+  const now = Date.now()
+  const timestamps = (userQueryTimestamps.get(userId) || [])
+    .filter(time => now - time < RATE_LIMIT_WINDOW)
+
+  const oldestQuery = timestamps[0] || now
+  const resetIn = Math.ceil((RATE_LIMIT_WINDOW - (now - oldestQuery)) / 1000)
+
+  return {
+    queriesRemaining: Math.max(0, QUERY_RATE_LIMIT - timestamps.length),
+    resetIn: Math.max(0, resetIn)
+  }
+}
+
+/**
+ * Log query rechazada para análisis
+ */
+export function logRejectedQuery(query: string, reason: string, section?: string): void {
+  if (typeof window === "undefined") return
+
+  try {
+    const existing = JSON.parse(localStorage.getItem(REJECTED_QUERIES_KEY) || "[]") as RejectedQuery[]
+
+    const entry: RejectedQuery = {
+      query,
+      reason,
+      section,
+      timestamp: Date.now()
+    }
+
+    existing.push(entry)
+
+    // Mantener solo últimas MAX_LOG_ENTRIES
+    const trimmed = existing.slice(-MAX_LOG_ENTRIES)
+
+    localStorage.setItem(REJECTED_QUERIES_KEY, JSON.stringify(trimmed))
+  } catch (error) {
+    console.warn("Failed to log rejected query:", error)
+  }
+}
+
+/**
+ * Log query sin match (para mejorar KB)
+ */
+export function logNoMatchQuery(
+  query: string,
+  section?: string,
+  topScore?: number,
+  topMatchId?: string
+): void {
+  if (typeof window === "undefined") return
+
+  try {
+    const existing = JSON.parse(localStorage.getItem(NO_MATCH_QUERIES_KEY) || "[]") as NoMatchQuery[]
+
+    const entry: NoMatchQuery = {
+      query,
+      section,
+      timestamp: Date.now(),
+      topScore,
+      topMatchId
+    }
+
+    existing.push(entry)
+
+    // Mantener solo últimas MAX_LOG_ENTRIES
+    const trimmed = existing.slice(-MAX_LOG_ENTRIES)
+
+    localStorage.setItem(NO_MATCH_QUERIES_KEY, JSON.stringify(trimmed))
+  } catch (error) {
+    console.warn("Failed to log no-match query:", error)
+  }
+}
+
+/**
+ * Obtener queries rechazadas (para admin panel)
+ */
+export function getRejectedQueries(limit = 50): RejectedQuery[] {
+  if (typeof window === "undefined") return []
+
+  try {
+    const data = localStorage.getItem(REJECTED_QUERIES_KEY)
+    if (!data) return []
+
+    const queries = JSON.parse(data) as RejectedQuery[]
+    return queries.slice(-limit).reverse() // Más recientes primero
+  } catch (error) {
+    console.warn("Failed to get rejected queries:", error)
+    return []
+  }
+}
+
+/**
+ * Obtener queries sin match (para admin panel)
+ */
+export function getNoMatchQueries(limit = 50): NoMatchQuery[] {
+  if (typeof window === "undefined") return []
+
+  try {
+    const data = localStorage.getItem(NO_MATCH_QUERIES_KEY)
+    if (!data) return []
+
+    const queries = JSON.parse(data) as NoMatchQuery[]
+    return queries.slice(-limit).reverse() // Más recientes primero
+  } catch (error) {
+    console.warn("Failed to get no-match queries:", error)
+    return []
+  }
+}
+
+/**
+ * Limpiar logs (para admin)
+ */
+export function clearQueryLogs(): void {
+  if (typeof window === "undefined") return
+
+  try {
+    localStorage.removeItem(REJECTED_QUERIES_KEY)
+    localStorage.removeItem(NO_MATCH_QUERIES_KEY)
+  } catch (error) {
+    console.warn("Failed to clear query logs:", error)
+  }
+}
+
+/**
+ * Obtener estadísticas de queries rechazadas
+ */
+export function getRejectedQueryStats(): {
+  total: number
+  byReason: Record<string, number>
+  bySection: Record<string, number>
+  last24h: number
+  last7d: number
+} {
+  const queries = getRejectedQueries(1000)
+  const now = Date.now()
+  const day = 24 * 60 * 60 * 1000
+  const week = 7 * day
+
+  const stats = {
+    total: queries.length,
+    byReason: {} as Record<string, number>,
+    bySection: {} as Record<string, number>,
+    last24h: 0,
+    last7d: 0
+  }
+
+  queries.forEach(q => {
+    // Count by reason
+    stats.byReason[q.reason] = (stats.byReason[q.reason] || 0) + 1
+
+    // Count by section
+    if (q.section) {
+      stats.bySection[q.section] = (stats.bySection[q.section] || 0) + 1
+    }
+
+    // Time-based counts
+    const age = now - q.timestamp
+    if (age <= day) stats.last24h++
+    if (age <= week) stats.last7d++
+  })
+
+  return stats
 }
