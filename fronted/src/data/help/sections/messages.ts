@@ -1,0 +1,238 @@
+import type { HelpSection } from "../types"
+
+export const messagesSection: HelpSection = {
+  id: "messages",
+  label: "Mensajes",
+  description: "Atiende consultas de clientes y gestiona conversaciones en tiempo real.",
+  welcomeMessage:
+    "Estas en Mensajes. Atiende las consultas de tus clientes en tiempo real.",
+  quickActions: [
+    "messages-view",
+    "messages-reply",
+    "messages-filter-pending",
+    "messages-history",
+    "messages-delete",
+  ],
+  entries: [
+    {
+      id: "messages-view",
+      question: "Como veo las conversaciones con los clientes?",
+      aliases: [
+        "ver conversaciones",
+        "ver mensajes",
+        "lista de conversaciones",
+        "abrir chat",
+        "ver chats",
+      ],
+      answer:
+        "Las conversaciones se muestran en la pantalla principal de Mensajes. A la izquierda veras la lista de todos los clientes que han iniciado una conversacion, ordenados por el mensaje mas reciente. Haz clic en cualquier conversacion para ver el historial completo de mensajes intercambiados con ese cliente.",
+      keywords: ["veo", "conversaciones", "clientes", "muestran", "pantalla", "principal", "mensajes", "izquierda", "veras", "lista", "todos", "han", "iniciado", "conversacion", "ordenados"],
+      relatedActions: ["messages-reply", "messages-filter-pending"],
+    },
+    {
+      id: "messages-reply",
+      question: "Como respondo a un cliente?",
+      aliases: [
+        "responder mensaje",
+        "contestar cliente",
+        "enviar mensaje",
+        "escribir al cliente",
+        "responder chat",
+      ],
+      answer:
+        "Para responder a un cliente, selecciona su conversacion en la lista y escribe tu mensaje en el campo de texto en la parte inferior de la ventana de chat. Presiona Enter o el boton de enviar para que el mensaje llegue al cliente. El cliente recibira tu respuesta en tiempo real si esta conectado a la plataforma.",
+      keywords: ["respondo", "cliente", "responder", "selecciona", "conversacion", "lista", "escribe", "mensaje", "campo", "texto", "parte", "inferior", "ventana", "chat", "presiona"],
+      steps: [
+        { text: "Ve al menu lateral 'Ventas' y haz clic en 'Mensajes'", image: "/help/messages/step1-menu-mensajes.png" },
+        { text: "Selecciona la conversacion del cliente en la lista lateral", image: "/help/messages/step2-seleccionar-conversacion.png" },
+        { text: "Escribe tu respuesta y haz clic en enviar", image: "/help/messages/step3-responder.png" },
+      ],
+      relatedActions: ["messages-view", "messages-typing"],
+    },
+    {
+      id: "messages-filter-pending",
+      question: "Como filtro los mensajes pendientes de responder?",
+      aliases: [
+        "mensajes pendientes",
+        "mensajes sin responder",
+        "filtrar pendientes",
+        "chats sin contestar",
+      ],
+      answer:
+        "En la lista de conversaciones puedes aplicar el filtro de 'Pendientes' para ver unicamente las conversaciones que tienen mensajes sin responder. Las conversaciones pendientes tambien se destacan visualmente con un indicador de mensajes no leidos. Esto te permite priorizar la atencion a los clientes que estan esperando una respuesta.",
+      keywords: ["filtro", "mensajes", "pendientes", "responder", "lista", "conversaciones", "puedes", "aplicar", "'pendientes'", "ver", "unicamente", "tienen", "tambien", "destacan", "visualmente"],
+      relatedActions: ["messages-view", "messages-reply"],
+    },
+    {
+      id: "messages-history",
+      question: "Como veo el historial de mensajes con un cliente?",
+      aliases: [
+        "historial de mensajes",
+        "mensajes anteriores",
+        "conversaciones pasadas",
+        "historial chat",
+      ],
+      answer:
+        "Al abrir una conversacion puedes desplazarte hacia arriba para ver los mensajes anteriores. El sistema carga automaticamente los mensajes mas antiguos a medida que te desplazas. Todo el historial de la conversacion se mantiene almacenado y disponible para consulta, incluyendo la fecha y hora de cada mensaje.",
+      keywords: ["veo", "historial", "mensajes", "cliente", "abrir", "conversacion", "puedes", "desplazarte", "hacia", "arriba", "ver", "anteriores", "sistema", "carga", "automaticamente"],
+      relatedActions: ["messages-view"],
+    },
+    {
+      id: "messages-typing",
+      question: "Que significa el indicador de escritura?",
+      aliases: [
+        "indicador de escritura",
+        "cliente escribiendo",
+        "typing indicator",
+        "esta escribiendo",
+      ],
+      answer:
+        "El indicador de escritura aparece debajo del nombre del cliente cuando este esta escribiendo un mensaje en ese momento. Esto te permite saber que el cliente esta activo y preparando una consulta, para que puedas esperar su mensaje antes de responder. El indicador desaparece automaticamente si el cliente deja de escribir.",
+      keywords: ["significa", "indicador", "escritura", "aparece", "debajo", "nombre", "cliente", "escribiendo", "mensaje", "ese", "momento", "esto", "permite", "saber", "activo"],
+      relatedActions: ["messages-reply"],
+    },
+    {
+      id: "messages-delete",
+      question: "Como elimino un mensaje o conversacion?",
+      aliases: [
+        "eliminar mensaje",
+        "borrar mensaje",
+        "borrar conversacion",
+        "eliminar chat",
+        "borrar chat",
+      ],
+      answer:
+        "Para eliminar un mensaje individual, pasa el cursor sobre el mensaje y selecciona la opcion de eliminar que aparece. Para eliminar una conversacion completa, haz clic derecho sobre la conversacion en la lista y selecciona 'Eliminar conversacion'. Ten en cuenta que esta accion es permanente y los mensajes eliminados no se pueden recuperar.",
+      keywords: ["elimino", "mensaje", "conversacion", "eliminar", "individual", "pasa", "cursor", "sobre", "selecciona", "opcion", "aparece", "completa", "haz", "clic", "derecho"],
+      relatedActions: ["messages-view"],
+    },
+    {
+      id: "messages-notifications",
+      question: "Como funcionan las notificaciones de nuevos mensajes?",
+      aliases: [
+        "notificaciones mensajes",
+        "alertas de chat",
+        "aviso de mensaje nuevo",
+        "notificacion chat",
+      ],
+      answer:
+        "Cuando un cliente envia un nuevo mensaje, recibiras una notificacion visual en el icono de mensajes del menu lateral. Si estas en otra seccion de la plataforma, aparecera un indicador con la cantidad de mensajes no leidos. Las notificaciones se actualizan en tiempo real para que nunca pierdas una consulta de un cliente.",
+      keywords: ["funcionan", "notificaciones", "nuevos", "mensajes", "cliente", "envia", "nuevo", "mensaje", "recibiras", "notificacion", "visual", "icono", "menu", "lateral", "otra"],
+      relatedActions: ["messages-view", "messages-filter-pending"],
+    },
+    {
+      id: "messages-search",
+      question: "Como busco en las conversaciones?",
+      aliases: [
+        "buscar mensaje",
+        "buscar en chat",
+        "encontrar conversacion",
+        "buscar cliente en mensajes",
+      ],
+      answer:
+        "Utiliza la barra de busqueda en la parte superior de la lista de conversaciones para buscar por nombre de cliente. Tambien puedes buscar dentro de una conversacion especifica para encontrar un mensaje particular. Los resultados se muestran en tiempo real a medida que escribes, facilitando localizar la informacion que necesitas.",
+      keywords: ["busco", "conversaciones", "utiliza", "barra", "busqueda", "parte", "superior", "lista", "buscar", "nombre", "cliente", "tambien", "puedes", "dentro", "conversacion"],
+      relatedActions: ["messages-view", "messages-history"],
+    },
+    {
+      id: "messages-status",
+      question: "Como se si un cliente esta conectado?",
+      aliases: [
+        "cliente conectado",
+        "estado del cliente",
+        "cliente en linea",
+        "usuario activo chat",
+      ],
+      answer:
+        "El estado de conexion del cliente se indica con un punto verde junto a su nombre en la lista de conversaciones cuando esta en linea. Si el cliente esta desconectado, el indicador no aparece. Esta informacion te ayuda a saber si el cliente esta disponible para una respuesta inmediata o si recibira tu mensaje la proxima vez que se conecte.",
+      keywords: ["cliente", "conectado", "estado", "conexion", "indica", "punto", "verde", "junto", "nombre", "lista", "conversaciones", "linea", "desconectado", "indicador", "aparece"],
+      relatedActions: ["messages-reply", "messages-typing"],
+    },
+    {
+      id: "messages-multiple",
+      question: "Puedo atender varias conversaciones al mismo tiempo?",
+      aliases: [
+        "multiples conversaciones",
+        "varios chats",
+        "atender varios clientes",
+        "cambiar entre conversaciones",
+      ],
+      answer:
+        "Si, puedes atender varias conversaciones simultaneamente. La lista de conversaciones a la izquierda te permite cambiar rapidamente entre clientes con un clic. Los mensajes nuevos de otras conversaciones se destacaran con un indicador para que no pierdas ninguna consulta mientras atiendes a otro cliente.",
+      keywords: ["puedo", "atender", "varias", "conversaciones", "mismo", "tiempo", "puedes", "simultaneamente", "lista", "izquierda", "permite", "cambiar", "rapidamente", "entre", "clientes"],
+      relatedActions: ["messages-view", "messages-filter-pending"],
+    },
+    {
+      id: "messages-attachments",
+      question: "¿Cómo envío archivos o imágenes en el chat?",
+      aliases: [
+        "enviar archivo",
+        "adjuntar imagen",
+        "enviar foto",
+        "archivo adjunto",
+        "subir imagen",
+      ],
+      answer:
+        "Puedes enviar archivos e imágenes directamente en las conversaciones:\n\n**📎 Para adjuntar un archivo:**\n1. Haz clic en el ícono de clip (📎) junto al campo de mensaje\n2. Selecciona el archivo o imagen desde tu dispositivo\n3. Verás una vista previa del archivo seleccionado\n4. Escribe un mensaje opcional que acompañe al archivo\n5. Haz clic en enviar\n\n**Tipos de archivos soportados:**\n• Imágenes (JPG, PNG, GIF, WebP)\n• Documentos (PDF, DOC, XLS)\n• Archivos comprimidos (ZIP, RAR)\n\n**Vista previa:**\nAntes de enviar, verás una miniatura del archivo. Si cambias de opinión, puedes hacer clic en la X para cancelar y seleccionar otro archivo.\n\n**En el chat:**\nLas imágenes se muestran como miniaturas clickeables. Los otros archivos aparecen con un enlace de descarga.\n\n**Límite de tamaño:** Verifica con tu administrador el tamaño máximo permitido por archivo.",
+      keywords: ["archivo", "adjunto", "imagen", "foto", "enviar", "clip", "paperclip", "subir", "adjuntar", "attach"],
+      steps: [
+        { text: "Abre la conversación con el cliente", image: "/help/messages/step1-open-conversation.png" },
+        { text: "Haz clic en el ícono de clip (📎)", image: "/help/messages/step2-click-paperclip.png" },
+        { text: "Selecciona el archivo o imagen de tu dispositivo", image: "/help/messages/step3-select-file.png" },
+        { text: "Verás una vista previa del archivo", image: "/help/messages/step4-preview.png" },
+        { text: "Escribe un mensaje opcional y envía", image: "/help/messages/step5-send-with-file.png" },
+      ],
+      relatedActions: ["messages-reply", "messages-view"],
+      route: "/dashboard/messages",
+      section: "messages",
+    },
+    {
+      id: "messages-edit",
+      question: "¿Puedo editar o corregir un mensaje ya enviado?",
+      aliases: [
+        "editar mensaje",
+        "corregir mensaje",
+        "modificar mensaje",
+        "cambiar texto enviado",
+        "editar chat",
+      ],
+      answer:
+        "Sí, puedes editar mensajes que ya enviaste, pero con limitaciones:\n\n**⏱️ Límite de tiempo:**\nSolo puedes editar mensajes enviados en los **últimos 5 minutos**. Pasado ese tiempo, el mensaje queda bloqueado y ya no se puede modificar.\n\n**Cómo editar:**\n1. Ubica el mensaje que deseas editar (debe ser tuyo y reciente)\n2. Pasa el cursor sobre el mensaje\n3. Haz clic en el menú de 3 puntos (⋮) que aparece\n4. Selecciona 'Editar mensaje'\n5. Modifica el texto en el campo que aparece\n6. Haz clic en 'Guardar' o presiona Enter\n\n**Indicador de edición:**\nLos mensajes editados muestran una pequeña etiqueta '(editado)' para que el cliente sepa que el contenido fue modificado después del envío.\n\n**Restricciones:**\n• Solo puedes editar TUS propios mensajes\n• Solo dentro de los primeros 5 minutos\n• No puedes editar mensajes con archivos adjuntos\n• Los mensajes del cliente no se pueden editar\n\n**Tip:** Si necesitas corregir un mensaje antiguo, es mejor enviar un nuevo mensaje con la corrección.",
+      keywords: ["editar", "mensaje", "corregir", "modificar", "cambiar", "texto", "actualizar", "edit"],
+      steps: [
+        { text: "Pasa el cursor sobre el mensaje que enviaste (< 5 min)", image: "/help/messages/step1-hover-message.png" },
+        { text: "Haz clic en el menú de 3 puntos (⋮)", image: "/help/messages/step2-menu.png" },
+        { text: "Selecciona 'Editar mensaje'", image: "/help/messages/step3-select-edit.png" },
+        { text: "Modifica el texto en el campo editable", image: "/help/messages/step4-edit-text.png" },
+        { text: "Guarda los cambios (Enter o botón Guardar)", image: "/help/messages/step5-save.png" },
+      ],
+      relatedActions: ["messages-reply", "messages-delete"],
+      route: "/dashboard/messages",
+      section: "messages",
+    },
+    {
+      id: "messages-sort-filter",
+      question: "¿Cómo ordeno y filtro la lista de conversaciones?",
+      aliases: [
+        "ordenar conversaciones",
+        "filtrar chats",
+        "orden alfabético",
+        "solo pendientes",
+        "organizar conversaciones",
+      ],
+      answer:
+        "Tienes varias opciones para organizar tu lista de conversaciones:\n\n**🔽 Ordenamiento:**\n• **Por Actividad Reciente (predeterminado):** Las conversaciones con mensajes más recientes aparecen arriba\n• **Por Nombre Alfabético:** Activa el toggle 'Ordenar A-Z' para ordenar los clientes alfabéticamente\n\n**🔍 Filtros disponibles:**\n\n**1. Mostrar Solo Pendientes:**\nActiva este filtro para ver únicamente conversaciones con mensajes sin responder. Ideal para priorizar atención.\n\n**2. Búsqueda por Nombre:**\nUsa el campo de búsqueda para encontrar rápidamente un cliente específico escribiendo su nombre.\n\n**Cómo activar los filtros:**\n1. En la parte superior de la lista de conversaciones, verás los toggles de filtro\n2. **'Solo Pendientes'** - Activa para ver mensajes sin responder\n3. **'Ordenar A-Z'** - Activa para orden alfabético\n4. Los filtros se pueden combinar (ej: pendientes + alfabético)\n\n**Indicadores visuales:**\n• Conversaciones pendientes muestran un contador de mensajes no leídos\n• Clientes con mensajes nuevos aparecen destacados\n• El orden se actualiza automáticamente cuando llegan nuevos mensajes\n\n**Tip:** Usa 'Solo Pendientes' al inicio de tu turno para ver qué clientes necesitan respuesta urgente.",
+      keywords: ["ordenar", "filtrar", "sort", "filter", "alfabético", "pendientes", "organizar", "lista", "toggle"],
+      steps: [
+        { text: "Ve a la sección de Mensajes", image: "/help/messages/step1-messages-section.png" },
+        { text: "Localiza los toggles en la parte superior de la lista", image: "/help/messages/step2-find-toggles.png" },
+        { text: "Activa 'Solo Pendientes' para ver mensajes sin responder", image: "/help/messages/step3-pending-filter.png" },
+        { text: "Activa 'Ordenar A-Z' para orden alfabético", image: "/help/messages/step4-alphabetic.png" },
+        { text: "Usa la búsqueda para encontrar un cliente específico", image: "/help/messages/step5-search.png" },
+      ],
+      relatedActions: ["messages-view", "messages-filter-pending", "messages-search"],
+      route: "/dashboard/messages",
+      section: "messages",
+    },
+  ],
+}
