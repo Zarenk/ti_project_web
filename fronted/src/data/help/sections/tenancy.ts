@@ -1,0 +1,256 @@
+import type { HelpSection } from "../types"
+
+export const tenancySection: HelpSection = {
+  id: "tenancy",
+  label: "Organizaciones",
+  description: "Configura organizaciones, empresas y verticales de negocio.",
+  welcomeMessage:
+    "Estas en Organizaciones. Configura la estructura de tu negocio y verticales.",
+  quickActions: [
+    "tenancy-create-org",
+    "tenancy-manage-companies",
+    "tenancy-change-vertical",
+    "tenancy-schema",
+    "tenancy-migration",
+  ],
+  entries: [
+    {
+      id: "tenancy-create-org",
+      question: "Como creo una nueva organizacion?",
+      aliases: [
+        "crear organizacion",
+        "nueva organizacion",
+        "registrar organizacion",
+        "agregar organizacion",
+        "nueva empresa",
+      ],
+      answer:
+        "Accede a la seccion de Organizaciones y haz clic en 'Nueva Organizacion'. Ingresa el nombre, la vertical de negocio y los datos fiscales principales. La organizacion se creara con la configuracion base de la vertical seleccionada. Podras agregar empresas y usuarios una vez creada.",
+      relatedActions: ["tenancy-manage-companies", "tenancy-change-vertical"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+    },
+    {
+      id: "tenancy-manage-companies",
+      question: "Como administro las empresas dentro de una organizacion?",
+      aliases: [
+        "gestionar empresas",
+        "empresas organizacion",
+        "administrar companias",
+        "ver empresas",
+        "lista empresas",
+      ],
+      answer:
+        "Dentro de cada organizacion puedes ver y gestionar las empresas asociadas. Haz clic en la organizacion para ver sus empresas, agregar nuevas o editar las existentes. Cada empresa puede tener su propia configuracion de tiendas, usuarios y productos manteniendo la estructura organizacional.",
+      relatedActions: ["tenancy-create-org"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+    },
+    {
+      id: "tenancy-change-vertical",
+      question: "Como cambio la vertical de negocio de una organizacion?",
+      aliases: [
+        "cambiar vertical",
+        "modificar vertical",
+        "tipo de negocio",
+        "vertical negocio",
+        "rubro empresa",
+      ],
+      answer:
+        "Entra al detalle de la organizacion y busca la opcion de vertical de negocio. Puedes cambiar entre las verticales disponibles como retail, distribucion o servicios. Ten en cuenta que al cambiar la vertical se ajustaran los campos y formularios disponibles segun el nuevo tipo de negocio. Se recomienda hacer esto antes de cargar mucha informacion.",
+      relatedActions: ["tenancy-compatibility", "tenancy-schema"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+    },
+    {
+      id: "tenancy-compatibility",
+      question: "Que es la compatibilidad entre verticales?",
+      aliases: [
+        "compatibilidad vertical",
+        "verticales compatibles",
+        "migrar vertical",
+        "cambio de rubro",
+      ],
+      answer:
+        "La compatibilidad entre verticales indica que tan facilmente se puede migrar de un tipo de negocio a otro. Algunas verticales comparten campos y estructuras similares, lo que facilita la transicion. Otras requieren ajustes significativos. El sistema te mostrara una advertencia si el cambio de vertical implica perdida de datos o reestructuracion de formularios.",
+      relatedActions: ["tenancy-change-vertical", "tenancy-schema"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+    },
+    {
+      id: "tenancy-schema",
+      question: "Que es la aplicacion de esquema por vertical?",
+      aliases: [
+        "esquema vertical",
+        "schema enforcement",
+        "estructura datos vertical",
+        "campos por vertical",
+        "configuracion esquema",
+      ],
+      answer:
+        "Cada vertical de negocio define un esquema que determina los campos disponibles en productos, ventas y entradas. Por ejemplo, una vertical de retail incluye campos como talla y color, mientras que una de distribucion maneja volumenes y rutas. El esquema se aplica automaticamente al seleccionar la vertical y garantiza consistencia en los datos ingresados.",
+      relatedActions: ["tenancy-change-vertical", "tenancy-compatibility"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+    },
+    {
+      id: "tenancy-migration",
+      question: "Como verifico el estado de migracion de una organizacion?",
+      aliases: [
+        "estado migracion",
+        "migracion organizacion",
+        "progreso migracion",
+        "verificar migracion",
+      ],
+      answer:
+        "En el panel de la organizacion encontraras un indicador de estado de migracion que muestra si la estructura esta actualizada. Si hay migraciones pendientes, el sistema mostrara los pasos necesarios y el progreso. Las migraciones se ejecutan para actualizar la base de datos cuando hay cambios en el esquema de la plataforma.",
+      relatedActions: ["tenancy-schema"],
+      roles: ["SUPER_ADMIN_GLOBAL"],
+    },
+    {
+      id: "tenancy-edit-org",
+      question: "Como edito los datos de una organizacion?",
+      aliases: [
+        "editar organizacion",
+        "modificar organizacion",
+        "actualizar organizacion",
+        "cambiar nombre organizacion",
+      ],
+      answer:
+        "Haz clic en la organizacion que deseas editar y accede a su configuracion. Podras modificar el nombre, datos fiscales, direccion y otros campos generales. Los cambios se aplican a nivel organizacional y se reflejan en todas las empresas que pertenecen a esa organizacion.",
+      relatedActions: ["tenancy-create-org", "tenancy-manage-companies"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+    },
+    {
+      id: "tenancy-users",
+      question: "Como asigno usuarios a una organizacion?",
+      aliases: [
+        "usuarios organizacion",
+        "agregar usuario organizacion",
+        "miembros organizacion",
+        "equipo organizacion",
+      ],
+      answer:
+        "Dentro de la configuracion de la organizacion, accede a la seccion de usuarios. Desde ahi puedes invitar nuevos miembros o asignar usuarios existentes. Cada usuario vinculado a la organizacion hereda los permisos de su rol dentro del contexto de esa organizacion y sus empresas.",
+      relatedActions: ["tenancy-manage-companies"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+    },
+    {
+      id: "tenancy-delete-org",
+      question: "Puedo eliminar una organizacion?",
+      aliases: [
+        "eliminar organizacion",
+        "borrar organizacion",
+        "dar de baja organizacion",
+        "remover organizacion",
+      ],
+      answer:
+        "La eliminacion de una organizacion es una accion critica que solo pueden realizar los super administradores globales. Antes de eliminar, el sistema verificara que no haya datos activos como ventas pendientes o inventario registrado. Se recomienda desactivar la organizacion en lugar de eliminarla para conservar el historial completo.",
+      relatedActions: ["tenancy-edit-org"],
+      roles: ["SUPER_ADMIN_GLOBAL"],
+    },
+    {
+      id: "tenancy-verticals-list",
+      question: "Que verticales de negocio estan disponibles?",
+      aliases: [
+        "lista verticales",
+        "tipos de negocio",
+        "verticales disponibles",
+        "rubros disponibles",
+        "opciones vertical",
+      ],
+      answer:
+        "La plataforma ofrece varias verticales de negocio preconfiguradas como retail, distribucion mayorista, servicios y manufactura. Cada vertical incluye campos, flujos y reportes adaptados a las necesidades especificas de ese tipo de negocio. Consulta con el administrador global para conocer las verticales habilitadas en tu instancia.",
+      relatedActions: ["tenancy-change-vertical", "tenancy-compatibility"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+    },
+    {
+      id: "tenancy-wizard",
+      question: "¿Cómo funciona el asistente para cambiar de vertical?",
+      aliases: [
+        "asistente de vertical",
+        "wizard de cambio",
+        "guía de migración",
+        "paso a paso vertical",
+        "asistente guiado",
+      ],
+      answer:
+        "El **asistente de cambio de vertical** es un proceso guiado en 4 pasos que te ayuda a migrar tu organización de un tipo de negocio a otro de forma segura:\n\n**📍 Paso 1: Seleccionar Vertical**\nElige el nuevo vertical objetivo entre las opciones disponibles:\n• **General** - Configuración estándar para cualquier negocio\n• **Computers** - Venta de computadoras con fichas técnicas\n• **Retail** - Tiendas físicas con variantes de producto\n• **Restaurants** - Optimizado para menús y pedidos\n\n**✅ Paso 2: Validar Compatibilidad**\nEl sistema verifica automáticamente:\n• Si el cambio es compatible con tus datos actuales\n• Qué campos se mantendrán y cuáles se perderán\n• Nivel de riesgo del cambio (bajo, medio, alto)\n\n**📊 Paso 3: Revisar Impacto**\nVe un resumen detallado del impacto:\n• Productos afectados\n• Campos que cambiarán\n• Advertencias sobre posible pérdida de datos\n\n**🔐 Paso 4: Confirmar Cambio**\nIngresa un motivo del cambio y confirma. El sistema ejecutará la migración de forma segura.\n\n**IMPORTANTE:** Este proceso es irreversible. Asegúrate de hacer un respaldo antes de cambiar de vertical.",
+      keywords: ["wizard", "asistente", "guía", "pasos", "migración", "cambiar", "vertical", "guiado", "seleccionar", "validar", "revisar", "confirmar"],
+      steps: [
+        { text: "Entra al detalle de la organización que deseas cambiar", image: "/help/tenancy/step1-org-detail.png" },
+        { text: "Haz clic en 'Cambiar Vertical' para iniciar el asistente", image: "/help/tenancy/step2-start-wizard.png" },
+        { text: "Paso 1: Selecciona el vertical objetivo de la lista", image: "/help/tenancy/step3-select-vertical.png" },
+        { text: "Paso 2: El sistema valida compatibilidad automáticamente", image: "/help/tenancy/step4-validate.png" },
+        { text: "Paso 3: Revisa el impacto y advertencias cuidadosamente", image: "/help/tenancy/step5-review-impact.png" },
+        { text: "Paso 4: Ingresa motivo y confirma el cambio", image: "/help/tenancy/step6-confirm.png" },
+      ],
+      relatedActions: ["tenancy-change-vertical", "tenancy-compatibility", "tenancy-schema"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+      route: "/dashboard/tenancy",
+      section: "tenancy",
+    },
+    {
+      id: "tenancy-schema-enforcement",
+      question: "¿Qué es la validación estricta del esquema y cómo la activo?",
+      aliases: [
+        "validación estricta",
+        "schema enforcement",
+        "obligar esquema",
+        "forzar campos vertical",
+        "toggle schema",
+      ],
+      answer:
+        "La **validación estricta del esquema** (Schema Enforcement) obliga a que todos los productos de una empresa cumplan estrictamente con los campos definidos por su vertical de negocio.\n\n**🔒 Cuando está ACTIVADA:**\n• Todos los productos DEBEN usar el esquema del vertical\n• No se pueden crear productos con campos personalizados fuera del esquema\n• Los formularios solo muestran campos aprobados para ese vertical\n• Garantiza consistencia total en los datos\n\n**🔓 Cuando está DESACTIVADA:**\n• Los productos pueden tener campos personalizados adicionales\n• Mayor flexibilidad pero menos consistencia\n• Útil durante migración o cuando necesitas campos especiales\n\n**Cómo activarla/desactivarla:**\n1. Ve al detalle de la empresa dentro de la organización\n2. Localiza el interruptor 'Validación estricta del esquema'\n3. Activa/desactiva según tus necesidades\n4. Los cambios se aplican inmediatamente\n\n**Recomendación:** Activa la validación estricta una vez que hayas configurado completamente tu vertical para mantener la calidad de los datos.",
+      keywords: ["validación", "estricta", "schema", "enforcement", "toggle", "obligar", "esquema", "forzar", "campos", "producto"],
+      steps: [
+        { text: "Accede a la organización y selecciona la empresa", image: "/help/tenancy/step1-select-company.png" },
+        { text: "Busca el toggle 'Validación estricta del esquema'", image: "/help/tenancy/step2-find-toggle.png" },
+        { text: "Activa el interruptor para obligar el esquema", image: "/help/tenancy/step3-enable-strict.png" },
+        { text: "Todos los productos nuevos usarán solo campos del vertical", image: "/help/tenancy/step4-strict-applied.png" },
+      ],
+      relatedActions: ["tenancy-schema", "tenancy-change-vertical"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+      route: "/dashboard/tenancy",
+      section: "tenancy",
+    },
+    {
+      id: "tenancy-search-filter",
+      question: "¿Cómo busco y filtro organizaciones?",
+      aliases: [
+        "buscar organizaciones",
+        "filtrar organizaciones",
+        "encontrar organización",
+        "búsqueda por nombre",
+        "buscar por código",
+      ],
+      answer:
+        "En la lista de organizaciones puedes buscar y filtrar de forma rápida:\n\n**🔍 Búsqueda por texto:**\n1. Localiza el campo de búsqueda en la parte superior de la lista\n2. Escribe el nombre de la organización o su código\n3. La lista se filtra automáticamente mientras escribes\n4. Puedes buscar por:\n   • Nombre completo o parcial de la organización\n   • Código de la organización\n   • Cualquier fragmento del texto\n\n**📊 Información visible:**\nCada organización muestra:\n• **Nombre** - Nombre de la organización\n• **Código** - Identificador único\n• **Estado** - Activa/Inactiva (badge de color)\n• **Unidades** - Número de empresas/compañías\n• **Usuarios** - Cantidad de usuarios asignados\n• **Super Admin** - Quién administra la organización\n\n**💡 Tip:** Si administras muchas organizaciones, usa el código corto para búsquedas más rápidas.\n\nLa búsqueda es en tiempo real y no distingue mayúsculas/minúsculas.",
+      keywords: ["buscar", "filtrar", "search", "encontrar", "organización", "nombre", "código", "lista"],
+      steps: [
+        { text: "Accede a la sección de Organizaciones", image: "/help/tenancy/step1-org-list.png" },
+        { text: "Localiza el campo de búsqueda en la parte superior", image: "/help/tenancy/step2-search-field.png" },
+        { text: "Escribe el nombre o código de la organización", image: "/help/tenancy/step3-type-query.png" },
+        { text: "La lista se filtra en tiempo real", image: "/help/tenancy/step4-filtered-results.png" },
+        { text: "Haz clic en la organización para ver sus detalles", image: "/help/tenancy/step5-view-details.png" },
+      ],
+      relatedActions: ["tenancy-manage-companies", "tenancy-edit-org"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+      route: "/dashboard/tenancy",
+      section: "tenancy",
+    },
+    {
+      id: "tenancy-vertical-options",
+      question: "¿Qué diferencias hay entre los verticales disponibles?",
+      aliases: [
+        "diferencias verticales",
+        "comparar verticales",
+        "cual vertical elegir",
+        "general vs retail",
+        "computers vs retail",
+      ],
+      answer:
+        "Cada vertical está optimizado para un tipo específico de negocio:\n\n**🔷 GENERAL**\nConfiguración estándar para todo tipo de negocio. Campos básicos sin especialización. Ideal si tu negocio no encaja en las demás categorías o estás empezando.\n\n**💻 COMPUTERS (Computadoras/Laptops)**\nOptimizado para venta de tecnología:\n• Fichas técnicas detalladas (procesador, RAM, almacenamiento)\n• Especificaciones visibles en el catálogo público\n• Comparación de productos técnicos\n• Ideal para: Tiendas de tecnología, distribuidores de hardware\n\n**🏪 RETAIL (Comercio Minorista)**\nPara tiendas físicas y comercio al por menor:\n• Variantes de producto (tallas, colores)\n• Control de stock por SKU\n• Gestión de inventario multi-tienda\n• Ideal para: Ropa, calzado, accesorios, tiendas físicas\n\n**🍽️ RESTAURANTS (Restaurantes)**\nEspecializado para servicios de comida:\n• Menús y categorías de platos\n• Gestión de mesas y pedidos\n• Control de cocina\n• Ideal para: Restaurantes, cafeterías, bares, food trucks\n\n**⚙️ SERVICES y MANUFACTURING**\nPróximamente disponibles.\n\n**¿Cuál elegir?** Selecciona el que mejor se adapte a tu modelo de negocio principal. Puedes cambiar después usando el asistente guiado.",
+      keywords: ["verticales", "diferencias", "opciones", "general", "computers", "retail", "restaurants", "elegir", "comparar"],
+      relatedActions: ["tenancy-wizard", "tenancy-change-vertical", "tenancy-verticals-list"],
+      roles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
+      route: "/dashboard/tenancy",
+      section: "tenancy",
+    },
+  ],
+}
