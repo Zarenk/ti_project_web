@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import Image from "next/image"
-import { Send, Bot, User, Sparkles, BookOpen, BadgeCheck, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp, ImageIcon } from "lucide-react"
+import { Send, Bot, User, Sparkles, BookOpen, BadgeCheck, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp, ImageIcon, Download } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -142,6 +142,57 @@ function FeedbackButtons({ msg }: { msg: ChatMessage }) {
         <ThumbsDown className="h-3 w-3" />
       </button>
     </div>
+  )
+}
+
+function MessageContent({ content }: { content: string }) {
+  // Detectar markdown links [text](url)
+  const parts = content.split(/(\[.*?\]\(.*?\))/)
+
+  return (
+    <>
+      {parts.map((part, idx) => {
+        // Verificar si es un link markdown
+        const match = part.match(/\[(.*?)\]\((.*?)\)/)
+        if (match) {
+          const [, text, url] = match
+
+          // Caso especial: Link al manual PDF
+          if (url === '/api/manual') {
+            return (
+              <a
+                key={idx}
+                href={url}
+                download="Manual_Usuario_ADSLab.pdf"
+                className="mt-2 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                onClick={() => {
+                  console.log('Descargando manual PDF...')
+                }}
+              >
+                <Download className="h-4 w-4" />
+                {text}
+              </a>
+            )
+          }
+
+          // Links normales
+          return (
+            <a
+              key={idx}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              {text}
+            </a>
+          )
+        }
+
+        // Texto normal con saltos de línea preservados
+        return <span key={idx}>{part}</span>
+      })}
+    </>
   )
 }
 
@@ -285,7 +336,9 @@ export function HelpChatPanel() {
                     : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
                 }`}
               >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                <div className="whitespace-pre-wrap">
+                  <MessageContent content={msg.content} />
+                </div>
                 {msg.steps && msg.steps.length > 0 && (
                   <StepsGuide steps={msg.steps} />
                 )}
