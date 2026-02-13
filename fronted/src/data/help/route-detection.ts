@@ -18,8 +18,9 @@ export interface RouteContext {
  */
 const ROUTE_TO_SECTION_MAP: Record<string, string> = {
   // Inventario
-  '/dashboard/inventory': 'inventory',
+  '/dashboard/inventory/labels': 'inventory',
   '/dashboard/inventory/product-details': 'inventory',
+  '/dashboard/inventory': 'inventory',
 
   // Productos
   '/dashboard/products': 'products',
@@ -225,7 +226,7 @@ export function getContextualSuggestions(section: string): string[] {
   const suggestions: Record<string, string[]> = {
     inventory: [
       '¿Cómo veo el stock de un producto?',
-      '¿Cómo actualizo el precio de un producto?',
+      '¿Cómo genero etiquetas?',
       '¿Dónde veo productos con stock bajo?',
     ],
     products: [
