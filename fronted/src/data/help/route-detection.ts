@@ -67,9 +67,13 @@ const ROUTE_TO_SECTION_MAP: Record<string, string> = {
   // Usuarios
   '/dashboard/users': 'users',
 
-  // Configuración
+  // Configuración del Sistema
   '/dashboard/options': 'settings',
   '/dashboard/settings': 'settings',
+
+  // Tienda Pública
+  '/store': 'public-store',
+  '/cart': 'public-store',
 
   // Caja registradora
   '/dashboard/cashregister': 'cashregister',
@@ -121,6 +125,7 @@ const SECTION_DISPLAY_NAMES: Record<string, string> = {
   tenancy: 'Multi-Tenancy',
   hardware: 'Hardware',
   'api-integrations': 'Integraciones API',
+  'public-store': 'Tienda en Línea',
 }
 
 /**
@@ -272,6 +277,11 @@ export function getContextualSuggestions(section: string): string[] {
       '¿Cómo configuro la empresa?',
       '¿Dónde cambio el logo?',
       '¿Cómo activo la facturación electrónica?',
+    ],
+    'public-store': [
+      '¿Cómo busco un producto?',
+      '¿Cómo filtro por categoría o precio?',
+      '¿Cómo funciona el carrito de compras?',
     ],
   }
 

@@ -294,6 +294,8 @@ export function generateSectionExplanation(section: string): string {
     exchange: "**Cambio de Divisas** gestiona tipos de cambio:\n• Registrar nuevos tipos de cambio\n• Ver historial de cambios\n• Usar en ventas multidivisa",
 
     reports: "**Reportes** muestra estadísticas y análisis:\n• Ver reportes de ventas\n• Analizar inventario\n• Exportar reportes a Excel\n• Gráficos y dashboards",
+
+    'public-store': "**Tienda en Línea** es el catálogo público para clientes:\n• Buscar y filtrar productos\n• Ver detalles y especificaciones\n• Agregar productos al carrito\n• Realizar compras en línea\n• Seguimiento de pedidos",
   }
 
   const description = sectionDescriptions[section]
