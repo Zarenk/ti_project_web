@@ -1,0 +1,210 @@
+import type { HelpSection } from "../types"
+
+export const exchangeSection: HelpSection = {
+  id: "exchange",
+  label: "Tipo de Cambio",
+  description: "Consulta y actualiza las tasas de cambio entre monedas.",
+  welcomeMessage:
+    "Estas en Tipo de Cambio. Consulta y actualiza las tasas de cambio.",
+  quickActions: [
+    "exchange-view-rate",
+    "exchange-update-rate",
+    "exchange-history",
+    "exchange-conversion",
+  ],
+  entries: [
+    {
+      id: "exchange-view-rate",
+      question: "Como veo el tipo de cambio actual?",
+      aliases: [
+        "ver tipo de cambio",
+        "tasa de cambio actual",
+        "cambio del dia",
+        "cotizacion actual",
+        "precio dolar",
+      ],
+      answer:
+        "Al ingresar a la seccion de Tipo de Cambio veras la tasa vigente que se esta utilizando en el sistema. Esta tasa se aplica automaticamente a todas las operaciones que involucren conversion de moneda, como ventas en dolares o costos de importacion en moneda extranjera.",
+      keywords: ["veo", "tipo", "cambio", "actual", "ingresar", "seccion", "veras", "tasa", "vigente", "utilizando", "sistema", "aplica", "automaticamente", "todas", "operaciones"],
+      relatedActions: ["exchange-update-rate", "exchange-conversion"],
+    },
+    {
+      id: "exchange-update-rate",
+      question: "Como actualizo el tipo de cambio?",
+      aliases: [
+        "cambiar tipo de cambio",
+        "actualizar tasa",
+        "modificar tipo de cambio",
+        "nueva tasa cambio",
+        "ajustar cambio",
+      ],
+      answer:
+        "En la seccion de Tipo de Cambio, ingresa la nueva tasa en el campo correspondiente y haz clic en guardar. La nueva tasa se aplicara a todas las operaciones realizadas a partir de ese momento. Las ventas y entradas anteriores mantendran la tasa vigente al momento de su registro para preservar la exactitud contable.",
+      keywords: ["actualizo", "tipo", "cambio", "seccion", "ingresa", "nueva", "tasa", "campo", "correspondiente", "haz", "clic", "guardar", "aplicara", "todas", "operaciones"],
+      steps: [
+        { text: "Ve al menu lateral y haz clic en 'Tipo de Cambio'", image: "/help/exchange/step1-menu-cambio.png" },
+        { text: "Ingresa la nueva tasa de cambio en el formulario", image: "/help/exchange/step2-ingresar-tasa.png" },
+        { text: "Haz clic en 'Guardar' para aplicar el nuevo tipo de cambio", image: "/help/exchange/step3-guardar.png" },
+      ],
+      relatedActions: ["exchange-view-rate", "exchange-history"],
+    },
+    {
+      id: "exchange-history",
+      question: "Como veo el historial de tipos de cambio?",
+      aliases: [
+        "historial cambio",
+        "tasas anteriores",
+        "registro tipos de cambio",
+        "cambio historico",
+        "historial tasa",
+      ],
+      answer:
+        "La seccion de Tipo de Cambio muestra un registro historico con todas las tasas utilizadas, la fecha de vigencia y quien realizo cada actualizacion. Este historial es util para auditorias y para entender las variaciones en los costos de productos importados a lo largo del tiempo.",
+      keywords: ["veo", "historial", "tipos", "cambio", "seccion", "tipo", "muestra", "registro", "historico", "todas", "tasas", "utilizadas", "fecha", "vigencia", "quien"],
+      relatedActions: ["exchange-view-rate", "exchange-update-rate"],
+    },
+    {
+      id: "exchange-conversion",
+      question: "Como funciona la conversion de moneda en el sistema?",
+      aliases: [
+        "conversion moneda",
+        "convertir dolares",
+        "calcular cambio",
+        "equivalencia moneda",
+        "cambio automatico",
+      ],
+      answer:
+        "El sistema utiliza la tasa de cambio vigente para convertir automaticamente entre monedas. Cuando registras un costo en dolares, el sistema calcula el equivalente en moneda local usando la tasa del momento. Esta conversion se refleja en reportes, costos de productos y margenes de ganancia de forma transparente.",
+      keywords: ["funciona", "conversion", "moneda", "sistema", "utiliza", "tasa", "cambio", "vigente", "convertir", "automaticamente", "entre", "monedas", "registras", "costo", "dolares"],
+      relatedActions: ["exchange-view-rate"],
+    },
+    {
+      id: "exchange-impact-prices",
+      question: "El tipo de cambio afecta los precios de venta?",
+      aliases: [
+        "cambio afecta precios",
+        "precios tipo de cambio",
+        "impacto cambio precios",
+        "actualizacion precios cambio",
+      ],
+      answer:
+        "El tipo de cambio se utiliza principalmente para calcular costos de productos con precios en moneda extranjera. Los precios de venta no se actualizan automaticamente al cambiar la tasa. Si deseas ajustar los precios de venta segun el nuevo tipo de cambio, deberas hacerlo manualmente desde la seccion de productos o inventario.",
+      keywords: ["tipo", "cambio", "afecta", "precios", "venta", "utiliza", "principalmente", "calcular", "costos", "productos", "moneda", "extranjera", "actualizan", "automaticamente", "cambiar"],
+      relatedActions: ["exchange-update-rate"],
+    },
+    {
+      id: "exchange-frequency",
+      question: "Con que frecuencia debo actualizar el tipo de cambio?",
+      aliases: [
+        "frecuencia actualizacion cambio",
+        "cuando actualizar tasa",
+        "periodicidad cambio",
+        "cada cuanto actualizar cambio",
+      ],
+      answer:
+        "Se recomienda actualizar el tipo de cambio al inicio de cada jornada laboral o cuando haya variaciones significativas en el mercado cambiario. Mantener la tasa actualizada garantiza que los costos de productos importados y las conversiones en reportes reflejen valores reales. El sistema usa la ultima tasa registrada hasta que se ingrese una nueva.",
+      keywords: ["frecuencia", "debo", "actualizar", "tipo", "cambio", "recomienda", "inicio", "cada", "jornada", "laboral", "haya", "variaciones", "significativas", "mercado", "cambiario"],
+      relatedActions: ["exchange-update-rate", "exchange-history"],
+    },
+    {
+      id: "exchange-multi-currency",
+      question: "Puedo manejar varias monedas en el sistema?",
+      aliases: [
+        "varias monedas",
+        "multiples monedas",
+        "moneda secundaria",
+        "dolares y soles",
+      ],
+      answer:
+        "El sistema trabaja con una moneda principal definida en la configuracion de la empresa y permite registrar costos en moneda extranjera que se convierten automaticamente. La tasa de cambio configurada se usa para todas las conversiones. Los reportes pueden mostrarse en la moneda principal con referencia al tipo de cambio utilizado.",
+      keywords: ["puedo", "manejar", "varias", "monedas", "sistema", "trabaja", "moneda", "principal", "definida", "configuracion", "empresa", "permite", "registrar", "costos", "extranjera"],
+      relatedActions: ["exchange-view-rate", "exchange-conversion"],
+    },
+    {
+      id: "exchange-reports",
+      question: "Como se refleja el tipo de cambio en los reportes?",
+      aliases: [
+        "reportes tipo cambio",
+        "informes moneda",
+        "reporte dolares",
+        "cambio en reportes",
+      ],
+      answer:
+        "Los reportes contables y de costos utilizan la tasa de cambio vigente al momento de cada operacion. Esto significa que una compra realizada con un tipo de cambio de 3.80 mantendra ese valor en los reportes, incluso si la tasa actual es diferente. Asi se preserva la exactitud historica de los registros financieros.",
+      keywords: ["refleja", "tipo", "cambio", "reportes", "contables", "costos", "utilizan", "tasa", "vigente", "momento", "cada", "operacion", "esto", "significa", "compra"],
+      relatedActions: ["exchange-history"],
+    },
+    {
+      id: "exchange-chart",
+      question: "¿Cómo interpreto el gráfico de evolución del tipo de cambio?",
+      aliases: [
+        "gráfico tipo de cambio",
+        "ver gráfico",
+        "evolución del cambio",
+        "tendencia de cambio",
+        "línea temporal cambio",
+      ],
+      answer:
+        "El **gráfico de evolución** muestra visualmente cómo ha variado el tipo de cambio a lo largo del tiempo:\n\n• **Eje horizontal (X)**: Fechas en que se registraron tasas de cambio\n• **Eje vertical (Y)**: Valor del tipo de cambio en soles (S/.)\n• **Líneas**: Cada moneda tiene su propia línea de color (USD verde, EUR azul)\n• **Puntos**: Cada punto representa un registro específico de tasa\n\n**Cómo usarlo:**\n1. Puedes filtrar el gráfico por moneda usando el selector superior derecho\n2. Selecciona 'USD', 'EUR' o 'Todas' para ver las tendencias que te interesan\n3. Pasa el mouse sobre un punto para ver el valor exacto y la fecha\n4. Observa las tendencias: líneas ascendentes indican que la moneda extranjera se está apreciando (sube de precio), líneas descendentes indican depreciación\n\nEl gráfico te ayuda a identificar patrones y tomar decisiones sobre cuándo actualizar precios de productos importados.",
+      keywords: ["gráfico", "evolución", "línea", "tendencia", "temporal", "visual", "chart", "histórico", "curva", "variación"],
+      steps: [
+        { text: "Desplázate hasta la sección 'Evolución del tipo de cambio'", image: "/help/exchange/step1-locate-chart.png" },
+        { text: "Usa el selector de moneda para filtrar (USD, EUR o Todas)", image: "/help/exchange/step2-filter-currency.png" },
+        { text: "Observa la línea: subidas indican apreciación, bajadas depreciación", image: "/help/exchange/step3-interpret-line.png" },
+        { text: "Pasa el mouse sobre un punto para ver valores exactos", image: "/help/exchange/step4-hover-details.png" },
+        { text: "Analiza tendencias para decisiones de compra/venta", image: "/help/exchange/step5-analyze-trend.png" },
+      ],
+      relatedActions: ["exchange-history", "exchange-view-rate"],
+      route: "/dashboard/exchange",
+      section: "exchange",
+    },
+    {
+      id: "exchange-trend-indicators",
+      question: "¿Qué significan las flechas y porcentajes en las tarjetas de moneda?",
+      aliases: [
+        "indicadores de tendencia",
+        "flechas de cambio",
+        "porcentaje de variación",
+        "cambio porcentual",
+        "subió o bajó el dólar",
+      ],
+      answer:
+        "Las **tarjetas de moneda** en la parte superior muestran el tipo de cambio actual junto con indicadores de tendencia:\n\n**🔼 Flecha Verde hacia Arriba + Porcentaje Positivo:**\nIndica que la tasa actual es MAYOR que el registro anterior. Por ejemplo, '+2.50%' significa que el dólar/euro subió 2.5% respecto a la última actualización.\n\n**🔽 Flecha Roja hacia Abajo + Porcentaje Negativo:**\nIndica que la tasa actual es MENOR que el registro anterior. Por ejemplo, '-1.20%' significa que bajó 1.2%.\n\n**➖ Sin Flecha (0%):**\nLa tasa se mantiene igual que el último registro.\n\n**¿Por qué es importante?**\n• Te alerta sobre variaciones significativas\n• Ayuda a decidir si es buen momento para compras en moneda extranjera\n• Si el porcentaje es alto (>3-5%), puede ser necesario ajustar precios de productos importados\n\nLos porcentajes se calculan comparando el registro más reciente con el inmediatamente anterior.",
+      keywords: ["tendencia", "flecha", "porcentaje", "variación", "indicador", "cambio", "subió", "bajó", "aumentó", "disminuyó"],
+      steps: [
+        { text: "Observa las tarjetas de USD y EUR en la parte superior", image: "/help/exchange/step1-rate-cards.png" },
+        { text: "Fíjate en el color del indicador: verde=subió, rojo=bajó", image: "/help/exchange/step2-color-meaning.png" },
+        { text: "Lee el porcentaje: indica cuánto cambió respecto al anterior", image: "/help/exchange/step3-percentage.png" },
+        { text: "Si el cambio es significativo (>3%), considera ajustar precios", image: "/help/exchange/step4-action-needed.png" },
+      ],
+      relatedActions: ["exchange-view-rate", "exchange-update-rate", "exchange-impact-prices"],
+      route: "/dashboard/exchange",
+      section: "exchange",
+    },
+    {
+      id: "exchange-date-filter",
+      question: "¿Cómo filtro el historial de tipos de cambio por fecha?",
+      aliases: [
+        "filtrar por fecha",
+        "buscar por rango de fecha",
+        "historial entre fechas",
+        "ver cambios de un periodo",
+        "filtro de fechas",
+      ],
+      answer:
+        "En la tabla de **Historial**, puedes filtrar los registros de tipo de cambio por rango de fechas:\n\n**Paso a paso:**\n1. Localiza el selector de rango de fechas en la esquina superior derecha de la tabla (ícono de calendario)\n2. Haz clic en el selector para abrir el calendario\n3. Selecciona la **fecha de inicio** (desde)\n4. Selecciona la **fecha de fin** (hasta)\n5. La tabla se filtrará automáticamente para mostrar solo los registros dentro de ese rango\n\n**Funcionalidades adicionales:**\n• **Búsqueda por moneda**: Usa el campo de búsqueda a la izquierda para filtrar por 'USD' o 'EUR'\n• **Limpiar filtro**: Haz clic en el ícono X en el selector de fechas para quitar el filtro y ver todos los registros\n• **Ordenamiento**: Haz clic en los encabezados de columna para ordenar por fecha, moneda o valor\n\nEsto es útil para analizar variaciones del tipo de cambio en períodos específicos, como un mes o trimestre.",
+      keywords: ["filtrar", "fecha", "rango", "período", "histórico", "buscar", "calendario", "desde", "hasta", "entre fechas"],
+      steps: [
+        { text: "Desplázate hasta la sección de 'Historial' en la página", image: "/help/exchange/step1-history-table.png" },
+        { text: "Haz clic en el selector de rango de fechas (superior derecha)", image: "/help/exchange/step2-date-picker.png" },
+        { text: "Selecciona la fecha de inicio en el calendario", image: "/help/exchange/step3-start-date.png" },
+        { text: "Selecciona la fecha de fin", image: "/help/exchange/step4-end-date.png" },
+        { text: "La tabla se actualiza mostrando solo registros en ese rango", image: "/help/exchange/step5-filtered-results.png" },
+        { text: "Usa la búsqueda para filtrar por moneda si lo deseas", image: "/help/exchange/step6-search-currency.png" },
+      ],
+      relatedActions: ["exchange-history", "exchange-chart"],
+      route: "/dashboard/exchange",
+      section: "exchange",
+    },
+  ],
+}
