@@ -93,13 +93,13 @@ const ROUTE_TO_SECTION_MAP: Record<string, string> = {
   '/dashboard/pending-orders': 'sales',
 
   // Mensajes
-  '/dashboard/messages': 'settings',
+  '/dashboard/messages': 'messages',
 
   // Historial
-  '/dashboard/history': 'settings',
+  '/dashboard/history': 'history',
 
   // Código de barras
-  '/barcode': 'hardware',
+  '/barcode': 'barcode',
 
   // API
   '/api': 'api-integrations',
@@ -130,6 +130,9 @@ const SECTION_DISPLAY_NAMES: Record<string, string> = {
   hardware: 'Hardware',
   'api-integrations': 'Integraciones API',
   'public-store': 'Tienda en Línea',
+  history: 'Historial',
+  barcode: 'Código de Barras',
+  messages: 'Mensajes',
 }
 
 /**

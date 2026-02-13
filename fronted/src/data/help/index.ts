@@ -24,6 +24,9 @@ import { apiIntegrationsSection } from "./sections/api-integrations"
 import { reportsSection } from "./sections/reports"
 import { settingsSection } from "./sections/settings"
 import { publicStoreSection } from "./sections/public-store"
+import { brandsSection } from "./sections/brands"
+import { historySection } from "./sections/history"
+import { barcodeSection } from "./sections/barcode"
 
 export const HELP_SECTIONS: HelpSection[] = [
   courtesySection,
@@ -50,6 +53,9 @@ export const HELP_SECTIONS: HelpSection[] = [
   reportsSection,
   settingsSection,
   publicStoreSection,
+  brandsSection,
+  historySection,
+  barcodeSection,
 ]
 
 const ROUTE_SECTION_MAP: [string, string][] = [
@@ -57,7 +63,7 @@ const ROUTE_SECTION_MAP: [string, string][] = [
   ["/dashboard/accounting", "accounting"],
   ["/dashboard/inventory", "inventory"],
   ["/dashboard/products", "products"],
-  ["/dashboard/brands", "products"],
+  ["/dashboard/brands", "brands"],
   ["/dashboard/sales/salesdashboard", "sales"],
   ["/dashboard/sales/new", "sales"],
   ["/dashboard/sales", "sales"],
@@ -67,7 +73,7 @@ const ROUTE_SECTION_MAP: [string, string][] = [
   ["/dashboard/providers", "providers"],
   ["/dashboard/users", "users"],
   ["/dashboard/super-users", "users"],
-  ["/dashboard/history", "users"],
+  ["/dashboard/history", "history"],
   ["/dashboard/tenancy", "tenancy"],
   ["/dashboard/companies", "tenancy"],
   ["/dashboard/stores", "stores"],
@@ -83,6 +89,7 @@ const ROUTE_SECTION_MAP: [string, string][] = [
   ["/dashboard", "general"],
   ["/store", "public-store"],
   ["/cart", "public-store"],
+  ["/barcode", "barcode"],
 ]
 
 export function resolveSection(pathname: string): string {
