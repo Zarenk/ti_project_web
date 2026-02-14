@@ -102,9 +102,9 @@ export class AccountingController {
     // Generar nombre de archivo según estándar SUNAT
     const company = await this.prisma.company.findFirst({
       where: { id: tenant?.companyId ?? undefined },
-      select: { ruc: true },
+      select: { sunatRuc: true },
     });
-    const ruc = company?.ruc || '00000000000';
+    const ruc = company?.sunatRuc || '00000000000';
     const [year, month] = period.split('-');
     const day = format(new Date(), 'dd');
     const formatCode = exportFormat.replace('.', '');

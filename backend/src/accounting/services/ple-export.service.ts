@@ -36,9 +36,9 @@ export class PleExportService {
     // Obtener RUC de la empresa
     const company = await this.prisma.company.findFirst({
       where: { id: tenant?.companyId ?? undefined },
-      select: { ruc: true },
+      select: { sunatRuc: true },
     });
-    const ruc = company?.ruc || '00000000000';
+    const ruc = company?.sunatRuc || '00000000000';
 
     const lines: string[] = [];
     let globalLineNumber = 1;
@@ -117,9 +117,9 @@ export class PleExportService {
     // Obtener RUC
     const company = await this.prisma.company.findFirst({
       where: { id: tenant?.companyId ?? undefined },
-      select: { ruc: true },
+      select: { sunatRuc: true },
     });
-    const ruc = company?.ruc || '00000000000';
+    const ruc = company?.sunatRuc || '00000000000';
 
     const pleLines: string[] = [];
     let lineNumber = 1;

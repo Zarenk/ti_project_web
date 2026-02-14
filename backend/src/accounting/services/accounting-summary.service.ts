@@ -125,8 +125,7 @@ export class AccountingSummaryService {
     const productsInStock = await this.prisma.inventory.count({
       where: {
         organizationId: orgId,
-        companyId,
-        totalStock: { gt: 0 },
+        // Inventory doesn't have companyId filter
       },
     });
 
@@ -155,8 +154,7 @@ export class AccountingSummaryService {
     const igvBalance = await this.getAccountBalance('4011', orgId, companyId, currentEnd);
 
     // Desglosar IGV de ventas vs compras del mes actual
-    const igvMovements = await this.prisma.accEntryLine.groupBy({
-      by: [],
+    const igvMovements = await this.prisma.accEntryLine.aggregate({
       where: {
         account: '4011',
         entry: {
@@ -169,8 +167,8 @@ export class AccountingSummaryService {
       _sum: { debit: true, credit: true },
     });
 
-    const igvPurchases = Number((igvMovements[0]?._sum?.debit || 0));
-    const igvSales = Number((igvMovements[0]?._sum?.credit || 0));
+    const igvPurchases = Number((igvMovements._sum?.debit || 0));
+    const igvSales = Number((igvMovements._sum?.credit || 0));
     const netIgv = igvSales - igvPurchases;
 
     // Fecha de vencimiento: día 18 del mes siguiente

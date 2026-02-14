@@ -38,7 +38,8 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
       },
     } as any;
 
-    return { service: new AccountingService(prisma), prisma };
+    const verticalConfig = { isFeatureEnabled: jest.fn().mockResolvedValue(true) } as any;
+    return { service: new AccountingService(prisma, verticalConfig), prisma };
   };
 
   it('handles cash payments', async () => {
