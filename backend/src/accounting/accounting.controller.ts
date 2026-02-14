@@ -6,6 +6,7 @@ import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 import { AccountingSummaryService } from './services/accounting-summary.service';
 import { PleExportService } from './services/ple-export.service';
+import { AccountingAnalyticsService } from './services/accounting-analytics.service';
 import { Response } from 'express';
 import { format } from 'date-fns';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -17,6 +18,7 @@ export class AccountingController {
     private readonly accountingService: AccountingService,
     private readonly summaryService: AccountingSummaryService,
     private readonly pleService: PleExportService,
+    private readonly analyticsService: AccountingAnalyticsService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -76,6 +78,16 @@ export class AccountingController {
   @Get('summary')
   async getSummary(@CurrentTenant() tenant: TenantContext | null) {
     return this.summaryService.calculateSummary(tenant);
+  }
+
+  @Get('analytics/cash-flow')
+  async getCashFlow(@CurrentTenant() tenant: TenantContext | null) {
+    return this.analyticsService.getCashFlow(tenant);
+  }
+
+  @Get('analytics/health-score')
+  async getHealthScore(@CurrentTenant() tenant: TenantContext | null) {
+    return this.analyticsService.getHealthScore(tenant);
   }
 
   @Get('export/ple')

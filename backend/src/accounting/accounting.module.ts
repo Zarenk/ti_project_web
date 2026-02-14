@@ -21,6 +21,7 @@ import { CreditNoteAccountingService } from './services/credit-note-accounting.s
 import { TenancyModule } from 'src/tenancy/tenancy.module';
 import { AccountingSummaryService } from './services/accounting-summary.service';
 import { PleExportService } from './services/ple-export.service';
+import { AccountingAnalyticsService } from './services/accounting-analytics.service';
 
 @Module({
   imports: [PrismaModule, TenancyModule],
@@ -46,6 +47,7 @@ import { PleExportService } from './services/ple-export.service';
     DebitNoteAccountingService,
     AccountingSummaryService,
     PleExportService,
+    AccountingAnalyticsService,
     {
       provide: 'CreditNoteAccountingService',
       useClass: CreditNoteAccountingService,
