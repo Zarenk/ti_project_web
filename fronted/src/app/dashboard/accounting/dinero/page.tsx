@@ -180,7 +180,7 @@ export default function MiDineroPage() {
             ) : (
               <div className="space-y-4">
                 {(cashData?.movimientosRecientes || []).map((mov) => (
-                  <div key={mov.id} className="flex items-center justify-between">
+                  <div key={`${mov.tipo}-${mov.id}`} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       {mov.tipo === "entrada" ? (
                         <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/20">
