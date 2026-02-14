@@ -19,45 +19,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { BACKEND_URL } from '@/lib/utils'
-
-interface EntryLine {
-  account: string
-  description?: string
-  debit: number
-  credit: number
-}
-
-interface Entry {
-  id: string
-  provider?: string
-  date: string
-  serie?: string
-  correlativo?: string
-  invoiceUrl?: string
-  status: 'draft' | 'posted' | 'void'
-  lines: EntryLine[]
-}
+import { getAccountingEntry, type AccountingEntry } from '../entries.api'
 
 export default function EntryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   // `params` is provided as a Promise in Next.js 15+. Use the React `use()` hook
   // to unwrap the value before accessing its properties.
   const { id } = use(params)
-  const [entry, setEntry] = useState<Entry | null>(null)
+  const [entry, setEntry] = useState<AccountingEntry | null>(null)
 
   useEffect(() => {
-    const fetchEntry = async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/accounting/entries/${id}`)
-        if (res.ok) {
-          const data: Entry = await res.json()
-          setEntry(data)
-        }
-      } catch (err) {
-        console.error('Failed to load entry', err)
-      }
-    }
-    fetchEntry()
+    getAccountingEntry(id)
+      .then(setEntry)
+      .catch((err) => console.error('Failed to load entry', err))
   }, [id])
 
   if (!entry) return <section className='p-4'>Loading...</section>

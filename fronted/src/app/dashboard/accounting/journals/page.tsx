@@ -36,13 +36,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Journal, fetchJournals, deleteJournal } from "./journals.api";
+import {
+  Journal,
+  fetchJournals,
+  deleteJournal,
+  fetchAccountingEntries,
+  fetchSalesTransactions,
+  fetchEntryById,
+} from "./journals.api";
 import { JournalForm } from "./journal-form";
 import { DeleteActionsGuard } from "@/components/delete-actions-guard";
 import { Input } from "@/components/ui/input";
 import { BACKEND_URL } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getAuthHeaders } from "@/utils/auth-token";
 import { formatGlosa } from "./formatGlosa";
 import { formatDisplayGlosa } from "./formatDisplayGlosa";
 import { useTenantSelection } from "@/context/tenant-selection-context";
@@ -315,7 +321,6 @@ const normalizeInventoryDetails = (value: unknown): InventoryEntryDetail[] => {
 
 const buildInventoryEntrySummaries = async (
   entryIds: number[],
-  headers: HeadersInit
 ): Promise<InventoryEntrySummaryMap> => {
   if (entryIds.length === 0) {
     return new Map();
@@ -330,18 +335,11 @@ const buildInventoryEntrySummaries = async (
   const results = await Promise.all(
     uniqueIds.map(async (entryId) => {
       try {
-        const detailRes = await fetch(
-          `${BACKEND_URL}/api/entries/by-id/${entryId}`,
-          {
-            headers,
-          }
-        );
+        const detailJson = await fetchEntryById(entryId);
 
-        if (!detailRes.ok) {
+        if (!detailJson) {
           return null;
         }
-
-        const detailJson = await detailRes.json();
         const details = normalizeInventoryDetails(detailJson);
 
         const summaryParts = details
@@ -599,45 +597,26 @@ export default function JournalsPage() {
     const loadDaily = async () => {
       setDailyLoading(true);
       try {
-        let headers: Record<string, string>;
-        try {
-          headers = await getAuthHeaders();
-        } catch {
-          setDailyLines([]);
-          return;
-        }
-        if (!headers.Authorization) {
-          setDailyLines([]);
-          return;
-        }
         const from = new Date(`${selectedDate}T00:00:00.000Z`).toISOString();
         const to = new Date(`${selectedDate}T23:59:59.999Z`).toISOString();
-        const params = new URLSearchParams({ from, to, page: "1", size: "500" });
-        const salesParams = new URLSearchParams({ from, to });
-        const [res, salesRes] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/accounting/entries?${params.toString()}`, {
-            headers,
-          }),
-          fetch(`${BACKEND_URL}/api/sales/transactions?${salesParams.toString()}`, {
-            headers,
-          }),
-        ]);
 
-        if (res.status === 401 || salesRes.status === 401) {
-          setDailyLines([]);
-          router.push("/login");
-          return;
+        let entriesResult: { data: any[] };
+        let sales: Sale[] = [];
+        try {
+          [entriesResult, sales] = await Promise.all([
+            fetchAccountingEntries(from, to),
+            fetchSalesTransactions(from, to) as Promise<Sale[]>,
+          ]);
+        } catch (err: any) {
+          if (err?.name === "UnauthenticatedError" || err?.message?.includes("Unauthenticated")) {
+            setDailyLines([]);
+            router.push("/login");
+            return;
+          }
+          throw err;
         }
 
         let lines: DailyLine[] = [];
-        let sales: Sale[] = [];
-        if (salesRes.ok) {
-          try {
-            sales = await salesRes.json();
-          } catch {
-            sales = [];
-          }
-        }
 
         const salesByVoucher = new Map<string, Sale>();
         for (const sale of sales) {
@@ -653,9 +632,8 @@ export default function JournalsPage() {
           }
         }
 
-        if (res.ok) {
-          const json = await res.json();
-          const entriesData = Array.isArray(json.data) ? json.data : [];
+        {
+          const entriesData = Array.isArray(entriesResult.data) ? entriesResult.data : [];
 
           const inventoryEntryIds = entriesData
             .filter((entry: any) => (entry?.source ?? "") === "inventory_entry")
@@ -671,7 +649,6 @@ export default function JournalsPage() {
 
           const inventorySummaries = await buildInventoryEntrySummaries(
             inventoryEntryIds,
-            headers
           );
 
           lines = entriesData.flatMap((e: any) => {

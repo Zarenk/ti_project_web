@@ -1,14 +1,24 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
 import { AccountingService, AccountNode } from './accounting.service';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { AccountingSummaryService } from './services/accounting-summary.service';
+import { PleExportService } from './services/ple-export.service';
+import { Response } from 'express';
+import { format } from 'date-fns';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Controller('accounting')
 @UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class AccountingController {
-  constructor(private readonly accountingService: AccountingService) {}
+  constructor(
+    private readonly accountingService: AccountingService,
+    private readonly summaryService: AccountingSummaryService,
+    private readonly pleService: PleExportService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get('accounts')
   getAccounts(
@@ -61,5 +71,50 @@ export class AccountingController {
     @CurrentTenant() tenant: TenantContext | null,
   ) {
     return this.accountingService.getTrialBalance(period, tenant);
+  }
+
+  @Get('summary')
+  async getSummary(@CurrentTenant() tenant: TenantContext | null) {
+    return this.summaryService.calculateSummary(tenant);
+  }
+
+  @Get('export/ple')
+  async exportPle(
+    @Query('period') period: string,
+    @Query('format') exportFormat: '5.1' | '6.1',
+    @CurrentTenant() tenant: TenantContext | null,
+    @Res() res: Response,
+  ) {
+    if (!period || !exportFormat) {
+      throw new BadRequestException('Period and format are required');
+    }
+
+    let content: string;
+
+    if (exportFormat === '5.1') {
+      content = await this.pleService.exportLibroDiario(period, tenant);
+    } else if (exportFormat === '6.1') {
+      content = await this.pleService.exportLibroMayor(period, tenant);
+    } else {
+      throw new BadRequestException('Invalid format. Use 5.1 or 6.1');
+    }
+
+    // Generar nombre de archivo según estándar SUNAT
+    const company = await this.prisma.company.findFirst({
+      where: { id: tenant?.companyId ?? undefined },
+      select: { ruc: true },
+    });
+    const ruc = company?.ruc || '00000000000';
+    const [year, month] = period.split('-');
+    const day = format(new Date(), 'dd');
+    const formatCode = exportFormat.replace('.', '');
+    const indicator = '00';
+    const estado = '1';
+
+    const filename = `LE${ruc}${year}${month}${day}${formatCode}${indicator}${estado}.txt`;
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(content);
   }
 }
