@@ -56,18 +56,17 @@ export class AccountingAnalyticsService {
     const startToday = startOfDay(today);
     const endToday = endOfDay(today);
 
-    // Get cash available (from cash register + bank accounts)
+    // Get cash available (from cash register)
     const cashRegisters = await this.prisma.cashRegister.findMany({
       where: {
         organizationId,
-        companyId,
-        status: 'ACTIVO',
+        status: 'ACTIVE',
       },
-      select: { balance: true },
+      select: { currentBalance: true },
     });
 
     const disponible = cashRegisters.reduce(
-      (sum, reg) => sum + (reg.balance?.toNumber() || 0),
+      (sum, reg) => sum + (reg.currentBalance?.toNumber() || 0),
       0,
     );
 
@@ -84,22 +83,21 @@ export class AccountingAnalyticsService {
       _sum: { total: true },
     });
 
-    const entradasHoy = salesTodayResult._sum.total?.toNumber() || 0;
+    const entradasHoy = salesTodayResult._sum.total || 0;
 
     // Get today's expenses (entries/purchases)
     const entriesTodayResult = await this.prisma.entry.aggregate({
       where: {
         organizationId,
-        companyId,
         createdAt: {
           gte: startToday,
           lte: endToday,
         },
       },
-      _sum: { total: true },
+      _sum: { totalGross: true },
     });
 
-    const salidasHoy = entriesTodayResult._sum.total?.toNumber() || 0;
+    const salidasHoy = entriesTodayResult._sum.totalGross?.toNumber() || 0;
 
     // Simple projection: available + avg daily income * 7
     const avgIncome = entradasHoy; // Simplified
@@ -110,16 +108,15 @@ export class AccountingAnalyticsService {
     const monthlyExpensesResult = await this.prisma.entry.aggregate({
       where: {
         organizationId,
-        companyId,
         createdAt: {
           gte: monthStart,
           lte: today,
         },
       },
-      _sum: { total: true },
+      _sum: { totalGross: true },
     });
 
-    const monthlyExpenses = monthlyExpensesResult._sum.total?.toNumber() || 0;
+    const monthlyExpenses = monthlyExpensesResult._sum.totalGross?.toNumber() || 0;
     const gastosRecurrentes = (monthlyExpenses / 30) * 7;
 
     // Get recent movements (last 10 sales and purchases)
@@ -127,21 +124,21 @@ export class AccountingAnalyticsService {
       where: { organizationId, companyId },
       select: {
         id: true,
-        invoiceNumber: true,
         total: true,
         createdAt: true,
+        description: true,
       },
       orderBy: { createdAt: 'desc' },
       take: 5,
     });
 
     const recentPurchases = await this.prisma.entry.findMany({
-      where: { organizationId, companyId },
+      where: { organizationId },
       select: {
         id: true,
         serie: true,
         correlativo: true,
-        total: true,
+        totalGross: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -152,15 +149,15 @@ export class AccountingAnalyticsService {
       ...recentSales.map((sale) => ({
         id: sale.id,
         tipo: 'entrada' as const,
-        concepto: `Venta #${sale.invoiceNumber || sale.id}`,
-        monto: sale.total?.toNumber() || 0,
+        concepto: `Venta #${sale.id}`,
+        monto: sale.total || 0,
         fecha: this.formatFechaRelativa(sale.createdAt),
       })),
       ...recentPurchases.map((entry) => ({
         id: entry.id,
         tipo: 'salida' as const,
-        concepto: `Compra ${entry.serie || ''}-${entry.correlativo || entry.id}`,
-        monto: -(entry.total?.toNumber() || 0),
+        concepto: `Compra ${entry.serie ? `${entry.serie}-${entry.correlativo}` : `#${entry.id}`}`,
+        monto: -(entry.totalGross?.toNumber() || 0),
         fecha: this.formatFechaRelativa(entry.createdAt),
       })),
     ]
@@ -199,13 +196,12 @@ export class AccountingAnalyticsService {
     const pendingPaymentsResult = await this.prisma.entry.aggregate({
       where: {
         organizationId,
-        companyId,
-        paymentStatus: 'PENDIENTE',
+        paymentTerm: { not: 'CASH' },
       },
-      _sum: { total: true },
+      _sum: { totalGross: true },
     });
 
-    const loQueDebes = pendingPaymentsResult._sum.total?.toNumber() || 0;
+    const loQueDebes = pendingPaymentsResult._sum.totalGross?.toNumber() || 0;
 
     // Calculate Equity (Patrimonio)
     const tuPatrimonio = loQueTienes - loQueDebes;
@@ -223,22 +219,21 @@ export class AccountingAnalyticsService {
       _sum: { total: true },
     });
 
-    const ingresos = monthlyRevenueResult._sum.total?.toNumber() || 0;
+    const ingresos = monthlyRevenueResult._sum.total || 0;
 
     // Get monthly costs
     const monthlyCostsResult = await this.prisma.entry.aggregate({
       where: {
         organizationId,
-        companyId,
         createdAt: {
           gte: monthStart,
           lte: today,
         },
       },
-      _sum: { total: true },
+      _sum: { totalGross: true },
     });
 
-    const costos = monthlyCostsResult._sum.total?.toNumber() || 0;
+    const costos = monthlyCostsResult._sum.totalGross?.toNumber() || 0;
 
     // Calculate profitability
     const ganancia = ingresos - costos;
