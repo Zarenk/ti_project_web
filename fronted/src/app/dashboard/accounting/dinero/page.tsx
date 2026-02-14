@@ -3,6 +3,8 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { AccountingModeToggle } from "@/components/accounting-mode-toggle"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useCashFlow } from "../hooks/useCashFlow"
 import {
   DollarSign,
   TrendingUp,
@@ -11,25 +13,46 @@ import {
   Calendar,
   ArrowUpRight,
   ArrowDownRight,
+  RefreshCw,
 } from "lucide-react"
 import Link from "next/link"
+import { toast } from "sonner"
 
 export default function MiDineroPage() {
-  // TODO: Fetch real data from API
-  const cashData = {
-    disponible: 45230.50,
-    entradasHoy: 12500.00,
-    salidasHoy: 8340.00,
-    proyeccionSemana: 52000.00,
-    gastosRecurrentes: 15000.00,
+  const { data: cashData, loading, error, refetch } = useCashFlow()
+
+  const handleRefresh = async () => {
+    try {
+      await refetch()
+      toast.success("Datos actualizados")
+    } catch {
+      toast.error("Error al actualizar datos")
+    }
   }
 
-  const recentMovements = [
-    { id: 1, tipo: "entrada", concepto: "Venta #1234", monto: 5200, fecha: "Hoy, 14:30" },
-    { id: 2, tipo: "salida", concepto: "Pago a proveedor", monto: -3500, fecha: "Hoy, 11:20" },
-    { id: 3, tipo: "entrada", concepto: "Venta #1233", monto: 7300, fecha: "Hoy, 09:15" },
-    { id: 4, tipo: "salida", concepto: "Servicios públicos", monto: -840, fecha: "Ayer, 16:45" },
-  ]
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Card className="max-w-md">
+            <CardContent className="pt-6">
+              <div className="text-center space-y-4">
+                <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
+                <h3 className="text-lg font-semibold">Error al cargar datos</h3>
+                <p className="text-sm text-muted-foreground">
+                  No se pudieron cargar los datos de flujo de caja. Verifica tu conexión e intenta nuevamente.
+                </p>
+                <Button onClick={handleRefresh}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Reintentar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -41,7 +64,18 @@ export default function MiDineroPage() {
             Estado de tu efectivo y flujo de caja en tiempo real
           </p>
         </div>
-        <AccountingModeToggle variant="compact" />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
+          <AccountingModeToggle variant="compact" />
+        </div>
       </div>
 
       {/* Main Metrics */}
@@ -52,7 +86,11 @@ export default function MiDineroPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">S/ {cashData.disponible.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
+            {loading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <div className="text-2xl font-bold">S/ {(cashData?.disponible || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               Total en caja y bancos ahora
             </p>
@@ -65,9 +103,13 @@ export default function MiDineroPage() {
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              S/ {cashData.entradasHoy.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-            </div>
+            {loading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <div className="text-2xl font-bold text-green-600">
+                S/ {(cashData?.entradasHoy || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               Ventas y cobros del día
             </p>
@@ -80,9 +122,13 @@ export default function MiDineroPage() {
             <TrendingDown className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              S/ {cashData.salidasHoy.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-            </div>
+            {loading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <div className="text-2xl font-bold text-red-600">
+                S/ {(cashData?.salidasHoy || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               Gastos y pagos del día
             </p>
@@ -95,7 +141,11 @@ export default function MiDineroPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">S/ {cashData.proyeccionSemana.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
+            {loading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <div className="text-2xl font-bold">S/ {(cashData?.proyeccionSemana || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               Estimado para la próxima semana
             </p>
@@ -112,30 +162,47 @@ export default function MiDineroPage() {
             <CardDescription>Últimas entradas y salidas de dinero</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentMovements.map((mov) => (
-                <div key={mov.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {mov.tipo === "entrada" ? (
-                      <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/20">
-                        <ArrowUpRight className="h-4 w-4 text-green-600" />
+            {loading ? (
+              <div className="space-y-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div>
+                        <Skeleton className="h-4 w-32 mb-2" />
+                        <Skeleton className="h-3 w-24" />
                       </div>
-                    ) : (
-                      <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/20">
-                        <ArrowDownRight className="h-4 w-4 text-red-600" />
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-sm font-medium">{mov.concepto}</p>
-                      <p className="text-xs text-muted-foreground">{mov.fecha}</p>
                     </div>
+                    <Skeleton className="h-4 w-20" />
                   </div>
-                  <span className={`text-sm font-semibold ${mov.tipo === "entrada" ? "text-green-600" : "text-red-600"}`}>
-                    {mov.tipo === "entrada" ? "+" : ""}S/ {Math.abs(mov.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {(cashData?.movimientosRecientes || []).map((mov) => (
+                  <div key={mov.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {mov.tipo === "entrada" ? (
+                        <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/20">
+                          <ArrowUpRight className="h-4 w-4 text-green-600" />
+                        </div>
+                      ) : (
+                        <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/20">
+                          <ArrowDownRight className="h-4 w-4 text-red-600" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-medium">{mov.concepto}</p>
+                        <p className="text-xs text-muted-foreground">{mov.fecha}</p>
+                      </div>
+                    </div>
+                    <span className={`text-sm font-semibold ${mov.tipo === "entrada" ? "text-green-600" : "text-red-600"}`}>
+                      {mov.monto > 0 ? "+" : ""}S/ {Math.abs(mov.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             <Button variant="outline" className="w-full mt-4" asChild>
               <Link href="/dashboard/accounting/journals">
                 Ver todos los movimientos
@@ -152,35 +219,44 @@ export default function MiDineroPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                <div className="flex gap-3">
-                  <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-100">
-                      Gastos recurrentes próximos
-                    </h4>
-                    <p className="text-sm text-blue-800 dark:text-blue-200 mt-1">
-                      Tienes S/ {cashData.gastosRecurrentes.toLocaleString('es-PE')} en gastos fijos para esta semana.
-                      Tu dinero actual lo cubre sin problemas.
-                    </p>
+              {loading ? (
+                <>
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </>
+              ) : cashData ? (
+                <>
+                  <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                    <div className="flex gap-3">
+                      <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-100">
+                          Gastos recurrentes próximos
+                        </h4>
+                        <p className="text-sm text-blue-800 dark:text-blue-200 mt-1">
+                          Tienes S/ {cashData.gastosRecurrentes.toLocaleString('es-PE')} en gastos fijos para esta semana.
+                          Tu dinero actual lo cubre sin problemas.
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                <div className="flex gap-3">
-                  <TrendingUp className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-sm text-green-900 dark:text-green-100">
-                      Capacidad de inversión
-                    </h4>
-                    <p className="text-sm text-green-800 dark:text-green-200 mt-1">
-                      Después de gastos fijos, tendrás ~S/ {(cashData.disponible - cashData.gastosRecurrentes).toLocaleString('es-PE')} disponibles.
-                      Buen momento para invertir en inventario.
-                    </p>
+                  <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                    <div className="flex gap-3">
+                      <TrendingUp className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-semibold text-sm text-green-900 dark:text-green-100">
+                          Capacidad de inversión
+                        </h4>
+                        <p className="text-sm text-green-800 dark:text-green-200 mt-1">
+                          Después de gastos fijos, tendrás ~S/ {(cashData.disponible - cashData.gastosRecurrentes).toLocaleString('es-PE')} disponibles.
+                          Buen momento para invertir en inventario.
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </>
+              ) : null}
 
               <Button className="w-full" asChild>
                 <Link href="/dashboard/sales/new">
