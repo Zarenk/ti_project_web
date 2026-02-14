@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { AccountingModeToggle } from "@/components/accounting-mode-toggle"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   FileText,
   Download,
@@ -16,18 +17,59 @@ import {
   Clock,
 } from "lucide-react"
 import Link from "next/link"
+import { useTenantSelection } from "@/context/tenant-selection-context"
+import { getCompanyDetail } from "@/app/dashboard/tenancy/tenancy.api"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
 
 export default function SUNATPage() {
   const [exportingPLE, setExportingPLE] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [companyData, setCompanyData] = useState<{
+    ruc: string
+    razonSocial: string
+  } | null>(null)
 
-  // TODO: Fetch real data from API
+  const { selection } = useTenantSelection()
+
+  useEffect(() => {
+    async function loadCompanyData() {
+      if (!selection.companyId) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        const company = await getCompanyDetail(selection.companyId)
+        if (company) {
+          setCompanyData({
+            ruc: company.sunatRuc || company.taxId || "Sin RUC",
+            razonSocial: company.sunatBusinessName || company.legalName || company.name,
+          })
+        }
+      } catch (error) {
+        console.error("Error loading company data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadCompanyData()
+  }, [selection.companyId])
+
+  // Calculate current period and next declaration date
+  const today = new Date()
+  const currentPeriod = format(today, "yyyy-MM")
+  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 15)
+  const daysUntilDeclaration = Math.ceil((nextMonth.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
   const complianceData = {
-    ruc: "20519857538",
-    razonSocial: "MI EMPRESA SAC",
-    periodo: "2026-02",
+    ruc: companyData?.ruc || "Cargando...",
+    razonSocial: companyData?.razonSocial || "Cargando...",
+    periodo: currentPeriod,
     estadoLibros: "AL_DIA" as const,
-    proximaDeclaracion: "2026-03-15",
-    diasRestantes: 29,
+    proximaDeclaracion: format(nextMonth, "yyyy-MM-dd"),
+    diasRestantes: daysUntilDeclaration,
   }
 
   const pleBooks = [
@@ -122,10 +164,19 @@ export default function SUNATPage() {
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{complianceData.ruc}</div>
-            <p className="text-xs text-muted-foreground mt-1 truncate">
-              {complianceData.razonSocial}
-            </p>
+            {loading ? (
+              <>
+                <Skeleton className="h-8 w-40" />
+                <Skeleton className="h-4 w-48 mt-1" />
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{complianceData.ruc}</div>
+                <p className="text-xs text-muted-foreground mt-1 truncate">
+                  {complianceData.razonSocial}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
