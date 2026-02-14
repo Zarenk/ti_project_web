@@ -18,9 +18,9 @@ describe('vertical scripts registry', () => {
   });
 
   it('runs noop handler for known script', async () => {
-    await runVerticalScript('create_retail_catalogs', { organizationId: 77 });
+    await runVerticalScript('create_retail_catalogs', { companyId: 1, organizationId: 77 });
     expect(infoSpy).toHaveBeenCalledWith(
-      '[vertical-script] create_retail_catalogs ejecutado para organizacion 77',
+      '[vertical-script] create_retail_catalogs ejecutado para empresa 1 (org: 77)',
     );
   });
 });

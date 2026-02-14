@@ -24,9 +24,13 @@ export class AuthController {
     }
     const { accessToken, refreshToken } =
       await this.authService.refreshToken(token);
+    const isProduction = process.env.NODE_ENV === 'production';
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
       sameSite: 'lax',
+      secure: isProduction,
+      path: '/api/auth',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
     return { access_token: accessToken };
   }

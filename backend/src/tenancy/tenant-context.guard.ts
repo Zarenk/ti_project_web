@@ -29,11 +29,9 @@ export class TenantContextGuard implements CanActivate {
     try {
       request.tenantContext = this.tenantContextService.getContext();
     } catch (error) {
-      const orgHeader = request.headers['x-org-id'];
-      const companyHeader = request.headers['x-company-id'];
-      console.log(
-        `[tenant debug] org=${orgHeader} company=${companyHeader} error=${
-          error instanceof Error ? error.message : error
+      this.logger.warn(
+        `Unable to resolve tenant context. Falling back when possible: ${
+          error instanceof Error ? error.message : String(error)
         }`,
       );
       if (error instanceof BadRequestException) {

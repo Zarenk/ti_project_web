@@ -47,7 +47,11 @@ describe('CashregisterService (multi-organization)', () => {
       $transaction: jest.fn(),
     } as unknown as PrismaService;
 
-    service = new CashregisterService(prisma);
+    const verticalConfig = {
+      isFeatureEnabled: jest.fn().mockResolvedValue(true),
+      getConfig: jest.fn().mockResolvedValue({ features: { sales: true } }),
+    } as any;
+    service = new CashregisterService(prisma, verticalConfig);
     logOrganizationContextMock = logOrganizationContext as jest.Mock;
     logOrganizationContextMock.mockClear();
   });

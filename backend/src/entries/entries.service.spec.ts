@@ -15,7 +15,7 @@ interface PrismaMock {
   store: { findUnique: jest.Mock };
   provider: { findUnique: jest.Mock };
   user: { findUnique: jest.Mock };
-  product: { findUnique: jest.Mock };
+  product: { findUnique: jest.Mock; findMany: jest.Mock };
   entry: {
     create: jest.Mock;
     findUnique: jest.Mock;
@@ -24,14 +24,17 @@ interface PrismaMock {
     delete: jest.Mock;
   };
   entryDetail: { update: jest.Mock };
+  salesDetail: { count: jest.Mock };
   entryDetailSeries: { createMany: jest.Mock; deleteMany: jest.Mock };
-  inventory: { findFirst: jest.Mock; create: jest.Mock };
+  inventory: { findFirst: jest.Mock; findMany: jest.Mock; create: jest.Mock };
   storeOnInventory: {
     findFirst: jest.Mock;
+    findMany: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
   };
   inventoryHistory: { create: jest.Mock };
+  shippingGuide: { updateMany: jest.Mock };
   invoice: { create: jest.Mock };
   $transaction: jest.Mock;
 }
@@ -40,7 +43,7 @@ const createPrismaMock = (): PrismaMock => ({
   store: { findUnique: jest.fn() },
   provider: { findUnique: jest.fn() },
   user: { findUnique: jest.fn() },
-  product: { findUnique: jest.fn() },
+  product: { findUnique: jest.fn(), findMany: jest.fn() },
   entry: {
     create: jest.fn(),
     findUnique: jest.fn(),
@@ -49,14 +52,17 @@ const createPrismaMock = (): PrismaMock => ({
     delete: jest.fn(),
   },
   entryDetail: { update: jest.fn() },
+  salesDetail: { count: jest.fn() },
   entryDetailSeries: { createMany: jest.fn(), deleteMany: jest.fn() },
-  inventory: { findFirst: jest.fn(), create: jest.fn() },
+  inventory: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn() },
   storeOnInventory: {
     findFirst: jest.fn(),
+    findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
   },
   inventoryHistory: { create: jest.fn() },
+  shippingGuide: { updateMany: jest.fn() },
   invoice: { create: jest.fn() },
   $transaction: jest.fn(),
 });
@@ -106,6 +112,9 @@ describe('EntriesService multi-organization support', () => {
       id: baseInput.details[0].productId,
       name: 'Widget',
     });
+    prisma.product.findMany.mockResolvedValue([
+      { id: baseInput.details[0].productId, name: 'Widget' },
+    ]);
     prisma.entry.create.mockResolvedValue({
       id: 555,
       details: [{ id: 888, productId: baseInput.details[0].productId }],
@@ -116,15 +125,19 @@ describe('EntriesService multi-organization support', () => {
     prisma.entry.findMany.mockResolvedValue([]);
     prisma.entry.findFirst.mockResolvedValue(null);
     prisma.entryDetail.update.mockResolvedValue(undefined);
+    prisma.salesDetail.count.mockResolvedValue(0);
     prisma.inventory.findFirst.mockResolvedValue(null);
+    prisma.inventory.findMany.mockResolvedValue([]);
     prisma.inventory.create.mockResolvedValue({ id: 444 });
     prisma.storeOnInventory.findFirst.mockResolvedValue(null);
+    prisma.storeOnInventory.findMany.mockResolvedValue([]);
     prisma.storeOnInventory.create.mockResolvedValue({
       id: 333,
       stock: baseInput.details[0].quantity,
     });
     prisma.storeOnInventory.update.mockResolvedValue(undefined);
     prisma.inventoryHistory.create.mockResolvedValue(undefined);
+    prisma.shippingGuide.updateMany.mockResolvedValue({ count: 0 });
     prisma.entryDetailSeries.createMany.mockResolvedValue(undefined);
     prisma.entry.findUnique.mockResolvedValue(null);
     prisma.entry.delete.mockResolvedValue(undefined);

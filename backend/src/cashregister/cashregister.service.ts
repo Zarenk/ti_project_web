@@ -959,7 +959,7 @@ export class CashregisterService {
     let candidate = `${normalizedBase} - Turno ${timestamp}`;
     // Garantiza nombres unicos en caso de cierres simultaneos
     while (
-      await prisma.cashRegister.findUnique({
+      await prisma.cashRegister.findFirst({
         where: { name: candidate },
       })
     ) {

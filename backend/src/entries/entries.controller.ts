@@ -17,7 +17,6 @@ import { EntriesService } from './entries.service';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { EntryPaymentMethod, PaymentTerm } from '@prisma/client';
 import { multerConfig } from 'src/config/multer.config';
 import pdfParse from 'pdf-parse';
 import { diskStorage } from 'multer';
@@ -43,65 +42,9 @@ export class EntriesController {
   // Endpoint para crear una nueva entrada
   @Post()
   async createEntry(
-    @Body()
-    body: {
-      storeId: number;
-      userId: number;
-      providerId: number;
-      date: Date;
-      description?: string;
-      tipoMoneda?: string;
-      tipoCambioId?: number;
-      paymentMethod?: EntryPaymentMethod;
-      paymentTerm?: PaymentTerm;
-      serie?: string;
-      correlativo?: string;
-      providerName?: string;
-      totalGross?: number;
-      igvRate?: number;
-      details: {
-        productId: number;
-        name: string;
-        quantity: number;
-        price: number;
-        priceInSoles: number;
-      }[];
-      invoice?: {
-        serie: string;
-        nroCorrelativo: string;
-        tipoComprobante: string;
-        tipoMoneda: string;
-        total: number;
-        fechaEmision: Date;
-      };
-      guide?: {
-        serie?: string;
-        correlativo?: string;
-        fechaEmision?: string;
-        fechaEntregaTransportista?: string;
-        motivoTraslado?: string;
-        puntoPartida?: string;
-        puntoLlegada?: string;
-        destinatario?: string;
-        pesoBrutoUnidad?: string;
-        pesoBrutoTotal?: string;
-        transportista?: string;
-      };
-    },
+    @Body() body: CreateEntryDto,
     @CurrentTenant('organizationId') organizationId: number | null | undefined,
   ) {
-    if (
-      body.paymentTerm &&
-      !Object.values(PaymentTerm).includes(body.paymentTerm)
-    ) {
-      throw new BadRequestException('paymentTerm inválido.');
-    }
-    if (body.totalGross !== undefined && typeof body.totalGross !== 'number') {
-      throw new BadRequestException('totalGross debe ser un número.');
-    }
-    if (body.igvRate !== undefined && typeof body.igvRate !== 'number') {
-      throw new BadRequestException('igvRate debe ser un número.');
-    }
     return this.entriesService.createEntry(
       body,
       organizationId === undefined ? undefined : organizationId,
@@ -143,44 +86,8 @@ export class EntriesController {
     }
   }
 
-  // Endpoint para actualizar una entrada con un PDF
-  @Post(':id/upload-pdf')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './uploads/invoices', // Carpeta donde se guardarán los PDFs
-        filename: (req, file, cb) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = path.extname(file.originalname);
-          cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
-        },
-      }),
-      fileFilter: (req, file, cb) => {
-        if (!file.originalname.match(/\.(pdf)$/)) {
-          return cb(
-            new BadRequestException('Solo se permiten archivos PDF'),
-            false,
-          );
-        }
-        cb(null, true);
-      },
-    }),
-  )
-  async uploadPdf(
-    @Param('id') id: string,
-    @UploadedFile() file: Express.Multer.File,
-  ) {
-    if (!file) {
-      throw new BadRequestException('No se proporcionó un archivo PDF.');
-    }
-
-    const pdfUrl = `/uploads/invoices/${file.filename}`;
-    const entryId = Number(id);
-    await this.registerInvoiceSample(entryId, file);
-    return this.entriesService.updateEntryPdf(entryId, pdfUrl);
-  }
-
+  // Optimized: Moved draft/upload-pdf BEFORE :id/upload-pdf
+  // NestJS matches routes in order, so specific routes must come before dynamic routes
   @Post('draft/upload-pdf')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -285,6 +192,44 @@ export class EntriesController {
       organizationId,
       userId,
     };
+  }
+
+  // Endpoint para actualizar una entrada con un PDF (con :id específico)
+  @Post(':id/upload-pdf')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads/invoices',
+        filename: (req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = path.extname(file.originalname);
+          cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.originalname.match(/\.(pdf)$/)) {
+          return cb(
+            new BadRequestException('Solo se permiten archivos PDF'),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadPdf(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No se proporcionó un archivo PDF.');
+    }
+
+    const pdfUrl = `/uploads/invoices/${file.filename}`;
+    const entryId = Number(id);
+    await this.registerInvoiceSample(entryId, file);
+    return this.entriesService.updateEntryPdf(entryId, pdfUrl);
   }
 
   // Endpoint para actualizar una entrada con un PDF GUIA (con :id específico)

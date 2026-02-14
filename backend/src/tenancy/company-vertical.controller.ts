@@ -38,6 +38,8 @@ const ALLOWED_VERTICALS = new Set<BusinessVertical>([
 @Controller('companies')
 @UseGuards(JwtAuthGuard, TenantContextGuard)
 export class CompanyVerticalController {
+  private readonly compatibilityThrottle = new Map<number, number>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantContextService: TenantContextService,
@@ -71,12 +73,74 @@ export class CompanyVerticalController {
     );
   }
 
+  private ensureCompatibilityThrottled(companyId: number): void {
+    const now = Date.now();
+    const lastCheck = this.compatibilityThrottle.get(companyId);
+    const cooldownMs = 10_000;
+
+    if (lastCheck && now - lastCheck < cooldownMs) {
+      const retryAfter = Math.ceil(
+        (cooldownMs - (now - lastCheck)) / 1000,
+      );
+      throw new BadRequestException(
+        `Demasiadas verificaciones de compatibilidad. Intenta nuevamente en ${retryAfter} segundos.`,
+      );
+    }
+
+    this.compatibilityThrottle.set(companyId, now);
+
+    if (this.compatibilityThrottle.size > 100) {
+      for (const [key, timestamp] of this.compatibilityThrottle) {
+        if (now - timestamp > cooldownMs * 6) {
+          this.compatibilityThrottle.delete(key);
+        }
+      }
+    }
+  }
+
   private ensureAllowedVertical(vertical: BusinessVertical): void {
     if (!ALLOWED_VERTICALS.has(vertical)) {
       throw new BadRequestException(
         'Este vertical aun no esta disponible en esta fase.',
       );
     }
+  }
+
+  /**
+   * Read-only access: allows any authenticated user whose active company
+   * matches the requested companyId (employees, admins, super admins).
+   */
+  private async getCompanyWithReadAccess(companyId: number) {
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: {
+        id: true,
+        organizationId: true,
+        businessVertical: true,
+        productSchemaEnforced: true,
+      },
+    });
+    if (!company) {
+      throw new NotFoundException('Empresa no encontrada');
+    }
+    const context = this.tenantContextService.getContextWithFallback();
+    if (context.isGlobalSuperAdmin) return company;
+    if (context.companyId === companyId) return company;
+    if (
+      Array.isArray(context.allowedCompanyIds) &&
+      context.allowedCompanyIds.includes(companyId)
+    ) {
+      return company;
+    }
+    if (
+      context.isOrganizationSuperAdmin &&
+      context.organizationId === company.organizationId
+    ) {
+      return company;
+    }
+    throw new ForbiddenException(
+      'No tiene permiso para acceder a la información de esta empresa.',
+    );
   }
 
   private async getCompanyOrThrow(companyId: number) {
@@ -96,9 +160,40 @@ export class CompanyVerticalController {
     return company;
   }
 
+  @Get(':id/bank-accounts')
+  async getBankAccounts(@Param('id', ParseIntPipe) id: number) {
+    await this.getCompanyWithReadAccess(id);
+    const company = await this.prisma.company.findUnique({
+      where: { id },
+      select: { bankAccounts: true },
+    });
+    return { bankAccounts: Array.isArray(company?.bankAccounts) ? company.bankAccounts : [] };
+  }
+
+  @Put(':id/bank-accounts')
+  async updateBankAccounts(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { bankAccounts: { bankName: string; accountNumber: string; cci?: string }[] },
+  ) {
+    const company = await this.getCompanyOrThrow(id);
+    if (!Array.isArray(body.bankAccounts)) {
+      throw new BadRequestException('bankAccounts debe ser un array.');
+    }
+    for (const account of body.bankAccounts) {
+      if (!account.bankName || !account.accountNumber) {
+        throw new BadRequestException('Cada cuenta debe tener bankName y accountNumber.');
+      }
+    }
+    await this.prisma.company.update({
+      where: { id },
+      data: { bankAccounts: body.bankAccounts },
+    });
+    return { bankAccounts: body.bankAccounts };
+  }
+
   @Get(':id/vertical')
   async getVertical(@Param('id', ParseIntPipe) id: number) {
-    const company = await this.getCompanyOrThrow(id);
+    const company = await this.getCompanyWithReadAccess(id);
     const config = await this.verticalConfigService.getConfig(id);
     const migration = await this.getMigrationProgress(id);
 
@@ -114,7 +209,7 @@ export class CompanyVerticalController {
 
   @Get(':id/vertical/status')
   async getVerticalStatus(@Param('id', ParseIntPipe) id: number) {
-    await this.getCompanyOrThrow(id);
+    await this.getCompanyWithReadAccess(id);
     const migration = await this.getMigrationProgress(id);
     return {
       companyId: id,
@@ -129,6 +224,7 @@ export class CompanyVerticalController {
   ): Promise<VerticalCompatibilityResult> {
     const company = await this.getCompanyOrThrow(id);
     this.ensureAllowedVertical(dto.targetVertical);
+    this.ensureCompatibilityThrottled(id);
 
     return this.compatibilityService.check(
       id,

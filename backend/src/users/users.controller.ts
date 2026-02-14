@@ -28,6 +28,7 @@ import { TenantContextGuard } from 'src/tenancy/tenant-context.guard';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateLastContextDto } from './dto/update-last-context.dto';
 import { ValidateContextDto } from './dto/validate-context.dto';
+import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 
 @Controller('users')
 export class UsersController {
@@ -191,6 +192,16 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Patch('preferences')
+  updatePreferences(
+    @Request() req,
+    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+    dto: UpdatePreferencesDto,
+  ) {
+    return this.usersService.updatePreferences(req.user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('me/validate-context')
   validateContext(
     @Request() req,
@@ -204,6 +215,34 @@ export class UsersController {
     query: ValidateContextDto,
   ) {
     return this.usersService.validateContext(req.user.userId, query);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantContextGuard)
+  @Get('active-sessions')
+  getActiveSessions(
+    @Request() req: ExpressRequest,
+    @CurrentTenant() tenant: TenantContext | null,
+  ) {
+    const normalizedRole = (req.user?.role ?? '')
+      .toString()
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '_');
+    const isGlobal =
+      (tenant?.isGlobalSuperAdmin ?? false) ||
+      normalizedRole === 'SUPER_ADMIN_GLOBAL';
+    const isOrg =
+      (tenant?.isOrganizationSuperAdmin ?? false) ||
+      normalizedRole === 'SUPER_ADMIN_ORG';
+
+    if (!isGlobal && !isOrg) {
+      throw new ForbiddenException(
+        'Solo los super administradores pueden ver las sesiones activas.',
+      );
+    }
+
+    const organizationId = isGlobal ? null : tenant?.organizationId ?? null;
+    return this.usersService.getActiveSessions(organizationId);
   }
 
   @UseGuards(JwtAuthGuard)

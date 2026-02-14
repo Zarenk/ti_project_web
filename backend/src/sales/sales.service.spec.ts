@@ -17,6 +17,7 @@ jest.mock('src/tenancy/organization-context.logger', () => ({
 type PrismaMock = {
   storeOnInventory: {
     findFirst: jest.Mock;
+    findMany: jest.Mock;
     findUnique: jest.Mock;
     update: jest.Mock;
   };
@@ -39,6 +40,7 @@ type PrismaMock = {
   invoiceSales: { deleteMany: jest.Mock; findFirst: jest.Mock };
   orders: { update: jest.Mock };
   shippingGuide: { updateMany: jest.Mock };
+  sunatTransmission: { findFirst: jest.Mock };
   $transaction: jest.Mock;
   salesDetail: { findMany: jest.Mock };
   product: { findMany: jest.Mock };
@@ -70,6 +72,11 @@ describe('SalesService multi-organization support', () => {
     prisma = {
       storeOnInventory: {
         findFirst: jest.fn().mockResolvedValue({ id: 1, stock: 10 }),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 1, stock: 10, inventory: { productId: 1 } },
+          ]),
         findUnique: jest.fn(),
         update: jest.fn(),
       },
@@ -112,6 +119,9 @@ describe('SalesService multi-organization support', () => {
       },
       shippingGuide: {
         updateMany: jest.fn(),
+      },
+      sunatTransmission: {
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       $transaction: jest.fn(),
       salesDetail: {
@@ -324,24 +334,25 @@ describe('SalesService multi-organization support', () => {
   it('filters revenue by category using the provided organizationId', async () => {
     const startDate = new Date('2024-01-01T00:00:00.000Z');
     const endDate = new Date('2024-01-31T23:59:59.000Z');
-    prisma.sales.findMany.mockResolvedValueOnce([{ id: 123 }]);
     prisma.salesDetail.findMany.mockResolvedValueOnce([
-      { productId: 10, quantity: 2, price: 50 },
-    ]);
-    prisma.product.findMany.mockResolvedValueOnce([
-      { id: 10, category: { name: 'Electrónicos' } },
+      {
+        quantity: 2,
+        price: 50,
+        entryDetail: {
+          product: { category: { name: 'Electrónicos' } },
+        },
+      },
     ]);
 
     const result = await service.getRevenueByCategory(startDate, endDate, 77);
 
-    expect(prisma.sales.findMany).toHaveBeenCalledWith(
+    expect(prisma.salesDetail.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ organizationId: 77 }),
+        where: expect.objectContaining({
+          sale: expect.objectContaining({ organizationId: 77 }),
+        }),
       }),
     );
-    expect(prisma.salesDetail.findMany).toHaveBeenCalledWith({
-      where: { salesId: { in: [123] } },
-    });
     expect(result).toEqual([{ name: 'Electrónicos', value: 100 }]);
   });
 
@@ -472,7 +483,10 @@ describe('SalesService multi-organization support', () => {
           salePayment: { deleteMany: jest.fn().mockResolvedValue(undefined) },
           shippingGuide: { updateMany: jest.fn().mockResolvedValue(undefined) },
           orders: { update: jest.fn().mockResolvedValue(undefined) },
-          invoiceSales: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+          invoiceSales: {
+            findFirst: jest.fn().mockResolvedValue(null),
+            deleteMany: jest.fn().mockResolvedValue(undefined),
+          },
           cashTransactionPaymentMethod: {
             deleteMany: jest.fn().mockResolvedValue(undefined),
           },
@@ -540,7 +554,10 @@ describe('SalesService multi-organization support', () => {
           salePayment: { deleteMany: jest.fn().mockResolvedValue(undefined) },
           shippingGuide: { updateMany: jest.fn().mockResolvedValue(undefined) },
           orders: { update: jest.fn().mockResolvedValue(undefined) },
-          invoiceSales: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+          invoiceSales: {
+            findFirst: jest.fn().mockResolvedValue(null),
+            deleteMany: jest.fn().mockResolvedValue(undefined),
+          },
           cashTransactionPaymentMethod: {
             deleteMany: jest.fn().mockResolvedValue(undefined),
           },

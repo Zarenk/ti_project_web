@@ -111,7 +111,7 @@ describe('ClientService multi-organization support', () => {
 
   it('propagates organizationId when creating guests', async () => {
     randomUUIDMock.mockReturnValue('12345678-1234-1234-1234-123456789abc');
-    prisma.user.create.mockResolvedValue({ id: 55 });
+    prisma.user.create.mockResolvedValue({ id: 55, tokenVersion: 0 });
     prisma.client.create.mockResolvedValue({
       id: 10,
       name: '12345678-1234-1234-1234-123456789abc',
@@ -143,7 +143,7 @@ describe('ClientService multi-organization support', () => {
 
   it('creates guests with a null organizationId when none is provided', async () => {
     randomUUIDMock.mockReturnValue('12345678-1234-1234-1234-123456789abc');
-    prisma.user.create.mockResolvedValue({ id: 56 });
+    prisma.user.create.mockResolvedValue({ id: 56, tokenVersion: 0 });
     prisma.client.create.mockResolvedValue({
       id: 11,
       name: '12345678-1234-1234-1234-123456789abc',

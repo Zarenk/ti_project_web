@@ -59,44 +59,45 @@ enum IngredientMovementType {
 }
 
 model Product {
-  id          Int      @id @default(autoincrement())
-  name        String
-  barcode     String?  @unique // Opcional pero Unico
-  qrCode      String?  @unique // Opcional pero Unico
-  description String?
-  brandName   String?  @map("brand")
-  price       Float
-  priceSell   Float?
-  status      String?
-  image       String?
-  images      String[]
-  organizationId Int?
-  companyId      Int?
-  extraAttributes Json?
-  isVerticalMigrated Boolean @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 Int      @id @default(autoincrement())
+  name               String
+  barcode            String?  @unique // Opcional pero Unico
+  qrCode             String?  @unique // Opcional pero Unico
+  description        String?
+  brandName          String?  @map("brand")
+  price              Float
+  priceSell          Float?
+  status             String?
+  image              String?
+  images             String[]
+  organizationId     Int?
+  companyId          Int?
+  extraAttributes    Json?
+  isVerticalMigrated Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
   // Relacion con Brand
-  brandId Int?
-  brand   Brand? @relation(fields: [brandId], references: [id])
+  brandId            Int?
+  brand              Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
 
   // NUEVO: Relacion directa con Organization
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   // NUEVA Relacion CON COMPANY
-  company     Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   // Relacion con Category
   categoryId  Int
-  category    Category      @relation(fields: [categoryId], references: [id])
+  category    Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   entryDetail EntryDetail[]
   inventory   Inventory[]
-  isDemo      Boolean  @default(false)
+  isDemo      Boolean       @default(false)
 
-  specification ProductSpecification?
-  features      ProductFeature[]
-  reviews       Review[]
-  favorites     Favorite[]
-  recipeItems   RecipeItem[]
+  specification        ProductSpecification?
+  features             ProductFeature[]
+  reviews              Review[]
+  favorites            Favorite[]
+  recipeItems          RecipeItem[]
+  quoteItems           QuoteItem[]
   restaurantOrderItems RestaurantOrderItem[]
 
   // Relacion con Transfer
@@ -124,7 +125,7 @@ model ProductSpecification {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  product Product @relation(fields: [productId], references: [id])
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
 }
@@ -138,22 +139,22 @@ model ProductFeature {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  product Product @relation(fields: [productId], references: [id])
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
 }
 
 model Brand {
-  id        Int      @id @default(autoincrement())
-  name      String
-  logoSvg   String?
-  logoPng   String?
+  id             Int      @id @default(autoincrement())
+  name           String
+  logoSvg        String?
+  logoPng        String?
   organizationId Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  products Product[]
-  keywords Keyword[]
+  products     Product[]
+  keywords     Keyword[]
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, name])
@@ -179,51 +180,51 @@ model SiteSettings {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  company        Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([companyId])
 }
 
 model CatalogCover {
-  id           Int      @id @default(autoincrement())
-  imagePath    String
-  originalName String?
-  mimeType     String?
-  isActive     Boolean  @default(true)
-  organizationId  Int?
-  companyId       Int?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  imagePath      String
+  originalName   String?
+  mimeType       String?
+  isActive       Boolean  @default(true)
+  organizationId Int?
+  companyId      Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  company         Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, companyId, isActive])
 }
 
 model Category {
-  id          Int      @id @default(autoincrement())
-  name        String
-  description String?
-  status      String?
-  image       String?
+  id             Int      @id @default(autoincrement())
+  name           String
+  description    String?
+  status         String?
+  image          String?
   organizationId Int?
   companyId      Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  isDemo      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  isDemo         Boolean  @default(false)
 
   // Relacion con Product
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull) // NUEVO
-  products Product[]
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull) // NUEVO
+  products     Product[]
 
   @@unique([organizationId, name])
   @@index([organizationId, name])
-  @@index([companyId])                          // para auditoria
-  @@index([organizationId, companyId])          // (opcional) para informes
+  @@index([companyId]) // para auditoria
+  @@index([organizationId, companyId]) // (opcional) para informes
 }
 
 enum UserRole {
@@ -236,31 +237,33 @@ enum UserRole {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
-  username     String   @unique
-  password     String
-  role         UserRole @default(CLIENT) // Enum para roles de usuario
-  status       String   @default("ACTIVO")
-  organizationId      Int?
-  lastOrgId    Int?
-  lastCompanyId Int?
-  lastContextUpdatedAt DateTime?
-  lastContextHash String?
-  failedLoginAttempts Int      @default(0)
-  lockUntil    DateTime?
-  isPermanentlyLocked Boolean  @default(false)
-  client       Client? // Relacion opcional con el modelo Client
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  tokenVersion Int      @default(0)
-  isDemo       Boolean  @default(false)
-  isPublicSignup Boolean @default(false)
-  emailVerificationToken String? @unique
-  emailVerifiedAt DateTime?
+  id                     Int       @id @default(autoincrement())
+  email                  String    @unique
+  username               String    @unique
+  password               String
+  role                   UserRole  @default(CLIENT) // Enum para roles de usuario
+  status                 String    @default("ACTIVO")
+  organizationId         Int?
+  lastOrgId              Int?
+  lastCompanyId          Int?
+  lastContextUpdatedAt   DateTime?
+  lastContextHash        String?
+  lastActiveAt           DateTime?
+  failedLoginAttempts    Int       @default(0)
+  lockUntil              DateTime?
+  isPermanentlyLocked    Boolean   @default(false)
+  client                 Client? // Relacion opcional con el modelo Client
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  tokenVersion           Int       @default(0)
+  isDemo                 Boolean   @default(false)
+  isPublicSignup         Boolean   @default(false)
+  emailVerificationToken String?   @unique
+  emailVerifiedAt        DateTime?
+  accountingMode         String?   @default("simple") // "simple" or "contador"
 
-  lastOrg      Organization? @relation("UserLastOrganization", fields: [lastOrgId], references: [id], onDelete: SetNull)
-  lastCompany  Company?      @relation("UserLastCompany", fields: [lastCompanyId], references: [id], onDelete: SetNull)
+  lastOrg          Organization?      @relation("UserLastOrganization", fields: [lastOrgId], references: [id], onDelete: SetNull)
+  lastCompany      Company?           @relation("UserLastCompany", fields: [lastCompanyId], references: [id], onDelete: SetNull)
   entrys           Entry[] // Relacion con el modelo Entry
   inventoryHistory InventoryHistory[] // Relacion con el modelo InventoryHistory
   // Relacion con Sales
@@ -273,21 +276,26 @@ model User {
   favorites        Favorite[]
   sunatStoredPdfs  SunatStoredPdf[]
 
-  memberships OrganizationMembership[]
-  createdInvoiceTemplates InvoiceTemplate[] @relation("InvoiceTemplateCreatedBy")
-  updatedInvoiceTemplates InvoiceTemplate[] @relation("InvoiceTemplateUpdatedBy")
-  verticalChangeAudits VerticalChangeAudit[]
+  memberships                 OrganizationMembership[]
+  createdInvoiceTemplates     InvoiceTemplate[]            @relation("InvoiceTemplateCreatedBy")
+  updatedInvoiceTemplates     InvoiceTemplate[]            @relation("InvoiceTemplateUpdatedBy")
+  verticalChangeAudits        VerticalChangeAudit[]
   companyVerticalChangeAudits CompanyVerticalChangeAudit[]
-  contextPreferences UserContextPreference[]
-  contextHistory UserContextHistory[]
-  requestedExports OrganizationDataExport[] @relation("OrganizationDataExportsRequestedBy")
-  restaurantOrdersCreated RestaurantOrder[] @relation("RestaurantOrderCreatedBy")
-  ingredientMovements IngredientMovement[]
+  contextPreferences          UserContextPreference[]
+  contextHistory              UserContextHistory[]
+  requestedExports            OrganizationDataExport[]     @relation("OrganizationDataExportsRequestedBy")
+  restaurantOrdersCreated     RestaurantOrder[]            @relation("RestaurantOrderCreatedBy")
+  ingredientMovements         IngredientMovement[]
+  quotesCreated               Quote[]
+  helpConversations           HelpConversation[]
+  helpKBCandidatesApproved    HelpKBCandidate[]            @relation("HelpKBCandidateApprovedBy")
+
   @@index([email])
   @@index([username])
   @@index([organizationId, email])
   @@index([lastOrgId])
   @@index([lastCompanyId])
+  @@index([lastActiveAt])
 }
 
 model UserContextPreference {
@@ -305,12 +313,12 @@ model UserContextPreference {
 }
 
 model UserContextHistory {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  orgId      Int
-  companyId  Int?
-  device     String?
-  createdAt  DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  orgId     Int
+  companyId Int?
+  device    String?
+  createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -326,54 +334,55 @@ enum OrganizationMembershipRole {
 }
 
 model Organization {
-  id        Int       @id @default(autoincrement())
-  name      String
-  slug      String?   @unique
-  code      String?   @unique
-  status    String    @default("ACTIVE")
-  businessVertical BusinessVertical @default(GENERAL)
-  productSchemaEnforced Boolean     @default(false)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id                    Int              @id @default(autoincrement())
+  name                  String
+  slug                  String?          @unique
+  code                  String?          @unique
+  status                String           @default("ACTIVE")
+  businessVertical      BusinessVertical @default(GENERAL)
+  productSchemaEnforced Boolean          @default(false)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
-  orders       Orders[]
-  units        OrganizationUnit[]
-  companies    Company[]
-  memberships  OrganizationMembership[]
-  settings     OrganizationSetting?
-    providers    Provider[]
-    brands       Brand[]
-    products     Product[]
-  categories   Category[]
-  accEntries   AccEntry[]
-  exchangeRates TipoCambio[]
-  entrySeries  EntryDetailSeries[]
-  catalogCover CatalogCover[]
-  siteSettings SiteSettings[]
-  sunatTransmissions SunatTransmission[]
-  sunatStoredPdfs   SunatStoredPdf[]
-  invoiceTemplates InvoiceTemplate[]
-  invoiceSamples InvoiceSample[]
-  monitoringAlerts MonitoringAlert[]
-  monitoringAlertEvents MonitoringAlertEvent[]
-  userLastContext  User[] @relation("UserLastOrganization")
-  subscription     Subscription?
-  billingPaymentMethods BillingPaymentMethod[]
-  subscriptionInvoices SubscriptionInvoice[]
-  onboardingProgress OnboardingProgress?
-  dataExports   OrganizationDataExport[] @relation("OrganizationDataExports")
-  auditLogs   AuditLog[]
-  verticalChangeAudits VerticalChangeAudit[]
-  rollbackSnapshots    VerticalRollbackSnapshot[]
-  verticalOverride     OrganizationVerticalOverride?
-  companyVerticalChangeAudits CompanyVerticalChangeAudit[]
+  orders                           Orders[]
+  units                            OrganizationUnit[]
+  companies                        Company[]
+  memberships                      OrganizationMembership[]
+  settings                         OrganizationSetting?
+  providers                        Provider[]
+  brands                           Brand[]
+  products                         Product[]
+  categories                       Category[]
+  accEntries                       AccEntry[]
+  exchangeRates                    TipoCambio[]
+  entrySeries                      EntryDetailSeries[]
+  catalogCover                     CatalogCover[]
+  siteSettings                     SiteSettings[]
+  sunatTransmissions               SunatTransmission[]
+  sunatStoredPdfs                  SunatStoredPdf[]
+  invoiceTemplates                 InvoiceTemplate[]
+  invoiceSamples                   InvoiceSample[]
+  monitoringAlerts                 MonitoringAlert[]
+  monitoringAlertEvents            MonitoringAlertEvent[]
+  userLastContext                  User[]                            @relation("UserLastOrganization")
+  subscription                     Subscription?
+  billingPaymentMethods            BillingPaymentMethod[]
+  subscriptionInvoices             SubscriptionInvoice[]
+  onboardingProgress               OnboardingProgress?
+  dataExports                      OrganizationDataExport[]          @relation("OrganizationDataExports")
+  auditLogs                        AuditLog[]
+  verticalChangeAudits             VerticalChangeAudit[]
+  rollbackSnapshots                VerticalRollbackSnapshot[]
+  verticalOverride                 OrganizationVerticalOverride?
+  companyVerticalChangeAudits      CompanyVerticalChangeAudit[]
   companyVerticalRollbackSnapshots CompanyVerticalRollbackSnapshot[]
-  restaurantTables RestaurantTable[]
-  kitchenStations  KitchenStation[]
-  ingredients      Ingredient[]
-  restaurantOrders RestaurantOrder[]
-  ingredientMovements IngredientMovement[]
-  recipeItems RecipeItem[]
+  restaurantTables                 RestaurantTable[]
+  kitchenStations                  KitchenStation[]
+  ingredients                      Ingredient[]
+  restaurantOrders                 RestaurantOrder[]
+  ingredientMovements              IngredientMovement[]
+  recipeItems                      RecipeItem[]
+  quotes                           Quote[]
 
   @@unique([name])
   @@index([status])
@@ -381,26 +390,26 @@ model Organization {
 }
 
 model OrganizationVerticalOverride {
-  id             Int           @id @default(autoincrement())
-  organizationId Int           @unique
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @unique
   configJson     Json
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model Company {
-  id                    Int            @id @default(autoincrement())
+  id                    Int              @id @default(autoincrement())
   organizationId        Int
   name                  String
   legalName             String?
-  taxId                 String?        @unique
-  status                String         @default("ACTIVE")
+  taxId                 String?          @unique
+  status                String           @default("ACTIVE")
   businessVertical      BusinessVertical @default(GENERAL)
-  productSchemaEnforced Boolean        @default(false)
-  defaultQuoteMargin    Float          @default(0.12)
-  sunatEnvironment      String         @default("BETA")
+  productSchemaEnforced Boolean          @default(false)
+  defaultQuoteMargin    Float            @default(0.12)
+  sunatEnvironment      String           @default("BETA")
   sunatRuc              String?
   sunatBusinessName     String?
   sunatAddress          String?
@@ -418,41 +427,44 @@ model Company {
   sunatCertPathProd     String?
   sunatKeyPathProd      String?
   sunatCertificateNotes String?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  bankAccounts          Json?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  units          OrganizationUnit[]
-  stores         Store[]
-  sales          Sales[]
-  invoiceSales  InvoiceSales[]
-  orders         Orders[]
-  clients        Client[]
-  inventoryHistories InventoryHistory[]
-  products           Product[] // NUEVA RELACION
-  categories         Category[]
-  accEntries         AccEntry[]
-  catalogCover CatalogCover[]
-  siteSettings SiteSettings[]
-  sunatTransmissions SunatTransmission[]
-  userLastContext  User[] @relation("UserLastCompany")
-  sunatStoredPdfs   SunatStoredPdf[]
-  documentSequences CompanyDocumentSequence[]
-  invoiceTemplates InvoiceTemplate[]
-  invoiceSamples InvoiceSample[]
-  monitoringAlerts MonitoringAlert[]
-  monitoringAlertEvents MonitoringAlertEvent[]
-  subscriptionInvoices SubscriptionInvoice[]
-  auditLogs     AuditLog[]
-  verticalOverride CompanyVerticalOverride?
-  companyVerticalChangeAudits CompanyVerticalChangeAudit[]
+  organization                     Organization                      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  units                            OrganizationUnit[]
+  stores                           Store[]
+  sales                            Sales[]
+  invoiceSales                     InvoiceSales[]
+  orders                           Orders[]
+  clients                          Client[]
+  inventoryHistories               InventoryHistory[]
+  products                         Product[] // NUEVA RELACION
+  categories                       Category[]
+  accEntries                       AccEntry[]
+  catalogCover                     CatalogCover[]
+  siteSettings                     SiteSettings[]
+  sunatTransmissions               SunatTransmission[]
+  userLastContext                  User[]                            @relation("UserLastCompany")
+  sunatStoredPdfs                  SunatStoredPdf[]
+  documentSequences                CompanyDocumentSequence[]
+  invoiceTemplates                 InvoiceTemplate[]
+  invoiceSamples                   InvoiceSample[]
+  monitoringAlerts                 MonitoringAlert[]
+  monitoringAlertEvents            MonitoringAlertEvent[]
+  subscriptionInvoices             SubscriptionInvoice[]
+  auditLogs                        AuditLog[]
+  verticalOverride                 CompanyVerticalOverride?
+  companyVerticalChangeAudits      CompanyVerticalChangeAudit[]
   companyVerticalRollbackSnapshots CompanyVerticalRollbackSnapshot[]
-  restaurantTables RestaurantTable[]
-  kitchenStations  KitchenStation[]
-  ingredients      Ingredient[]
-  restaurantOrders RestaurantOrder[]
-  ingredientMovements IngredientMovement[]
-  recipeItems RecipeItem[]
+  restaurantTables                 RestaurantTable[]
+  kitchenStations                  KitchenStation[]
+  ingredients                      Ingredient[]
+  restaurantOrders                 RestaurantOrder[]
+  ingredientMovements              IngredientMovement[]
+  recipeItems                      RecipeItem[]
+  quotes                           Quote[]
+  quoteSequences                   QuoteSequence[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -497,7 +509,6 @@ enum OrganizationCleanupStatus {
   FAILED
 }
 
-
 enum SubscriptionInvoiceStatus {
   PENDING
   PAID
@@ -512,20 +523,40 @@ enum SignupAttemptStatus {
   BLOCKED
 }
 
+enum QuoteStatus {
+  DRAFT
+  ISSUED
+  CANCELLED
+}
+
+enum QuoteItemType {
+  PRODUCT
+  SERVICE
+  WARRANTY
+}
+
+enum QuoteItemCategory {
+  PC
+  LAPTOP
+  HARDWARE
+  SERVICE
+  WARRANTY
+}
+
 model SubscriptionPlan {
-  id          Int                 @id @default(autoincrement())
-  code        String              @unique
+  id          Int                  @id @default(autoincrement())
+  code        String               @unique
   name        String
   description String?
   interval    SubscriptionInterval @default(MONTHLY)
-  price       Decimal             @default(0.00)
-  currency    String              @default("PEN")
-  trialDays   Int?                @default(14)
+  price       Decimal              @default(0.00)
+  currency    String               @default("PEN")
+  trialDays   Int?                 @default(14)
   features    Json?
   quotas      Json?
-  isActive    Boolean             @default(true)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 
   subscriptions Subscription[]
 
@@ -533,23 +564,23 @@ model SubscriptionPlan {
 }
 
 model BillingPaymentMethod {
-  id              Int                          @id @default(autoincrement())
-  organizationId  Int
-  provider        BillingPaymentProvider       @default(STRIPE)
-  externalId      String
-  brand           String?
-  last4           String?
-  expMonth        Int?
-  expYear         Int?
-  country         String?
-  status          BillingPaymentMethodStatus   @default(ACTIVE)
-  isDefault       Boolean                      @default(false)
-  metadata        Json?
-  createdAt       DateTime                     @default(now())
-  updatedAt       DateTime                     @updatedAt
+  id             Int                        @id @default(autoincrement())
+  organizationId Int
+  provider       BillingPaymentProvider     @default(STRIPE)
+  externalId     String
+  brand          String?
+  last4          String?
+  expMonth       Int?
+  expYear        Int?
+  country        String?
+  status         BillingPaymentMethodStatus @default(ACTIVE)
+  isDefault      Boolean                    @default(false)
+  metadata       Json?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  subscriptions Subscription[] @relation("SubscriptionDefaultPaymentMethod")
+  organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]        @relation("SubscriptionDefaultPaymentMethod")
   invoices      SubscriptionInvoice[]
 
   @@unique([organizationId, externalId])
@@ -557,54 +588,54 @@ model BillingPaymentMethod {
 }
 
 model Subscription {
-  id                    Int                @id @default(autoincrement())
-  planId                Int
-  organizationId        Int                @unique
-  status                SubscriptionStatus @default(TRIAL)
-  billingCustomerId     String?
-  trialEndsAt           DateTime?
-  currentPeriodStart    DateTime?
-  currentPeriodEnd      DateTime?
-  cancelAtPeriodEnd     Boolean            @default(false)
-  canceledAt            DateTime?
-  metadata              Json?
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
+  id                     Int                @id @default(autoincrement())
+  planId                 Int
+  organizationId         Int                @unique
+  status                 SubscriptionStatus @default(TRIAL)
+  billingCustomerId      String?
+  trialEndsAt            DateTime?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  canceledAt             DateTime?
+  metadata               Json?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
   defaultPaymentMethodId Int?
 
-  plan          SubscriptionPlan       @relation(fields: [planId], references: [id], onDelete: Restrict)
-  organization  Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  invoices      SubscriptionInvoice[]
+  plan                 SubscriptionPlan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoices             SubscriptionInvoice[]
   defaultPaymentMethod BillingPaymentMethod? @relation("SubscriptionDefaultPaymentMethod", fields: [defaultPaymentMethodId], references: [id], onDelete: SetNull)
 
   @@index([status])
 }
 
 model SubscriptionInvoice {
-  id                 Int                        @id @default(autoincrement())
+  id                 Int                       @id @default(autoincrement())
   subscriptionId     Int
   organizationId     Int
   companyId          Int
   paymentMethodId    Int?
   providerInvoiceId  String?
-  status             SubscriptionInvoiceStatus  @default(PENDING)
-  amount             Decimal                    @default(0.00)
-  subtotal           Decimal                    @default(0.00)
-  taxRate            Decimal                    @default(0.00)
-  taxAmount          Decimal                    @default(0.00)
-  currency           String                     @default("PEN")
+  status             SubscriptionInvoiceStatus @default(PENDING)
+  amount             Decimal                   @default(0.00)
+  subtotal           Decimal                   @default(0.00)
+  taxRate            Decimal                   @default(0.00)
+  taxAmount          Decimal                   @default(0.00)
+  currency           String                    @default("PEN")
   billingPeriodStart DateTime?
   billingPeriodEnd   DateTime?
   dueDate            DateTime?
   paidAt             DateTime?
   metadata           Json?
-  createdAt          DateTime                   @default(now())
-  updatedAt          DateTime                   @updatedAt
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
 
-  subscription  Subscription         @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  company       Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  paymentMethod BillingPaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  subscription       Subscription          @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company            Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  paymentMethod      BillingPaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
   sunatTransmissions SunatTransmission[]
 
   @@index([subscriptionId])
@@ -620,38 +651,38 @@ enum DemoDataStatus {
 }
 
 model OnboardingProgress {
-  id               Int             @id @default(autoincrement())
-  organizationId   Int             @unique
-  currentStep      Int             @default(1)
-  companyProfile   Json?
-  storeSetup       Json?
-  sunatSetup       Json?
-  dataImport       Json?
-  demoStatus       DemoDataStatus  @default(NONE)
-  demoSeededAt     DateTime?
-  demoClearedAt    DateTime?
+  id                Int            @id @default(autoincrement())
+  organizationId    Int            @unique
+  currentStep       Int            @default(1)
+  companyProfile    Json?
+  storeSetup        Json?
+  sunatSetup        Json?
+  dataImport        Json?
+  demoStatus        DemoDataStatus @default(NONE)
+  demoSeededAt      DateTime?
+  demoClearedAt     DateTime?
   wizardDismissedAt DateTime?
-  isCompleted      Boolean         @default(false)
-  completedAt      DateTime?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  isCompleted       Boolean        @default(false)
+  completedAt       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
-  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([updatedAt])
 }
 
 model PublicSignupAttempt {
-  id          Int                  @id @default(autoincrement())
-  email       String
-  domain      String
-  ip          String?
-  deviceHash  String?
-  userAgent   String?
-  status      SignupAttemptStatus  @default(PENDING)
+  id           Int                 @id @default(autoincrement())
+  email        String
+  domain       String
+  ip           String?
+  deviceHash   String?
+  userAgent    String?
+  status       SignupAttemptStatus @default(PENDING)
   errorMessage String?
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   @@index([email, createdAt])
   @@index([domain, createdAt])
@@ -685,37 +716,37 @@ model TaxRate {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@unique([countryCode, regionCode])
   @@index([countryCode, regionCode])
   @@index([isDefault])
-  @@unique([countryCode, regionCode])
 }
 
 model SunatTransmission {
-  id             Int      @id @default(autoincrement())
-  companyId      Int
-  organizationId Int?
-  saleId         Int?
+  id                    Int      @id @default(autoincrement())
+  companyId             Int
+  organizationId        Int?
+  saleId                Int?
   subscriptionInvoiceId Int?
-  environment    String   @default("BETA")
-  documentType   String
-  serie          String?
-  correlativo    String?
-  zipFilePath    String?
-  xmlFilePath    String?
-  cdrFilePath    String?
-  cdrCode        String?
-  cdrDescription String?
-  ticket         String?
-  status         String   @default("PENDING")
-  response       Json?
-  payload        Json?
-  errorMessage   String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  environment           String   @default("BETA")
+  documentType          String
+  serie                 String?
+  correlativo           String?
+  zipFilePath           String?
+  xmlFilePath           String?
+  cdrFilePath           String?
+  cdrCode               String?
+  cdrDescription        String?
+  ticket                String?
+  status                String   @default("PENDING")
+  response              Json?
+  payload               Json?
+  errorMessage          String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  sale         Sales?        @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization        Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  sale                Sales?               @relation(fields: [saleId], references: [id], onDelete: SetNull)
   subscriptionInvoice SubscriptionInvoice? @relation(fields: [subscriptionInvoiceId], references: [id], onDelete: SetNull)
 
   @@index([companyId, status])
@@ -744,17 +775,17 @@ model SunatStoredPdf {
 }
 
 model OrganizationDataExport {
-  id             Int                           @id @default(autoincrement())
-  organizationId Int
-  requestedBy    Int?
-  status         OrganizationDataExportStatus  @default(PENDING)
-  filePath       String?
-  errorMessage   String?
-  requestedAt    DateTime                      @default(now())
-  completedAt    DateTime?
-  cleanupStatus  OrganizationCleanupStatus     @default(PENDING)
+  id                 Int                          @id @default(autoincrement())
+  organizationId     Int
+  requestedBy        Int?
+  status             OrganizationDataExportStatus @default(PENDING)
+  filePath           String?
+  errorMessage       String?
+  requestedAt        DateTime                     @default(now())
+  completedAt        DateTime?
+  cleanupStatus      OrganizationCleanupStatus    @default(PENDING)
   cleanupCompletedAt DateTime?
-  expiresAt      DateTime?
+  expiresAt          DateTime?
 
   organization    Organization @relation("OrganizationDataExports", fields: [organizationId], references: [id], onDelete: Cascade)
   requestedByUser User?        @relation("OrganizationDataExportsRequestedBy", fields: [requestedBy], references: [id], onDelete: SetNull)
@@ -770,8 +801,8 @@ model VerticalChangeAudit {
   newVertical    BusinessVertical
   changeReason   String?
   warningsJson   Json?
-  success        Boolean         @default(true)
-  createdAt      DateTime        @default(now())
+  success        Boolean          @default(true)
+  createdAt      DateTime         @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -794,7 +825,7 @@ model VerticalRollbackSnapshot {
 }
 
 model CompanyVerticalOverride {
-  companyId Int    @id
+  companyId  Int   @id
   configJson Json?
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -809,12 +840,12 @@ model CompanyVerticalChangeAudit {
   newVertical    BusinessVertical
   changeReason   String?
   warningsJson   Json?
-  success        Boolean         @default(true)
-  createdAt      DateTime        @default(now())
+  success        Boolean          @default(true)
+  createdAt      DateTime         @default(now())
 
   company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user        User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([organizationId])
@@ -837,23 +868,22 @@ model CompanyVerticalRollbackSnapshot {
   @@index([expiresAt])
 }
 
-
 model OrganizationUnit {
-  id              Int                @id @default(autoincrement())
-  organizationId  Int
-  companyId       Int?
-  parentUnitId    Int?
-  name            String
-  code            String?
-  status          String             @default("ACTIVE")
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  companyId      Int?
+  parentUnitId   Int?
+  name           String
+  code           String?
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  company         Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  parent          OrganizationUnit?  @relation("OrganizationUnitHierarchy", fields: [parentUnitId], references: [id])
-  children        OrganizationUnit[] @relation("OrganizationUnitHierarchy")
-  memberships     OrganizationMembership[]
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company?                 @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  parent       OrganizationUnit?        @relation("OrganizationUnitHierarchy", fields: [parentUnitId], references: [id])
+  children     OrganizationUnit[]       @relation("OrganizationUnitHierarchy")
+  memberships  OrganizationMembership[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, code])
@@ -863,19 +893,19 @@ model OrganizationUnit {
 }
 
 model OrganizationMembership {
-  id                  Int                          @id @default(autoincrement())
-  userId              Int
-  organizationId      Int
-  organizationUnitId  Int?
-  role                OrganizationMembershipRole   @default(MEMBER)
-  isDefault           Boolean                      @default(false)
-  modulePermissions   Json?
-  createdAt           DateTime                     @default(now())
-  updatedAt           DateTime                     @updatedAt
+  id                 Int                        @id @default(autoincrement())
+  userId             Int
+  organizationId     Int
+  organizationUnitId Int?
+  role               OrganizationMembershipRole @default(MEMBER)
+  isDefault          Boolean                    @default(false)
+  modulePermissions  Json?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
 
-  user                User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  organizationUnit    OrganizationUnit?            @relation(fields: [organizationUnitId], references: [id], onDelete: SetNull)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationUnit OrganizationUnit? @relation(fields: [organizationUnitId], references: [id], onDelete: SetNull)
 
   @@unique([userId, organizationId, organizationUnitId])
   @@index([organizationId])
@@ -884,13 +914,13 @@ model OrganizationMembership {
 }
 
 model OrganizationSetting {
-  id              Int           @id @default(autoincrement())
-  organizationId  Int           @unique
-  preferences     Json?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @unique
+  preferences    Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model Client {
@@ -910,21 +940,24 @@ model Client {
   updatedAt      DateTime @updatedAt
   isDemo         Boolean  @default(false)
 
-  user  User    @relation(fields: [userId], references: [id])
-  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company          Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
   // Relacion con Sales
-  sales Sales[] // Relacion con el modelo Sales
+  sales            Sales[] // Relacion con el modelo Sales
   restaurantOrders RestaurantOrder[]
+  quotes           Quote[]
 
   @@index([organizationId, name])
   @@index([companyId])
+  @@index([email])
+  @@index([typeNumber])  // Para búsquedas rápidas de clientes por documento
 }
 
 model Provider {
   id             Int      @id @default(autoincrement())
   name           String
   document       String?
-  documentNumber String?  @unique
+  documentNumber String?
   description    String?
   phone          String?
   adress         String?
@@ -936,47 +969,47 @@ model Provider {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  entrys     Entry[] // Relacion con el modelo Entry
-  accEntries AccEntry[] // Relacion con el modelo AccEntry
+  organization     Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  entrys           Entry[] // Relacion con el modelo Entry
+  accEntries       AccEntry[] // Relacion con el modelo AccEntry
   invoiceTemplates InvoiceTemplate[]
 
-  @@index([organizationId])
   @@unique([organizationId, documentNumber]) // NUEVO: unicidad por organizacion
+  @@index([organizationId])
 }
 
 model InvoiceTemplate {
-  id             Int      @id @default(autoincrement())
-  organizationId Int?
-  companyId      Int?
-  providerId     Int?
-  providerName   String?
-  documentType   String
-  version        Int      @default(1)
-  priority       Int      @default(100)
-  isActive       Boolean  @default(true)
-  checksum       String?
-  regexRules     Json?
-  fieldMappings  Json?
+  id              Int      @id @default(autoincrement())
+  organizationId  Int?
+  companyId       Int?
+  providerId      Int?
+  providerName    String?
+  documentType    String
+  version         Int      @default(1)
+  priority        Int      @default(100)
+  isActive        Boolean  @default(true)
+  checksum        String?
+  regexRules      Json?
+  fieldMappings   Json?
   extractionHints Json?
-  sampleFilename String?
-  notes          String?
-  createdById    Int?
-  updatedById    Int?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  sampleFilename  String?
+  notes           String?
+  createdById     Int?
+  updatedById     Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  provider     Provider?     @relation(fields: [providerId], references: [id], onDelete: SetNull)
-  createdBy    User?         @relation("InvoiceTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy    User?         @relation("InvoiceTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  organization Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  provider     Provider?       @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  createdBy    User?           @relation("InvoiceTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy    User?           @relation("InvoiceTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   samples      InvoiceSample[] @relation("InvoiceTemplateSamples")
 
+  @@unique([organizationId, companyId, providerId, documentType, version])
   @@index([organizationId, companyId])
   @@index([providerId])
   @@index([documentType])
-  @@unique([organizationId, companyId, providerId, documentType, version])
 }
 
 model MonitoringAlert {
@@ -996,8 +1029,8 @@ model MonitoringAlert {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  organization Organization?          @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?               @relation(fields: [companyId], references: [id], onDelete: SetNull)
   events       MonitoringAlertEvent[]
 
   @@index([alertType, status])
@@ -1005,16 +1038,16 @@ model MonitoringAlert {
 }
 
 model MonitoringAlertEvent {
-  id             Int       @id @default(autoincrement())
+  id             Int      @id @default(autoincrement())
   alertId        Int?
   organizationId Int?
   companyId      Int?
   alertType      String
   status         String
-  severity       String    @default("INFO")
+  severity       String   @default("INFO")
   message        String
   metadata       Json?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime @default(now())
 
   alert        MonitoringAlert? @relation(fields: [alertId], references: [id], onDelete: Cascade)
   organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
@@ -1035,48 +1068,48 @@ enum EntryPaymentMethod {
 }
 
 model Entry {
-  id           Int      @id @default(autoincrement())
-  storeId      Int // Almacen relacionado con la entrada  
-  userId       Int // Usuario que realiza la entrada
-  providerId   Int // Proveedor relacionado con la entrada
-  journalId    Int? // Diario contable relacionado con la entrada
-  date         DateTime @default(now()) // Fecha de la entrada
-  description  String? // Descripcion opcional
-  tipoMoneda   String? // Tipo de moneda (e.g., PEN, USD)
-  tipoCambioId Int? // FK a TipoCambio
-  paymentMethod EntryPaymentMethod @default(CASH)
-  paymentTerm  PaymentTerm        @default(CASH)
-  serie        String?
-  correlativo  String?
-  providerName String?
-  totalGross   Decimal?
-  igvRate      Decimal            @default(0.18)
-  pdfUrl       String?
-  guiaUrl      String? // URL del PDF de la guia de remision
-  guiaSerie    String?
-  guiaCorrelativo String?
-  guiaFechaEmision String?
+  id                            Int                @id @default(autoincrement())
+  storeId                       Int // Almacen relacionado con la entrada  
+  userId                        Int // Usuario que realiza la entrada
+  providerId                    Int // Proveedor relacionado con la entrada
+  journalId                     Int? // Diario contable relacionado con la entrada
+  date                          DateTime           @default(now()) // Fecha de la entrada
+  description                   String? // Descripcion opcional
+  tipoMoneda                    String? // Tipo de moneda (e.g., PEN, USD)
+  tipoCambioId                  Int? // FK a TipoCambio
+  paymentMethod                 EntryPaymentMethod @default(CASH)
+  paymentTerm                   PaymentTerm        @default(CASH)
+  serie                         String?
+  correlativo                   String?
+  providerName                  String?
+  totalGross                    Decimal?
+  igvRate                       Decimal            @default(0.18)
+  pdfUrl                        String?
+  guiaUrl                       String? // URL del PDF de la guia de remision
+  guiaSerie                     String?
+  guiaCorrelativo               String?
+  guiaFechaEmision              String?
   guiaFechaEntregaTransportista String?
-  guiaMotivoTraslado String?
-  guiaPuntoPartida String?
-  guiaPuntoLlegada String?
-  guiaDestinatario String?
-  guiaPesoBrutoUnidad String?
-  guiaPesoBrutoTotal String?
-  guiaTransportista String?
-  organizationId Int?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  referenceId String? @unique
+  guiaMotivoTraslado            String?
+  guiaPuntoPartida              String?
+  guiaPuntoLlegada              String?
+  guiaDestinatario              String?
+  guiaPesoBrutoUnidad           String?
+  guiaPesoBrutoTotal            String?
+  guiaTransportista             String?
+  organizationId                Int?
+  createdAt                     DateTime           @default(now())
+  updatedAt                     DateTime           @updatedAt
+  referenceId                   String?            @unique
 
-  store    Store         @relation(fields: [storeId], references: [id]) // Relacion con el modelo Store
-  user     User          @relation(fields: [userId], references: [id]) // Relacion con el modelo User
-  provider Provider      @relation(fields: [providerId], references: [id]) // Relacion con el modelo Provider
-  journal  Journal?      @relation(fields: [journalId], references: [id])
+  store    Store         @relation(fields: [storeId], references: [id], onDelete: Restrict) // Relacion con el modelo Store
+  user     User          @relation(fields: [userId], references: [id], onDelete: Restrict) // Relacion con el modelo User
+  provider Provider      @relation(fields: [providerId], references: [id], onDelete: Restrict) // Relacion con el modelo Provider
+  journal  Journal?      @relation(fields: [journalId], references: [id], onDelete: SetNull)
   details  EntryDetail[]
 
   invoice    Invoice?    @relation // Relacion 1:1 con Comprobante (sin `fields` ni `references`)
-  tipoCambio TipoCambio? @relation(fields: [tipoCambioId], references: [id])
+  tipoCambio TipoCambio? @relation(fields: [tipoCambioId], references: [id], onDelete: SetNull)
 
   shippingGuides ShippingGuide[]
   invoiceSamples InvoiceSample[]
@@ -1107,16 +1140,16 @@ model Invoice {
 }
 
 model Inventory {
-  id        Int      @id @default(autoincrement())
-  productId Int
-  storeId   Int
+  id             Int      @id @default(autoincrement())
+  productId      Int
+  storeId        Int
   organizationId Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   InventoryHistory InventoryHistory[] // Relacion con el modelo InventoryHistory
   storeOnInventory StoreOnInventory[] // Relacion con la tabla intermedia
-  product          Product            @relation(fields: [productId], references: [id])
+  product          Product            @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   entryDetails EntryDetail[] // Relacion uno-a-muchos con EntryDetail
 
@@ -1137,9 +1170,9 @@ model EntryDetail {
   inventoryId Int? // Relacion con Inventory
 
   entry        Entry               @relation(fields: [entryId], references: [id], onDelete: Cascade) // Relacion con el modelo Entry
-  product      Product             @relation(fields: [productId], references: [id]) // Relacion con el modelo Product
+  product      Product             @relation(fields: [productId], references: [id], onDelete: Restrict) // Relacion con el modelo Product
   series       EntryDetailSeries[] // Relacion con las series
-  inventory    Inventory?          @relation(fields: [inventoryId], references: [id]) // Relacion con Inventory
+  inventory    Inventory?          @relation(fields: [inventoryId], references: [id], onDelete: SetNull) // Relacion con Inventory
   // Relacion con SalesDetail
   salesDetails SalesDetail[] // Relacion con el modelo SalesDetail
 
@@ -1148,35 +1181,35 @@ model EntryDetail {
 }
 
 model EntryDetailSeries {
-  id            Int         @id @default(autoincrement())
-  entryDetailId Int
-  serial        String
-  status        String      @default("active") // Nuevo campo
+  id             Int           @id @default(autoincrement())
+  entryDetailId  Int
+  serial         String
+  status         String        @default("active") // Nuevo campo
   organizationId Int?
-  entryDetail   EntryDetail @relation(fields: [entryDetailId], references: [id], onDelete: Cascade)
-  organization  Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  entryDetail    EntryDetail   @relation(fields: [entryDetailId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@unique([organizationId, serial])
   @@index([organizationId, serial])
 }
 
 model Store {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  description String?
-  ruc         String?
-  phone       String?
-  adress      String?
-  email       String?
-  website     String?
-  status      String?
-  image       String?
+  id             Int      @id @default(autoincrement())
+  name           String
+  description    String?
+  ruc            String?
+  phone          String?
+  adress         String?
+  email          String?
+  website        String?
+  status         String?
+  image          String?
   organizationId Int?
   companyId      Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   storeOnInventory StoreOnInventory[] // Relacion con la tabla intermedia
   entries          Entry[] // Relacion con el modelo Entry
@@ -1188,13 +1221,14 @@ model Store {
   transfersTo Transfer[] @relation("DestinationStore")
 
   // Relacion con Sales
-  sales Sales[] // Relacion con el modelo Sales
+  sales            Sales[] // Relacion con el modelo Sales
   restaurantOrders RestaurantOrder[]
-  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company          Company?          @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   // Relacion con la tabla de caja
   CashRegister CashRegister[]
-  @@index([organizationId, name])
+
+  @@unique([organizationId, name])
 }
 
 model StoreOnInventory {
@@ -1205,8 +1239,8 @@ model StoreOnInventory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  inventory    Inventory     @relation(fields: [inventoryId], references: [id])
-  store        Store         @relation(fields: [storeId], references: [id])
+  inventory    Inventory     @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
   // Relacion con SalesDetail
   salesDetails SalesDetail[] // Relacion con el modelo SalesDetail
 
@@ -1215,20 +1249,20 @@ model StoreOnInventory {
 }
 
 model InventoryHistory {
-  id            Int      @id @default(autoincrement())
-  inventoryId   Int // Relacion con el inventario
-  userId        Int // Usuario que realiza el cambio
-  action        String // Tipo de accion: "create", "update", "delete"
-  description   String? // Descripcion opcional
-  stockChange   Int // Cambio en el stock (positivo o negativo)
-  previousStock Int? // Stock anterior (opcional)
-  newStock      Int? // Stock nuevo (opcional)
+  id             Int      @id @default(autoincrement())
+  inventoryId    Int // Relacion con el inventario
+  userId         Int // Usuario que realiza el cambio
+  action         String // Tipo de accion: "create", "update", "delete"
+  description    String? // Descripcion opcional
+  stockChange    Int // Cambio en el stock (positivo o negativo)
+  previousStock  Int? // Stock anterior (opcional)
+  newStock       Int? // Stock nuevo (opcional)
   organizationId Int?
   companyId      Int?
-  createdAt     DateTime @default(now()) // Fecha del cambio
+  createdAt      DateTime @default(now()) // Fecha del cambio
 
-  inventory Inventory @relation(fields: [inventoryId], references: [id])
-  user      User      @relation(fields: [userId], references: [id]) // Relacion con la tabla de usuarios
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict) // Relacion con la tabla de usuarios
   company   Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([inventoryId])
@@ -1249,13 +1283,13 @@ model Transfer {
   createdAt          DateTime @default(now()) // Fecha del traslado
 
   // Relacion con la tabla Store para la tienda de origen
-  sourceStore Store @relation("SourceStore", fields: [sourceStoreId], references: [id])
+  sourceStore Store @relation("SourceStore", fields: [sourceStoreId], references: [id], onDelete: Restrict)
 
   // Relacion con la tabla Store para la tienda de destino
-  destinationStore Store @relation("DestinationStore", fields: [destinationStoreId], references: [id])
+  destinationStore Store @relation("DestinationStore", fields: [destinationStoreId], references: [id], onDelete: Restrict)
 
   // Relacion con la tabla Product
-  product Product @relation(fields: [productId], references: [id])
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@index([sourceStoreId]) // Indice para optimizar consultas por tienda de origen
   @@index([destinationStoreId]) // Indice para optimizar consultas por tienda de destino
@@ -1264,7 +1298,7 @@ model Transfer {
 }
 
 model RestaurantTable {
-  id             Int                  @id @default(autoincrement())
+  id             Int                   @id @default(autoincrement())
   organizationId Int?
   companyId      Int?
   name           String
@@ -1272,38 +1306,38 @@ model RestaurantTable {
   capacity       Int?
   area           String?
   status         RestaurantTableStatus @default(AVAILABLE)
-  currentOrderId Int?                 @unique
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  currentOrderId Int?                  @unique
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
-  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  company        Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  currentOrder   RestaurantOrder?     @relation("RestaurantTableCurrentOrder", fields: [currentOrderId], references: [id], onDelete: SetNull)
-  orders         RestaurantOrder[]    @relation("RestaurantTableOrders")
+  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  currentOrder RestaurantOrder?  @relation("RestaurantTableCurrentOrder", fields: [currentOrderId], references: [id], onDelete: SetNull)
+  orders       RestaurantOrder[] @relation("RestaurantTableOrders")
 
+  @@unique([companyId, code])
   @@index([organizationId])
   @@index([companyId])
   @@index([status])
-  @@unique([companyId, code])
 }
 
 model KitchenStation {
-  id             Int       @id @default(autoincrement())
+  id             Int      @id @default(autoincrement())
   organizationId Int?
   companyId      Int?
   name           String
   code           String
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  orderItems     RestaurantOrderItem[]
+  organization Organization?         @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?              @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  orderItems   RestaurantOrderItem[]
 
+  @@unique([companyId, code])
   @@index([organizationId])
   @@index([companyId])
-  @@unique([companyId, code])
 }
 
 model Ingredient {
@@ -1319,10 +1353,10 @@ model Ingredient {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  recipeItems    RecipeItem[]
-  movements      IngredientMovement[]
+  organization Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  recipeItems  RecipeItem[]
+  movements    IngredientMovement[]
 
   @@unique([companyId, name])
   @@index([organizationId])
@@ -1330,20 +1364,20 @@ model Ingredient {
 }
 
 model RecipeItem {
-  id            Int      @id @default(autoincrement())
-  productId     Int
-  ingredientId  Int
-  quantity      Float
-  unit          String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  productId      Int
+  ingredientId   Int
+  quantity       Float
+  unit           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
   organizationId Int?
   companyId      Int?
 
-  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  ingredient    Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
-  organization  Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ingredient   Ingredient    @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@unique([productId, ingredientId])
   @@index([ingredientId])
@@ -1372,15 +1406,15 @@ model RestaurantOrder {
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
 
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  store          Store?        @relation(fields: [storeId], references: [id], onDelete: SetNull)
-  table          RestaurantTable? @relation("RestaurantTableOrders", fields: [tableId], references: [id], onDelete: SetNull)
-  currentTable   RestaurantTable? @relation("RestaurantTableCurrentOrder")
-  client         Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  createdBy      User?         @relation("RestaurantOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  sales          Sales?        @relation("RestaurantOrderSale", fields: [salesId], references: [id], onDelete: SetNull)
-  items          RestaurantOrderItem[]
+  organization        Organization?         @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company             Company?              @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  store               Store?                @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  table               RestaurantTable?      @relation("RestaurantTableOrders", fields: [tableId], references: [id], onDelete: SetNull)
+  currentTable        RestaurantTable?      @relation("RestaurantTableCurrentOrder")
+  client              Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdBy           User?                 @relation("RestaurantOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  sales               Sales?                @relation("RestaurantOrderSale", fields: [salesId], references: [id], onDelete: SetNull)
+  items               RestaurantOrderItem[]
   ingredientMovements IngredientMovement[]
 
   @@index([organizationId])
@@ -1388,23 +1422,25 @@ model RestaurantOrder {
   @@index([storeId])
   @@index([tableId])
   @@index([status])
+  @@index([openedAt])
+  @@index([companyId, openedAt])
 }
 
 model RestaurantOrderItem {
-  id             Int              @id @default(autoincrement())
-  orderId        Int
-  productId      Int
-  quantity       Float
-  unitPrice      Float
-  notes          String?
-  stationId      Int?
-  status         KitchenItemStatus @default(PENDING)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  id        Int               @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Float
+  unitPrice Float
+  notes     String?
+  stationId Int?
+  status    KitchenItemStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
-  order          RestaurantOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product        Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
-  station        KitchenStation? @relation(fields: [stationId], references: [id], onDelete: SetNull)
+  order   RestaurantOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  station KitchenStation? @relation(fields: [stationId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([productId])
@@ -1413,7 +1449,7 @@ model RestaurantOrderItem {
 }
 
 model IngredientMovement {
-  id             Int                  @id @default(autoincrement())
+  id             Int                    @id @default(autoincrement())
   ingredientId   Int
   organizationId Int?
   companyId      Int?
@@ -1423,13 +1459,13 @@ model IngredientMovement {
   orderId        Int?
   notes          String?
   createdById    Int?
-  createdAt      DateTime            @default(now())
+  createdAt      DateTime               @default(now())
 
-  ingredient     Ingredient      @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
-  organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  company        Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  order          RestaurantOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  createdBy      User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  ingredient   Ingredient       @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  order        RestaurantOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdBy    User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([ingredientId])
   @@index([organizationId])
@@ -1439,34 +1475,34 @@ model IngredientMovement {
 }
 
 model Sales {
-  id          Int        @id @default(autoincrement())
-  userId      Int // Usuario que realiza la venta
-  storeId     Int // Tienda donde se realiza la venta
-  clientId    Int // Cliente asociado a la venta
-  total       Float // Total de la venta
-  taxableTotal   Float     @default(0) // Total gravado (base imponible)
-  exemptTotal    Float     @default(0) // Total exonerado
-  unaffectedTotal Float    @default(0) // Total inafecto
-  igvTotal        Float    @default(0) // IGV calculado
-  description String? // Descripcion opcional
-  source      SaleSource @default(POS)
-  organizationId Int?
-  companyId      Int?
-  createdAt   DateTime   @default(now()) // Fecha de la venta
-  updatedAt   DateTime   @updatedAt
-  referenceId String? @unique
+  id              Int        @id @default(autoincrement())
+  userId          Int // Usuario que realiza la venta
+  storeId         Int // Tienda donde se realiza la venta
+  clientId        Int // Cliente asociado a la venta
+  total           Float // Total de la venta
+  taxableTotal    Float      @default(0) // Total gravado (base imponible)
+  exemptTotal     Float      @default(0) // Total exonerado
+  unaffectedTotal Float      @default(0) // Total inafecto
+  igvTotal        Float      @default(0) // IGV calculado
+  description     String? // Descripcion opcional
+  source          SaleSource @default(POS)
+  organizationId  Int?
+  companyId       Int?
+  createdAt       DateTime   @default(now()) // Fecha de la venta
+  updatedAt       DateTime   @updatedAt
+  referenceId     String?    @unique
 
-  user           User            @relation(fields: [userId], references: [id]) // Relacion con el usuario
-  store          Store           @relation(fields: [storeId], references: [id]) // Relacion con la tienda
-  client         Client          @relation(fields: [clientId], references: [id]) // Relacion con el cliente
-  salesDetails   SalesDetail[] // Relacion con los detalles de la venta
-  invoices       InvoiceSales[] // Relacion con las facturas de venta
-  payments       SalePayment[] // Relacion con tabla intermedia
+  user               User                @relation(fields: [userId], references: [id], onDelete: Restrict) // Relacion con el usuario
+  store              Store               @relation(fields: [storeId], references: [id], onDelete: Restrict) // Relacion con la tienda
+  client             Client              @relation(fields: [clientId], references: [id], onDelete: Restrict) // Relacion con el cliente
+  salesDetails       SalesDetail[] // Relacion con los detalles de la venta
+  invoices           InvoiceSales[] // Relacion con las facturas de venta
+  payments           SalePayment[] // Relacion con tabla intermedia
   shippingGuides     ShippingGuide[]
   order              Orders?
-  company            Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company            Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
   sunatTransmissions SunatTransmission[]
-  restaurantOrder    RestaurantOrder?   @relation("RestaurantOrderSale")
+  restaurantOrder    RestaurantOrder?    @relation("RestaurantOrderSale")
 
   @@index([userId])
   @@index([storeId])
@@ -1491,16 +1527,16 @@ model PaymentMethod {
 model SalePayment {
   id                Int              @id @default(autoincrement())
   salesId           Int
-  companyId       Int
+  companyId         Int
   paymentMethodId   Int
   amount            Float // Monto pagado con ese mÃ©todo
   currency          String           @default("PEN") // Tipo de moneda (e.g., PEN, USD)
   transactionId     String? // ID de transaccion para rastrear pagos digitales
   referenceNote     String? // (opcional) para agregar voucher, observacion, etc.
-  sale              Sales            @relation(fields: [salesId], references: [id])
-  paymentMethod     PaymentMethod    @relation(fields: [paymentMethodId], references: [id])
+  sale              Sales            @relation(fields: [salesId], references: [id], onDelete: Cascade)
+  paymentMethod     PaymentMethod    @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
   cashTransactionId Int?
-  cashTransaction   CashTransaction? @relation(fields: [cashTransactionId], references: [id])
+  cashTransaction   CashTransaction? @relation(fields: [cashTransactionId], references: [id], onDelete: SetNull)
 
   @@index([salesId])
   @@index([paymentMethodId])
@@ -1510,7 +1546,7 @@ model SalePayment {
 model SalesDetail {
   id                 Int      @id @default(autoincrement())
   salesId            Int // Relacion con la venta
-  companyId       Int
+  companyId          Int
   entryDetailId      Int // Relacion con el detalle de la entrada
   storeOnInventoryId Int // Relacion con el inventario de la tienda
   productId          Int // Producto relacionado
@@ -1521,8 +1557,8 @@ model SalesDetail {
   updatedAt          DateTime @updatedAt
 
   sale             Sales            @relation(fields: [salesId], references: [id], onDelete: Cascade) // Relacion con el modelo Sales
-  entryDetail      EntryDetail      @relation(fields: [entryDetailId], references: [id]) // Relacion con el modelo EntryDetail
-  storeOnInventory StoreOnInventory @relation(fields: [storeOnInventoryId], references: [id]) // Relacion con el inventario de la tienda
+  entryDetail      EntryDetail      @relation(fields: [entryDetailId], references: [id], onDelete: Restrict) // Relacion con el modelo EntryDetail
+  storeOnInventory StoreOnInventory @relation(fields: [storeOnInventoryId], references: [id], onDelete: Restrict) // Relacion con el inventario de la tienda
 
   @@index([salesId])
   @@index([productId])
@@ -1543,12 +1579,11 @@ model InvoiceSales {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  sales Sales @relation(fields: [salesId], references: [id], onDelete: Cascade) // Relacion con Entry
+  sales   Sales   @relation(fields: [salesId], references: [id], onDelete: Cascade) // Relacion con Entry
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, tipoComprobante, serie, nroCorrelativo]) // Restriccion unica compuesta
 }
-
 
 model CompanyDocumentSequence {
   id                Int      @id @default(autoincrement())
@@ -1563,6 +1598,77 @@ model CompanyDocumentSequence {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, documentType])
+}
+
+model QuoteSequence {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  year      Int
+  current   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, year])
+}
+
+model Quote {
+  id                 Int         @id @default(autoincrement())
+  organizationId     Int?
+  companyId          Int?
+  clientId           Int?
+  createdById        Int?
+  status             QuoteStatus @default(DRAFT)
+  quoteNumber        String?
+  quoteYear          Int?
+  quoteSequence      Int?
+  issuedAt           DateTime?
+  cancelledAt        DateTime?
+  currency           String
+  validity           String
+  conditions         String?
+  taxRate            Float       @default(0.18)
+  subtotal           Float       @default(0)
+  taxAmount          Float       @default(0)
+  marginAmount       Float       @default(0)
+  total              Float       @default(0)
+  clientNameSnapshot String?
+  contactSnapshot    String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  client       Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdBy    User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  items        QuoteItem[]
+
+  @@unique([companyId, quoteNumber])
+  @@index([organizationId, companyId, status])
+  @@index([companyId, createdAt])
+}
+
+model QuoteItem {
+  id          Int               @id @default(autoincrement())
+  quoteId     Int
+  productId   Int?
+  name        String
+  description String?
+  specs       Json?
+  unitPrice   Float
+  costPrice   Float?
+  quantity    Int
+  lineTotal   Float
+  type        QuoteItemType     @default(PRODUCT)
+  category    QuoteItemCategory @default(HARDWARE)
+  createdAt   DateTime          @default(now())
+
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([quoteId])
+  @@index([productId])
 }
 
 model InvoiceSample {
@@ -1581,16 +1687,16 @@ model InvoiceSample {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  company      Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  entry        Entry?           @relation(fields: [entryId], references: [id], onDelete: SetNull)
-  template     InvoiceTemplate? @relation("InvoiceTemplateSamples", fields: [invoiceTemplateId], references: [id], onDelete: SetNull)
+  organization Organization?          @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company      Company?               @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  entry        Entry?                 @relation(fields: [entryId], references: [id], onDelete: SetNull)
+  template     InvoiceTemplate?       @relation("InvoiceTemplateSamples", fields: [invoiceTemplateId], references: [id], onDelete: SetNull)
   logs         InvoiceExtractionLog[]
 
+  @@unique([sha256, organizationId], name: "InvoiceSample_hash_org_unique")
   @@index([organizationId, companyId])
   @@index([entryId])
   @@index([invoiceTemplateId])
-  @@unique([sha256, organizationId], name: "InvoiceSample_hash_org_unique")
 }
 
 model InvoiceExtractionLog {
@@ -1625,10 +1731,10 @@ model Orders {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  sale          Sales?          @relation(fields: [salesId], references: [id])
+  sale          Sales?          @relation(fields: [salesId], references: [id], onDelete: SetNull)
   OrderTracking OrderTracking[]
-  organization  Organization?   @relation(fields: [organizationId], references: [id])
-  company       Company?       @relation(fields: [companyId], references: [id])
+  organization  Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company       Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([salesId])
   @@index([organizationId, createdAt])
@@ -1642,16 +1748,16 @@ model OrderTracking {
   description String
   createdAt   DateTime @default(now())
 
-  order Orders @relation(fields: [orderId], references: [id])
+  order Orders @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
 
 model TipoCambio {
   id             Int           @id @default(autoincrement())
-  fecha          DateTime      // Fecha del tipo de cambio
-  moneda         String        // Ej: "USD", "EUR", "CLP"
-  valor          Float         // Cuanto vale 1 unidad de esa moneda en soles
+  fecha          DateTime // Fecha del tipo de cambio
+  moneda         String // Ej: "USD", "EUR", "CLP"
+  valor          Float // Cuanto vale 1 unidad de esa moneda en soles
   createdAt      DateTime      @default(now())
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   organizationId Int?
@@ -1664,7 +1770,7 @@ model TipoCambio {
 
 model CashRegister {
   id             Int                @id @default(autoincrement())
-  name           String             @unique
+  name           String
   description    String?
   storeId        Int
   initialBalance Decimal            @default(0.00)
@@ -1674,10 +1780,11 @@ model CashRegister {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
-  store        Store             @relation(fields: [storeId], references: [id])
+  store        Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
   transactions CashTransaction[]
   closures     CashClosure[]
 
+  @@unique([storeId, name])
   @@index([organizationId, storeId])
   @@map("cash_registers")
 }
@@ -1695,9 +1802,9 @@ model CashTransaction {
   organizationId     Int?
   createdAt          DateTime            @default(now())
 
-  cashRegister   CashRegister                   @relation(fields: [cashRegisterId], references: [id])
+  cashRegister   CashRegister                   @relation(fields: [cashRegisterId], references: [id], onDelete: Restrict)
   paymentMethods CashTransactionPaymentMethod[] // Relacion con la tabla intermedia
-  user           User                           @relation(fields: [userId], references: [id])
+  user           User                           @relation(fields: [userId], references: [id], onDelete: Restrict)
   salePayments   SalePayment[]
 
   @@index([organizationId, createdAt])
@@ -1705,30 +1812,30 @@ model CashTransaction {
 }
 
 model CashTransactionPaymentMethod {
-  id                Int @id @default(autoincrement())
+  id                Int     @id @default(autoincrement())
   cashTransactionId Int
   paymentMethodId   Int // Hacer que el campo sea opcional
   amount            Decimal @default(0.00)
 
-  cashTransaction CashTransaction @relation(fields: [cashTransactionId], references: [id])
-  paymentMethod   PaymentMethod   @relation(fields: [paymentMethodId], references: [id]) // Relacion opcional
+  cashTransaction CashTransaction @relation(fields: [cashTransactionId], references: [id], onDelete: Cascade)
+  paymentMethod   PaymentMethod   @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict) // Relacion opcional
 }
 
 model CashClosure {
-  id             Int      @id @default(autoincrement())
-  cashRegisterId Int
-  userId         Int
-  openingBalance Decimal
-  closingBalance Decimal
-  totalIncome    Decimal
+  id                 Int      @id @default(autoincrement())
+  cashRegisterId     Int
+  userId             Int
+  openingBalance     Decimal
+  closingBalance     Decimal
+  totalIncome        Decimal
   nextOpeningBalance Decimal?
-  notes          String?
-  totalExpense   Decimal
+  notes              String?
+  totalExpense       Decimal
   organizationId     Int?
-  createdAt      DateTime @default(now())
+  createdAt          DateTime @default(now())
 
-  cashRegister CashRegister @relation(fields: [cashRegisterId], references: [id])
-  user         User         @relation(fields: [userId], references: [id])
+  cashRegister CashRegister @relation(fields: [cashRegisterId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, createdAt])
   @@map("cash_closures")
@@ -1786,8 +1893,8 @@ model ShippingGuide {
 
   createdAt DateTime @default(now())
 
-  sale  Sales? @relation(fields: [ventaId], references: [id])
-  entry Entry? @relation(fields: [entryId], references: [id])
+  sale  Sales? @relation(fields: [ventaId], references: [id], onDelete: SetNull)
+  entry Entry? @relation(fields: [entryId], references: [id], onDelete: SetNull)
 }
 
 model Review {
@@ -1799,8 +1906,8 @@ model Review {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  product Product @relation(fields: [productId], references: [id])
-  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([productId, userId])
   @@index([productId])
@@ -1818,8 +1925,8 @@ model ChatMessage {
   deletedAt DateTime?
   seenAt    DateTime?
 
-  client User @relation("ClientMessages", fields: [clientId], references: [id])
-  sender User @relation("SenderMessages", fields: [senderId], references: [id])
+  client User @relation("ClientMessages", fields: [clientId], references: [id], onDelete: Cascade)
+  sender User @relation("SenderMessages", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
   @@index([senderId])
@@ -1831,8 +1938,8 @@ model Favorite {
   productId Int
   createdAt DateTime @default(now())
 
-  user    User    @relation(fields: [userId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([userId, productId])
   @@index([userId])
@@ -1866,7 +1973,7 @@ model AuditLog {
   ip             String?
   userAgent      String?
   journalEntryId Int?
-  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
   organizationId Int?
   companyId      Int?
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
@@ -1912,7 +2019,7 @@ model Campaign {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  org       Org        @relation(fields: [orgId], references: [id])
+  org       Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   templates Template[]
   creatives Creative[]
   runs      Run[]
@@ -1930,7 +2037,7 @@ model Template {
   updatedAt  DateTime        @updatedAt
   deletedAt  DateTime?
 
-  campaign  Campaign   @relation(fields: [campaignId], references: [id])
+  campaign  Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   creatives Creative[]
 
   @@unique([campaignId, version, deletedAt])
@@ -1947,8 +2054,8 @@ model Creative {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  campaign Campaign @relation(fields: [campaignId], references: [id])
-  template Template @relation(fields: [templateId], references: [id])
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
   assets   Asset[]
 
   @@unique([campaignId, name, deletedAt])
@@ -1964,7 +2071,7 @@ model Run {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  campaign Campaign           @relation(fields: [campaignId], references: [id])
+  campaign Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   assets   Asset[]
   logs     PublishTargetLog[]
 
@@ -1981,8 +2088,8 @@ model Asset {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  run      Run                @relation(fields: [runId], references: [id])
-  creative Creative           @relation(fields: [creativeId], references: [id])
+  run      Run                @relation(fields: [runId], references: [id], onDelete: Cascade)
+  creative Creative           @relation(fields: [creativeId], references: [id], onDelete: Cascade)
   logs     PublishTargetLog[]
 
   @@unique([runId, uri, deletedAt])
@@ -2000,7 +2107,7 @@ model PublishTarget {
   updatedAt DateTime       @updatedAt
   deletedAt DateTime?
 
-  org  Org                @relation(fields: [orgId], references: [id])
+  org  Org                @relation(fields: [orgId], references: [id], onDelete: Cascade)
   logs PublishTargetLog[]
 
   @@unique([orgId, name, deletedAt])
@@ -2017,9 +2124,9 @@ model PublishTargetLog {
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
-  publishTarget PublishTarget @relation(fields: [publishTargetId], references: [id])
-  asset         Asset         @relation(fields: [assetId], references: [id])
-  run           Run?          @relation(fields: [runId], references: [id])
+  publishTarget PublishTarget @relation(fields: [publishTargetId], references: [id], onDelete: Cascade)
+  asset         Asset         @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  run           Run?          @relation(fields: [runId], references: [id], onDelete: SetNull)
   runId         Int?
 
   @@unique([publishTargetId, assetId, deletedAt])
@@ -2071,11 +2178,14 @@ model Account {
   code      String    @unique
   name      String
   parentId  Int?
-  parent    Account?  @relation("AccountChildren", fields: [parentId], references: [id])
+  parent    Account?  @relation("AccountChildren", fields: [parentId], references: [id], onDelete: Restrict)
   children  Account[] @relation("AccountChildren")
   level     Int
   isPosting Boolean   @default(false)
   taxCodes  TaxCode[]
+
+  @@index([parentId])
+  @@index([isPosting])
 }
 
 model Journal {
@@ -2097,6 +2207,7 @@ model Period {
   pleExports PleExport[]
 
   @@unique([startDate, endDate])
+  @@index([status])
 }
 
 model JournalEntry {
@@ -2109,7 +2220,7 @@ model JournalEntry {
   debitTotal  Decimal     @default(0.00)
   creditTotal Decimal     @default(0.00)
 
-  period    Period         @relation(fields: [periodId], references: [id])
+  period    Period         @relation(fields: [periodId], references: [id], onDelete: Restrict)
   lines     JournalLine[]
   documents DocumentLink[]
   auditLogs AuditLog[]
@@ -2128,8 +2239,8 @@ model JournalLine {
   debit       Decimal @default(0.00)
   credit      Decimal @default(0.00)
 
-  entry   JournalEntry @relation(fields: [entryId], references: [id])
-  taxCode TaxCode?     @relation(fields: [taxCodeId], references: [id])
+  entry   JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  taxCode TaxCode?     @relation(fields: [taxCodeId], references: [id], onDelete: SetNull)
   // @@check(name: "debit_credit_check", expression: "(debit = 0 AND credit > 0) OR (credit = 0 AND debit > 0)")
 
   @@index([entryId])
@@ -2145,7 +2256,7 @@ model TaxCode {
   sunatTributoCode   String
   sunatOperacionType String
   contraAccountId    Int?
-  contraAccount      Account?      @relation(fields: [contraAccountId], references: [id])
+  contraAccount      Account?      @relation(fields: [contraAccountId], references: [id], onDelete: SetNull)
 
   @@index([code])
 }
@@ -2156,7 +2267,7 @@ model DocumentLink {
   url         String
   description String?
 
-  entry JournalEntry @relation(fields: [entryId], references: [id])
+  entry JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 
   @@index([entryId])
 }
@@ -2168,7 +2279,7 @@ model PleExport {
   fileUrl    String
   exportedAt DateTime @default(now())
 
-  period Period @relation(fields: [periodId], references: [id])
+  period Period @relation(fields: [periodId], references: [id], onDelete: Restrict)
 
   @@index([periodId])
   @@index([type])
@@ -2203,28 +2314,28 @@ model AccPeriod {
 }
 
 model AccEntry {
-  id          Int            @id @default(autoincrement())
-  periodId    Int
-  date        DateTime
-  status      AccEntryStatus @default(DRAFT)
-  totalDebit  Float
-  totalCredit Float
-  providerId  Int?
-  serie       String?
-  correlativo String?
-  invoiceUrl  String?
-  source      String?
-  sourceId    Int?
-  referenceId String?        @unique
+  id             Int            @id @default(autoincrement())
+  periodId       Int
+  date           DateTime
+  status         AccEntryStatus @default(DRAFT)
+  totalDebit     Float
+  totalCredit    Float
+  providerId     Int?
+  serie          String?
+  correlativo    String?
+  invoiceUrl     String?
+  source         String?
+  sourceId       Int?
+  referenceId    String?        @unique
   organizationId Int?
   companyId      Int?
-  period      AccPeriod      @relation(fields: [periodId], references: [id])
-  provider    Provider?      @relation(fields: [providerId], references: [id])
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  lines       AccEntryLine[]
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  period         AccPeriod      @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  provider       Provider?      @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  company        Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  lines          AccEntryLine[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   @@unique([source, sourceId])
   @@index([periodId])
@@ -2244,4 +2355,91 @@ model AccEntryLine {
   entry       AccEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 
   @@index([entryId])
+}
+
+// ── Help Assistant: Learning & Memory ──────────────────────────
+
+enum HelpMessageRole {
+  USER
+  ASSISTANT
+}
+
+enum HelpMessageSource {
+  STATIC
+  AI
+  PROMOTED
+}
+
+enum HelpFeedback {
+  POSITIVE
+  NEGATIVE
+}
+
+enum HelpCandidateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model HelpConversation {
+  id            Int           @id @default(autoincrement())
+  userId        Int
+  createdAt     DateTime      @default(now())
+  lastMessageAt DateTime      @default(now())
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      HelpMessage[]
+
+  @@index([userId])
+}
+
+model HelpMessage {
+  id             Int               @id @default(autoincrement())
+  conversationId Int
+  role           HelpMessageRole
+  content        String
+  source         HelpMessageSource?
+  section        String?
+  route          String?
+  score          Float?
+  feedback       HelpFeedback?
+  createdAt      DateTime          @default(now())
+  conversation   HelpConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([feedback])
+  @@index([source])
+}
+
+model HelpKBCandidate {
+  id            Int                 @id @default(autoincrement())
+  question      String
+  questionNorm  String
+  answer        String
+  section       String
+  positiveVotes Int                 @default(0)
+  negativeVotes Int                 @default(0)
+  status        HelpCandidateStatus @default(PENDING)
+  approvedById  Int?
+  approvedBy    User?               @relation("HelpKBCandidateApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime            @default(now())
+  reviewedAt    DateTime?
+
+  @@unique([questionNorm, section])
+  @@index([status])
+  @@index([section])
+}
+
+model HelpEmbedding {
+  id         Int      @id @default(autoincrement())
+  sourceType String   // "static" | "promoted"
+  sourceId   String   // KB entry ID or HelpKBCandidate ID
+  section    String
+  question   String
+  answer     String
+  embedding  Float[]  // 384-dimensional vector from sentence-transformers
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([sourceType, sourceId])
+  @@index([section])
 }

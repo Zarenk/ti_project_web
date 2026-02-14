@@ -19,6 +19,7 @@ import { RolesGuard } from 'src/users/roles.guard';
 import { Roles } from 'src/users/roles.decorator';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 const SALES_ALLOWED_ROLES = [
   'ADMIN',
@@ -27,7 +28,7 @@ const SALES_ALLOWED_ROLES = [
   'SUPER_ADMIN_ORG',
 ] as const;
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, TenantRequiredGuard)
 @Roles(...SALES_ALLOWED_ROLES)
 @ModulePermission('sales')
 @Controller('sales')

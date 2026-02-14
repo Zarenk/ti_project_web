@@ -7,7 +7,7 @@ import { ModulePermission } from '../common/decorators/module-permission.decorat
 import { CurrentTenant } from '../tenancy/tenant-context.decorator';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN', 'SUPER_ADMIN_ORG', 'SUPER_ADMIN_GLOBAL')
+@Roles('EMPLOYEE', 'ADMIN', 'SUPER_ADMIN_ORG', 'SUPER_ADMIN_GLOBAL')
 @ModulePermission('dashboard')
 @Controller('dashboard')
 export class DashboardController {
@@ -29,6 +29,20 @@ export class DashboardController {
       entriesLimit: Number.isFinite(entriesTake) ? entriesTake : 10,
       salesLimit: Number.isFinite(salesTake) ? salesTake : 10,
       lowStockLimit: Number.isFinite(lowStockTake) ? lowStockTake : 10,
+      organizationId: organizationId ?? undefined,
+      companyId: companyId ?? undefined,
+    });
+  }
+
+  @Get('sparklines')
+  async getSparklines(
+    @Query('days') days = '30',
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+  ) {
+    const parsedDays = parseInt(days, 10);
+    return this.dashboardService.getSparklines({
+      days: Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : 30,
       organizationId: organizationId ?? undefined,
       companyId: companyId ?? undefined,
     });

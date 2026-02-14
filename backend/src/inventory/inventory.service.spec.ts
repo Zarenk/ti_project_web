@@ -148,10 +148,15 @@ describe('InventoryService multi-organization support', () => {
       postInventoryAdjustment: jest.fn().mockResolvedValue(undefined),
     };
 
+    const verticalConfig = {
+      isFeatureEnabled: jest.fn().mockResolvedValue(true),
+      getConfig: jest.fn().mockResolvedValue({ features: { inventory: true } }),
+    } as any;
     service = new InventoryService(
       prisma as unknown as PrismaService,
       activityService as unknown as ActivityService,
       accountingHook as AccountingHook,
+      verticalConfig,
     );
 
     prisma.product.findUnique.mockResolvedValue({ name: 'Widget' });

@@ -1,6 +1,7 @@
 ﻿import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
 import { DefaultAdminService } from './users/default-admin.service';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ActiveTrackerInterceptor } from './common/interceptors/active-tracker.interceptor';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ProductsModule } from './products/products.module';
@@ -20,7 +21,7 @@ import { SeriesModule } from './series/series.module';
 import { ExchangeModule } from './exchange/exchange.module';
 import { PaymentmethodsModule } from './paymentmethods/paymentmethods.module';
 import { CashregisterModule } from './cashregister/cashregister.module';
-import { BarcodeGateway } from './barcode/barcode.gateway';
+import { BarcodeModule } from './barcode/barcode.module';
 import { GuideModule } from './guide/guide.module';
 import { ProductspecsModule } from './productspecs/productspecs.module';
 import { ProductofeaturesModule } from './productofeatures/productofeatures.module';
@@ -66,6 +67,7 @@ import { IngredientsModule } from './ingredients/ingredients.module';
 import { RecipeItemsModule } from './recipe-items/recipe-items.module';
 import { RestaurantOrdersModule } from './restaurant-orders/restaurant-orders.module';
 import { QuotesModule } from './quotes/quotes.module';
+import { HelpModule } from './help/help.module';
 
 @Module({
   imports: [
@@ -124,11 +126,12 @@ import { QuotesModule } from './quotes/quotes.module';
     RecipeItemsModule,
     RestaurantOrdersModule,
     QuotesModule,
+    BarcodeModule,
+    HelpModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [
     AppService,
-    BarcodeGateway,
     PrismaService,
     {
       provide: APP_GUARD,
@@ -140,6 +143,10 @@ import { QuotesModule } from './quotes/quotes.module';
     },
     TenantRequiredGuard,
     DefaultAdminService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ActiveTrackerInterceptor,
+    },
   ],
 })
 export class AppModule implements NestModule {

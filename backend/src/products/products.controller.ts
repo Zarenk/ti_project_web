@@ -202,26 +202,46 @@ export class ProductsController {
 
     const before = await this.productsService.findOne(numericId);
     const removed = await this.productsService.remove(numericId);
-    await this.activityService.log(
-      {
-        actorId: (req as any)?.user?.userId,
-        actorEmail: (req as any)?.user?.username,
-        entityType: 'Product',
-        entityId: numericId.toString(),
-        action: AuditAction.DELETED,
-        summary: `Producto ${before?.name ?? numericId} eliminado`,
-        diff: { before } as any,
-      },
-      req,
-    );
+    try {
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Product',
+          entityId: numericId.toString(),
+          action: AuditAction.DELETED,
+          summary: `Producto ${before?.name ?? numericId} eliminado`,
+          diff: { before } as any,
+        },
+        req,
+      );
+    } catch {
+      // Activity log is non-critical — don't fail the delete
+    }
     return removed;
   }
 
   @Delete()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  async removes(@Body('ids') ids: number[]) {
-    return this.productsService.removes(ids);
+  async removes(@Body('ids') ids: number[], @Req() req: Request) {
+    const result = await this.productsService.removes(ids);
+    try {
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Product',
+          entityId: ids.join(','),
+          action: AuditAction.DELETED,
+          summary: `${ids.length} producto(s) eliminado(s) en lote: IDs [${ids.join(', ')}]`,
+        },
+        req,
+      );
+    } catch {
+      // Activity log is non-critical
+    }
+    return result;
   }
 
   @Patch(':id/price-sell')

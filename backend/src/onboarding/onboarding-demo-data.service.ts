@@ -574,9 +574,13 @@ export class OnboardingDemoDataService {
   ) {
     const name = `Demo Store ${organizationId}`;
     return this.prisma.store.upsert({
-      where: { name },
+      where: {
+        organizationId_name: {
+          organizationId,
+          name,
+        },
+      },
       update: {
-        organizationId,
         companyId,
         status: 'ACTIVE',
       },

@@ -351,14 +351,18 @@ async function ensureOrganization(
   const storeIds = new Map<string, number>();
   for (const store of fixture.stores) {
     const savedStore = await prisma.store.upsert({
-      where: { name: store.name },
+      where: {
+        organizationId_name: {
+          organizationId: organization.id,
+          name: store.name,
+        },
+      },
       update: {
         status: store.status ?? 'ACTIVE',
         phone: store.phone ?? null,
         adress: store.adress ?? null,
         email: store.email ?? null,
         website: store.website ?? null,
-        organizationId: organization.id,
       } as any,
       create: {
         name: store.name,
@@ -377,7 +381,12 @@ async function ensureOrganization(
 
   for (const provider of fixture.providers) {
     await prisma.provider.upsert({
-      where: { documentNumber: provider.documentNumber },
+      where: {
+        organizationId_documentNumber: {
+          organizationId: organization.id,
+          documentNumber: provider.documentNumber,
+        },
+      },
       update: {
         name: provider.name,
         document: provider.document,

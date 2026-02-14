@@ -37,7 +37,7 @@ export class ChatController {
       req,
       tenant ?? undefined,
     );
-    this.chatGateway.server.emit('chat:receive', message);
+    this.chatGateway.emitMessageToConversation(message, tenant ?? undefined);
     return message;
   }
 

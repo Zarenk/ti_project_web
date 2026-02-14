@@ -225,6 +225,7 @@ export class ChatService {
   async updateMessage(
     { id, senderId, text }: { id: number; senderId: number; text: string },
     req?: Request,
+    tenant?: TenantContext,
   ): Promise<ChatMessage> {
     const message = await this.prisma.chatMessage.findUnique({
       where: { id },
@@ -233,6 +234,7 @@ export class ChatService {
     if (!message || message.deletedAt) {
       throw new NotFoundException('Message not found');
     }
+    await this.assertClientWithinTenant(message.clientId, tenant);
     if (message.senderId !== senderId) {
       throw new ForbiddenException('Cannot edit this message');
     }
@@ -266,6 +268,7 @@ export class ChatService {
   async deleteMessage(
     { id, senderId }: { id: number; senderId: number },
     req?: Request,
+    tenant?: TenantContext,
   ): Promise<ChatMessage> {
     const message = await this.prisma.chatMessage.findUnique({
       where: { id },
@@ -274,6 +277,7 @@ export class ChatService {
     if (!message || message.deletedAt) {
       throw new NotFoundException('Message not found');
     }
+    await this.assertClientWithinTenant(message.clientId, tenant);
     if (message.senderId !== senderId) {
       throw new ForbiddenException('Cannot delete this message');
     }

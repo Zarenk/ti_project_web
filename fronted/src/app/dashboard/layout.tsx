@@ -20,6 +20,9 @@ import { TenantFeaturesProvider } from "@/context/tenant-features-context";
 import { ContextStatusBanner } from "@/components/context-status-banner";
 import { TrialStatusBanner } from "@/components/trial-status-banner";
 import { OnboardingWizardBanner } from "@/components/onboarding-wizard-banner";
+import { HelpAssistantProvider } from "@/context/help-assistant-context";
+import { HelpAssistant } from "@/components/help/HelpAssistant";
+import { AccountingModeProvider } from "@/context/accounting-mode-context";
 
 export const revalidate = 0;
 
@@ -45,34 +48,39 @@ export default async function Page({ children }: { children: ReactNode }) {
     <SidebarProvider>
       <TenantSelectionProvider>
         <TenantFeaturesProvider>
-          <AppSidebar />
-          <SidebarInset>
-            <LogoutOverlay />
-            <ContextStatusBanner />
-            <TrialStatusBanner
-              className="px-4 pt-4"
-              leading={
-                <>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <SidebarTrigger className="-ml-1" />
-                      </TooltipTrigger>
-                      <TooltipContent>Abrir/Cerrar Sidebar</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <Separator
-                    orientation="vertical"
-                    className="mr-2 data-[orientation=vertical]:h-4"
-                  />
-                </>
-              }
-            />
-            <OnboardingWizardBanner />
-            <Suspense fallback={<DashboardLoading />}>
-              {children}
-            </Suspense>
-          </SidebarInset>
+          <AccountingModeProvider>
+            <HelpAssistantProvider>
+              <AppSidebar />
+            <SidebarInset>
+              <LogoutOverlay />
+              <ContextStatusBanner />
+              <TrialStatusBanner
+                className="px-4 pt-4"
+                leading={
+                  <>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <SidebarTrigger className="-ml-1" />
+                        </TooltipTrigger>
+                        <TooltipContent>Abrir/Cerrar Sidebar</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <Separator
+                      orientation="vertical"
+                      className="mr-2 data-[orientation=vertical]:h-4"
+                    />
+                  </>
+                }
+              />
+              <OnboardingWizardBanner />
+              <Suspense fallback={<DashboardLoading />}>
+                {children}
+              </Suspense>
+            </SidebarInset>
+              <HelpAssistant />
+            </HelpAssistantProvider>
+          </AccountingModeProvider>
         </TenantFeaturesProvider>
       </TenantSelectionProvider>
     </SidebarProvider>

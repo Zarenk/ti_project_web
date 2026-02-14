@@ -1,6 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildOrganizationFilter } from 'src/tenancy/organization.utils';
+import { subDays, startOfDay, endOfDay, eachDayOfInterval, format } from 'date-fns';
+
+export interface SparklinePoint {
+  date: string;
+  value: number;
+}
+
+interface SparklineParams {
+  days?: number;
+  organizationId?: number | null;
+  companyId?: number | null;
+}
+
 interface DashboardOverviewParams {
   entriesLimit: number;
   salesLimit: number;
@@ -236,5 +249,237 @@ export class DashboardService {
       total: currentTotal,
       growth,
     };
+  }
+
+  // ── Sparklines ───────────────────────────────────────────────────────
+
+  async getSparklines(params: SparklineParams) {
+    const days = params.days ?? 30;
+    const now = new Date();
+    const from = startOfDay(subDays(now, days - 1));
+    const to = endOfDay(now);
+    const dateRange = eachDayOfInterval({ start: from, end: to });
+    const dateKeys = dateRange.map((d) => format(d, 'yyyy-MM-dd'));
+
+    const { organizationId, companyId } = params;
+
+    const [
+      salesByDay,
+      entryQtyByProductDay,
+      salesQtyByProductDay,
+      currentStockByProduct,
+      ordersByDay,
+    ] = await Promise.all([
+      this.fetchDailySalesTotals(from, to, organizationId, companyId),
+      this.fetchDailyEntryQuantities(from, to, organizationId),
+      this.fetchDailySalesQuantities(from, to, organizationId, companyId),
+      this.fetchCurrentStockByProduct(organizationId, companyId),
+      this.fetchDailyOrderCounts(from, to, params),
+    ]);
+
+    // ── Sales sparkline (simple aggregation) ──
+    const sales: SparklinePoint[] = dateKeys.map((date) => ({
+      date,
+      value: salesByDay.get(date) ?? 0,
+    }));
+
+    // ── Reconstruct inventory total & out-of-stock per day ──
+    // For each product, walk backwards from current stock
+    const productIds = new Set<number>();
+    for (const k of entryQtyByProductDay.keys()) productIds.add(k);
+    for (const k of salesQtyByProductDay.keys()) productIds.add(k);
+    for (const k of currentStockByProduct.keys()) productIds.add(k);
+
+    // dailyTotalStock[dayIndex] = sum of all product stocks on that day
+    const dailyTotalStock = new Array(dateKeys.length).fill(0);
+    const dailyOutOfStock = new Array(dateKeys.length).fill(0);
+
+    for (const pid of productIds) {
+      const curStock = currentStockByProduct.get(pid) ?? 0;
+      const entryMap = entryQtyByProductDay.get(pid);
+      const salesMap = salesQtyByProductDay.get(pid);
+
+      // Walk backwards: today is last index
+      let stock = curStock;
+      for (let i = dateKeys.length - 1; i >= 0; i--) {
+        dailyTotalStock[i] += stock;
+        if (stock <= 0) dailyOutOfStock[i]++;
+
+        if (i > 0) {
+          // Un-do today's movements to get yesterday's stock
+          const dayKey = dateKeys[i];
+          const added = entryMap?.get(dayKey) ?? 0;
+          const removed = salesMap?.get(dayKey) ?? 0;
+          stock = stock - added + removed;
+        }
+      }
+    }
+
+    const inventory: SparklinePoint[] = dateKeys.map((date, i) => ({
+      date,
+      value: dailyTotalStock[i],
+    }));
+
+    const outOfStock: SparklinePoint[] = dateKeys.map((date, i) => ({
+      date,
+      value: dailyOutOfStock[i],
+    }));
+
+    // ── Orders sparkline ──
+    const pendingOrders: SparklinePoint[] = dateKeys.map((date) => ({
+      date,
+      value: ordersByDay.get(date) ?? 0,
+    }));
+
+    return { inventory, sales, outOfStock, pendingOrders };
+  }
+
+  // ── Sparkline helpers ──
+
+  private async fetchDailySalesTotals(
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ): Promise<Map<string, number>> {
+    const where: Record<string, unknown> = {
+      createdAt: { gte: from, lte: to },
+    };
+    if (organizationId !== undefined) {
+      where.organizationId = organizationId ?? null;
+    }
+    if (companyId !== undefined) {
+      where.store = { companyId: companyId ?? null };
+    }
+    const rows = await this.prisma.sales.findMany({
+      where,
+      select: { createdAt: true, total: true },
+    });
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      const key = format(r.createdAt, 'yyyy-MM-dd');
+      map.set(key, (map.get(key) ?? 0) + r.total);
+    }
+    return map;
+  }
+
+  private async fetchDailyEntryQuantities(
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+  ): Promise<Map<number, Map<string, number>>> {
+    const entryWhere: Record<string, unknown> = {
+      createdAt: { gte: from, lte: to },
+    };
+    if (organizationId !== undefined) {
+      entryWhere.organizationId = organizationId ?? null;
+    }
+    const rows = await this.prisma.entryDetail.findMany({
+      where: { entry: entryWhere },
+      select: {
+        productId: true,
+        quantity: true,
+        entry: { select: { createdAt: true } },
+      },
+    });
+    const map = new Map<number, Map<string, number>>();
+    for (const r of rows) {
+      const key = format(r.entry.createdAt, 'yyyy-MM-dd');
+      if (!map.has(r.productId)) map.set(r.productId, new Map());
+      const pMap = map.get(r.productId)!;
+      pMap.set(key, (pMap.get(key) ?? 0) + r.quantity);
+    }
+    return map;
+  }
+
+  private async fetchDailySalesQuantities(
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ): Promise<Map<number, Map<string, number>>> {
+    const saleWhere: Record<string, unknown> = {
+      createdAt: { gte: from, lte: to },
+    };
+    if (organizationId !== undefined) {
+      saleWhere.organizationId = organizationId ?? null;
+    }
+    if (companyId !== undefined) {
+      saleWhere.store = { companyId: companyId ?? null };
+    }
+    const rows = await this.prisma.salesDetail.findMany({
+      where: { sale: saleWhere },
+      select: {
+        productId: true,
+        quantity: true,
+        sale: { select: { createdAt: true } },
+      },
+    });
+    const map = new Map<number, Map<string, number>>();
+    for (const r of rows) {
+      const key = format(r.sale.createdAt, 'yyyy-MM-dd');
+      if (!map.has(r.productId)) map.set(r.productId, new Map());
+      const pMap = map.get(r.productId)!;
+      pMap.set(key, (pMap.get(key) ?? 0) + r.quantity);
+    }
+    return map;
+  }
+
+  private async fetchCurrentStockByProduct(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ): Promise<Map<number, number>> {
+    const inventoryWhere: Record<string, unknown> = {};
+    if (organizationId !== undefined) {
+      inventoryWhere.inventory = {
+        organizationId: organizationId ?? null,
+      };
+    }
+    if (companyId !== undefined) {
+      inventoryWhere.store = { companyId: companyId ?? null };
+    }
+
+    const rows = await this.prisma.storeOnInventory.findMany({
+      where: inventoryWhere,
+      select: {
+        stock: true,
+        inventory: { select: { productId: true } },
+      },
+    });
+
+    const map = new Map<number, number>();
+    for (const r of rows) {
+      const pid = r.inventory.productId;
+      map.set(pid, (map.get(pid) ?? 0) + r.stock);
+    }
+    return map;
+  }
+
+  private async fetchDailyOrderCounts(
+    from: Date,
+    to: Date,
+    params: SparklineParams,
+  ): Promise<Map<string, number>> {
+    const where: Record<string, unknown> = {
+      createdAt: { gte: from, lte: to },
+    };
+    if (params.organizationId !== undefined) {
+      where.organizationId = params.organizationId ?? null;
+    }
+    if (params.companyId !== undefined) {
+      where.companyId = params.companyId ?? null;
+    }
+
+    const rows = await this.prisma.orders.findMany({
+      where,
+      select: { createdAt: true },
+    });
+
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      const key = format(r.createdAt, 'yyyy-MM-dd');
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return map;
   }
 }

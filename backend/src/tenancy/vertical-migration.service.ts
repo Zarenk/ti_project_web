@@ -95,6 +95,17 @@ export class VerticalMigrationService {
     );
 
     await this.prisma.$transaction(async (tx) => {
+      // Optimistic concurrency: verify vertical hasn't changed
+      const current = await tx.company.findUnique({
+        where: { id: companyId },
+        select: { businessVertical: true },
+      });
+      if (!current || current.businessVertical !== previousVertical) {
+        throw new BadRequestException(
+          'El vertical fue modificado por otro usuario. Recarga la pagina e intenta nuevamente.',
+        );
+      }
+
       await tx.company.update({
         where: { id: companyId },
         data: { businessVertical: targetVertical },
@@ -132,11 +143,46 @@ export class VerticalMigrationService {
       });
     });
 
-    await this.runScripts(
-      this.getScriptsFor(targetVertical, 'onActivate'),
-      companyId,
-      company.organizationId,
-    );
+    try {
+      await this.runScripts(
+        this.getScriptsFor(targetVertical, 'onActivate'),
+        companyId,
+        company.organizationId,
+      );
+    } catch (activationError) {
+      // Compensate: revert the vertical change
+      await this.prisma.$transaction(async (tx) => {
+        await tx.company.update({
+          where: { id: companyId },
+          data: { businessVertical: previousVertical },
+        });
+        await tx.companyVerticalChangeAudit.create({
+          data: {
+            companyId,
+            organizationId: company.organizationId,
+            userId: params.actorId,
+            oldVertical: targetVertical,
+            newVertical: previousVertical,
+            changeReason:
+              'rollback-automatico: fallo en scripts de activacion',
+            warningsJson: Prisma.JsonNull,
+            success: false,
+          },
+        });
+      });
+
+      try {
+        await this.runScripts(
+          this.getScriptsFor(targetVertical, 'onDeactivate'),
+          companyId,
+          company.organizationId,
+        );
+      } catch {
+        // Best-effort cleanup; primary error is more important
+      }
+
+      throw activationError;
+    }
 
     this.configService.invalidateCache(companyId, company.organizationId);
     this.events.emitChanged({
@@ -150,7 +196,10 @@ export class VerticalMigrationService {
   async rollback(companyId: number, actorId: number) {
     const [snapshot, company] = await Promise.all([
       this.prisma.companyVerticalRollbackSnapshot.findFirst({
-        where: { companyId },
+        where: {
+          companyId,
+          expiresAt: { gte: new Date() },
+        },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.company.findUnique({
@@ -165,7 +214,7 @@ export class VerticalMigrationService {
 
     if (!snapshot) {
       throw new NotFoundException(
-        'No hay snapshots disponibles para rollback.',
+        'No hay snapshots disponibles para rollback. Es posible que haya expirado (7 dias).',
       );
     }
 
@@ -175,13 +224,26 @@ export class VerticalMigrationService {
       throw new BadRequestException('Snapshot invalido para rollback.');
     }
 
+    const currentVertical = company.businessVertical;
+
     await this.runScripts(
-      this.getScriptsFor(company.businessVertical, 'onDeactivate'),
+      this.getScriptsFor(currentVertical, 'onDeactivate'),
       companyId,
       company.organizationId,
     );
 
     await this.prisma.$transaction(async (tx) => {
+      // Optimistic concurrency: verify vertical hasn't changed
+      const current = await tx.company.findUnique({
+        where: { id: companyId },
+        select: { businessVertical: true },
+      });
+      if (!current || current.businessVertical !== currentVertical) {
+        throw new BadRequestException(
+          'El vertical fue modificado por otro usuario. Recarga la pagina e intenta nuevamente.',
+        );
+      }
+
       await tx.company.update({
         where: { id: companyId },
         data: { businessVertical: targetVertical },
@@ -192,7 +254,7 @@ export class VerticalMigrationService {
           companyId,
           organizationId: company.organizationId,
           userId: actorId,
-          oldVertical: company.businessVertical,
+          oldVertical: currentVertical,
           newVertical: targetVertical,
           changeReason: 'rollback',
           warningsJson: Prisma.JsonNull,
@@ -205,17 +267,52 @@ export class VerticalMigrationService {
       });
     });
 
-    await this.runScripts(
-      this.getScriptsFor(targetVertical, 'onActivate'),
-      companyId,
-      company.organizationId,
-    );
+    try {
+      await this.runScripts(
+        this.getScriptsFor(targetVertical, 'onActivate'),
+        companyId,
+        company.organizationId,
+      );
+    } catch (activationError) {
+      // Compensate: revert the vertical change
+      await this.prisma.$transaction(async (tx) => {
+        await tx.company.update({
+          where: { id: companyId },
+          data: { businessVertical: currentVertical },
+        });
+        await tx.companyVerticalChangeAudit.create({
+          data: {
+            companyId,
+            organizationId: company.organizationId,
+            userId: actorId,
+            oldVertical: targetVertical,
+            newVertical: currentVertical,
+            changeReason:
+              'rollback-automatico: fallo en scripts de activacion',
+            warningsJson: Prisma.JsonNull,
+            success: false,
+          },
+        });
+      });
+
+      try {
+        await this.runScripts(
+          this.getScriptsFor(targetVertical, 'onDeactivate'),
+          companyId,
+          company.organizationId,
+        );
+      } catch {
+        // Best-effort cleanup
+      }
+
+      throw activationError;
+    }
 
     this.configService.invalidateCache(companyId, company.organizationId);
     this.events.emitChanged({
       companyId,
       organizationId: company.organizationId,
-      previousVertical: company.businessVertical,
+      previousVertical: currentVertical,
       newVertical: targetVertical,
     });
 

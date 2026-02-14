@@ -447,6 +447,7 @@ export class UsersService {
         lastCompanyId: true,
         lastContextUpdatedAt: true,
         lastContextHash: true,
+        accountingMode: true,
       },
     });
 
@@ -465,9 +466,63 @@ export class UsersService {
       name: user.username,
       email: user.email,
       role: user.role,
+      accountingMode: user.accountingMode ?? 'simple',
       lastContext,
       userPermissions,
     };
+  }
+
+  /**
+   * Returns users that had API activity in the last 5 minutes.
+   * If organizationId is null → all users (for SUPER_ADMIN_GLOBAL).
+   * Otherwise → only users belonging to that organization.
+   */
+  async getActiveSessions(organizationId: number | null) {
+    const threshold = new Date(Date.now() - 5 * 60 * 1000);
+
+    const where: any = {
+      lastActiveAt: { gte: threshold },
+      status: 'ACTIVO',
+    };
+
+    if (organizationId !== null) {
+      where.memberships = {
+        some: { organizationId },
+      };
+    }
+
+    const users = await this.prismaService.user.findMany({
+      where,
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        lastActiveAt: true,
+        memberships: {
+          select: {
+            organization: {
+              select: { id: true, name: true },
+            },
+            role: true,
+          },
+        },
+      },
+      orderBy: { lastActiveAt: 'desc' },
+    });
+
+    return users.map((u) => ({
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      role: u.role,
+      lastActiveAt: u.lastActiveAt,
+      organizations: u.memberships.map((m) => ({
+        id: m.organization.id,
+        name: m.organization.name,
+        membershipRole: m.role,
+      })),
+    }));
   }
 
   async updateLastContext(
@@ -896,6 +951,31 @@ export class UsersService {
     });
 
     return updated;
+  }
+
+  async updatePreferences(
+    userId: number,
+    data: { accountingMode?: string },
+  ) {
+    const updated = await this.prismaService.user.update({
+      where: { id: userId },
+      data: {
+        accountingMode: data.accountingMode,
+      },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        accountingMode: true,
+      },
+    });
+
+    return {
+      message: 'Preferencias actualizadas correctamente',
+      preferences: {
+        accountingMode: updated.accountingMode,
+      },
+    };
   }
 
   async changePassword(

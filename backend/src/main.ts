@@ -10,9 +10,15 @@ import { TelemetryInterceptor } from './metrics/trace.interceptor';
 import { TenantHeaderSanitizerMiddleware } from './common/middleware/tenant-header.middleware';
 import { PrismaService } from './prisma/prisma.service';
 import { TenantSlugResolverMiddleware } from './common/middleware/tenant-slug-resolver.middleware';
+import {
+  getAllowedOrigins,
+  isAllowedOrigin,
+} from './common/cors/allowed-origins';
+import { TenantExceptionFilter } from './common/filters/tenant-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.useGlobalFilters(new TenantExceptionFilter());
   const metrics = app.get(MetricsService);
   const telemetryEnabled = process.env.DISABLE_TELEMETRY !== 'true';
   if (telemetryEnabled) {
@@ -20,18 +26,7 @@ async function bootstrap() {
     await import('./metrics/tracing');
   }
 
-  const allowedOrigins =
-    process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()) || [
-      'http://localhost:3000',
-    ];
-  console.log('[CORS]', allowedOrigins);
-
-  const isAllowedOrigin = (origin?: string) => {
-    if (!origin) return true;
-    if (allowedOrigins.includes(origin)) return true;
-    if (/^https?:\/\/[^.]+\.lvh\.me(?::\d+)?$/i.test(origin)) return true;
-    return false;
-  };
+  console.log('[CORS]', getAllowedOrigins());
 
   app.enableCors({
     origin: (origin, callback) => {
