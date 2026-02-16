@@ -1,23 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BrowserMultiFormatReader } from "@zxing/browser";
-import {
-  BarcodeFormat,
-  DecodeHintType,
-  NotFoundException,
-} from "@zxing/library";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 
 interface ZxingScannerProps {
   onScanSuccess: (decodedText: string, format: string) => void;
   onScanError?: (error: Error) => void;
-  formats?: BarcodeFormat[];
 }
 
 /**
  * Modern barcode/QR scanner using @zxing/browser
+ *
+ * Uses dynamic imports to avoid build-time ESM resolution issues.
  *
  * Supports multiple formats:
  * - QR Code
@@ -33,14 +28,12 @@ interface ZxingScannerProps {
 export default function ZxingScanner({
   onScanSuccess,
   onScanError,
-  formats,
 }: ZxingScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const readerRef = useRef<unknown>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [deviceId, setDeviceId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     let isActive = true;
@@ -48,11 +41,16 @@ export default function ZxingScanner({
 
     const initScanner = async () => {
       try {
+        // Dynamic imports to avoid build-time module resolution issues
+        const { BrowserMultiFormatReader } = await import("@zxing/browser");
+        const { BarcodeFormat, DecodeHintType, NotFoundException } =
+          await import("@zxing/library");
+
         // Configure hints for better performance and QR detection
         const hints = new Map();
 
-        // Set supported formats (default to common formats if not specified)
-        const supportedFormats = formats ?? [
+        // Set supported formats
+        const supportedFormats = [
           BarcodeFormat.QR_CODE,
           BarcodeFormat.EAN_13,
           BarcodeFormat.EAN_8,
@@ -64,10 +62,9 @@ export default function ZxingScanner({
         ];
         hints.set(DecodeHintType.POSSIBLE_FORMATS, supportedFormats);
 
-        // 🚀 OPTIMIZATIONS: Better QR detection in complex positions
-        hints.set(DecodeHintType.TRY_HARDER, true); // More thorough scanning
-        hints.set(DecodeHintType.PURE_BARCODE, false); // Allow detection of codes with surrounding content
-        hints.set(DecodeHintType.ASSUME_GS1, false); // Better for non-GS1 codes
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        hints.set(DecodeHintType.PURE_BARCODE, false);
+        hints.set(DecodeHintType.ASSUME_GS1, false);
 
         // Create reader with hints
         const reader = new BrowserMultiFormatReader(hints);
@@ -75,27 +72,31 @@ export default function ZxingScanner({
 
         // Get available video devices using native API
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoInputDevices = devices.filter(device => device.kind === 'videoinput');
+        const videoInputDevices = devices.filter(
+          (device) => device.kind === "videoinput"
+        );
 
         if (videoInputDevices.length === 0) {
           throw new Error("No se encontraron cámaras disponibles");
         }
 
         // Prefer back camera on mobile devices
-        const backCamera = videoInputDevices.find((device) =>
-          device.label.toLowerCase().includes("back") ||
-          device.label.toLowerCase().includes("trasera") ||
-          device.label.toLowerCase().includes("rear")
+        const backCamera = videoInputDevices.find(
+          (device) =>
+            device.label.toLowerCase().includes("back") ||
+            device.label.toLowerCase().includes("trasera") ||
+            device.label.toLowerCase().includes("rear")
         );
-        const selectedDeviceId = backCamera?.deviceId ?? videoInputDevices[0].deviceId;
-        setDeviceId(selectedDeviceId);
+        const selectedDeviceId =
+          backCamera?.deviceId ?? videoInputDevices[0].deviceId;
 
         if (!isActive || !videoRef.current) return;
 
-        console.log(`[ZxingScanner] Using camera: ${videoInputDevices.find(d => d.deviceId === selectedDeviceId)?.label || selectedDeviceId}`);
+        console.log(
+          `[ZxingScanner] Using camera: ${videoInputDevices.find((d) => d.deviceId === selectedDeviceId)?.label || selectedDeviceId}`
+        );
 
         // Start continuous scanning using decodeFromVideoDevice
-        // This is the correct API for @zxing/browser
         controls = await reader.decodeFromVideoDevice(
           selectedDeviceId,
           videoRef.current,
@@ -103,7 +104,7 @@ export default function ZxingScanner({
             if (result && isActive) {
               const text = result.getText();
               const format = BarcodeFormat[result.getBarcodeFormat()];
-              console.log(`[ZxingScanner] ✅ Scanned: ${text} (${format})`);
+              console.log(`[ZxingScanner] Scanned: ${text} (${format})`);
               onScanSuccess(text, format);
             }
 
@@ -117,7 +118,10 @@ export default function ZxingScanner({
         setIsLoading(false);
       } catch (err) {
         console.error("[ZxingScanner] Initialization error:", err);
-        const errorMessage = err instanceof Error ? err.message : "Error al iniciar el escáner";
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Error al iniciar el escáner";
         setError(errorMessage);
         setIsLoading(false);
         onScanError?.(err instanceof Error ? err : new Error(errorMessage));
@@ -141,7 +145,7 @@ export default function ZxingScanner({
 
       // Stop all video tracks
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
 
@@ -150,7 +154,7 @@ export default function ZxingScanner({
         readerRef.current = null;
       }
     };
-  }, [formats, onScanSuccess, onScanError]);
+  }, [onScanSuccess, onScanError]);
 
   if (error) {
     return (
@@ -172,15 +176,15 @@ export default function ZxingScanner({
         ref={videoRef}
         className="w-full"
         style={{
-          maxHeight: "500px", // 🚀 Larger viewport for better scanning
+          maxHeight: "500px",
           objectFit: "cover",
         }}
-        playsInline // Important for iOS devices
+        playsInline
         autoPlay
         muted
       />
 
-      {/* Scan guide overlay - LARGER for better visibility */}
+      {/* Scan guide overlay */}
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative">
           {/* Main scanning frame */}
@@ -197,13 +201,13 @@ export default function ZxingScanner({
         </div>
       </div>
 
-      {/* Info text with tips */}
+      {/* Info text */}
       <div className="absolute bottom-6 left-0 right-0 space-y-2 px-4 text-center">
         <p className="text-sm font-medium text-white drop-shadow-lg">
           Centra el código QR en el recuadro
         </p>
         <p className="text-xs text-white/80 drop-shadow-lg">
-          💡 Mantén el código estable y bien iluminado
+          Mantén el código estable y bien iluminado
         </p>
       </div>
     </div>
