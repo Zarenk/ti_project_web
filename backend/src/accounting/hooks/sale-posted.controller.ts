@@ -3,6 +3,7 @@ import { SalePostedDto } from './dto/sale-posted.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { JournalEntryService } from '../services/journal-entry.service';
 import { SaleAccountingService } from '../services/sale-accounting.service';
+import { AccountBootstrapService } from '../services/account-bootstrap.service';
 import { Response } from 'express';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
@@ -19,6 +20,7 @@ export class SalePostedController {
     private readonly prisma: PrismaService,
     private readonly journalEntryService: JournalEntryService,
     private readonly mapper: SaleAccountingService,
+    private readonly bootstrap: AccountBootstrapService,
   ) {}
 
   @Post()
@@ -72,6 +74,11 @@ export class SalePostedController {
       };
 
       this.logger.debug(`Effective tenant: orgId=${effectiveTenant.organizationId}, companyId=${effectiveTenant.companyId}`);
+
+      // Auto-crear cuentas PCGE y Journal si no existen para esta organización
+      if (effectiveTenant.organizationId) {
+        await this.bootstrap.ensureDefaults(effectiveTenant.organizationId);
+      }
 
       const invoice = sale.invoices?.[0];
       if (invoice) {

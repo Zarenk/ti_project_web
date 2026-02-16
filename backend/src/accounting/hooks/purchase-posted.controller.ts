@@ -3,6 +3,7 @@ import { PurchasePostedDto } from './dto/purchase-posted.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { JournalEntryService } from '../services/journal-entry.service';
 import { PurchaseAccountingService } from '../services/purchase-account.service';
+import { AccountBootstrapService } from '../services/account-bootstrap.service';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
@@ -20,6 +21,7 @@ export class PurchasePostedController {
     private readonly prisma: PrismaService,
     private readonly journalEntryService: JournalEntryService,
     private readonly mapper: PurchaseAccountingService,
+    private readonly bootstrap: AccountBootstrapService,
   ) {}
 
   @Post()
@@ -61,6 +63,11 @@ export class PurchasePostedController {
         allowedOrganizationUnitIds: tenant?.allowedOrganizationUnitIds ?? [],
       };
 
+      // Auto-crear cuentas PCGE y Journal si no existen para esta organización
+      if (effectiveTenant.organizationId) {
+        await this.bootstrap.ensureDefaults(effectiveTenant.organizationId);
+      }
+
       // Verificar si ya existe un journal entry para esta factura
       if (purchase.invoice) {
         const existing = await this.prisma.journalEntry.findFirst({
@@ -84,7 +91,7 @@ export class PurchasePostedController {
       // Obtener detalles de productos para las líneas contables
       const productDetails = await this.prisma.entryDetail.findMany({
         where: { entryId: purchase.id },
-        include: { product: true, series: true },
+        include: { product: true, series: true }, // series: EntryDetailSeries[]
       });
 
       const products = productDetails.map(detail => ({

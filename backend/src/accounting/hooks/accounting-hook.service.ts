@@ -5,6 +5,14 @@ import axios from 'axios';
 export class AccountingHook {
   private readonly logger = new Logger(AccountingHook.name);
 
+  private getBaseUrl(): string {
+    if (process.env.ACCOUNTING_URL) {
+      return process.env.ACCOUNTING_URL;
+    }
+    const port = process.env.PORT || '4000';
+    return `http://localhost:${port}/api`;
+  }
+
   private isHookEnabled(): boolean {
     const flag = process.env.ACCOUNTING_HOOK_ENABLED;
     if (flag === undefined) {
@@ -19,7 +27,7 @@ export class AccountingHook {
       timestamp: new Date().toISOString(),
     };
 
-    const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:4000/api';
+    const baseUrl = this.getBaseUrl();
     const url = `${baseUrl}/accounting/hooks/sale-posted`;
     const maxRetries = 3;
 
@@ -54,8 +62,7 @@ export class AccountingHook {
       timestamp: new Date().toISOString(),
     };
 
-    // Align default with other hooks (port + /api prefix)
-    const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:4000/api';
+    const baseUrl = this.getBaseUrl();
     const url = `${baseUrl}/accounting/hooks/purchase-posted`;
     const maxRetries = 3;
 
@@ -90,7 +97,7 @@ export class AccountingHook {
       return;
     }
     const payload = { ...data, timestamp: new Date().toISOString() };
-    const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:3000';
+    const baseUrl = this.getBaseUrl();
     const url = `${baseUrl}/accounting/hooks/inventory-adjusted`;
     const maxRetries = 3;
 
@@ -118,7 +125,7 @@ export class AccountingHook {
       timestamp: new Date().toISOString(),
     };
 
-    const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:4000/api';
+    const baseUrl = this.getBaseUrl();
     const url = `${baseUrl}/accounting/hooks/payment-posted`;
     const maxRetries = 3;
 
@@ -146,7 +153,7 @@ export class AccountingHook {
       timestamp: new Date().toISOString(),
     };
 
-    const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:4000/api';
+    const baseUrl = this.getBaseUrl();
     const url = `${baseUrl}/accounting/hooks/credit-note-posted`;
     const maxRetries = 3;
 
@@ -174,7 +181,7 @@ export class AccountingHook {
       timestamp: new Date().toISOString(),
     };
 
-    const baseUrl = process.env.ACCOUNTING_URL || 'http://localhost:4000/api';
+    const baseUrl = this.getBaseUrl();
     const url = `${baseUrl}/accounting/hooks/debit-note-posted`;
     const maxRetries = 3;
 
