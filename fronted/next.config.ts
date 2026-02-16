@@ -35,6 +35,7 @@ const skipStrictChecks = Boolean(
 );
 
 const nextConfig: NextConfig = {
+  transpilePackages: ['@zxing/browser', '@zxing/library'],
   eslint: {
     ignoreDuringBuilds: skipStrictChecks,
   },
