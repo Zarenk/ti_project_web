@@ -46,8 +46,8 @@ describe('executeSale', () => {
       paymentMethod: {
         findUnique: jest
           .fn()
-          .mockImplementation(async ({ where: { id } }: any) =>
-            paymentMethodMap.get(id) ?? null,
+          .mockImplementation(
+            async ({ where: { id } }: any) => paymentMethodMap.get(id) ?? null,
           ),
         findFirst: jest.fn(),
         create: jest.fn(),
@@ -128,4 +128,3 @@ describe('executeSale', () => {
     ).toHaveBeenCalledTimes(2);
   });
 });
-

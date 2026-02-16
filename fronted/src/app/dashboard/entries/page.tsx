@@ -1,6 +1,5 @@
 import { getProducts } from '../products/products.api'
 import { DataTable } from './data-table';
-import { columns } from './columns';
 import { getAllEntries } from './entries.api';
 
 export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
@@ -37,7 +36,7 @@ export default async function Page() {
         <div className='container mx-auto px-1 sm:px-6 lg:px-8'>
           <h1 className='px-5 text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6'>Control de Inventarios: Ingresos</h1>
           <div className="overflow-x-auto">
-            <DataTable columns={columns} data={mappedData}></DataTable>
+            <DataTable data={mappedData}></DataTable>
           </div>
         </div>
       </section>

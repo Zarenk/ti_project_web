@@ -43,7 +43,7 @@ import {
 export default function Navbar() {
   const { settings } = useSiteSettings()
   const [loggingOut, setLoggingOut] = useState(false)
-  const { logout, userName, userId } = useAuth()
+  const { logoutAndRedirect, userName, userId } = useAuth()
   const router = useRouter()
   const { items } = useCart()
 
@@ -214,8 +214,7 @@ export default function Navbar() {
   const handleLogout = async () => {
     if (loggingOut) return
     setLoggingOut(true)
-    await logout()
-    router.replace("/login")
+    await logoutAndRedirect()
     setLoggingOut(false)
   }
 

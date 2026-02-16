@@ -99,11 +99,15 @@ export class ApisNetService {
       return response.data;
     } catch (error: any) {
       if (error?.response?.status === 404) {
-        throw new BadRequestException('No se encontraron datos para el documento solicitado.');
+        throw new BadRequestException(
+          'No se encontraron datos para el documento solicitado.',
+        );
       }
 
       if (error?.response?.status === 401) {
-        throw new UnauthorizedException('Credenciales de apis.net.pe invalidas o caducadas.');
+        throw new UnauthorizedException(
+          'Credenciales de apis.net.pe invalidas o caducadas.',
+        );
       }
 
       throw new InternalServerErrorException(
@@ -116,15 +120,8 @@ export class ApisNetService {
     return {
       type: 'RUC',
       identifier: ruc,
-      name:
-        data?.razonSocial ??
-        data?.nombre ??
-        data?.nombreComercial ??
-        '--',
-      address:
-        data?.direccion ??
-        data?.direccionCompleta ??
-        null,
+      name: data?.razonSocial ?? data?.nombre ?? data?.nombreComercial ?? '--',
+      address: data?.direccion ?? data?.direccionCompleta ?? null,
       status: data?.estado ?? null,
       condition: data?.condicion ?? null,
       ubigeo: data?.ubigeo ?? null,
@@ -136,7 +133,11 @@ export class ApisNetService {
   }
 
   private mapDniResponse(data: any, dni: string): LookupResultDto {
-    const nombres = [data?.nombres, data?.apellidoPaterno, data?.apellidoMaterno]
+    const nombres = [
+      data?.nombres,
+      data?.apellidoPaterno,
+      data?.apellidoMaterno,
+    ]
       .filter((part) => !!part?.trim?.())
       .join(' ')
       .trim();
@@ -198,7 +199,3 @@ export class ApisNetService {
     return normalized;
   }
 }
-
-
-
-

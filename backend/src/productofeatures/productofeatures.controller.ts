@@ -7,12 +7,16 @@ import {
   Patch,
   Delete,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { ProductfeaturesService } from './productofeatures.service';
 import { CreateProductoFeatureDto } from './dto/create-productofeature.dto';
 import { UpdateProductFeatureDto } from './dto/update-productofeature.dto';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('products/:productId/features')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class ProductofeaturesController {
   constructor(private readonly service: ProductfeaturesService) {}
 

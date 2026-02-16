@@ -327,6 +327,12 @@ const taxCodes = [
 ];
 
 async function main() {
+  // DEPRECATED: This seed is outdated and incompatible with the new Account schema
+  // which requires accountType and organizationId. Use minimal-accounts.seed.ts instead.
+  console.warn('⚠️  acounting.seed.ts is deprecated. Use minimal-accounts.seed.ts instead.');
+  return;
+
+  /* DISABLED - Outdated code below
   const accountIdByCode = new Map<string, number>();
 
   for (const acc of accounts) {
@@ -342,7 +348,9 @@ async function main() {
     });
     accountIdByCode.set(acc.code, created.id);
   }
+  */
 
+  /* DISABLED - TaxCode seeding also disabled
   for (const tax of taxCodes) {
     const contraAccountId = tax.contraAccountCode
       ? accountIdByCode.get(tax.contraAccountCode)
@@ -366,6 +374,7 @@ async function main() {
       },
     });
   }
+  */
 
   console.log('Accounting seed completed');
 }

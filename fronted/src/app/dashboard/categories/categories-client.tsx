@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 
 import { DataTable } from "./data-table";
 import { columns, type Categories } from "./columns";
 import { getCategories } from "./categories.api";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { TablePageSkeleton } from "@/components/table-page-skeleton";
 
 type RawCategory = {
   id: string | number;
@@ -63,12 +63,7 @@ export function CategoriesClient(): React.ReactElement {
 
   const content = useMemo(() => {
     if (loading) {
-      return (
-        <div className="flex items-center gap-2 py-10 text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          <span>Cargando categorias...</span>
-        </div>
-      );
+      return <TablePageSkeleton title={false} columns={3} rows={5} actions={false} />;
     }
 
     if (error) {

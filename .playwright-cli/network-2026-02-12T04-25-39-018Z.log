@@ -1,0 +1,35 @@
+[POST] http://192.168.1.41:4000/api/public/clients/guest => [400] Bad Request
+[GET] http://192.168.1.41:4000/api/public/products => [400] Bad Request
+[GET] http://192.168.1.41:4000/api/public/category/with-count => [400] Bad Request
+[POST] http://localhost:3000/__nextjs_original-stack-frames => [200] OK
+[GET] http://localhost:3000/?_rsc=1oqwi => [200] OK
+[GET] http://localhost:3000/_next/static/webpack/ca334c955ef33fff.webpack.hot-update.json => [200] OK
+[POST] http://192.168.1.41:4000/api/public/clients/guest => [201] Created
+[GET] http://192.168.1.41:4000/api/public/products => [200] OK
+[GET] http://192.168.1.41:4000/api/public/category/with-count => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/24 => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/8 => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/7 => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/5 => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/4 => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/3 => [200] OK
+[GET] http://localhost:3000/assets/logos/kingston.png => [404] Not Found
+[GET] http://localhost:3000/_next/static/webpack/e0f4294501931fee.webpack.hot-update.json => [200] OK
+[GET] http://localhost:3000/?_rsc=1oqwi => [200] OK
+[GET] http://localhost:3000/_next/static/webpack/66933a91d9dc564f.webpack.hot-update.json => [200] OK
+[GET] http://localhost:3000/?_rsc=1oqwi => [200] OK
+[GET] http://192.168.1.41:4000/api/public/products => [200] OK
+[GET] http://192.168.1.41:4000/api/public/category/with-count => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/24 => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/8 => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/7 => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/5 => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/4 => [200] OK
+[GET] http://192.168.1.41:4000/api/public/inventory/stores-with-product/3 => [200] OK
+[GET] http://localhost:3000/assets/logos/kingston.png => [404] Not Found
+[GET] http://localhost:3000/?_rsc=1oqwi => [200] OK
+[GET] http://localhost:3000/_next/static/webpack/a4db1f6f59260b05.webpack.hot-update.json => [200] OK
+[GET] http://localhost:3000/?_rsc=1oqwi => [200] OK
+[GET] http://localhost:3000/?_rsc=1oqwi => [200] OK
+[GET] http://localhost:3000/_next/static/webpack/efde611739058399.webpack.hot-update.json => [200] OK
+[GET] http://localhost:3000/?_rsc=1oqwi => [200] OK

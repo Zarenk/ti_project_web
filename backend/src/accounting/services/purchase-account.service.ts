@@ -3,10 +3,18 @@ import { EntryLine } from '../entries.service';
 
 export interface PurchaseEntryLine extends EntryLine {}
 
+export interface PurchaseProduct {
+  quantity: number;
+  name: string;
+  price: number;
+  series?: string;
+}
+
 export interface PurchaseData {
   total: number;
   provider?: { name?: string } | null;
   isCredit?: boolean;
+  products?: PurchaseProduct[];
 }
 
 const round2 = (n: number) => Number(n.toFixed(2));
@@ -23,10 +31,22 @@ export class PurchaseAccountingService {
       ? `Cuentas por pagar ${purchase.provider?.name ?? ''}`.trim()
       : 'Caja';
 
+    // Construir descripción detallada de mercaderías
+    let merchandiseDescription = 'Mercaderías';
+    if (purchase.products && purchase.products.length > 0) {
+      const itemsDetail = purchase.products
+        .map(p => {
+          const seriesInfo = p.series ? ` S/N:${p.series}` : '';
+          return `${p.quantity}x ${p.name} @S/${p.price.toFixed(2)}${seriesInfo}`;
+        })
+        .join(' | ');
+      merchandiseDescription = `Mercaderías: ${itemsDetail}`;
+    }
+
     return [
       {
         account: '2011',
-        description: 'Mercaderías',
+        description: merchandiseDescription,
         debit: subtotal,
         credit: 0,
       },

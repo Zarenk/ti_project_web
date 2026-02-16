@@ -1,8 +1,10 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { OrderTrackingService } from './ordertracking.service';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('orders')
+@UseGuards(TenantRequiredGuard)
 export class OrderTrackingController {
   constructor(private readonly orderTrackingService: OrderTrackingService) {}
 

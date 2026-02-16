@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ArrowDown, ArrowUp, Calculator, Search, ChevronDown, ChevronUp, Calendar, X } from "lucide-react"
+import { ArrowDown, ArrowUp, Calculator, Search, ChevronDown, ChevronUp, Calendar, X, Banknote, CreditCard, Landmark, Smartphone } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import { BACKEND_URL } from "@/lib/utils"
 import { Transaction } from "../types/cash-register"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { BrandLogo } from "@/components/BrandLogo"
 
 const COMPANY_RUC = process.env.NEXT_PUBLIC_COMPANY_RUC ?? "20519857538"
 
@@ -95,6 +96,18 @@ const removePaymentMethodSegments = (value: string) => {
       .replace(/pagado\s+con[^|]+/gi, " ")
       .replace(/pago\s+con[^|]+/gi, " ")
   )
+}
+
+const getPaymentMethodIcon = (method: string) => {
+  const upper = method.toUpperCase()
+  if (upper.includes("EFECTIVO")) return <Banknote className="h-3.5 w-3.5" />
+  if (upper.includes("TRANSFERENCIA")) return <Landmark className="h-3.5 w-3.5" />
+  if (upper.includes("VISA")) return <BrandLogo src="/icons/visa.png" alt="Visa" className="h-3.5 w-3.5" />
+  if (upper.includes("YAPE")) return <BrandLogo src="/icons/yape.png" alt="Yape" className="h-3.5 w-3.5" />
+  if (upper.includes("PLIN")) return <BrandLogo src="/icons/plin.png" alt="Plin" className="h-3.5 w-3.5" />
+  if (upper.includes("TARJETA")) return <CreditCard className="h-3.5 w-3.5" />
+  if (upper.includes("APP") || upper.includes("BILLETERA")) return <Smartphone className="h-3.5 w-3.5" />
+  return null
 }
 
 const trimDescriptionSeparators = (value: string) =>
@@ -1201,36 +1214,36 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                           {!isMobile && <TableCell>{transaction.employee}</TableCell>}
                           {!isMobile && (
                             <TableCell className="flex flex-wrap gap-1">
-                              {paymentEntriesForDisplay.length > 0 ? (
-                                paymentEntriesForDisplay.map((entry, index) => {
-                                  const label = entry.label || entry.raw
-                                  const amountText = entry.amountText
-                                    ? formatPaymentAmountText(
-                                        entry.amountText,
-                                        effectiveType === "EXPENSE",
-                                      )
-                                    : null
+                                {paymentEntriesForDisplay.length > 0 ? (
+                                  paymentEntriesForDisplay.map((entry, index) => {
+                                    const label = entry.label || entry.raw
+                                    const amountText = entry.amountText
+                                      ? formatPaymentAmountText(
+                                          entry.amountText,
+                                          effectiveType === "EXPENSE",
+                                        )
+                                      : null
+                                    const icon = getPaymentMethodIcon(label || entry.raw)
 
-                                  return (
-                                    <Badge
-                                      key={`${entry.raw}-${index}`}
-                                      variant="outline"
-                                      className={getBadgeColor(label || entry.raw)}
-                                    >
-                                      {amountText ? (
-                                        <>
+                                    return (
+                                      <Badge
+                                        key={`${entry.raw}-${index}`}
+                                        variant="outline"
+                                        className={getBadgeColor(label || entry.raw)}
+                                      >
+                                        <span className="flex items-center gap-1">
+                                          {icon}
                                           <span>{label}</span>
-                                          <span className="ml-1 font-semibold">{amountText}</span>
-                                        </>
-                                      ) : (
-                                        <span>{label}</span>
-                                      )}
-                                    </Badge>
-                                  )
-                                })
-                              ) : (
-                                "-"
-                              )}
+                                          {amountText ? (
+                                            <span className="ml-1 font-semibold">{amountText}</span>
+                                          ) : null}
+                                        </span>
+                                      </Badge>
+                                    )
+                                  })
+                                ) : (
+                                  "-"
+                                )}
                             </TableCell>
                           )}
                           {!isMobile && (
@@ -1370,14 +1383,17 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                             effectiveType === "EXPENSE",
                                           )
                                         : null
+                                      const label = entry.label || entry.raw
+                                      const icon = getPaymentMethodIcon(label)
 
                                       return (
                                         <div
                                           key={`${entry.label}-${index}`}
                                           className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm"
                                         >
-                                          <span className="font-medium text-foreground">
-                                            {entry.label || entry.raw}
+                                          <span className="flex items-center gap-2 font-medium text-foreground">
+                                            {icon}
+                                            {label}
                                           </span>
                                           {amountText && (
                                             <span className="text-muted-foreground">{amountText}</span>
@@ -1591,14 +1607,22 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                             <div className="rounded-md border bg-background/80">
                               <table className="w-full text-xs">
                                 <tbody>
-                                  {activeOperationsSummary.paymentBreakdown.map((entry) => (
+                                  {activeOperationsSummary.paymentBreakdown.map((entry) => {
+                                    const icon = getPaymentMethodIcon(entry.method)
+                                    return (
                                     <tr key={entry.method} className="border-t">
-                                      <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
+                                      <td className="px-3 py-2 text-left text-muted-foreground">
+                                        <span className="flex items-center gap-2">
+                                          {icon}
+                                          {entry.method}
+                                        </span>
+                                      </td>
                                       <td className="px-3 py-2 text-right font-medium text-foreground">
                                         {formatCurrency(entry.amount, activeOperationsSummary.currencySymbol)}
                                       </td>
                                     </tr>
-                                  ))}
+                                    )
+                                  })}
                                 </tbody>
                               </table>
                             </div>
@@ -1678,14 +1702,22 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                   <div className="mt-3 rounded-md border bg-background/80">
                                     <table className="w-full text-xs">
                                       <tbody>
-                                        {summary.paymentBreakdown.map((entry) => (
-                                          <tr key={entry.method} className="border-t">
-                                            <td className="px-3 py-2 text-left text-muted-foreground">{entry.method}</td>
-                                            <td className="px-3 py-2 text-right font-medium text-foreground">
-                                              {formatCurrency(entry.amount, summary.currencySymbol)}
-                                            </td>
-                                          </tr>
-                                        ))}
+                                        {summary.paymentBreakdown.map((entry) => {
+                                          const icon = getPaymentMethodIcon(entry.method)
+                                          return (
+                                            <tr key={entry.method} className="border-t">
+                                              <td className="px-3 py-2 text-left text-muted-foreground">
+                                                <span className="flex items-center gap-2">
+                                                  {icon}
+                                                  {entry.method}
+                                                </span>
+                                              </td>
+                                              <td className="px-3 py-2 text-right font-medium text-foreground">
+                                                {formatCurrency(entry.amount, summary.currencySymbol)}
+                                              </td>
+                                            </tr>
+                                          )
+                                        })}
                                       </tbody>
                                     </table>
                                   </div>
@@ -1840,21 +1872,30 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                         }))
                       : []
                     const formattedPaymentMethods = paymentEntries.length > 0
-                      ? paymentEntries
-                          .map((entry) => {
-                            if (!entry.amountText) {
-                              return entry.label || entry.raw
-                            }
+                      ? paymentEntries.map((entry, index) => {
+                          const label = entry.label || entry.raw
+                          const amountText = entry.amountText
+                            ? formatPaymentAmountText(
+                                entry.amountText,
+                                modalEffectiveType === "EXPENSE",
+                              )
+                            : null
+                          const icon = getPaymentMethodIcon(label)
 
-                            const amountText = formatPaymentAmountText(
-                              entry.amountText,
-                              modalEffectiveType === "EXPENSE",
-                            )
-
-                            return `${entry.label || entry.raw}: ${amountText}`
-                          })
-                          .join(", ")
-                      : "-"
+                          return (
+                            <span
+                              key={`${label}-${index}`}
+                              className="inline-flex items-center gap-2 rounded-md border px-2 py-0.5 text-xs"
+                            >
+                              {icon}
+                              <span>{label}</span>
+                              {amountText ? (
+                                <span className="font-semibold">{amountText}</span>
+                              ) : null}
+                            </span>
+                          )
+                        })
+                      : null
 
                     const formattedAmount = formatAmountWithSign(
                       modalTransaction.amount,
@@ -1899,7 +1940,14 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                         <p><strong>Monto:</strong> {formattedAmount}</p>
                         <p><strong>Encargado:</strong> {modalTransaction.employee || "-"}</p>
                         <p>
-                          <strong>Métodos de Pago:</strong> {formattedPaymentMethods}
+                          <strong>Métodos de Pago:</strong>{" "}
+                          {formattedPaymentMethods ? (
+                            <span className="mt-1 flex flex-wrap gap-2">
+                              {formattedPaymentMethods}
+                            </span>
+                          ) : (
+                            "-"
+                          )}
                         </p>
                         <p><strong>ID:</strong> {modalTransaction.id}</p>
                         {(modalTransaction.cashRegisterName || modalTransaction.cashRegisterId) && (
@@ -2025,16 +2073,22 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                 <div className="overflow-hidden rounded-md border">
                                   <table className="w-full text-sm">
                                     <tbody>
-                                      {paymentEntriesForModal.map((entry, index) => (
-                                        <tr key={`${entry.label}-${index}`} className="border-b last:border-b-0">
-                                          <th className="w-1/2 bg-muted px-3 py-2 text-left font-medium align-top">
-                                            {entry.label}
-                                          </th>
-                                          <td className="px-3 py-2 text-right text-muted-foreground">
-                                            {entry.amountText ?? "-"}
-                                          </td>
-                                        </tr>
-                                      ))}
+                                      {paymentEntriesForModal.map((entry, index) => {
+                                        const icon = getPaymentMethodIcon(entry.label)
+                                        return (
+                                          <tr key={`${entry.label}-${index}`} className="border-b last:border-b-0">
+                                            <th className="w-1/2 bg-muted px-3 py-2 text-left font-medium align-top">
+                                              <span className="flex items-center gap-2">
+                                                {icon}
+                                                {entry.label}
+                                              </span>
+                                            </th>
+                                            <td className="px-3 py-2 text-right text-muted-foreground">
+                                              {entry.amountText ?? "-"}
+                                            </td>
+                                          </tr>
+                                        )
+                                      })}
                                     </tbody>
                                   </table>
                                 </div>
@@ -2128,14 +2182,22 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                           <div className="overflow-hidden rounded-md border">
                             <table className="w-full text-sm">
                               <tbody>
-                                {modalClosureDetails.paymentBreakdown.map((entry) => (
-                                  <tr key={entry.method} className="border-b last:border-b-0">
-                                    <th className="bg-muted px-3 py-2 text-left font-medium align-top w-48">{entry.method}</th>
-                                    <td className="px-3 py-2 text-muted-foreground">
-                                      {modalCurrency} {entry.amount.toFixed(2)}
-                                    </td>
-                                  </tr>
-                                ))}
+                                {modalClosureDetails.paymentBreakdown.map((entry) => {
+                                  const icon = getPaymentMethodIcon(entry.method)
+                                  return (
+                                    <tr key={entry.method} className="border-b last:border-b-0">
+                                      <th className="bg-muted px-3 py-2 text-left font-medium align-top w-48">
+                                        <span className="flex items-center gap-2">
+                                          {icon}
+                                          {entry.method}
+                                        </span>
+                                      </th>
+                                      <td className="px-3 py-2 text-muted-foreground">
+                                        {modalCurrency} {entry.amount.toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
                               </tbody>
                             </table>
                           </div>

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { readErrorMessage, resolveAuthToken } from "../utils";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+import { BACKEND_URL } from "@/lib/utils";
 const BACKUPS_URL = `${BACKEND_URL}/api/system/backups`;
 
 /**

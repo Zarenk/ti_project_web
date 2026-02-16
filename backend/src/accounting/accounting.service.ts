@@ -1,17 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { AccEntryStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { zonedTimeToUtc } from 'date-fns-tz';
 import { endOfDay, startOfDay, parse, endOfMonth, format } from 'date-fns';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 
 export interface AccountNode {
   id: number;
   code: string;
   name: string;
+  accountType?: 'ACTIVO' | 'PASIVO' | 'PATRIMONIO' | 'INGRESO' | 'GASTO';
   parentId: number | null;
   children?: AccountNode[];
+  balance?: number;
+  updatedAt?: string;
 }
 
 const LIMA_TZ = 'America/Lima';
@@ -54,7 +58,25 @@ const formatInventoryQuantity = (value: unknown): string => {
 
 @Injectable()
 export class AccountingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly verticalConfig: VerticalConfigService,
+  ) {}
+
+  private async ensureAccountingFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
+      return;
+    }
+
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.accounting === false) {
+      throw new ForbiddenException(
+        'El modulo de contabilidad no esta habilitado para esta empresa.',
+      );
+    }
+  }
 
   private emitTenantLog(
     operation: string,
@@ -80,9 +102,14 @@ export class AccountingService {
   async getAccounts(
     tenantContext?: TenantContext | null,
   ): Promise<AccountNode[]> {
+    await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
+
     this.emitTenantLog('getAccounts', tenantContext);
 
+    const organizationId = tenantContext?.organizationId ?? null;
+
     const accounts = await this.prisma.account.findMany({
+      where: organizationId ? { organizationId } : undefined,
       orderBy: { code: 'asc' },
     });
 
@@ -92,7 +119,9 @@ export class AccountingService {
         id: acc.id,
         code: acc.code,
         name: acc.name,
+        accountType: acc.accountType,
         parentId: acc.parentId,
+        updatedAt: acc.updatedAt.toISOString(),
         children: [],
       });
     }
@@ -127,12 +156,21 @@ export class AccountingService {
     data: {
       code: string;
       name: string;
+      accountType: 'ACTIVO' | 'PASIVO' | 'PATRIMONIO' | 'INGRESO' | 'GASTO';
       parentId?: number | null;
     },
     tenantContext?: TenantContext | null,
   ): Promise<AccountNode> {
+    await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
+
+    const organizationId = tenantContext?.organizationId;
+    if (!organizationId) {
+      throw new Error('Organization ID is required to create an account');
+    }
+
     this.emitTenantLog('createAccount', tenantContext, {
       code: data.code,
+      accountType: data.accountType,
       parentId: data.parentId ?? null,
     });
 
@@ -140,7 +178,10 @@ export class AccountingService {
       data: {
         code: data.code,
         name: data.name,
+        accountType: data.accountType,
         parentId: data.parentId ?? null,
+        organizationId,
+        companyId: tenantContext?.companyId ?? null,
         level: data.code.length,
         isPosting: data.code.length >= 4,
       },
@@ -149,36 +190,54 @@ export class AccountingService {
       id: account.id,
       code: account.code,
       name: account.name,
+      accountType: account.accountType,
       parentId: account.parentId,
+      updatedAt: account.updatedAt.toISOString(),
     };
   }
 
   async updateAccount(
     id: number,
-    data: { code: string; name: string; parentId?: number | null },
+    data: {
+      code: string;
+      name: string;
+      accountType?: 'ACTIVO' | 'PASIVO' | 'PATRIMONIO' | 'INGRESO' | 'GASTO';
+      parentId?: number | null;
+    },
     tenantContext?: TenantContext | null,
   ): Promise<AccountNode> {
+    await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
+
     this.emitTenantLog('updateAccount', tenantContext, {
       id,
       code: data.code,
+      accountType: data.accountType,
       parentId: data.parentId ?? null,
     });
 
+    const updateData: any = {
+      code: data.code,
+      name: data.name,
+      parentId: data.parentId ?? null,
+      level: data.code.length,
+      isPosting: data.code.length >= 4,
+    };
+
+    if (data.accountType) {
+      updateData.accountType = data.accountType;
+    }
+
     const account = await this.prisma.account.update({
       where: { id },
-      data: {
-        code: data.code,
-        name: data.name,
-        parentId: data.parentId ?? null,
-        level: data.code.length,
-        isPosting: data.code.length >= 4,
-      },
+      data: updateData,
     });
     return {
       id: account.id,
       code: account.code,
       name: account.name,
+      accountType: account.accountType,
       parentId: account.parentId,
+      updatedAt: account.updatedAt.toISOString(),
     };
   }
 
@@ -192,6 +251,8 @@ export class AccountingService {
     },
     tenantContext?: TenantContext | null,
   ) {
+    await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
+
     this.emitTenantLog('getLedger.request', tenantContext, {
       accountCode: params.accountCode ?? null,
       from: params.from ?? null,
@@ -297,6 +358,8 @@ export class AccountingService {
   }
 
   async getTrialBalance(period: string, tenantContext?: TenantContext | null) {
+    await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
+
     this.emitTenantLog('getTrialBalance.request', tenantContext, {
       period,
     });
@@ -404,6 +467,8 @@ export class AccountingService {
         (entry.store as any)?.organizationId ??
         null;
       const entryCompanyId = (entry.store as any)?.companyId ?? null;
+
+      await this.ensureAccountingFeatureEnabled(entryCompanyId);
 
       this.emitTenantLog(
         'createJournalForInventoryEntry.entryLoaded',

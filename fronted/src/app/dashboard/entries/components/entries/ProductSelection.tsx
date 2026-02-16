@@ -1,10 +1,11 @@
-import { Barcode, Check, ChevronsUpDown, Plus, Save, ChevronDown } from 'lucide-react'
+﻿import { Barcode, Check, ChevronsUpDown, Plus, Save, ChevronDown, Info } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn, normalizeOptionValue } from '@/lib/utils'
 import AddProductDialog from '../AddProductDialog'
 import { AddSeriesDialog } from '../AddSeriesDialog'
@@ -26,7 +27,10 @@ export function ProductSelection({
   setOpen,
   value,
   setValueProduct,
+  recentProductIds,
+  onProductSelected,
   products,
+  selectedProducts,
   categories,
   setProducts,
   setCategories,
@@ -60,6 +64,19 @@ export function ProductSelection({
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isCategoryPopoverOpen, setIsCategoryPopoverOpen] = useState(false)
 
+  const renderStatusChip = (filled: boolean, optional = false) => (
+    <span
+      className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        filled
+          ? "border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+          : optional
+            ? "border-slate-200/70 bg-slate-50 text-slate-600 dark:border-slate-800/60 dark:bg-slate-900/60 dark:text-slate-300"
+            : "border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200"
+      }`}
+    >
+      {filled ? "Listo" : optional ? "Opcional" : "Requerido"}
+    </span>
+  )
   const [pendingCategory, setPendingCategory] = useState<{ id: number; name: string } | null>(null)
   const [pendingProductId, setPendingProductId] = useState<number | null>(null)
   const [previousCategoryName, setPreviousCategoryName] = useState<string | null>(null)
@@ -97,6 +114,25 @@ export function ProductSelection({
   }, [products, normalizedSelectedProductValue, value])
 
   const displayedProductName = selectedProductOption?.name ?? value ?? ''
+  const recentSet = useMemo(
+    () =>
+      new Set<number>(
+        (Array.isArray(recentProductIds) ? recentProductIds : []).filter(
+          (id: any) => typeof id === 'number',
+        ),
+      ),
+    [recentProductIds],
+  )
+  const orderedProducts = useMemo(() => {
+    if (!Array.isArray(recentProductIds) || recentProductIds.length === 0) {
+      return products
+    }
+    const recent = recentProductIds
+      .map((id: number) => products.find((p: any) => p.id === id))
+      .filter(Boolean) as any[]
+    const rest = products.filter((p: any) => !recentSet.has(p.id))
+    return [...recent, ...rest]
+  }, [products, recentProductIds, recentSet])
   const applyCategoryUpdate = async (
     productId: number,
     category: { id: number; name: string },
@@ -106,7 +142,7 @@ export function ProductSelection({
     try {
       setIsUpdatingCategory(true)
       await updateProductCategory(productId, category.id)
-      toast.success('Categoría actualizada correctamente.')
+      toast.success('categoria actualizada correctamente.')
       setCurrentProduct((prev:any) => {
         if (!prev || prev.id !== productId) {
           return prev
@@ -125,8 +161,8 @@ export function ProductSelection({
         ),
       )
     } catch (error) {
-      console.error('Error al actualizar la categoría del producto:', error)
-      toast.error('No se pudo actualizar la categoría del producto.')
+      console.error('Error al actualizar la categoria del producto:', error)
+      toast.error('No se pudo actualizar la categoria del producto.')
       setValue('category_name', previousName || '', { shouldValidate: true })
       setCurrentProduct((prev:any) => {
         if (!prev || prev.id !== productId) {
@@ -171,7 +207,7 @@ export function ProductSelection({
     const normalizedPreviousName = previousName?.trim().toLowerCase()
     const hadPreviousCategory = Boolean(
       (previousId && previousId > 0) ||
-        (normalizedPreviousName && normalizedPreviousName !== '' && normalizedPreviousName !== 'sin categoría'),
+        (normalizedPreviousName && normalizedPreviousName !== '' && normalizedPreviousName !== 'sin categoria'),
     )
 
     if (previousId === category.id) {
@@ -215,25 +251,47 @@ export function ProductSelection({
   return (
     <div className="flex-1 flex-col border border-gray-600 rounded-md p-2">
       <div className="mb-2 flex items-center justify-between">
-        <Label htmlFor="product-combobox" className="text-sm font-medium">
-          Ingrese un producto:
-        </Label>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsCollapsed((prev) => !prev)}
-          aria-label={`${isCollapsed ? 'Expandir' : 'Contraer'} panel de producto`}
-          aria-expanded={!isCollapsed}
-          title={isCollapsed ? 'Mostrar panel' : 'Ocultar panel'}
-        >
-          <ChevronDown
-            className={cn(
-              'h-4 w-4 transition-transform',
-              isCollapsed ? '-rotate-90' : 'rotate-0'
-            )}
-          />
-        </Button>
+                <div className="flex items-center gap-1">
+          <Label htmlFor="product-combobox" className="text-sm font-medium">
+            Ingrese un producto:
+          </Label>          
+          {renderStatusChip(Boolean(selectedProducts && selectedProducts.length > 0))}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 cursor-pointer text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                aria-label="Ayuda para seleccionar producto"
+              >
+                <Info className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Busca y selecciona el producto que deseas ingresar.</TooltipContent>
+          </Tooltip>
+        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsCollapsed((prev) => !prev)}
+              aria-label={`${isCollapsed ? 'Expandir' : 'Contraer'} panel de producto`}
+              aria-expanded={!isCollapsed}
+              className="cursor-pointer transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <ChevronDown
+                className={cn(
+                  'h-4 w-4 transition-transform',
+                  isCollapsed ? '-rotate-90' : 'rotate-0'
+                )}
+              />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{isCollapsed ? 'Mostrar panel' : 'Ocultar panel'}</TooltipContent>
+        </Tooltip>
       </div>
       {!isCollapsed && (
         <>
@@ -244,21 +302,19 @@ export function ProductSelection({
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className="min-w-[150px] flex-1 sm:w-[300px]
-              justify-between truncate text-xs sm:text-sm"
-              title="Busca y selecciona el producto que deseas ingresar"
+              className="min-w-[150px] flex-1 cursor-pointer justify-between truncate text-xs transition-colors hover:border-primary/60 hover:bg-accent/40 sm:w-[300px] sm:text-sm"
             >
               {displayedProductName || 'Selecciona un producto...'}
               <ChevronsUpDown className="opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="min-w-[150px] sm:w-[300px] p-0">
+          <PopoverContent className="p-0" style={{ width: "var(--radix-popover-trigger-width)" }}>
             <Command>
               <CommandInput placeholder="Buscar producto..." />
               <CommandList>
                 <CommandEmpty>No se encontraron productos.</CommandEmpty>
                 <CommandGroup>
-                  {products.map((product: any) => {
+                  {orderedProducts.map((product: any) => {
                     const normalizedProductName = normalizeOptionValue(product.name)
                     const isSelected = normalizedProductName === normalizedSelectedProductValue
                     const commandValue =
@@ -272,6 +328,7 @@ export function ProductSelection({
                       <CommandItem
                         key={product.id ?? product.name}
                         value={commandValue}
+                        className="cursor-pointer transition-colors hover:bg-accent/60"
                         onSelect={() => {
                           if (isSelected) {
                             setOpen(false)
@@ -285,22 +342,32 @@ export function ProductSelection({
                           const category = categories.find((cat: any) => cat.id === product.categoryId)
 
                           setValueProduct(product.name || '')
+                          if (typeof onProductSelected === 'function' && typeof product.id === 'number') {
+                            onProductSelected(product.id)
+                          }
                           setCurrentProduct({
                             id: product.id,
                             name: product.name,
                             price: purchasePrice,
                             priceSell: product.priceSell,
                             categoryId: product.categoryId,
-                            category_name: category?.name || product.category_name || 'Sin categor?a',
+                            category_name: category?.name || product.category_name || 'Sin categoria',
                           })
-                          setValue('category_name', category?.name || product.category_name || 'Sin categor?a')
+                          setValue('category_name', category?.name || product.category_name || 'Sin categoria')
                           setValue('price', purchasePrice || 0)
                           setValue('priceSell', product.priceSell || 0)
                           setValue('description', product.description || '')
                           setOpen(false)
                         }}
                       >
-                        {product.name}
+                        <div className="flex items-center gap-2">
+                          <span>{product.name}</span>
+                          {recentSet.has(product.id) && (
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                              Reciente
+                            </span>
+                          )}
+                        </div>
                         <Check className={cn('ml-auto', isSelected ? 'opacity-100' : 'opacity-0')} />
                       </CommandItem>
                     )
@@ -311,26 +378,34 @@ export function ProductSelection({
           </PopoverContent>
         </Popover>
 
-        <Button
-          className="sm:w-auto sm:ml-2 ml-0 bg-green-700 hover:bg-green-800 text-white"
-          type="button"
-          onClick={addProduct}
-          title="Agrega el producto seleccionado a la lista del ingreso"
-        >
-          <span className="hidden sm:block">Agregar</span>
-          <Plus className="w-2 h-2" />
-        </Button>
-        {/* Botón para abrir el modal */}
-        <Button
-          className="bg-blue-600 hover:bg-blue-700 text-white className='sm:w-auto sm:ml-2 ml-0"
-          type="button"
-          onClick={() => setIsDialogOpenSeries(true)}
-          disabled={!currentProduct}
-          title="Asigna series o códigos únicos al producto seleccionado"
-        >
-          <span className="hidden sm:block">Agregar Series</span>
-          <Barcode className="w-6 h-6" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className="sm:w-auto sm:ml-2 ml-0 cursor-pointer bg-green-700 text-white transition-colors hover:bg-green-800"
+              type="button"
+              onClick={addProduct}
+            >
+              <span className="hidden sm:block">Agregar</span>
+              <Plus className="w-2 h-2" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Agrega el producto seleccionado al ingreso.</TooltipContent>
+        </Tooltip>
+        {/* BotÃ³n para abrir el modal */}
+        <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            className="sm:w-auto sm:ml-2 ml-0 cursor-pointer bg-blue-600 text-white transition-colors hover:bg-blue-700"
+            type="button"
+            onClick={() => setIsDialogOpenSeries(true)}
+            disabled={!currentProduct}
+          >
+            <span className="hidden sm:block">Agregar Series</span>
+            <Barcode className="w-6 h-6" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Asigna series o códigos únicos al producto.</TooltipContent>
+      </Tooltip>
 
         <AddSeriesDialog
           isOpen={isDialogOpenSeries}
@@ -341,15 +416,19 @@ export function ProductSelection({
           getAllSeriesFromDataTable={getAllSeriesFromDataTable}
         />
 
-        <Button
-          className="sm:w-auto sm:ml-2 ml-0 bg-green-700 hover:bg-green-800 text-white"
-          type="button"
-          onClick={() => setIsDialogOpenProduct(true)}
-          title="Crea un nuevo producto y añádelo al catálogo"
-        >
-          <span className="hidden sm:block">Nuevo</span>
-          <Save className="w-6 h-6" />
-        </Button>
+        <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            className="sm:w-auto sm:ml-2 ml-0 cursor-pointer bg-green-700 text-white transition-colors hover:bg-green-800"
+            type="button"
+            onClick={() => setIsDialogOpenProduct(true)}
+          >
+            <span className="hidden sm:block">Nuevo</span>
+            <Save className="w-6 h-6" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Crea un nuevo producto y lo agrega al catálogo.</TooltipContent>
+      </Tooltip>
 
         <AddProductDialog
           isOpen={isDialogOpenProduct}
@@ -361,11 +440,27 @@ export function ProductSelection({
           setCurrentProduct={setCurrentProduct}
           setValue={setValue}
           isNewCategoryBoolean={isNewCategoryBoolean}
-          setIsNewCategoryBoolean={setIsNewCategoryBoolean} // Pasar la función
+          setIsNewCategoryBoolean={setIsNewCategoryBoolean} // Pasar la funciÃ³n
         />
       </div>
 
-      <Label className="text-sm font-medium py-2">Categoria</Label>
+            <div className="flex items-center gap-1 py-2">
+        <Label className="text-sm font-medium">Categoria</Label>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 cursor-pointer text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Ayuda para seleccionar categoria"
+            >
+              <Info className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Selecciona o cambia la categoria asociada al producto.</TooltipContent>
+        </Tooltip>
+      </div>
       <input type="hidden" {...categoryField} value={categoryValue || ''} />
       {isNewCategoryBoolean ? (
         <Input
@@ -382,7 +477,7 @@ export function ProductSelection({
               })
             }
           }}
-          placeholder="Ingresa el nombre de la categoría"
+          placeholder="Ingresa el nombre de la categoria"
         />
       ) : (
         <Popover open={isCategoryPopoverOpen} onOpenChange={setIsCategoryPopoverOpen}>
@@ -390,23 +485,23 @@ export function ProductSelection({
             <Button
               variant="outline"
               role="combobox"
-              className="w-full justify-between"
-              title="Selecciona o cambia la categoría asociada al producto"
+              className="w-full cursor-pointer justify-between transition-colors hover:border-primary/60 hover:bg-accent/40"
             >
-              {categoryValue || 'Selecciona una categoría...'}
+              {categoryValue || 'Selecciona una categoria...'}
               <ChevronsUpDown className="opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-full min-w-[200px] p-0">
+          <PopoverContent className="p-0" style={{ width: "var(--radix-popover-trigger-width)" }}>
             <Command>
-              <CommandInput placeholder="Buscar categoría..." />
+              <CommandInput placeholder="Buscar categoria..." />
               <CommandList>
-                <CommandEmpty>No se encontraron categorías.</CommandEmpty>
+                <CommandEmpty>No se encontraron categorias.</CommandEmpty>
                 <CommandGroup>
                   {categories.map((category: any) => (
                     <CommandItem
                       key={category.id}
                       value={category.name}
+                      className="cursor-pointer transition-colors hover:bg-accent/60"
                       onSelect={() => handleCategorySelection(category)}
                     >
                       {category.name}
@@ -427,9 +522,9 @@ export function ProductSelection({
       <AlertDialog open={isConfirmDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Actualizar categoría del producto</AlertDialogTitle>
+            <AlertDialogTitle>Actualizar categoria del producto</AlertDialogTitle>
             <AlertDialogDescription>
-              {`El producto tiene la categoría "${previousCategoryName || 'Sin categoría'}".`}
+              {`El producto tiene la categoria "${previousCategoryName || 'Sin categoria'}".`}
               <br />
               {pendingCategory ? `¿Deseas actualizarla por "${pendingCategory.name}"?` : null}
             </AlertDialogDescription>
@@ -448,35 +543,82 @@ export function ProductSelection({
       <Input
         {...register("description")}
         readOnly
-        title="Descripción del producto proveniente del catálogo"
       />
       <div className="flex justify-between gap-1">
             <div className="flex flex-col flex-grow">
               <Label className="text-sm font-medium py-2">Cantidad</Label>
-              <Input
-                type="text"
-                placeholder="Cantidad"
-                value={quantity.toString()}
-                maxLength={10}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
-                    setQuantity(Number(value));
-                  }
-                }}
-                onBlur={() => {
-                  const numericValue = parseFloat(String(quantity));
-                  setQuantity(!isNaN(numericValue) ? numericValue : 1);
-                }}
-                title="Indica cuántas unidades ingresarás al inventario"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  placeholder="Cantidad"
+                  className="h-9 flex-1 text-sm"
+                  value={quantity.toString()}
+                  maxLength={10}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
+                      const next = Number(value);
+                      setQuantity(Number.isNaN(next) ? 1 : Math.max(1, next));
+                    }
+                  }}
+                  onBlur={() => {
+                    const numericValue = parseFloat(String(quantity));
+                    if (!Number.isNaN(numericValue) && numericValue > 0) {
+                      setQuantity(numericValue);
+                    } else {
+                      setQuantity(1);
+                    }
+                  }}
+                />
+                <div className="flex items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 cursor-pointer border-rose-600 bg-rose-600 text-white hover:border-rose-700 hover:bg-rose-700 dark:border-rose-400 dark:bg-rose-400 dark:text-rose-950 dark:hover:border-rose-300 dark:hover:bg-rose-300"
+                        aria-label="Disminuir cantidad"
+                        onClick={() => {
+                          setQuantity((prev: number) => {
+                            const current = Number(prev) || 0;
+                            return Math.max(1, current - 1);
+                          });
+                        }}
+                      >
+                        -
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Disminuir cantidad</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 cursor-pointer border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 dark:border-emerald-400 dark:bg-emerald-400 dark:text-emerald-950 dark:hover:border-emerald-300 dark:hover:bg-emerald-300"
+                        aria-label="Aumentar cantidad"
+                        onClick={() => {
+                          setQuantity((prev: number) => {
+                            const current = Number(prev) || 0;
+                            return Math.max(1, current + 1);
+                          });
+                        }}
+                      >
+                        +
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Aumentar cantidad</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
             </div>
             <div className="flex flex-col flex-grow">
               <Label className="text-sm font-medium py-2">Precio Total Unitario</Label>
               <Input
                 value={totalPurchasePrice}
                 readOnly
-                title="Resultado del precio de compra multiplicado por la cantidad"
               />
             </div>
           </div>
@@ -485,6 +627,17 @@ export function ProductSelection({
     </div>
   )
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

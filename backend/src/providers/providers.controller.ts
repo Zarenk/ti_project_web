@@ -9,17 +9,28 @@ import {
   BadRequestException,
   Req,
   Query,
+  UploadedFile,
+  UseInterceptors,
+  UseGuards,
 } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
+import { ValidateProviderFieldsDto } from './dto/validate-provider-fields.dto';
 import { Request } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { EntityOwnershipGuard, EntityModel, EntityIdParam } from 'src/common/guards/entity-ownership.guard';
 
 @ModulePermission(['inventory', 'purchases', 'providers'])
 @Controller('providers')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
 
@@ -54,12 +65,62 @@ export class ProvidersController {
     return { exists };
   }
 
+  @Post('validate')
+  async validateProviderFields(
+    @Body() dto: ValidateProviderFieldsDto,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.providersService.validateProviderFields(
+      dto,
+      organizationId === undefined ? undefined : organizationId,
+    );
+  }
+
+  @Post('import-excel')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: join(__dirname, '..', '..', 'excels'),
+        filename: (req, file, cb) => {
+          const randomName = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `${randomName}${extname(file.originalname)}`);
+        },
+      }),
+    }),
+  )
+  async importExcel(@UploadedFile() file: Express.Multer.File) {
+    const data = this.providersService.parseExcel(file.path);
+
+    return {
+      message: 'Archivo procesado con exito',
+      preview: data,
+    };
+  }
+
+  @Post('import-excel/commit')
+  async commitExcelImport(
+    @Body() body: { data: any[] },
+    @Req() req: Request,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.providersService.processExcelData(
+      body.data,
+      req,
+      organizationId === undefined ? undefined : organizationId,
+    );
+  }
+
   @Get()
   @ApiResponse({ status: 200, description: 'Return all providers' }) // Swagger
   findAll(
     @CurrentTenant('organizationId') organizationId: number | null,
     @Query('search') search?: string,
   ) {
+    if (!organizationId) {
+      throw new BadRequestException(
+        'Contexto de tenant no disponible para listar proveedores.',
+      );
+    }
     const trimmedSearch =
       typeof search === 'string' ? search.trim() : undefined;
     const hasSearch = Boolean(trimmedSearch);
@@ -127,11 +188,15 @@ export class ProvidersController {
   }
 
   @Delete(':id')
+  @UseGuards(EntityOwnershipGuard)
+  @EntityModel('provider')
+  @EntityIdParam('id')
   remove(
     @Param('id') id: string,
     @CurrentTenant('organizationId') organizationId: number | null,
     @Req() req: Request,
   ) {
+    // 🔒 Ownership validado por EntityOwnershipGuard
     return this.providersService.remove(
       +id,
       req,

@@ -7,7 +7,11 @@
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from 'src/prisma/prisma.service';
-import { generateBoletaXML, generateInvoiceXML } from './utils/xml-generator';
+import {
+  generateBoletaXML,
+  generateCreditNoteXML,
+  generateInvoiceXML,
+} from './utils/xml-generator';
 import { firmarDocumentoUBL } from './utils/signer';
 import { generateZip } from './utils/zip-generator';
 import { sendToSunat } from './utils/sunat-client';
@@ -31,6 +35,7 @@ interface SendDocumentParams {
   certificatePathOverride?: string | null;
   environmentOverride?: string;
   saleId?: number | null;
+  subscriptionInvoiceId?: number | null;
 }
 
 @Injectable()
@@ -46,6 +51,7 @@ export class SunatService {
       certificatePathOverride,
       environmentOverride,
       saleId,
+      subscriptionInvoiceId,
     } = params;
 
     let transmissionId: number | null = null;
@@ -133,7 +139,7 @@ export class SunatService {
       } else if (normalizedType === 'boleta') {
         xml = generateBoletaXML(payload);
       } else {
-        xml = generateInvoiceXML(payload);
+        xml = generateCreditNoteXML(payload);
       }
 
       const signedXml = await firmarDocumentoUBL(
@@ -157,6 +163,12 @@ export class SunatService {
 
       const zipFileName = `${ruc}-${tipoComprobante}-${serie}-${correlativo}`;
       const zipFilePath = generateZip(zipFileName, signedXml, normalizedType);
+      const xmlFolder = resolveBackendPath('sunat', 'xml', normalizedType);
+      if (!fs.existsSync(xmlFolder)) {
+        fs.mkdirSync(xmlFolder, { recursive: true });
+      }
+      const xmlFilePath = path.join(xmlFolder, `${zipFileName}.xml`);
+      fs.writeFileSync(xmlFilePath, signedXml, 'utf-8');
 
       const sunatUrl = isProd ? SUNAT_ENDPOINTS.PROD : SUNAT_ENDPOINTS.BETA;
 
@@ -165,6 +177,7 @@ export class SunatService {
           companyId,
           organizationId: company.organizationId ?? null,
           saleId: saleId ?? null,
+          subscriptionInvoiceId: subscriptionInvoiceId ?? null,
           environment,
           documentType: normalizedType,
           serie,
@@ -190,12 +203,44 @@ export class SunatService {
         username,
         password,
       );
+      const responsePayload = {
+        ...response,
+        cdrXml: undefined,
+      };
+      const cdrCode = response?.cdrCode ?? null;
+      const cdrDescription = response?.cdrDescription ?? null;
+      const cdrXml = response?.cdrXml ?? null;
+      let status = 'SENT';
+      if (cdrCode) {
+        if (cdrCode === '0') {
+          status = 'ACCEPTED';
+        } else if (cdrCode === '98') {
+          status = 'PENDING';
+        } else if (cdrCode === '99') {
+          status = 'REJECTED';
+        } else {
+          status = 'OBSERVED';
+        }
+      }
+      let cdrFilePath: string | null = null;
+      if (cdrXml) {
+        const cdrFolder = resolveBackendPath('sunat', 'cdr', normalizedType);
+        if (!fs.existsSync(cdrFolder)) {
+          fs.mkdirSync(cdrFolder, { recursive: true });
+        }
+        cdrFilePath = path.join(cdrFolder, `${zipFileName}-cdr.xml`);
+        fs.writeFileSync(cdrFilePath, cdrXml, 'utf-8');
+      }
 
       await this.prismaService.sunatTransmission.update({
         where: { id: transmission.id },
         data: {
-          status: 'SENT',
-          response: this.wrapJsonResponse(response),
+          status,
+          response: this.wrapJsonResponse(responsePayload),
+          xmlFilePath,
+          cdrFilePath,
+          cdrCode,
+          cdrDescription,
         },
       });
 
@@ -263,6 +308,7 @@ export class SunatService {
 
   async generarYEnviarConSerie(
     documentType: string,
+    companyId?: number | null,
   ): Promise<{ serie: string; correlativo: string }> {
     const normalizedType = this.normalizeDocumentType(documentType);
     const tipo =
@@ -276,8 +322,13 @@ export class SunatService {
 
     const prefix = tipo === '01' ? 'F001' : tipo === '03' ? 'B001' : 'N001';
 
+    const where: Prisma.InvoiceSalesWhereInput = { serie: prefix };
+    if (typeof companyId === 'number') {
+      where.companyId = companyId;
+    }
+
     const ultimo = await this.prismaService.invoiceSales.findFirst({
-      where: { serie: prefix },
+      where,
       orderBy: { nroCorrelativo: 'desc' },
       select: { serie: true, nroCorrelativo: true },
     });

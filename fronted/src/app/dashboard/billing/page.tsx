@@ -1,149 +1,206 @@
 "use client"
 
+import { useCallback, useEffect, useMemo, useState } from "react"
 import type { JSX } from "react"
+import type { SubscriptionSummary } from "@/types/subscription"
+import { fetchSubscriptionSummary } from "@/lib/subscription-summary"
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Skeleton } from "@/components/ui/skeleton"
+import { SubscriptionUsageCard } from "@/components/subscription-usage-card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ExclamationTriangleIcon } from "lucide-react"
 
-interface BillingRecord {
-  id: string
-  concept: string
-  amount: number
-  issuedAt: Date
-  status: "Cancelado"
-}
-
-function formatDate(date: Date): string {
+function formatDateFromIso(value?: string | null): string {
+  if (!value) return "—"
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return "—"
   return new Intl.DateTimeFormat("es-PE", {
     day: "2-digit",
     month: "long",
     year: "numeric",
-  }).format(date)
+  }).format(parsed)
 }
 
-function formatCurrency(value: number): string {
+function formatCurrencyDisplay(value?: string | null, currency = "PEN"): string {
+  if (!value) return "—"
+  const numeric = Number(value)
+  if (Number.isNaN(numeric)) {
+    return `${currency} ${value}`
+  }
   return new Intl.NumberFormat("es-PE", {
     style: "currency",
-    currency: "PEN",
-    minimumFractionDigits: 2,
-  }).format(value)
-}
-
-function buildSampleBilling(): BillingRecord[] {
-  const today = new Date()
-  return [0, 10, 20, 27].map((offset, index) => {
-    const issuedAt = new Date(today)
-    issuedAt.setDate(issuedAt.getDate() + offset)
-    return {
-      id: `REC-${2025 + index}`,
-      concept: index % 2 === 0 ? "Renovacion de plan Premium" : "Modulo adicional de soporte",
-      amount: index % 2 === 0 ? 100 : 100,
-      issuedAt,
-      status: "Cancelado" as const,
-    }
-  })
+    currency,
+    maximumFractionDigits: 2,
+  }).format(numeric)
 }
 
 export default function BillingPage(): JSX.Element {
-  const records = buildSampleBilling()
-  const nextRenewal = records[records.length - 1]?.issuedAt ?? new Date()
+  const [summary, setSummary] = useState<SubscriptionSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadSummary = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await fetchSubscriptionSummary()
+      setSummary(data)
+      setError(null)
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "No se pudo obtener la facturación. Inténtalo nuevamente en unos minutos."
+      setError(message)
+      setSummary(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    loadSummary().catch(() => {
+      if (!active) return
+    })
+    return () => {
+      active = false
+    }
+  }, [loadSummary])
+
+  const resumeContent = useMemo(() => {
+    if (!summary) return null
+    const contact = summary.contacts.primary
+    const companyName = summary.company?.name ?? summary.organization?.name ?? "—"
+
+    return (
+      <>
+        <div className="space-y-2">
+          <Label>Plan activo</Label>
+          <Input value={summary.plan.name} readOnly className="font-medium" />
+          <p className="text-xs text-muted-foreground">
+            {formatCurrencyDisplay(summary.plan.price, summary.plan.currency)} / {summary.plan.interval === "YEARLY" ? "año" : "mes"}
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label>Empresa facturada</Label>
+          <Input value={companyName} readOnly className="font-medium" />
+        </div>
+        <div className="space-y-2">
+          <Label>Responsable comercial</Label>
+          <Input value={contact ? `${contact.name} (${contact.email})` : "—"} readOnly />
+        </div>
+        <div className="space-y-2">
+          <Label>Próxima renovación</Label>
+          <Input value={formatDateFromIso(summary.billing.currentPeriodEnd ?? summary.billing.nextDueDate)} readOnly />
+        </div>
+      </>
+    )
+  }, [summary])
+
+  if (loading) {
+    return (
+      <div className="container mx-auto max-w-5xl space-y-8 py-10">
+        <Skeleton className="h-8 w-40" />
+        <Card className="border-2">
+          <CardHeader className="space-y-3">
+            <Skeleton className="h-6 w-56" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent className="grid gap-6 md:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className="space-y-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!summary) {
+    return (
+      <div className="container mx-auto max-w-3xl space-y-6 py-10">
+        <p className="text-center text-sm text-rose-600">{error ?? "No hay información disponible."}</p>
+        <Button onClick={loadSummary}>Reintentar</Button>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto max-w-5xl space-y-10 py-10">
       <header className="space-y-2">
         <Badge className="rounded-full bg-amber-500 px-4 py-1 text-sm font-semibold uppercase tracking-wide text-white">
-          Facturacion
+          Facturación
         </Badge>
         <div className="space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight">Historial de pagos</h1>
           <p className="text-muted-foreground">
-            Visualiza los comprobantes emitidos recientemente. Esta vista es solo referencial hasta integrar el backend.
+            Consulta el estado de tu suscripción y descarga comprobantes oficiales cuando estén disponibles.
           </p>
         </div>
       </header>
 
       <Card className="border-2">
         <CardHeader className="space-y-3">
-          <CardTitle>Resumen de facturacion</CardTitle>
+          <CardTitle>Resumen de facturación</CardTitle>
           <CardDescription>
-            Todos los montos se muestran en soles (PEN). Contacta a soporte si detectas alguna diferencia en tus recibos.
+            Todos los montos se muestran en soles (PEN). Si detectas alguna diferencia en tus recibos contáctanos.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-6 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="billing-plan">Plan activo</Label>
-            <Input id="billing-plan" value="Premium" readOnly className="font-medium" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="billing-company">Empresa facturada</Label>
-            <Input id="billing-company" value="ECOTERRA" readOnly className="font-medium" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="billing-manager">Responsable comercial</Label>
-            <Input id="billing-manager" value="Milagros Chipoco" readOnly />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="billing-next">Proxima renovacion estimada</Label>
-            <Input id="billing-next" value={formatDate(nextRenewal)} readOnly />
-          </div>
-        </CardContent>
+        <CardContent className="grid gap-6 md:grid-cols-2">{resumeContent}</CardContent>
         <CardFooter className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
-            Una vez habilitada la pasarela de pagos, podros descargar recibos oficiales y solicitar notas de credito en linea.
+            La descarga automática de facturas se habilitará en las próximas iteraciones.
           </p>
-          <Button variant="outline" className="rounded-full">
+          <Button variant="outline" className="rounded-full" disabled>
             Exportar historial
           </Button>
         </CardFooter>
       </Card>
 
+      {summary.plan.restrictions ? (
+        <Alert className="border-amber-500/30 bg-amber-50 dark:border-amber-500/40 dark:bg-slate-900">
+          <AlertTitle className="flex items-center gap-2 text-amber-900 dark:text-amber-200">
+            <ExclamationTriangleIcon className="h-4 w-4" />
+            Suscripción limitada
+          </AlertTitle>
+          <AlertDescription className="text-amber-900/80 dark:text-amber-100/80">
+            Tu cuenta tiene cobros pendientes y los límites fueron reducidos temporalmente. Reintenta el pago desde la
+            sección “Mi plan” para restaurar el acceso completo.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <SubscriptionUsageCard summary={summary} />
+
       <Card className="border-2">
         <CardHeader>
           <CardTitle>Pagos recientes</CardTitle>
-          <CardDescription>Tabla resumida de los pagos confirmados en el ultimo mes.</CardDescription>
+          <CardDescription>En esta tabla aparecerán tus pagos confirmados y enlaces de descarga.</CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-36">Comprobante</TableHead>
+                <TableHead className="w-40">Comprobante</TableHead>
                 <TableHead>Concepto</TableHead>
                 <TableHead className="w-32">Fecha</TableHead>
-                <TableHead className="w-28 text-right">Importe</TableHead>
+                <TableHead className="w-32 text-right">Importe</TableHead>
                 <TableHead className="w-32">Estado</TableHead>
-                <TableHead className="w-28 text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {records.map((record) => (
-                <TableRow key={record.id}>
-                  <TableCell className="font-medium">{record.id}</TableCell>
-                  <TableCell>{record.concept}</TableCell>
-                  <TableCell>{formatDate(record.issuedAt)}</TableCell>
-                  <TableCell className="text-right font-semibold text-emerald-600">
-                    {formatCurrency(record.amount)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className="bg-emerald-100 text-emerald-700">{record.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="text-sky-600">
-                      Descargar
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                  Aún no registramos pagos en esta organización o la integración sigue en curso.
+                </TableCell>
+              </TableRow>
             </TableBody>
           </Table>
         </CardContent>

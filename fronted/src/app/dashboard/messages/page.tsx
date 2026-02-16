@@ -13,6 +13,7 @@ import socket, { cn } from '@/lib/utils';
 import TypingIndicator from '@/components/TypingIndicator';
 import { useMessages } from '@/context/messages-context';
 import EditableMessage from './EditableMessage';
+import { toast } from 'sonner';
 
 interface Message {
   id: number;
@@ -24,14 +25,41 @@ interface Message {
   file?: string;
 }
 
+interface ChatClient {
+  userId: number;
+  name?: string | null;
+  image?: string | null;
+  status?: string | null;
+}
+
+interface SeenPayload {
+  clientId: number;
+  viewerId: number;
+  seenAt: string;
+}
+
+interface TypingPayload {
+  clientId: number;
+  senderId: number;
+  isTyping: boolean;
+}
+
+interface UpdatePayload {
+  id: number;
+  text: string;
+}
+
+interface DeletePayload {
+  id: number;
+}
+
 export default function Page() {
   const { userId, userName } = useAuth();
   const { pendingCounts, setPendingCounts } = useMessages();
-  const [clients, setClients] = useState<any[]>([]);
+  const [clients, setClients] = useState<ChatClient[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [history, setHistory] = useState<Message[]>([]);
   const [text, setText] = useState('');
-  const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -53,13 +81,12 @@ export default function Page() {
   };
 
   const clearFile = () => {
-    setFile(null);
     setPreview(null);
   };
 
 
   const displayName = useCallback(
-    (c: any) =>
+    (c: ChatClient) =>
       c.name && c.name.trim() !== '' ? c.name : `Invitado #${c.userId}`,
     [],
   );
@@ -74,27 +101,32 @@ export default function Page() {
         }));
       }
     };
-    const seenHandler = ({ clientId }: any) => {
+    const seenHandler = ({ clientId }: Pick<SeenPayload, 'clientId'>) => {
       setPendingCounts((prev) =>
         prev[clientId] ? { ...prev, [clientId]: 0 } : prev,
       );
     };
+    const errorHandler = (payload: { message?: string }) => {
+      toast.error(payload?.message || 'Error en tiempo real de chat.');
+    };
     socket.on('chat:receive', receiveHandler);
     socket.on('chat:seen', seenHandler);
+    socket.on('chat:error', errorHandler);
     return () => {
       socket.off('chat:receive', receiveHandler);
       socket.off('chat:seen', seenHandler);
+      socket.off('chat:error', errorHandler);
     };
   }, [selected, setPendingCounts]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const allClients = await getClients();
+        const allClients = (await getClients()) as ChatClient[];
         setClients(allClients);
 
         const lastEntries = await Promise.all(
-          allClients.map(async (c: any) => {
+          allClients.map(async (c) => {
             const msgs = await getMessages(c.userId);
             return [c.userId, msgs[msgs.length - 1] ?? null] as const;
           })
@@ -125,7 +157,7 @@ export default function Page() {
     const historyHandler = (msgs: Message[]) => {
       setHistory(msgs); // Replace history with server response
     };
-    const seenHandler = ({ clientId, viewerId, seenAt }: any) => {
+    const seenHandler = ({ clientId, viewerId, seenAt }: SeenPayload) => {
       if (clientId !== selected) return;
       if (viewerId === userId) {
         setHistory((prev) =>
@@ -142,20 +174,23 @@ export default function Page() {
       }
     };
 
-    const typingHandler = ({ clientId, senderId, isTyping }: any) => {
+    const typingHandler = ({ clientId, senderId, isTyping }: TypingPayload) => {
       if (clientId === selected && senderId !== userId) {
         setClientTyping(isTyping);
       }
     };
 
-    const updateHandler = ({ id, text }: any) => {
+    const updateHandler = ({ id, text }: UpdatePayload) => {
       setHistory((prev) =>
         prev.map((m) => (m.id === id ? { ...m, text } : m)),
       );
     };
 
-    const deleteHandler = ({ id }: any) => {
+    const deleteHandler = ({ id }: DeletePayload) => {
       setHistory((prev) => prev.filter((m) => m.id !== id));
+    };
+    const errorHandler = (payload: { message?: string }) => {
+      toast.error(payload?.message || 'Error en tiempo real de chat.');
     };
 
     socket.emit('chat:history', { clientId: selected });
@@ -164,6 +199,7 @@ export default function Page() {
     socket.on('chat:history', historyHandler);
     socket.on('chat:seen', seenHandler);
     socket.on('chat:typing', typingHandler);
+    socket.on('chat:error', errorHandler);
     socket.on('chat:updated', updateHandler);
     socket.on('chat:deleted', deleteHandler);
 
@@ -172,10 +208,11 @@ export default function Page() {
       socket.off('chat:history', historyHandler);
       socket.off('chat:seen', seenHandler);
       socket.off('chat:typing', typingHandler);
+      socket.off('chat:error', errorHandler);
       socket.off('chat:updated', updateHandler);
       socket.off('chat:deleted', deleteHandler);
     };
-  }, [selected]);
+  }, [selected, setPendingCounts, userId]);
 
   useEffect(() => {
     if (selected === null) return;
@@ -217,19 +254,19 @@ export default function Page() {
       );
       setLastMessages((prev) => ({ ...prev, [selected]: msg }));
       setText('');
-      setFile(null);
       setPreview(null);
     } catch (e) {
-      console.error(e);
+      const message = e instanceof Error ? e.message : 'No se pudo enviar el mensaje.';
+      toast.error(message);
     }
   };
 
   const clientMap = useMemo(
-    () => new Map(clients.map((c: any) => [c.userId, displayName(c)])),
+    () => new Map(clients.map((c) => [c.userId, displayName(c)])),
     [clients, displayName],
   );
   const clientInfo = useMemo(
-    () => clients.find((c: any) => c.userId === selected),
+    () => clients.find((c) => c.userId === selected),
     [clients, selected],
   );
   const isActive = clientInfo?.status === 'Activo';

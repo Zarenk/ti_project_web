@@ -379,7 +379,12 @@ export function SiteSettingsProvider({
 }: SiteSettingsProviderProps) {
   const tenantSelection = useOptionalTenantSelection();
   const [manualTenantVersion, setManualTenantVersion] = useState(0);
-  const version = tenantSelection?.version ?? manualTenantVersion;
+  const selectionOrgId = tenantSelection?.selection.orgId ?? null;
+  const selectionCompanyId = tenantSelection?.selection.companyId ?? null;
+  const versionCounter = tenantSelection?.version ?? manualTenantVersion;
+  const tenantVersionKey = `${selectionOrgId ?? "none"}::${
+    selectionCompanyId ?? "none"
+  }::${versionCounter}`;
   const [settings, setSettings] = useState<SiteSettings>(() =>
     withDefaultSettings(initialSettings),
   );
@@ -405,10 +410,21 @@ export function SiteSettingsProvider({
     return fetch(input, { ...init, headers });
   }, []);
 
+  // Track if a fetch is already in progress to prevent concurrent requests
+  const fetchInProgressRef = useRef(false);
+
   const refresh = useCallback(async () => {
+    if (fetchInProgressRef.current) {
+      console.log("[site-settings] Fetch already in progress, skipping");
+      return;
+    }
+
+    fetchInProgressRef.current = true;
     setIsLoading(true);
     try {
-      const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}&ts=${Date.now()}`;
+      const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(
+        tenantVersionKey,
+      )}&ts=${Date.now()}`;
       const response = await tenantAwareFetch(url, { cache: "no-store" });
 
       if (!response.ok) {
@@ -436,18 +452,26 @@ export function SiteSettingsProvider({
       setError(err instanceof Error ? err.message : "No se pudieron cargar los ajustes del sitio.");
     } finally {
       setIsLoading(false);
+      fetchInProgressRef.current = false;
     }
-  }, [tenantAwareFetch, version]);
+  }, [tenantAwareFetch, tenantVersionKey]);
+
+  // Store refresh in a ref to avoid including it as a dependency
+  const refreshRef = useRef(refresh);
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
 
   useEffect(() => {
     if (initialSettings) {
       setIsLoading(false);
       return;
     }
-    refresh().catch((err) => {
+    refreshRef.current().catch((err) => {
       console.error("Error initializing site settings", err);
     });
-  }, [initialSettings, refresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSettings]); // Only run when initialSettings changes, not when refresh changes
 
   useEffect(() => {
     if (tenantSelection) {
@@ -468,21 +492,22 @@ export function SiteSettingsProvider({
     };
   }, [tenantSelection]);
 
-  const previousVersionRef = useRef(version);
+  const previousTenantKeyRef = useRef(tenantVersionKey);
   useEffect(() => {
-    if (previousVersionRef.current === version) {
+    if (previousTenantKeyRef.current === tenantVersionKey) {
       return;
     }
-    previousVersionRef.current = version;
+    previousTenantKeyRef.current = tenantVersionKey;
     setPersistedSettings(withDefaultSettings(null));
     setSettings(withDefaultSettings(null));
     setPersistedUpdatedAt(null);
     setPersistedCreatedAt(null);
     setError(null);
-    refresh().catch((err) => {
+    refreshRef.current().catch((err) => {
       console.error("Error loading site settings for tenant", err);
     });
-  }, [version, refresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantVersionKey]); // Only run when tenantVersionKey changes, not when refresh changes
 
   useIsomorphicLayoutEffect(() => {
     if (typeof document !== "undefined") {
@@ -532,7 +557,9 @@ export function SiteSettingsProvider({
         createdAt: string | null;
       } | null> => {
         try {
-          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}&ts=${Date.now()}`;
+          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(
+            tenantVersionKey,
+          )}&ts=${Date.now()}`;
           const response = await tenantAwareFetch(url, { cache: "no-store" });
           if (!response.ok) {
             return null;
@@ -577,7 +604,7 @@ export function SiteSettingsProvider({
         for (let attempt = 0; attempt < 2; attempt++) {
           applyValidated();
 
-          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(String(version ?? ""))}`;
+          const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(tenantVersionKey)}`;
           const response = await tenantAwareFetch(url, {
             method: "PUT",
             headers: {
@@ -641,7 +668,13 @@ export function SiteSettingsProvider({
         setIsSaving(false);
       }
     },
-    [persistedSettings, persistedUpdatedAt, persistedCreatedAt, tenantAwareFetch, version],
+    [
+      persistedSettings,
+      persistedUpdatedAt,
+      persistedCreatedAt,
+      tenantAwareFetch,
+      tenantVersionKey,
+    ],
   );
 
   const updateSettings = useCallback(

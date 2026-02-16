@@ -1,8 +1,9 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  HttpException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -15,6 +16,21 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CategoryService } from 'src/category/category.service';
 import { BrandsService } from 'src/brands/brands.service';
 import { TenantContextService } from 'src/tenancy/tenant-context.service';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
+import { BusinessVertical } from 'src/types/business-vertical.enum';
+import { VerticalProductSchema } from 'src/config/verticals.config';
+import { handlePrismaError } from 'src/common/errors/prisma-error.handler';
+
+interface VerticalSchemaState {
+  vertical: BusinessVertical;
+  enforceSchema: boolean;
+  schema: VerticalProductSchema | null;
+}
+
+interface SchemaResolution {
+  extraAttributes: Prisma.InputJsonValue | null;
+  isVerticalMigrated: boolean;
+}
 
 @Injectable()
 export class ProductsService {
@@ -23,7 +39,23 @@ export class ProductsService {
     private categoryService: CategoryService,
     private brandsService: BrandsService,
     private tenantContext: TenantContextService,
+    private verticalConfigService: VerticalConfigService,
   ) {}
+
+  private async ensureProductsFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
+      return;
+    }
+
+    const config = await this.verticalConfigService.getConfig(companyId);
+    if (config.features.inventory === false) {
+      throw new ForbiddenException(
+        'El modulo de productos/inventario no esta habilitado para esta empresa.',
+      );
+    }
+  }
 
   /** Helpers */
   private mapBrand(brand: Pick<Brand, 'name' | 'logoSvg' | 'logoPng'> | null) {
@@ -67,7 +99,6 @@ export class ProductsService {
     return sanitized;
   }
 
-  /** FILTRO por organización (no por compañía) */
   private orgFilter() {
     const orgId = this.tenantContext.getContext().organizationId ?? null;
     return { organizationId: orgId } as const;
@@ -82,26 +113,68 @@ export class ProductsService {
       brand,
       status,
       categoryId,
+      extraAttributes,
+      isVerticalMigrated,
       ...data
     } = createProductDto as any;
 
     const ctx = this.tenantContext.getContext();
+
+    // Validate products/inventory feature is enabled
+    await this.ensureProductsFeatureEnabled(ctx.companyId);
+
+    const trimmedName = String(createProductDto?.name ?? '').trim();
+    if (!trimmedName) {
+      throw new BadRequestException('El nombre del producto es obligatorio.');
+    }
+    if (!ctx.organizationId) {
+      throw new BadRequestException('Organizacion no definida para el producto.');
+    }
     const normalizedStatus = this.normalizeStatus(status);
     const normalizedFeatures = this.sanitizeFeatureInputs(features);
+    const schemaResolution = await this.resolveCreateSchemaState(
+      ctx.organizationId ?? null,
+      ctx.companyId ?? null,
+      extraAttributes,
+    );
+    const normalizedPrice = Number(data?.price);
+    if (!Number.isFinite(normalizedPrice)) {
+      throw new BadRequestException('El precio de compra es invalido.');
+    }
+    const hasPriceSell =
+      Object.prototype.hasOwnProperty.call(data ?? {}, 'priceSell') &&
+      data?.priceSell !== null &&
+      data?.priceSell !== undefined;
+    const normalizedPriceSell = hasPriceSell
+      ? Number(data?.priceSell)
+      : undefined;
+    if (hasPriceSell && !Number.isFinite(normalizedPriceSell)) {
+      throw new BadRequestException('El precio de venta es invalido.');
+    }
 
-    // Verificar categoría en esta organización (si viene)
     if (typeof categoryId === 'number') {
       const cat = await this.prismaService.category.findFirst({
         where: { id: categoryId, organizationId: ctx.organizationId ?? null },
       });
       if (!cat) {
         throw new BadRequestException(
-          'La categoría no pertenece a tu organización.',
+          'La categoria no pertenece a tu organizacion.',
         );
       }
     }
 
     try {
+      const existingByName = await this.prismaService.product.findFirst({
+        where: {
+          organizationId: ctx.organizationId,
+          name: { equals: trimmedName, mode: 'insensitive' },
+        },
+      });
+      if (existingByName) {
+        throw new ConflictException(
+          `El producto con el nombre "${trimmedName}" ya existe en esta organizacion.`,
+        );
+      }
       let brandEntity: Brand | null = null;
       if (!brandId && brand) {
         brandEntity = await this.brandsService.findOrCreateByName(brand);
@@ -114,9 +187,14 @@ export class ProductsService {
       const createdProduct = await this.prismaService.product.create({
         data: {
           ...data,
+          price: normalizedPrice,
+          priceSell: normalizedPriceSell,
+          name: trimmedName,
+          extraAttributes: schemaResolution.extraAttributes,
+          isVerticalMigrated: schemaResolution.isVerticalMigrated,
           status: normalizedStatus,
-          organizationId: ctx.organizationId, // identidad
-          companyId: ctx.companyId ?? null, // trazabilidad (no filtra lecturas)
+          organizationId: ctx.organizationId,
+          companyId: ctx.companyId ?? null,
           categoryId: categoryId ?? undefined,
           brandId: brandEntity ? brandEntity.id : (brandId ?? undefined),
           brandName: brandEntity ? brandEntity.name : undefined,
@@ -137,16 +215,16 @@ export class ProductsService {
 
       return { ...createdProduct, brand: this.mapBrand(createdProduct.brand) };
     } catch (error) {
+      if (error instanceof HttpException) throw error;
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        // @@unique([organizationId, name]) en el schema
         throw new ConflictException(
-          `El producto con el nombre "${createProductDto.name}" ya existe en esta organización.`,
+          `El producto con el nombre "${createProductDto.name}" ya existe en esta organizacion.`,
         );
       }
-      throw error;
+      handlePrismaError(error);
     }
   }
 
@@ -159,91 +237,131 @@ export class ProductsService {
       categoryId?: number;
     }[],
   ) {
-    const ctx = this.tenantContext.getContext();
-    const createdProducts: any[] = [];
-    const defaultCategory =
-      await this.categoryService.verifyOrCreateDefaultCategory(); // ya scoped por organización
+    try {
+      const ctx = this.tenantContext.getContext();
+      const createdProducts: any[] = [];
+      const defaultCategory =
+        await this.categoryService.verifyOrCreateDefaultCategory();
 
-    for (const p of products) {
-      // Buscar por ORGANIZACIÓN (compartido entre compañías)
-      const existing = await this.prismaService.product.findFirst({
-        where: { name: p.name, organizationId: ctx.organizationId ?? null },
-      });
-
-      if (!existing) {
-        // Validar categoría dentro de la organización
-        const categoryIdToUse = p.categoryId ?? defaultCategory.id;
-        const cat = await this.prismaService.category.findFirst({
-          where: {
-            id: categoryIdToUse,
-            organizationId: ctx.organizationId ?? null,
-          },
+      for (const p of products) {
+        const existing = await this.prismaService.product.findFirst({
+          where: { name: p.name, organizationId: ctx.organizationId ?? null },
         });
-        if (!cat) {
-          throw new NotFoundException(
-            `La categoría ${categoryIdToUse} no existe en tu organización.`,
-          );
+
+        if (!existing) {
+          const categoryIdToUse = p.categoryId ?? defaultCategory.id;
+          const cat = await this.prismaService.category.findFirst({
+            where: {
+              id: categoryIdToUse,
+              organizationId: ctx.organizationId ?? null,
+            },
+          });
+          if (!cat) {
+            throw new NotFoundException(
+              `La categoria ${categoryIdToUse} no existe en tu organizacion.`,
+            );
+          }
+
+          const newProduct = await this.prismaService.product.create({
+            data: {
+              name: p.name,
+              price: p.price,
+              description: p.description || '',
+              brandId: p.brandId ?? null,
+              categoryId: categoryIdToUse,
+              organizationId: ctx.organizationId ?? null,
+              companyId: ctx.companyId ?? null,
+              images: [],
+              status: 'Activo',
+            },
+          });
+          createdProducts.push(newProduct);
+        } else {
+          createdProducts.push(existing);
         }
-
-        const newProduct = await this.prismaService.product.create({
-          data: {
-            name: p.name,
-            price: p.price,
-            description: p.description || '',
-            brandId: p.brandId ?? null,
-            categoryId: categoryIdToUse,
-            organizationId: ctx.organizationId ?? null, // identidad
-            companyId: ctx.companyId ?? null, // trazabilidad
-            images: [],
-            status: 'Activo',
-          },
-        });
-        createdProducts.push(newProduct);
-      } else {
-        createdProducts.push(existing);
       }
-    }
 
-    return createdProducts;
+      return createdProducts;
+    } catch (error) {
+      handlePrismaError(error);
+    }
   }
 
-  async findAll() {
-    // Sólo por organización (compartido entre compañías)
-    const products = await this.prismaService.product.findMany({
-      where: this.orgFilter(),
-      include: {
-        specification: true,
-        features: true,
-        brand: true,
-        category: { select: { name: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findAll(filters?: { migrationStatus?: 'legacy' | 'migrated' }) {
+    try {
+      // Validate products/inventory feature is enabled
+      const ctx = this.tenantContext.getContext();
+      await this.ensureProductsFeatureEnabled(ctx.companyId);
 
-    return products.map((p) => ({ ...p, brand: this.mapBrand(p.brand) }));
+      const where: Prisma.ProductWhereInput = {
+        ...this.orgFilter(),
+      };
+
+      if (filters?.migrationStatus === 'legacy') {
+        where.OR = [
+          { extraAttributes: { equals: Prisma.JsonNull } },
+          { isVerticalMigrated: false },
+        ];
+      } else if (filters?.migrationStatus === 'migrated') {
+        where.AND = [
+          { extraAttributes: { not: Prisma.JsonNull } },
+          { isVerticalMigrated: true },
+        ];
+      }
+
+      const products = await this.prismaService.product.findMany({
+        where,
+        take: 500,
+        include: {
+          specification: true,
+          features: true,
+          brand: true,
+          category: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return products.map((p) => ({ ...p, brand: this.mapBrand(p.brand) }));
+    } catch (error) {
+      handlePrismaError(error);
+    }
   }
 
   async findOne(id: number) {
     if (!id || typeof id !== 'number') {
-      throw new BadRequestException('El ID proporcionado no es válido.');
+      throw new BadRequestException('El ID proporcionado no es valido.');
     }
-    const product = await this.prismaService.product.findFirst({
-      where: { id, ...this.orgFilter() }, // validar pertenencia a la organización
-      include: {
-        category: true,
-        specification: true,
-        features: true,
-        brand: {
-          select: { id: true, name: true, logoSvg: true, logoPng: true },
+
+    // Validate products/inventory feature is enabled
+    const ctx = this.tenantContext.getContext();
+    await this.ensureProductsFeatureEnabled(ctx.companyId);
+
+    try {
+      const product = await this.prismaService.product.findFirst({
+        where: { id, ...this.orgFilter() },
+        include: {
+          category: true,
+          specification: true,
+          features: true,
+          brand: {
+            select: { id: true, name: true, logoSvg: true, logoPng: true },
+          },
         },
-      },
-    });
-    if (!product)
-      throw new NotFoundException(`Product with id ${id} not found`);
-    return { ...product, brand: this.mapBrand(product.brand) };
+      });
+      if (!product)
+        throw new NotFoundException(`Product with id ${id} not found`);
+      return { ...product, brand: this.mapBrand(product.brand) };
+    } catch (error) {
+      handlePrismaError(error);
+    }
   }
 
   async update(id: number, updateProductDto: UpdateProductDto) {
+    const ctx = this.tenantContext.getContext();
+
+    // Validate products/inventory feature is enabled
+    await this.ensureProductsFeatureEnabled(ctx.companyId);
+
     const {
       specification,
       images,
@@ -252,28 +370,68 @@ export class ProductsService {
       brand,
       status,
       categoryId,
+      extraAttributes,
+      isVerticalMigrated,
       ...data
     } = updateProductDto as any;
 
-    // Asegura que pertenece a la organización
     const existing = await this.findOne(id);
 
-    // Validar categoría (si se envía) pertenece a la organización
     if (typeof categoryId === 'number') {
       const cat = await this.prismaService.category.findFirst({
         where: { id: categoryId, ...this.orgFilter() },
       });
       if (!cat)
         throw new BadRequestException(
-          'La categoría no pertenece a tu organización.',
+          'La categoria no pertenece a tu organizacion.',
         );
     }
 
     const normalizedStatus =
       status !== undefined ? this.normalizeStatus(status) : undefined;
     const normalizedFeatures = this.sanitizeFeatureInputs(features);
+    const schemaResolution = await this.resolveUpdateSchemaState(
+      ctx.organizationId ?? null,
+      ctx.companyId ?? null,
+      extraAttributes,
+      existing.extraAttributes,
+      existing.isVerticalMigrated,
+    );
+    const hasPrice = Object.prototype.hasOwnProperty.call(
+      updateProductDto ?? {},
+      'price',
+    );
+    const hasPriceSell = Object.prototype.hasOwnProperty.call(
+      updateProductDto ?? {},
+      'priceSell',
+    );
+    const normalizedPrice = hasPrice ? Number(data?.price) : undefined;
+    if (hasPrice && !Number.isFinite(normalizedPrice)) {
+      throw new BadRequestException('El precio de compra es invalido.');
+    }
+    const normalizedPriceSell = hasPriceSell ? Number(data?.priceSell) : undefined;
+    if (hasPriceSell && !Number.isFinite(normalizedPriceSell)) {
+      throw new BadRequestException('El precio de venta es invalido.');
+    }
 
     try {
+      if (updateProductDto.name) {
+        const nextName = updateProductDto.name.trim();
+        if (nextName) {
+          const duplicate = await this.prismaService.product.findFirst({
+            where: {
+              organizationId: ctx.organizationId ?? null,
+              name: { equals: nextName, mode: 'insensitive' },
+              NOT: { id: Number(id) },
+            },
+          });
+          if (duplicate) {
+            throw new ConflictException(
+              `El producto con el nombre "${nextName}" ya existe en esta organizacion.`,
+            );
+          }
+        }
+      }
       let brandEntity: Brand | null = null;
       if (!brandId && brand) {
         brandEntity = await this.brandsService.findOrCreateByName(brand);
@@ -281,9 +439,13 @@ export class ProductsService {
 
       const productFound = await this.prismaService.$transaction(async (tx) => {
         const updated = await tx.product.update({
-          where: { id: Number(id) }, // pertenencia ya validada
+          where: { id: Number(id) },
           data: {
             ...data,
+            ...(hasPrice ? { price: normalizedPrice } : {}),
+            ...(hasPriceSell ? { priceSell: normalizedPriceSell } : {}),
+            extraAttributes: schemaResolution.extraAttributes,
+            isVerticalMigrated: schemaResolution.isVerticalMigrated,
             ...(categoryId !== undefined ? { categoryId } : {}),
             ...(normalizedStatus !== undefined
               ? { status: normalizedStatus }
@@ -330,16 +492,79 @@ export class ProductsService {
         throw new NotFoundException(`Product with id ${id} not found`);
       return { ...productFound, brand: this.mapBrand(productFound.brand) };
     } catch (error) {
+      if (error instanceof HttpException) throw error;
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        // @@unique([organizationId, name])
         throw new ConflictException(
-          `El producto con el nombre "${updateProductDto.name}" ya existe en esta organización.`,
+          `El producto con el nombre "${updateProductDto.name}" ya existe en esta organizacion.`,
         );
       }
-      throw error;
+      handlePrismaError(error);
+    }
+  }
+
+  async validateProductName(
+    name: string,
+    excludeId?: number,
+  ): Promise<{ nameAvailable: boolean }> {
+    const ctx = this.tenantContext.getContext();
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      return { nameAvailable: true };
+    }
+    if (!ctx.organizationId) {
+      throw new BadRequestException('Organizacion no definida para el producto.');
+    }
+    try {
+      const existing = await this.prismaService.product.findFirst({
+        where: {
+          organizationId: ctx.organizationId,
+          name: { equals: trimmedName, mode: 'insensitive' },
+          ...(excludeId ? { NOT: { id: excludeId } } : {}),
+        },
+      });
+      return { nameAvailable: !existing };
+    } catch (error) {
+      handlePrismaError(error);
+    }
+  }
+
+  async updateProductVerticalMigration(
+    id: number,
+    extraAttributes: Record<string, unknown>,
+    markMigrated = false,
+  ) {
+    try {
+      const ctx = this.tenantContext.getContext();
+      const existing = await this.prismaService.product.findFirst({
+        where: { id, ...this.orgFilter() },
+      });
+      if (!existing) {
+        throw new NotFoundException('Producto no encontrado en tu organización.');
+      }
+
+      const resolution = await this.resolveUpdateSchemaState(
+        ctx.organizationId ?? null,
+        ctx.companyId ?? null,
+        extraAttributes,
+        existing.extraAttributes,
+        existing.isVerticalMigrated,
+      );
+
+      return this.prismaService.product.update({
+        where: { id },
+        data: {
+          extraAttributes:
+            resolution.extraAttributes === null
+              ? Prisma.JsonNull
+              : resolution.extraAttributes,
+          isVerticalMigrated: markMigrated || resolution.isVerticalMigrated,
+        },
+      });
+    } catch (error) {
+      handlePrismaError(error);
     }
   }
 
@@ -354,11 +579,10 @@ export class ProductsService {
       const invalid = products.filter((p) => !p.id || isNaN(Number(p.id)));
       if (invalid.length) {
         throw new BadRequestException(
-          'Todos los productos deben tener un ID válido.',
+          'Todos los productos deben tener un ID valido.',
         );
       }
 
-      // Verificar pertenencia a la organización
       const ids = products.map((p) => Number(p.id));
       const existing = await this.prismaService.product.findMany({
         where: { id: { in: ids }, ...this.orgFilter() },
@@ -366,7 +590,7 @@ export class ProductsService {
       });
       if (existing.length !== ids.length) {
         throw new NotFoundException(
-          'Uno o más productos no pertenecen a tu organización.',
+          'Uno o mas productos no pertenecen a tu organizacion.',
         );
       }
 
@@ -400,60 +624,354 @@ export class ProductsService {
         updatedProducts: updated,
       };
     } catch (error) {
+      if (error instanceof HttpException) throw error;
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025'
       ) {
         throw new NotFoundException(
-          'Uno o más productos no fueron encontrados.',
+          'Uno o mas productos no fueron encontrados.',
         );
       }
-      throw new InternalServerErrorException(
-        'Hubo un error al actualizar los productos.',
-      );
+      handlePrismaError(error);
     }
   }
 
   async remove(id: number) {
-    // Verificar pertenencia a la organización
-    await this.findOne(id);
+    try {
+      const product = await this.findOne(id);
 
-    const deleted = await this.prismaService.product.deleteMany({
-      where: { id, ...this.orgFilter() }, // sólo si pertenece a la org
-    });
+      // Pre-validación: detectar relaciones que bloquean la eliminación
+      const blocking = await this.checkBlockingRelations([id]);
+      if (blocking.length > 0) {
+        const reasons = blocking.map((b) => b.reason).join('; ');
+        throw new ConflictException(
+          `No se puede eliminar el producto "${product.name}": ${reasons}. ` +
+            `Debe eliminar o desvincular estos registros primero.`,
+        );
+      }
 
-    if (deleted.count === 0) {
-      throw new NotFoundException(`Product with id ${id} not found`);
+      const deleted = await this.prismaService.product.deleteMany({
+        where: { id, ...this.orgFilter() },
+      });
+
+      if (deleted.count === 0) {
+        throw new NotFoundException(`Product with id ${id} not found`);
+      }
+      return { id, deleted: true };
+    } catch (error) {
+      handlePrismaError(error);
     }
-    return { id, deleted: true };
   }
 
   async removes(ids: number[]) {
     if (!Array.isArray(ids) || ids.length === 0) {
       throw new NotFoundException(
-        'No se proporcionaron IDs válidos para eliminar.',
+        'No se proporcionaron IDs validos para eliminar.',
       );
     }
-    const numericIds = ids.map((id) => Number(id));
+    try {
+      const numericIds = ids.map((id) => Number(id));
 
-    const deleted = await this.prismaService.product.deleteMany({
-      where: { id: { in: numericIds }, ...this.orgFilter() },
-    });
+      // Pre-validación: detectar relaciones que bloquean la eliminación
+      const blocking = await this.checkBlockingRelations(numericIds);
+      if (blocking.length > 0) {
+        const summary = blocking
+          .map((b) => `Producto ID ${b.productId}: ${b.reason}`)
+          .join('. ');
+        throw new ConflictException(
+          `No se pueden eliminar algunos productos: ${summary}`,
+        );
+      }
 
-    if (deleted.count === 0) {
-      throw new NotFoundException(
-        'No se encontraron productos con los IDs proporcionados en tu organización.',
-      );
+      const deleted = await this.prismaService.product.deleteMany({
+        where: { id: { in: numericIds }, ...this.orgFilter() },
+      });
+
+      if (deleted.count === 0) {
+        throw new NotFoundException(
+          'No se encontraron productos con los IDs proporcionados en tu organizacion.',
+        );
+      }
+
+      return {
+        message: `${deleted.count} producto(s) eliminado(s) correctamente.`,
+      };
+    } catch (error) {
+      handlePrismaError(error);
+    }
+  }
+
+  /**
+   * Verifica relaciones que bloquean la eliminación de productos (FK RESTRICT).
+   * Retorna un arreglo de { productId, reason } para cada producto bloqueado.
+   */
+  private async checkBlockingRelations(
+    productIds: number[],
+  ): Promise<{ productId: number; reason: string }[]> {
+    const blocking: { productId: number; reason: string }[] = [];
+
+    // Relaciones con ON DELETE RESTRICT que bloquean la eliminación
+    // (ProductFeature, ProductSpecification, Review, Favorite usan CASCADE — no bloquean)
+    const [entries, inventory, transfers, restaurantItems] =
+      await Promise.all([
+        this.prismaService.entryDetail.groupBy({
+          by: ['productId'],
+          where: { productId: { in: productIds } },
+          _count: true,
+        }),
+        this.prismaService.inventory.groupBy({
+          by: ['productId'],
+          where: { productId: { in: productIds } },
+          _count: true,
+        }),
+        this.prismaService.transfer.groupBy({
+          by: ['productId'],
+          where: { productId: { in: productIds } },
+          _count: true,
+        }),
+        this.prismaService.restaurantOrderItem.groupBy({
+          by: ['productId'],
+          where: { productId: { in: productIds } },
+          _count: true,
+        }),
+      ]);
+
+    // Mapear resultados por productId
+    const reasonsMap = new Map<number, string[]>();
+
+    for (const e of entries) {
+      const list = reasonsMap.get(e.productId) ?? [];
+      list.push(`${e._count} detalle(s) de entrada`);
+      reasonsMap.set(e.productId, list);
+    }
+    for (const i of inventory) {
+      const list = reasonsMap.get(i.productId) ?? [];
+      list.push(`${i._count} registro(s) de inventario`);
+      reasonsMap.set(i.productId, list);
+    }
+    for (const t of transfers) {
+      const list = reasonsMap.get(t.productId) ?? [];
+      list.push(`${t._count} transferencia(s)`);
+      reasonsMap.set(t.productId, list);
+    }
+    for (const r of restaurantItems) {
+      const list = reasonsMap.get(r.productId) ?? [];
+      list.push(`${r._count} orden(es) de restaurante`);
+      reasonsMap.set(r.productId, list);
     }
 
+    for (const [productId, reasons] of reasonsMap) {
+      blocking.push({
+        productId,
+        reason: `tiene ${reasons.join(', ')}`,
+      });
+    }
+
+    return blocking;
+  }
+
+  async findByBarcode(code: string, explicitOrganizationId?: number | null) {
+    try {
+      const orgFilter =
+        explicitOrganizationId !== undefined
+          ? { organizationId: explicitOrganizationId }
+          : this.orgFilter();
+      return this.prismaService.product.findFirst({
+        where: { OR: [{ barcode: code }, { qrCode: code }], ...orgFilter },
+        include: { category: { select: { id: true, name: true } } },
+      });
+    } catch (error) {
+      handlePrismaError(error);
+    }
+  }
+
+  async findOneForBarcode(id: number, explicitOrganizationId?: number | null) {
+    try {
+      const orgFilter =
+        explicitOrganizationId !== undefined
+          ? { organizationId: explicitOrganizationId }
+          : this.orgFilter();
+      return this.prismaService.product.findFirst({
+        where: { id, ...orgFilter },
+        include: { category: { select: { id: true, name: true } } },
+      });
+    } catch (error) {
+      handlePrismaError(error);
+    }
+  }
+
+  private async resolveCreateSchemaState(
+    _organizationId: number | null,
+    companyId: number | null,
+    extraAttributes: unknown,
+  ): Promise<SchemaResolution> {
+    const state = await this.resolveVerticalState(_organizationId, companyId);
+    return this.applySchemaRules(state, extraAttributes ?? null, false);
+  }
+
+  private async resolveUpdateSchemaState(
+    _organizationId: number | null,
+    companyId: number | null,
+    incomingExtraAttributes: unknown,
+    fallbackExtraAttributes: unknown,
+    currentMigrated: boolean,
+  ): Promise<SchemaResolution> {
+    const state = await this.resolveVerticalState(_organizationId, companyId);
+    const source =
+      incomingExtraAttributes !== undefined
+        ? incomingExtraAttributes
+        : fallbackExtraAttributes ?? null;
+    return this.applySchemaRules(state, source, currentMigrated);
+  }
+
+  private async resolveVerticalState(
+    organizationId: number | null,
+    companyId: number | null,
+  ): Promise<VerticalSchemaState> {
+    if (!companyId) {
+      return {
+        vertical: BusinessVertical.GENERAL,
+        enforceSchema: false,
+        schema: null,
+      };
+    }
+    let config: Awaited<ReturnType<VerticalConfigService["getConfig"]>> | null =
+      null;
+    try {
+      config = await this.verticalConfigService.getConfig(companyId);
+    } catch (error) {
+      if (organizationId) {
+        const fallback = await this.prismaService.company.findFirst({
+          where: { organizationId },
+          select: { id: true },
+          orderBy: { id: "asc" },
+        });
+        if (fallback?.id) {
+          config = await this.verticalConfigService.getConfig(fallback.id);
+        }
+      }
+      if (!config) {
+        throw error;
+      }
+    }
     return {
-      message: `${deleted.count} producto(s) eliminado(s) correctamente.`,
+      vertical: config.name,
+      enforceSchema: config.enforcedProductSchema,
+      schema: config.productSchema ?? null,
     };
   }
 
-  async findByBarcode(code: string) {
-    return this.prismaService.product.findFirst({
-      where: { OR: [{ barcode: code }, { qrCode: code }], ...this.orgFilter() },
-    });
+  private applySchemaRules(
+    state: VerticalSchemaState,
+    rawValue: unknown,
+    fallbackMigrated: boolean,
+  ): SchemaResolution {
+    if (state.vertical !== BusinessVertical.RETAIL) {
+      return {
+        extraAttributes: (rawValue as Prisma.InputJsonValue) ?? null,
+        isVerticalMigrated: fallbackMigrated,
+      };
+    }
+
+    if (!rawValue && state.enforceSchema) {
+      throw new BadRequestException(
+        'Este vertical requiere completar los atributos adicionales del producto.',
+      );
+    }
+
+    if (!rawValue) {
+      return {
+        extraAttributes: null,
+        isVerticalMigrated: false,
+      };
+    }
+
+    const normalized = state.schema
+      ? this.validateExtraAttributes(rawValue, state.schema)
+      : this.ensureJsonValue(rawValue);
+
+    return {
+      extraAttributes: normalized,
+      isVerticalMigrated: true,
+    };
+  }
+
+  private ensureJsonValue(value: unknown): Prisma.InputJsonValue {
+    if (
+      value === undefined ||
+      value === null ||
+      (typeof value !== 'object' && typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean')
+    ) {
+      throw new BadRequestException(
+        'Los atributos adicionales del producto no son validos.',
+      );
+    }
+    return value as Prisma.InputJsonValue;
+  }
+
+  private validateExtraAttributes(
+    rawValue: unknown,
+    schema: VerticalProductSchema,
+  ): Prisma.JsonObject {
+    const payload = this.ensureJsonValue(rawValue);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new BadRequestException(
+        'Los atributos adicionales del producto no cumplen con el esquema requerido.',
+      );
+    }
+    const normalized: Prisma.JsonObject = {};
+
+    for (const field of schema.fields) {
+      const value = payload[field.key];
+      const isEmptyString =
+        typeof value === 'string' && value.trim().length === 0;
+      if ((value === null || value === undefined || isEmptyString) && field.required) {
+        throw new BadRequestException(
+          `El campo "${field.label}" es obligatorio para productos de este vertical.`,
+        );
+      }
+      if (
+        value !== null &&
+        value !== undefined &&
+        field.options &&
+        typeof value === 'string' &&
+        !field.options.includes(value)
+      ) {
+        throw new BadRequestException(
+          `El campo "${field.label}" solo admite los valores: ${field.options.join(', ')}.`,
+        );
+      }
+      if (value !== undefined) {
+        normalized[field.key] = value;
+      }
+    }
+
+    return normalized;
+  }
+
+  async markProductVerticalMigrated(id: number) {
+    try {
+      const product = await this.prismaService.product.findFirst({
+        where: { id, ...this.orgFilter() },
+        select: { id: true, extraAttributes: true, isVerticalMigrated: true },
+      });
+
+      if (!product) {
+        throw new NotFoundException('Producto no encontrado en tu organización.');
+      }
+      if (!product.extraAttributes) {
+        throw new BadRequestException(
+          'Completa los atributos adicionales antes de marcar el producto como migrado.',
+        );
+      }
+
+      return this.prismaService.product.update({
+        where: { id },
+        data: { isVerticalMigrated: true },
+      });
+    } catch (error) {
+      handlePrismaError(error);
+    }
   }
 }

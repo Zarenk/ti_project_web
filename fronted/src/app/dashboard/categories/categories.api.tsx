@@ -1,22 +1,8 @@
-import { getAuthHeaders } from "@/utils/auth-token";
-
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
-
-async function authorizedFetch(url: string, init: RequestInit = {}) {
-  const auth = await getAuthHeaders();
-  const headers = new Headers(init.headers ?? {});
-
-  for (const [key, value] of Object.entries(auth)) {
-    if (value != null && value !== "") {
-      headers.set(key, value);
-    }
-  }
-
-  return fetch(url, { ...init, headers });
-}
+import { BACKEND_URL } from "@/lib/utils";
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
 export async function createCategory(categoryData: any) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/category`, {
+  const res = await authFetch(`${BACKEND_URL}/api/category`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -39,7 +25,7 @@ export async function createCategory(categoryData: any) {
 
 export async function createCategoryDefault() {
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/categories/verify-or-create-default`, {
+    const response = await authFetch(`${BACKEND_URL}/api/categories/verify-or-create-default`, {
       method: "POST",
     });
 
@@ -56,7 +42,7 @@ export async function createCategoryDefault() {
 
 export async function getCategories() {
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/category`, {
+    const response = await authFetch(`${BACKEND_URL}/api/category`, {
       cache: "no-store",
     });
 
@@ -72,15 +58,26 @@ export async function getCategories() {
     const data = await response.json();
     return data;
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error("Error al obtener categorias:", error);
     return [];
   }
 }
 
 export async function getCategory(id: string) {
-  const data = await authorizedFetch(`${BACKEND_URL}/api/category/${id}`, {
-    cache: "no-store",
-  });
+  let data: Response;
+  try {
+    data = await authFetch(`${BACKEND_URL}/api/category/${id}`, {
+      cache: "no-store",
+    });
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
+  }
 
   const json = await data.json();
 
@@ -95,7 +92,7 @@ export async function getCategory(id: string) {
 
 export async function verifyCategories(categories: { name: string }[]) {
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/category/verify`, {
+    const response = await authFetch(`${BACKEND_URL}/api/category/verify`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -116,7 +113,7 @@ export async function verifyCategories(categories: { name: string }[]) {
 }
 
 export async function deleteCategory(id: string) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/category/${id}`, {
+  const res = await authFetch(`${BACKEND_URL}/api/category/${id}`, {
     method: "DELETE",
   });
 
@@ -129,7 +126,7 @@ export async function deleteCategory(id: string) {
 }
 
 export async function deleteCategories(ids: string[]) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/category/`, {
+  const res = await authFetch(`${BACKEND_URL}/api/category/`, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
@@ -144,7 +141,7 @@ export async function deleteCategories(ids: string[]) {
 }
 
 export async function updateCategory(id: string, newCategory: any) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/category/${id}`, {
+  const res = await authFetch(`${BACKEND_URL}/api/category/${id}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -168,7 +165,7 @@ export async function updateCategory(id: string, newCategory: any) {
 
 export async function getCategoriesWithCount() {
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/category/with-count`, {
+    const response = await authFetch(`${BACKEND_URL}/api/category/with-count`, {
       cache: "no-store",
     });
     if (!response.ok) {
@@ -176,6 +173,54 @@ export async function getCategoriesWithCount() {
     }
     return await response.json();
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    console.error("Error al obtener las categorias con conteo:", error);
+    return [];
+  }
+}
+
+export async function validateCategoryName(payload: {
+  name: string;
+  categoryId?: number;
+}): Promise<{ nameAvailable: boolean }> {
+  const res = await authFetch(`${BACKEND_URL}/api/category/validate-name`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    const message =
+      errorData?.message ||
+      errorData?.error ||
+      "Error al validar la categoria.";
+    throw new Error(message);
+  }
+
+  return res.json();
+}
+
+export async function getPublicCategoriesWithCount() {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/public/category/with-count`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      if (response.status === 400) {
+        return [];
+      }
+      throw new Error("Error al obtener las categorias con conteo");
+    }
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error("Error al obtener las categorias con conteo:", error);
     return [];
   }

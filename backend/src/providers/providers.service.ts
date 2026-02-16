@@ -13,6 +13,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AuditAction } from '@prisma/client';
 import { ActivityService } from '../activity/activity.service';
 import { Request } from 'express';
+import * as xlsx from 'xlsx';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 import {
   buildOrganizationFilter,
@@ -53,6 +54,176 @@ export class ProvidersService {
     );
   }
 
+  parseExcel(filePath: string): any[] {
+    const workbook = xlsx.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rawData = xlsx.utils.sheet_to_json(sheet, { raw: false });
+
+    const cleanedData = rawData.map((row: any) => {
+      const cleanedRow: Record<string, unknown> = {};
+      Object.keys(row).forEach((key) => {
+        const cleanKey = key.trim();
+        const value = row[key];
+        cleanedRow[cleanKey] = typeof value === 'string' ? value.trim() : value;
+      });
+      return cleanedRow;
+    });
+
+    return cleanedData;
+  }
+
+  private normalizeProviderDocument(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const normalized = value.trim().toUpperCase();
+    if (normalized === 'DNI') return 'DNI';
+    if (normalized === 'RUC') return 'RUC';
+    if (normalized === 'OTRO DOCUMENTO' || normalized === 'OTRO') {
+      return 'Otro Documento';
+    }
+    return null;
+  }
+
+  private normalizeOptionalField(value: unknown): string | undefined {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value !== 'string') return String(value);
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+  }
+
+  async processExcelData(
+    data: any[],
+    req?: Request,
+    organizationIdFromContext?: number | null,
+  ) {
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new BadRequestException('No se encontraron datos para importar.');
+    }
+
+    const errors: string[] = [];
+    const seenDocumentNumbers = new Set<string>();
+    const payload: Prisma.ProviderCreateManyInput[] = [];
+
+    data.forEach((row, index) => {
+      const rowNumber = index + 2;
+      const name = this.normalizeOptionalField(row?.name);
+      const document = this.normalizeProviderDocument(row?.document);
+      const documentNumberRaw =
+        typeof row?.documentNumber === 'number'
+          ? String(row.documentNumber)
+          : typeof row?.documentNumber === 'string'
+            ? row.documentNumber.trim()
+            : '';
+      const documentNumber = documentNumberRaw.replace(/\s+/g, '');
+
+      if (!name) {
+        errors.push(`Fila ${rowNumber}: El campo name es obligatorio.`);
+      }
+
+      if (!document) {
+        errors.push(
+          `Fila ${rowNumber}: El campo document debe ser DNI, RUC u Otro Documento.`,
+        );
+      }
+
+      if (!documentNumber) {
+        errors.push(
+          `Fila ${rowNumber}: El campo documentNumber es obligatorio.`,
+        );
+      } else if (document === 'DNI' && !/^\d{8}$/.test(documentNumber)) {
+        errors.push(
+          `Fila ${rowNumber}: El documentNumber debe tener 8 digitos para DNI.`,
+        );
+      } else if (document === 'RUC' && !/^\d{11}$/.test(documentNumber)) {
+        errors.push(
+          `Fila ${rowNumber}: El documentNumber debe tener 11 digitos para RUC.`,
+        );
+      }
+
+      if (documentNumber) {
+        if (seenDocumentNumbers.has(documentNumber)) {
+          errors.push(
+            `Fila ${rowNumber}: documentNumber duplicado en el archivo.`,
+          );
+        }
+        seenDocumentNumbers.add(documentNumber);
+      }
+
+      const statusRaw = this.normalizeOptionalField(row?.status);
+      const status =
+        statusRaw && statusRaw.toLowerCase() === 'inactivo'
+          ? 'Inactivo'
+          : 'Activo';
+
+      payload.push({
+        name: name ?? '',
+        document: document ?? 'Otro Documento',
+        documentNumber,
+        description: this.normalizeOptionalField(row?.description),
+        phone: this.normalizeOptionalField(row?.phone),
+        adress: this.normalizeOptionalField(row?.adress),
+        email: this.normalizeOptionalField(row?.email),
+        website: this.normalizeOptionalField(row?.website),
+        image: this.normalizeOptionalField(row?.image),
+        status,
+        organizationId: organizationIdFromContext ?? null,
+      });
+    });
+
+    if (errors.length > 0) {
+      throw new BadRequestException({
+        message: 'Se encontraron errores en el archivo.',
+        errors,
+      });
+    }
+
+    const documentNumbers = payload
+      .map((row) => row.documentNumber)
+      .filter((value): value is string => Boolean(value));
+
+    const existing = await this.prismaService.provider.findMany({
+      where: {
+        documentNumber: { in: documentNumbers },
+        ...buildOrganizationFilter(organizationIdFromContext),
+      },
+      select: { documentNumber: true },
+    });
+
+    if (existing.length > 0) {
+      const duplicates = existing.map((item) => item.documentNumber);
+      throw new ConflictException(
+        `Ya existen proveedores con estos documentos: ${duplicates.join(', ')}.`,
+      );
+    }
+
+    const result = await this.prismaService.provider.createMany({
+      data: payload,
+    });
+
+    logOrganizationContext({
+      service: ProvidersService.name,
+      operation: 'importExcel',
+      organizationId: organizationIdFromContext ?? undefined,
+      metadata: { count: result.count },
+    });
+
+    await this.activityService.log(
+      {
+        actorId: (req as any)?.user?.userId,
+        actorEmail: (req as any)?.user?.username,
+        entityType: 'Provider',
+        action: AuditAction.CREATED,
+        summary: `${result.count} proveedor(es) importado(s)`,
+      },
+      req,
+    );
+
+    return {
+      message: `${result.count} proveedor(es) importado(s) correctamente.`,
+      count: result.count,
+    };
+  }
+
   async create(
     createProviderDto: CreateProviderDto,
     req?: Request,
@@ -77,6 +248,46 @@ export class ProvidersService {
         organizationId: resolvedOrganizationId ?? organizationId ?? undefined,
         metadata: { providerName: createProviderDto.name },
       });
+
+      const normalizedName = String(providerPayload?.name ?? '').trim();
+      if (normalizedName) {
+        const nameExists = await this.prismaService.provider.findFirst({
+          where: {
+            name: { equals: normalizedName, mode: 'insensitive' },
+            ...buildOrganizationFilter(
+              resolvedOrganizationId ?? organizationIdFromContext,
+            ),
+          },
+          select: { id: true },
+        });
+        if (nameExists) {
+          throw new ConflictException(
+            'Ya existe un proveedor con ese nombre en esta organizaciÃ³n.',
+          );
+        }
+      }
+
+      const normalizedDocumentNumber = String(
+        providerPayload?.documentNumber ?? '',
+      )
+        .trim()
+        .replace(/\s+/g, '');
+      if (normalizedDocumentNumber) {
+        const docExists = await this.prismaService.provider.findFirst({
+          where: {
+            documentNumber: normalizedDocumentNumber,
+            ...buildOrganizationFilter(
+              resolvedOrganizationId ?? organizationIdFromContext,
+            ),
+          },
+          select: { id: true },
+        });
+        if (docExists) {
+          throw new ConflictException(
+            `El proveedor con el RUC "${normalizedDocumentNumber}" ya existe.`,
+          );
+        }
+      }
 
       const provider = await this.prismaService.provider.create({
         data: {
@@ -237,6 +448,66 @@ export class ProvidersService {
     return !!provider; // Devuelve true si el proveedor existe, false si no
   }
 
+  async validateProviderFields(
+    dto: { name?: string; documentNumber?: string; providerId?: number },
+    organizationIdFromContext?: number | null,
+  ) {
+    const organizationFilter = buildOrganizationFilter(
+      organizationIdFromContext,
+    ) as Prisma.ProviderWhereInput;
+    const providerId = dto.providerId ? Number(dto.providerId) : undefined;
+
+    const normalizedName = dto.name?.trim();
+    let nameAvailable = true;
+    if (normalizedName) {
+      const existingByName = await this.prismaService.provider.findFirst({
+        where: {
+          ...organizationFilter,
+          name: { equals: normalizedName, mode: 'insensitive' },
+          ...(providerId ? { id: { not: providerId } } : {}),
+        },
+        select: { id: true },
+      });
+      nameAvailable = !existingByName;
+    }
+
+    const normalizedDocumentNumber = dto.documentNumber
+      ? dto.documentNumber.trim().replace(/\s+/g, '')
+      : '';
+    let documentAvailable = true;
+    if (normalizedDocumentNumber) {
+      const existingByDocument = await this.prismaService.provider.findFirst({
+        where: {
+          ...organizationFilter,
+          documentNumber: normalizedDocumentNumber,
+          ...(providerId ? { id: { not: providerId } } : {}),
+        },
+        select: { id: true },
+      });
+      documentAvailable = !existingByDocument;
+    }
+
+    logOrganizationContext({
+      service: ProvidersService.name,
+      operation: 'validateProviderFields',
+      organizationId:
+        organizationIdFromContext === undefined
+          ? undefined
+          : organizationIdFromContext,
+      metadata: {
+        nameChecked: Boolean(normalizedName),
+        documentChecked: Boolean(normalizedDocumentNumber),
+        nameAvailable,
+        documentAvailable,
+      },
+    });
+
+    return {
+      nameAvailable,
+      documentAvailable,
+    };
+  }
+
   async update(
     id: number,
     updateProviderDto: UpdateProviderDto,
@@ -283,6 +554,48 @@ export class ProvidersService {
         mismatchError:
           'La organización del proveedor no coincide con el contexto actual.',
       });
+
+      const normalizedName = String(providerPayload?.name ?? '').trim();
+      if (normalizedName) {
+        const nameExists = await this.prismaService.provider.findFirst({
+          where: {
+            name: { equals: normalizedName, mode: 'insensitive' },
+            ...buildOrganizationFilter(
+              resolvedOrganizationId ?? organizationIdFromContext,
+            ),
+            id: { not: providerId },
+          },
+          select: { id: true },
+        });
+        if (nameExists) {
+          throw new ConflictException(
+            'Ya existe un proveedor con ese nombre en esta organizacion.',
+          );
+        }
+      }
+
+      const normalizedDocumentNumber = String(
+        providerPayload?.documentNumber ?? '',
+      )
+        .trim()
+        .replace(/\s+/g, '');
+      if (normalizedDocumentNumber) {
+        const docExists = await this.prismaService.provider.findFirst({
+          where: {
+            documentNumber: normalizedDocumentNumber,
+            ...buildOrganizationFilter(
+              resolvedOrganizationId ?? organizationIdFromContext,
+            ),
+            id: { not: providerId },
+          },
+          select: { id: true },
+        });
+        if (docExists) {
+          throw new ConflictException(
+            `El proveedor con el RUC "${normalizedDocumentNumber}" ya existe.`,
+          );
+        }
+      }
 
       if (organizationId !== undefined) {
         logOrganizationContext({

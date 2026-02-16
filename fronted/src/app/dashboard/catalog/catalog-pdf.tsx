@@ -16,6 +16,8 @@ import { brandAssets } from '@/catalog/brandAssets'
 import { getBrands, getKeywords } from '../brands/brands.api'
 import { resolveImageUrl } from '@/lib/images'
 
+export type CatalogLayoutMode = 'grid' | 'list'
+
 interface Product {
   id: number
   name: string
@@ -50,6 +52,7 @@ interface CatalogPdfItem {
   title: string
   description?: string
   price?: string
+  previousPrice?: string
   imageUrl?: string
   logos?: string[]
   specs?: CatalogPdfSpec[]
@@ -113,6 +116,12 @@ function getLogos(p: Product, brandMap: Record<string, string>): string[] {
 
 function formatPrice(value: number): string {
   return `S/. ${value.toLocaleString('en-US')}`
+}
+
+function computePreviousPrice(value: number, seedSource: number | undefined): number {
+  const seed = Math.abs(Math.sin((seedSource ?? value) || 1))
+  const upliftPercent = 0.05 + seed * 0.05
+  return Math.max(value, Math.round(value * (1 + upliftPercent)))
 }
 
 const LOGO_DISPLAY_SIZE = 25
@@ -212,12 +221,43 @@ function renderSpecIcon(key: SpecKey) {
 
 
 const styles = StyleSheet.create({
-  page: { position: 'relative' },
+  page: { position: 'relative', padding: 16 },
+  pageFrame: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    bottom: 12,
+    border: '1.5 solid #1d4ed8',
+    borderRadius: 12
+  },
+  pageAccentTop: {
+    position: 'absolute',
+    left: 40,
+    right: 40,
+    top: 20,
+    height: 4,
+    backgroundColor: '#38bdf8',
+    borderRadius: 999
+  },
+  pageAccentBottom: {
+    position: 'absolute',
+    left: 40,
+    right: 40,
+    bottom: 20,
+    height: 3,
+    backgroundColor: 'rgba(56, 189, 248, 0.5)',
+    borderRadius: 999
+  },
+  coverWithImage: { flex: 1, width: '100%', alignItems: 'center', paddingBottom: 24 },
+  coverImageRegion: { width: '100%', height: 560 },
+  coverImage: { width: '100%', height: '100%', objectFit: 'cover' },
+  coverTextRegion: { width: '100%', alignItems: 'center', gap: 2, paddingTop: 4, paddingBottom: 12 },
   pageBackgroundLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   pageBackground: { width: '100%', height: '100%', objectFit: 'cover' },
-  pageBackgroundOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.55)' },
   pageContent: { position: 'relative', zIndex: 1, flex: 1, padding: 16 },
   coverPageContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 48, paddingBottom: 48 },
+  coverPageContentPlain: { paddingTop: 0, paddingBottom: 0 },
   coverHeading: { width: '100%', alignItems: 'center' },
   coverLogo: { width: 96, height: 96, marginBottom: 16 },
   coverTextBox: {
@@ -230,8 +270,23 @@ const styles = StyleSheet.create({
   coverTextBoxFirst: { marginTop: 0 },
   coverTextBoxOnImage: { backgroundColor: 'rgba(15, 23, 42, 0.78)' },
   coverTextBoxPlain: { backgroundColor: '#e2e8f0' },
+  coverTextBoxMinimal: { backgroundColor: 'transparent', paddingVertical: 4, paddingHorizontal: 0 },
+  coverTextLayer: { position: 'relative', alignSelf: 'stretch' },
+  coverTitleShadow: { position: 'absolute', top: 1, left: 0, right: 0, fontSize: 24, fontWeight: 'bold', textAlign: 'center', color: 'rgba(148, 163, 184, 0.5)' },
+  coverTitleShadowOnImage: { color: 'rgba(15, 23, 42, 0.65)' },
+  coverSelectionShadow: { position: 'absolute', top: 1, left: 0, right: 0, fontSize: 14, fontWeight: 'bold', textAlign: 'center', color: 'rgba(148, 163, 184, 0.45)' },
+  coverSelectionShadowOnImage: { color: 'rgba(15, 23, 42, 0.55)' },
+  coverSubtitleShadow: { position: 'absolute', top: 1, left: 0, right: 0, fontSize: 12, textAlign: 'center', color: 'rgba(148, 163, 184, 0.4)' },
+  coverSubtitleShadowOnImage: { color: 'rgba(15, 23, 42, 0.5)' },
   coverTechLabel: { fontSize: 12, textAlign: 'center', color: '#1f2937', letterSpacing: 1 },
   coverTechLabelOnImage: { color: '#f8fafc' },
+  coverPlainContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  coverPlainContent: { alignItems: 'center', gap: 4 },
+  coverPlainLogo: { width: 80, height: 80, marginBottom: 6 },
+  coverPlainTitle: { fontSize: 22, fontWeight: 'bold', letterSpacing: 0.5, color: '#0f172a', textAlign: 'center' },
+  coverPlainSelection: { fontSize: 11, letterSpacing: 1, color: '#1f2937', textTransform: 'uppercase', textAlign: 'center' },
+  coverPlainSubtitle: { fontSize: 10, color: '#1f2937', textAlign: 'center' },
+  coverPlainTech: { fontSize: 10, letterSpacing: 1.5, color: '#475569', textAlign: 'center' },
   headerContainer: { alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   headerLogo: { width: 56, height: 56, marginBottom: 8 },
   coverTitle: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', color: '#0f172a' },
@@ -256,6 +311,51 @@ const styles = StyleSheet.create({
     position: 'relative',
     backgroundColor: 'white'
   },
+  listContainer: { display: 'flex', flexDirection: 'column', gap: 14, paddingHorizontal: 12 },
+  listItem: {
+    flexDirection: 'row',
+    border: '1.5 solid #cbd5f5',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 0,
+    gap: 12,
+    backgroundColor: '#fff',
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#1e293b',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+  },
+  listItemDivider: { position: 'absolute', top: 0, left: 0, right: 0, borderTop: '3 solid #38bdf8' },
+  listImageWrapper: {
+    width: 120,
+    height: 90,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listImage: { width: '100%', height: '100%', objectFit: 'contain' },
+  listBody: { flex: 1, gap: 4 },
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  listTitle: { fontSize: 14, fontWeight: 'bold', color: '#0f172a' },
+  listCompanyLogo: { width: 24, height: 24 },
+  listDescription: { fontSize: 10, color: '#475569' },
+  listSpecList: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
+  listSpecRow: { width: '48%', flexDirection: 'row', alignItems: 'center', gap: 4 },
+  listSpecText: { fontSize: 9, color: '#1f2937', flexShrink: 1 },
+  listSpecLabel: { fontWeight: 'bold' },
+  listPriceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 6 },
+  listPriceLabel: { fontSize: 11, fontWeight: '600', color: '#475569', textTransform: 'uppercase' },
+  listPriceValue: { fontSize: 14, fontWeight: 'bold', color: '#0f172a' },
+  listLogos: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 },
+  listLogo: { width: 32, height: 32, objectFit: 'contain' },
   imageWrapper: {
     width: '100%',
     height: 120,
@@ -302,7 +402,20 @@ const styles = StyleSheet.create({
   specIcon: { width: 14, height: 14, marginRight: 4 },
   specText: { fontSize: 9, color: '#1a1a1a', flexShrink: 1 },
   specLabel: { fontWeight: 'bold' },
-  companyLogo: { position: 'absolute', top: 4, right: 4, width: 24, height: 24 }
+  companyLogo: { position: 'absolute', top: 4, right: 4, width: 24, height: 24 },
+  priceBlock: { marginTop: 6, alignItems: 'center', justifyContent: 'center', display: 'flex' },
+  priceBefore: {
+    fontSize: 9,
+    color: '#94a3b8',
+    textDecoration: 'line-through',
+    textTransform: 'uppercase'
+  },
+  listPriceBefore: {
+    fontSize: 10,
+    color: '#94a3b8',
+    textDecoration: 'line-through',
+    marginRight: 6
+  }
 })
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -313,6 +426,62 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return chunks
 }
 
+function estimateItemComplexity(item: CatalogPdfItem): number {
+  const descWeight = item.description ? Math.min(item.description.length / 180, 1.2) : 0
+  const specWeight = item.specs ? Math.min(item.specs.length * 0.12, 0.9) : 0
+  return 1 + descWeight + specWeight
+}
+
+const GRID_COLUMNS = 3
+const GRID_MAX_ITEMS = 6
+const LIST_MAX_ITEMS = 3
+
+function paginateGridItems(items: CatalogPdfItem[]): CatalogPdfItem[][] {
+  if (items.length <= GRID_MAX_ITEMS) {
+    return [items]
+  }
+
+  const rows = chunk(items, GRID_COLUMNS)
+  const pages: CatalogPdfItem[][] = []
+  let current: CatalogPdfItem[] = []
+  let rowUnits = 0
+
+  for (const row of rows) {
+    const rowComplexity = Math.max(...row.map(estimateItemComplexity))
+    const requiredUnits = rowComplexity > 1.5 ? 1.2 : 1
+    const wouldOverflow = current.length > 0 && (rowUnits + requiredUnits > 2 || current.length + row.length > GRID_MAX_ITEMS)
+    if (wouldOverflow) {
+      pages.push(current)
+      current = []
+      rowUnits = 0
+    }
+    current.push(...row)
+    rowUnits += requiredUnits
+  }
+
+  if (current.length) {
+    pages.push(current)
+  }
+
+  // Fallback guard: ensure no page exceeds the hard limit
+  return pages.flatMap((page) =>
+    page.length > GRID_MAX_ITEMS ? chunk(page, GRID_MAX_ITEMS) : [page]
+  )
+}
+
+function paginateListItems(items: CatalogPdfItem[]): CatalogPdfItem[][] {
+  return chunk(items, LIST_MAX_ITEMS)
+}
+
+function paginateSectionItems(items: CatalogPdfItem[], layout: CatalogLayoutMode): CatalogPdfItem[][] {
+  if (layout === 'grid') {
+    const result = paginateGridItems(items)
+    return result.length ? result : chunk(items, GRID_MAX_ITEMS)
+  }
+  const result = paginateListItems(items)
+  return result.length ? result : chunk(items, LIST_MAX_ITEMS)
+}
+
 function CatalogPdfDocument({
   sections,
   coverImage,
@@ -320,6 +489,7 @@ function CatalogPdfDocument({
   subtitle,
   selectionSummary,
   companyLogo,
+  layout,
 }: {
   sections: CatalogSection[]
   coverImage?: string
@@ -327,12 +497,12 @@ function CatalogPdfDocument({
   subtitle: string
   selectionSummary?: string
   companyLogo: string
+  layout: CatalogLayoutMode
 }) {
-  const ITEMS_PER_PAGE = 6
   const pages: { category: string; items: CatalogPdfItem[] }[] = []
 
   for (const section of sections) {
-    const groups = chunk(section.items, ITEMS_PER_PAGE)
+    const groups = paginateSectionItems(section.items, layout)
     for (const items of groups) {
       pages.push({ category: section.category, items })
     }
@@ -341,139 +511,170 @@ function CatalogPdfDocument({
   return (
     <Document>
       <Page key="cover" size="A4" style={styles.page}>
-        {coverImage && (
-          <View style={styles.pageBackgroundLayer}>
-            <PdfImage style={styles.pageBackground} src={coverImage} />
-            <View style={styles.pageBackgroundOverlay} />
-          </View>
-        )}
-        <View style={[styles.pageContent, styles.coverPageContent]}>
-          <PdfImage style={styles.coverLogo} src={companyLogo} />
-          <View style={styles.coverHeading}>
-            <View
-              style={[
-                styles.coverTextBox,
-                styles.coverTextBoxFirst,
-                coverImage ? styles.coverTextBoxOnImage : styles.coverTextBoxPlain,
-              ]}
-            >
-            <Text
-                style={[
-                  styles.coverTitle,
-                  ...(coverImage ? [styles.coverTitleOnImage] : []),
-                ]}
-              >
-                {title.toUpperCase()}
-              </Text>
+        <View style={styles.pageFrame} fixed />
+        <View style={styles.pageAccentTop} fixed />
+        <View style={styles.pageAccentBottom} fixed />
+        {coverImage ? (
+          <View style={styles.coverWithImage}>
+            <View style={styles.coverImageRegion}>
+              <PdfImage style={styles.coverImage} src={coverImage} />
             </View>
-            {selectionSummary && (
-              <View
-                style={[
-                  styles.coverTextBox,
-                  coverImage
-                    ? styles.coverTextBoxOnImage
-                    : styles.coverTextBoxPlain,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.coverSelection,
-                    ...(coverImage ? [styles.coverSelectionOnImage] : []),
-                  ]}
-                >
+            <View style={styles.coverTextRegion}>
+              <PdfImage style={styles.coverPlainLogo} src={companyLogo} />
+              <Text style={styles.coverPlainTitle}>{title.toUpperCase()}</Text>
+              {selectionSummary && (
+                <Text style={styles.coverPlainSelection}>
                   {selectionSummary}
                 </Text>
-              </View>
-            )}
-            <View
-              style={[
-                styles.coverTextBox,
-                coverImage ? styles.coverTextBoxOnImage : styles.coverTextBoxPlain,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.coverSubtitle,
-                  ...(coverImage ? [styles.coverSubtitleOnImage] : []),
-                ]}
-              >
-                {subtitle}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.coverTextBox,
-                coverImage ? styles.coverTextBoxOnImage : styles.coverTextBoxPlain,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.coverTechLabel,
-                  ...(coverImage ? [styles.coverTechLabelOnImage] : []),
-                ]}
-              >
-                {TECH_LABEL}
-              </Text>
+              )}
+              <Text style={styles.coverPlainSubtitle}>{subtitle}</Text>
+              <Text style={styles.coverPlainTech}>{TECH_LABEL}</Text>
             </View>
           </View>
-        </View>
+        ) : (
+          <View style={styles.coverPlainContainer}>
+            <PdfImage style={styles.coverPlainLogo} src={companyLogo} />
+            <Text style={styles.coverPlainTitle}>{title.toUpperCase()}</Text>
+            {selectionSummary && (
+              <Text style={styles.coverPlainSelection}>
+                {selectionSummary}
+              </Text>
+            )}
+            <Text style={styles.coverPlainSubtitle}>{subtitle}</Text>
+            <Text style={styles.coverPlainTech}>{TECH_LABEL}</Text>
+          </View>
+        )}
       </Page>
       {pages.map((page, index) => (
         <Page key={`page-${index}`} size="A4" style={styles.page}>
+          <View style={styles.pageFrame} fixed />
+          <View style={styles.pageAccentTop} fixed />
+          <View style={styles.pageAccentBottom} fixed />
           <View style={styles.pageContent}>
             <Text style={styles.category}>{page.category}</Text>
             <View style={styles.categorySeparator} />
-            <View style={styles.grid}>
-              {page.items.map((item, idx) => (
-                <View key={idx} style={styles.item}>
-                  <PdfImage style={styles.companyLogo} src={companyLogo} />
-                  <View style={styles.imageWrapper}>
-                    {item.imageUrl ? (
-                      <PdfImage style={styles.image} src={item.imageUrl} />
-                    ) : (
-                      <Text style={styles.imagePlaceholder}>Imagen no disponible</Text>
-                    )}
-                  </View>
-                  <View style={styles.imageBadge}>
-                    <View style={[styles.badgeEdge, styles.badgeEdgeLeft]} />
-                    <View style={styles.badgeCenter}>
-                      <PdfImage style={styles.badgeLogo} src={companyLogo} />
-                      <Text style={styles.badgeText}>{TECH_LABEL}</Text>
-                    </View>
-                    <View style={[styles.badgeEdge, styles.badgeEdgeRight]} />
-                  </View>
-                  <Text style={styles.title}>{item.title}</Text>
-                  {item.description && (
-                    <Text style={styles.description}>{item.description}</Text>
-                  )}
-                  {item.price && <Text style={styles.price}>{item.price}</Text>}
-                  {item.specs && item.specs.length > 0 && (
-                    <View style={styles.specList}>
-                      {item.specs.map((spec, specIdx) => (
-                        <View key={specIdx} style={styles.specRow}>
-                          {renderSpecIcon(spec.key)}
-                          <Text style={styles.specText}>
-                            <Text style={styles.specLabel}>{spec.label}: </Text>
-                            {spec.value}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                  {item.logos && item.logos.length > 0 && (
-                    <View style={styles.logos}>
-                      {item.logos.map((logo, id) => (
-                        <PdfImage key={id} style={styles.logo} src={logo} />
-                      ))}
-                    </View>
-                  )}
-                </View>
-              ))}
+            <View style={layout === 'grid' ? styles.grid : styles.listContainer}>
+              {page.items.map((item, idx) =>
+                layout === 'grid' ? (
+                  <GridItem key={idx} item={item} companyLogo={companyLogo} />
+                ) : (
+                  <ListItem key={idx} item={item} companyLogo={companyLogo} />
+                )
+              )}
             </View>
           </View>
         </Page>
       ))}
     </Document>
+  )
+}
+
+function GridItem({ item, companyLogo }: { item: CatalogPdfItem; companyLogo: string }) {
+  return (
+    <View style={styles.item}>
+      <PdfImage style={styles.companyLogo} src={companyLogo} />
+      <View style={styles.imageWrapper}>
+        {item.imageUrl ? (
+          <PdfImage style={styles.image} src={item.imageUrl} />
+        ) : (
+          <Text style={styles.imagePlaceholder}>Imagen no disponible</Text>
+        )}
+      </View>
+      <View style={styles.imageBadge}>
+        <View style={[styles.badgeEdge, styles.badgeEdgeLeft]} />
+        <View style={styles.badgeCenter}>
+          <PdfImage style={styles.badgeLogo} src={companyLogo} />
+          <Text style={styles.badgeText}>{TECH_LABEL}</Text>
+        </View>
+        <View style={[styles.badgeEdge, styles.badgeEdgeRight]} />
+      </View>
+      <Text style={styles.title}>{item.title}</Text>
+      {item.description && <Text style={styles.description}>{item.description}</Text>}
+      {(item.price || item.previousPrice) && (
+        <View style={styles.priceBlock}>
+          {item.previousPrice && (
+            <Text style={styles.priceBefore}>
+              Antes {item.previousPrice}
+            </Text>
+          )}
+          {item.price && <Text style={styles.price}>{item.price}</Text>}
+        </View>
+      )}
+      {item.specs && item.specs.length > 0 && (
+        <View style={styles.specList}>
+          {item.specs.map((spec, specIdx) => (
+            <View key={specIdx} style={styles.specRow}>
+              {renderSpecIcon(spec.key)}
+              <Text style={styles.specText}>
+                <Text style={styles.specLabel}>{spec.label}: </Text>
+                {spec.value}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+      {item.logos && item.logos.length > 0 && (
+        <View style={styles.logos}>
+          {item.logos.map((logo, id) => (
+            <PdfImage key={id} style={styles.logo} src={logo} />
+          ))}
+        </View>
+      )}
+    </View>
+  )
+}
+
+function ListItem({ item, companyLogo }: { item: CatalogPdfItem; companyLogo: string }) {
+  return (
+    <View style={styles.listItem}>
+      <View style={styles.listItemDivider} />
+      <View style={styles.listImageWrapper}>
+        {item.imageUrl ? (
+          <PdfImage style={styles.listImage} src={item.imageUrl} />
+        ) : (
+          <Text style={styles.imagePlaceholder}>Imagen no disponible</Text>
+        )}
+      </View>
+      <View style={styles.listBody}>
+        <View style={styles.listHeader}>
+          <Text style={styles.listTitle}>{item.title}</Text>
+          <PdfImage style={styles.listCompanyLogo} src={companyLogo} />
+        </View>
+        {item.description && (
+          <Text style={styles.listDescription}>{item.description}</Text>
+        )}
+        {item.specs && item.specs.length > 0 && (
+          <View style={styles.listSpecList}>
+            {item.specs.slice(0, 6).map((spec, idx) => (
+              <View key={idx} style={styles.listSpecRow}>
+                {renderSpecIcon(spec.key)}
+                <Text style={styles.listSpecText}>
+                  <Text style={styles.listSpecLabel}>{spec.label}: </Text>
+                  {spec.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+        {(item.price || item.previousPrice) && (
+          <View style={styles.listPriceRow}>
+            {item.previousPrice && (
+              <Text style={styles.listPriceBefore}>
+                Antes {item.previousPrice}
+              </Text>
+            )}
+            {item.price && <Text style={styles.listPriceValue}>{item.price}</Text>}
+          </View>
+        )}
+        {item.logos && item.logos.length > 0 && (
+          <View style={styles.listLogos}>
+            {item.logos.map((logo, id) => (
+              <PdfImage key={id} style={styles.listLogo} src={logo} />
+            ))}
+          </View>
+        )}
+      </View>
+    </View>
   )
 }
 
@@ -571,7 +772,9 @@ async function normalizeLogo(src?: string): Promise<string | null> {
 
 export async function generateCatalogPdf(
   products: Product[],
-  coverImageUrl?: string
+  coverImageUrl?: string,
+  layout: CatalogLayoutMode = 'grid',
+  companyLogoOverride?: string,
 ): Promise<Blob> {
   const [{ data }, keywordRes] = await Promise.all([
     getBrands(1, 1000),
@@ -595,8 +798,11 @@ export async function generateCatalogPdf(
     }
   }
 
+  const resolvedCompanyLogo = companyLogoOverride
+    ? resolveImageUrl(companyLogoOverride) ?? companyLogoOverride
+    : COMPANY_LOGO_PATH
   const companyLogo =
-    (await normalizeLogo(COMPANY_LOGO_PATH)) ?? COMPANY_LOGO_PATH
+    (await normalizeLogo(resolvedCompanyLogo)) ?? resolvedCompanyLogo
 
   const grouped: Record<string, CatalogPdfItem[]> = {}
 
@@ -623,10 +829,18 @@ export async function generateCatalogPdf(
       }
     }
 
+    const previousValue =
+      typeof (p as any).previousPriceOverride === 'number'
+        ? (p as any).previousPriceOverride
+        : typeof priceValue === 'number'
+          ? computePreviousPrice(priceValue, p.id)
+          : undefined
+
     const item: CatalogPdfItem = {
       title: p.name,
       description: p.description,
       price: typeof priceValue === 'number' ? formatPrice(priceValue) : undefined,
+      previousPrice: typeof previousValue === 'number' ? formatPrice(previousValue) : undefined,
       imageUrl: proxied,
       logos,
       specs: specs.length > 0 ? specs : undefined,
@@ -649,9 +863,9 @@ export async function generateCatalogPdf(
       coverSrc = coverImageUrl
     } else {
       const normalized = resolveImageUrl(coverImageUrl)
-      coverSrc = normalized
-        ? `/api/image?url=${encodeURIComponent(normalized)}`
-        : undefined
+      if (normalized) {
+        coverSrc = (await rasterImageToDataUrl(normalized)) ?? normalized
+      }
     }
   }
 
@@ -678,13 +892,13 @@ export async function generateCatalogPdf(
       subtitle={subtitle}
       selectionSummary={selectionSummary}
       companyLogo={companyLogo}
+      layout={layout}
     />
   )
 
   const blob = await pdf(document).toBlob()
   return blob
 }
-
 
 
 

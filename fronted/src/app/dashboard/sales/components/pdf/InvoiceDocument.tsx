@@ -8,8 +8,9 @@ import {
   Image,
 } from '@react-pdf/renderer';
 
-const BACKEND_BASE_URL =
-  (process.env.NEXT_PUBLIC_BACKEND_URL ?? '').replace(/\/$/, '');
+import { BACKEND_URL } from '@/lib/utils';
+
+const BACKEND_BASE_URL = BACKEND_URL;
 
 const styles = StyleSheet.create({
   page: {

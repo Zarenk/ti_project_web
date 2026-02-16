@@ -1,8 +1,7 @@
+import { BACKEND_URL } from "@/lib/utils"
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch"
 import { getAuthHeaders } from "@/utils/auth-token"
 import { clearTenantSelection, getTenantSelection, setTenantSelection } from "@/utils/tenant-preferences"
-
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") || "http://localhost:4000"
 
 export interface OrganizationUnitInput {
   name: string
@@ -15,6 +14,21 @@ export interface CreateOrganizationPayload {
   code?: string
   status?: string
   units: OrganizationUnitInput[]
+  companies?: Array<{
+    name: string
+    legalName?: string | null
+    taxId?: string | null
+    status?: string
+  }>
+}
+
+export interface UpdateOrganizationPayload {
+  name?: string
+  code?: string | null
+  status?: string
+  slug?: string | null
+  units?: OrganizationUnitInput[]
+  companies?: CompanyResponse[]
 }
 
 export interface OrganizationSuperAdmin {
@@ -25,13 +39,32 @@ export interface OrganizationSuperAdmin {
 
 export type SunatEnvironment = "BETA" | "PROD"
 
+export interface CompanyDocumentSequence {
+  id: number
+  documentType: string
+  serie: string
+  nextCorrelative: number
+  correlativeLength: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CompanyDocumentSequenceInput {
+  documentType: string
+  serie: string
+  nextCorrelative: string
+  correlativeLength?: number
+}
+
 export interface CompanyResponse {
   id: number
   organizationId: number
   name: string
+  businessVertical?: string | null
   legalName: string | null
   taxId: string | null
   status: string
+  defaultQuoteMargin?: number | null
   sunatEnvironment: SunatEnvironment
   sunatRuc: string | null
   sunatBusinessName: string | null
@@ -50,6 +83,7 @@ export interface CompanyResponse {
   sunatKeyPathProd: string | null
   createdAt: string
   updatedAt: string
+  documentSequences: CompanyDocumentSequence[]
 }
 
 export interface OrganizationResponse {
@@ -57,6 +91,7 @@ export interface OrganizationResponse {
   name: string
   code: string | null
   status: string
+  slug?: string | null
   createdAt: string
   updatedAt: string
   units: Array<{
@@ -76,8 +111,8 @@ export interface OrganizationResponse {
 
 export interface CurrentTenantResponse {
   organization: { id: number; name: string } | null
-  company: { id: number; name: string } | null
-  companies: Array<{ id: number; name: string }>
+  company: { id: number; name: string; businessVertical?: string | null } | null
+  companies: Array<{ id: number; name: string; businessVertical?: string | null }>
 }
 
 export interface OrganizationCompaniesOverview {
@@ -110,10 +145,12 @@ export interface UpdateCompanyPayload {
   logoUrl?: string | null
   primaryColor?: string | null
   secondaryColor?: string | null
+  defaultQuoteMargin?: number | null
   sunatSolUserBeta?: string | null
   sunatSolPasswordBeta?: string | null
   sunatSolUserProd?: string | null
   sunatSolPasswordProd?: string | null
+  documentSequences?: CompanyDocumentSequenceInput[]
 }
 
 export interface SunatTransmission {
@@ -153,6 +190,8 @@ function mapCompanyResponse(data: any): CompanyResponse {
     legalName: data.legalName ?? null,
     taxId: data.taxId ?? null,
     status: String(data.status ?? ""),
+    defaultQuoteMargin:
+      typeof data.defaultQuoteMargin === "number" ? data.defaultQuoteMargin : null,
     sunatEnvironment: (data.sunatEnvironment === "PROD" ? "PROD" : "BETA") as SunatEnvironment,
     sunatRuc: data.sunatRuc ?? null,
     sunatBusinessName: data.sunatBusinessName ?? null,
@@ -171,6 +210,25 @@ function mapCompanyResponse(data: any): CompanyResponse {
     sunatKeyPathProd: data.sunatKeyPathProd ?? null,
     createdAt: new Date(data.createdAt).toISOString(),
     updatedAt: new Date(data.updatedAt).toISOString(),
+    documentSequences: Array.isArray(data.documentSequences)
+      ? data.documentSequences.map((sequence: any) => {
+          const length =
+            typeof sequence?.correlativeLength === "number"
+              ? sequence.correlativeLength
+              : typeof sequence?.nextCorrelative === "number"
+                ? String(sequence.nextCorrelative).length
+                : 3
+          return {
+            id: Number(sequence.id),
+            documentType: String(sequence.documentType ?? "").toUpperCase(),
+            serie: String(sequence.serie ?? ""),
+            nextCorrelative: Number(sequence.nextCorrelative ?? 1),
+            correlativeLength: length,
+            createdAt: new Date(sequence.createdAt ?? data.createdAt ?? new Date()).toISOString(),
+            updatedAt: new Date(sequence.updatedAt ?? data.updatedAt ?? new Date()).toISOString(),
+          }
+        })
+      : [],
   }
 }
 
@@ -243,14 +301,67 @@ export async function getOrganization(
   return data as OrganizationResponse
 }
 
+export async function updateOrganization(
+  id: number,
+  payload: UpdateOrganizationPayload,
+): Promise<OrganizationResponse> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const body: Record<string, unknown> = {}
+  if (typeof payload.name === "string") {
+    body.name = payload.name
+  }
+  if (payload.code !== undefined) {
+    body.code = payload.code
+  }
+  if (payload.status !== undefined) {
+    body.status = payload.status
+  }
+  if (payload.slug !== undefined) {
+    body.slug = payload.slug
+  }
+  if (payload.units !== undefined) {
+    body.units = payload.units
+  }
+  if (payload.companies !== undefined) {
+    body.companies = payload.companies
+  }
+
+  headers["Content-Type"] = "application/json"
+
+  const response = await fetch(`${BACKEND_URL}/api/tenancy/${id}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(body),
+    cache: "no-store",
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo actualizar la organizacion"
+    throw new Error(message)
+  }
+
+  return data as OrganizationResponse
+}
+
 export async function getCurrentTenant(): Promise<CurrentTenantResponse> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    return { organization: null, company: null, companies: [] }
+  }
+
   const performRequest = async () => {
-    const headers = await getAuthHeaders()
-
-    if (!headers.Authorization) {
-      throw new Error("No se encontro un token de autenticacion")
-    }
-
     const response = await fetch(`${BACKEND_URL}/api/tenancy/current`, {
       headers,
       cache: "no-store",
@@ -279,6 +390,10 @@ export async function getCurrentTenant(): Promise<CurrentTenantResponse> {
 
   if (response.ok) {
     return data as CurrentTenantResponse
+  }
+
+  if (response.status === 401) {
+    return { organization: null, company: null, companies: [] }
   }
 
   if (response.status === 400) {
@@ -381,7 +496,7 @@ export async function listOrganizations(): Promise<OrganizationResponse[]> {
   const headers = await getAuthHeaders()
 
   if (!headers.Authorization) {
-    throw new Error("No se encontro un token de autenticacion")
+    return []
   }
 
   const response = await fetch(`${BACKEND_URL}/api/tenancy`, {
@@ -394,6 +509,9 @@ export async function listOrganizations(): Promise<OrganizationResponse[]> {
   const data = isJson ? await response.json() : await response.text()
 
   if (!response.ok) {
+    if (response.status === 401) {
+      return []
+    }
     const message =
       (typeof data === "object" && data && "message" in data
         ? (data as { message?: string }).message
@@ -408,13 +526,20 @@ export async function listOrganizations(): Promise<OrganizationResponse[]> {
   return data as OrganizationResponse[]
 }
 
-export async function searchUsers(search: string): Promise<UserSummary[]> {
+export async function searchUsers(
+  search: string,
+  orgId?: number | null,
+  companyId?: number | null,
+): Promise<UserSummary[]> {
   const trimmed = search.trim()
   if (!trimmed) {
     return []
   }
 
-  const headers = await getAuthHeaders()
+  const headers = await getAuthHeaders({
+    orgId: orgId ?? undefined,
+    companyId: companyId ?? undefined,
+  })
   if (!headers.Authorization) {
     return []
   }
@@ -458,6 +583,88 @@ export interface CreateCompanyPayload {
   taxId?: string | null
   status?: string
   organizationId?: number
+}
+
+export interface ValidateCompanyPayload {
+  organizationId?: number | null
+  companyId?: number | null
+  legalName?: string | null
+  taxId?: string | null
+}
+
+export async function validateCompanyFields(
+  payload: ValidateCompanyPayload,
+): Promise<{ legalNameAvailable: boolean; taxIdAvailable: boolean }> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/validate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo validar la empresa"
+    throw new Error(message)
+  }
+
+  return {
+    legalNameAvailable: Boolean((data as any).legalNameAvailable),
+    taxIdAvailable: Boolean((data as any).taxIdAvailable),
+  }
+}
+
+export interface ValidateOrganizationNamePayload {
+  name: string
+}
+
+export async function validateOrganizationName(
+  payload: ValidateOrganizationNamePayload,
+): Promise<{ nameAvailable: boolean }> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/tenancy/validate-name`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo validar la organizacion"
+    throw new Error(message)
+  }
+
+  return {
+    nameAvailable: Boolean((data as any).nameAvailable),
+  }
 }
 
 export async function createCompany(
@@ -705,7 +912,7 @@ export async function getCompanySunatTransmissions(
   const headers = await getAuthHeaders()
 
   if (!headers.Authorization) {
-    throw new Error("No se encontro un token de autenticacion")
+    return []
   }
 
   const response = await fetch(
@@ -717,6 +924,9 @@ export async function getCompanySunatTransmissions(
   )
 
   if (!response.ok) {
+    if (response.status === 401) {
+      return []
+    }
     throw new Error("No se pudieron obtener los envios SUNAT")
   }
 
@@ -748,7 +958,7 @@ export async function getSunatStoredPdfs(): Promise<SunatStoredPdf[]> {
   const headers = await getAuthHeaders()
 
   if (!headers.Authorization) {
-    throw new Error("No se encontro un token de autenticacion")
+    return []
   }
 
   const response = await fetch(`${BACKEND_URL}/api/sunat/pdfs`, {
@@ -757,6 +967,9 @@ export async function getSunatStoredPdfs(): Promise<SunatStoredPdf[]> {
   })
 
   if (!response.ok) {
+    if (response.status === 401) {
+      return []
+    }
     throw new Error("No se pudieron obtener los PDFs almacenados")
   }
 
@@ -800,5 +1013,664 @@ export async function retrySunatTransmission(transmissionId: number) {
   }
 
   return response.json().catch(() => ({}))
+}
+
+export interface CompanyVerticalMigrationStats {
+  total: number
+  migrated: number
+  legacy: number
+  percentage: number
+}
+
+export type OrganizationVerticalMigrationStats = CompanyVerticalMigrationStats
+
+export type VerticalProductFieldType =
+  | "text"
+  | "number"
+  | "select"
+  | "multi-select"
+  | "color"
+  | "textarea"
+  | "date"
+  | "json"
+
+export interface VerticalProductSchemaField {
+  key: string
+  label: string
+  type: VerticalProductFieldType
+  options?: string[]
+  required?: boolean
+  group?: string
+  generated?: boolean
+}
+
+export interface VerticalProductSchema {
+  inventoryTracking: "by_product" | "by_variant" | "by_ingredient" | "lot_tracking"
+  pricingModel: "uniform" | "by_variant" | "by_modifiers"
+  fields: VerticalProductSchemaField[]
+}
+
+export interface VerticalFeatures {
+  sales: boolean
+  inventory: boolean
+  production: boolean
+  reservations: boolean
+  appointments: boolean
+  multiWarehouse: boolean
+  lotTracking: boolean
+  serialNumbers: boolean
+  tableManagement: boolean
+  kitchenDisplay: boolean
+  workOrders: boolean
+  projectTracking: boolean
+  posIntegration: boolean
+  ecommerceIntegration: boolean
+  deliveryPlatforms: boolean
+}
+
+export interface VerticalUIConfig {
+  theme?: "default" | "restaurant" | "retail" | "services"
+  dashboardLayout: "standard" | "sales-focused" | "production-focused"
+  primaryColor?: string
+  templates: {
+    invoice: string
+    receipt: string
+    report: string
+  }
+  customMenuItems?: Array<{
+    label: string
+    path: string
+    icon: string
+  }>
+}
+
+export interface VerticalConfigPayload {
+  name: string
+  displayName: string
+  description: string
+  features: VerticalFeatures
+  ui: VerticalUIConfig
+  productSchema: VerticalProductSchema
+  alternateSchemas?: Record<string, VerticalProductSchema>
+  version: string
+}
+
+export interface CompanyVerticalInfo {
+  companyId: number
+  organizationId: number
+  businessVertical: VerticalName
+  productSchemaEnforced: boolean
+  migration: CompanyVerticalMigrationStats | null
+  config: VerticalConfigPayload | null
+}
+
+export type OrganizationVerticalInfo = CompanyVerticalInfo
+
+export type VerticalName =
+  | "GENERAL"
+  | "COMPUTERS"
+  | "RETAIL"
+  | "RESTAURANTS"
+  | "SERVICES"
+  | "MANUFACTURING"
+
+export interface VerticalCompatibilityResult {
+  isCompatible: boolean
+  errors: string[]
+  warnings: string[]
+  requiresMigration: boolean
+  affectedModules: string[]
+  estimatedDowntime: number
+  dataImpact: {
+    tables: Array<{
+      name: string
+      recordCount: number
+      willBeHidden: boolean
+      willBeMigrated: boolean
+      backupRecommended: boolean
+    }>
+    customFields: Array<{
+      entity: string
+      field: string
+      willBeRemoved: boolean
+    }>
+    integrations: string[]
+  }
+}
+
+export interface UpdateVerticalPayloadRequest {
+  vertical: VerticalName
+  reason: string
+  force?: boolean
+}
+
+export interface UpdateCompanyVerticalResponse {
+  companyId: number
+  organizationId: number | null
+  businessVertical: VerticalName
+  warnings: string[]
+}
+
+export async function getCurrentUserRole(): Promise<string | null> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) return null
+
+  const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
+    method: "POST",
+    headers,
+    cache: "no-store",
+  })
+
+  if (!response.ok) return null
+
+  const data = (await response.json().catch(() => null)) as { role?: string } | null
+  if (!data || typeof data.role !== "string") return null
+
+  return data.role.toUpperCase()
+}
+
+export async function fetchCompanyVerticalInfo(
+  companyId: number,
+): Promise<CompanyVerticalInfo | null> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    return null
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical`, {
+    headers,
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    return null
+  }
+
+  const data = (await response.json().catch(() => null)) as
+    | {
+        companyId?: number
+        organizationId?: number
+        businessVertical?: string
+        productSchemaEnforced?: boolean
+        migration?: Partial<CompanyVerticalMigrationStats> | null
+        config?: VerticalConfigPayload | null
+      }
+    | null
+
+  if (
+    !data ||
+    typeof data.companyId !== "number" ||
+    typeof data.organizationId !== "number" ||
+    typeof data.businessVertical !== "string"
+  ) {
+    return null
+  }
+
+  const migration =
+    data.migration && typeof data.migration === "object"
+      ? {
+          total: Number(data.migration.total ?? 0),
+          migrated: Number(data.migration.migrated ?? 0),
+          legacy: Number(data.migration.legacy ?? 0),
+          percentage: Number.isFinite(Number(data.migration.percentage))
+            ? Number(data.migration.percentage)
+            : 0,
+        }
+      : null
+
+  return {
+    companyId: data.companyId ?? companyId,
+    organizationId: data.organizationId,
+    businessVertical: (data.businessVertical as VerticalName) ?? "GENERAL",
+    productSchemaEnforced: Boolean(data.productSchemaEnforced),
+    migration,
+    config: data.config ?? null,
+  }
+}
+
+export async function setCompanyProductSchemaEnforced(
+  companyId: number,
+  enforced: boolean,
+): Promise<{ organizationId: number | null; companyId: number; productSchemaEnforced: boolean }> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/companies/${companyId}/vertical/enforce-product-schema`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify({ enforced }),
+    },
+  )
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null)
+    const message =
+      (errorPayload && typeof errorPayload === "object" && "message" in errorPayload
+        ? (errorPayload as { message?: string }).message
+        : undefined) || "No se pudo actualizar la validación estricta"
+    throw new Error(message)
+  }
+
+  const payload = (await response.json().catch(() => null)) as
+    | { organizationId?: number; companyId?: number; productSchemaEnforced?: boolean }
+    | null
+
+  return {
+    organizationId: payload?.organizationId ?? null,
+    companyId: payload?.companyId ?? companyId,
+    productSchemaEnforced: Boolean(payload?.productSchemaEnforced ?? enforced),
+  }
+}
+
+export async function checkCompanyVerticalCompatibility(
+  companyId: number,
+  targetVertical: VerticalName,
+): Promise<VerticalCompatibilityResult> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/companies/${companyId}/vertical/compatibility-check`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify({ targetVertical }),
+    },
+  )
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo validar la compatibilidad del vertical"
+    throw new Error(message)
+  }
+
+  const data = (await response.json().catch(() => null)) as VerticalCompatibilityResult | null
+  if (!data) {
+    throw new Error("Respuesta inesperada del servicio de compatibilidad")
+  }
+  return data
+}
+
+export async function updateCompanyVertical(
+  companyId: number,
+  payload: UpdateVerticalPayloadRequest,
+): Promise<UpdateCompanyVerticalResponse> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  const data = contentType.includes("application/json")
+    ? await response.json().catch(() => null)
+    : null
+
+  if (!response.ok) {
+    const message =
+      (data && typeof data === "object" && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo actualizar el vertical"
+    throw new Error(message)
+  }
+
+  const organizationId =
+    data && typeof data === "object" && "organizationId" in data
+      ? Number((data as { organizationId?: number }).organizationId ?? NaN)
+      : NaN
+
+  const companyFromPayload =
+    data && typeof data === "object" && "companyId" in data
+      ? Number((data as { companyId: number }).companyId)
+      : companyId
+
+  return {
+    companyId: companyFromPayload,
+    organizationId: Number.isFinite(organizationId) ? organizationId : null,
+    businessVertical:
+      (data && typeof data === "object" && "businessVertical" in data
+        ? ((data as { businessVertical: string }).businessVertical as VerticalName)
+        : payload.vertical) ?? payload.vertical,
+    warnings:
+      (data && typeof data === "object" && Array.isArray((data as { warnings?: unknown }).warnings)
+        ? ((data as { warnings?: string[] }).warnings ?? [])
+        : []),
+  }
+}
+
+export async function rollbackCompanyVertical(
+  companyId: number,
+): Promise<{ organizationId: number | null; companyId: number; businessVertical: VerticalName }> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/rollback`, {
+    method: "POST",
+    headers,
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo revertir el vertical"
+    throw new Error(message)
+  }
+
+  const data = (await response.json().catch(() => null)) as
+    | { organizationId?: number; companyId?: number; businessVertical?: string }
+    | null
+
+  return {
+    organizationId: data?.organizationId ?? null,
+    companyId: data?.companyId ?? companyId,
+    businessVertical: (data?.businessVertical as VerticalName) ?? "GENERAL",
+  }
+}
+
+export interface CompanyVerticalOverride {
+  companyId: number
+  configJson: Record<string, any> | null
+}
+
+export async function getCompanyVerticalOverride(
+  companyId: number,
+): Promise<CompanyVerticalOverride> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/override`, {
+    headers,
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo obtener la configuracion personalizada"
+    throw new Error(message)
+  }
+
+  const data = (await response.json().catch(() => null)) as CompanyVerticalOverride | null
+  return data ?? { companyId, configJson: null }
+}
+
+export async function updateCompanyVerticalOverride(
+  companyId: number,
+  configJson: Record<string, any>,
+): Promise<CompanyVerticalOverride> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/override`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify({ configJson }),
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo actualizar la configuracion personalizada"
+    throw new Error(message)
+  }
+
+  const data = (await response.json().catch(() => null)) as CompanyVerticalOverride | null
+  return data ?? { companyId, configJson }
+}
+
+export async function deleteCompanyVerticalOverride(
+  companyId: number,
+): Promise<{ companyId: number; deleted: boolean }> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/override`, {
+    method: "DELETE",
+    headers,
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo eliminar la configuracion personalizada"
+    throw new Error(message)
+  }
+
+  return { companyId, deleted: true }
+}
+
+// ===== Migration Metrics & History =====
+
+export interface VerticalChangeHistoryEntry {
+  id: number
+  oldVertical: string
+  newVertical: string
+  changeReason: string | null
+  warningsJson: any
+  success: boolean
+  createdAt: string
+  user: {
+    id: number
+    username: string
+    email: string
+  } | null
+}
+
+export interface VerticalHistoryResponse {
+  companyId: number
+  history: VerticalChangeHistoryEntry[]
+  rollbackAvailable: boolean
+  rollbackSnapshot: {
+    id: string
+    snapshotData: any
+    createdAt: string
+    expiresAt: string
+  } | null
+  totalChanges: number
+}
+
+export interface VerticalMetricsResponse {
+  companyId: number
+  currentVertical: string
+  migration: {
+    total: number
+    migrated: number
+    legacy: number
+    percentage: number
+  }
+  statistics: {
+    totalChanges: number
+    successfulChanges: number
+    failedChanges: number
+    successRate: number
+  }
+  recentHistory: Array<{
+    id: number
+    oldVertical: string
+    newVertical: string
+    success: boolean
+    createdAt: string
+  }>
+  rollbackAvailable: boolean
+  rollbackExpiresAt: string | null
+}
+
+export async function fetchCompanyVerticalHistory(
+  companyId: number,
+): Promise<VerticalHistoryResponse> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/history`, {
+    method: "GET",
+    headers,
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo obtener el historial de migraciones"
+    throw new Error(message)
+  }
+
+  return response.json()
+}
+
+export async function fetchCompanyVerticalMetrics(
+  companyId: number,
+): Promise<VerticalMetricsResponse> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/metrics`, {
+    method: "GET",
+    headers,
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo obtener las metricas de migracion"
+    throw new Error(message)
+  }
+
+  return response.json()
+}
+
+// ===== Vertical Notifications =====
+
+export interface VerticalNotification {
+  id: number
+  message: string
+  severity: string
+  metadata: {
+    previousVertical: string
+    newVertical: string
+    timestamp: string
+  }
+  createdAt: string
+}
+
+export interface VerticalNotificationsResponse {
+  companyId: number
+  notifications: VerticalNotification[]
+  total: number
+}
+
+export async function fetchCompanyVerticalNotifications(
+  companyId: number,
+): Promise<VerticalNotificationsResponse> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/companies/${companyId}/vertical/notifications`,
+    {
+      method: "GET",
+      headers,
+    },
+  )
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudieron obtener las notificaciones"
+    throw new Error(message)
+  }
+
+  return response.json()
+}
+
+/**
+ * Export vertical change history as CSV
+ */
+export async function exportVerticalHistoryCSV(companyId: number): Promise<Blob> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/companies/${companyId}/vertical/history/export/csv`,
+    {
+      method: "GET",
+      headers,
+    },
+  )
+
+  if (!response.ok) {
+    throw new Error("No se pudo exportar el historial a CSV")
+  }
+
+  return response.blob()
+}
+
+/**
+ * Helper function to trigger file download in browser
+ */
+export function downloadFile(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
 

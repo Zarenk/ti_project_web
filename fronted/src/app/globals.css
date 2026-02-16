@@ -137,6 +137,9 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-background text-foreground transition-colors duration-500;
     font-family: var(--font-site-body), sans-serif;
@@ -285,6 +288,25 @@
   display: none; /* Chrome, Safari */
 }
 
+/* Thin scrollbar for gallery detail overlays */
+.gallery-detail-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.gallery-detail-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+.gallery-detail-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.gallery-detail-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+.gallery-detail-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 @keyframes accordion-down {
   from {
     height: 0;
@@ -389,6 +411,44 @@
       ) border-box;
     background-clip: padding-box, border-box, border-box;
   }
+}
+
+.login-scan-border {
+  position: relative;
+  overflow: visible;
+  --scan-border-width: 3px;
+  --scan-border-opacity: 0.75;
+}
+
+.login-scan-border::before {
+  content: "";
+  position: absolute;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.login-scan-border::before {
+  inset: -6px;
+  opacity: var(--scan-border-opacity);
+  box-shadow:
+    0 0 15px rgba(59, 130, 246, 0.55),
+    0 0 35px rgba(14, 165, 233, 0.4),
+    0 0 55px rgba(14, 165, 233, 0.25);
+  border: 1px solid rgba(59, 130, 246, 0.45);
+}
+
+.dark .login-scan-border::before {
+  opacity: 0.95;
+  box-shadow:
+    0 0 22px rgba(14, 165, 233, 0.65),
+    0 0 60px rgba(14, 165, 233, 0.4),
+    0 0 90px rgba(14, 165, 233, 0.3);
+  border: 1px solid rgba(147, 197, 253, 0.8);
+}
+
+@media (max-width: 640px) {
+  .login-scan-border { --scan-border-width: 2px; }
+  .login-scan-border::before { inset: -3px; }
 }
 
 /* Smoothly animate custom angle for cross-browser */
@@ -528,4 +588,106 @@
 
 @media (prefers-reduced-motion: reduce) {
   .diag-shimmer::after { animation: none; opacity: 0; }
+}
+
+/* Simple reusable fade utilities for signup landing */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes logo-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes dot-blink {
+  0%, 20% { opacity: 0; }
+  40%, 100% { opacity: 1; }
+}
+
+@layer utilities {
+  .animate-fade-in { animation: fade-in 0.6s ease-out both; }
+  .animate-fade-in-up { animation: fade-in-up 0.75s ease-out both; }
+  .animate-logo-pulse { animation: logo-pulse 2s ease-in-out infinite; }
+  .animate-dot { animation: dot-blink 1.4s infinite; }
+  .animate-dot-2 { animation: dot-blink 1.4s infinite 0.2s; }
+  .animate-dot-3 { animation: dot-blink 1.4s infinite 0.4s; }
+}
+
+/* Sales dashboard scoped tokens */
+.sales-dashboard-theme {
+  --background: oklch(0.985 0.004 255);
+  --foreground: oklch(0.2 0.03 255);
+  --card: oklch(0.992 0.003 255);
+  --card-foreground: oklch(0.2 0.03 255);
+  --popover: oklch(0.992 0.003 255);
+  --popover-foreground: oklch(0.2 0.03 255);
+  --primary: oklch(0.28 0.05 255);
+  --primary-foreground: oklch(0.985 0.004 255);
+  --secondary: oklch(0.95 0.006 255);
+  --secondary-foreground: oklch(0.22 0.03 255);
+  --muted: oklch(0.945 0.006 255);
+  --muted-foreground: oklch(0.48 0.03 255);
+  --accent: oklch(0.95 0.006 255);
+  --accent-foreground: oklch(0.22 0.03 255);
+  --border: oklch(0.9 0.006 255);
+  --input: oklch(0.9 0.006 255);
+  --ring: oklch(0.58 0.04 255);
+  --chart-1: oklch(0.5 0.12 155);
+  --chart-2: oklch(0.55 0.12 225);
+  --chart-3: oklch(0.42 0.05 255);
+}
+
+.dark .sales-dashboard-theme {
+  --background: oklch(0.16 0.03 255);
+  --foreground: oklch(0.97 0.004 255);
+  --card: oklch(0.2 0.03 255);
+  --card-foreground: oklch(0.97 0.004 255);
+  --popover: oklch(0.2 0.03 255);
+  --popover-foreground: oklch(0.97 0.004 255);
+  --primary: oklch(0.86 0.02 255);
+  --primary-foreground: oklch(0.22 0.03 255);
+  --secondary: oklch(0.24 0.03 255);
+  --secondary-foreground: oklch(0.97 0.004 255);
+  --muted: oklch(0.24 0.03 255);
+  --muted-foreground: oklch(0.7 0.02 255);
+  --accent: oklch(0.24 0.03 255);
+  --accent-foreground: oklch(0.97 0.004 255);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.6 0.03 255);
+  --chart-1: oklch(0.66 0.14 150);
+  --chart-2: oklch(0.7 0.14 225);
+  --chart-3: oklch(0.6 0.08 255);
+}
+
+/* Modern tooltip custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(100, 116, 139, 0.1);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(147, 197, 253, 0.4) 0%, rgba(59, 130, 246, 0.6) 100%);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(147, 197, 253, 0.6) 0%, rgba(59, 130, 246, 0.8) 100%);
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.6) rgba(100, 116, 139, 0.1);
 }

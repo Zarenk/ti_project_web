@@ -30,9 +30,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { useRouter } from "next/navigation"
 import { useAuth } from "@/context/auth-context"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 
 export function NavUser({
   user,
@@ -44,15 +44,15 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-  const { logout } = useAuth()
-  const [loggingOut, setLoggingOut] = useState(false)
+  const { logoutAndRedirect, role } = useAuth()
   const router = useRouter()
+  const [loggingOut, setLoggingOut] = useState(false)
+  const isGlobalSuperAdmin = role === "SUPER_ADMIN_GLOBAL"
 
   const handleLogout = async () => {
     if (loggingOut) return
     setLoggingOut(true)
-    await logout()
-    router.replace("/login")
+    await logoutAndRedirect()
     setLoggingOut(false)
   }
 
@@ -98,7 +98,7 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={() => router.push("/dashboard/plan")}>
                 <Sparkles />
-                Mi Plan
+                {isGlobalSuperAdmin ? "Ver Planes" : "Mi Plan"}
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

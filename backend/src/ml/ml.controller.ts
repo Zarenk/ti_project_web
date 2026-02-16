@@ -1,7 +1,10 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { MLService } from './ml.service';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('ml')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class MLController {
   constructor(private readonly mlService: MLService) {}
 

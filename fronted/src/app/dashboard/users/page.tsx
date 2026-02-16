@@ -7,6 +7,11 @@ import { UsersDataTable } from "./data-table";
 import { getUsers, type DashboardUser } from "./users.api";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useAuth } from "@/context/auth-context";
+import { TablePageSkeleton } from "@/components/table-page-skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HelpAdminTab } from "./help-admin-tab";
+import { HelpTestingPanel } from "./help-testing";
+import { HelpLearningDashboard } from "./help-learning";
 
 type UsersState = {
   data: DashboardUser[];
@@ -73,13 +78,34 @@ export default function UsersPage(): React.ReactElement {
         const hasCredentials =
           Boolean(user.email?.trim()) && Boolean(user.username?.trim());
         const role = typeof user.role === "string" ? user.role.toUpperCase() : "";
-        return hasCredentials && role !== "GUEST";
+        const username = user.username?.trim() || "";
+
+        // Excluir usuarios genéricos automáticos y GUEST
+        const isGenericUser = username.startsWith("generic_");
+
+        return hasCredentials && role !== "GUEST" && !isGenericUser;
       })
       .map((user) => ({
         ...user,
         createdAt: user.createdAt ?? "",
       }));
   }, [data]);
+
+  const usersTable = (
+    <div className="overflow-x-auto">
+      {loading && filteredUsers.length === 0 ? (
+        <TablePageSkeleton title={false} filters={1} columns={4} rows={6} actions={false} />
+      ) : (
+        <UsersDataTable
+          data={filteredUsers}
+          canManageUsers={canManageUsers}
+          isGlobalSuperAdmin={isGlobalSuperAdmin}
+          organizationId={selection.orgId}
+          onUserUpdated={handleUserUpdated}
+        />
+      )}
+    </div>
+  );
 
   return (
     <section className="py-6">
@@ -92,21 +118,29 @@ export default function UsersPage(): React.ReactElement {
             <span className="text-sm text-destructive">{error}</span>
           ) : null}
         </div>
-        <div className="overflow-x-auto">
-          {loading && filteredUsers.length === 0 ? (
-            <div className="flex h-32 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
-              Cargando usuarios...
-            </div>
-          ) : (
-            <UsersDataTable
-              data={filteredUsers}
-              canManageUsers={canManageUsers}
-              isGlobalSuperAdmin={isGlobalSuperAdmin}
-              organizationId={selection.orgId}
-              onUserUpdated={handleUserUpdated}
-            />
-          )}
-        </div>
+
+        {isGlobalSuperAdmin ? (
+          <Tabs defaultValue="users">
+            <TabsList>
+              <TabsTrigger value="users">Usuarios</TabsTrigger>
+              <TabsTrigger value="help-assistant">Asistente</TabsTrigger>
+              <TabsTrigger value="help-learning">🧠 Auto-Aprendizaje</TabsTrigger>
+              <TabsTrigger value="testing">🧪 Testing</TabsTrigger>
+            </TabsList>
+            <TabsContent value="users">{usersTable}</TabsContent>
+            <TabsContent value="help-assistant">
+              <HelpAdminTab />
+            </TabsContent>
+            <TabsContent value="help-learning">
+              <HelpLearningDashboard />
+            </TabsContent>
+            <TabsContent value="testing">
+              <HelpTestingPanel />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          usersTable
+        )}
       </div>
     </section>
   );

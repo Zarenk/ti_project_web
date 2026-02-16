@@ -341,14 +341,21 @@ describe('WebSalesService multi-organization support', () => {
   });
 
   it('retrieves a web order by id scoped to the tenant', async () => {
-    prisma.orders.findFirst.mockResolvedValue({ id: 101, organizationId: 88 });
+    prisma.orders.findFirst.mockResolvedValue({
+      id: 101,
+      organizationId: 88,
+      sale: null,
+      sunatStatus: null,
+    });
 
     const order = await service.getWebOrderById(101, 88, 12);
 
-    expect(order).toEqual({ id: 101, organizationId: 88 });
-    expect(prisma.orders.findFirst).toHaveBeenCalledWith({
-      where: { id: 101, organizationId: 88, companyId: 12 },
-    });
+    expect(order).toMatchObject({ id: 101, organizationId: 88 });
+    expect(prisma.orders.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 101, organizationId: 88, companyId: 12 },
+      }),
+    );
   });
 
   it('throws when requesting an order from another tenant', async () => {
@@ -360,11 +367,15 @@ describe('WebSalesService multi-organization support', () => {
   });
 
   it('filters web sales by organization when retrieving by id', async () => {
-    prisma.sales.findFirst.mockResolvedValue({ id: 303, organizationId: 321 });
+    prisma.sales.findFirst.mockResolvedValue({
+      id: 303,
+      organizationId: 321,
+      sunatStatus: null,
+    });
 
     const sale = await service.getWebSaleById(303, 321, 15);
 
-    expect(sale).toEqual({ id: 303, organizationId: 321 });
+    expect(sale).toMatchObject({ id: 303, organizationId: 321 });
     expect(prisma.sales.findFirst).toHaveBeenCalledWith({
       where: { id: 303, organizationId: 321, companyId: 15 },
       include: expect.any(Object),

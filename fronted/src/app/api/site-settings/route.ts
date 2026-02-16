@@ -12,8 +12,7 @@ import {
   TENANT_COOKIE_NAME,
   parseTenantCookie,
 } from "@/lib/tenant/tenant-shared";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+import { BACKEND_URL } from "@/lib/utils";
 const SITE_SETTINGS_URL = `${BACKEND_URL}/api/site-settings`;
 
 function applyMetadataHeaders(

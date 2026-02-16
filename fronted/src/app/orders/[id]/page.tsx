@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
+import { BACKEND_URL } from "@/lib/utils"
 
 import { ArrowLeft, Calendar, FileText, MapPin, Package, Truck, User } from "lucide-react"
 import Image from "next/image"
@@ -157,7 +158,7 @@ export default function OrderDetails() {
     : null
 
   const invoicePdfUrl = invoiceData
-    ? `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/sunat/pdf/${
+    ? `${BACKEND_URL}/api/sunat/pdf/${
         invoiceData.type.toLowerCase() === 'boleta' ? 'boleta' : 'factura'
       }/20519857538-${
         invoiceData.type.toLowerCase() === 'boleta' ? '03' : '01'

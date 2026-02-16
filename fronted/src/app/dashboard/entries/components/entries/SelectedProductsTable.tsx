@@ -333,7 +333,7 @@ export const SelectedProductsTable = ({
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
-                      className="w-full justify-between px-2 py-1 h-auto text-xs sm:text-sm"
+                      className="h-auto w-full cursor-pointer justify-between px-2 py-1 text-xs transition-colors hover:border-primary/60 hover:bg-accent/40 sm:text-sm"
                       title="Cambia la categoría para este producto específico"
                     >
                       {product.category_name || "Sin categoría"}
@@ -348,6 +348,7 @@ export const SelectedProductsTable = ({
                         <CommandGroup>
                           <CommandItem
                             value="Sin categoría"
+                            className="cursor-pointer transition-colors hover:bg-accent/60"
                             onSelect={() => {
                               setSelectedProducts((prev) =>
                                 prev.map((p, i) =>
@@ -369,6 +370,7 @@ export const SelectedProductsTable = ({
                             <CommandItem
                               key={category.id}
                               value={category.name}
+                              className="cursor-pointer transition-colors hover:bg-accent/60"
                               onSelect={() => {
                                 setSelectedProducts((prev) =>
                                   prev.map((p, i) =>

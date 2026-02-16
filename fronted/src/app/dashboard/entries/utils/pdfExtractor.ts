@@ -4,6 +4,8 @@ import { toast } from "sonner";
 // Listas de patrones para identificar proveedores por diseño de comprobante
 // Se pueden agregar más nombres o RUCs en cada lista para extender el soporte
 const DELTRON_PATTERNS: (string | RegExp)[] = ["20212331377"];
+const INGRAM_PATTERNS: (string | RegExp)[] = ["20267163228", /ingram\s+micro/i];
+const NEXSYS_PATTERNS: (string | RegExp)[] = ["20470145901", /nexsys\s+del\s+peru/i];
 const TEMPLATE_PROVIDER_PATTERNS: (string | RegExp)[] = [
   /gozu gaming/i,
   /2060\d{7}/, // RUC de GOZU y similares que comparten el mismo diseño
@@ -11,7 +13,10 @@ const TEMPLATE_PROVIDER_PATTERNS: (string | RegExp)[] = [
   "20519078520", // RUC del nuevo proveedor
 ];
 
-type InvoiceProvider = "deltron" | "template" | "unknown";
+type InvoiceProvider = "deltron" | "template" | "ingram" | "nexsys" | "unknown";
+
+type GuideItem = { name: string; quantity: number; series?: string[] };
+
 
 // Detecta el proveedor de la factura a partir del texto extraído
 // Devuelve "deltron", "template" o "unknown" si no se reconoce
@@ -27,12 +32,25 @@ export function detectInvoiceProvider(text: string): InvoiceProvider {
     return "deltron";
   }
 
+  if (matches(INGRAM_PATTERNS)) {
+    return "ingram";
+  }
+
+  if (matches(NEXSYS_PATTERNS)) {
+    return "nexsys";
+  }
+
   if (matches(TEMPLATE_PROVIDER_PATTERNS)) {
     return "template";
   }
 
   return "unknown";
 }
+
+export function detectGuideDocument(text: string): boolean {
+  return /guia\s+de\s+remision/i.test(text);
+}
+
 
 // Extrae información del proveedor desde el texto del PDF y actualiza el formulario
 // Retorna el RUC encontrado para permitir lógica adicional (como tipo de moneda)
@@ -447,4 +465,1248 @@ export function processInvoiceText(
     setValue("fecha_emision_comprobante", fechaMatch[1].trim());
   if (totalMatch)
     setValue("total_comprobante", totalMatch[1].replace(/[\s,]/g, ""));
+}
+
+export function processGuideText(
+  text: string,
+  setSelectedProducts: Function,
+  setValue: Function,
+  setCurrency: Function
+) {
+  const normalized = text.replace(/\u00a0/g, " ");
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const normalizedLines = normalized.replace(/\r\n/g, "\n");
+  const serieCorrelativoMatch = normalizedLines.match(
+    /N\s*[°º#]?\s*([A-Z0-9]{2,4})\s*-\s*(\d{3,})/i
+  );
+  const issueMatch = normalizedLines.match(
+    /Fecha\s+y\s+hora\s+de\s+emisi[oó]n\s*:\s*([0-9\/.-]+\s+\d{1,2}:\d{2}\s*(?:AM|PM)?)?/i
+  );
+  const deliveryMatch = normalizedLines.match(
+    /Fecha\s+de\s+entrega[^\n]*:\s*([0-9\/.-]+(?:\s+\d{1,2}:\d{2}\s*(?:AM|PM)?)?)/i
+  );
+  const reasonMatch = normalizedLines.match(
+    /Motivo\s+de\s+Traslado\s*:\s*([^\n]+)/i
+  );
+  const rucMatch = normalizedLines.match(/R\.?U\.?C\.?\s*N\s*:?\s*(\d{11})/i);
+  const dateTimeRegex =
+    /\b\d{1,2}[\/.-]\d{1,2}[\/.-]\d{4}\s+\d{1,2}:\d{2}\s*(?:AM|PM)\b/i;
+
+  let issueDateValue = issueMatch?.[1]?.trim() ?? "";
+  if (!issueDateValue) {
+    const rowsForIssue = normalizedLines
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const motivoIdx = rowsForIssue.findIndex((line) => /Motivo\s+de\s+Traslado/i.test(line));
+    const startIdx = motivoIdx >= 0 ? Math.max(0, motivoIdx - 12) : 0;
+    const endIdx = motivoIdx >= 0 ? motivoIdx : rowsForIssue.length;
+    const window = rowsForIssue.slice(startIdx, endIdx).reverse();
+    const candidateLine = window.find((line) => dateTimeRegex.test(line));
+    if (candidateLine) {
+      const match = candidateLine.match(dateTimeRegex);
+      issueDateValue = match?.[0] ?? candidateLine;
+    }
+  }
+
+  const extractInlineOrNext = (labelPattern: string, stopPattern: string) => {
+    const labelRegex = new RegExp(labelPattern, "i");
+    const stopRegex = new RegExp(stopPattern, "i");
+    const rows = normalizedLines.split("\n").map((line) => line.trim());
+
+    for (let i = 0; i < rows.length; i++) {
+      const line = rows[i];
+      if (!labelRegex.test(line)) continue;
+
+      const inline = line
+        .replace(labelRegex, "")
+        .replace(/^\s*:\s*/, "")
+        .trim();
+
+      if (inline && !stopRegex.test(inline)) {
+        const next = rows[i + 1] ?? "";
+        if (next && !stopRegex.test(next) && next.length > 2) {
+          return `${inline} ${next}`.replace(/\s+/g, " ").trim();
+        }
+        return inline;
+      }
+
+      const nextLine = rows[i + 1] ?? "";
+      if (nextLine && !stopRegex.test(nextLine)) {
+        const nextNext = rows[i + 2] ?? "";
+        if (nextNext && !stopRegex.test(nextNext) && nextNext.length > 2) {
+          return `${nextLine} ${nextNext}`.replace(/\s+/g, " ").trim();
+        }
+        return nextLine.replace(/\s+/g, " ").trim();
+      }
+    }
+
+    return null;
+  };
+
+  const getPrevNonEmpty = (rows: string[], fromIndex: number, maxSteps = 3) => {
+    for (let i = fromIndex - 1, steps = 0; i >= 0 && steps < maxSteps; i--, steps++) {
+      const value = rows[i]?.trim();
+      if (value) return value;
+    }
+    return null;
+  };
+
+  const labelLineRegex =
+    /Punto\s+de\s+llegada|Punto\s+de\s+Partida|Datos\s+del\s+Destinatario|Fecha\s+y\s+hora\s+de\s+emisi[oó]n|Fecha\s+de\s+entrega|Motivo\s+de\s+Traslado|Bienes\s+por\s+transportar|Unidad\s+de\s+Medida\s+del\s+Peso\s+Bruto|Peso\s+Bruto\s+total\s+de\s+la\s+carga|Datos\s+del\s+transportista|Datos\s+del\s+traslado|Modalidad\s+de\s+Traslado|Indicador/i;
+
+  const getPrevLines = (rows: string[], fromIndex: number, count = 2) => {
+    const collected: string[] = [];
+    for (let i = fromIndex - 1; i >= 0 && collected.length < count; i--) {
+      const value = rows[i]?.trim();
+      if (!value) continue;
+      if (labelLineRegex.test(value)) continue;
+      collected.push(value);
+    }
+    return collected.reverse();
+  };
+
+  const getNextNonEmpty = (rows: string[], fromIndex: number, maxSteps = 3) => {
+    for (let i = fromIndex + 1, steps = 0; i < rows.length && steps < maxSteps; i++, steps++) {
+      const value = rows[i]?.trim();
+      if (value) return value;
+    }
+    return null;
+  };
+
+  const rows = normalizedLines.split("\n").map((line) => line.trim());
+  const findLabelIndex = (pattern: string) => {
+    const regex = new RegExp(pattern, "i");
+    return rows.findIndex((line) => regex.test(line));
+  };
+
+  const partidaBlock = normalizedLines.match(
+    /Punto\s+de\s+Partida\s*:?\s*([\s\S]*?)(?=Punto\s+de\s+llegada|Datos\s+del\s+Destinatario|Bienes\s+por\s+transportar|Unidad\s+de\s+Medida\s+del\s+Peso\s+Bruto|Peso\s+Bruto\s+total\s+de\s+la\s+carga|Datos\s+del\s+transportista|$)/i
+  );
+  const llegadaBlock = normalizedLines.match(
+    /Punto\s+de\s+llegada\s*:?\s*([\s\S]*?)(?=Datos\s+del\s+Destinatario|Bienes\s+por\s+transportar|Unidad\s+de\s+Medida\s+del\s+Peso\s+Bruto|Peso\s+Bruto\s+total\s+de\s+la\s+carga|Datos\s+del\s+transportista|$)/i
+  );
+  const partidaIndex = findLabelIndex("Punto\\s+de\\s+Partida");
+  const llegadaIndex = findLabelIndex("Punto\\s+de\\s+llegada");
+  const motivoIndex = rows.findIndex((line) =>
+    /Motivo\s+de\s+Traslado/i.test(line)
+  );
+  const partidaValue =
+    partidaBlock?.[1]?.replace(/\s+/g, " ").trim() ??
+    extractInlineOrNext(
+      "Punto\\s+de\\s+Partida",
+      "Punto\\s+de\\s+llegada|Datos\\s+del\\s+Destinatario|Bienes\\s+por\\s+transportar|Unidad\\s+de\\s+Medida\\s+del\\s+Peso\\s+Bruto|Peso\\s+Bruto\\s+total\\s+de\\s+la\\s+carga|Datos\\s+del\\s+transportista"
+    ) ??
+    (partidaIndex >= 0 ? getPrevLines(rows, partidaIndex, 2).join(" ").trim() : null);
+  const llegadaValue =
+    llegadaBlock?.[1]?.replace(/\s+/g, " ").trim() ??
+    extractInlineOrNext(
+      "Punto\\s+de\\s+llegada",
+      "Datos\\s+del\\s+Destinatario|Bienes\\s+por\\s+transportar|Unidad\\s+de\\s+Medida\\s+del\\s+Peso\\s+Bruto|Peso\\s+Bruto\\s+total\\s+de\\s+la\\s+carga|Datos\\s+del\\s+transportista"
+    ) ??
+    (llegadaIndex >= 0 ? getPrevLines(rows, llegadaIndex, 2).join(" ").trim() : null);
+
+  let resolvedPartida = partidaValue;
+  let resolvedLlegada = llegadaValue;
+  if (motivoIndex >= 0 && (partidaIndex >= 0 || llegadaIndex >= 0)) {
+    const endIndexCandidates = [partidaIndex, llegadaIndex].filter((i) => i >= 0);
+    const endIndex = endIndexCandidates.length > 0 ? Math.min(...endIndexCandidates) : -1;
+    if (endIndex > motivoIndex) {
+      const blockLines = rows
+        .slice(motivoIndex + 1, endIndex)
+        .filter((line) => line && !labelLineRegex.test(line));
+      if (blockLines.length >= 2) {
+        const mid = Math.floor(blockLines.length / 2);
+        const llegadaLines = blockLines.slice(0, mid);
+        const partidaLines = blockLines.slice(mid);
+        if (llegadaLines.length > 0) {
+          resolvedLlegada = llegadaLines.join(" ").replace(/\s+/g, " ").trim();
+        }
+        if (partidaLines.length > 0) {
+          resolvedPartida = partidaLines.join(" ").replace(/\s+/g, " ").trim();
+        }
+      }
+    }
+  }
+  const destinatarioValue = extractInlineOrNext(
+    "Datos\\s+del\\s+Destinatario",
+    "Bienes\\s+por\\s+transportar|Unidad\\s+de\\s+Medida\\s+del\\s+Peso\\s+Bruto|Peso\\s+Bruto\\s+total\\s+de\\s+la\\s+carga|Datos\\s+del\\s+transportista"
+  );
+  const pesoUnidadValue = extractInlineOrNext(
+    "Unidad\\s+de\\s+Medida\\s+del\\s+Peso\\s+Bruto",
+    "Peso\\s+Bruto\\s+total\\s+de\\s+la\\s+carga|Datos\\s+del\\s+transportista"
+  );
+  const pesoTotalValue = extractInlineOrNext(
+    "Peso\\s+Bruto\\s+total\\s+de\\s+la\\s+carga",
+    "Datos\\s+del\\s+transportista"
+  );
+  const transportistaValue = extractInlineOrNext(
+    "Datos\\s+del\\s+transportista",
+    "$"
+  );
+
+  if (serieCorrelativoMatch) {
+    setValue("guia_serie", serieCorrelativoMatch[1]);
+    setValue("guia_correlativo", serieCorrelativoMatch[2]);
+  }
+  if (issueDateValue) {
+    setValue("guia_fecha_emision", issueDateValue);
+  }
+  if (deliveryMatch && deliveryMatch[1]) {
+    setValue("guia_fecha_entrega_transportista", deliveryMatch[1].trim());
+  }
+  if (reasonMatch) {
+    setValue("guia_motivo_traslado", reasonMatch[1].trim());
+  }
+  if (resolvedPartida) {
+    setValue("guia_punto_partida", resolvedPartida);
+  }
+  if (resolvedLlegada) {
+    setValue("guia_punto_llegada", resolvedLlegada);
+  }
+  if (destinatarioValue) {
+    const destinatario = destinatarioValue
+      .replace(/\s+-\s+REGISTRO\s+UNICO\s+DE\s+CONTRIBUYENTES.*$/i, "")
+      .trim();
+    if (destinatario) {
+      setValue("guia_destinatario", destinatario);
+    }
+  }
+  const pesoUnidadIndex = findLabelIndex("Unidad\\s+de\\s+Medida\\s+del\\s+Peso\\s+Bruto");
+  const pesoTotalIndex = findLabelIndex("Peso\\s+Bruto\\s+total\\s+de\\s+la\\s+carga");
+  const transportistaIndex = findLabelIndex("Datos\\s+del\\s+transportista");
+  const trasladoIndex = findLabelIndex("Datos\\s+del\\s+traslado");
+
+  const resolvedPesoUnidad =
+    pesoUnidadValue ??
+    (pesoUnidadIndex >= 0
+      ? getNextNonEmpty(rows, pesoUnidadIndex) ?? getPrevNonEmpty(rows, pesoUnidadIndex)
+      : null);
+  const resolvedPesoTotal =
+    pesoTotalValue ??
+    (pesoTotalIndex >= 0
+      ? getNextNonEmpty(rows, pesoTotalIndex) ?? getPrevNonEmpty(rows, pesoTotalIndex)
+      : null);
+  const resolvedTransportista =
+    transportistaValue ??
+    (transportistaIndex >= 0 ? getPrevLines(rows, transportistaIndex, 2).join(" ").trim() : null);
+  const resolvedTransportistaFinal = resolvedTransportista
+    ? resolvedTransportista
+        // Evita arrastrar "NO" sueltos previos al texto real del transportista
+        .replace(/^\s*(?:NO\b\s*)+/i, "")
+        .trim()
+    : null;
+
+  let resolvedPesoUnidadFinal = resolvedPesoUnidad;
+  let resolvedPesoTotalFinal = resolvedPesoTotal;
+  if (
+    (!resolvedPesoUnidadFinal || resolvedPesoUnidadFinal === "NO") ||
+    (!resolvedPesoTotalFinal || resolvedPesoTotalFinal === "NO")
+  ) {
+    const unitAnchorIndex = rows.findIndex((value) =>
+      /Unidad\s+de\s+Medida\s+del\s+Peso\s+Bruto/i.test(value)
+    );
+    const transportistaLineIndex = rows.findIndex((value) =>
+      /Datos\s+del\s+transportista/i.test(value)
+    );
+    const start = unitAnchorIndex >= 0 ? unitAnchorIndex : 0;
+    const end =
+      transportistaLineIndex > start ? transportistaLineIndex : rows.length;
+    const window = rows.slice(start, end);
+
+    const unitCandidate = window.find(
+      (value) => /^[A-Z]{2,5}$/.test(value) && value !== "NO"
+    );
+    const totalCandidate = window.find(
+      (value) => /^\d+([.,]\d+)?$/.test(value)
+    );
+
+    if (!resolvedPesoUnidadFinal || resolvedPesoUnidadFinal === "NO") {
+      resolvedPesoUnidadFinal = unitCandidate ?? resolvedPesoUnidadFinal;
+    }
+    if (!resolvedPesoTotalFinal || resolvedPesoTotalFinal === "NO") {
+      resolvedPesoTotalFinal = totalCandidate ?? resolvedPesoTotalFinal;
+    }
+  }
+
+  // OCR frecuente: KGM y 5 aparecen despues de
+  // "Indicador para registrar vehiculos/vehículos y conductores del transportista:"
+  // y antes de "Indicador de transbordo programado" / "Unidad de Medida del Peso Bruto".
+  const invalidPesoUnidad =
+    !resolvedPesoUnidadFinal ||
+    resolvedPesoUnidadFinal === "NO" ||
+    resolvedPesoUnidadFinal.length > 12 ||
+    /REGISTRO|EMPRESA|CONTRIBUYENTES|MODALIDAD|INDICADOR|DATOS/i.test(resolvedPesoUnidadFinal);
+  const invalidPesoTotal =
+    !resolvedPesoTotalFinal ||
+    resolvedPesoTotalFinal === "NO" ||
+    /[A-Za-z]/.test(resolvedPesoTotalFinal);
+
+  if (invalidPesoUnidad || invalidPesoTotal) {
+    const registrarIdx = rows.findIndex((value) =>
+      /Indicador\s+para\s+registrar\s+veh(?:iculos|[ií]culos|Ã­culos)\s+y\s+conductores\s+del\s+transportista/i.test(
+        value,
+      ),
+    );
+    const unidadLabelIdx = rows.findIndex((value) =>
+      /Unidad\s+de\s+Medida\s+del\s+Peso\s+Bruto/i.test(value),
+    );
+    const transbordoIdx = rows.findIndex((value) =>
+      /Indicador\s+de\s+transbordo\s+programado/i.test(value),
+    );
+    const endIdxCandidates = [unidadLabelIdx, transbordoIdx, transportistaIndex]
+      .filter((idx) => idx >= 0 && idx > registrarIdx);
+    const endIdx = endIdxCandidates.length > 0 ? Math.min(...endIdxCandidates) : rows.length;
+
+    if (registrarIdx >= 0) {
+      const window = rows
+        .slice(registrarIdx + 1, endIdx)
+        .map((v) => v.trim())
+        .filter(
+          (v) =>
+            v &&
+            v !== "NO" &&
+            !/Indicador|Modalidad|Datos\s+del\s+traslado|Unidad\s+de\s+Medida/i.test(v),
+        );
+      const unitCandidate = window.find((value) => /^[A-Z]{2,5}$/.test(value));
+      const totalCandidate = window.find((value) => /^\d+([.,]\d+)?$/.test(value));
+      if (invalidPesoUnidad && unitCandidate) {
+        resolvedPesoUnidadFinal = unitCandidate;
+      }
+      if (invalidPesoTotal && totalCandidate) {
+        resolvedPesoTotalFinal = totalCandidate;
+      }
+    }
+  }
+
+  // Fallback adicional: extraer explicitamente el bloque entre anclas
+  // para capturar KGM y 5 aunque el OCR venga desordenado.
+  if (
+    !resolvedPesoUnidadFinal ||
+    !resolvedPesoTotalFinal ||
+    invalidPesoUnidad ||
+    invalidPesoTotal
+  ) {
+    const registrarBlockMatch = normalizedLines.match(
+      /Indicador\s+para\s+registrar\s+veh(?:iculos|[ií]culos|Ã­culos)\s+y\s+conductores\s+del\s+transportista\s*:?\s*([\s\S]*?)(?=Indicador\s+de\s+transbordo\s+programado|Unidad\s+de\s+Medida\s+del\s+Peso\s+Bruto|Datos\s+del\s+transportista|$)/i,
+    );
+    if (registrarBlockMatch?.[1]) {
+      const blockLines = registrarBlockMatch[1]
+        .split("\n")
+        .map((v) => v.trim())
+        .filter(
+          (v) =>
+            v &&
+            v !== "NO" &&
+            !/Indicador|Modalidad|Datos\s+del\s+traslado|Unidad\s+de\s+Medida/i.test(v),
+        );
+      const unitCandidate = blockLines.find((value) => /^[A-Z]{2,5}$/.test(value));
+      const totalCandidate = blockLines.find((value) => /^\d+([.,]\d+)?$/.test(value));
+      if ((invalidPesoUnidad || !resolvedPesoUnidadFinal) && unitCandidate) {
+        resolvedPesoUnidadFinal = unitCandidate;
+      }
+      if ((invalidPesoTotal || !resolvedPesoTotalFinal) && totalCandidate) {
+        resolvedPesoTotalFinal = totalCandidate;
+      }
+    }
+  }
+
+  if (resolvedPesoUnidadFinal) {
+    setValue("guia_peso_bruto_unidad", resolvedPesoUnidadFinal);
+  }
+  if (resolvedPesoTotalFinal) {
+    setValue("guia_peso_bruto_total", resolvedPesoTotalFinal);
+  }
+  if (resolvedTransportistaFinal) {
+    setValue("guia_transportista", resolvedTransportistaFinal);
+  }
+  if (rucMatch) {
+    setValue("provider_documentNumber", rucMatch[1]);
+    setValue("ruc", rucMatch[1]);
+  }
+
+  setValue("comprobante", "GUIA DE REMISION");
+  setCurrency("PEN");
+  setValue("tipo_moneda", "PEN");
+
+  const descriptionParts = [reasonMatch?.[1]?.trim(), deliveryMatch?.[1]?.trim()].filter(Boolean);
+  if (descriptionParts.length > 0) {
+    setValue("entry_description", descriptionParts.join(" - "));
+  }
+
+  const items: GuideItem[] = [];
+  let inItems = false;
+  let pendingName: string | null = null;
+  let pendingSeries: string | null = null;
+
+  const extractSeriesFromName = (input: string) => {
+    const seriesMatch = input.match(
+      /\bSERIE\b\s*(?:N|N\.|Nº|NO|S\/N)?\s*[:\-]?\s*([A-Z0-9-]{5,})/i
+    );
+    if (!seriesMatch) {
+      return { name: input, series: null };
+    }
+    const cleaned = input
+      .replace(seriesMatch[0], "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    return { name: cleaned, series: seriesMatch[1].trim() };
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\s{2,}/g, " ").trim();
+    const rowIndexMatch = line.match(/^(\d{1,3})\s+/);
+    const rowIndex = rowIndexMatch?.[1] ?? null;
+    const hadNoMarker = /\bNO\b/i.test(line) || /NO$/i.test(line);
+
+    if (/Bienes\s+por\s+transportar/i.test(line)) {
+      inItems = true;
+      continue;
+    }
+
+    if (
+      inItems &&
+      /Unidad\s+de\s+Medida\s+del\s+Peso\s+Bruto|Datos\s+del\s+traslado|Datos\s+del\s+transportista/i.test(
+        line
+      )
+    ) {
+      inItems = false;
+    }
+
+    if (!inItems) continue;
+
+    if (
+      /Descripcion\s+Detallada|Unidad\s+de\s+medida|Cantidad|Codigo|Partida|GTIN|Arancelaria/i.test(
+        line
+      )
+    ) {
+      continue;
+    }
+
+    if (/^[A-Z0-9-]{10,}$/i.test(line) && !/\s/.test(line)) {
+      continue;
+    }
+
+    const unitMatch = line.match(/UNIDAD\s*\([A-Z]+\)/i);
+    const nameSource = unitMatch ? line.slice(0, unitMatch.index).trim() : line;
+    const qtySource = unitMatch ? line.slice(unitMatch.index) : line;
+    const qtyMatch = qtySource.match(/(\d+(?:[.,]\d+)?)\s*$/);
+    if (!qtyMatch) {
+      if (/[A-Z]/.test(nameSource) && nameSource.length >= 6) {
+        const extracted = extractSeriesFromName(nameSource);
+        pendingName = extracted.name;
+        pendingSeries = extracted.series;
+      }
+      continue;
+    }
+
+    const qty = parseFloat(qtyMatch[1].replace(",", "."));
+    const extractedNow = extractSeriesFromName(nameSource);
+    let name = extractedNow.name
+      .replace(/^\d+NO\s+/i, "")
+      .replace(/^\d+\s+NO\s+/i, "")
+      .replace(/^\d+\s+/, "")
+      .replace(/NO$/i, "")
+      .replace(/^\d+\s+/, "")
+      .trim();
+    let seriesValue: string | null = extractedNow.series;
+
+    if (rowIndex && hadNoMarker) {
+      if (rowIndex.length === 1) {
+        const rowSuffix = new RegExp(`${rowIndex}{1,2}$`);
+        if (rowSuffix.test(name)) {
+          name = name.replace(rowSuffix, "").trim();
+        }
+      } else if (rowIndex.length === 2 && name.endsWith(rowIndex)) {
+        name = name.slice(0, -rowIndex.length).trim();
+      }
+    }
+
+    if (
+      !name ||
+      name.length < 3 ||
+      /^\d+$/.test(name) ||
+      (rowIndex && name === rowIndex) ||
+      /^NO$/i.test(name) ||
+      Number.isNaN(qty)
+    ) {
+      if (pendingName) {
+        name = pendingName;
+        seriesValue = pendingSeries ?? seriesValue;
+      } else {
+        continue;
+      }
+    }
+
+    if (!name) continue;
+    items.push({ name, quantity: qty, series: seriesValue ? [seriesValue] : undefined });
+    pendingName = null;
+    pendingSeries = null;
+  }
+
+  if (items.length > 0) {
+    setSelectedProducts(
+      items.map((item, index) => ({
+        id: index + 1,
+        name: item.name,
+        quantity: item.quantity,
+        price: 0,
+        priceSell: 0,
+        category_name: "Sin categoria",
+        series: item.series ?? [],
+      }))
+    );
+  } else {
+    toast.warning("No se encontraron productos en la guia de remision.");
+  }
+}
+
+// =====================================================================
+// DELTRON GUIDE PROCESSOR
+// Handles "Guía de Remisión Remitente Electrónica" from GRUPO DELTRON
+// Format: BIENES A TRASLADAR with CÓDIGO, DESCRIPCIÓN, series on next lines
+// =====================================================================
+
+export function processDeltronGuideText(
+  text: string,
+  setSelectedProducts: Function,
+  setValue: Function,
+  setCurrency: Function
+) {
+  const normalized = text.replace(/\u00a0/g, " ");
+  const lines = normalized
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const fullText = lines.join("\n");
+
+  // --- SERIE / CORRELATIVO ---
+  // Format: N°: T029-00004430 or N°: T0A1-00012345
+  const serieMatch = fullText.match(
+    /N[°º]?\s*:?\s*([A-Z0-9]{3,5})\s*-\s*(\d{4,})/i
+  );
+  if (serieMatch) {
+    setValue("guia_serie", serieMatch[1].trim());
+    setValue("guia_correlativo", serieMatch[2].trim());
+  }
+
+  // --- RUC EMISOR ---
+  const rucMatch = fullText.match(
+    /R\.?U\.?C\.?\s*(?:N[°º]?)?\s*:?\s*(\d{11})/i
+  );
+  if (rucMatch) {
+    setValue("ruc", rucMatch[1]);
+    setValue("provider_documentNumber", rucMatch[1]);
+  }
+
+  // --- FECHA DE EMISIÓN ---
+  // Format: FECHA DE EMISIÓN: 06-01-2026
+  const fechaEmisionMatch = fullText.match(
+    /FECHA\s+DE\s+EMISI[ÓO]N\s*:\s*([0-9\/.\-]+)/i
+  );
+  if (fechaEmisionMatch) {
+    setValue("guia_fecha_emision", fechaEmisionMatch[1].trim());
+    setValue("fecha_emision_comprobante", fechaEmisionMatch[1].trim());
+  }
+
+  // --- INICIO TRASLADO ---
+  // Format: INICIO TRASLADO: 06/01/2026
+  const inicioTrasladoMatch = fullText.match(
+    /INICIO\s+(?:DE\s+)?TRASLADO\s*:\s*([0-9\/.\-]+)/i
+  );
+  if (inicioTrasladoMatch) {
+    setValue("guia_fecha_entrega_transportista", inicioTrasladoMatch[1].trim());
+  }
+
+  // --- MOTIVO DE TRASLADO ---
+  const motivoMatch = fullText.match(
+    /MOTIVO\s+DE\s+TRASLADO\s*:\s*([^\n]+)/i
+  );
+  if (motivoMatch) {
+    setValue("guia_motivo_traslado", motivoMatch[1].trim());
+  }
+
+  // --- PUNTO DE PARTIDA ---
+  // Format: PUNTO DE PARTIDA\nDIRECCIÓN: AV. EJERCITO NRO. 839 ...
+  const partidaBlock = fullText.match(
+    /PUNTO\s+DE\s+PARTIDA\s*\n\s*DIRECCI[ÓO]N\s*:\s*([\s\S]*?)(?=UBIGEO|PUNTO\s+DE\s+LLEGADA|C[ÓO]DIGO\s*:|$)/i
+  );
+  if (partidaBlock) {
+    const addr = partidaBlock[1].replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+    setValue("guia_punto_partida", addr);
+  }
+
+  // --- PUNTO DE LLEGADA ---
+  const llegadaBlock = fullText.match(
+    /PUNTO\s+DE\s+LLEGADA\s*\n\s*DIRECCI[ÓO]N\s*:\s*([\s\S]*?)(?=UBIGEO|DESTINATARIO|C[ÓO]DIGO\s*:|$)/i
+  );
+  if (llegadaBlock) {
+    const addr = llegadaBlock[1].replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+    setValue("guia_punto_llegada", addr);
+  }
+
+  // --- DESTINATARIO ---
+  const destinatarioMatch = fullText.match(
+    /RAZ[ÓO]N\s+SOCIAL\s*:\s*([^\n]+)/i
+  );
+  if (destinatarioMatch) {
+    setValue("guia_destinatario", destinatarioMatch[1].trim());
+  }
+
+  // --- PESO BRUTO ---
+  // Format: PESO BRUTO TOTAL CARGA: 8.6 KGM
+  const pesoMatch = fullText.match(
+    /PESO\s+BRUTO\s+TOTAL\s+(?:CARGA|DE\s+LA\s+CARGA)\s*:\s*([0-9.,]+)\s*([A-Z]{2,5})/i
+  );
+  if (pesoMatch) {
+    setValue("guia_peso_bruto_total", pesoMatch[1].replace(",", ".").trim());
+    setValue("guia_peso_bruto_unidad", pesoMatch[2].trim());
+  }
+
+  // --- TRANSPORTISTA ---
+  // pdf-parse may merge empty fields onto one line (e.g. "RAZÓN SOCIAL:No. IDENTIDAD:")
+  // Only set if the captured value is a real name, not another field label
+  const transportistaBlock = fullText.match(
+    /DATOS\s+DEL\s+TRANSPORTISTA[\s\S]*?RAZ[ÓO]N\s+SOCIAL\s*:\s*([^\n]+)/i
+  );
+  if (transportistaBlock) {
+    const val = transportistaBlock[1].trim();
+    const isFieldLabel = /^(No\.\s*IDENTIDAD|PLACA|CONDUCTOR|DOCUMENTO|LICENCIA|INICIO|MODALIDAD)\s*:/i.test(val);
+    if (val && !isFieldLabel) {
+      setValue("guia_transportista", val);
+    }
+  }
+
+  // --- DOCUMENTO RELACIONADO (factura asociada) ---
+  // pdf-parse may merge columns: "F103-01080358Factura20212331377"
+  const docRelMatch = fullText.match(
+    /DOCUMENTOS\s+RELACIONADOS[\s\S]*?([A-Z]\d{2,3}-\d{5,})\s*(Factura|Boleta)/i
+  );
+  if (docRelMatch) {
+    setValue("serie", docRelMatch[1].trim());
+    setValue("comprobante", docRelMatch[2].toUpperCase() === "FACTURA" ? "FACTURA" : "BOLETA");
+  }
+
+  // --- COMPROBANTE TYPE ---
+  setValue("comprobante", "GUIA DE REMISION");
+  setCurrency("PEN");
+  setValue("tipo_moneda", "PEN");
+
+  // --- DESCRIPCIÓN ---
+  const descParts: string[] = [];
+  if (motivoMatch) descParts.push(motivoMatch[1].trim());
+  if (inicioTrasladoMatch) descParts.push(inicioTrasladoMatch[1].trim());
+  if (descParts.length > 0) {
+    setValue("entry_description", descParts.join(" - "));
+  }
+
+  // --- BIENES A TRASLADAR ---
+  // pdf-parse output format (columns merged, NO spaces between row/code/description):
+  //   Line 1: "{N}{CODE}{DESCRIPTION}       ------- {WARRANTY}"
+  //           e.g. "1KBMSWBKTE4071STECLADO+MOUSE STD W. TE4071       ------- 12 MESES (C/S PGE) DE GARANTIA"
+  //   Line 2: "{SERIES}" (space-separated serial numbers)
+  //           e.g. "KCJT2506031016 KCJT2506031017"
+  //   Line 3: "NIU{QTY}" (unit + quantity, NO space)
+  //           e.g. "NIU2"
+  const items: GuideItem[] = [];
+
+  const itemsSectionIdx = lines.findIndex((line) =>
+    /BIENES\s+A\s+TRASLADAR/i.test(line)
+  );
+  const footerIdx = lines.findIndex((line, idx) =>
+    idx > itemsSectionIdx &&
+    /REPRESENTACI[ÓO]N\s+IMPRESA|RECIB[ÍI]\s+CONFORME|LA\s+MERCADER[ÍI]A\s+VIAJA|P[áa]gina\s+\d+\s+de/i.test(line)
+  );
+  const endIdx = footerIdx >= 0 ? footerIdx : lines.length;
+
+  // Known product description prefixes to separate code from description
+  // when pdf-parse merges them (e.g. "KBMSWBKTE4071STECLADO+MOUSE...")
+  const productPrefixes = [
+    "TECLADO", "MOUSE", "FUENTE", "COOLER", "MEMORIA", "PLACA",
+    "TARJETA", "DISCO", "CABLE", "ADAPTADOR", "CARGADOR", "FUNDA",
+    "PARLANTE", "IMPRESORA", "ROUTER", "WEBCAM", "AUDIFONO", "HEADSET",
+    "PANTALLA", "LAPTOP", "REGULADOR", "ESTABILIZADOR", "FORZA",
+    "MONITOR", "PROCESADOR", "SERVIDOR", "SWITCH", "ACCESS", "BATERIA",
+    "CINTA", "TONER", "CARTUCHO", "RACK", "GABINETE", "VENTILADOR",
+    "MON ", "NB ", "SSD ", "PROC ", "CASE ", "PAD ", "KB ", "MS ",
+    "PC ", "KIT ", "HUB ", "UPS ",
+  ];
+
+  /** Extract product description from merged {CODE}{DESCRIPTION} text */
+  const extractDescription = (raw: string): string => {
+    let desc = raw;
+    // Strategy 1: Match a known product prefix in the text (most reliable)
+    const upper = desc.toUpperCase();
+    for (const prefix of productPrefixes) {
+      const idx = upper.indexOf(prefix);
+      if (idx >= 6) { // Code is at least 6 chars, skip it
+        return desc.slice(idx).trim();
+      }
+    }
+    // Strategy 2: Find boundary after last digit + 1 letter in the code
+    const codeMatch = desc.match(/^([A-Z0-9]*\d[A-Z])([A-Z].+)/i);
+    if (codeMatch && codeMatch[2].length >= 5) {
+      return codeMatch[2].trim();
+    }
+    // Strategy 3: Split at first non-alphanumeric boundary
+    const boundary = desc.search(/[^A-Za-z0-9]/);
+    if (boundary > 6) {
+      return desc.slice(boundary).replace(/^[^A-Za-z]+/, "").trim();
+    }
+    // Fallback: return as-is (includes code but at least captures the item)
+    return desc.trim();
+  };
+
+  if (itemsSectionIdx >= 0) {
+    const itemLines: string[] = [];
+    for (let k = itemsSectionIdx + 1; k < endIdx; k++) {
+      const line = lines[k];
+      // Skip merged table headers: "N°CÓDIGO", "CÓDIGO", "SUNAT", "DESCRIPCIÓNUNIDADCANTIDAD"
+      if (/^(?:N[°º]?\s*)?C[ÓO]DIGO|^DESCRIPCI[ÓO]N|^UNIDAD\b|^CANTIDAD\b|^SUNAT\b/i.test(line)) continue;
+      itemLines.push(line);
+    }
+
+
+    let pendingName = "";
+    let pendingSeries: string[] = [];
+
+    for (let i = 0; i < itemLines.length; i++) {
+      const line = itemLines[i];
+
+      // Quantity line: "NIU2", "NIU 5", "UND3" (pdf-parse merges unit+qty with NO space)
+      const qtyLineMatch = line.match(/^(?:NIU|UND|PZA|SET|UN)\s*(\d+(?:[.,]\d+)?)\s*$/i);
+      if (qtyLineMatch && pendingName) {
+        items.push({
+          name: pendingName,
+          quantity: parseFloat(qtyLineMatch[1].replace(",", ".")),
+          series: pendingSeries.length > 0 ? [...pendingSeries] : undefined,
+        });
+        pendingName = "";
+        pendingSeries = [];
+        continue;
+      }
+
+      // Description line: contains "-------" separator between description and warranty
+      if (line.includes("-------")) {
+        let desc = line.split("-------")[0].trim();
+        // Remove leading row number (merged, no space): "1KBMS..." → "KBMS..."
+        desc = desc.replace(/^\d{1,3}/, "");
+        desc = extractDescription(desc);
+
+        if (desc && desc.length >= 3) {
+          if (pendingName) {
+            items.push({ name: pendingName, quantity: 1, series: pendingSeries.length > 0 ? [...pendingSeries] : undefined });
+            pendingSeries = [];
+          }
+          pendingName = desc;
+        }
+        continue;
+      }
+
+      // Full merged line: "{N}{CODE}{DESC}...NIU{QTY}" all on one line
+      const fullLineMatch = line.match(
+        /^\d{1,3}[A-Z][A-Z0-9]{5,}.+?(?:NIU|UND|PZA|SET|UN)\s*(\d+(?:[.,]\d+)?)\s*$/i
+      );
+      if (fullLineMatch) {
+        let desc = line.replace(/(?:NIU|UND|PZA|SET|UN)\s*\d+(?:[.,]\d+)?\s*$/i, "").trim();
+        desc = desc.replace(/^\d{1,3}/, "");
+        desc = desc.replace(/\s*-{2,}\s*.*/, "").trim();
+        desc = extractDescription(desc);
+
+        if (pendingName) {
+          items.push({ name: pendingName, quantity: 1, series: pendingSeries.length > 0 ? [...pendingSeries] : undefined });
+          pendingSeries = [];
+        }
+        items.push({
+          name: desc || line,
+          quantity: parseFloat(fullLineMatch[1].replace(",", ".")),
+          series: undefined,
+        });
+        pendingName = "";
+        continue;
+      }
+
+      // Series numbers: alphanumeric codes 5+ chars, space-separated
+      if (pendingName) {
+        const tokens = line.split(/\s+/).filter(Boolean);
+        const seriesTokens = tokens.filter(
+          (t) => /^[A-Z0-9]{5,}$/i.test(t) && !/^(NIU|UND|PZA|SET|UN)$/i.test(t)
+        );
+        if (seriesTokens.length > 0) {
+          pendingSeries.push(...seriesTokens);
+        }
+      }
+    }
+
+    // Push last pending item
+    if (pendingName) {
+      items.push({ name: pendingName, quantity: 1, series: pendingSeries.length > 0 ? [...pendingSeries] : undefined });
+    }
+  }
+
+  // --- SET PRODUCTS ---
+  if (items.length > 0) {
+    setSelectedProducts(
+      items.map((item, index) => ({
+        id: index + 1,
+        name: item.name,
+        quantity: item.quantity,
+        price: 0,
+        priceSell: 0,
+        category_name: "Sin categoria",
+        series: item.series ?? [],
+      }))
+    );
+  } else {
+    toast.warning("No se encontraron productos en la guía de remisión DELTRON.");
+  }
+}
+
+// =====================================================================
+// INGRAM MICRO INVOICE PROCESSOR
+// Handles "Factura Electrónica" from INGRAM MICRO S.A.C. (RUC 20267163228)
+// Format: pdf-parse scatters table columns; code+unit lines anchor each item
+// =====================================================================
+
+export function processIngramInvoiceText(
+  text: string,
+  setSelectedProducts: Function,
+  setValue: Function,
+  setCurrency: Function
+) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const fullText = lines.join("\n");
+
+  // --- PROVIDER INFO ---
+  const rucMatch = fullText.match(
+    /R\.?U\.?C\.?\s*(?:N[°º]?)?\s*:?\s*(\d{11})/i
+  );
+  if (rucMatch) {
+    setValue("ruc", rucMatch[1]);
+    setValue("provider_documentNumber", rucMatch[1]);
+  }
+
+  // Provider name + address (INGRAM MICRO line, address on next line)
+  const nameIdx = lines.findIndex((l) => /INGRAM\s+MICRO/i.test(l));
+  if (nameIdx >= 0) {
+    setValue("provider_name", lines[nameIdx]);
+    if (nameIdx + 1 < lines.length) {
+      setValue("provider_adress", lines[nameIdx + 1]);
+    }
+  }
+
+  // --- SERIE / CORRELATIVO ---
+  const serieMatch = fullText.match(/\b([A-Z]\d{3}-\d{5,})\b/);
+  if (serieMatch) {
+    setValue("serie", serieMatch[1]);
+    setValue("nroCorrelativo", serieMatch[1]);
+  }
+
+  // --- COMPROBANTE TYPE ---
+  const comprobanteMatch = fullText.match(
+    /(FACTURA|BOLETA)\s+ELECTR[ÓO]NICA/i
+  );
+  if (comprobanteMatch) {
+    setValue("comprobante", comprobanteMatch[0].trim());
+  }
+
+  // --- FECHA DE EMISIÓN ---
+  // In Ingram PDFs the date line appears BEFORE the "Fecha de Emisión:" label
+  // e.g. "2026-01-30  12:00:00a.m.\nFecha de Emisión:"
+  const fechaMatch = fullText.match(
+    /(\d{4}-\d{2}-\d{2})\s+\d{1,2}:\d{2}:\d{2}[ap]\.m\./i
+  );
+  if (fechaMatch) {
+    setValue("fecha_emision_comprobante", fechaMatch[1]);
+  }
+
+  // --- CURRENCY ---
+  if (/d[óo]lar\s+estadounidense/i.test(fullText)) {
+    setCurrency("USD");
+    setValue("tipo_moneda", "USD");
+  } else {
+    setCurrency("PEN");
+    setValue("tipo_moneda", "PEN");
+  }
+
+  // --- DATOS ADICIONALES → OBSERVACIÓN ---
+  // Ingram header block (consistent across invoices):
+  //   line X:   "Fecha de Vencimiento:Moneda:Orden de Compra:Factura Interna:"
+  //   line X+1: "Cod. Vendedor:Nro Pedido:"
+  //   line X+2: "{yyyy-mm-dd} {moneda}"   → Fecha de Vencimiento
+  //   line X+3: "{orden_compra}"
+  //   line X+4: "{factura_interna}"
+  //   line X+5: "{condicion}"
+  //   line X+6: "{nro_pedido}"
+  const obsParts: string[] = [];
+  const headerIdx = lines.findIndex((l) =>
+    /^Fecha de Vencimiento:.*Orden de Compra:/i.test(l)
+  );
+  if (headerIdx >= 0) {
+    // Fecha de Vencimiento (line headerIdx+2): "2026-03-01 Dólar..."
+    const vencLine = lines[headerIdx + 2] || "";
+    const vencMatch = vencLine.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (vencMatch) {
+      obsParts.push(`Venc: ${vencMatch[1]}`);
+    }
+
+    // Orden de Compra (line headerIdx+3): purely numeric or alphanumeric
+    const ocVal = (lines[headerIdx + 3] || "").trim();
+    if (ocVal && /^[\dA-Za-z-]+$/.test(ocVal)) {
+      obsParts.push(`OC: ${ocVal}`);
+    }
+
+    // Nro Pedido (line headerIdx+6): numeric
+    const pedidoVal = (lines[headerIdx + 6] || "").trim();
+    if (pedidoVal && /^\d+$/.test(pedidoVal)) {
+      obsParts.push(`Pedido: ${pedidoVal}`);
+    }
+  }
+
+  // Condición / Términos de Pago
+  const terminosIdx = lines.findIndex((l) => /^Terminos de Pago:/i.test(l));
+  if (terminosIdx >= 0 && terminosIdx + 1 < lines.length) {
+    const terminosVal = lines[terminosIdx + 1]?.trim();
+    if (terminosVal && /\d/.test(terminosVal)) {
+      obsParts.push(`Pago: ${terminosVal}`);
+    }
+  }
+
+  if (obsParts.length > 0) {
+    setValue("entry_description", obsParts.join(" | ").slice(0, 200));
+  }
+
+  // --- ITEMS ---
+  // Anchor on code+unit lines: "06627549EA 1.00 894.00"
+  // Pattern: {code}{unit} {val} {val}  (unit = EA, UN, NIU, UND, PZA, SET)
+  // Then look backward for description and forward for {precio_unitario} {cantidad}
+  const items: { name: string; quantity: number; price: number }[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Match code+unit line
+    if (!/^\d{4,}(?:EA|UN|NIU|UND|PZA|SET)\s+[\d.]+\s+[\d,.]+$/i.test(line))
+      continue;
+
+    // Look backward for description (nearest non-numeric text line)
+    let name = "";
+    for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
+      const prev = lines[j];
+      if (
+        prev.length >= 5 &&
+        /[A-Za-z]/.test(prev) &&
+        !/^\d+[.,]?\d*$/.test(prev) &&
+        !/^\d+$/.test(prev) &&
+        !/^\d+[A-Z]{2,}\s/i.test(prev)
+      ) {
+        name = prev;
+        break;
+      }
+    }
+
+    // Look forward for {precio_unitario} {cantidad} line (two decimals)
+    let price = 0;
+    let quantity = 0;
+    for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
+      const next = lines[j];
+      const twoNums = next.match(/^([\d,]+\.\d{2})\s+(\d+\.\d{2})$/);
+      if (twoNums) {
+        price = parseFloat(twoNums[1].replace(/,/g, ""));
+        quantity = parseFloat(twoNums[2]);
+        break;
+      }
+    }
+
+    if (name && quantity > 0) {
+      items.push({ name, quantity, price });
+    }
+  }
+
+  // --- SET PRODUCTS ---
+  if (items.length > 0) {
+    setSelectedProducts(
+      items.map((item, index) => ({
+        id: index + 1,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        category_name: "Sin categoria",
+      }))
+    );
+  } else {
+    toast.warning(
+      "No se encontraron productos en la factura de Ingram Micro."
+    );
+  }
+
+  // --- TOTAL ---
+  // Between "Observaciones:" and "REPRESENTACIÓN IMPRESA" the IGV and total appear
+  // The largest number in that range is the IMPORTE TOTAL
+  const obsIdx = lines.findIndex((l) => /^Observaciones/i.test(l));
+  const repIdx = lines.findIndex((l) => /REPRESENTACI[ÓO]N/i.test(l));
+  if (obsIdx >= 0 && repIdx > obsIdx) {
+    let maxVal = 0;
+    for (let k = obsIdx + 1; k < repIdx; k++) {
+      const numMatch = lines[k].match(/^([\d,]+\.\d{2})$/);
+      if (numMatch) {
+        const val = parseFloat(numMatch[1].replace(/,/g, ""));
+        if (val > maxVal) maxVal = val;
+      }
+    }
+    if (maxVal > 0) {
+      setValue("total_comprobante", maxVal.toFixed(2));
+    }
+  }
+}
+
+// =====================================================================
+// NEXSYS INVOICE PROCESSOR
+// Handles "Factura Electrónica" from NEXSYS DEL PERU S.R.L. (RUC 20470145901)
+// Format: values line {base} {igv_price} {qty}, then description, then code line
+// =====================================================================
+
+export function processNexsysInvoiceText(
+  text: string,
+  setSelectedProducts: Function,
+  setValue: Function,
+  setCurrency: Function
+) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const fullText = lines.join("\n");
+
+  // --- PROVIDER INFO ---
+  const rucMatch = fullText.match(
+    /R\.?U\.?C\.?\s*N[°º]?\s*(\d{11})/i
+  );
+  if (rucMatch) {
+    setValue("ruc", rucMatch[1]);
+    setValue("provider_documentNumber", rucMatch[1]);
+  }
+
+  // Provider name + address (lines between name and phone/website)
+  const nameIdx = lines.findIndex((l) => /NEXSYS\s+DEL\s+PERU/i.test(l));
+  if (nameIdx >= 0) {
+    setValue("provider_name", lines[nameIdx]);
+    const addrParts: string[] = [];
+    for (let j = nameIdx + 1; j < Math.min(nameIdx + 5, lines.length); j++) {
+      if (/Telef|www\.|http/i.test(lines[j])) break;
+      if (lines[j].length > 0) addrParts.push(lines[j]);
+    }
+    if (addrParts.length > 0) {
+      setValue(
+        "provider_adress",
+        addrParts.join(" ").replace(/\s+/g, " ").trim()
+      );
+    }
+  }
+
+  // --- SERIE / CORRELATIVO ---
+  const serieMatch = fullText.match(/N[°º]\s*([A-Z]\d{3}-\d{5,})/i);
+  if (serieMatch) {
+    setValue("serie", serieMatch[1]);
+    setValue("nroCorrelativo", serieMatch[1]);
+  }
+
+  // --- COMPROBANTE TYPE ---
+  const comprobanteMatch = fullText.match(
+    /(FACTURA|BOLETA)\s+ELECTR[ÓO]NICA/i
+  );
+  if (comprobanteMatch) {
+    setValue("comprobante", comprobanteMatch[0].trim());
+  }
+
+  // --- FECHA DE EMISIÓN ---
+  // In NEXSYS the date appears on the line right after the "FECHA" label
+  const fechaIdx = lines.findIndex((l) => /^FECHA$/i.test(l));
+  if (fechaIdx >= 0 && fechaIdx + 1 < lines.length) {
+    const dateStr = lines[fechaIdx + 1].trim();
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
+      setValue("fecha_emision_comprobante", dateStr);
+    }
+  }
+
+  // --- CURRENCY ---
+  if (/US\$|DOLARES\s+AMERICANOS|d[óo]lar/i.test(fullText)) {
+    setCurrency("USD");
+    setValue("tipo_moneda", "USD");
+  } else {
+    setCurrency("PEN");
+    setValue("tipo_moneda", "PEN");
+  }
+
+  // --- DATOS ADICIONALES → OBSERVACIÓN ---
+  // Extract: REFERENCIA, TERMINOS, VENCIMIENTO, ASESOR COMERCIAL, PEDIDO DE VENTA
+  // These appear in a known order between the address block and "ITEM"
+  const obsParts: string[] = [];
+
+  const refIdx = lines.findIndex((l) => /^REFERENCIA$/i.test(l));
+  const asesorIdx = lines.findIndex((l) => /^ASESOR COMERCIAL:/i.test(l));
+  const pedidoIdx = lines.findIndex((l) => /^PEDIDO DE VENTA:/i.test(l));
+  const itemIdx = lines.findIndex((l) => /^ITEM$/i.test(l));
+  const terminosLine = lines.find((l) => /^:TERMINOS/i.test(l));
+  const vencimientoLine = lines.findIndex((l) => /^:VENCIMIENTO$/i.test(l));
+
+  // TERMINOS: value appears 2 lines before "ITEM" (e.g., "CONTADO")
+  if (itemIdx > 0) {
+    const terminosVal = lines[itemIdx - 1]?.trim();
+    if (terminosVal && !/^ITEM$/i.test(terminosVal) && !/^\d/.test(terminosVal)) {
+      obsParts.push(`Términos: ${terminosVal}`);
+    }
+  }
+
+  // REFERENCIA: value appears a few lines after "REFERENCIA" label
+  if (refIdx >= 0) {
+    // Look for a short numeric-dash value (e.g., "30-12", "18-12")
+    for (let j = refIdx + 1; j < Math.min(refIdx + 5, lines.length); j++) {
+      if (/^\d{1,2}-\d{1,2}$/.test(lines[j].trim())) {
+        obsParts.push(`Ref: ${lines[j].trim()}`);
+        break;
+      }
+    }
+  }
+
+  // VENCIMIENTO: date appears 2 lines before "CONTADO"/"CREDITO" before ITEM
+  if (vencimientoLine >= 0 && itemIdx > 0) {
+    const vencVal = lines[itemIdx - 2]?.trim();
+    if (vencVal && /^\d{1,2}-\d{1,2}-\d{4}$/.test(vencVal)) {
+      obsParts.push(`Venc: ${vencVal}`);
+    }
+  }
+
+  // ASESOR COMERCIAL: value on line after PEDIDO DE VENTA value
+  if (pedidoIdx >= 0 && pedidoIdx + 2 < lines.length) {
+    const asesorVal = lines[pedidoIdx + 2]?.trim();
+    if (asesorVal && !/^\d{1,2}[/-]/.test(asesorVal) && !/^ITEM$/i.test(asesorVal)) {
+      obsParts.push(`Asesor: ${asesorVal}`);
+    }
+  }
+
+  // PEDIDO DE VENTA: value is on the line right after "PEDIDO DE VENTA:"
+  if (pedidoIdx >= 0 && pedidoIdx + 1 < lines.length) {
+    const pedidoVal = lines[pedidoIdx + 1]?.trim();
+    if (pedidoVal && /^PV-/i.test(pedidoVal)) {
+      obsParts.push(`PV: ${pedidoVal}`);
+    }
+  }
+
+  if (obsParts.length > 0) {
+    setValue("entry_description", obsParts.join(" | ").slice(0, 200));
+  }
+
+  // --- ITEMS ---
+  // NEXSYS has TWO item formats depending on the invoice:
+  //
+  // Format A (multi-line): values on one line, description on next lines
+  //   Line 1: "{base_price} {igv_price} {quantity}"
+  //   Line 2+: "{DESCRIPTION}"
+  //   Line N: "{CODE} {item_sequence}"
+  //
+  // Format B (single-line): everything merged on one line
+  //   "{base_price} {igv_price} {qty}{DESCRIPTION}{CODE} {item_sequence}"
+  //   e.g. "385.00 454.30 1NoteBook IPS3...FreeDosS83K100C3LM 1.00"
+  //
+  // Section: between "ITEM" header and "***" total-in-words footer
+
+  const itemStartIdx = lines.findIndex((l) => /^ITEM$/i.test(l));
+  const itemEndIdx = lines.findIndex(
+    (l, i) =>
+      i > (itemStartIdx >= 0 ? itemStartIdx : 0) && /^\*{3}\s/.test(l)
+  );
+  const startIdx = itemStartIdx >= 0 ? itemStartIdx + 1 : 0;
+  const endIdx = itemEndIdx >= 0 ? itemEndIdx : lines.length;
+  const itemLines = lines.slice(startIdx, endIdx);
+
+  const items: { name: string; quantity: number; price: number }[] = [];
+  // Format A: values only (3 numbers, qty is integer at end)
+  const valuesRegex = /^([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(\d+)$/;
+  // Format B: values + qty + description + code + seq all on one line
+  const singleLineRegex =
+    /^([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(\d{1,3})([A-Za-z].+?)\s+(\d+\.\d{2})$/;
+  const codeLineRegex = /^[A-Z0-9][\w-]+\s+\d+\.\d{2}$/i;
+
+  for (let i = 0; i < itemLines.length; i++) {
+    // Try Format A first (multi-line: values only on this line)
+    const multiMatch = itemLines[i].match(valuesRegex);
+    if (multiMatch) {
+      const igvPrice = parseFloat(multiMatch[2].replace(/,/g, ""));
+      const quantity = parseInt(multiMatch[3], 10);
+
+      // Collect description from subsequent lines
+      const descParts: string[] = [];
+      for (let j = i + 1; j < itemLines.length; j++) {
+        const nextLine = itemLines[j];
+        if (valuesRegex.test(nextLine)) break;
+        if (singleLineRegex.test(nextLine)) break;
+        if (codeLineRegex.test(nextLine)) break;
+        if (/^\*{3}\s|^Forma\s+de\s+Pago/i.test(nextLine)) break;
+        if (nextLine.length > 0 && /[A-Za-z]/.test(nextLine)) {
+          descParts.push(nextLine);
+        }
+      }
+
+      const name = descParts.join(" ").replace(/\s+/g, " ").trim();
+      if (name && quantity > 0) {
+        items.push({ name, quantity, price: igvPrice });
+      }
+      continue;
+    }
+
+    // Try Format B (single-line: everything merged)
+    const singleMatch = itemLines[i].match(singleLineRegex);
+    if (singleMatch) {
+      const igvPrice = parseFloat(singleMatch[2].replace(/,/g, ""));
+      const quantity = parseInt(singleMatch[3], 10);
+      let rawDesc = singleMatch[4];
+
+      // Strip trailing product code merged with description
+      // Detect case transition: lowercase → UPPERCASE+digits (8+ chars)
+      // e.g. "FreeDosS83K100C3LM" → strip "S83K100C3LM", keep "FreeDos"
+      const codeStrip = rawDesc.match(/^(.*[a-z])([A-Z][A-Z0-9-]{7,})$/);
+      const name =
+        codeStrip && codeStrip[1].trim().length >= 10
+          ? codeStrip[1].trim()
+          : rawDesc.trim();
+
+      if (name && quantity > 0) {
+        items.push({ name, quantity, price: igvPrice });
+      }
+      continue;
+    }
+  }
+
+  // --- SET PRODUCTS ---
+  if (items.length > 0) {
+    setSelectedProducts(
+      items.map((item, index) => ({
+        id: index + 1,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        category_name: "Sin categoria",
+      }))
+    );
+  } else {
+    toast.warning("No se encontraron productos en la factura de Nexsys.");
+  }
+
+  // --- TOTAL ---
+  // Computed from extracted items (avoids pdf-parse column alignment issues)
+  const total = items.reduce(
+    (acc, item) => acc + item.price * item.quantity,
+    0
+  );
+  if (total > 0) {
+    setValue("total_comprobante", total.toFixed(2));
+  }
 }

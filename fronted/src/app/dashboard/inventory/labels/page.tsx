@@ -40,6 +40,7 @@ interface AggregatedProduct {
   categoryName: string;
   serialNumbers: string[];
   stock: number;
+  createdAt: Date;
 }
 
 interface ProductSelection {
@@ -202,6 +203,7 @@ function aggregateInventory(items: InventoryApiItem[]): AggregatedProduct[] {
         categoryName: product.category?.name ?? "Sin categoria",
         serialNumbers: [],
         stock: 0,
+        createdAt: product.createdAt ? new Date(product.createdAt) : new Date(),
       });
     }
 
@@ -245,6 +247,7 @@ export default function InventoryLabelsPage(): ReactElement {
   const [categorySearch, setCategorySearch] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<Record<number, ProductSelection>>({});
   const [codeType, setCodeType] = useState<"qr" | "barcode">("qr");
+  const [showLatestOnly, setShowLatestOnly] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = () => {
@@ -330,7 +333,8 @@ export default function InventoryLabelsPage(): ReactElement {
     const query = productSearch.trim().toLowerCase();
     const categoryFilterActive = selectedCategories.length > 0;
 
-    return products.filter((product) => {
+    // Filter products based on search and category
+    const filtered = products.filter((product) => {
       const categoryKey = product.categoryId ?? -1;
       const matchesCategory = !categoryFilterActive || selectedCategories.includes(categoryKey);
       const matchesQuery =
@@ -338,9 +342,20 @@ export default function InventoryLabelsPage(): ReactElement {
         product.name.toLowerCase().includes(query) ||
         product.categoryName.toLowerCase().includes(query) ||
         product.code.toLowerCase().includes(query);
+
       return matchesCategory && matchesQuery;
     });
-  }, [products, productSearch, selectedCategories]);
+
+    // Sort products: if showLatestOnly is true, sort by createdAt DESC, otherwise alphabetically
+    return filtered.sort((a, b) => {
+      if (showLatestOnly) {
+        // Most recent first
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      }
+      // Alphabetical order
+      return a.name.localeCompare(b.name, "es");
+    });
+  }, [products, productSearch, selectedCategories, showLatestOnly]);
 
   useEffect(() => {
     if (selectedCategories.length === 0) {
@@ -608,6 +623,13 @@ export default function InventoryLabelsPage(): ReactElement {
                     onChange={(event) => setProductSearch(event.target.value)}
                     className="max-w-md"
                   />
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition hover:bg-muted">
+                    <Checkbox
+                      checked={showLatestOnly}
+                      onCheckedChange={(checked) => setShowLatestOnly(checked === true)}
+                    />
+                    <span className="font-medium">Ultimos productos agregados</span>
+                  </label>
                   <Badge variant="secondary">
                     {selectedProductCount > 0
                       ? `${selectedProductCount} productos seleccionados`
@@ -683,8 +705,14 @@ export default function InventoryLabelsPage(): ReactElement {
                           </CardContent>
                         )}
                         {!isSelected && hasSerials && (
-                          <CardFooter className="pt-0 text-xs text-muted-foreground">
-                            Incluye {product.serialNumbers.length} series registradas
+                          <CardFooter className="flex-col items-start gap-1 pt-0 text-xs text-muted-foreground">
+                            <p className="font-medium">
+                              Incluye {product.serialNumbers.length} series registradas:
+                            </p>
+                            <p className="leading-relaxed">
+                              {product.serialNumbers.slice(0, 3).join(", ")}
+                              {product.serialNumbers.length > 3 && "..."}
+                            </p>
                           </CardFooter>
                         )}
                       </Card>
@@ -752,20 +780,24 @@ export default function InventoryLabelsPage(): ReactElement {
               return (
                 <div
                   key={`${product.id}-${serial ?? "all"}-${codeType}`}
-                  className="label-card flex flex-col items-center gap-2 rounded-lg border p-4 transition-shadow hover:shadow"
+                  className="label-card flex flex-col items-center gap-3 rounded-lg border p-4 transition-shadow hover:shadow"
                 >
                   {codeType === "qr" ? (
                     <QRCodeCanvas value={qrValue} size={128} />
                   ) : (
                     <Code39Barcode value={humanReadableCode} />
                   )}
-                  <div className="text-center space-y-1">
-                    <p className="text-sm font-semibold leading-tight">{product.name}</p>
-                    <p className="text-xs text-muted-foreground leading-tight">{product.categoryName}</p>
-                    <p className="text-xs text-muted-foreground leading-tight">Codigo base: {product.code}</p>
+                  <div className="text-center space-y-1.5 w-full">
+                    <p className="text-base font-bold leading-tight text-foreground">{product.name}</p>
                     {serial && (
-                      <p className="text-xs font-medium leading-tight">Serie: {serial}</p>
+                      <Badge variant="default" className="font-semibold">
+                        Serie: {serial}
+                      </Badge>
                     )}
+                    <p className="text-sm font-medium leading-tight text-foreground">
+                      Codigo: {product.code}
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-tight">{product.categoryName}</p>
                   </div>
                 </div>
               );

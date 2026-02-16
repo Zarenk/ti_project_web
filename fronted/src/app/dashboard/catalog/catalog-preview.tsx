@@ -16,6 +16,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { ImageUp, EyeOff } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import type { CatalogLayoutMode } from "./catalog-pdf";
 
 type PrimitiveSpecValue = string | number | boolean | null | undefined;
 
@@ -57,6 +67,14 @@ interface Product {
 
 interface CatalogPreviewProps {
   products: Product[];
+  layout: CatalogLayoutMode;
+  onRemoveProduct?: (productId: number) => void;
+  onPriceChange?: (productId: number, value: number | null) => void;
+  onPreviousPriceChange?: (productId: number, value: number | null) => void;
+  priceOverrides?: Record<number, number>;
+  previousPriceOverrides?: Record<number, number>;
+  onRequestImageUpdate?: (productId: number) => void;
+  updatingImageId?: number | null;
 }
 
 const SPEC_CONFIG: Array<{ key: string; label: string }> = [
@@ -143,7 +161,7 @@ function buildItemDetails(spec?: ProductSpecification): CatalogItemDetailItem[] 
     if (!value) {
       continue;
     }
-    details.push({ label, value });
+    details.push({ label, value, iconKey: key });
     handled.add(key.toLowerCase());
   }
 
@@ -168,7 +186,17 @@ function buildItemDetails(spec?: ProductSpecification): CatalogItemDetailItem[] 
   return details;
 }
 
-export function CatalogPreview({ products }: CatalogPreviewProps) {
+export function CatalogPreview({
+  products,
+  layout,
+  onRemoveProduct,
+  onPriceChange,
+  onPreviousPriceChange,
+  priceOverrides,
+  previousPriceOverrides,
+  onRequestImageUpdate,
+  updatingImageId,
+}: CatalogPreviewProps) {
   const [onlyStock, setOnlyStock] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState("all");
   const [sortBy, setSortBy] = useState<"name" | "brand" | "price-asc" | "price-desc">(
@@ -216,6 +244,7 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     [products]
   );
 
+
   const filteredProducts = useMemo(() => {
     const result = products.filter((p) => {
       const matchesStock = !onlyStock || (p.stock ?? 0) > 0;
@@ -223,7 +252,10 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
         selectedBrand === "all" || p.brand?.name === selectedBrand;
       return matchesStock && matchesBrand;
     });
-    const getPrice = (p: Product) => p.priceSell ?? p.price ?? 0;
+    const getPrice = (p: Product) => {
+      const override = typeof p.id === "number" ? priceOverrides?.[p.id] : undefined;
+      return override ?? p.priceSell ?? p.price ?? 0;
+    };
     result.sort((a, b) => {
         switch (sortBy) {
           case "price-asc":
@@ -242,8 +274,27 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     return result;
   }, [products, onlyStock, selectedBrand, sortBy]);
 
-  function formatPrice(value: number): string {
-    return `S/. ${value.toLocaleString('en-US')}`;
+function formatPrice(value: number): string {
+  return `S/. ${value.toLocaleString('en-US')}`;
+}
+
+function getDefaultPreviousPrice(product: Product): number | undefined {
+  const priceValue = product.priceSell ?? product.price;
+  if (typeof priceValue !== "number") {
+    return undefined;
+  }
+  const seedSource = product.id ?? priceValue ?? 1;
+  const normalized = Math.abs(Math.sin(seedSource || 1));
+  const upliftPercent = 0.05 + normalized * 0.05;
+  return Math.max(priceValue, Math.round(priceValue * (1 + upliftPercent)));
+}
+
+  function handleResetPricing(product: Product) {
+    if (typeof product.id !== "number") {
+      return;
+    }
+    onPriceChange?.(product.id, null);
+    onPreviousPriceChange?.(product.id, null);
   }
 
   function getLogos(p: Product): string[] {
@@ -289,9 +340,11 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
     return Array.from(logos);
   }
 
-  const grouped: Record<string, CatalogItemProps[]> = {};
+  const grouped: Record<string, Array<{ product: Product; item: CatalogItemProps }>> = {};
   for (const p of filteredProducts) {
-    const priceValue = p.priceSell ?? p.price;
+    const overridePrice =
+      typeof p.id === "number" ? priceOverrides?.[p.id] : undefined;
+    const priceValue = overridePrice ?? p.priceSell ?? p.price;
     const details = buildItemDetails(p.specification);
     const item: CatalogItemProps = {
       title: p.name,
@@ -302,9 +355,15 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
       details: details.length > 0 ? details : undefined,
     };
     const catName = p.category?.name || "Sin categoria";
-    grouped[catName] = grouped[catName] ? [...grouped[catName], item] : [item];
+    const entry = grouped[catName] ?? [];
+    entry.push({ product: p, item });
+    grouped[catName] = entry;
   }
   const categories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+  const layoutContainerClass =
+    layout === "grid"
+      ? "catalog-grid mx-auto grid max-w-7xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+      : "catalog-list mx-auto flex max-w-7xl flex-col gap-6";
 
   return (
     <Card>
@@ -316,13 +375,14 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
               id="only-stock"
               checked={onlyStock}
               onCheckedChange={(checked) => setOnlyStock(checked === true)}
+              className="cursor-pointer"
             />
-            <Label htmlFor="only-stock">Solo con stock</Label>
+            <Label htmlFor="only-stock" className="cursor-pointer">Solo con stock</Label>
           </div>
           <div className="flex items-center space-x-2">
             <Label>Marca</Label>
             <Select value={selectedBrand} onValueChange={setSelectedBrand}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] cursor-pointer">
                 <SelectValue placeholder="Todas" />
               </SelectTrigger>
               <SelectContent>
@@ -338,7 +398,7 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
           <div className="flex items-center space-x-2">
             <Label>Ordenar</Label>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] cursor-pointer">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -358,10 +418,109 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
               <h2 className="text-xl font-semibold">{cat}</h2>
               <div className="mx-auto mt-2 h-1 w-full bg-primary"></div>
             </div>
-            <div className="catalog-grid mx-auto grid max-w-7xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {grouped[cat].map((item, index) => (
-                <CatalogItem key={index} {...item} />
-              ))}
+            <div className={layoutContainerClass}>
+              {grouped[cat].map(({ product, item }, index) => {
+                const productId = typeof product.id === "number" ? product.id : null;
+                const currentDisplayValue =
+                  priceOverrides?.[productId ?? -1] ??
+                  product.priceSell ??
+                  product.price;
+                const previousDisplayValue =
+                  previousPriceOverrides?.[productId ?? -1] ??
+                  getDefaultPreviousPrice(product);
+                const priceEditorNode =
+                  productId !== null && onPriceChange ? (
+                    <PriceEditor
+                      productId={productId}
+                      currentPrice={typeof currentDisplayValue === "number" ? currentDisplayValue : undefined}
+                      previousPrice={typeof previousDisplayValue === "number" ? previousDisplayValue : undefined}
+                      onPriceChange={onPriceChange}
+                      onPreviousPriceChange={onPreviousPriceChange}
+                    />
+                  ) : undefined;
+
+                const showActions =
+                  productId !== null &&
+                  ((onRemoveProduct !== undefined) ||
+                    (onPriceChange &&
+                      (priceOverrides?.[productId] !== undefined ||
+                        previousPriceOverrides?.[productId] !== undefined)) ||
+                    onRequestImageUpdate !== undefined);
+
+                return (
+                  <div key={product.id ?? `${cat}-${index}`} className="relative group space-y-2">
+                    {showActions && (
+                      <div className="absolute right-3 top-3 z-10 flex gap-2 opacity-0 translate-y-1 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:translate-y-0 group-focus-within:pointer-events-auto">
+                        {productId !== null && onRequestImageUpdate && (
+                          <TooltipProvider delayDuration={120}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="icon"
+                                  className="h-8 w-8 cursor-pointer rounded-full bg-white/90 text-slate-700 shadow-md transition hover:bg-white"
+                                  onClick={() => onRequestImageUpdate(productId)}
+                                  disabled={updatingImageId === productId}
+                                  aria-label="Actualizar imagen"
+                                >
+                                  <ImageUp className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">Actualizar imagen</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        {onPriceChange &&
+                          productId !== null &&
+                          (priceOverrides?.[productId] !== undefined ||
+                            previousPriceOverrides?.[productId] !== undefined) && (
+                            <TooltipProvider delayDuration={120}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    className="cursor-pointer rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-md hover:bg-white"
+                                    onClick={() => handleResetPricing(product)}
+                                  >
+                                    Restaurar precios
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom">Restaurar precios</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        {onRemoveProduct && productId !== null && (
+                          <TooltipProvider delayDuration={120}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="icon"
+                                  className="h-8 w-8 cursor-pointer rounded-full bg-white/90 text-slate-700 shadow-md transition hover:bg-white"
+                                  onClick={() => onRemoveProduct(productId)}
+                                  aria-label="Ocultar producto"
+                                >
+                                  <EyeOff className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">Ocultar producto</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                    )}
+                    <CatalogItem
+                      {...item}
+                      layout={layout}
+                      priceEditor={priceEditorNode}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -371,6 +530,131 @@ export function CatalogPreview({ products }: CatalogPreviewProps) {
 }
 
 export default CatalogPreview;
+
+interface PriceEditorProps {
+  productId: number;
+  currentPrice?: number;
+  previousPrice?: number;
+  onPriceChange?: (productId: number, value: number | null) => void;
+  onPreviousPriceChange?: (productId: number, value: number | null) => void;
+}
+
+function PriceEditor({
+  productId,
+  currentPrice,
+  previousPrice,
+  onPriceChange,
+  onPreviousPriceChange,
+}: PriceEditorProps) {
+  const formatInputValue = (value?: number) =>
+    typeof value === "number" ? String(value) : "";
+
+  const [isEditingCurrent, setIsEditingCurrent] = useState(false);
+  const [isEditingPrevious, setIsEditingPrevious] = useState(false);
+  const [currentDraft, setCurrentDraft] = useState(formatInputValue(currentPrice));
+  const [previousDraft, setPreviousDraft] = useState(formatInputValue(previousPrice));
+
+  useEffect(() => {
+    if (!isEditingCurrent) {
+      setCurrentDraft(formatInputValue(currentPrice));
+    }
+  }, [currentPrice, isEditingCurrent]);
+
+  useEffect(() => {
+    if (!isEditingPrevious) {
+      setPreviousDraft(formatInputValue(previousPrice));
+    }
+  }, [previousPrice, isEditingPrevious]);
+
+  function commitPrice(value: string, callback?: (id: number, value: number | null) => void) {
+    if (!callback) {
+      return;
+    }
+    if (value.trim() === "") {
+      callback(productId, null);
+      return;
+    }
+    const parsed = Number(value);
+    callback(productId, Number.isFinite(parsed) ? parsed : null);
+  }
+
+  return (
+    <div className="flex flex-col items-end text-right text-sm text-gray-900">
+      <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <span>Antes</span>
+        {isEditingPrevious ? (
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={previousDraft}
+            onChange={(event) => setPreviousDraft(event.target.value)}
+            onBlur={() => {
+              setIsEditingPrevious(false);
+              commitPrice(previousDraft, onPreviousPriceChange);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                setIsEditingPrevious(false);
+                commitPrice(previousDraft, onPreviousPriceChange);
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                setIsEditingPrevious(false);
+                setPreviousDraft(formatInputValue(previousPrice));
+              }
+            }}
+            autoFocus
+            className="h-6 w-24 rounded border border-slate-300 bg-white px-2 text-right text-xs font-semibold text-gray-900 focus-visible:ring-2 focus-visible:ring-primary"
+          />
+        ) : (
+          <button
+            type="button"
+            className="cursor-text rounded px-1 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+            onClick={() => setIsEditingPrevious(true)}
+          >
+            {typeof previousPrice === "number" ? previousPrice.toLocaleString("en-US") : "--"}
+          </button>
+        )}
+      </div>
+      <div className="flex items-baseline gap-1 text-base font-bold text-gray-900">
+        <span>S/.</span>
+        {isEditingCurrent ? (
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={currentDraft}
+            onChange={(event) => setCurrentDraft(event.target.value)}
+            onBlur={() => {
+              setIsEditingCurrent(false);
+              commitPrice(currentDraft, onPriceChange);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                setIsEditingCurrent(false);
+                commitPrice(currentDraft, onPriceChange);
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                setIsEditingCurrent(false);
+                setCurrentDraft(formatInputValue(currentPrice));
+              }
+            }}
+            autoFocus
+            className="h-7 w-24 rounded border border-slate-300 bg-white px-2 text-right text-base font-bold text-gray-900 focus-visible:ring-2 focus-visible:ring-primary"
+          />
+        ) : (
+          <button
+            type="button"
+            className="cursor-text rounded px-1 text-base font-bold text-gray-900 hover:bg-slate-100"
+            onClick={() => setIsEditingCurrent(true)}
+          >
+            {typeof currentPrice === "number" ? currentPrice.toLocaleString("en-US") : "--"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 
 

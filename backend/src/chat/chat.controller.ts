@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ChatService } from './chat.service';
@@ -13,8 +14,11 @@ import { CreateChatDto } from './dto/create-chat.dto';
 import { ChatGateway } from './chat.gateway';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('chat')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class ChatController {
   constructor(
     private readonly chatService: ChatService,
@@ -33,7 +37,7 @@ export class ChatController {
       req,
       tenant ?? undefined,
     );
-    this.chatGateway.server.emit('chat:receive', message);
+    this.chatGateway.emitMessageToConversation(message, tenant ?? undefined);
     return message;
   }
 

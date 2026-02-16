@@ -1,27 +1,29 @@
-import { getAuthHeaders } from '@/utils/auth-token';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { BACKEND_URL } from '@/lib/utils';
+import { authFetch, UnauthenticatedError } from '@/utils/auth-fetch';
 
 export async function getProfile() {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
-    method: 'POST',
-    headers,
-    credentials: 'include',
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    throw new Error('Error al obtener el perfil');
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/users/profile`, {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      throw new Error('Error al obtener el perfil');
+    }
+    return res.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
   }
-  return res.json();
 }
 
 export async function updateProfile(data: { username?: string; email?: string; phone?: string; image?: string }) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
+  const res = await authFetch(`${BACKEND_URL}/api/users/profile`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...headers },
-    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -47,12 +49,28 @@ export async function uploadProfileImage(file: File) {
   return res.json() as Promise<{ url: string }>;
 }
 
+export async function getClientActivity() {
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/clients/activity`, {
+      cache: 'no-store',
+    });
+
+    if (res.status === 401) return [];
+    if (!res.ok) throw new Error('Error al cargar la actividad');
+
+    return res.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
+  }
+}
+
 export async function changePassword(currentPassword: string, newPassword: string) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${BACKEND_URL}/api/users/password`, {
+  const res = await authFetch(`${BACKEND_URL}/api/users/password`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...headers },
-    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ currentPassword, newPassword }),
   });
   if (!res.ok) {

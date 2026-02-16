@@ -24,6 +24,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { useHelpAssistant } from "@/context/help-assistant-context"
 
 export function NavProjects({
   projects,
@@ -35,6 +36,12 @@ export function NavProjects({
   }[]
 }) {
   const { isMobile } = useSidebar()
+  const { setIsOpen } = useHelpAssistant()
+
+  const handleChatbotClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsOpen(true)
+  }
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -43,10 +50,20 @@ export function NavProjects({
         {projects.map((item) => (
           <SidebarMenuItem key={item.name}>
             <SidebarMenuButton asChild>
-              <a href={item.url}>
-                <item.icon />
-                <span>{item.name}</span>
-              </a>
+              {item.url === "#chatbot" ? (
+                <button
+                  onClick={handleChatbotClick}
+                  className="group relative flex w-full items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-sm font-medium outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <item.icon className="h-4 w-4 transition-transform group-hover:scale-110" />
+                  <span>{item.name}</span>
+                </button>
+              ) : (
+                <a href={item.url}>
+                  <item.icon />
+                  <span>{item.name}</span>
+                </a>
+              )}
             </SidebarMenuButton>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

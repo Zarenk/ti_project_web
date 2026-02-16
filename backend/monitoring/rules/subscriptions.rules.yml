@@ -1,0 +1,29 @@
+groups:
+  - name: subscriptions
+    rules:
+      - alert: SpikeSubscriptionCancellations
+        expr: increase(subscription_canceled_total[15m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Spike de cancelaciones en suscripciones"
+          description: "Se detectaron más de 5 cancelaciones en 15 minutos para {{ $labels.instance }}."
+
+      - alert: SubscriptionWebhookFailures
+        expr: increase(subscription_webhook_events_total{result="failed"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Webhook de suscripción fallido"
+          description: "Se detectó al menos un webhook fallido en los últimos 5 minutos (provider={{ $labels.provider }}, type={{ $labels.type }})."
+
+      - alert: SubscriptionDunningExhausted
+        expr: increase(subscription_dunning_attempts_total{result="retry_exhausted"}[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dunning agotado"
+          description: "Alguna suscripción agotó los reintentos de dunning en la última hora."

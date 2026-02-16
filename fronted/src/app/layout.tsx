@@ -8,8 +8,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { CartProvider } from "@/context/cart-context";
 import ConditionalFooter from "@/components/conditional-footer";
 import { AuthProvider } from "@/context/auth-context";
-import WhatsappButton from "@/components/whatsapp-button";
-import ChatButton from "@/components/ChatButton";
+import FooterControls from "@/components/footer-controls";
 import { MessagesProvider } from "@/context/messages-context";
 import { SiteSettingsProvider } from "@/context/site-settings-context";
 import { ThemeModeSync } from "./theme-mode-sync";
@@ -102,9 +101,7 @@ export default async function RootLayout({
                   >
                     <Toaster position="top-right" richColors /> {/* Configuración de Sonner */}
                     {children}
-                    <WhatsappButton />
-                    <ChatButton />
-                    <ConditionalFooter />
+                    <FooterControls />
                   </MaintenanceGate>
                 </MessagesProvider>
               </CartProvider>

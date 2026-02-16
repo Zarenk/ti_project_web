@@ -12,7 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2 } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
+import { Banknote, CreditCard, Landmark, Loader2, Smartphone } from "lucide-react";
 import { Sale } from "../columns";
 
 const parseNumber = (value: unknown): number => {
@@ -43,6 +44,21 @@ const getDetailTotal = (detail?: NonNullable<Sale["details"]>[number]): number =
   const computed = quantity * price;
 
   return Number.isFinite(computed) ? computed : 0;
+};
+
+const getPaymentIcon = (method?: string | null) => {
+  if (!method) {
+    return null;
+  }
+  const upper = method.toUpperCase();
+  if (upper.includes("EFECTIVO")) return <Banknote className="h-4 w-4 text-emerald-500" />;
+  if (upper.includes("TRANSFERENCIA")) return <Landmark className="h-4 w-4 text-sky-500" />;
+  if (upper.includes("VISA")) return <BrandLogo src="/icons/visa.png" alt="Visa" className="h-4 w-4" />;
+  if (upper.includes("YAPE")) return <BrandLogo src="/icons/yape.png" alt="Yape" className="h-4 w-4" />;
+  if (upper.includes("PLIN")) return <BrandLogo src="/icons/plin.png" alt="Plin" className="h-4 w-4" />;
+  if (upper.includes("TARJETA")) return <CreditCard className="h-4 w-4 text-indigo-500" />;
+  if (upper.includes("APP") || upper.includes("BILLETERA")) return <Smartphone className="h-4 w-4 text-purple-500" />;
+  return null;
 };
 
 export type ViewSaleDetailHandler = (sale: Sale) => void;
@@ -493,14 +509,20 @@ export function SaleDetailDialog({
                       </tr>
                     </thead>
                     <tbody>
-                      {aggregatedPayments.map((payment) => {
-                        const paymentCurrency = payment.currency?.toUpperCase();
-                        return (
-                          <tr key={payment.key} className="border-t">
-                            <td className="px-4 py-2">{payment.methodName}</td>
-                            <td className="px-4 py-2 uppercase">
-                              {paymentCurrency ?? currency}
-                            </td>
+                        {aggregatedPayments.map((payment) => {
+                          const paymentCurrency = payment.currency?.toUpperCase();
+                          const icon = getPaymentIcon(payment.methodName);
+                          return (
+                            <tr key={payment.key} className="border-t">
+                              <td className="px-4 py-2">
+                                <div className="flex items-center gap-2">
+                                  {icon}
+                                  <span>{payment.methodName}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-2 uppercase">
+                                {paymentCurrency ?? currency}
+                              </td>
                             <td className="px-4 py-2 font-semibold">
                               {formatPaymentAmount(payment.amount, paymentCurrency)}
                             </td>

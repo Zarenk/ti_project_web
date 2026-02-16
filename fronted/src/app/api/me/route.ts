@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
+import { BACKEND_URL } from '@/lib/utils'
 
 export async function getCurrentUser(request: Request) {
   let token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
@@ -12,8 +11,8 @@ export async function getCurrentUser(request: Request) {
   }
   if (!token) return null
 
-  const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
-    method: 'POST',
+  const res = await fetch(`${BACKEND_URL}/api/users/me`, {
+    method: 'GET',
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok) return null

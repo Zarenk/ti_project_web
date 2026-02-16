@@ -1,0 +1,13 @@
+{
+  "name": "snowflake-platform",
+  "description": "Build on Snowflakes AI Data Cloud with snow CLI, Cortex AI (COMPLETE, SUMMARIZE, AI_FILTER), Native Apps, and Snowpark. Covers JWT auth, account identifiers, Marketplace publishing. Prevents 11 documented errors. Use when: Snowflake apps, Cortex AI SQL, Native App publishing. Troubleshoot: JWT auth failures, account locator confusion, memory leaks, AI throttling.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jeremy Dawes",
+    "email": "jeremy@jezweb.net"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jezweb/claude-skills",
+  "keywords": [],
+  "agents": "./agents/"
+}

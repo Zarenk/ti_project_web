@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { MODULE_PERMISSION_LABELS, useEnforcedModulePermission } from "@/hooks/use-enforced-module-permission"
 import type { ModulePermissionKey } from "@/hooks/use-module-permission"
+import { useAuth } from "@/context/auth-context"
 
 interface GuardOptions {
   moduleLabel?: string
@@ -21,16 +22,17 @@ export function ModulePermissionGate({
   module,
   children,
   moduleLabel,
-  redirectTo = "/unauthorized",
+  redirectTo = "/dashboard",
   showToast = true,
 }: ModulePermissionGateProps) {
   const router = useRouter()
   const { allowed, loading } = useEnforcedModulePermission(module)
+  const { authPending, sessionExpiring } = useAuth()
   const label = useMemo(() => moduleLabel ?? MODULE_PERMISSION_LABELS[module], [module, moduleLabel])
   const hasWarnedRef = useRef(false)
 
   useEffect(() => {
-    if (loading) {
+    if (loading || authPending || sessionExpiring) {
       return
     }
 
@@ -47,9 +49,9 @@ export function ModulePermissionGate({
     } else {
       hasWarnedRef.current = false
     }
-  }, [allowed, loading, label, redirectTo, router, showToast])
+  }, [allowed, authPending, loading, label, redirectTo, router, sessionExpiring, showToast])
 
-  if (loading || !allowed) {
+  if (loading || authPending || sessionExpiring || !allowed) {
     return null
   }
 

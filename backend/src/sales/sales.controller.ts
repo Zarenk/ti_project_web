@@ -10,6 +10,7 @@ import {
   Req,
   Query,
   Delete,
+  Logger,
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
@@ -18,6 +19,8 @@ import { RolesGuard } from 'src/users/roles.guard';
 import { Roles } from 'src/users/roles.decorator';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { EntityOwnershipGuard, EntityModel, EntityIdParam } from 'src/common/guards/entity-ownership.guard';
 
 const SALES_ALLOWED_ROLES = [
   'ADMIN',
@@ -26,24 +29,30 @@ const SALES_ALLOWED_ROLES = [
   'SUPER_ADMIN_ORG',
 ] as const;
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, TenantRequiredGuard)
 @Roles(...SALES_ALLOWED_ROLES)
 @ModulePermission('sales')
 @Controller('sales')
 export class SalesController {
+  private readonly logger = new Logger(SalesController.name);
+
   constructor(private readonly salesService: SalesService) {}
 
   @Post()
   async createSale(
     @Body() createSaleDto: CreateSaleDto,
+    @CurrentTenant() fullTenant: any,
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
+    const isSuperAdmin = fullTenant?.isSuperAdmin ?? false;
+    this.logger.debug(`[POST /sales] TenantContext received: isSuperAdmin=${isSuperAdmin}, fullTenant=${JSON.stringify(fullTenant)}`);
     return this.salesService.createSale({
       ...createSaleDto,
       organizationId:
         createSaleDto.organizationId ?? organizationId ?? undefined,
       companyId: createSaleDto.companyId ?? companyId ?? undefined,
+      isSuperAdmin,
     });
   }
 
@@ -91,6 +100,92 @@ export class SalesController {
     @CurrentTenant('companyId') companyId: number | null,
   ) {
     return this.salesService.getMonthlySalesTotal(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('monthly-profit')
+  async getMonthlySalesProfit(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getMonthlySalesProfit(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('total/from/:from/to/:to')
+  async getSalesTotalByRange(
+    @Param('from') from: string,
+    @Param('to') to: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getSalesTotalByRange(
+      new Date(from),
+      new Date(to),
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('count/from/:from/to/:to')
+  async getSalesCountByRange(
+    @Param('from') from: string,
+    @Param('to') to: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getSalesCountByRange(
+      new Date(from),
+      new Date(to),
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('taxes/from/:from/to/:to')
+  async getSalesTaxByRange(
+    @Param('from') from: string,
+    @Param('to') to: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getSalesTaxByRange(
+      new Date(from),
+      new Date(to),
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('clients/from/:from/to/:to')
+  async getClientStatsByRange(
+    @Param('from') from: string,
+    @Param('to') to: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getClientStatsByRange(
+      new Date(from),
+      new Date(to),
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('profit/from/:from/to/:to')
+  async getSalesProfitByRange(
+    @Param('from') from: string,
+    @Param('to') to: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.salesService.getSalesProfitByRange(
+      new Date(from),
+      new Date(to),
       organizationId ?? undefined,
       companyId ?? undefined,
     );
@@ -241,6 +336,44 @@ export class SalesController {
     );
   }
 
+  @Get('profit/products')
+  async getProductsProfitByRange(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('q') q?: string,
+    @Query('page') page = '1',
+    @Query('pageSize') pageSize = '25',
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+  ) {
+    const p = Number.parseInt(page as any) || 1
+    const ps = Number.parseInt(pageSize as any) || 25
+    return this.salesService.getProductsProfitByRange(
+      from ? new Date(from) : undefined,
+      to ? new Date(to) : undefined,
+      q ?? undefined,
+      p,
+      ps,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    )
+  }
+
+  @Get('profit/chart/:from/:to')
+  async getProfitChartByDateRange(
+    @Param('from') from: string,
+    @Param('to') to: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+  ) {
+    return this.salesService.getDailyProfitByDateRange(
+      new Date(from),
+      new Date(to),
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    )
+  }
+
   @Get('transactions')
   getSalesTransactions(
     @Query('from') from?: string,
@@ -300,12 +433,16 @@ export class SalesController {
   }
 
   @Delete(':id')
+  @UseGuards(EntityOwnershipGuard)
+  @EntityModel('sales')
+  @EntityIdParam('id')
   async deleteSale(
     @Param('id', ParseIntPipe) id: number,
     @Req() req,
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
+    // 🔒 Ownership validado por EntityOwnershipGuard
     const userId = req?.user?.userId;
     return this.salesService.deleteSale(
       id,

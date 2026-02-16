@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -21,8 +22,11 @@ import { ClientService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('clients')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class ClientController {
   constructor(private readonly clientService: ClientService) {}
 
@@ -119,6 +123,11 @@ export class ClientController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
+    if (!organizationId && !companyId) {
+      throw new BadRequestException(
+        'Contexto de tenant no disponible para listar clientes.',
+      );
+    }
     return this.clientService.findAll(
       organizationId ?? undefined,
       companyId ?? undefined,
@@ -130,6 +139,11 @@ export class ClientController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
+    if (!organizationId && !companyId) {
+      throw new BadRequestException(
+        'Contexto de tenant no disponible para listar clientes.',
+      );
+    }
     return this.clientService.findRegistered(
       organizationId ?? undefined,
       companyId ?? undefined,
@@ -141,6 +155,11 @@ export class ClientController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
+    if (!organizationId && !companyId) {
+      throw new BadRequestException(
+        'Contexto de tenant no disponible para listar clientes.',
+      );
+    }
     return this.clientService.findAllForChat(
       organizationId ?? undefined,
       companyId ?? undefined,

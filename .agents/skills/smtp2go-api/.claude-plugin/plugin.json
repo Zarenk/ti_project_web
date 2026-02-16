@@ -1,0 +1,12 @@
+{
+  "name": "smtp2go-api",
+  "description": "Send transactional emails and SMS via SMTP2GO API. Covers authentication, /email/send and /email/mime endpoints, template management, attachments (base64/URL), webhooks for delivery events, statistics, and suppressions. Use when sending emails from Cloudflare Workers, building notifications, tracking delivery status, handling bounces. Prevents auth errors, attachment encoding issues.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jeremy Dawes",
+    "email": "jeremy@jezweb.net"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jezweb/claude-skills",
+  "keywords": []
+}

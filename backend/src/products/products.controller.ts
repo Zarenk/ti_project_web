@@ -11,6 +11,7 @@ import {
   UploadedFile,
   Req,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuditAction } from '@prisma/client';
@@ -18,6 +19,8 @@ import { ActivityService } from '../activity/activity.service';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { UpdateProductVerticalMigrationDto } from './dto/update-product-vertical-migration.dto';
+import { ValidateProductNameDto } from './dto/validate-product-name.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -26,9 +29,12 @@ import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { EntityOwnershipGuard, EntityModel, EntityIdParam } from 'src/common/guards/entity-ownership.guard';
 
 @ModulePermission(['inventory', 'catalog'])
 @Controller('products')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
@@ -60,6 +66,8 @@ export class ProductsController {
   }
 
   @Post('verify-or-create-products')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
   async verifyOrCreateProducts(
     @Body()
     products: {
@@ -71,6 +79,15 @@ export class ProductsController {
     }[],
   ) {
     return this.productsService.verifyOrCreateProducts(products);
+  }
+
+  @Post('validate-name')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  async validateProductName(
+    @Body() dto: ValidateProductNameDto,
+  ): Promise<{ nameAvailable: boolean }> {
+    return this.productsService.validateProductName(dto.name, dto.productId);
   }
 
   @Post('upload-image')
@@ -105,8 +122,14 @@ export class ProductsController {
 
   @Get()
   @ApiResponse({ status: 200, description: 'Return all products' }) // Swagger
-  findAll() {
-    return this.productsService.findAll();
+  findAll(@Query('migrationStatus') migrationStatus?: string) {
+    const normalized =
+      migrationStatus === 'legacy' || migrationStatus === 'migrated'
+        ? migrationStatus
+        : undefined;
+    return this.productsService.findAll({
+      migrationStatus: normalized,
+    });
   }
 
   @Get(':id')
@@ -170,9 +193,12 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, EntityOwnershipGuard)
   @Roles('ADMIN')
+  @EntityModel('product')
+  @EntityIdParam('id')
   async remove(@Param('id') id: string, @Req() req: Request) {
+    // 🔒 Ownership validado por EntityOwnershipGuard
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) {
       throw new BadRequestException('El ID debe ser un número válido.');
@@ -180,26 +206,46 @@ export class ProductsController {
 
     const before = await this.productsService.findOne(numericId);
     const removed = await this.productsService.remove(numericId);
-    await this.activityService.log(
-      {
-        actorId: (req as any)?.user?.userId,
-        actorEmail: (req as any)?.user?.username,
-        entityType: 'Product',
-        entityId: numericId.toString(),
-        action: AuditAction.DELETED,
-        summary: `Producto ${before?.name ?? numericId} eliminado`,
-        diff: { before } as any,
-      },
-      req,
-    );
+    try {
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Product',
+          entityId: numericId.toString(),
+          action: AuditAction.DELETED,
+          summary: `Producto ${before?.name ?? numericId} eliminado`,
+          diff: { before } as any,
+        },
+        req,
+      );
+    } catch {
+      // Activity log is non-critical — don't fail the delete
+    }
     return removed;
   }
 
   @Delete()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  async removes(@Body('ids') ids: number[]) {
-    return this.productsService.removes(ids);
+  async removes(@Body('ids') ids: number[], @Req() req: Request) {
+    const result = await this.productsService.removes(ids);
+    try {
+      await this.activityService.log(
+        {
+          actorId: (req as any)?.user?.userId,
+          actorEmail: (req as any)?.user?.username,
+          entityType: 'Product',
+          entityId: ids.join(','),
+          action: AuditAction.DELETED,
+          summary: `${ids.length} producto(s) eliminado(s) en lote: IDs [${ids.join(', ')}]`,
+        },
+        req,
+      );
+    } catch {
+      // Activity log is non-critical
+    }
+    return result;
   }
 
   @Patch(':id/price-sell')
@@ -243,5 +289,34 @@ export class ProductsController {
       id: numericId,
       categoryId,
     });
+  }
+
+  @Patch(':id/vertical-migration')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  markVerticalMigration(@Param('id') id: string) {
+    const numericId = Number(id);
+    if (!Number.isFinite(numericId)) {
+      throw new BadRequestException('El ID debe ser un número válido.');
+    }
+    return this.productsService.markProductVerticalMigrated(numericId);
+  }
+
+  @Post(':id/vertical-migration')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  async updateVerticalMigration(
+    @Param('id') id: string,
+    @Body() dto: UpdateProductVerticalMigrationDto,
+  ) {
+    const numericId = Number(id);
+    if (!Number.isFinite(numericId)) {
+      throw new BadRequestException('El ID debe ser un número válido.');
+    }
+    return this.productsService.updateProductVerticalMigration(
+      numericId,
+      dto.extraAttributes,
+      dto.markMigrated ?? false,
+    );
   }
 }

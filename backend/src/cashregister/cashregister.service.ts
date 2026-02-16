@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -15,10 +16,45 @@ import { CreateCashTransactionDto } from './dto/create-cashtransactions.dto';
 import { CreateCashClosureDto } from './dto/create-cashclosure.dto';
 import { CreateCashRegisterDto } from './dto/create-cashregister.dto';
 import { UpdateCashRegisterDto } from './dto/update-cashregister.dto';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 
 @Injectable()
 export class CashregisterService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly verticalConfig: VerticalConfigService,
+  ) {}
+
+  private async ensureCashRegisterFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
+      return;
+    }
+
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.cashRegister === false) {
+      throw new ForbiddenException(
+        'El modulo de caja registradora no esta habilitado para esta empresa.',
+      );
+    }
+  }
+
+  private async ensureSalesFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
+      return;
+    }
+
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.sales === false) {
+      throw new ForbiddenException(
+        'El modulo de ventas no esta habilitado para esta empresa.',
+      );
+    }
+  }
+
   private formatPaymentMethods(
     paymentMethods: Array<
       Prisma.CashTransactionPaymentMethodGetPayload<{
@@ -140,6 +176,8 @@ export class CashregisterService {
       fallbacks: [store.companyId ?? null],
       mismatchMessage: 'La tienda pertenece a otra compania.',
     });
+
+    await this.ensureCashRegisterFeatureEnabled(companyId);
     const existingWhere: Prisma.CashRegisterWhereInput = {
       storeId,
       status: 'ACTIVE',
@@ -182,6 +220,8 @@ export class CashregisterService {
     storeId: number,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const organizationFilter = this.buildOrganizationFilter(
       options?.organizationId,
     ) as Prisma.CashRegisterWhereInput;
@@ -211,6 +251,8 @@ export class CashregisterService {
     endOfDay: Date,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const organizationFilter = this.buildOrganizationFilter(
       options?.organizationId,
     ) as Prisma.CashTransactionWhereInput;
@@ -342,7 +384,7 @@ export class CashregisterService {
               return Number.isFinite(numericAmount) && numericAmount !== 0;
             }),
         }),
-        voucher: tx.salePayments[0]?.sale?.invoices[0]
+        voucher: tx.salePayments[0]?.sale?.invoices?.[0]
           ? `${tx.salePayments[0].sale.invoices[0].serie}-${tx.salePayments[0].sale.invoices[0].nroCorrelativo}`
           : null,
         clientName: linkedClient?.name ?? tx.clientName ?? null,
@@ -386,6 +428,8 @@ export class CashregisterService {
     storeId: number,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashRegisterWhereInput = {
       storeId,
       status: 'ACTIVE',
@@ -415,6 +459,8 @@ export class CashregisterService {
     organizationId?: number | null;
     companyId?: number | null;
   }) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashRegisterWhereInput = {
       ...(this.buildOrganizationFilter(
         options?.organizationId,
@@ -440,6 +486,8 @@ export class CashregisterService {
     id: number,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashRegisterWhereInput = {
       id,
       ...(this.buildOrganizationFilter(
@@ -508,6 +556,8 @@ export class CashregisterService {
       mismatchMessage: 'La caja pertenece a otra compania.',
     });
 
+    await this.ensureCashRegisterFeatureEnabled(companyId);
+
     const targetStoreId =
       updatePayload.storeId ?? normalizedExisting.storeId ?? null;
     if (targetStoreId !== null) {
@@ -570,6 +620,8 @@ export class CashregisterService {
       options?.companyId !== undefined
         ? (options.companyId ?? null)
         : (normalizedExisting.store?.companyId ?? null);
+
+    await this.ensureCashRegisterFeatureEnabled(companyId);
     logOrganizationContext({
       service: CashregisterService.name,
       operation: 'remove',
@@ -649,6 +701,8 @@ export class CashregisterService {
       mismatchMessage: 'La caja pertenece a otra compania.',
     });
 
+    await this.ensureCashRegisterFeatureEnabled(companyId);
+
     logOrganizationContext({
       service: CashregisterService.name,
       operation: 'createTransaction',
@@ -667,48 +721,66 @@ export class CashregisterService {
       );
     }
 
-    const transaction = await this.prisma.cashTransaction.create({
-      data: {
-        cashRegisterId,
-        type,
-        amount,
-        description: description || '',
-        userId,
-        createdAt: new Date(),
-        clientName: clientName || null,
-        clientDocument: clientDocument || null,
-        clientDocumentType: clientDocumentType || null,
-        organizationId,
-      } as Prisma.CashTransactionUncheckedCreateInput,
-    });
-
-    for (const method of paymentMethods) {
-      let paymentMethodRecord = await this.prisma.paymentMethod.findFirst({
-        where: { name: method.method },
+    // 🔒 Usar transacción para prevenir race conditions en currentBalance
+    const transaction = await this.prisma.$transaction(async (prisma) => {
+      // Re-validar que la caja sigue activa dentro de la transacción (prevenir TOCTOU)
+      const freshCashRegister = await prisma.cashRegister.findUnique({
+        where: { id: cashRegisterId },
+        select: { status: true },
       });
-      if (!paymentMethodRecord) {
-        paymentMethodRecord = await this.prisma.paymentMethod.create({
+
+      if (!freshCashRegister || freshCashRegister.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          'La caja fue cerrada durante la operación.',
+        );
+      }
+
+      const cashTransaction = await prisma.cashTransaction.create({
+        data: {
+          cashRegisterId,
+          type,
+          amount,
+          description: description || '',
+          userId,
+          createdAt: new Date(),
+          clientName: clientName || null,
+          clientDocument: clientDocument || null,
+          clientDocumentType: clientDocumentType || null,
+          organizationId,
+        } as Prisma.CashTransactionUncheckedCreateInput,
+      });
+
+      for (const method of paymentMethods) {
+        let paymentMethodRecord = await prisma.paymentMethod.findFirst({
+          where: { name: method.method },
+        });
+        if (!paymentMethodRecord) {
+          paymentMethodRecord = await prisma.paymentMethod.create({
+            data: {
+              name: method.method,
+              isActive: true,
+            },
+          });
+        }
+
+        await prisma.cashTransactionPaymentMethod.create({
           data: {
-            name: method.method,
-            isActive: true,
+            cashTransactionId: cashTransaction.id,
+            paymentMethodId: paymentMethodRecord.id,
+            amount: new Prisma.Decimal(method.amount),
           },
         });
       }
 
-      await this.prisma.cashTransactionPaymentMethod.create({
+      // Actualizar saldo dentro de la misma transacción (atomicidad garantizada)
+      await prisma.cashRegister.update({
+        where: { id: cashRegisterId },
         data: {
-          cashTransactionId: transaction.id,
-          paymentMethodId: paymentMethodRecord.id,
-          amount: new Prisma.Decimal(method.amount),
+          currentBalance: newBalance,
         },
       });
-    }
 
-    await this.prisma.cashRegister.update({
-      where: { id: cashRegisterId },
-      data: {
-        currentBalance: newBalance,
-      },
+      return cashTransaction;
     });
 
     return transaction;
@@ -718,6 +790,8 @@ export class CashregisterService {
     organizationId?: number | null;
     companyId?: number | null;
   }) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashTransactionWhereInput = {
       ...(this.buildOrganizationFilter(
         options?.organizationId,
@@ -745,6 +819,8 @@ export class CashregisterService {
     cashRegisterId: number,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashTransactionWhereInput = {
       cashRegisterId,
       ...(this.buildOrganizationFilter(
@@ -826,6 +902,8 @@ export class CashregisterService {
         fallbacks: [(cashRegister as any).store?.companyId ?? null],
         mismatchMessage: 'La caja pertenece a otra compania.',
       });
+
+      await this.ensureCashRegisterFeatureEnabled(companyId);
       logOrganizationContext({
         service: CashregisterService.name,
         operation: 'createClosure',
@@ -924,7 +1002,7 @@ export class CashregisterService {
     let candidate = `${normalizedBase} - Turno ${timestamp}`;
     // Garantiza nombres unicos en caso de cierres simultaneos
     while (
-      await prisma.cashRegister.findUnique({
+      await prisma.cashRegister.findFirst({
         where: { name: candidate },
       })
     ) {
@@ -937,6 +1015,8 @@ export class CashregisterService {
     storeId: number,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const organizationFilter = this.buildOrganizationFilter(
       options?.organizationId,
     ) as Prisma.CashClosureWhereInput;
@@ -973,6 +1053,8 @@ export class CashregisterService {
     date: Date,
     options?: { organizationId?: number | null; companyId?: number | null },
   ) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
@@ -1010,6 +1092,8 @@ export class CashregisterService {
     organizationId?: number | null;
     companyId?: number | null;
   }) {
+    await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
+
     const where: Prisma.CashClosureWhereInput = {
       ...(this.buildOrganizationFilter(
         options?.organizationId,

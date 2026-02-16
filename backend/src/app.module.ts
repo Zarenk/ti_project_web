@@ -1,6 +1,7 @@
-﻿import { Module } from '@nestjs/common';
+﻿import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
 import { DefaultAdminService } from './users/default-admin.service';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ActiveTrackerInterceptor } from './common/interceptors/active-tracker.interceptor';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ProductsModule } from './products/products.module';
@@ -8,6 +9,7 @@ import { UsersModule } from './users/users.module';
 import { CategoryModule } from './category/category.module';
 import { StoresModule } from './stores/stores.module';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ProvidersModule } from './providers/providers.module';
 import { EntriesModule } from './entries/entries.module';
 import { InventoryModule } from './inventory/inventory.module';
@@ -19,7 +21,7 @@ import { SeriesModule } from './series/series.module';
 import { ExchangeModule } from './exchange/exchange.module';
 import { PaymentmethodsModule } from './paymentmethods/paymentmethods.module';
 import { CashregisterModule } from './cashregister/cashregister.module';
-import { BarcodeGateway } from './barcode/barcode.gateway';
+import { BarcodeModule } from './barcode/barcode.module';
 import { GuideModule } from './guide/guide.module';
 import { ProductspecsModule } from './productspecs/productspecs.module';
 import { ProductofeaturesModule } from './productofeatures/productofeatures.module';
@@ -47,14 +49,30 @@ import { AccReportsModule } from './acc-reports/acc-reports.module';
 import { KeywordsModule } from './keywords/keywords.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { ModulePermissionsGuard } from './common/guards/module-permissions.guard';
+import { TenantRequiredGuard } from './common/guards/tenant-required.guard';
 import { SystemMaintenanceModule } from './system-maintenance/system-maintenance.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { TenantContextGuard } from './tenancy/tenant-context.guard';
 import { LookupsModule } from './lookups/lookups.module';
+import { InvoiceTemplatesModule } from './invoice-templates/invoice-templates.module';
+import { InvoiceExtractionModule } from './invoice-extraction/invoice-extraction.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { PublicSignupModule } from './public-signup/public-signup.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { PublicRateLimitMiddleware } from './common/middleware/public-rate-limit.middleware';
+import { RestaurantTablesModule } from './restaurant-tables/restaurant-tables.module';
+import { KitchenStationsModule } from './kitchen-stations/kitchen-stations.module';
+import { IngredientsModule } from './ingredients/ingredients.module';
+import { RecipeItemsModule } from './recipe-items/recipe-items.module';
+import { RestaurantOrdersModule } from './restaurant-orders/restaurant-orders.module';
+import { QuotesModule } from './quotes/quotes.module';
+import { HelpModule } from './help/help.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Habilita el uso global de variables de entorno
+    ScheduleModule.forRoot(),
     ProductsModule,
     UsersModule,
     CategoryModule,
@@ -96,11 +114,24 @@ import { LookupsModule } from './lookups/lookups.module';
     SystemMaintenanceModule,
     TenancyModule,
     LookupsModule,
+    InvoiceTemplatesModule,
+    InvoiceExtractionModule,
+    SubscriptionsModule,
+    PublicSignupModule,
+    OnboardingModule,
+    DashboardModule,
+    RestaurantTablesModule,
+    KitchenStationsModule,
+    IngredientsModule,
+    RecipeItemsModule,
+    RestaurantOrdersModule,
+    QuotesModule,
+    BarcodeModule,
+    HelpModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [
     AppService,
-    BarcodeGateway,
     PrismaService,
     {
       provide: APP_GUARD,
@@ -110,7 +141,21 @@ import { LookupsModule } from './lookups/lookups.module';
       provide: APP_GUARD,
       useClass: ModulePermissionsGuard,
     },
+    TenantRequiredGuard,
     DefaultAdminService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ActiveTrackerInterceptor,
+    },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(PublicRateLimitMiddleware).forRoutes(
+      { path: 'public/(.*)', method: RequestMethod.ALL },
+      { path: 'contact', method: RequestMethod.ALL },
+      { path: 'newsletter', method: RequestMethod.ALL },
+      { path: 'orders/(.*)', method: RequestMethod.ALL },
+    );
+  }
+}

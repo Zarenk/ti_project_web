@@ -18,8 +18,10 @@ import { CreateCashClosureDto } from './dto/create-cashclosure.dto';
 import { CreateCashTransactionDto } from './dto/create-cashtransactions.dto';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('cashregister')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class CashregisterController {
   constructor(private readonly cashregisterService: CashregisterService) {}
 

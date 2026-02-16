@@ -56,7 +56,7 @@ export default function UserNewPage(): React.ReactElement | null {
   if (checking) {
     return (
       <div className="flex min-h-screen items-start justify-center p-3">
-        <Card className="w-full max-w-lg sm:max-w-md md:max-w-lg lg:max-w-2xl">
+        <Card className="w-full max-w-lg sm:max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
           <CardHeader className="pb-2">
             <Skeleton className="mx-auto mt-5 h-7 w-40 rounded" />
           </CardHeader>
@@ -76,7 +76,7 @@ export default function UserNewPage(): React.ReactElement | null {
 
   return (
     <div className="flex min-h-screen items-start justify-center p-3">
-      <Card className="w-full max-w-lg sm:max-w-md md:max-w-lg lg:max-w-2xl">
+      <Card className="w-full max-w-lg sm:max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
         <CardHeader className="pb-2 sm:pb-2">
           <CardTitle className="pt-5 text-center text-xl font-bold">
             Crear Usuario

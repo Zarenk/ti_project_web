@@ -1,4 +1,6 @@
 import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
@@ -351,14 +353,18 @@ async function ensureOrganization(
   const storeIds = new Map<string, number>();
   for (const store of fixture.stores) {
     const savedStore = await prisma.store.upsert({
-      where: { name: store.name },
+      where: {
+        organizationId_name: {
+          organizationId: organization.id,
+          name: store.name,
+        },
+      },
       update: {
         status: store.status ?? 'ACTIVE',
         phone: store.phone ?? null,
         adress: store.adress ?? null,
         email: store.email ?? null,
         website: store.website ?? null,
-        organizationId: organization.id,
       } as any,
       create: {
         name: store.name,
@@ -377,7 +383,12 @@ async function ensureOrganization(
 
   for (const provider of fixture.providers) {
     await prisma.provider.upsert({
-      where: { documentNumber: provider.documentNumber },
+      where: {
+        organizationId_documentNumber: {
+          organizationId: organization.id,
+          documentNumber: provider.documentNumber,
+        },
+      },
       update: {
         name: provider.name,
         document: provider.document,
@@ -753,7 +764,19 @@ function filterOrganizations(
 export async function applyMultiTenantFixtures(
   options: ApplyFixturesOptions = {},
 ): Promise<MultiTenantFixtureSummary> {
-  const prisma = (options.prisma ?? new PrismaClient()) as PrismaSeedClient;
+  // Create PrismaClient with adapter for Prisma 7.x
+  let prisma: PrismaSeedClient;
+  if (options.prisma) {
+    prisma = options.prisma as PrismaSeedClient;
+  } else {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('DATABASE_URL environment variable is required');
+    }
+    const pool = new Pool({ connectionString });
+    const adapter = new PrismaPg(pool);
+    prisma = new PrismaClient({ adapter }) as PrismaSeedClient;
+  }
   const logger = options.logger ?? console.log;
   const shouldDisconnect = !options.prisma;
 

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import Navbar from "@/components/navbar"
+import { sendContactMessage } from "./contact.api"
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -31,21 +32,12 @@ export default function ContactPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      })
-      if (res.ok) {
-        alert('Mensaje enviado')
-        setFormData({ nombre: '', email: '', telefono: '', asunto: '', mensaje: '' })
-      } else {
-        const data = await res.json()
-        alert(data.error || 'Error al enviar mensaje')
-      }
-    } catch (err) {
+      await sendContactMessage(formData)
+      alert('Mensaje enviado')
+      setFormData({ nombre: '', email: '', telefono: '', asunto: '', mensaje: '' })
+    } catch (err: any) {
       console.error('Error sending message:', err)
-      alert('Error al enviar mensaje')
+      alert(err?.message || 'Error al enviar mensaje')
     }
   }
 

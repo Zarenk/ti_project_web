@@ -58,12 +58,18 @@ export class AccountsService {
   async create(data: {
     code: string;
     name: string;
+    accountType: 'ACTIVO' | 'PASIVO' | 'PATRIMONIO' | 'INGRESO' | 'GASTO';
+    organizationId: number;
+    companyId?: number | null;
     parentId?: number | null;
   }): Promise<AccountNode> {
     const account = await this.prisma.account.create({
       data: {
         code: data.code,
         name: data.name,
+        accountType: data.accountType,
+        organizationId: data.organizationId,
+        companyId: data.companyId ?? null,
         parentId: data.parentId ?? null,
         level: data.code.length,
         isPosting: data.code.length >= 4,

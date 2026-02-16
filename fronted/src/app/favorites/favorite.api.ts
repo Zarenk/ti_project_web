@@ -1,5 +1,3 @@
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
-
 import { getAuthHeaders } from '@/utils/auth-token'
 
 export async function getFavorites() {

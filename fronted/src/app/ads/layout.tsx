@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { MODULE_PERMISSION_LABELS, useEnforcedModulePermission } from "@/hooks/use-enforced-module-permission"
 import { useRBAC } from "../hooks/use-rbac"
 import { useFeatureFlag } from "../hooks/use-feature-flags"
+import { useAuth } from "@/context/auth-context"
 
 const MODULE_KEY = "ads"
 
@@ -14,8 +15,9 @@ export default function AdsLayout({ children }: { children: ReactNode }) {
   const enabled = useFeatureFlag("ads")
   const roleAllowed = useRBAC(["admin", "marketing"])
   const hasWarnedRef = useRef(false)
+  const { authPending, sessionExpiring } = useAuth()
 
-  const isPending = loading || roleAllowed === undefined
+  const isPending = loading || roleAllowed === undefined || authPending || sessionExpiring
   const allowed = moduleAllowed && enabled && roleAllowed === true
   const router = useRouter()
 

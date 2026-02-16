@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { spawn } from 'child_process';
 import { Readable } from 'stream';
 import { PrismaService } from 'src/prisma/prisma.service';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 export interface GeneratedBackup {
   stream: Readable;
@@ -88,29 +88,23 @@ export class SystemMaintenanceService {
           continue;
         }
 
-        const organizationColumn = columnMap.get('organizationid');
-        const companyColumn = columnMap.get('companyid');
+        const conditions = this.buildSafeWhereConditions(
+          columnMap,
+          organizationId,
+          companyId,
+        );
 
-        const clauses: string[] = [];
-        if (organizationColumn && organizationId != null) {
-          clauses.push(`"${organizationColumn}" = ${organizationId}`);
-        }
-        if (companyColumn && companyId != null) {
-          clauses.push(`"${companyColumn}" = ${companyId}`);
-        }
-
-        if (clauses.length === 0) {
+        if (conditions.length === 0) {
           continue;
         }
 
-        const whereClause =
-          clauses.length === 1
-            ? clauses[0]
-            : clauses.map((clause) => `(${clause})`).join(' OR ');
+        // 🔒 Usar Prisma.sql para prevenir SQL injection
+        const tableName = Prisma.raw(`"${table}"`);
+        const whereConditions = Prisma.join(conditions, ' OR ');
 
-        const rows = await tx.$queryRawUnsafe<Record<string, unknown>[]>(`
-            SELECT * FROM "${table}" WHERE ${whereClause}
-          `);
+        const rows = await tx.$queryRaw<Record<string, unknown>[]>(
+          Prisma.sql`SELECT * FROM ${tableName} WHERE ${whereConditions}`,
+        );
 
         if (rows && rows.length > 0) {
           snapshot[table] = rows;
@@ -167,28 +161,22 @@ export class SystemMaintenanceService {
           continue;
         }
 
-        const organizationColumn = columnMap.get('organizationid');
-        const companyColumn = columnMap.get('companyid');
+        const conditions = this.buildSafeWhereConditions(
+          columnMap,
+          organizationId,
+          companyId,
+        );
 
-        const clauses: string[] = [];
-        if (organizationColumn && organizationId != null) {
-          clauses.push(`"${organizationColumn}" = ${organizationId}`);
-        }
-        if (companyColumn && companyId != null) {
-          clauses.push(`"${companyColumn}" = ${companyId}`);
-        }
-
-        if (clauses.length === 0) {
+        if (conditions.length === 0) {
           continue;
         }
 
-        const whereClause =
-          clauses.length === 1
-            ? clauses[0]
-            : clauses.map((clause) => `(${clause})`).join(' OR ');
+        // 🔒 Usar Prisma.sql para prevenir SQL injection
+        const tableName = Prisma.raw(`"${table}"`);
+        const whereConditions = Prisma.join(conditions, ' OR ');
 
-        const countRows = await tx.$queryRawUnsafe<Array<{ count: bigint }>>(
-          `SELECT COUNT(*)::bigint as count FROM "${table}" WHERE ${whereClause}`,
+        const countRows = await tx.$queryRaw<Array<{ count: bigint }>>(
+          Prisma.sql`SELECT COUNT(*)::bigint as count FROM ${tableName} WHERE ${whereConditions}`,
         );
         const count = Number(countRows?.[0]?.count ?? 0);
 
@@ -198,8 +186,8 @@ export class SystemMaintenanceService {
 
         deletedCounts[table] = count;
 
-        await tx.$executeRawUnsafe(
-          `DELETE FROM "${table}" WHERE ${whereClause}`,
+        await tx.$executeRaw(
+          Prisma.sql`DELETE FROM ${tableName} WHERE ${whereConditions}`,
         );
       }
     });
@@ -215,6 +203,34 @@ export class SystemMaintenanceService {
       return value;
     }
     return null;
+  }
+
+  /**
+   * 🔒 Construye condiciones WHERE de forma segura usando Prisma.sql
+   * Previene SQL injection al parametrizar valores correctamente
+   */
+  private buildSafeWhereConditions(
+    columnMap: Map<string, string>,
+    organizationId: number | null,
+    companyId: number | null,
+  ): Prisma.Sql[] {
+    const conditions: Prisma.Sql[] = [];
+
+    const orgCol = columnMap.get('organizationid');
+    if (orgCol && organizationId != null) {
+      conditions.push(
+        Prisma.sql([`"${orgCol}" = `, ''], organizationId),
+      );
+    }
+
+    const compCol = columnMap.get('companyid');
+    if (compCol && companyId != null) {
+      conditions.push(
+        Prisma.sql([`"${compCol}" = `, ''], companyId),
+      );
+    }
+
+    return conditions;
   }
 
   private async loadTenantAwareTableMetadata(

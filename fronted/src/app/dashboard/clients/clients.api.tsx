@@ -1,23 +1,45 @@
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
 export async function getClients(){
-  const data = await fetch(`${BACKEND_URL}/api/clients`, {
-      'cache': 'no-store',
-  });
-  return data.json()
+  try {
+    const data = await authFetch(`/clients`, {
+      cache: 'no-store',
+    });
+    return data.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function getRegisteredClients(){
-  const data = await fetch(`${BACKEND_URL}/api/clients/registered`, {
-      'cache': 'no-store',
-  });
-  return data.json()
+  try {
+    const data = await authFetch(`/clients/registered`, {
+      cache: 'no-store',
+    });
+    return data.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function getClient(id: string){
-  const data = await fetch(`${BACKEND_URL}/api/clients/${id}`, {
-      'cache': 'force-cache',
-  });
+  let data: Response;
+  try {
+    data = await authFetch(`/clients/${id}`, {
+      cache: 'force-cache',
+    });
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
+  }
 
   const json = await data.json();
 
@@ -34,7 +56,7 @@ export async function getClient(id: string){
 }
 
 export async function createClient(productData: any){
-    const res = await fetch(`${BACKEND_URL}/api/clients`,{
+    const res = await authFetch(`/clients`,{
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',         
@@ -61,7 +83,7 @@ export async function selfRegisterClient(data: {
   typeNumber?: string
   image?: string
 }) {
-  const res = await fetch(`${BACKEND_URL}/api/clients/self-register`, {
+  const res = await authFetch(`/clients/self-register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -79,7 +101,7 @@ export async function selfRegisterClient(data: {
 
 export async function verifyOrCreateClients(clients: { name: string; type: string; typeNumber: string; idUser: number }[]){
   try{
-    const res = await fetch(`${BACKEND_URL}/api/clients/verify-or-create-clients`,{
+    const res = await authFetch(`/clients/verify-or-create-clients`,{
       method: 'POST',
       headers: {
           'Content-Type': 'application/json',         
@@ -104,7 +126,7 @@ export async function verifyOrCreateClients(clients: { name: string; type: strin
 
 export async function checkClientExists(typeNumber: string): Promise<boolean> {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/clients/check`, {
+    const response = await authFetch(`/clients/check`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -127,14 +149,14 @@ export async function checkClientExists(typeNumber: string): Promise<boolean> {
 
 
 export async function deleteClient(id: string){
-    const res = await fetch(`${BACKEND_URL}/api/clients/${id}`, {
+    const res = await authFetch(`/clients/${id}`, {
         method: 'DELETE',
     });
     return res.json()
 }
 
 export async function updateClient(id: string, newClient: any){
-    const res = await fetch(`${BACKEND_URL}/api/clients/${id}`, {
+    const res = await authFetch(`/clients/${id}`, {
         method: 'PATCH',
         headers: {
             'Content-Type': 'application/json',
@@ -155,7 +177,7 @@ export async function updateManyClients(clients: any[]) {
     console.log("Enviando clientes al backend para actualización masiva:", clients); // Log para depuración
   
     try {
-      const response = await fetch(`${BACKEND_URL}/api/clients`, {
+      const response = await authFetch(`/clients`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -186,7 +208,7 @@ export const deleteClients = async (ids: string[]) => {
     // Convertir los IDs a números antes de enviarlos
     const numericIds = ids.map((id) => Number(id))
 
-    const response = await fetch(`${BACKEND_URL}/api/clients/`, {
+    const response = await authFetch(`/clients/`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -209,7 +231,7 @@ export async function uploadClientImage(file: File) {
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`${BACKEND_URL}/api/clients/upload-image`, {
+  const res = await authFetch(`/clients/upload-image`, {
     method: 'POST',
     body: formData,
   });

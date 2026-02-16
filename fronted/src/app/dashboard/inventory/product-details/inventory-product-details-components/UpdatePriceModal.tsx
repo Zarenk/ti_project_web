@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { updateProductPriceSell } from "../../inventory.api";
 import { toast } from "sonner";
@@ -16,7 +17,8 @@ interface Props {
 
 export default function UpdatePriceDialog({ productId, defaultPrice }: Omit<Props, "isOpen">) {
     
-    const [price, setPrice] = useState<number | string>(defaultPrice ?? ""); // Usar "" si defaultPrice es null
+    const [price, setPrice] = useState<number | string>(defaultPrice ?? "");
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const searchParams = useSearchParams();
     const router = useRouter();
 
@@ -32,20 +34,23 @@ export default function UpdatePriceDialog({ productId, defaultPrice }: Omit<Prop
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-    
+
+        const parsedPrice = parseFloat(price as string);
+        if (isNaN(parsedPrice)) {
+          toast.error("Por favor, ingrese un precio válido.");
+          return;
+        }
+
+        setIsSubmitting(true);
         try {
-            const parsedPrice = parseFloat(price as string);
-            if (isNaN(parsedPrice)) {
-              alert("Por favor, ingrese un precio válido.");
-              return;
-            }
-      
-            console.log("productoId", productId);
             await updateProductPriceSell(productId, parsedPrice);
             router.replace(`/dashboard/inventory/product-details/${productId}`);
             toast.success("Se actualizo el precio de venta del producto correctamente.");
           } catch (error) {
             console.error("Error actualizando precio:", error);
+            toast.error("Error al actualizar el precio.");
+          } finally {
+            setIsSubmitting(false);
           }
     };
 
@@ -78,9 +83,11 @@ export default function UpdatePriceDialog({ productId, defaultPrice }: Omit<Prop
 
           <AlertDialogFooter className="mt-4">
             <AlertDialogCancel asChild>
-                <Button onClick={handleClose} variant="outline">Cancelar</Button>
+                <Button onClick={handleClose} variant="outline" disabled={isSubmitting}>Cancelar</Button>
             </AlertDialogCancel>
-                <Button type="submit">Guardar</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Guardando...</> : "Guardar"}
+                </Button>
           </AlertDialogFooter>
         </form>
       </AlertDialogContent>

@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
-import { ChevronsUpDown, Check } from "lucide-react";
+import { ChevronsUpDown, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createCategory } from "../../categories/categories.api";
 import { createProduct } from "../../products/products.api";
@@ -58,6 +58,7 @@ export function AddProductDialog({
   const [isNewCategory, setIsNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [isCategoryPopoverOpen, setIsCategoryPopoverOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAddCategory = async (): Promise<{ id: number; name: string } | null> => {
     if (!newCategoryName.trim()) {
@@ -92,6 +93,7 @@ export function AddProductDialog({
       return;
     }
 
+    setIsSubmitting(true);
     try {
       let categoryId: number;
       let categoryName: string;
@@ -152,6 +154,8 @@ export function AddProductDialog({
     } catch (error: any) {
       console.error("Error al agregar el producto:", error);
       toast.error(error.message || "El producto ya existe o no se pudo crear.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -260,8 +264,10 @@ export function AddProductDialog({
           </div>
         </div>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onClose}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={handleAddProduct}>Guardar</AlertDialogAction>
+          <AlertDialogCancel onClick={onClose} disabled={isSubmitting}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={handleAddProduct} disabled={isSubmitting}>
+            {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Guardando...</> : "Guardar"}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

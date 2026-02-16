@@ -1,7 +1,10 @@
-import { Controller, Post, Body, Param } from '@nestjs/common';
+import { Controller, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { CampaignsService } from './campaigns.service';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('campaigns')
+@UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 

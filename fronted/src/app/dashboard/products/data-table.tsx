@@ -1170,8 +1170,22 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
                   <div className="space-y-2 text-sm">
                     <div><strong>Nombre:</strong> {selectedRowData.name}</div>
                     <div><strong>Descripción:</strong> {selectedRowData.description}</div>
-                    <div><strong>Precio:</strong> S/. {priceFormatter.format(selectedRowData.price)}</div>
-                    <div><strong>Precio de Venta:</strong> S/. {priceFormatter.format(selectedRowData.priceSell)}</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong>Precio:</strong> S/. {priceFormatter.format(selectedRowData.price)}
+                      {(!Number.isFinite(selectedRowData.price) || selectedRowData.price <= 0) && (
+                        <span className="rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Sin precio compra
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong>Precio de Venta:</strong> S/. {priceFormatter.format(selectedRowData.priceSell)}
+                      {(!Number.isFinite(selectedRowData.priceSell) || selectedRowData.priceSell <= 0) && (
+                        <span className="rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Sin precio venta
+                        </span>
+                      )}
+                    </div>
                     <div><strong>Estado:</strong> {normalizeProductStatus(selectedRowData.status)}</div>
                     <div><strong>Fecha de Creación:</strong> {new Date(selectedRowData.createdAt).toLocaleDateString()}</div>
                     <div>

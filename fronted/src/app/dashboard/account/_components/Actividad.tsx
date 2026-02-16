@@ -3,13 +3,11 @@
 import { useEffect, useMemo, useState } from "react"
 import { DateRange } from "react-day-picker"
 import { getUserDataFromToken } from "@/lib/auth"
-import { getAuthHeaders } from "@/utils/auth-token"
+import { getClientActivity } from "../account.api"
 import ActivityFilters from "./ActivityFilter"
 import SummaryCards from "./SummaryCard"
 import ActivityTable, { ActivityItem } from "./ActivityTable"
 import RequireAdmin from "@/components/require-admin"
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000"
 
 export default function Actividad() {
   const [data, setData] = useState<ActivityItem[]>([])
@@ -23,13 +21,7 @@ export default function Actividad() {
   useEffect(() => {
     async function load() {
       try {
-        const headers = await getAuthHeaders()
-        const res = await fetch(`${BACKEND_URL}/api/clients/activity`, {
-          headers,
-          credentials: "include",
-        })
-        if (!res.ok) throw new Error("Error")
-        const json = await res.json()
+        const json = await getClientActivity()
         setData(json as ActivityItem[])
       } catch (err) {
         console.error(err)

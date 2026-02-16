@@ -4,16 +4,42 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useForm } from 'react-hook-form'
-import { createProvider, updateProvider } from '../providers.api'
+import { createProvider, updateProvider, uploadProviderImage, validateProviderFields } from '../providers.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { SelectTrigger, SelectValue } from '@radix-ui/react-select'
 import { Select, SelectContent, SelectItem } from '@/components/ui/select'
 import { z } from 'zod'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { useDebounce } from '@/app/hooks/useDebounce'
 import { toast } from 'sonner'
 import { useTenantSelection } from '@/context/tenant-selection-context'
+import { AlertTriangle, Check } from 'lucide-react'
+import { resolveImageUrl } from '@/lib/images'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import Link from 'next/link'
+import { FileSpreadsheet } from 'lucide-react'
 
+const normalizeProviderImagePath = (input?: string): string => {
+  const raw = input?.trim() ?? ""
+  if (!raw) return ""
+  if (raw.startsWith("http")) return raw
+  if (raw.startsWith("/uploads") || raw.startsWith("uploads/")) return raw
+  if (/^\d{1,3}(\.\d{1,3}){3}\//.test(raw)) {
+    return `http://${raw}`
+  }
+  const uploadsIndex = raw.indexOf("/uploads")
+  if (uploadsIndex >= 0) {
+    const relative = raw.slice(uploadsIndex)
+    return relative.startsWith("/") ? relative : `/${relative}`
+  }
+  return raw
+}
 
 export function ProviderForm({provider}: {provider: any}) {
 
@@ -23,13 +49,13 @@ export function ProviderForm({provider}: {provider: any}) {
       required_error: "Se requiere el nombre del proveedor",
     })
       .min(3, "El nombre del proveedor debe tener al menos 3 caracteres")
-      .max(50, "El nombre del proveedor no puede tener más de 50 caracteres")
-      .regex(/^[a-zA-Z0-9\s]+$/, "El nombre solo puede contener letras, números y espacios"),
+      .max(50, "El nombre del proveedor no puede tener mケs de 50 caracteres")
+      .regex(/^[a-zA-Z0-9\s]+$/, "El nombre solo puede contener letras, nカmeros y espacios"),
     document: z.enum(["Otro Documento", "DNI", "RUC"], {
         required_error: "El tipo de documento es obligatorio",
       }),
     documentNumber: z.string({required_error: "Se requiere el Nro. de documento",})
-        .min(1, "El número de documento es obligatorio"),
+        .min(1, "El numero de documento es obligatorio"),
     description: z.string({
     }),
     phone: z.string({
@@ -41,10 +67,19 @@ export function ProviderForm({provider}: {provider: any}) {
     website: z.string({
     }),
     image: z.string()
-      .url("La imagen debe ser una URL válida") // Valida que sea una URL válida
-      //.regex(/\.(jpg|jpeg|png|gif)$/i, "La imagen debe tener una extensión válida (.jpg, .jpeg, .png, .gif)") // Valida extensiones
       .optional() // El campo es opcional
-      .or(z.literal("")), // Permite que el campo sea una cadena vacía
+      .or(z.literal("")) // Permite que el campo sea una cadena vacia
+      .refine((value) => {
+        if (!value) return true
+        if (value.startsWith("/uploads") || value.startsWith("uploads/")) return true
+        if (/^\d{1,3}(\.\d{1,3}){3}\//.test(value)) return true
+        try {
+          new URL(value)
+          return true
+        } catch {
+          return false
+        }
+      }, "La imagen debe ser una URL valida"), // Valida que sea una URL valida
     status: z.enum(["Activo", "Inactivo"]).optional(),
     }) //{name: "", lastname: "", age: z.number()}
 
@@ -53,7 +88,7 @@ export function ProviderForm({provider}: {provider: any}) {
 
     const mapProviderToFormValues = useMemo(() => ({
       name: provider?.name ?? '',
-      document: (provider?.document ?? 'Sin Documento') as ProviderType['document'],
+      document: (provider?.document ?? 'Otro Documento') as ProviderType['document'],
       documentNumber: provider?.documentNumber ?? '',
       description: provider?.description ?? '',
       phone: provider?.phone ?? '',
@@ -61,12 +96,12 @@ export function ProviderForm({provider}: {provider: any}) {
       email: provider?.email ?? '',
       website: provider?.website ?? '',
       status: (provider?.status ?? 'Activo') as ProviderType['status'],
-      image: provider?.image ?? '',
+      image: normalizeProviderImagePath(provider?.image ?? ''),
     }), [provider]);
 
     const emptyFormValues = useMemo(() => ({
       name: '',
-      document: 'Sin Documento' as ProviderType['document'],
+      document: 'Otro Documento' as ProviderType['document'],
       documentNumber: '',
       description: '',
       phone: '',
@@ -86,17 +121,46 @@ export function ProviderForm({provider}: {provider: any}) {
     });
 
   const { handleSubmit, register, setValue } = form;
+  const selectedDocumentType = form.watch("document");
+  const watchedName = form.watch("name");
+  const watchedDocumentNumber = form.watch("documentNumber");
+  const watchedDescription = form.watch("description");
+  const watchedPhone = form.watch("phone");
+  const watchedAdress = form.watch("adress");
+  const watchedEmail = form.watch("email");
+  const watchedWebsite = form.watch("website");
+  const watchedImage = form.watch("image");
+  const [isImageUploading, setIsImageUploading] = useState(false);
+  const trimmedDocumentNumber = (watchedDocumentNumber ?? '').trim()
+  const normalizedDocumentNumber = trimmedDocumentNumber.replace(/\D/g, '')
+  const documentValidationTarget =
+    selectedDocumentType === "Otro Documento"
+      ? trimmedDocumentNumber.replace(/\s+/g, '')
+      : normalizedDocumentNumber
+  const debouncedNameValidation = useDebounce(watchedName ?? '', 1000)
+  const debouncedDocumentValidation = useDebounce(documentValidationTarget, 1000)
 
   const router = useRouter();
   const params = useParams<{id: string}>();
+  const currentProviderId = params?.id ? Number(params.id) : undefined;
 
   // Estado para manejar el error del nombre si se repite
   const [nameError, setNameError] = useState<string | null>(null);
+  const [nameValidation, setNameValidation] = useState<{
+    status?: "idle" | "checking" | "valid" | "invalid"
+    message?: string
+  }>({})
+  const [documentValidation, setDocumentValidation] = useState<{
+    status?: "idle" | "checking" | "valid" | "invalid"
+    message?: string
+  }>({})
   const initializedVersion = useRef(false);
 
   useEffect(() => {
     form.reset(mapProviderToFormValues);
     setNameError(null);
+    setNameValidation({ status: "idle", message: undefined })
+    setDocumentValidation({ status: "idle", message: undefined })
   }, [form, mapProviderToFormValues]);
 
   useEffect(() => {
@@ -106,228 +170,565 @@ export function ProviderForm({provider}: {provider: any}) {
     }
 
     setNameError(null);
+    setNameValidation({ status: "idle", message: undefined })
+    setDocumentValidation({ status: "idle", message: undefined })
     form.reset(emptyFormValues);
     router.refresh();
   }, [version, form, emptyFormValues, router]);
 
+  useEffect(() => {
+    const trimmedName = String(debouncedNameValidation ?? "").trim()
+    if (trimmedName.length < 3) {
+      setNameValidation({ status: "idle", message: undefined })
+      return
+    }
+
+    let active = true
+    setNameValidation({ status: "checking", message: undefined })
+    validateProviderFields({
+      name: trimmedName,
+      providerId: currentProviderId,
+    })
+      .then((result) => {
+        if (!active) return
+        if (!result.nameAvailable) {
+          setNameValidation({
+            status: "invalid",
+            message: "Ya existe un proveedor con ese nombre.",
+          })
+        } else {
+          setNameValidation({ status: "valid", message: undefined })
+        }
+      })
+      .catch((error) => {
+        if (!active) return
+        console.warn("[providers] no se pudo validar nombre", error)
+        setNameValidation({ status: "idle", message: undefined })
+      })
+
+    return () => {
+      active = false
+    }
+  }, [debouncedNameValidation, currentProviderId])
+
+  useEffect(() => {
+    const target = String(debouncedDocumentValidation ?? "").trim()
+    const expectedLength =
+      selectedDocumentType === "DNI"
+        ? 8
+        : selectedDocumentType === "RUC"
+          ? 11
+          : 3
+
+    if (target.length < expectedLength) {
+      setDocumentValidation({ status: "idle", message: undefined })
+      return
+    }
+
+    let active = true
+    setDocumentValidation({ status: "checking", message: undefined })
+    validateProviderFields({
+      documentNumber: target,
+      providerId: currentProviderId,
+    })
+      .then((result) => {
+        if (!active) return
+        if (!result.documentAvailable) {
+          setDocumentValidation({
+            status: "invalid",
+            message: "Ya existe un proveedor con ese documento.",
+          })
+        } else {
+          setDocumentValidation({ status: "valid", message: undefined })
+        }
+      })
+      .catch((error) => {
+        if (!active) return
+        console.warn("[providers] no se pudo validar documento", error)
+        setDocumentValidation({ status: "idle", message: undefined })
+      })
+
+    return () => {
+      active = false
+    }
+  }, [debouncedDocumentValidation, currentProviderId, selectedDocumentType])
+
+  useEffect(() => {
+    if (!nameError) return
+    setNameError(null)
+  }, [watchedName, watchedDocumentNumber, selectedDocumentType])
+
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
     try{
-        if (!data.documentNumber){
-            toast.error("El número de documento es obligatorio.");
+        if (nameValidation.status === "checking" || documentValidation.status === "checking") {
+            toast.error("Aun estamos validando los datos del proveedor.");
             return;
         }
-        // Validar el número de documento según el tipo de documento
+        if (nameValidation.status === "invalid") {
+            toast.error(nameValidation.message ?? "El nombre del proveedor ya existe.");
+            return;
+        }
+        if (documentValidation.status === "invalid") {
+            toast.error(documentValidation.message ?? "El documento del proveedor ya existe.");
+            return;
+        }
+        if (!data.documentNumber){
+            toast.error("El numero de documento es obligatorio.");
+            return;
+        }
+        // Validar el numero de documento segun el tipo de documento
         if (data.document === "DNI" && !/^\d{8}$/.test(data.documentNumber)) {
-            toast.error("El número de documento debe tener exactamente 8 dígitos para DNI");
+            toast.error("El numero de documento debe tener exactamente 8 digitos para DNI");
             return;
         }
 
         if (data.document === "RUC" && !/^\d{11}$/.test(data.documentNumber)) {
-            toast.error("El número de documento debe tener exactamente 11 dígitos para RUC");
+            toast.error("El numero de documento debe tener exactamente 11 digitos para RUC");
             return;
         }
 
         if(params?.id){
             await updateProvider(params.id, {...data})
-            toast.success("Proveedor actualizado correctamente."); // Notificación de éxito
+            toast.success("Proveedor actualizado correctamente."); // NotificaciИn de ゼxito
             router.push("/dashboard/providers"),
             router.refresh();
         }
         else{
             await createProvider({...data});
-            toast.success("Proveedor creado correctamente."); // Notificación de éxito
+            toast.success("Proveedor creado correctamente."); // NotificaciИn de ゼxito
             router.push("/dashboard/providers");
             router.refresh();
         }
     }
     catch(error: any){
 
-        if (error.response?.status === 409 || error.response?.data?.message.includes("ya existe")) {
-            setNameError(error.response?.data?.message || "El Nro de documento del proveedor ya existe.");
+        if (error.response?.status === 409 || error.response?.data?.message?.includes("ya existe")) {
+            const message =
+              error.response?.data?.message ||
+              "El proveedor ya existe en la organizacion.";
+            setNameError(message);
+            if (message.toLowerCase().includes("nombre")) {
+              setNameValidation({ status: "invalid", message })
+            }
+            if (message.toLowerCase().includes("ruc") || message.toLowerCase().includes("documento")) {
+              setDocumentValidation({ status: "invalid", message })
+            }
             console.log("Estado nameError actualizado:", error.response?.data?.message);
         } else {
             console.error("Error inesperado:", error.message);
         }
     }
         
-    })      
+    })
+
+  const hasName = Boolean(watchedName?.trim())
+  const hasDocument = Boolean(selectedDocumentType?.trim())
+  const hasDocumentNumber = (() => {
+    if (selectedDocumentType === "DNI") {
+      return normalizedDocumentNumber.length === 8
+    }
+    if (selectedDocumentType === "RUC") {
+      return normalizedDocumentNumber.length === 11
+    }
+    return Boolean((watchedDocumentNumber ?? '').trim())
+  })()
+  const hasDescription = Boolean(watchedDescription?.trim())
+  const hasPhone = Boolean(watchedPhone?.trim())
+  const hasAdress = Boolean(watchedAdress?.trim())
+  const hasEmail = Boolean(watchedEmail?.trim())
+  const hasWebsite = Boolean(watchedWebsite?.trim())
+  const hasImage = Boolean(watchedImage?.trim())
+  const imagePreview = normalizeProviderImagePath(watchedImage?.trim() ?? "")
+
+  const handleImageFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      setIsImageUploading(true)
+      const response = await uploadProviderImage(file)
+      if (response?.url) {
+        const normalized = normalizeProviderImagePath(response.url)
+        setValue("image", normalized, { shouldValidate: true })
+        toast.success("Imagen cargada correctamente.")
+      }
+    } catch (error) {
+      console.error("Error al subir la imagen:", error)
+      toast.error("No se pudo subir la imagen.")
+    } finally {
+      setIsImageUploading(false)
+      event.target.value = ""
+    }
+  }
+
+  const renderOptionalChip = (filled: boolean) => (
+    <span
+      className={`ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        filled
+          ? 'border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
+          : 'border-border/60 bg-muted/30 text-muted-foreground'
+      }`}
+    >
+      {filled ? <Check className="h-3 w-3" /> : null}
+      {filled ? 'Listo' : 'Opcional'}
+    </span>
+  )
+
+  const renderRequiredValidationChip = (
+    status: "idle" | "checking" | "valid" | "invalid" | undefined,
+    hasValue: boolean,
+  ) => {
+    if (status === "checking") {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-amber-200/70 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          Validando
+        </span>
+      )
+    }
+
+    if (status === "invalid") {
+      return (
+        <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-rose-200/70 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+          Ya existe
+        </span>
+      )
+    }
+
+    return (
+      <span
+        className={`ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+          hasValue
+            ? 'border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
+            : 'border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200'
+        }`}
+      >
+        {hasValue ? <Check className="h-3 w-3" /> : null}
+        {hasValue ? 'Listo' : 'Requerido'}
+      </span>
+    )
+  }
 
   return (
-    <div className="container mx-auto max-w-lg grid sm:max-w-md md:max-w-lg lg:max-w-xl">
-      <form className='flex flex-col gap-2'onSubmit={onSubmit}>
-                    <div className='flex flex-col'>
-                        <Label className='py-3'>
-                            Nombre del Proveedor
-                        </Label>
-                        <Input
-                        {...register('name')}
-                        maxLength={50} // Limita a 50 caracteres
-                        ></Input>
-                        {form.formState.errors.name && (
-                            <p className="text-red-500 text-sm">{form.formState.errors.name.message}</p>
-                        )}                       
-                    </div>
+    <div className="container mx-auto grid w-full max-w-2xl sm:max-w-2xl md:max-w-5xl lg:max-w-6xl xl:max-w-none">
+      <form className='flex flex-col gap-2' onSubmit={onSubmit}>
+        <div className="grid grid-cols-1 gap-x-0.5 gap-y-4 md:gap-x-1 md:gap-y-5 lg:grid-cols-4 lg:gap-x-6 lg:gap-y-6">
+          <div className='flex flex-col lg:col-span-1'>
+            <Label className='py-3'>
+              Nombre del Proveedor
+              {renderRequiredValidationChip(nameValidation.status, hasName)}
+            </Label>
+            <Input
+              {...register('name')}
+              maxLength={50} // Limita a 50 caracteres
+            />
+            {nameValidation.status === "checking" ? (
+              <p className="mt-2 text-xs text-amber-600">Validando nombre...</p>
+            ) : nameValidation.status === "invalid" ? (
+              <p className="mt-2 text-xs text-rose-500">
+                {nameValidation.message ?? "Ya existe un proveedor con ese nombre."}
+              </p>
+            ) : null}
+            {form.formState.errors.name && (
+              <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {form.formState.errors.name.message}
+              </p>
+            )}
+          </div>
 
-                    <div className="flex flex-col">
-                        <Label className='py-3'>
-                            Seleccione el Tipo de Documento
-                        </Label>
-                        <Select value={form.watch("document")} // Sincroniza el valor del Select con el formulario
-                        defaultValue={form.getValues("document")} onValueChange={(value) => setValue("document", value as "DNI" | "RUC" | "Otro Documento", {shouldValidate: true})}>
-                            <SelectTrigger>
-                                <SelectValue /> {/*placeholder="Documento" */}
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="DNI">DNI</SelectItem>
-                                <SelectItem value="RUC">RUC</SelectItem>
-                                <SelectItem value="Sin Documento">Otro Documento</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+          <div className="flex flex-col lg:col-span-1">
+            <Label className='py-3'>
+              Selecciona el Tipo de Documento:
+              <span
+                className={`ml-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  hasDocument
+                    ? 'border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
+                    : 'border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200'
+                }`}
+              >
+                {hasDocument ? <Check className="mr-1 h-3 w-3" /> : null}
+                {hasDocument ? 'Listo' : 'Requerido'}
+              </span>
+            </Label>
+            <Select
+              value={selectedDocumentType}
+              defaultValue={form.getValues("document")}
+              onValueChange={(value) =>
+                setValue("document", value as "DNI" | "RUC" | "Otro Documento", {
+                  shouldValidate: true,
+                })
+              }
+            >
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SelectTrigger className="cursor-pointer">
+                      <SelectValue />
+                    </SelectTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Selecciona el tipo de documento</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <SelectContent>
+                <SelectItem value="DNI">DNI</SelectItem>
+                <SelectItem value="RUC">RUC</SelectItem>
+                <SelectItem value="Otro Documento">Otro Documento</SelectItem>
+              </SelectContent>
+            </Select>
+            {form.formState.errors.document && (
+              <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {form.formState.errors.document.message}
+              </p>
+            )}
+          </div>
 
-                    <div className="flex flex-col">
-                        <Label className='py-3'>
-                            Numero del Documento
-                        </Label>
-                        <Input
-                        type="text" // Mantén el tipo como "text" para que el valor sea una cadena
-                        maxLength={11} // Limita a 100 caracteres
-                        onInput={(e) => {
-                            const input = e.target as HTMLInputElement;
-                            input.value = input.value.replace(/\D/g, ""); // Reemplaza cualquier carácter no numérico
-                        }}
-                        {...register('documentNumber')}></Input>
-                        {form.formState.errors.documentNumber && (
-                            <p className="text-red-500 text-sm">{form.formState.errors.documentNumber.message}</p>
-                        )}
-                        {nameError && (
-                            <p className="text-red-500 text-sm">{nameError}</p> // Muestra el error del nombre duplicado
-                        )}                       
-                    </div>
-                    
-                    <div className="flex flex-col">
-                        <Label className='py-3'>
-                            Descripcion
-                        </Label>
-                        <Input
-                        maxLength={100} // Limita a 100 caracteres
-                        {...register('description')}></Input>
-                        {form.formState.errors.description && (
-                            <p className="text-red-500 text-sm">{form.formState.errors.description.message}</p>
-                        )}
-                    </div>
+          <div className="flex flex-col lg:col-span-1">
+            <Label className='py-3'>
+              Numero del Documento
+              {renderRequiredValidationChip(documentValidation.status, hasDocumentNumber)}
+            </Label>
+            <Input
+              type="text"
+              maxLength={selectedDocumentType === "RUC" ? 11 : selectedDocumentType === "DNI" ? 8 : 25}
+              onInput={(e) => {
+                const input = e.target as HTMLInputElement;
+                if (selectedDocumentType === "DNI") {
+                  input.value = input.value.replace(/\D/g, "").slice(0, 8);
+                } else if (selectedDocumentType === "RUC") {
+                  input.value = input.value.replace(/\D/g, "").slice(0, 11);
+                } else {
+                  input.value = input.value.slice(0, 25);
+                }
+              }}
+              {...register('documentNumber')}
+            />
+            {form.formState.errors.documentNumber && (
+              <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {form.formState.errors.documentNumber.message}
+              </p>
+            )}
+            {documentValidation.status === "checking" ? (
+              <p className="mt-2 text-xs text-amber-600">Validando documento...</p>
+            ) : documentValidation.status === "invalid" ? (
+              <p className="mt-2 text-xs text-rose-500">
+                {documentValidation.message ?? "Ya existe un proveedor con ese documento."}
+              </p>
+            ) : null}
+            {nameError && (
+              <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {nameError}
+              </p>
+            )}
+          </div>
+          
+          <div className="flex flex-col lg:col-span-1">
+            <Label className='py-3'>
+              Selecciona un estado:
+              {renderOptionalChip(Boolean(form.watch("status")))}
+            </Label>
+            <Select
+              value={form.watch("status")}
+              defaultValue={form.getValues("status")}
+              onValueChange={(value) =>
+                setValue("status", value as "Activo" | "Inactivo", {
+                  shouldValidate: true,
+                })
+              }
+            >
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SelectTrigger className="cursor-pointer">
+                      <SelectValue />
+                    </SelectTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Selecciona el estado del proveedor</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <SelectContent>
+                <SelectItem value="Activo">Activo</SelectItem>
+                <SelectItem value="Inactivo">Inactivo</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-                    <div className="flex flex-col">
-                        <Label className='py-3'>
-                            Telefono
-                        </Label>
-                        <Input
-                        maxLength={100} // Limita a 100 caracteres
-                        {...register('phone')}></Input>
-                        {form.formState.errors.description && (
-                            <p className="text-red-500 text-sm">{form.formState.errors.description.message}</p>
-                        )}
-                    </div>
+          <div className="flex flex-col lg:col-span-2">
+            <Label className='py-3'>
+              Descripcion
+              {renderOptionalChip(hasDescription)}
+            </Label>
+            <Input
+              maxLength={100} // Limita a 100 caracteres
+              {...register('description')}
+            />
+            {form.formState.errors.description && (
+              <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {form.formState.errors.description.message}
+              </p>
+            )}
+          </div>
 
-                    <div className="flex flex-col">
-                        <Label className='py-3'>
-                            Direccion
-                        </Label>
-                        <Input
-                        maxLength={100} // Limita a 100 caracteres
-                        {...register('adress')}></Input>
-                        {form.formState.errors.description && (
-                            <p className="text-red-500 text-sm">{form.formState.errors.description.message}</p>
-                        )}
-                    </div>
+          <div className="flex flex-col lg:col-span-1">
+            <Label className='py-3'>
+              Telefono
+              {renderOptionalChip(hasPhone)}
+            </Label>
+            <Input
+              maxLength={100} // Limita a 100 caracteres
+              {...register('phone')}
+            />
+          </div>
 
-                    <div className="flex flex-col">
-                        <Label className='py-3'>
-                            Email
-                        </Label>
-                        <Input
-                        maxLength={100} // Limita a 100 caracteres
-                        {...register('email')}></Input>
-                        {form.formState.errors.description && (
-                            <p className="text-red-500 text-sm">{form.formState.errors.description.message}</p>
-                        )}
-                    </div>
+          <div className="flex flex-col lg:col-span-1">
+            <Label className='py-3'>
+              Direccion
+              {renderOptionalChip(hasAdress)}
+            </Label>
+            <Input
+              maxLength={100} // Limita a 100 caracteres
+              {...register('adress')}
+            />
+          </div>
 
-                    <div className="flex flex-col">
-                        <Label className='py-3'>
-                            Pagina Web
-                        </Label>
-                        <Input
-                        maxLength={100} // Limita a 100 caracteres
-                        {...register('website')}></Input>
-                        {form.formState.errors.description && (
-                            <p className="text-red-500 text-sm">{form.formState.errors.description.message}</p>
-                        )}
-                    </div>
+          <div className="flex flex-col lg:col-span-1">
+            <Label className='py-3'>
+              Email
+              {renderOptionalChip(hasEmail)}
+            </Label>
+            <Input
+              maxLength={100} // Limita a 100 caracteres
+              {...register('email')}
+            />
+          </div>
 
-                    <div className="flex flex-col">
-                        <Label className='py-3'>
-                            Imagen
-                        </Label>                
-                        <Input
-                        maxLength={200} // Limita a 100 caracteres
-                        {...register('image')}></Input>
-                        {form.formState.errors.image && (
-                            <p className="text-red-500 text-sm">{form.formState.errors.image.message}</p>
-                        )}
-                    </div>             
+          <div className="flex flex-col lg:col-span-1">
+            <Label className='py-3'>
+              Pagina Web
+              {renderOptionalChip(hasWebsite)}
+            </Label>
+            <Input
+              maxLength={100} // Limita a 100 caracteres
+              {...register('website')}
+            />
+          </div>
 
-                    <div className="flex flex-col">
-                        <Label className='py-3'>
-                            Seleccion un estado
-                        </Label>
-                        <Select value={form.watch("status")} // Sincroniza el valor del Select con el formulario
-                        defaultValue={form.getValues("status")} onValueChange={(value) => setValue("status", value as "Activo" | "Inactivo", {shouldValidate: true})}>
-                            <SelectTrigger>
-                                <SelectValue /> {/*placeholder="Estado" */}
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Activo">Activo</SelectItem>
-                                <SelectItem value="Inactivo">Inactivo</SelectItem>
-                            </SelectContent>
-                        </Select>
+          <div className="flex flex-col lg:col-span-2">
+            <Label className='py-3'>
+              Imagen
+              {renderOptionalChip(hasImage)}
+            </Label>
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="space-y-2">
+                <Input
+                  placeholder="URL o ruta relativa /uploads"
+                  maxLength={200}
+                  {...register('image')}
+                />
+                <TooltipProvider delayDuration={150}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        disabled={isImageUploading}
+                        className="cursor-pointer"
+                        onChange={handleImageFile}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Selecciona el archivo de imagen</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <p className="text-xs text-muted-foreground">
+                  Puedes ingresar una URL externa o subir un archivo (se almacenara en /uploads).
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  {imagePreview ? (
+                    <img
+                      src={resolveImageUrl(imagePreview)}
+                      alt="Vista previa de proveedor"
+                      className="h-24 w-24 rounded border object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-24 w-24 items-center justify-center rounded border text-xs text-muted-foreground">
+                      Sin vista previa
                     </div>
-                    <Button className='mt-4'>
-                        {
-                            params.id ? 'Actualizar Proveedor' : 'Crear Proveedor'
-                        }
-                    </Button>
-                    <Button className=''
-                    type="button" // Evita que el botón envíe el formulario
-                    onClick={() => 
-                        form.reset({
-                            name: "",
-                            document: "Otro Documento",
-                            documentNumber: "",
-                            description: "",
-                            phone: "",
-                            adress: "",
-                            email: "@",
-                            website: "",
-                            image: "",
-                            status: "Activo", // Restablece el estado a "Activo"
-                        })
-                    } // Restablece el estado a "Activo"})} // Restablece los campos del formulario
-                    >
-                        Limpiar
-                    </Button>
-                    <Button 
-                    className=""
-                    type="button" // Evita que el botón envíe el formulario
-                    onClick={() => router.back()} // Regresa a la página anterior
-                    >
-                        Volver
-                    </Button>
-        </form>
+                  )}
+                </div>
+                {imagePreview && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    className="cursor-pointer sm:self-end"
+                    onClick={() => setValue("image", "", { shouldValidate: true })}
+                  >
+                    Quitar
+                  </Button>
+                )}
+              </div>
+            </div>
+            {form.formState.errors.image && (
+              <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {form.formState.errors.image.message}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col-reverse gap-2 lg:flex-row lg:items-center lg:justify-end">
+          <Button
+            variant="outline"
+            className="w-full cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
+            type="button"
+            onClick={() => router.back()}
+          >
+            Volver
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
+            type="button"
+            onClick={() =>
+              form.reset({
+                name: "",
+                document: "Otro Documento",
+                documentNumber: "",
+                description: "",
+                phone: "",
+                adress: "",
+                email: "@",
+                website: "",
+                image: "",
+                status: "Activo", // Restablece el estado a "Activo"
+              })
+            }
+          >
+            Limpiar
+          </Button>
+          <Button
+            asChild
+            className="w-full bg-emerald-600 text-white hover:bg-emerald-700 lg:w-auto"
+          >
+            <Link href="/dashboard/providers/excel-upload">
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Subir proveedores desde Excel
+            </Link>
+          </Button>
+          <Button className='w-full cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600 lg:w-auto lg:min-w-[160px]'>
+            {params.id ? 'Actualizar Proveedor' : 'Crear Proveedor'}
+          </Button>
+        </div>
+      </form>
     </div>
   )
 }
 
 export default ProviderForm
-

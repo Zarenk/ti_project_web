@@ -1,7 +1,13 @@
 import { toast } from "sonner";
 import { createProvider } from "../../providers/providers.api";
 import { verifyOrCreateProducts } from "../../products/products.api";
-import { createEntry, uploadGuiaPdf, uploadPdf } from "../entries.api";
+import {
+  attachDraftGuiaPdf,
+  attachDraftPdf,
+  createEntry,
+  uploadGuiaPdf,
+  uploadPdf,
+} from "../entries.api";
 import { updateProductPriceSell } from "../../inventory/inventory.api";
 import { UnauthenticatedError } from "@/utils/auth-fetch";
 
@@ -45,11 +51,13 @@ export async function handleFormSubmission({
   selectedProducts,
   isNewInvoiceBoolean,
   validateSeriesBeforeSubmit,
-  categories,
-  pdfFile,
-  pdfGuiaFile,
-  router,
-  getUserIdFromToken,
+    categories,
+    pdfFile,
+    pdfGuiaFile,
+    draftPdfId,
+    draftGuiaId,
+    router,
+    getUserIdFromToken,
   tipoMoneda, // Nuevo parÃ¡metro
   tipoCambioActual, // Nuevo parÃ¡metro
   referenceId,
@@ -135,21 +143,31 @@ export async function handleFormSubmission({
       const verifiedProduct = verifiedProducts.find((vp: any) => vp.name === product.name);
       if (!verifiedProduct) throw new Error(`No se encontro un ID para el producto con nombre: ${product.name}`);
 
-      // Calcular el precio en soles si la moneda es "USD"
+      // Calcular el precio en soles según la moneda
+      // Si es USD, convertir a soles con tipo de cambio
+      // Si es PEN/soles, usar el precio directamente
       const priceInSoles = tipoMoneda === "USD" && tipoCambioActual
         ? product.price * tipoCambioActual
-        : null;
+        : product.price; // Si ya está en soles, usar el mismo precio
 
       return {
         productId: verifiedProduct.id,
         quantity: product.quantity > 0 ? product.quantity : 1,
         price: product.price > 0 ? product.price : 1,
-        priceInSoles: priceInSoles, // Agregar el precio en soles si aplica
+        priceInSoles: priceInSoles, // Siempre envía un número
         series: product.series || [],
       };
     });
 
     console.log("Productos actualizados:", updatedProducts);
+
+    const hasInvoice = [
+      data.serie,
+      data.nroCorrelativo,
+      data.comprobante,
+      data.total_comprobante,
+      data.fecha_emision_comprobante,
+    ].some((value: any) => value && String(value).trim().length > 0);
 
     const totalFromInput = parseMonetaryAmount(data.total_comprobante);
     const fallbackDetailsTotal = selectedProducts.reduce(
@@ -169,21 +187,52 @@ export async function handleFormSubmission({
       paymentTerm: data.payment_method, // Contado/Crédito para asientos contables
       details: updatedProducts,
       totalGross: totalFromInput,
-      invoice: {
-        serie: data.serie,
-        nroCorrelativo: data.nroCorrelativo,
-        tipoComprobante: data.comprobante,
-        tipoMoneda: data.tipo_moneda,
-        total: totalFromInput ?? fallbackDetailsTotal,
-        fechaEmision: new Date(data.fecha_emision_comprobante),
-      },
+      invoice: hasInvoice
+        ? {
+            serie: data.serie,
+            nroCorrelativo: data.nroCorrelativo,
+            tipoComprobante: data.comprobante,
+            tipoMoneda: data.tipo_moneda,
+            total: totalFromInput ?? fallbackDetailsTotal,
+            fechaEmision: new Date(data.fecha_emision_comprobante),
+          }
+        : undefined,
+
+      guide: (() => {
+        const guideValues = {
+          serie: data.guia_serie,
+          correlativo: data.guia_correlativo,
+          fechaEmision: data.guia_fecha_emision,
+          fechaEntregaTransportista: data.guia_fecha_entrega_transportista,
+          motivoTraslado: data.guia_motivo_traslado,
+          puntoPartida: data.guia_punto_partida,
+          puntoLlegada: data.guia_punto_llegada,
+          destinatario: data.guia_destinatario,
+          pesoBrutoUnidad: data.guia_peso_bruto_unidad,
+          pesoBrutoTotal: data.guia_peso_bruto_total,
+          transportista: data.guia_transportista,
+        };
+        const hasGuide = Object.values(guideValues).some(
+          (value) => value && String(value).trim().length > 0,
+        );
+        return hasGuide ? guideValues : undefined;
+      })(),
     };
 
     const createdEntry = await createEntry(payload);
     if (!createdEntry?.id) throw new Error("No se pudo obtener el ID de la entrada creada.");
 
-    if (pdfFile) await uploadPdf(createdEntry.id, pdfFile);
-    if (pdfGuiaFile) await uploadGuiaPdf(createdEntry.id, pdfGuiaFile);
+    if (draftPdfId) {
+      await attachDraftPdf(createdEntry.id, draftPdfId);
+    } else if (pdfFile) {
+      await uploadPdf(createdEntry.id, pdfFile);
+    }
+
+    if (draftGuiaId) {
+      await attachDraftGuiaPdf(createdEntry.id, draftGuiaId);
+    } else if (pdfGuiaFile) {
+      await uploadGuiaPdf(createdEntry.id, pdfGuiaFile);
+    }
 
     toast.success("Se registro la informacion correctamente.");
     router.push("/dashboard/entries");

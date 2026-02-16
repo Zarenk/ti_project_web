@@ -5,8 +5,11 @@ import {
   IsInt,
   IsNotEmpty,
   IsOptional,
+  IsNumber,
   IsString,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -67,6 +70,12 @@ export class CompanyInputDto {
   @IsString()
   @MaxLength(20)
   secondaryColor?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  defaultQuoteMargin?: number;
 
   @IsOptional()
   @IsString()

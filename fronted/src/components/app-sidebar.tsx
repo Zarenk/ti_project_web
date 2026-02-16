@@ -1,29 +1,31 @@
 "use client"
 
 import * as React from "react"
+import dynamic from "next/dynamic"
+import NextLink from "next/link"
 import {
-  AudioWaveform,
+  Boxes,
   Building2,
-  Banknote,
   BookOpen,
   Bot,
+  ClipboardList,
   Command,
   DollarSign,
-  Frame,
-  GalleryVerticalEnd,
   Globe,
   Home,
   HouseIcon,
-  Link,
+  Link as LinkIcon,
   Map,
   Megaphone,
   PieChart,
   QrCode,
-  Settings2,
   Settings2Icon,
   ShoppingCart,
   SquareTerminal,
   Store,
+  Table2,
+  Truck,
+  Utensils,
   UserIcon,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
@@ -31,7 +33,6 @@ import type { LucideIcon } from "lucide-react"
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
-import { TeamSwitcher } from "@/components/team-switcher"
 import {
   Sidebar,
   SidebarContent,
@@ -39,18 +40,15 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
 import { useMessages } from "@/context/messages-context"
 import { useAuth } from "@/context/auth-context"
 import { useFeatureFlag } from "@/app/hooks/use-feature-flags"
 import { useRBAC } from "@/app/hooks/use-rbac"
 import { useSiteSettings } from "@/context/site-settings-context"
 import { useModulePermission, type ModulePermissionKey } from "@/hooks/use-module-permission"
-
-type Team = {
-  name: string
-  logo: LucideIcon
-  plan: string
-}
+import { useVerticalConfig } from "@/hooks/use-vertical-config"
+import type { VerticalFeatures } from "@/app/dashboard/tenancy/tenancy.api"
 
 type NavSubItem = {
   title: string
@@ -78,20 +76,12 @@ type ProjectItem = {
 }
 
 type SidebarData = {
-  teams: Team[]
   navMain: NavItem[]
   projects: ProjectItem[]
 }
 
 // Static navigation data
 const data: SidebarData = {
-  teams: [
-    {
-      name: "Tecnologia Informatica",
-      logo: GalleryVerticalEnd,
-      plan: "Administrador",
-    },
-  ],
   navMain: [
     {
       title: "Almacen",
@@ -143,7 +133,6 @@ const data: SidebarData = {
       title: "Productos",
       url: "/dashboard/products",
       icon: SquareTerminal,
-      isActive: true,
       permission: "catalog",
       items: [
         {
@@ -167,7 +156,6 @@ const data: SidebarData = {
       title: "Proveedores",
       url: "/dashboard/providers",
       icon: Globe,
-      isActive: true,
       permission: "providers",
       items: [
         {
@@ -188,7 +176,7 @@ const data: SidebarData = {
       icon: Bot,
       permission: "settings",
       items: [
-        { title: "Historial de Modificaciones", 
+        { title: "Historial de Modificaciones",
           url: "/dashboard/history",
           permission: "settings",
         },
@@ -201,6 +189,17 @@ const data: SidebarData = {
           title: "Ver Usuarios",
           url: "/dashboard/users",
           permission: "settings",
+        },
+        {
+          title: "Ver Clientes",
+          url: "/dashboard/clients",
+          permission: "settings",
+        },
+        {
+          title: "Sesiones Activas",
+          url: "/dashboard/users/sessions",
+          permission: "settings",
+          requiredRoles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
         },
         {
           title: "Super usuarios",
@@ -238,18 +237,18 @@ const data: SidebarData = {
       ],
     },
     {
-      title: "Tiendas",
+      title: "Tiendas/Sucursales",
       url: "#",
       icon: Store,
       permission: "store",
       items: [
         {
-          title: "Nueva Tienda",
+          title: "Nueva Tienda/Sucursal",
           url: "/dashboard/stores/new",
           permission: "store",
         },
         {
-          title: "Ver Tiendas",
+          title: "Ver Tiendas/Sucursales",
           url: "/dashboard/stores",
           permission: "store",
         },
@@ -262,12 +261,7 @@ const data: SidebarData = {
       permission: "accounting",
       items: [
         {
-          title: "Nuevo Tipo de Cambio",
-          url: "/dashboard/exchange/new",
-          permission: "accounting",
-        },
-        {
-          title: "Ver Tipo de Cambio",
+          title: "Tipo de Cambio",
           url: "/dashboard/exchange",
           permission: "accounting",
         },
@@ -276,7 +270,7 @@ const data: SidebarData = {
     {
       title: "Catalogo",
       url: "/dashboard/catalog",
-      icon: Link,
+      icon: LinkIcon,
       permission: "store",
       items: [
         {
@@ -325,7 +319,7 @@ const data: SidebarData = {
         {
           title: "Ver Historial de Ventas",
           url: "/dashboard/sales/salesdashboard",
-          permission: "sales",
+          permission: "salesHistory",
         },
       ],
     },
@@ -338,9 +332,19 @@ const data: SidebarData = {
       icon: Home,
     },
     {
+      name: "Onboarding",
+      url: "/dashboard/onboarding",
+      icon: Map,
+    },
+    {
       name: "Escaner QR",
       url: "/barcode",
       icon: QrCode,
+    },
+    {
+      name: "Ayuda Chatbot",
+      url: "#chatbot",
+      icon: Bot,
     },
     {
       name: "Login",
@@ -362,43 +366,63 @@ const data: SidebarData = {
   ],
 }
 
+const NAV_FEATURE_REQUIREMENTS: Record<string, keyof VerticalFeatures> = {
+  Almacen: "inventory",
+  Categorias: "inventory",
+  Productos: "inventory",
+  Proveedores: "inventory",
+  Ventas: "sales",
+  Tiendas: "posIntegration",
+  Catalogo: "ecommerceIntegration",
+}
+
+const CUSTOM_MENU_ICONS: Record<string, LucideIcon> = {
+  table: Table2,
+  kitchen: Utensils,
+  ingredients: Boxes,
+  "cash-register": SquareTerminal,
+  book: BookOpen,
+  orders: ClipboardList,
+  truck: Truck,
+  store: Store,
+  home: Home,
+}
+
+function resolveCustomMenuIcon(name?: string): LucideIcon {
+  if (!name) return Command
+  const key = name.toLowerCase()
+  return CUSTOM_MENU_ICONS[key] ?? Command
+}
+
+const TeamSwitcherLazy = dynamic(
+  () =>
+    import("@/components/team-switcher").then((mod) => ({
+      default: mod.TeamSwitcher,
+    })),
+  {
+    ssr: false,
+    loading: () => <TeamSwitcherSkeleton />,
+  },
+)
+
+function TeamSwitcherSkeleton() {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-10 flex-1 animate-pulse rounded-lg bg-muted" />
+    </div>
+  )
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const { userName, role } = useAuth()
   const { totalUnread } = useMessages()
   const { settings } = useSiteSettings()
   const checkPermission = useModulePermission()
+  const { info: verticalInfo, migration } = useVerticalConfig()
   const normalizedRoleValue = role?.toString().trim().toUpperCase() ?? ""
-
-  const roleLabel = React.useMemo(() => {
-    if (!normalizedRoleValue) {
-      return "Usuario"
-    }
-
-    const roleMap: Record<string, string> = {
-      SUPER_ADMIN_GLOBAL: "Super Admin Global",
-      SUPER_ADMIN_ORG: "Super Administrador",
-      ADMIN: "Administrador",
-      EMPLOYEE: "Empleado",
-    }
-
-    if (roleMap[normalizedRoleValue]) {
-      return roleMap[normalizedRoleValue]
-    }
-
-    const formatted = normalizedRoleValue
-      .toLowerCase()
-      .split(/[_\s]+/)
-      .filter(Boolean)
-      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-      .join(" ")
-
-    return (
-      formatted ||
-      normalizedRoleValue.charAt(0) +
-        normalizedRoleValue.slice(1).toLowerCase()
-    )
-  }, [normalizedRoleValue])
+  const verticalFeatures = verticalInfo?.config?.features
+  const isComputerVertical = verticalInfo?.businessVertical === "COMPUTERS"
 
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
   const canAccessAccounting = useRBAC([
@@ -413,20 +437,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const canManageAds = useRBAC(["admin", "marketing"])
   const canAccessAds = adsEnabled && canManageAds
 
-  const teams = React.useMemo(() => {
-    const primaryTeam = data.teams[0]
-    const companyName = settings.company?.name?.trim()
-
-    return [
-      {
-        ...primaryTeam,
-        name: companyName || primaryTeam.name,
-        plan: roleLabel,
-      },
-      ...data.teams.slice(1),
-    ]
-  }, [roleLabel, settings.company?.name])
-
   const brandLogo = settings.brand?.logoUrl?.trim()
 
   const profile = {
@@ -437,6 +447,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const filteredNav = data.navMain
     .filter((item) => {
+      if (verticalFeatures) {
+        const feature = NAV_FEATURE_REQUIREMENTS[item.title]
+        if (feature && verticalFeatures[feature] === false) {
+          return false
+        }
+      }
       if (!checkPermission(item.permission)) {
         return false
       }
@@ -455,6 +471,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     })
     .map((item) => {
       const items = item.items?.filter((subItem) => {
+        if (verticalFeatures) {
+          const feature = NAV_FEATURE_REQUIREMENTS[item.title] ?? NAV_FEATURE_REQUIREMENTS[subItem.title]
+          if (feature && verticalFeatures[feature] === false) {
+            return false
+          }
+        }
         if (!checkPermission(subItem.permission ?? item.permission)) {
           return false
         }
@@ -486,15 +508,52 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const navMain = React.useMemo(() => {
     const items = filteredNav.map((item) => {
       if (item.title === "Ventas") {
+        const canAccessQuotes = isComputerVertical && checkPermission("sales")
         return {
           ...item,
-          items: item.items?.map((sub) =>
+          items: [
+            ...(item.items ?? []),
+            ...(canAccessQuotes
+              ? [
+                  {
+                    title: "Cotizaciones",
+                    url: "/dashboard/quotes",
+                    permission: "sales" as const,
+                  },
+                ]
+              : []),
+          ].map((sub) =>
             sub.title === "Mensajes" ? { ...sub, badge: totalUnread } : sub
           ),
         }
       }
       return item
     })
+    if (verticalInfo?.config?.ui?.customMenuItems?.length) {
+      const normalizeLabel = (value: string) =>
+        value
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/\p{Diacritic}/gu, "");
+      const excludedCustomLabels = new Set(["pos", "catalogo"]);
+      verticalInfo.config.ui.customMenuItems.forEach((menu) => {
+        const normalized = normalizeLabel(menu.label ?? "");
+        if (excludedCustomLabels.has(normalized)) {
+          return;
+        }
+        items.push({
+          title: menu.label,
+          url: "#",
+          icon: resolveCustomMenuIcon(menu.icon),
+          items: [
+            {
+              title: menu.label,
+              url: menu.path,
+            },
+          ],
+        })
+      })
+    }
     if (accountingEnabled && canAccessAccounting && checkPermission("accounting")) {
       const accountingItem = {
         title: "Contabilidad",
@@ -502,6 +561,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: PieChart,
         permission: "accounting" as const,
         items: [
+          { title: "General", url: "/dashboard/accounting", permission: "accounting" as const },
           { title: "Plan de Cuentas", url: "/dashboard/accounting/chart", permission: "accounting" as const },
           { title: "Diarios", url: "/dashboard/accounting/journals", permission: "accounting" as const },
           { title: "Asientos", url: "/dashboard/accounting/entries", permission: "accounting" as const },
@@ -546,14 +606,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     accountingEnabled,
     canAccessAccounting,
     checkPermission,
-    settings.permissions,
-    role,
+    verticalInfo,
+    isComputerVertical,
   ])
 
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={teams} initialTeamIndex={0} />
+        <TeamSwitcherLazy />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMain} />

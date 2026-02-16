@@ -3,17 +3,41 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Filter, Tags, CalendarDays, Clock } from "lucide-react";
+import { Filter, Tags, CalendarDays, TrendingUp } from "lucide-react";
+import type { DateRange } from "react-day-picker";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
+import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import { useTenantSelection } from "@/context/tenant-selection-context";
-import { columns } from "./columns"; // Importar las columnas definidas
-import { getAllPurchasePrices, getInventoryWithCurrency } from "./inventory.api";
+import { useTenantFeatures } from "@/context/tenant-features-context";
+import { useInventoryColumns } from "./columns"; // Importar las columnas definidas
+import {
+  getAllPurchasePrices,
+  getInventoryWithCurrency,
+  getInventoryAlertSummary,
+  type InventoryAlertSummary,
+} from "./inventory.api";
 import { DataTable } from "./data-table";
+import { CreateTemplateDialog } from "./create-template-dialog";
+import { TablePageSkeleton } from "@/components/table-page-skeleton";
 
 interface InventoryItem {
   id: number;
@@ -41,46 +65,40 @@ interface InventoryItem {
   serialNumbers: string[];
 }
 
-type SortMode = "created" | "updated";
+type SortMode = "created" | "stock";
+type MigrationFilter = "all" | "legacy" | "migrated";
 
 interface FilterControlsProps {
   sortMode: SortMode;
   onSortChange: (mode: SortMode) => void;
   inStockOnly: boolean;
   onInStockToggle: (value: boolean) => void;
+  migrationStatus: MigrationFilter;
+  onMigrationChange: (value: MigrationFilter) => void;
+  dateRange: DateRange | undefined;
+  onDateRangeChange: (range: DateRange | undefined) => void;
 }
 
-function FilterControls({ sortMode, onSortChange, inStockOnly, onInStockToggle }: FilterControlsProps) {
+function FilterControls({
+  sortMode,
+  onSortChange,
+  inStockOnly,
+  onInStockToggle,
+  migrationStatus,
+  onMigrationChange,
+  dateRange,
+  onDateRangeChange,
+}: FilterControlsProps) {
   const baseButtonClasses =
-    "flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition hover:border-primary/60 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+    "flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition hover:border-primary/60 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border bg-muted/20 p-4">
+    <div className="grid gap-3 lg:grid-cols-12">
+      <div className="rounded-xl border bg-muted/20 p-3 lg:col-span-7">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Ordenar por
         </span>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <button
-            type="button"
-            className={cn(
-              baseButtonClasses,
-              sortMode === "updated"
-                ? "border-primary bg-primary/5 text-primary"
-                : "border-border text-foreground"
-            )}
-            onClick={() => onSortChange("updated")}
-          >
-            <div className="flex size-9 items-center justify-center rounded-full border bg-background">
-              <Clock className="size-4" />
-            </div>
-            <div className="space-y-1">
-              <span className="font-medium leading-none">Última actualización</span>
-              <p className="text-sm text-muted-foreground">
-                Ordena por la fecha de modificación más reciente.
-              </p>
-            </div>
-          </button>
+        <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(220px,280px)]">
           <button
             type="button"
             className={cn(
@@ -91,25 +109,71 @@ function FilterControls({ sortMode, onSortChange, inStockOnly, onInStockToggle }
             )}
             onClick={() => onSortChange("created")}
           >
-            <div className="flex size-9 items-center justify-center rounded-full border bg-background">
+            <div className="flex size-8 items-center justify-center rounded-full border bg-background">
               <CalendarDays className="size-4" />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <span className="font-medium leading-none">Último ingreso</span>
-              <p className="text-sm text-muted-foreground">
+              <p className="hidden text-xs text-muted-foreground sm:block">
                 Prioriza los productos agregados recientemente.
               </p>
             </div>
           </button>
+          <button
+            type="button"
+            className={cn(
+              baseButtonClasses,
+              sortMode === "stock"
+                ? "border-primary bg-primary/5 text-primary"
+                : "border-border text-foreground"
+            )}
+            onClick={() => onSortChange("stock")}
+          >
+            <div className="flex size-8 items-center justify-center rounded-full border bg-background">
+              <TrendingUp className="size-4" />
+            </div>
+            <div className="space-y-0.5">
+              <span className="font-medium leading-none">Mayor stock</span>
+              <p className="hidden text-xs text-muted-foreground sm:block">
+                Muestra primero los productos con más unidades.
+              </p>
+            </div>
+          </button>
+          <div className="flex flex-col justify-center rounded-lg border border-dashed border-border/60 bg-background/60 px-3 py-2">
+            <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Rango de fechas
+            </Label>
+            <CalendarDatePicker
+              className="mt-1 h-9 w-full"
+              variant="outline"
+              date={dateRange || { from: undefined, to: undefined }}
+              onDateSelect={onDateRangeChange}
+            />
+          </div>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-4">
+      <div className="rounded-xl border bg-muted/20 p-3 lg:col-span-3">
+        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Estado de migración
+        </Label>
+        <Select value={migrationStatus} onValueChange={onMigrationChange}>
+          <SelectTrigger className="mt-2 w-full">
+            <SelectValue placeholder="Selecciona un estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="legacy">Legacy</SelectItem>
+            <SelectItem value="migrated">Migrados</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3 lg:col-span-2">
         <div>
           <Label htmlFor="in-stock-only" className="text-sm font-medium">
-            Solo productos en stock
+            Solo en stock
           </Label>
-          <p className="text-sm text-muted-foreground">
-            Oculta los artículos sin unidades disponibles.
+          <p className="hidden text-xs text-muted-foreground sm:block">
+            Oculta sin unidades.
           </p>
         </div>
         <Switch id="in-stock-only" checked={inStockOnly} onCheckedChange={onInStockToggle} />
@@ -124,15 +188,21 @@ export default function InventoryPage() {
   const [baseInventory, setBaseInventory] = useState<InventoryItem[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("created");
   const [inStockOnly, setInStockOnly] = useState(false);
+  const [migrationStatus, setMigrationStatus] = useState<MigrationFilter>("all");
+  const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
   const { selection, version, loading: tenantLoading } = useTenantSelection();
   const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
+    () => `${selection.companyId ?? "none"}-${version}`,
+    [selection.companyId, version],
   );
+  const [alertSummary, setAlertSummary] = useState<InventoryAlertSummary | null>(null);
+  const { migration, productSchema } = useTenantFeatures();
+  const pendingLegacyProducts = migration?.legacy ?? 0;
+  const columns = useInventoryColumns({ productSchema });
 
 
   useEffect(() => {
-    if (tenantLoading) {
+    if (tenantLoading || !selection.companyId) {
       return;
     }
 
@@ -245,6 +315,36 @@ export default function InventoryPage() {
     };
   }, [tenantLoading, selectionKey]);
 
+  const tenantReady = !tenantLoading && !!selection.companyId;
+
+  useEffect(() => {
+    if (!tenantReady) {
+      setAlertSummary(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadSummary = async () => {
+        try {
+          const summary = await getInventoryAlertSummary({
+            companyId: selection.companyId ?? undefined,
+          });
+          if (!cancelled) {
+            setAlertSummary(summary);
+          }
+      } catch (error) {
+        console.error("Error al cargar resumen de alertas:", error);
+        if (!cancelled) {
+          setAlertSummary(null);
+        }
+      }
+    };
+
+    void loadSummary();
+    return () => {
+      cancelled = true;
+    };
+    }, [tenantReady, selectionKey]);
 
   // Aplicar orden y filtro según controles
   useEffect(() => {
@@ -254,10 +354,29 @@ export default function InventoryPage() {
       data = data.filter((item) => (item?.stock ?? 0) > 0);
     }
 
-    if (sortMode === "updated") {
-      data.sort(
-        (a: any, b: any) => new Date(b.updateAt).getTime() - new Date(a.updateAt).getTime()
-      );
+    if (migrationStatus !== "all") {
+      data = data.filter((item) => {
+        const attrs = item.product?.extraAttributes ?? null;
+        const hasAttrs = !!attrs && Object.keys(attrs).length > 0;
+        const migrated = item.product?.isVerticalMigrated === true;
+        const legacy = item.product?.isVerticalMigrated === false || !hasAttrs;
+
+        return migrationStatus === "legacy" ? legacy : migrated && hasAttrs;
+      });
+    }
+
+    if (selectedDateRange?.from && selectedDateRange?.to) {
+      const from = new Date(selectedDateRange.from);
+      const to = new Date(selectedDateRange.to);
+      to.setHours(23, 59, 59, 999);
+      data = data.filter((item) => {
+        const itemDate = new Date(item.createdAt);
+        return itemDate >= from && itemDate <= to;
+      });
+    }
+
+    if (sortMode === "stock") {
+      data.sort((a: any, b: any) => (b.stock ?? 0) - (a.stock ?? 0));
     } else {
       data.sort(
         (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -265,11 +384,11 @@ export default function InventoryPage() {
     }
 
     setInventory(data);
-  }, [baseInventory, sortMode, inStockOnly]);
+  }, [baseInventory, sortMode, inStockOnly, migrationStatus, selectedDateRange]);
   
 
   if (loading) {
-    return <div className="px-4">Cargando inventario...</div>;
+    return <TablePageSkeleton filters={3} columns={5} rows={8} />;
   }
 
   return (
@@ -284,7 +403,7 @@ export default function InventoryPage() {
                   Monitorea existencias, números de serie y precios en tiempo real.
                 </p>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 <Sheet>
                   <SheetTrigger asChild>
                     <Button
@@ -304,15 +423,38 @@ export default function InventoryPage() {
                       </SheetDescription>
                     </SheetHeader>
                     <div className="px-1 pb-6">
-                      <FilterControls
-                        sortMode={sortMode}
-                        onSortChange={setSortMode}
-                        inStockOnly={inStockOnly}
-                        onInStockToggle={(value) => setInStockOnly(!!value)}
-                      />
+                        <FilterControls
+                          sortMode={sortMode}
+                          onSortChange={setSortMode}
+                          inStockOnly={inStockOnly}
+                          onInStockToggle={(value) => setInStockOnly(!!value)}
+                          migrationStatus={migrationStatus}
+                          onMigrationChange={(value) => setMigrationStatus(value as MigrationFilter)}
+                          dateRange={selectedDateRange}
+                          onDateRangeChange={setSelectedDateRange}
+                        />
                     </div>
                   </SheetContent>
                 </Sheet>
+                <CreateTemplateDialog
+                  organizationId={selection?.orgId ?? null}
+                  companyId={selection?.companyId ?? null}
+                  sampleId={null}
+                />
+                <Button
+                  asChild
+                  variant={pendingLegacyProducts > 0 ? "destructive" : "outline"}
+                  className="inline-flex w-full items-center justify-center gap-2 sm:w-auto"
+                >
+                  <Link href="/dashboard/products/migration">
+                    <Tags className="size-4" />
+                    <span>
+                      {pendingLegacyProducts > 0
+                        ? `Migrar productos (${pendingLegacyProducts})`
+                        : "Asistente de migración"}
+                    </span>
+                  </Link>
+                </Button>
                 <Button
                   asChild
                   className="inline-flex w-full items-center justify-center gap-2 sm:w-auto"
@@ -322,14 +464,34 @@ export default function InventoryPage() {
                     <span>Generar etiquetas</span>
                   </Link>
                 </Button>
-              </div>
-              </div>
+                <Button
+                  asChild
+                  variant="secondary"
+                  className="inline-flex w-full items-center justify-center gap-2 sm:w-auto"
+                  disabled={!tenantReady}
+                >
+                  <Link href="/dashboard/inventory/alerts">
+                    <Tags className="size-4" />
+                    <span>Mostrar alertas</span>
+                    {alertSummary?.badgeCount ? (
+                      <span className="ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-destructive px-2 text-xs font-semibold text-destructive-foreground">
+                        {alertSummary.badgeCount}
+                      </span>
+                    ) : null}
+                  </Link>
+                </Button>
+        </div>
+        </div>
             <div className="hidden border-b px-5 py-4 sm:block">
               <FilterControls
                 sortMode={sortMode}
                 onSortChange={setSortMode}
                 inStockOnly={inStockOnly}
                 onInStockToggle={(value) => setInStockOnly(!!value)}
+                migrationStatus={migrationStatus}
+                onMigrationChange={(value) => setMigrationStatus(value as MigrationFilter)}
+                dateRange={selectedDateRange}
+                onDateRangeChange={setSelectedDateRange}
               />
             </div>
             <div className="px-2 pb-6 sm:px-5">

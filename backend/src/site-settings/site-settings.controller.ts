@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Put, UseGuards, Request } from '@nestjs/common';
 import { SiteSettingsService } from './site-settings.service';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { RolesGuard } from 'src/users/roles.guard';
@@ -8,6 +8,7 @@ import { plainToInstance } from 'class-transformer';
 import { CreateSiteSettingDto } from './dto/create-site-setting.dto';
 import { UpdateSiteSettingsDto } from './dto/update-site-setting.dto';
 import { TenantContextService } from 'src/tenancy/tenant-context.service';
+import { Request as ExpressRequest } from 'express';
 
 @ModulePermission('settings')
 @Controller('site-settings')
@@ -47,12 +48,17 @@ export class SiteSettingsController {
   @Put()
   async updateSettings(
     @Body() dto: UpdateSiteSettingsDto,
+    @Request() req: ExpressRequest,
   ): Promise<CreateSiteSettingDto> {
     const { organizationId, companyId } = this.resolveTenantScope();
     const settings = await this.siteSettingsService.updateSettings(
       dto,
       organizationId,
       companyId,
+      {
+        actorId: req.user?.userId ?? null,
+        actorEmail: req.user?.email ?? req.user?.username ?? null,
+      },
     );
     return plainToInstance(CreateSiteSettingDto, {
       settings: settings.data,

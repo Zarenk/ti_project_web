@@ -1,5 +1,6 @@
 ﻿import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   Logger,
@@ -16,6 +17,7 @@ import { ActivityService } from '../activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { Request } from 'express';
 import { InventoryService } from 'src/inventory/inventory.service';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 import {
   CompleteOrderDto,
   isDeliveryShipping,
@@ -43,7 +45,20 @@ export class WebSalesService {
     private readonly activityService: ActivityService,
     private readonly accountingHook: AccountingHook,
     private readonly inventoryService: InventoryService,
+    private readonly verticalConfig: VerticalConfigService,
   ) {}
+
+  private async ensureEcommerceFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) return;
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.ecommerceIntegration === false) {
+      throw new ForbiddenException(
+        'El modulo de ventas web/ecommerce no esta habilitado para esta empresa.',
+      );
+    }
+  }
 
   /** ---------- helpers ---------- */
   private async assertCompanyMatchesOrganization(
@@ -148,6 +163,8 @@ export class WebSalesService {
       );
     }
 
+    await this.ensureEcommerceFeatureEnabled(resolvedCompanyId);
+
     const { shippingName, shippingAddress, city, postalCode, phone, code } =
       data;
 
@@ -243,6 +260,8 @@ export class WebSalesService {
       companyId: inputCompanyId ?? undefined,
       metadata: { storeId, userId },
     });
+
+    await this.ensureEcommerceFeatureEnabled(inputCompanyId);
 
     let resolvedClientId = clientId;
 
@@ -837,6 +856,8 @@ export class WebSalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureEcommerceFeatureEnabled(companyId);
+
     const where = buildOrganizationFilter(
       organizationId,
       companyId,
@@ -1032,7 +1053,7 @@ export class WebSalesService {
         : null;
 
       if (cleanedSale && 'sunatTransmissions' in cleanedSale) {
-        delete (cleanedSale as any).sunatTransmissions;
+        delete cleanedSale.sunatTransmissions;
       }
 
       return {
@@ -1084,18 +1105,66 @@ export class WebSalesService {
     });
   }
 
+  async getOrdersDashboardOverview(params: {
+    status?: string;
+    limit?: number;
+    from?: string;
+    to?: string;
+    organizationId?: number | null;
+    companyId?: number | null;
+  }) {
+    const baseWhere = buildOrganizationFilter(
+      params.organizationId,
+      params.companyId,
+    ) as Prisma.OrdersWhereInput;
+
+    const dateWhere =
+      params.from && params.to
+        ? {
+            ...baseWhere,
+            createdAt: {
+              gte: new Date(params.from),
+              lte: new Date(params.to),
+            },
+          }
+        : baseWhere;
+
+    const [pendingCount, recentOrders] = await this.prisma.$transaction([
+      this.prisma.orders.count({
+        where: {
+          ...baseWhere,
+          ...(params.status ? { status: params.status as any } : {}),
+        },
+      }),
+      this.prisma.orders.findMany({
+        where: dateWhere,
+        orderBy: { createdAt: 'desc' },
+        take: params.limit ?? 10,
+        select: {
+          id: true,
+          code: true,
+          status: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    return {
+      pendingCount,
+      recentOrders,
+    };
+  }
+
   private buildSunatStatus(
-    transmission?:
-      | {
-          id: number;
-          status: string;
-          ticket: string | null;
-          environment?: string | null;
-          errorMessage?: string | null;
-          updatedAt?: Date;
-          createdAt?: Date;
-        }
-      | null,
+    transmission?: {
+      id: number;
+      status: string;
+      ticket: string | null;
+      environment?: string | null;
+      errorMessage?: string | null;
+      updatedAt?: Date;
+      createdAt?: Date;
+    } | null,
   ) {
     if (!transmission) {
       return null;
@@ -1111,5 +1180,3 @@ export class WebSalesService {
     };
   }
 }
-
-

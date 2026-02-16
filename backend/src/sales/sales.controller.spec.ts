@@ -73,36 +73,39 @@ describe('SalesController', () => {
 
     service.createSale.mockResolvedValue({ id: 1 } as any);
 
-    await controller.createSale(createSaleDto, 77, 91);
+    await controller.createSale(createSaleDto, { organizationId: 55, companyId: 66 }, 77, 91);
 
     expect(service.createSale).toHaveBeenCalledWith({
       ...createSaleDto,
       organizationId: 55,
       companyId: 66,
+      isSuperAdmin: false,
     });
   });
 
   it('uses tenant context when payload omits organization and company', async () => {
     service.createSale.mockResolvedValue({ id: 2 } as any);
 
-    await controller.createSale({ ...createSaleBasePayload }, 88, 22);
+    await controller.createSale({ ...createSaleBasePayload }, { organizationId: 88, companyId: 22 }, 88, 22);
 
     expect(service.createSale).toHaveBeenCalledWith({
       ...createSaleBasePayload,
       organizationId: 88,
       companyId: 22,
+      isSuperAdmin: false,
     });
   });
 
   it('omits organizationId and companyId when both payload and context are null', async () => {
     service.createSale.mockResolvedValue({ id: 3 } as any);
 
-    await controller.createSale({ ...createSaleBasePayload }, null, null);
+    await controller.createSale({ ...createSaleBasePayload }, null, null, null);
 
     expect(service.createSale).toHaveBeenCalledWith({
       ...createSaleBasePayload,
       organizationId: undefined,
       companyId: undefined,
+      isSuperAdmin: false,
     });
   });
 

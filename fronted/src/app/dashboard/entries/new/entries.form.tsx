@@ -1,7 +1,7 @@
-"use client"
+﻿"use client"
 
 import { useForm } from 'react-hook-form'
-import { checkSeries, processPDF } from '../entries.api'
+import { checkSeries, processPDF, uploadDraftGuiaPdf, uploadDraftPdf } from '../entries.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { z } from 'zod'
@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import React from 'react'
 import { getProducts } from '../../products/products.api'
 import { getCategories } from '../../categories/categories.api'
-import { getProviders } from '../../providers/providers.api'
+import { getProviders, createProvider } from '../../providers/providers.api'
 import {jwtDecode} from 'jwt-decode';
 import { getAuthToken } from "@/utils/auth-token";
 import { getStores } from '../../stores/stores.api'
@@ -23,7 +23,16 @@ import { SelectedProductsTable } from '../components/entries/SelectedProductsTab
 import { handleFormSubmission } from '../utils/onSubmitHelper'
 import { ActionButtons } from '../components/entries/ActionButtons'
 import { getLatestExchangeRateByCurrency } from '../../exchange/exchange.api'
-import { detectInvoiceProvider, processExtractedText, processInvoiceText } from '../utils/pdfExtractor'
+import {
+  detectGuideDocument,
+  detectInvoiceProvider,
+  processExtractedText,
+  processDeltronGuideText,
+  processGuideText,
+  processIngramInvoiceText,
+  processInvoiceText,
+  processNexsysInvoiceText,
+} from '../utils/pdfExtractor'
 import { numeroALetrasCustom } from '../../sales/components/utils/numeros-a-letras'
 import {
   AlertDialog,
@@ -37,12 +46,14 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTenantSelection } from '@/context/tenant-selection-context'
+import { useAuth } from '@/context/auth-context'
+import { normalizeOptionValue } from '@/lib/utils'
 
-// Función para obtener el userId del token JWT almacenado en localStorage
+// FunciÃ³n para obtener el userId del token JWT almacenado en localStorage
 async function getUserIdFromToken(): Promise<number | null> {
   const token = await getAuthToken();
   if (!token) {
-    console.error('No se encontró un token de autenticación');
+    console.error('No se encontrÃ³ un token de autenticaciÃ³n');
     return null;
   }
 
@@ -77,7 +88,18 @@ const entriesSchema = z.object({
   comprobante: z.string({}),
   total_comprobante: z.string({}),
   tipo_moneda: z.string({}),
-  payment_method: z.enum(['CASH', 'CREDIT'])
+  payment_method: z.enum(['CASH', 'CREDIT']),
+  guia_serie: z.string({}),
+  guia_correlativo: z.string({}),
+  guia_fecha_emision: z.string({}),
+  guia_fecha_entrega_transportista: z.string({}),
+  guia_motivo_traslado: z.string({}),
+  guia_punto_partida: z.string({}),
+  guia_punto_llegada: z.string({}),
+  guia_destinatario: z.string({}),
+  guia_peso_bruto_unidad: z.string({}),
+  guia_peso_bruto_total: z.string({}),
+  guia_transportista: z.string({}),
 })
 //inferir el tipo de dato
 export type EntriesType = z.infer<typeof entriesSchema>;
@@ -105,6 +127,17 @@ function buildDefaultEntryValues(entry?: any): EntriesType {
     total_comprobante: entry?.total_comprobante ?? "",
     tipo_moneda: entry?.tipo_moneda ?? "PEN",
     payment_method: entry?.payment_method ?? "CASH",
+    guia_serie: entry?.guia_serie ?? "",
+    guia_correlativo: entry?.guia_correlativo ?? "",
+    guia_fecha_emision: entry?.guia_fecha_emision ?? "",
+    guia_fecha_entrega_transportista: entry?.guia_fecha_entrega_transportista ?? "",
+    guia_motivo_traslado: entry?.guia_motivo_traslado ?? "",
+    guia_punto_partida: entry?.guia_punto_partida ?? "",
+    guia_punto_llegada: entry?.guia_punto_llegada ?? "",
+    guia_destinatario: entry?.guia_destinatario ?? "",
+    guia_peso_bruto_unidad: entry?.guia_peso_bruto_unidad ?? "",
+    guia_peso_bruto_total: entry?.guia_peso_bruto_total ?? "",
+    guia_transportista: entry?.guia_transportista ?? "",
   };
 }
 
@@ -117,6 +150,9 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     });
 
     useEffect(() => {
+      if (hasEntryDraftAppliedRef.current) {
+        return;
+      }
       form.reset(initialValues);
     }, [form, initialValues]);
 
@@ -126,13 +162,18 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const categoryValue = form.watch('category_name');
   const initialCurrency = (form.getValues("tipo_moneda") as 'USD' | 'PEN') || 'PEN';
 
-  // Estado para manejar el envío del formulario
+  // Estado para manejar el envÃ­o del formulario
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [loadingStores, setLoadingStores] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(!categories?.length);
-  const { version } = useTenantSelection();
+  const { version, selection } = useTenantSelection();
+  const { userId } = useAuth();
+  const hasEntryDraftAppliedRef = useRef(false);
+  const isApplyingEntryDraftRef = useRef(false);
+  const entryDraftSaveTimeoutRef = useRef<number | null>(null);
+  const entryDraftLastPayloadRef = useRef<string | null>(null);
 
   // MODAL DE PRODUCTOS
   const [categoriesState, setCategories] = useState<{ id: number; name: string }[]>(categories ?? []);
@@ -176,10 +217,10 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   // MODAL PARA AGREGAR SERIES
   const [openSeriesModal, setOpenSeriesModal] = useState<number | null>(null);
  
-  // Estado para controlar el diálogo de confirmación del boton REGISTRAR VENTA
+  // Estado para controlar el diÃ¡logo de confirmaciÃ³n del boton REGISTRAR VENTA
   const [isDialogOpen, setIsDialogOpen] = useState(false);
  
-  // Función para manejar el envío del formulario
+  // FunciÃ³n para manejar el envÃ­o del formulario
   const getAllSeriesFromDataTable = (): string[] => {
     // Suponiendo que `selectedProducts` contiene los productos en el DataTable
     return selectedProducts.flatMap((product) => product.series || []);
@@ -191,10 +232,13 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // ALERT DIALOG PARA AGREGAR PROVEEDORES
   const [isDialogOpenProvider, setIsDialogOpenProvider] = useState(false); // Estado para controlar el AlertDialog
+  const [isProviderNotFoundOpen, setIsProviderNotFoundOpen] = useState(false);
+  const [pendingProviderData, setPendingProviderData] = useState<{ name: string; ruc: string; address: string } | null>(null);
+  const [isCreatingProvider, setIsCreatingProvider] = useState(false);
   //
 
   // ALERT DIALOG PARA AGREGAR TIENDAS
-  const [isDialogOpenStore, setIsDialogOpenStore] = useState(false); // Controla la apertura del diálogo
+  const [isDialogOpenStore, setIsDialogOpenStore] = useState(false); // Controla la apertura del diÃ¡logo
   //
 
   // COMBOBOX DE PRODUCTOS
@@ -205,6 +249,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // ENVIAR GUIA PDF
   const [pdfGuiaFile, setPdfGuiaFile] = useState<File | null>(null);
+  const [showGuideFields, setShowGuideFields] = useState(false);
 
 
   const entryReferenceIdRef = useRef<string | null>(null);
@@ -221,7 +266,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     return generated;
   };
 
-  // Función para agregar un producto al datatable
+  // FunciÃ³n para agregar un producto al datatable
   const [selectedProducts, setSelectedProducts] = useState<
     { id: number; name: string; price: number; priceSell: number; quantity: number; category_name: string, series?: string[], newSeries?: string }[]
   >([]);
@@ -240,9 +285,46 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // ENVIAR PDF
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [draftInvoice, setDraftInvoice] = useState<{ id: string; url: string } | null>(null);
   const [isNewInvoiceBoolean, setIsNewInvoiceBoolean] = useState(false);
+  const [showInvoiceFields, setShowInvoiceFields] = useState(false);
+  const [draftGuide, setDraftGuide] = useState<{ id: string; url: string } | null>(null);
+  const invoicePreviewUrl = useMemo(
+    () => {
+      if (pdfFile) {
+        return URL.createObjectURL(pdfFile);
+      }
+      return draftInvoice?.url ?? null;
+    },
+    [pdfFile, draftInvoice?.url],
+  );
+  const guidePreviewUrl = useMemo(
+    () => {
+      if (pdfGuiaFile) {
+        return URL.createObjectURL(pdfGuiaFile);
+      }
+      return draftGuide?.url ?? null;
+    },
+    [pdfGuiaFile, draftGuide?.url],
+  );
 
-  // Estado para manejar el diálogo de confirmación
+  useEffect(() => {
+    return () => {
+      if (invoicePreviewUrl && invoicePreviewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(invoicePreviewUrl);
+      }
+    };
+  }, [invoicePreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (guidePreviewUrl && guidePreviewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(guidePreviewUrl);
+      }
+    };
+  }, [guidePreviewUrl]);
+
+  // Estado para manejar el diÃ¡logo de confirmaciÃ³n
   const handleConfirm = async () => {
     if (isSubmitting) return;
     setIsDialogOpen(false); // Cierra el modal inmediatamente
@@ -269,27 +351,47 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       try {
         const result = await checkSeries(serial.trim());
         if (result.exists) {
-          toast.error(`La serie "${serial}" ya está asociada a otro producto en el sistema.`);
+          toast.error(`La serie "${serial}" ya estÃ¡ asociada a otro producto en el sistema.`);
           return false; // Detener el proceso si se encuentra una serie duplicada
         }
       } catch (error) {
         console.error(`Error al verificar la serie "${serial}":`, error);
-        toast.error(`Error al verificar la serie "${serial}". Inténtalo nuevamente.`);
+        toast.error(`Error al verificar la serie "${serial}". IntÃ©ntalo nuevamente.`);
         return false; // Detener el proceso si ocurre un error
       }
     }
   
-    return true; // Todas las series son válidas
+    return true; // Todas las series son vÃ¡lidas
   };
   //
 
   // COMBOBOX DE Proveedores
-  const [providers, setProviders] = useState<{ id: number; 
-  name: string, description: string, adress: string }[]>([]); // Estado para los proveedores
+  const [providers, setProviders] = useState<{ id: number;
+  name: string, description: string, document: string, documentNumber: string, adress: string }[]>([]); // Estado para los proveedores
   const [openProvider, setOpenProvider] = React.useState(false)
   const [valueProvider, setValueProvider] = React.useState("")
   // Estado para rastrear si el combobox de proveedores ha sido tocado
   const [isProviderComboTouched, setIsProviderComboTouched] = useState(false);
+
+  const entryContextKey = useMemo(() => {
+    if (!userId || !selection.orgId) return null;
+    return `entry-context:v1:${userId}:${selection.orgId}`;
+  }, [userId, selection.orgId]);
+  const entryDraftKey = useMemo(() => {
+    if (!userId || !selection.orgId) return null;
+    return `entry-draft:v1:${userId}:${selection.orgId}`;
+  }, [userId, selection.orgId]);
+  const [entryDefaults, setEntryDefaults] = useState<{
+    storeId?: number | null;
+    providerId?: number | null;
+    productId?: number | null;
+  } | null>(null);
+  const hasAppliedDefaultsRef = useRef(false);
+  const recentProductsKey = useMemo(() => {
+    if (!userId || !selection.orgId) return null;
+    return `entry-recent-products:v1:${userId}:${selection.orgId}`;
+  }, [userId, selection.orgId]);
+  const [recentProductIds, setRecentProductIds] = useState<number[]>([]);
 
   // CONTROLAR LA MONEDA
   const [currency, setCurrency] = useState<'USD' | 'PEN'>(initialCurrency);
@@ -298,6 +400,38 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [isConvertingCurrency, setIsConvertingCurrency] = useState(false);
 
   const normalizedCurrency = currency === 'USD' ? 'USD' : 'PEN';
+  const clearEntryDraft = () => {
+    if (!entryDraftKey || typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.removeItem(entryDraftKey);
+    } catch (error) {
+      console.warn("No se pudo limpiar el borrador de la entrada:", error);
+    }
+    entryDraftLastPayloadRef.current = null;
+  };
+
+  const selectedStoreId = useMemo(() => {
+    if (!valueStore) return null;
+    const normalized = normalizeOptionValue(valueStore);
+    const match = stores.find((store) => normalizeOptionValue(store.name) === normalized);
+    return match?.id ?? null;
+  }, [stores, valueStore]);
+
+  const selectedProviderId = useMemo(() => {
+    if (!valueProvider) return null;
+    const normalized = normalizeOptionValue(valueProvider);
+    const match = providers.find((provider) => normalizeOptionValue(provider.name) === normalized);
+    return match?.id ?? null;
+  }, [providers, valueProvider]);
+
+  const selectedProductId = useMemo(() => {
+    if (!value) return null;
+    const normalized = normalizeOptionValue(value);
+    const match = products.find((product) => normalizeOptionValue(product.name) === normalized);
+    return match?.id ?? null;
+  }, [products, value]);
 
   const totalAmount = useMemo(() => {
     return selectedProducts.reduce((sum, product) => {
@@ -413,7 +547,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
           if (!exchangeRate || exchangeRate <= 0) {
             toast.error(
-              'No se pudo obtener un tipo de cambio válido para convertir a dólares.'
+              'No se pudo obtener un tipo de cambio vÃ¡lido para convertir a dÃ³lares.'
             );
             return false;
           }
@@ -459,7 +593,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           form.setValue('priceSell', typeof convertedPriceSell === 'number' ? convertedPriceSell : 0, { shouldValidate: true });
 
           setTipoCambioActual(exchangeRate);
-          toast.success('Los precios se actualizaron a dólares.');
+          toast.success('Los precios se actualizaron a dÃ³lares.');
         } else if (currency === 'USD' && newCurrency === 'PEN') {
           if (!exchangeRate || exchangeRate <= 0) {
             exchangeRate = await getLatestExchangeRateByCurrency('USD');
@@ -467,7 +601,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
           if (!exchangeRate || exchangeRate <= 0) {
             toast.error(
-              'No se pudo obtener un tipo de cambio válido para convertir a soles.'
+              'No se pudo obtener un tipo de cambio vÃ¡lido para convertir a soles.'
             );
             return false;
           }
@@ -568,7 +702,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     setPendingCurrency(null);
   };
 
-  // Función para eliminar un producto del datatable
+  // FunciÃ³n para eliminar un producto del datatable
   const removeProduct = (id: number) => {
     setSelectedProducts((prev) => prev.filter((product) => product.id !== id));
   };
@@ -576,31 +710,34 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   //handlesubmit para manejar los datos y el ingreso de los productos
   const onSubmit = handleSubmit(async (data) => {
-    if (isSubmitting) return; // ✅ Evita clicks repetidos
-    setIsSubmitting(true); // ✅ Bloquea nuevos intentos
+    if (isSubmitting) return; // âœ… Evita clicks repetidos
+    setIsSubmitting(true); // âœ… Bloquea nuevos intentos
     try {
-      const success = await handleFormSubmission({
-        data,
-        form,
-        stores,
-        providers,
-        selectedProducts,
-        isNewInvoiceBoolean,
-        validateSeriesBeforeSubmit,
-        categories: categoriesState,
-        pdfFile,
-        pdfGuiaFile,
-        router,
-        getUserIdFromToken,
-        tipoMoneda, // Pasar el tipo de moneda
-        tipoCambioActual, // Pasar el tipo de cambio actual
-        referenceId: getEntryReferenceId(),
+        const success = await handleFormSubmission({
+          data,
+          form,
+          stores,
+          providers,
+          selectedProducts,
+          isNewInvoiceBoolean,
+          validateSeriesBeforeSubmit,
+          categories: categoriesState,
+          pdfFile,
+          pdfGuiaFile,
+          draftPdfId: draftInvoice?.id ?? null,
+          draftGuiaId: draftGuide?.id ?? null,
+          router,
+          getUserIdFromToken,
+          tipoMoneda, // Pasar el tipo de moneda
+          tipoCambioActual, // Pasar el tipo de cambio actual
+          referenceId: getEntryReferenceId(),
       });
       if (success) {
         entryReferenceIdRef.current = null;
+        clearEntryDraft();
       }
     } finally {
-      setIsSubmitting(false); // ✅ Libera el botón cuando termina
+      setIsSubmitting(false); // âœ… Libera el botÃ³n cuando termina
     }
   });
 
@@ -626,22 +763,22 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     let categoryName = form.getValues("category_name");
 
     if (isNewCategoryBoolean) {
-      // Si es una nueva categoría, usa el valor del input
+      // Si es una nueva categorÃ­a, usa el valor del input
       categoryName = form.getValues("category_name");
       if (!categoryName || categoryName.trim() === "") {
-        toast.error("El nombre de la categoría no puede estar vacío.");
-        console.error("El nombre de la categoría está vacío.");
+        toast.error("El nombre de la categorÃ­a no puede estar vacÃ­o.");
+        console.error("El nombre de la categorÃ­a estÃ¡ vacÃ­o.");
         return;
       }
     } else {
-      // Encuentra el nombre de la categoría correspondiente
+      // Encuentra el nombre de la categorÃ­a correspondiente
       const category = categoriesState.find(
         (cat: any) => cat.id === currentProduct.categoryId
       );
-      categoryName = category?.name || "Sin categoría";
+      categoryName = category?.name || "Sin categorÃ­a";
     }
 
-    // Verifica si el producto ya está en la lista
+    // Verifica si el producto ya estÃ¡ en la lista
     const existingProduct = selectedProducts.find(
       (product) => product.id === currentProduct.id
     );
@@ -666,7 +803,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       );
       toast.success("Cantidad actualizada para el producto existente.");
     } else {
-      // Si el producto no existe, agrégalo
+      // Si el producto no existe, agrÃ©galo
       setSelectedProducts((prev) => [
         ...prev,
         {
@@ -675,7 +812,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           price: currentProduct.price,
           priceSell: Number(form.getValues("priceSell") || currentProduct.priceSell),
           quantity,
-          category_name: categoryName || "Sin categoria", // Incluye el nombre de la categoría
+          category_name: categoryName || "Sin categoria", // Incluye el nombre de la categorÃ­a
           series: [...(series || [])], // Agregar series
         },
       ]);
@@ -699,26 +836,97 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   };
   //
 
+  const handlePreviewInvoice = () => {
+    if (invoicePreviewUrl) {
+      window.open(invoicePreviewUrl, "_blank", "noopener,noreferrer");
+    }
+    setShowInvoiceFields(true);
+    setShowGuideFields(false);
+  };
+
+  const handlePreviewGuide = () => {
+    if (guidePreviewUrl) {
+      window.open(guidePreviewUrl, "_blank", "noopener,noreferrer");
+    }
+    setShowGuideFields(true);
+    setShowInvoiceFields(false);
+  };
+  //
+
+  const handleProviderLookup = (ruc: string, name: string, address: string) => {
+    if (!ruc) return;
+    const found = providers.find((p) => p.documentNumber === ruc);
+    if (found) {
+      setValueProvider(found.name);
+      form.setValue("provider_name", found.name);
+      form.setValue("provider_adress", found.adress || "");
+      form.setValue("provider_documentNumber", found.documentNumber || "");
+      toast.success(`Proveedor "${found.name}" detectado automáticamente.`);
+    } else {
+      setPendingProviderData({ name, ruc, address });
+      setIsProviderNotFoundOpen(true);
+    }
+  };
+
+  const handleCreatePendingProvider = async () => {
+    if (!pendingProviderData) return;
+    setIsCreatingProvider(true);
+    try {
+      const created = await createProvider({
+        name: pendingProviderData.name,
+        description: pendingProviderData.name,
+        document: "RUC",
+        documentNumber: pendingProviderData.ruc,
+        adress: pendingProviderData.address,
+      });
+      if (created && created.id) {
+        setProviders((prev) => [...prev, created]);
+        setValueProvider(created.name);
+        form.setValue("provider_name", created.name);
+        form.setValue("provider_adress", created.adress || "");
+        form.setValue("provider_documentNumber", created.documentNumber || "");
+        toast.success(`Proveedor "${created.name}" creado y seleccionado.`);
+      }
+    } catch (error: any) {
+      console.error("Error al crear proveedor:", error);
+      toast.error(error?.message || "Error al crear el proveedor.");
+    } finally {
+      setIsCreatingProvider(false);
+      setIsProviderNotFoundOpen(false);
+      setPendingProviderData(null);
+    }
+  };
+
   const handlePDFUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     
     if (file) {
 
       if (file.type !== "application/pdf") {
-        toast.error("Por favor, sube un archivo PDF válido.");
+        toast.error("Por favor, sube un archivo PDF vÃ¡lido.");
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
         toast.error("El archivo no debe exceder los 5 MB.");
         return;
       }
-      setPdfFile(file);
-      try {
-        const extractedText = await processPDF(file); // Llama a la función de la API
-        const provider = detectInvoiceProvider(extractedText);
+        setPdfFile(file);
+        try {
+          const draft = await uploadDraftPdf(file);
+          setDraftInvoice({ id: draft.draftId, url: draft.url });
+        } catch (error) {
+          setDraftInvoice(null);
+        }
+        try {
+          const extractedText = await processPDF(file); // Llama a la funciÃ³n de la API
+          const provider = detectInvoiceProvider(extractedText);
 
         if (provider === "deltron") {
           processExtractedText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        } else if (provider === "ingram") {
+          processIngramInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        } else if (provider === "nexsys") {
+          processNexsysInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
         } else {
           processInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
           if (provider === "unknown") {
@@ -726,7 +934,17 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           }
         }
         setIsNewInvoiceBoolean(true);
+        setShowInvoiceFields(true);
+        setShowGuideFields(false);
         toast.success("Factura subida correctamente.");
+
+        // Auto-detectar proveedor por RUC
+        const ruc = form.getValues("provider_documentNumber") || "";
+        const provName = form.getValues("provider_name") || "";
+        const provAddress = form.getValues("provider_adress") || "";
+        if (ruc) {
+          handleProviderLookup(ruc, provName, provAddress);
+        }
       } catch (error) {
         console.error('Error al procesar el archivo PDF:', error);
         toast.error('Error al procesar el archivo PDF');
@@ -740,16 +958,51 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     
     if (fileGuia) {
       if (fileGuia.type !== "application/pdf") {
-        toast.error("Por favor, sube un archivo PDF válido.");
+        toast.error("Por favor, sube un archivo PDF valido.");
         return;
       }
       if (fileGuia.size > 5 * 1024 * 1024) {
         toast.error("El archivo no debe exceder los 5 MB.");
         return;
       }
-      setPdfGuiaFile(fileGuia);
-      try {
-        toast.success("Guía de remisión subida correctamente.");
+        setPdfGuiaFile(fileGuia);
+        try {
+          const draft = await uploadDraftGuiaPdf(fileGuia);
+          setDraftGuide({ id: draft.draftId, url: draft.url });
+        } catch (error) {
+          setDraftGuide(null);
+        }
+        try {
+          const extractedText = await processPDF(fileGuia);
+        if (!extractedText || !extractedText.trim()) {
+          toast.warning(
+            "No se pudo leer texto del PDF. Si es una imagen escaneada, se requiere OCR.",
+          );
+          return;
+        }
+
+        if (!detectGuideDocument(extractedText)) {
+          toast.warning("No se detecto una guia de remision en el PDF.");
+        }
+
+        // Route to provider-specific guide processor
+        const guideProvider = detectInvoiceProvider(extractedText);
+        if (guideProvider === "deltron") {
+          processDeltronGuideText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        } else {
+          processGuideText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        }
+        setShowGuideFields(true);
+        setShowInvoiceFields(false);
+        toast.success("Guia de remision procesada correctamente.");
+
+        // Auto-detectar proveedor por RUC
+        const ruc = form.getValues("provider_documentNumber") || "";
+        const provName = form.getValues("provider_name") || "";
+        const provAddress = form.getValues("provider_adress") || "";
+        if (ruc) {
+          handleProviderLookup(ruc, provName, provAddress);
+        }
       } catch (error) {
         console.error('Error al procesar el archivo PDF:', error);
         toast.error('Error al procesar el archivo PDF');
@@ -757,6 +1010,67 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     }
   };
   //
+
+  const handleClearForm = () => {
+    setSelectedProducts([]);
+    setSeries([]);
+    setCurrentProduct(null);
+    setQuantity(1);
+    setPdfFile(null);
+    setPdfGuiaFile(null);
+    setDraftInvoice(null);
+    setDraftGuide(null);
+    setValueProduct("");
+    setValueProvider("");
+    setValueStore("");
+    setOpen(false);
+    setOpenProvider(false);
+
+    setPdfFile(null);
+    setPdfGuiaFile(null);
+    setIsNewInvoiceBoolean(false);
+
+    // Restablece la UI al estado por defecto: factura visible, guia oculta
+    setShowInvoiceFields(true);
+    setShowGuideFields(false);
+
+    const today = new Date();
+    setSelectedDate(today);
+    setCreatedAt(today);
+    form.setValue("entry_date", today);
+
+    setCurrency("PEN");
+    setTipoMoneda("PEN");
+    setTipoCambioActual(null);
+
+    form.reset(buildDefaultEntryValues());
+    clearEntryDraft();
+
+    // Limpia los inputs file para evitar archivos "pegados"
+    const invoiceInput = document.getElementById("pdf-upload") as HTMLInputElement | null;
+    if (invoiceInput) invoiceInput.value = "";
+    const guideInput = document.getElementById("pdf-guia-upload") as HTMLInputElement | null;
+    if (guideInput) guideInput.value = "";
+  };
+  //
+
+  const handleRecentProductSelection = (productId: number) => {
+    if (!recentProductsKey || typeof window === "undefined") {
+      return;
+    }
+    setRecentProductIds((prev) => {
+      const next = [productId, ...prev.filter((id) => id !== productId)].slice(0, 10);
+      try {
+        window.localStorage.setItem(
+          recentProductsKey,
+          JSON.stringify({ productIds: next, updatedAt: new Date().toISOString() }),
+        );
+      } catch (error) {
+        console.warn("No se pudo guardar productos recientes:", error);
+      }
+      return next;
+    });
+  };
 
   // Actualizar el estado local cuando cambie el valor del formulario
   useEffect(() => {
@@ -825,6 +1139,245 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     };
   }, [version]);
   //
+
+  useEffect(() => {
+    if (!entryContextKey) {
+      setEntryDefaults(null);
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(entryContextKey);
+      if (!raw) {
+        setEntryDefaults(null);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setEntryDefaults({
+        storeId: typeof parsed?.storeId === "number" ? parsed.storeId : null,
+        providerId: typeof parsed?.providerId === "number" ? parsed.providerId : null,
+        productId: typeof parsed?.productId === "number" ? parsed.productId : null,
+      });
+    } catch (error) {
+      console.warn("No se pudo leer el contexto de entradas:", error);
+      setEntryDefaults(null);
+    }
+  }, [entryContextKey]);
+
+  useEffect(() => {
+    if (!entryDraftKey || typeof window === "undefined") {
+      return;
+    }
+    if (hasEntryDraftAppliedRef.current) {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(entryDraftKey);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      isApplyingEntryDraftRef.current = true;
+
+      const draftValues = parsed?.values ?? {};
+      const entryDateValue =
+        typeof draftValues?.entry_date === "string" && draftValues.entry_date
+          ? new Date(draftValues.entry_date)
+          : draftValues?.entry_date
+            ? new Date(draftValues.entry_date)
+            : new Date();
+
+      form.reset({
+        ...buildDefaultEntryValues(),
+        ...draftValues,
+        entry_date: entryDateValue,
+      });
+
+      if (Array.isArray(parsed?.selectedProducts)) {
+        setSelectedProducts(parsed.selectedProducts);
+      }
+      if (Array.isArray(parsed?.series)) {
+        setSeries(parsed.series);
+      }
+      if (typeof parsed?.quantity === "number") {
+        setQuantity(parsed.quantity || 1);
+      }
+      setValueStore(typeof parsed?.valueStore === "string" ? parsed.valueStore : "");
+      setValueProvider(typeof parsed?.valueProvider === "string" ? parsed.valueProvider : "");
+      setValueProduct(typeof parsed?.valueProduct === "string" ? parsed.valueProduct : "");
+      setCurrentProduct(parsed?.currentProduct ?? null);
+      setCurrency(parsed?.currency === "USD" ? "USD" : "PEN");
+      setTipoMoneda(parsed?.tipoMoneda === "USD" ? "USD" : "PEN");
+      setTipoCambioActual(typeof parsed?.tipoCambioActual === "number" ? parsed.tipoCambioActual : null);
+      setShowInvoiceFields(Boolean(parsed?.showInvoiceFields));
+      setShowGuideFields(Boolean(parsed?.showGuideFields));
+      setIsNewInvoiceBoolean(Boolean(parsed?.isNewInvoiceBoolean));
+      setIsNewCategoryBoolean(Boolean(parsed?.isNewCategoryBoolean));
+      setDraftInvoice(
+        parsed?.draftInvoiceId && parsed?.draftInvoiceUrl
+          ? { id: parsed.draftInvoiceId, url: parsed.draftInvoiceUrl }
+          : null
+      );
+      setDraftGuide(
+        parsed?.draftGuideId && parsed?.draftGuideUrl
+          ? { id: parsed.draftGuideId, url: parsed.draftGuideUrl }
+          : null
+      );
+
+      const selectedDateValue =
+        typeof parsed?.selectedDate === "string" && parsed.selectedDate
+          ? new Date(parsed.selectedDate)
+          : entryDateValue;
+      setSelectedDate(selectedDateValue);
+      setCreatedAt(
+        typeof parsed?.createdAt === "string" && parsed.createdAt
+          ? new Date(parsed.createdAt)
+          : null
+      );
+
+      if (typeof parsed?.referenceId === "string" && parsed.referenceId.trim()) {
+        entryReferenceIdRef.current = parsed.referenceId;
+      }
+
+      if (parsed?.invoiceFileName || parsed?.guideFileName) {
+        toast.message(
+          "Restauramos tu borrador. Vuelve a cargar la factura o guía si deseas previsualizar los PDFs.",
+        );
+      }
+
+      hasEntryDraftAppliedRef.current = true;
+      entryDraftLastPayloadRef.current = raw;
+    } catch (error) {
+      console.warn("No se pudo restaurar el borrador de la entrada:", error);
+    } finally {
+      isApplyingEntryDraftRef.current = false;
+    }
+  }, [entryDraftKey, form]);
+
+  const scheduleEntryDraftSave = (values: EntriesType) => {
+    if (!entryDraftKey || typeof window === "undefined") {
+      return;
+    }
+    if (isApplyingEntryDraftRef.current) {
+      return;
+    }
+    if (entryDraftSaveTimeoutRef.current) {
+      window.clearTimeout(entryDraftSaveTimeoutRef.current);
+    }
+    entryDraftSaveTimeoutRef.current = window.setTimeout(() => {
+      try {
+        const safeEntryDate =
+          values?.entry_date instanceof Date
+            ? values.entry_date.toISOString()
+            : values?.entry_date
+              ? new Date(values.entry_date as unknown as string).toISOString()
+              : new Date().toISOString();
+        const payload = JSON.stringify({
+          values: {
+            ...values,
+            entry_date: safeEntryDate,
+          },
+          selectedProducts,
+          series,
+          currentProduct,
+          quantity,
+          valueStore,
+          valueProvider,
+          valueProduct: value,
+          currency,
+          tipoMoneda,
+          tipoCambioActual,
+          selectedDate: selectedDate ? selectedDate.toISOString() : null,
+          createdAt: createdAt ? createdAt.toISOString() : null,
+          showInvoiceFields,
+          showGuideFields,
+          isNewInvoiceBoolean,
+          isNewCategoryBoolean,
+          invoiceFileName: pdfFile?.name ?? null,
+          guideFileName: pdfGuiaFile?.name ?? null,
+          draftInvoiceId: draftInvoice?.id ?? null,
+          draftInvoiceUrl: draftInvoice?.url ?? null,
+          draftGuideId: draftGuide?.id ?? null,
+          draftGuideUrl: draftGuide?.url ?? null,
+          referenceId: entryReferenceIdRef.current,
+          updatedAt: new Date().toISOString(),
+        });
+        if (payload === entryDraftLastPayloadRef.current) {
+          return;
+        }
+        window.localStorage.setItem(entryDraftKey, payload);
+        entryDraftLastPayloadRef.current = payload;
+      } catch (error) {
+        console.warn("No se pudo guardar el borrador de la entrada:", error);
+      }
+    }, 600);
+  };
+
+  useEffect(() => {
+    if (!entryDraftKey) {
+      return;
+    }
+    const subscription = form.watch((values) => {
+      scheduleEntryDraftSave(values as EntriesType);
+    });
+    return () => subscription.unsubscribe();
+  }, [entryDraftKey, form]);
+
+  useEffect(() => {
+    if (!entryDraftKey) {
+      return;
+    }
+    scheduleEntryDraftSave(form.getValues());
+  }, [
+    entryDraftKey,
+    selectedProducts,
+    series,
+    currentProduct,
+    quantity,
+    valueStore,
+    valueProvider,
+    value,
+    currency,
+    tipoMoneda,
+    tipoCambioActual,
+    selectedDate,
+    createdAt,
+    showInvoiceFields,
+    showGuideFields,
+    isNewInvoiceBoolean,
+    isNewCategoryBoolean,
+    pdfFile,
+    pdfGuiaFile,
+    draftInvoice,
+    draftGuide,
+  ]);
+
+  useEffect(() => {
+    if (!recentProductsKey) {
+      setRecentProductIds([]);
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(recentProductsKey);
+      if (!raw) {
+        setRecentProductIds([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      const ids = Array.isArray(parsed?.productIds)
+        ? parsed.productIds.filter((id: unknown) => typeof id === "number")
+        : [];
+      setRecentProductIds(ids);
+    } catch (error) {
+      console.warn("No se pudo leer productos recientes:", error);
+      setRecentProductIds([]);
+    }
+  }, [recentProductsKey]);
 
   // Cargar los proveedores al montar el componente
   useEffect(() => {
@@ -897,18 +1450,126 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     setValueStore('');
     setValueProvider('');
     setPdfGuiaFile(null);
+    setShowGuideFields(false);
     setTipoMoneda('PEN');
     setTipoCambioActual(null);
+    setPdfFile(null);
+    setShowInvoiceFields(false);
+    setIsNewInvoiceBoolean(false);
     form.reset(buildDefaultEntryValues());
+    hasAppliedDefaultsRef.current = false;
   }, [version, form]);
   //
+
+  useEffect(() => {
+    if (!entryDefaults || hasAppliedDefaultsRef.current) {
+      return;
+    }
+    if (loadingStores || loadingProviders || loadingProducts) {
+      return;
+    }
+
+    let applied = false;
+
+    if (!valueStore && entryDefaults.storeId) {
+      const store = stores.find((item) => item.id === entryDefaults.storeId);
+      if (store) {
+        setValueStore(store.name || "");
+        setValue("store_name", store.name || "");
+        setValue("store_adress", store.adress || "");
+        applied = true;
+      }
+    }
+
+    if (!valueProvider && entryDefaults.providerId) {
+      const provider = providers.find((item) => item.id === entryDefaults.providerId);
+      if (provider) {
+        setValueProvider(provider.name || "");
+        setValue("provider_name", provider.name || "");
+        setValue("provider_adress", provider.adress || "");
+        setValue("provider_documentNumber", provider.documentNumber || "");
+        applied = true;
+      }
+    }
+
+    if (!value && entryDefaults.productId) {
+      const product = products.find((item) => item.id === entryDefaults.productId);
+      if (product) {
+        const purchasePrice =
+          currency === "USD" && tipoCambioActual && tipoCambioActual > 0
+            ? Number((product.price / tipoCambioActual).toFixed(2))
+            : Number((product.price || 0).toFixed(2));
+        const category = categoriesState.find((cat) => cat.id === product.categoryId);
+
+        setValueProduct(product.name || "");
+        setCurrentProduct({
+          id: product.id,
+          name: product.name,
+          price: purchasePrice,
+          priceSell: product.priceSell,
+          categoryId: product.categoryId,
+          category_name: category?.name || product.category_name || "Sin categoria",
+        });
+        setValue("category_name", category?.name || product.category_name || "Sin categoria");
+        setValue("price", purchasePrice || 0);
+        setValue("priceSell", product.priceSell || 0);
+        setValue("description", product.description || "");
+        applied = true;
+      }
+    }
+
+    if (applied || entryDefaults) {
+      hasAppliedDefaultsRef.current = true;
+    }
+  }, [
+    entryDefaults,
+    loadingStores,
+    loadingProviders,
+    loadingProducts,
+    valueStore,
+    valueProvider,
+    value,
+    stores,
+    providers,
+    products,
+    categoriesState,
+    currency,
+    tipoCambioActual,
+    setValue,
+    setValueProduct,
+    setCurrentProduct,
+    setValueStore,
+    setValueProvider,
+  ]);
+
+  useEffect(() => {
+    if (!entryContextKey || typeof window === "undefined") {
+      return;
+    }
+    if (!selectedStoreId && !selectedProviderId && !selectedProductId) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(
+        entryContextKey,
+        JSON.stringify({
+          storeId: selectedStoreId ?? null,
+          providerId: selectedProviderId ?? null,
+          productId: selectedProductId ?? null,
+          updatedAt: new Date().toISOString(),
+        }),
+      );
+    } catch (error) {
+      console.warn("No se pudo guardar el contexto de entradas:", error);
+    }
+  }, [entryContextKey, selectedStoreId, selectedProviderId, selectedProductId]);
 
   // Efecto para ajustar las series cuando cambia la cantidad
   useEffect(() => {
     if (series.length > quantity) {
       // Ajustar el array de series para que no exceda la nueva cantidad
       setSeries((prev) => prev.slice(0, quantity));
-      toast.error(`La cantidad de series excedía la nueva cantidad (${quantity}). Se eliminaron las últimas series.`);
+      toast.error(`La cantidad de series excedÃ­a la nueva cantidad (${quantity}). Se eliminaron las Ãºltimas series.`);
     }
   }, [quantity]);
 
@@ -955,16 +1616,24 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     <div className="mx-auto w-full max-w-5xl px-2 sm:px-4 lg:px-8">
       <form className='relative flex flex-col gap-2' onSubmit={onSubmit}>
         <fieldset disabled={isSubmitting} className='flex flex-col gap-2'>
-                  <div className="flex flex-col sm:flex-row flex-wrap gap-2">
+                  <div className="flex flex-col gap-2">
                     <UploadSection
                       register={register}
+                      watch={form.watch}
                       handlePDFUpload={handlePDFUpload}
                       handlePDFGuiaUpload={handlePDFGuiaUpload}
+                      onPreviewInvoice={handlePreviewInvoice}
+                      onPreviewGuide={handlePreviewGuide}
+                      invoicePreviewUrl={invoicePreviewUrl}
+                      guidePreviewUrl={guidePreviewUrl}
                       currency={currency}
                       onCurrencyChange={handleCurrencySelection}
+                      showInvoiceFields={showInvoiceFields}
+                      showGuideFields={showGuideFields}
                     />
                     <AdditionalInfoSection
                       register={register}
+                      watch={form.watch}
                       selectedDate={selectedDate}
                       setSelectedDate={setSelectedDate}
                       createdAt={createdAt}
@@ -987,6 +1656,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       setProviders={setProviders}
                       setValue={form.setValue}
                       register={register}
+                      watch={form.watch}
                     />
                     <StoreSection
                       openStore={openStore}
@@ -996,18 +1666,22 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       stores={stores}
                       setValue={form.setValue}
                       register={register}
+                      watch={form.watch}
                       isDialogOpenStore={isDialogOpenStore}
                       setIsDialogOpenStore={setIsDialogOpenStore}
                       setStores={setStores}
                       setIsProviderComboTouched={setIsProviderComboTouched}
                       valueProvider={valueProvider}
                     />
-                     <ProductSelection
+                    <ProductSelection
                       open={open}
                       setOpen={setOpen}
                       value={value}
                       setValueProduct={setValueProduct}
+                      recentProductIds={recentProductIds}
+                      onProductSelected={handleRecentProductSelection}
                       products={products}
+                      selectedProducts={selectedProducts}
                       categories={categoriesState}
                       setProducts={setProducts}
                       setCategories={setCategories}
@@ -1060,6 +1734,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       isDialogOpen={isDialogOpen}
                       onSubmit={handleConfirm}
                       form={form}
+                      onClear={handleClearForm}
                       setSelectedProducts={setSelectedProducts}
                       setCurrentProduct={setCurrentProduct}
                       setQuantity={setQuantity}
@@ -1094,13 +1769,13 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
               <AlertDialogTitle>Cambiar moneda</AlertDialogTitle>
               <AlertDialogDescription>
                 {selectedProducts.length > 0
-                  ? `Tienes productos agregados. ¿Deseas actualizar sus precios a ${
+                  ? `Tienes productos agregados. Â¿Deseas actualizar sus precios a ${
                       pendingCurrency === 'USD'
-                        ? 'dólares (USD)'
+                        ? 'dÃ³lares (USD)'
                         : pendingCurrency === 'PEN'
                           ? 'soles (PEN)'
                           : 'la moneda seleccionada'
-                    }? Se usará el tipo de cambio más reciente disponible.`
+                    }? Se usara el tipo de cambio mas reciente disponible.`
                   : '¿Deseas cambiar la moneda seleccionada?'}
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -1117,7 +1792,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                 </span>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={8}>
-                Mantén la moneda actual sin aplicar cambios
+                Mantiene la moneda actual sin aplicar cambios
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -1138,6 +1813,43 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           </AlertDialogFooter>
         </AlertDialogContent>
         </AlertDialog>
+
+        <AlertDialog
+          open={isProviderNotFoundOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsProviderNotFoundOpen(false);
+              setPendingProviderData(null);
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Proveedor no registrado</AlertDialogTitle>
+              <AlertDialogDescription>
+                El proveedor <span className="font-semibold">{pendingProviderData?.name}</span> (RUC: {pendingProviderData?.ruc}) no está registrado en el sistema. ¿Desea crearlo?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                onClick={() => {
+                  setIsProviderNotFoundOpen(false);
+                  setPendingProviderData(null);
+                }}
+                disabled={isCreatingProvider}
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleCreatePendingProvider}
+                disabled={isCreatingProvider}
+              >
+                {isCreatingProvider ? 'Creando...' : 'Crear Proveedor'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {isSubmitting && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-black/40">
             <svg className="w-6 h-6 animate-spin text-gray-800 dark:text-white" viewBox="0 0 24 24">
@@ -1163,3 +1875,5 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 }
 
 export default EntriesForm
+
+

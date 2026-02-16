@@ -29,16 +29,19 @@ interface MockTransactionClient {
     updateMany: jest.Mock;
     findMany: jest.Mock;
     findUnique: jest.Mock;
+    findFirst: jest.Mock;
   };
   organizationMembership: {
     count: jest.Mock;
     findFirst: jest.Mock;
+    findMany: jest.Mock;
     updateMany: jest.Mock;
     update: jest.Mock;
     create: jest.Mock;
   };
   user: {
     findUnique: jest.Mock;
+    update: jest.Mock;
   };
 }
 
@@ -87,26 +90,32 @@ describe('TenancyService', () => {
         updateMany: jest.fn(),
         findMany: jest.fn(),
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
       },
       organizationMembership: {
         count: jest.fn(),
         findFirst: jest.fn(),
+        findMany: jest.fn(),
         updateMany: jest.fn(),
         update: jest.fn(),
         create: jest.fn(),
       },
       user: {
         findUnique: jest.fn(),
+        update: jest.fn(),
       },
     };
 
     tx.organizationMembership.count.mockResolvedValue(0);
     tx.organizationMembership.findFirst.mockResolvedValue(null);
+    tx.organizationMembership.findMany.mockResolvedValue([]);
     tx.organizationMembership.updateMany.mockResolvedValue({ count: 0 });
     tx.organizationMembership.update.mockResolvedValue(undefined);
     tx.organizationMembership.create.mockResolvedValue(undefined);
     tx.user.findUnique.mockResolvedValue(null);
+    tx.user.update.mockResolvedValue(undefined);
     tx.company.findMany.mockResolvedValue([]);
+    tx.company.findFirst.mockResolvedValue(null);
     tx.company.updateMany.mockResolvedValue({ count: 0 });
     tx.organization.findFirst.mockResolvedValue(null);
 
@@ -133,7 +142,7 @@ describe('TenancyService', () => {
     tx.organization.create.mockResolvedValue({
       id: 10,
       name: 'Acme Corp',
-      code: null,
+      code: 'ACMCOR',
       status: 'ACTIVE',
       createdAt,
       updatedAt,
@@ -157,7 +166,7 @@ describe('TenancyService', () => {
       data: {
         name: 'Acme Corp',
         slug: 'acme-corp',
-        code: null,
+        code: 'ACMCOR',
         status: 'ACTIVE',
       },
     });
@@ -172,7 +181,7 @@ describe('TenancyService', () => {
     expect(result).toEqual({
       id: 10,
       name: 'Acme Corp',
-      code: null,
+      code: 'ACMCOR',
       status: 'ACTIVE',
       createdAt,
       updatedAt,
@@ -442,7 +451,7 @@ describe('TenancyService', () => {
       }),
     });
     expect(tx.organizationUnit.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ code: 'support', parentUnitId: 21 }),
+      data: expect.objectContaining({ code: 'SUPPORT', parentUnitId: 21 }),
     });
     expect(result.units).toHaveLength(3);
     expect(result.companies).toEqual([]);
@@ -552,6 +561,66 @@ describe('TenancyService', () => {
         ]),
       }),
     ]);
+  });
+
+  it('promotes the owner to super admin when none exists', async () => {
+    const createdAt = new Date('2024-06-10T00:00:00.000Z');
+    const updatedAt = new Date('2024-06-10T00:30:00.000Z');
+
+    prisma.organization.findMany.mockResolvedValue([
+      {
+        id: 99,
+        name: 'Atlas Labs',
+        code: 'ATLAB',
+        status: 'ACTIVE',
+        createdAt,
+        updatedAt,
+        units: [],
+        companies: [],
+        _count: { memberships: 1 },
+      },
+    ]);
+
+    prisma.organizationMembership.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 800,
+        organizationId: 99,
+        role: 'OWNER',
+        userId: 400,
+        user: {
+          id: 400,
+          username: 'carmencita-lara',
+          email: 'carmencita@example.com',
+        },
+      });
+
+    prisma.organizationMembership.update.mockResolvedValue({
+      id: 800,
+      organizationId: 99,
+      role: 'SUPER_ADMIN',
+    });
+
+    prisma.user.findUnique.mockResolvedValue({
+      id: 400,
+      role: 'ADMIN',
+    });
+
+    const result = await service.listCompanies(baseTenant);
+
+    expect(prisma.organizationMembership.update).toHaveBeenCalledWith({
+      where: { id: 800 },
+      data: { role: 'SUPER_ADMIN' },
+    });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 400 },
+      data: { role: 'SUPER_ADMIN_ORG' },
+    });
+    expect(result[0].superAdmin).toEqual({
+      id: 400,
+      username: 'carmencita-lara',
+      email: 'carmencita@example.com',
+    });
   });
 
   it('retrieves a single organization by id', async () => {
@@ -777,6 +846,18 @@ describe('TenancyService', () => {
       sunatKeyPathProd: 'prod.key',
     };
 
+    tx.company.findUnique.mockResolvedValue({
+      id: 99,
+      organizationId: 5,
+      name: 'Megacorp',
+      legalName: null,
+      taxId: null,
+      status: 'ACTIVE',
+      sunatEnvironment: 'PROD',
+      sunatRuc: '20123456789',
+      documentSequences: [],
+    } as any);
+
     const result = await service.createCompany(dto as any, baseTenant);
 
     expect(prisma.company.create).toHaveBeenCalledWith({
@@ -788,6 +869,12 @@ describe('TenancyService', () => {
         status: 'ACTIVE',
         sunatEnvironment: 'PROD',
         sunatRuc: '20123456789',
+        sunatBusinessName: null,
+        sunatAddress: null,
+        sunatPhone: null,
+        logoUrl: null,
+        primaryColor: null,
+        secondaryColor: null,
         sunatSolUserBeta: 'betaUser',
         sunatSolPasswordBeta: 'betaPass',
         sunatCertPathBeta: 'beta.crt',
@@ -803,7 +890,7 @@ describe('TenancyService', () => {
   });
 
   it('updates SUNAT credentials when updating a company', async () => {
-    prisma.company.findUnique.mockResolvedValue({
+    const existingCompany = {
       id: 77,
       organizationId: 5,
       name: 'OldCo',
@@ -814,7 +901,22 @@ describe('TenancyService', () => {
       sunatRuc: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
+    };
+    const updatedCompanySnapshot = {
+      ...existingCompany,
+      name: 'NewCo',
+      sunatEnvironment: 'PROD',
+      sunatRuc: '20987654321',
+      sunatSolUserProd: 'prodUser',
+      sunatSolPasswordProd: 'prodPass',
+      sunatCertPathProd: 'prod.crt',
+      sunatKeyPathProd: 'prod.key',
+      documentSequences: [],
+    };
+
+    prisma.company.findUnique
+      .mockResolvedValueOnce(existingCompany)
+      .mockResolvedValueOnce(updatedCompanySnapshot as any);
 
     const updatedAt = new Date('2025-05-11T12:45:00.000Z');
     prisma.company.update.mockResolvedValue({
@@ -888,6 +990,9 @@ describe('TenancyService', () => {
     expect(prisma.company.update).toHaveBeenCalledWith({
       where: { id: 55 },
       data: { sunatKeyPathBeta: 'uploads/sunat/55/beta/key-1.key' },
+      include: expect.objectContaining({
+        documentSequences: expect.any(Object),
+      }),
     });
     expect(result.sunatKeyPathBeta).toBe('uploads/sunat/55/beta/key-1.key');
   });
@@ -914,6 +1019,9 @@ describe('TenancyService', () => {
     expect(prisma.company.update).toHaveBeenCalledWith({
       where: { id: 56 },
       data: { sunatCertPathProd: 'uploads/sunat/56/prod/cert.pem' },
+      include: expect.objectContaining({
+        documentSequences: expect.any(Object),
+      }),
     });
     expect(result.sunatCertPathProd).toBe('uploads/sunat/56/prod/cert.pem');
   });

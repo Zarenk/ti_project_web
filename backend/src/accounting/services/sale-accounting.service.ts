@@ -44,8 +44,16 @@ export class SaleAccountingService {
       : '';
     const paymentMethod = sale.payments?.[0]?.paymentMethod?.name ?? '';
     const accountCode = /yape|transfer/i.test(paymentMethod) ? '1041' : '1011';
-    const productName =
-      sale.salesDetails?.[0]?.entryDetail?.product?.name ?? '';
+
+    // Construir descripción detallada de productos
+    const productsDetail = (sale.salesDetails || [])
+      .map((d: any) => {
+        const productName = d.entryDetail?.product?.name || 'Producto';
+        const qty = d.quantity;
+        const price = d.price || 0;
+        return `${qty}x ${productName} @S/${price.toFixed(2)}`;
+      })
+      .join(' | ');
 
     const lines: SaleEntryLine[] = [
       {
@@ -57,7 +65,7 @@ export class SaleAccountingService {
       },
       {
         account: '7011',
-        description: `Venta ${invoiceCode} – ${productName}`.trim(),
+        description: `Venta ${invoiceCode}: ${productsDetail}`.trim(),
         debit: 0,
         credit: subtotal,
         quantity: null,
@@ -72,7 +80,7 @@ export class SaleAccountingService {
       },
       {
         account: '6911',
-        description: `Costo de ventas ${productName} – ${invoiceCode}`.trim(),
+        description: `Costo de ventas: ${productsDetail}`.trim(),
         debit: cost,
         credit: 0,
         cogs: true,
@@ -80,7 +88,7 @@ export class SaleAccountingService {
       },
       {
         account: '2011',
-        description: `Salida mercaderías por ${invoiceCode}`.trim(),
+        description: `Salida mercaderías: ${productsDetail}`.trim(),
         debit: 0,
         credit: cost,
         quantity: totalQty,

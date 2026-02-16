@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as https from 'https';
 import { assertSafeUrl } from '../../common/security/ssrf.util';
+import { extractCdrFromSoap } from './cdr-parser';
 
 /**
  * Envía un archivo ZIP a la SUNAT.
@@ -62,8 +63,13 @@ export async function sendToSunat(
       },
     });
 
-    // Retornar la respuesta de la SUNAT
-    return response.data;
+    const cdr = extractCdrFromSoap(response.data);
+    return {
+      raw: response.data,
+      cdrXml: cdr.cdrXml,
+      cdrCode: cdr.cdrCode,
+      cdrDescription: cdr.cdrDescription,
+    };
   } catch (error: any) {
     console.error('Error al enviar el archivo a la SUNAT:', error.message);
     if (error.response) {

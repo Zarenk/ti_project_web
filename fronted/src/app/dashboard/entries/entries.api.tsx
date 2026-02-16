@@ -1,6 +1,5 @@
-import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { BACKEND_URL } from "@/lib/utils"
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch"
 
 // Crear una nueva entrada
 export async function createEntry(data: {
@@ -13,8 +12,21 @@ export async function createEntry(data: {
   tipoCambioId?: number;
   paymentMethod?: string;
   paymentTerm?: 'CASH' | 'CREDIT';
-  details: { productId: number; quantity: number; price: number; priceInSoles: number }[];
+  details: { productId: number; quantity: number; price: number; priceInSoles: number; series?: string[] }[];
   invoice?: { serie: string; nroCorrelativo: string; tipoComprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
+  guide?: {
+    serie?: string;
+    correlativo?: string;
+    fechaEmision?: string;
+    fechaEntregaTransportista?: string;
+    motivoTraslado?: string;
+    puntoPartida?: string;
+    puntoLlegada?: string;
+    destinatario?: string;
+    pesoBrutoUnidad?: string;
+    pesoBrutoTotal?: string;
+    transportista?: string;
+  };
   referenceId?: string;
 }) {
     try{
@@ -52,7 +64,7 @@ export async function getAllEntries() {
     return await response.json();
   }catch(error) {
     if (error instanceof UnauthenticatedError) {
-      return null;
+      return [];
     }
     console.error("Error al obtener las entradas:", error); 
     throw error;
@@ -61,15 +73,22 @@ export async function getAllEntries() {
 
 // Obtener una entrada específica por ID
 export async function getEntryById(id: string) {
-  const response = await authFetch(`${BACKEND_URL}/api/entries/by-id/${id}`, {
-    method: 'GET',
-  });
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/by-id/${id}`, {
+      method: 'GET',
+    });
 
-  if (!response.ok) {
-    throw new Error('Error al obtener la entrada');
+    if (!response.ok) {
+      throw new Error('Error al obtener la entrada');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
   }
-
-  return await response.json();
 }
 
 // Eliminar Entrada
@@ -195,6 +214,197 @@ export function getPdfGuiaUrl(pdfPath: string): string {
 }
 //
 
+export async function uploadDraftGuiaPdf(pdfFile: File): Promise<{ draftId: string; url: string }> {
+  const formData = new FormData();
+  formData.append('file', pdfFile);
+
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/draft/upload-pdf-guia`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al subir el archivo PDF');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error al subir el borrador de la guía PDF:', error);
+    throw error;
+  }
+}
+
+export async function attachDraftGuiaPdf(entryId: number, draftId: string): Promise<void> {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/${entryId}/attach-draft-pdf-guia`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ draftId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al adjuntar el borrador de guía');
+    }
+  } catch (error) {
+    console.error('Error al adjuntar el borrador de guía PDF:', error);
+    throw error;
+  }
+}
+
+export async function uploadDraftPdf(pdfFile: File): Promise<{ draftId: string; url: string }> {
+  const formData = new FormData();
+  formData.append('file', pdfFile);
+
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/draft/upload-pdf`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al subir el archivo PDF');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error al subir el borrador del PDF:', error);
+    throw error;
+  }
+}
+
+export async function attachDraftPdf(entryId: number, draftId: string): Promise<void> {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/${entryId}/attach-draft-pdf`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ draftId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al adjuntar el borrador PDF');
+    }
+  } catch (error) {
+    console.error('Error al adjuntar el borrador PDF:', error);
+    throw error;
+  }
+}
+
+export interface InvoiceExtractionLog {
+  id: number;
+  level: string;
+  message: string;
+  context?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface ExtractionResultPayload {
+  textPreview?: string;
+  templateId?: number;
+  templateVersion?: number;
+  fields?: Record<string, string | null>;
+  score?: number;
+  manualAssignment?: boolean;
+}
+
+export interface InvoiceSample {
+  id: number;
+  extractionStatus: string;
+  createdAt: string;
+  originalFilename: string;
+  storagePath: string;
+  invoiceTemplateId?: number | null;
+  extractionResult?: ExtractionResultPayload | null;
+  logs?: InvoiceExtractionLog[];
+}
+
+export interface InvoiceTemplateSummary {
+  id: number;
+  documentType: string;
+  providerName?: string | null;
+  version: number;
+}
+
+export async function getInvoiceSamples(
+  entryId: number,
+  includeLogs = false,
+): Promise<InvoiceSample[]> {
+  try {
+    const response = await authFetch(
+      `${BACKEND_URL}/api/invoice-samples/entry/${entryId}?includeLogs=${includeLogs}`,
+      { method: 'GET' },
+    );
+
+    if (!response.ok) {
+      throw new Error('Error al obtener las muestras de facturas');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    console.error('Error al obtener las muestras de facturas:', error);
+    throw error;
+  }
+}
+//
+
+export async function getInvoiceTemplates(): Promise<
+  InvoiceTemplateSummary[]
+> {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/invoice-templates`, {
+      method: 'GET',
+    });
+    if (!response.ok) {
+      throw new Error('Error al obtener las plantillas');
+    }
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    console.error('Error al obtener las plantillas:', error);
+    throw error;
+  }
+}
+
+export async function assignInvoiceTemplate(
+  sampleId: number,
+  templateId: number,
+  reprocess = true,
+) {
+  const response = await authFetch(
+    `${BACKEND_URL}/api/invoice-samples/${sampleId}/template`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ templateId, reprocess }),
+    },
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(
+      errorData?.message || 'Error al asignar la plantilla manualmente',
+    );
+  }
+
+  return response.json();
+}
+//
+
 // Verificar si una serie ya existe
 export const checkSeries = async (serial: string): Promise<{ exists: boolean }> => {
   try {
@@ -214,7 +424,7 @@ export const checkSeries = async (serial: string): Promise<{ exists: boolean }> 
     return (await response.json()) as { exists: boolean };
   } catch (error: any) {
     if (error instanceof UnauthenticatedError) {
-      throw error;
+      return { exists: false };
     }
     console.error('Error al verificar la serie:', error);
     throw error;

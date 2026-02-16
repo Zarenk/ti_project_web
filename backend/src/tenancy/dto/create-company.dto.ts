@@ -1,11 +1,17 @@
+import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
+  ValidateNested,
 } from 'class-validator';
+import { CompanyDocumentSequenceDto } from './company-document-sequence.dto';
 
 const SUNAT_ENVIRONMENTS = ['BETA', 'PROD'] as const;
 
@@ -74,6 +80,12 @@ export class CreateCompanyDto {
   secondaryColor?: string | null;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  defaultQuoteMargin?: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(255)
   sunatSolUserBeta?: string | null;
@@ -112,4 +124,10 @@ export class CreateCompanyDto {
   @IsString()
   @MaxLength(255)
   sunatKeyPathProd?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CompanyDocumentSequenceDto)
+  documentSequences?: CompanyDocumentSequenceDto[];
 }

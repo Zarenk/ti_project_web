@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Barcode, CalendarIcon, Check, ChevronsUpDown, Loader2, Plus, Save, Search, X } from 'lucide-react'
+import { Banknote, Barcode, CalendarIcon, Check, ChevronsUpDown, CreditCard, Landmark, Layers, Loader2, Plus, Save, Search, Smartphone, X } from 'lucide-react'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { BACKEND_URL, cn, normalizeOptionValue, uploadPdfToServer } from '@/lib/utils'
 import React from 'react'
@@ -20,17 +20,18 @@ import {jwtDecode} from 'jwt-decode';
 import { getAuthToken } from "@/utils/auth-token";
 import {  getStores } from '../../stores/stores.api'
 import { getCategories } from '../../categories/categories.api'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Calendar } from '@/components/ui/calendar'
 import { format } from 'date-fns'
 import { es } from "date-fns/locale";
 import AddClientDialog from '../components/AddClientDialog'
-import { createSale, fetchSeriesByProductAndStore, generarYEnviarDocumento, getProductsByStore, getSeriesByProductAndStore, getStockByProductAndStore, lookupSunatDocument, type LookupResponse, sendInvoiceToSunat } from '../sales.api'
+import { createSale, fetchSeriesByProductAndStore, generarYEnviarDocumento, getPaymentMethods, getProductsByStore, getSeriesByProductAndStore, getStockByProductAndStore, lookupSunatDocument, type LookupResponse, sendInvoiceToSunat } from '../sales.api'
 import { AddSeriesDialog } from '../components/AddSeriesDialog'
 import { SeriesModal } from '../components/SeriesModal'
 import { StoreChangeDialog } from '../components/StoreChangeDialog'
 import { getRegisteredClients } from '../../clients/clients.api'
+import { updateProductPriceSell } from '../../inventory/inventory.api'
 import { InvoiceDocument } from '../components/pdf/InvoiceDocument'
 import QRCode from 'qrcode';
 import { numeroALetrasCustom } from '../components/utils/numeros-a-letras'
@@ -38,8 +39,11 @@ import { pdf } from '@react-pdf/renderer';
 import { PaymentMethodsModal } from '../components/PaymentMethodsSelector'
 import { ProductDetailModal } from '../components/ProductDetailModal'
 import { useTenantSelection } from '@/context/tenant-selection-context'
+import { useAuth } from '@/context/auth-context'
 import { getCompanyDetail, type CompanyDetail } from '../../tenancy/tenancy.api'
 import { UnauthenticatedError } from '@/utils/auth-fetch'
+import { BrandLogo } from '@/components/BrandLogo'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 // @ts-ignore
 const Numalet = require('numalet');
 
@@ -65,6 +69,51 @@ type SelectedPayment = {
   paymentMethodId: number | null;
   amount: number;
   currency: string;
+};
+type SalesDraft = {
+  version: 1;
+  updatedAt: string;
+  values: SalesType;
+  selectedProducts: {
+    id: number;
+    name: string;
+    price: number;
+    quantity: number;
+    category_name: string;
+    series?: string[];
+    newSeries?: string;
+  }[];
+  payments: SelectedPayment[];
+  currency: string;
+  valueStore: string;
+  valueClient: string;
+  valueInvoice: string;
+  selectedStoreId: number | null;
+  selectedDate: string | null;
+  createdAt: string | null;
+  showOutOfStock: boolean;
+  autoSyncPayment: boolean;
+  quickPaymentMethodId: number | null;
+};
+type PaymentMethodOption = { id: number; name: string };
+const defaultPaymentMethods: PaymentMethodOption[] = [
+  { id: -1, name: "EN EFECTIVO" },
+  { id: -2, name: "TRANSFERENCIA" },
+  { id: -3, name: "PAGO CON VISA" },
+  { id: -4, name: "YAPE" },
+  { id: -5, name: "PLIN" },
+  { id: -6, name: "OTRO MEDIO DE PAGO" },
+];
+const getPaymentMethodIcon = (name: string) => {
+  const upper = name.toUpperCase();
+  if (upper.includes("EFECTIVO")) return <Banknote className="h-4 w-4" />;
+  if (upper.includes("TRANSFERENCIA")) return <Landmark className="h-4 w-4" />;
+  if (upper.includes("VISA")) return <BrandLogo src="/icons/visa.png" alt="Visa" className="h-4 w-4" />;
+  if (upper.includes("YAPE")) return <BrandLogo src="/icons/yape.png" alt="Yape" className="h-4 w-4" />;
+  if (upper.includes("PLIN")) return <BrandLogo src="/icons/plin.png" alt="Plin" className="h-4 w-4" />;
+  if (upper.includes("TARJETA")) return <CreditCard className="h-4 w-4" />;
+  if (upper.includes("APP") || upper.includes("BILLETERA")) return <Smartphone className="h-4 w-4" />;
+  return null;
 };
 
 //definir el esquema de validacion
@@ -116,6 +165,20 @@ function buildDefaultSaleValues(sale?: any): SalesType {
   };
 }
 
+const renderStatusChip = (filled: boolean, optional = false) => (
+  <span
+    className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+      filled
+        ? "border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+        : optional
+        ? "border-slate-200/70 bg-slate-50 text-slate-600 dark:border-slate-800/60 dark:bg-slate-900/60 dark:text-slate-300"
+        : "border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200"
+    }`}
+  >
+    {filled ? "Listo" : optional ? "Opcional" : "Requerido"}
+  </span>
+)
+
 export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
   const initialValues = useMemo(() => buildDefaultSaleValues(sales), [sales]);
@@ -123,10 +186,16 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
     resolver: zodResolver(salesSchema),
     defaultValues: initialValues,
   });
+  // Estado para los productos
+  const [products, setProducts] = useState<
+    { id: number; name: string; price: number; description: string; categoryId: number; category_name: string; stock: number }[]
+  >([]); 
+
   useEffect(() => {
     form.reset(initialValues);
   }, [form, initialValues]);
   const { selection, version } = useTenantSelection();
+  const { userId } = useAuth();
 
   // Extraer funciones y estados del formulario
   const { handleSubmit, register, setValue, formState: {errors} } = form;
@@ -161,6 +230,9 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
 
   // Estado para pagos
   const [payments, setPayments] = useState<SelectedPayment[]>([]); // Define el tipo explícito
+  const [paymentMethodsList, setPaymentMethodsList] = useState<PaymentMethodOption[]>(defaultPaymentMethods);
+  const [quickPaymentMethodId, setQuickPaymentMethodId] = useState<number | null>(null);
+  const [autoSyncPayment, setAutoSyncPayment] = useState(false);
 
   // Estado para manejar el modal de métodos de pago
   const [forceOpenPaymentModal, setForceOpenPaymentModal] = useState(false);
@@ -204,6 +276,8 @@ const getSaleReferenceId = () => {
   // Estado para controlar el AlertDialog de precio 0
   const [isPriceAlertOpen, setIsPriceAlertOpen] = useState(false); // Controla la apertura del AlertDialog
   const [productWithZeroPrice, setProductWithZeroPrice] = useState<{ id: number; name: string } | null>(null); // Almacena el producto con precio 0
+  const [isUpdatingPrice, setIsUpdatingPrice] = useState(false);
+  const [priceAlertValue, setPriceAlertValue] = useState<string>("");
   
   // Estado para manejar el modal de detalle de producto en pantallas pequeñas
   const [activeProductIndex, setActiveProductIndex] = useState<number | null>(null);
@@ -211,6 +285,7 @@ const getSaleReferenceId = () => {
   // COMBOBOX DE PRODUCTOS
   const [open, setOpen] = React.useState(false)
   const [value, setValueProduct] = React.useState("")
+  const [showOutOfStock, setShowOutOfStock] = useState(false);
   // Estado para manejar la tienda seleccionada
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
   const [activeCompany, setActiveCompany] = useState<CompanyDetail | null>(null);
@@ -230,10 +305,12 @@ const getSaleReferenceId = () => {
     return `${normalizedBackendUrl}/${raw.replace(/^\/+/, '')}`;
   }, [activeCompany?.logoUrl, normalizedBackendUrl]);
 
-  // Estado para los productos
-  const [products, setProducts] = useState<
-    { id: number; name: string; price: number; description: string; categoryId: number; category_name: string; stock: number }[]
-  >([]); 
+  useEffect(() => {
+    if (!isPriceAlertOpen || !productWithZeroPrice) return;
+    const target = products.find((product) => product.id === productWithZeroPrice.id);
+    const currentPrice = typeof target?.price === "number" ? target.price : 0;
+    setPriceAlertValue(currentPrice > 0 ? String(currentPrice) : "");
+  }, [isPriceAlertOpen, productWithZeroPrice, products]);
 
   // Estado para rastrear si el combobox de tiendas ha sido tocado
   const [isStoreChangeDialogOpen, setIsStoreChangeDialogOpen] = useState(false); // Controla la apertura del AlertDialog
@@ -256,6 +333,56 @@ const getSaleReferenceId = () => {
   const [currentProduct, setCurrentProduct] = useState<{ id: number; name: string; price: number; categoryId: number; category_name: string; series?: string[] } | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
   const [stock, setStock] = useState<number>(0);
+  const totalProductsAmount = useMemo(
+    () => selectedProducts.reduce((sum, product) => sum + (product.price || 0) * (product.quantity || 0), 0),
+    [selectedProducts],
+  );
+  const getMostUsedPaymentMethodId = (
+    usage: Record<string, number>,
+    fallback: number | null,
+  ) => {
+    const entries = Object.entries(usage);
+    if (entries.length === 0) {
+      return fallback ?? null;
+    }
+    let bestId = fallback ?? Number(entries[0][0]);
+    let bestCount = -Infinity;
+    for (const [key, value] of entries) {
+      const id = Number(key);
+      if (!Number.isFinite(id)) {
+        continue;
+      }
+      if (value > bestCount) {
+        bestId = id;
+        bestCount = value;
+      }
+    }
+    return Number.isFinite(bestId) ? bestId : fallback ?? null;
+  };
+  const handleQuickPaymentSelect = (methodId: number | null) => {
+    if (methodId === null) {
+      setQuickPaymentMethodId(null);
+      setAutoSyncPayment(false);
+      setPayments([]);
+      setLastQuickPaymentMethodId(null);
+      persistSalesContext({ lastQuickPaymentMethodId: null });
+      return;
+    }
+    setQuickPaymentMethodId(methodId);
+    setAutoSyncPayment(true);
+    setLastQuickPaymentMethodId(methodId);
+    persistSalesContext({ lastQuickPaymentMethodId: methodId });
+    const nextAmount = Number(totalProductsAmount.toFixed(2));
+    if (nextAmount > 0) {
+      setPayments([
+        {
+          paymentMethodId: methodId,
+          amount: nextAmount,
+          currency,
+        },
+      ]);
+    }
+  };
 
   const NAME_COLUMN_MIN_WIDTH = 120;
   const NAME_COLUMN_MAX_WIDTH = 420;
@@ -270,6 +397,43 @@ const getSaleReferenceId = () => {
       productTableContainerRef.current.style.setProperty('--name-column-width', `${nameColumnWidth}px`);
     }
   }, [nameColumnWidth]);
+
+  useEffect(() => {
+    if (payments.length > 1 && autoSyncPayment) {
+      setAutoSyncPayment(false);
+    }
+  }, [payments.length, autoSyncPayment]);
+
+  useEffect(() => {
+    if (!autoSyncPayment) {
+      return;
+    }
+    if (!quickPaymentMethodId) {
+      return;
+    }
+    const nextAmount = Number(totalProductsAmount.toFixed(2));
+    if (nextAmount <= 0) {
+      if (payments.length > 0) {
+        setPayments([]);
+      }
+      return;
+    }
+    if (
+      payments.length === 1 &&
+      payments[0]?.paymentMethodId === quickPaymentMethodId &&
+      Number(payments[0]?.amount ?? 0) === nextAmount &&
+      payments[0]?.currency === currency
+    ) {
+      return;
+    }
+    setPayments([
+      {
+        paymentMethodId: quickPaymentMethodId,
+        amount: nextAmount,
+        currency,
+      },
+    ]);
+  }, [autoSyncPayment, quickPaymentMethodId, totalProductsAmount, currency, payments]);
 
   const handleNameColumnMouseMove = useCallback((event: MouseEvent) => {
     if (!nameColumnResizeStateRef.current) {
@@ -397,10 +561,97 @@ const getSaleReferenceId = () => {
   // Cargar los clientes al montar el componente
   const [openClient, setOpenClient] = React.useState(false)
   const [valueClient, setValueClient] = React.useState("")
+  const salesContextKey = useMemo(() => {
+    if (!userId || !selection.orgId) return null;
+    const companyKey = selection.companyId ?? 0;
+    return `sales-context:v1:${userId}:${selection.orgId}:${companyKey}`;
+  }, [userId, selection.orgId, selection.companyId]);
+  const salesDraftKey = useMemo(() => {
+    if (!userId || !selection.orgId) return null;
+    const companyKey = selection.companyId ?? 0;
+    return `sales-draft:v1:${userId}:${selection.orgId}:${companyKey}`;
+  }, [userId, selection.orgId, selection.companyId]);
+  const [draftPromptOpen, setDraftPromptOpen] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<SalesDraft | null>(null);
+  const draftSaveTimerRef = useRef<number | null>(null);
+  const draftAppliedRef = useRef(false);
+  const [lastInvoiceType, setLastInvoiceType] = useState<string>("");
+  const [invoiceTypeUsage, setInvoiceTypeUsage] = useState<Record<string, number>>({});
+  const lastInvoiceTypeRef = useRef(lastInvoiceType);
+  const invoiceTypeUsageRef = useRef(invoiceTypeUsage);
+  const [lastStoreId, setLastStoreId] = useState<number | null>(null);
+  const [recentClientIds, setRecentClientIds] = useState<number[]>([]);
+  const [recentProductIds, setRecentProductIds] = useState<number[]>([]);
+  const [lastQuickPaymentMethodId, setLastQuickPaymentMethodId] = useState<number | null>(null);
+  const [paymentMethodUsage, setPaymentMethodUsage] = useState<Record<string, number>>({});
+  const appliedDefaultsRef = useRef({
+    invoice: false,
+    store: false,
+    client: false,
+    product: false,
+    payment: false,
+  });
+  const paymentMethodUsageRef = useRef(paymentMethodUsage);
+  const lastProductOutOfStockNoticeRef = useRef(false);
+  const preferredInvoiceType = useMemo(() => {
+    const entries = Object.entries(invoiceTypeUsage);
+    if (entries.length === 0) {
+      return lastInvoiceType;
+    }
+    let bestType = lastInvoiceType || entries[0][0];
+    let bestCount = -Infinity;
+    for (const [key, value] of entries) {
+      if (value > bestCount) {
+        bestType = key;
+        bestCount = value;
+      }
+    }
+    return bestType;
+  }, [invoiceTypeUsage, lastInvoiceType]);
+  const preferredQuickPaymentMethodId = useMemo(() => {
+    const entries = Object.entries(paymentMethodUsage);
+    if (entries.length === 0) {
+      return lastQuickPaymentMethodId;
+    }
+    let bestId = lastQuickPaymentMethodId ?? Number(entries[0][0]);
+    let bestCount = -Infinity;
+    for (const [key, value] of entries) {
+      const id = Number(key);
+      if (!Number.isFinite(id)) {
+        continue;
+      }
+      if (value > bestCount) {
+        bestId = id;
+        bestCount = value;
+      }
+    }
+    return bestId ?? null;
+  }, [paymentMethodUsage, lastQuickPaymentMethodId]);
   const [categoriesState, setCategoriesState] = useState(categories ?? []);
   useEffect(() => {
     setCategoriesState(categories ?? []);
   }, [categories]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const methodsFromBackend = (await getPaymentMethods()) ?? [];
+        const combined = [...defaultPaymentMethods, ...methodsFromBackend];
+        const unique = Array.from(new Map(combined.map((method) => [method.name, method])).values());
+        if (!cancelled) {
+          setPaymentMethodsList(unique);
+        }
+      } catch {
+        if (!cancelled) {
+          setPaymentMethodsList(defaultPaymentMethods);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   useEffect(() => {
     let cancelled = false;
     setCategoriesState([]);
@@ -553,6 +804,248 @@ const getSaleReferenceId = () => {
   const displayedProductName = selectedProductOption?.name ?? value ?? "";
   const displayedStoreName = selectedStoreOption?.name ?? valueStore ?? "";
   const displayedClientName = selectedClientOption?.name ?? valueClient ?? ""
+  const recentClientSet = useMemo(
+    () => new Set<number>(recentClientIds.filter((id) => typeof id === "number")),
+    [recentClientIds],
+  );
+  const recentProductSet = useMemo(
+    () => new Set<number>(recentProductIds.filter((id) => typeof id === "number")),
+    [recentProductIds],
+  );
+  const filteredClients = useMemo(() => {
+    return clients.filter((client) => {
+      if (valueInvoice === "FACTURA") {
+        return client.type === "RUC";
+      }
+      if (valueInvoice === "BOLETA") {
+        return client.type !== "RUC";
+      }
+      return true;
+    });
+  }, [clients, valueInvoice]);
+  const orderedClients = useMemo(() => {
+    if (recentClientIds.length === 0) {
+      return filteredClients;
+    }
+    const recent = recentClientIds
+      .map((id) => filteredClients.find((client) => client.id === id))
+      .filter(Boolean) as any[];
+    const rest = filteredClients.filter((client) => !recentClientSet.has(client.id));
+    return [...recent, ...rest];
+  }, [filteredClients, recentClientIds, recentClientSet]);
+  const lastRecentProductId = recentProductIds.length > 0 ? recentProductIds[0] : null;
+  const suggestedOutOfStockProduct = useMemo(() => {
+    if (!selectedStoreId || !lastRecentProductId) {
+      return null;
+    }
+    const candidate = products.find((product) => product.id === lastRecentProductId) ?? null;
+    if (!candidate) {
+      return null;
+    }
+    return (candidate.stock ?? 0) <= 0 ? candidate : null;
+  }, [products, lastRecentProductId, selectedStoreId]);
+  const orderedProducts = useMemo(() => {
+    let baseProducts =
+      selectedStoreId && !showOutOfStock
+        ? products.filter((product) => (product.stock ?? 0) > 0)
+        : products;
+    if (suggestedOutOfStockProduct) {
+      baseProducts = baseProducts.filter((product) => product.id !== suggestedOutOfStockProduct.id);
+    }
+    if (recentProductIds.length === 0) {
+      return baseProducts;
+    }
+    const recent = recentProductIds
+      .map((id) => baseProducts.find((product) => product.id === id))
+      .filter(Boolean) as any[];
+    const rest = baseProducts.filter((product) => !recentProductSet.has(product.id));
+    return [...recent, ...rest];
+  }, [
+    products,
+    recentProductIds,
+    recentProductSet,
+    selectedStoreId,
+    showOutOfStock,
+    suggestedOutOfStockProduct,
+  ]);
+  const persistSalesContext = useCallback(
+    (next: Partial<{
+      lastInvoiceType: string;
+      invoiceTypeUsage: Record<string, number>;
+      lastStoreId: number | null;
+      recentClientIds: number[];
+      recentProductIds: number[];
+      lastQuickPaymentMethodId: number | null;
+      paymentMethodUsage: Record<string, number>;
+    }>) => {
+      if (!salesContextKey || typeof window === "undefined") {
+        return;
+      }
+      const payload = {
+        lastInvoiceType,
+        invoiceTypeUsage,
+        lastStoreId,
+        recentClientIds,
+        recentProductIds,
+        lastQuickPaymentMethodId,
+        paymentMethodUsage,
+        ...next,
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        window.localStorage.setItem(salesContextKey, JSON.stringify(payload));
+      } catch (error) {
+        console.warn("No se pudo guardar el contexto de ventas:", error);
+      }
+    },
+    [
+      salesContextKey,
+      lastInvoiceType,
+      invoiceTypeUsage,
+      lastStoreId,
+      recentClientIds,
+      recentProductIds,
+      lastQuickPaymentMethodId,
+      paymentMethodUsage,
+    ],
+  );
+
+  const isDraftMeaningful = useCallback((draft: SalesDraft | null) => {
+    if (!draft) return false;
+    // Productos seleccionados = trabajo real del usuario
+    if (draft.selectedProducts.length > 0) return true;
+    // Pagos registrados = trabajo real del usuario
+    if (draft.payments.length > 0) return true;
+    // Datos del cliente ingresados manualmente = trabajo real del usuario
+    const values = draft.values;
+    const hasClientData = Boolean(
+      values?.description ||
+      values?.client_name ||
+      values?.client_typeNumber
+    );
+    if (hasClientData) return true;
+    // IMPORTANTE: valueStore, valueClient, valueInvoice se auto-rellenan por defaults
+    // No deben contar como "draft significativo" por sí solos
+    // Solo si hay productos, pagos, o datos de cliente ingresados manualmente
+    return false;
+  }, []);
+
+  const buildDraftSnapshot = useCallback((): SalesDraft | null => {
+    if (!salesDraftKey || typeof window === "undefined") {
+      return null;
+    }
+    const values = form.getValues();
+    const draft: SalesDraft = {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      values,
+      selectedProducts,
+      payments,
+      currency,
+      valueStore,
+      valueClient,
+      valueInvoice,
+      selectedStoreId,
+      selectedDate: selectedDate ? selectedDate.toISOString() : null,
+      createdAt: createdAt ? createdAt.toISOString() : null,
+      showOutOfStock,
+      autoSyncPayment,
+      quickPaymentMethodId,
+    };
+    return isDraftMeaningful(draft) ? draft : null;
+  }, [
+    salesDraftKey,
+    form,
+    selectedProducts,
+    payments,
+    currency,
+    valueStore,
+    valueClient,
+    valueInvoice,
+    selectedStoreId,
+    selectedDate,
+    createdAt,
+    showOutOfStock,
+    autoSyncPayment,
+    quickPaymentMethodId,
+    isDraftMeaningful,
+  ]);
+
+  const persistSalesDraft = useCallback(
+    (draft: SalesDraft | null) => {
+      if (!salesDraftKey || typeof window === "undefined") {
+        return;
+      }
+      try {
+        if (!draft) {
+          window.localStorage.removeItem(salesDraftKey);
+          return;
+        }
+        window.localStorage.setItem(salesDraftKey, JSON.stringify(draft));
+      } catch (error) {
+        console.warn("No se pudo guardar el borrador de venta:", error);
+      }
+    },
+    [salesDraftKey],
+  );
+
+  const scheduleDraftSave = useCallback(() => {
+    if (!salesDraftKey || typeof window === "undefined") {
+      return;
+    }
+    if (draftSaveTimerRef.current) {
+      window.clearTimeout(draftSaveTimerRef.current);
+    }
+    draftSaveTimerRef.current = window.setTimeout(() => {
+      persistSalesDraft(buildDraftSnapshot());
+    }, 400);
+  }, [salesDraftKey, buildDraftSnapshot, persistSalesDraft]);
+
+  const applyDraft = useCallback(
+    (draft: SalesDraft) => {
+      draftAppliedRef.current = true;
+      const mergedValues = {
+        ...form.getValues(),
+        ...draft.values,
+      };
+      form.reset(mergedValues);
+      setSelectedProducts(draft.selectedProducts ?? []);
+      setPayments(draft.payments ?? []);
+      setCurrency(draft.currency ?? "PEN");
+      setValueStore(draft.valueStore ?? "");
+      setValueClient(draft.valueClient ?? "");
+      setValueInvoice(draft.valueInvoice ?? "");
+      setSelectedStoreId(draft.selectedStoreId ?? null);
+      setSelectedDate(draft.selectedDate ? new Date(draft.selectedDate) : new Date());
+      setCreatedAt(draft.createdAt ? new Date(draft.createdAt) : null);
+      setShowOutOfStock(Boolean(draft.showOutOfStock));
+      setAutoSyncPayment(Boolean(draft.autoSyncPayment));
+      setQuickPaymentMethodId(draft.quickPaymentMethodId ?? null);
+      setOpen(false);
+      setOpenClient(false);
+      setOpenStore(false);
+      setOpenInvoice(false);
+    },
+    [
+      form,
+      setSelectedProducts,
+      setPayments,
+      setCurrency,
+      setValueStore,
+      setValueClient,
+      setValueInvoice,
+      setSelectedStoreId,
+      setSelectedDate,
+      setCreatedAt,
+      setShowOutOfStock,
+      setAutoSyncPayment,
+      setQuickPaymentMethodId,
+      setOpen,
+      setOpenClient,
+      setOpenStore,
+      setOpenInvoice,
+    ],
+  );
 
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
@@ -723,10 +1216,52 @@ const getSaleReferenceId = () => {
         if (!createdSale || !createdSale.id) {
           throw new Error("No se pudo obtener el ID de la venta creada.");
         }
+
+        const paymentMethodIds = payments
+          .map((payment) => payment.paymentMethodId)
+          .filter((id): id is number => typeof id === "number" && Number.isFinite(id));
+        if (paymentMethodIds.length > 0) {
+          setPaymentMethodUsage((prev) => {
+            const next = { ...prev };
+            for (const id of paymentMethodIds) {
+              const key = String(id);
+              next[key] = (next[key] ?? 0) + 1;
+            }
+            const mostUsedId = getMostUsedPaymentMethodId(next, paymentMethodIds[0] ?? null);
+            setLastQuickPaymentMethodId(mostUsedId);
+            persistSalesContext({
+              paymentMethodUsage: next,
+              lastQuickPaymentMethodId: mostUsedId,
+            });
+            return next;
+          });
+        }
  
         saleReferenceIdRef.current = null;
+
+        // 🔒 Cancelar timer de draft pendiente (prevenir race condition)
+        if (draftSaveTimerRef.current) {
+          window.clearTimeout(draftSaveTimerRef.current);
+          draftSaveTimerRef.current = null;
+        }
+
+        // 🔒 Limpiar draft de forma sincrónica (prevenir modal al volver)
+        if (salesDraftKey && typeof window !== "undefined") {
+          try {
+            window.localStorage.removeItem(salesDraftKey);
+          } catch (e) {
+            console.warn("No se pudo limpiar el borrador de venta:", e);
+          }
+        }
+
+        // Marcar que ya no debe mostrar diálogos de borrador
+        draftAppliedRef.current = true;
+        // Cerrar cualquier diálogo abierto
+        setDraftPromptOpen(false);
+        setIsPriceAlertOpen(false);
+
         toast.success("Se registro la informacion correctamente."); // Notificaci??n de ?xito
- 
+
 
         if(data.tipoComprobante != "SIN COMPROBANTE"){
           // Llamar al endpoint para enviar la factura a la SUNAT
@@ -849,19 +1384,35 @@ const getSaleReferenceId = () => {
     }
     finally {
       setIsSubmitting(false);
+      // 🔒 Red de seguridad: limpiar draft incluso si hay error
+      if (draftSaveTimerRef.current) {
+        window.clearTimeout(draftSaveTimerRef.current);
+        draftSaveTimerRef.current = null;
+      }
     }
   })    
   //
 
   // Manejar el cambio en el combobox de tipoComprobante
   const handleTipoComprobanteChange = (currentValue: string) => {
-    const selectedValue = currentValue === valueInvoice ? "" : currentValue;
-    setValueInvoice(selectedValue); // Actualiza el estado local
-    form.setValue("tipoComprobante", selectedValue); // Actualiza el formulario
+    if (!currentValue) {
+      return;
+    }
+    setValueInvoice(currentValue); // Actualiza el estado local
+    form.setValue("tipoComprobante", currentValue); // Actualiza el formulario
     setOpenInvoice(false); // Cierra el combobox
+    setLastInvoiceType(currentValue);
+    setInvoiceTypeUsage((prev) => {
+      const next = {
+        ...prev,
+        [currentValue]: (prev[currentValue] ?? 0) + 1,
+      };
+      persistSalesContext({ lastInvoiceType: currentValue, invoiceTypeUsage: next });
+      return next;
+    });
 
     // Habilitar o deshabilitar el combobox de clientes según el valor seleccionado
-    if (!selectedValue || selectedValue === "SIN COMPROBANTE") {
+    if (currentValue === "SIN COMPROBANTE") {
       setIsClientDisabled(true); // Deshabilita el combobox de clientes
     } else {
       setIsClientDisabled(false); // Habilita el combobox de clientes
@@ -890,6 +1441,8 @@ const getSaleReferenceId = () => {
     setSelectedStoreId(nextStore.id);
     setValue("store_name", nextStore.name || "");
     setValue("store_adress", nextStore.adress || "");
+    setLastStoreId(nextStore.id);
+    persistSalesContext({ lastStoreId: nextStore.id });
 
     setSelectedProducts([]);
     setCurrentProduct(null);
@@ -900,8 +1453,97 @@ const getSaleReferenceId = () => {
     setValue("price", 0);
     setValue("description", "");
     setOpenStore(false);
+    lastProductOutOfStockNoticeRef.current = false;
+    setShowOutOfStock(false);
   };
   //
+
+  const recordRecentClient = (clientId: number) => {
+    setRecentClientIds((prev) => {
+      const next = [clientId, ...prev.filter((id) => id !== clientId)].slice(0, 10);
+      persistSalesContext({ recentClientIds: next });
+      return next;
+    });
+  };
+
+  const recordRecentProduct = (productId: number) => {
+    setRecentProductIds((prev) => {
+      const next = [productId, ...prev.filter((id) => id !== productId)].slice(0, 10);
+      persistSalesContext({ recentProductIds: next });
+      return next;
+    });
+  };
+
+  const selectProductForSale = async (selectedProduct: any) => {
+    if (!selectedProduct) {
+      return;
+    }
+
+    setValueProduct(selectedProduct.name || "");
+    if (typeof selectedProduct.id === "number") {
+      recordRecentProduct(selectedProduct.id);
+    }
+
+    const existingProduct = selectedProducts.find((item) => item.id === selectedProduct.id);
+    let simulatedStock = existingProduct
+      ? selectedProduct.stock - existingProduct.quantity
+      : selectedProduct.stock;
+
+    if (selectedStoreId) {
+      try {
+        const series = await getSeriesByProductAndStore(selectedStoreId, selectedProduct.id);
+
+        setCurrentProduct({
+          ...selectedProduct,
+          series,
+        });
+
+        const realStock = await getStockByProductAndStore(selectedStoreId, selectedProduct.id);
+
+        simulatedStock = existingProduct
+          ? realStock - existingProduct.quantity
+          : realStock;
+
+        setStock(simulatedStock > 0 ? simulatedStock : 0);
+
+        if (realStock <= 0) {
+          toast("Stock no disponible en esta tienda.", {
+            description: "Selecciona otra tienda o registra un ingreso de inventario.",
+          });
+        }
+
+        if (selectedProduct.price === 0 || selectedProduct.price === null) {
+          setProductWithZeroPrice({
+            id: selectedProduct.id,
+            name: selectedProduct.name,
+          });
+          setIsPriceAlertOpen(true);
+          return;
+        }
+      } catch (error) {
+        console.error("Error al obtener el stock del producto:", error);
+        setCurrentProduct({
+          ...selectedProduct,
+          series: [],
+        });
+        setStock(0);
+      }
+    } else {
+      console.warn("No se ha seleccionado una tienda");
+      setCurrentProduct(null);
+      setStock(0);
+    }
+
+    const category = categoriesState.find((cat: any) => cat.id === selectedProduct.categoryId);
+
+    setValue(
+      "category_name",
+      category?.name || selectedProduct.category_name || "Sin categoria",
+    );
+    setValue("price", selectedProduct.price || 0);
+    setValue("description", selectedProduct.description || "");
+    setOpen(false);
+  };
 
   // Función para eliminar un producto del datatable
   const removeProduct = (id: number) => {
@@ -1125,6 +1767,10 @@ const getSaleReferenceId = () => {
     setPdfData(null);
     setPayments([]);
     setForceOpenPaymentModal(false);
+    setQuickPaymentMethodId(null);
+    setAutoSyncPayment(false);
+    setLastQuickPaymentMethodId(null);
+    setPaymentMethodUsage({});
     setIsDialogOpen(false);
     setIsDialogOpenSeries(false);
     setIsSeriesModalOpen(false);
@@ -1158,7 +1804,308 @@ const getSaleReferenceId = () => {
     setProducts([]);
     setClients([]);
     form.reset(buildDefaultSaleValues());
+    appliedDefaultsRef.current = {
+      invoice: false,
+      store: false,
+      client: false,
+      product: false,
+      payment: false,
+    };
   }, [version, form]);
+
+  useEffect(() => {
+    lastInvoiceTypeRef.current = lastInvoiceType;
+  }, [lastInvoiceType]);
+
+  useEffect(() => {
+    invoiceTypeUsageRef.current = invoiceTypeUsage;
+  }, [invoiceTypeUsage]);
+
+  useEffect(() => {
+    paymentMethodUsageRef.current = paymentMethodUsage;
+  }, [paymentMethodUsage]);
+
+  useEffect(() => {
+    if (!salesContextKey || typeof window === "undefined") {
+      setLastInvoiceType("");
+      setInvoiceTypeUsage({});
+      setLastStoreId(null);
+      setRecentClientIds([]);
+      setRecentProductIds([]);
+      setLastQuickPaymentMethodId(null);
+      setPaymentMethodUsage({});
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(salesContextKey);
+      if (!raw) {
+        if (!lastInvoiceTypeRef.current && Object.keys(invoiceTypeUsageRef.current).length === 0) {
+          setLastInvoiceType("");
+          setInvoiceTypeUsage({});
+        }
+        setLastStoreId(null);
+        setRecentClientIds([]);
+        setRecentProductIds([]);
+        setLastQuickPaymentMethodId(null);
+        setPaymentMethodUsage({});
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setLastInvoiceType(typeof parsed?.lastInvoiceType === "string" ? parsed.lastInvoiceType : "");
+      if (parsed?.invoiceTypeUsage && typeof parsed.invoiceTypeUsage === "object") {
+        const nextUsage: Record<string, number> = {};
+        for (const [key, value] of Object.entries(parsed.invoiceTypeUsage)) {
+          if (typeof value === "number" && Number.isFinite(value)) {
+            nextUsage[key] = value;
+          }
+        }
+        setInvoiceTypeUsage(nextUsage);
+      } else {
+        setInvoiceTypeUsage({});
+      }
+      setLastStoreId(typeof parsed?.lastStoreId === "number" ? parsed.lastStoreId : null);
+      setRecentClientIds(
+        Array.isArray(parsed?.recentClientIds)
+          ? parsed.recentClientIds.filter((id: unknown) => typeof id === "number")
+          : [],
+      );
+      setRecentProductIds(
+        Array.isArray(parsed?.recentProductIds)
+          ? parsed.recentProductIds.filter((id: unknown) => typeof id === "number")
+          : [],
+      );
+      setLastQuickPaymentMethodId(
+        typeof parsed?.lastQuickPaymentMethodId === "number" ? parsed.lastQuickPaymentMethodId : null,
+      );
+      if (parsed?.paymentMethodUsage && typeof parsed.paymentMethodUsage === "object") {
+        const nextUsage: Record<string, number> = {};
+        for (const [key, value] of Object.entries(parsed.paymentMethodUsage)) {
+          if (typeof value === "number" && Number.isFinite(value)) {
+            nextUsage[key] = value;
+          }
+        }
+        setPaymentMethodUsage(nextUsage);
+      } else {
+        setPaymentMethodUsage({});
+      }
+    } catch (error) {
+      console.warn("No se pudo leer el contexto de ventas:", error);
+      if (!lastInvoiceTypeRef.current && Object.keys(invoiceTypeUsageRef.current).length === 0) {
+        setLastInvoiceType("");
+        setInvoiceTypeUsage({});
+      }
+      setLastStoreId(null);
+      setRecentClientIds([]);
+      setRecentProductIds([]);
+      setLastQuickPaymentMethodId(null);
+      setPaymentMethodUsage({});
+    }
+  }, [salesContextKey]);
+
+  useEffect(() => {
+    if (!salesContextKey || typeof window === "undefined") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(salesContextKey);
+      if (
+        !raw &&
+        (lastInvoiceTypeRef.current ||
+          Object.keys(invoiceTypeUsageRef.current).length > 0 ||
+          Object.keys(paymentMethodUsageRef.current).length > 0)
+      ) {
+        persistSalesContext({
+          lastInvoiceType: lastInvoiceTypeRef.current,
+          invoiceTypeUsage: invoiceTypeUsageRef.current,
+          paymentMethodUsage: paymentMethodUsageRef.current,
+        });
+      }
+    } catch (error) {
+      console.warn("No se pudo sincronizar el contexto de ventas:", error);
+    }
+  }, [salesContextKey, persistSalesContext]);
+
+  useEffect(() => {
+    if (!salesDraftKey || typeof window === "undefined") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(salesDraftKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as SalesDraft;
+      if (!parsed || parsed.version !== 1 || !isDraftMeaningful(parsed)) {
+        window.localStorage.removeItem(salesDraftKey);
+        return;
+      }
+      if (draftAppliedRef.current) return;
+      setPendingDraft(parsed);
+      setDraftPromptOpen(true);
+    } catch (error) {
+      console.warn("No se pudo leer el borrador de venta:", error);
+    }
+  }, [salesDraftKey, isDraftMeaningful]);
+
+  useEffect(() => {
+    if (!salesDraftKey) {
+      return;
+    }
+    scheduleDraftSave();
+  }, [
+    salesDraftKey,
+    selectedProducts,
+    payments,
+    currency,
+    valueStore,
+    valueClient,
+    valueInvoice,
+    selectedStoreId,
+    selectedDate,
+    createdAt,
+    showOutOfStock,
+    autoSyncPayment,
+    quickPaymentMethodId,
+    scheduleDraftSave,
+  ]);
+
+  useEffect(() => {
+    if (!salesDraftKey) {
+      return;
+    }
+    const subscription = form.watch(() => scheduleDraftSave());
+    return () => subscription.unsubscribe();
+  }, [salesDraftKey, form, scheduleDraftSave]);
+
+  useEffect(() => {
+    if (!salesDraftKey || typeof window === "undefined") {
+      return;
+    }
+    const handleBeforeUnload = () => {
+      persistSalesDraft(buildDraftSnapshot());
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [salesDraftKey, buildDraftSnapshot, persistSalesDraft]);
+
+  useEffect(() => {
+    if (!salesContextKey) {
+      return;
+    }
+
+    if (!appliedDefaultsRef.current.invoice) {
+      if (!valueInvoice && preferredInvoiceType) {
+        handleTipoComprobanteChange(preferredInvoiceType);
+        appliedDefaultsRef.current.invoice = true;
+      } else if (valueInvoice) {
+        appliedDefaultsRef.current.invoice = true;
+      }
+    }
+
+    if (!appliedDefaultsRef.current.store && stores.length > 0) {
+      if (lastStoreId) {
+        const store = stores.find((item) => item.id === lastStoreId);
+        if (store && !valueStore) {
+          handleStoreChange(store.name || "");
+        }
+      }
+      appliedDefaultsRef.current.store = true;
+    }
+
+    if (!appliedDefaultsRef.current.client && clients.length > 0) {
+      if (!preferredInvoiceType || valueInvoice === preferredInvoiceType) {
+        if (!valueClient && !isClientDisabled && recentClientIds.length > 0) {
+          const filteredClients = clients.filter((client) => {
+            if (valueInvoice === "FACTURA") {
+              return client.type === "RUC";
+          }
+          if (valueInvoice === "BOLETA") {
+            return client.type !== "RUC";
+          }
+          return true;
+        });
+        const recentClient = recentClientIds
+          .map((id) => filteredClients.find((client) => client.id === id))
+          .find(Boolean);
+          if (recentClient) {
+            setValueClient(recentClient.name || "");
+            setValue("client_name", recentClient.name || "");
+            setValue("client_type", recentClient.type || "");
+            setValue("client_typeNumber", recentClient.typeNumber || "");
+          }
+        }
+      }
+      appliedDefaultsRef.current.client = true;
+    }
+
+    if (!appliedDefaultsRef.current.product && products.length > 0) {
+      if (!value && recentProductIds.length > 0 && selectedStoreId) {
+        const recentProducts = recentProductIds
+          .map((id) => products.find((product) => product.id === id))
+          .filter(Boolean) as Array<{ id: number; stock?: number; price?: number }>;
+        // Buscar producto disponible con stock Y precio válido (no auto-seleccionar productos sin precio)
+        const availableProduct = recentProducts.find(
+          (product) => (product.stock ?? 0) > 0 && (product.price ?? 0) > 0
+        );
+        if (availableProduct) {
+          void selectProductForSale(availableProduct);
+        } else if (!lastProductOutOfStockNoticeRef.current) {
+          toast("El último producto usado no tiene stock.", {
+            description: "Selecciona otro producto o registra inventario.",
+          });
+          lastProductOutOfStockNoticeRef.current = true;
+        }
+      }
+      appliedDefaultsRef.current.product = true;
+    }
+    if (!appliedDefaultsRef.current.payment) {
+      let applied = false;
+      if (payments.length === 0) {
+        const candidateId =
+          typeof preferredQuickPaymentMethodId === "number"
+            ? preferredQuickPaymentMethodId
+            : typeof lastQuickPaymentMethodId === "number"
+            ? lastQuickPaymentMethodId
+            : null;
+        if (typeof candidateId === "number") {
+          const exists = paymentMethodsList.some((method) => method.id === candidateId);
+          if (exists) {
+            handleQuickPaymentSelect(candidateId);
+            applied = true;
+          }
+        }
+      } else {
+        applied = true;
+      }
+      if (quickPaymentMethodId !== null) {
+        applied = true;
+      }
+      if (applied) {
+        appliedDefaultsRef.current.payment = true;
+      }
+    }
+  }, [
+    salesContextKey,
+    preferredInvoiceType,
+    lastStoreId,
+    recentClientIds,
+    recentProductIds,
+    selectedStoreId,
+    stores,
+    clients,
+    products,
+    payments.length,
+    lastQuickPaymentMethodId,
+    preferredQuickPaymentMethodId,
+    paymentMethodsList,
+    quickPaymentMethodId,
+    valueStore,
+    valueClient,
+    value,
+    valueInvoice,
+    isClientDisabled,
+    handleStoreChange,
+    handleTipoComprobanteChange,
+    setValue,
+  ]);
 
   return (
     <div className="container mx-auto w-full max-w-4xl grid sm:max-w-md md:max-w-lg lg:max-w-4xl">
@@ -1175,21 +2122,36 @@ const getSaleReferenceId = () => {
         </div>
       )}
       <form className='relative flex flex-col gap-2' onSubmit={onSubmit}>
-        <fieldset disabled={isSubmitting} className="contents">                  
+        <TooltipProvider delayDuration={150}>
+          <fieldset disabled={isSubmitting} className="contents">                  
                   <div className="flex flex-wrap gap-4">
                     <div className="flex-1 flex-col border rounded-md p-2">                  
-                        <Label className="text-sm font-medium mb-2">Tipo de Comprobante</Label>
+                        <Label className="text-sm font-medium mb-2">
+                          <div className="flex items-center">
+                            <span>Tipo de Comprobante</span>
+                            {renderStatusChip(Boolean(form.getValues("tipoComprobante")))}
+                          </div>
+                        </Label>
                         <Popover open={openInvoice} onOpenChange={setOpenInvoice}>
                           <PopoverTrigger asChild>
                             <Button
+                              type="button"
                               variant="outline"
                               role="combobox"
                               aria-expanded={openInvoice}
                               className="w-[260px] justify-between text-xs cursor-pointer"
-                              title="Selecciona el tipo de comprobante"
                             >
-                              {valueInvoice || "Selecciona un tipo de comprobante..."}
-                              <ChevronsUpDown className="opacity-50" />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="flex w-full items-center justify-between">
+                                    {valueInvoice || "Selecciona un tipo de comprobante..."}
+                                    <ChevronsUpDown className="opacity-50" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  Selecciona el tipo de comprobante
+                                </TooltipContent>
+                              </Tooltip>
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-[260px] p-0">
@@ -1198,11 +2160,11 @@ const getSaleReferenceId = () => {
                               <CommandList>
                                 <CommandEmpty>No se encontraron resultados.</CommandEmpty>
                                 <CommandGroup>
-                                  {["SIN COMPROBANTE", "BOLETA", "FACTURA"].map((type) => (
+                                    {["SIN COMPROBANTE", "BOLETA", "FACTURA"].map((type) => (
                                     <CommandItem
                                       key={type}
                                       value={type}
-                                      className="cursor-pointer"
+                                      className="cursor-pointer transition-colors hover:bg-accent/60 rounded-sm px-1"
                                       onSelect={(currentValue) => {
 
                                         if (currentValue === valueInvoice) {
@@ -1210,13 +2172,8 @@ const getSaleReferenceId = () => {
                                           return;
                                         }
 
-                                        const selectedValue = currentValue === valueInvoice ? "" : currentValue;
-                                        setValueInvoice(selectedValue); // Actualiza el estado local
-                                        form.setValue("tipoComprobante", selectedValue); // Actualiza el formulario
-                                        setOpenInvoice(false); // Cierra el combobox
-
                                         // Llama a la función handleTipoComprobanteChange
-                                        handleTipoComprobanteChange(selectedValue); // Actualiza el estado de habilitación del combobox de clientes
+                                        handleTipoComprobanteChange(currentValue); // Actualiza el estado de habilitación del combobox de clientes
                                       }}
                                     >
                                       {type}
@@ -1227,7 +2184,7 @@ const getSaleReferenceId = () => {
                                         )}
                                       />
                                     </CommandItem>
-                                  ))}
+                                        ))}
                                 </CommandGroup>
                               </CommandList>
                             </Command>
@@ -1239,19 +2196,23 @@ const getSaleReferenceId = () => {
                       <div className="flex gap-1">                                                                     
                         <Popover open={openCalendar} onOpenChange={setOpenCalendar}>
                           <PopoverTrigger asChild>
-                            <Button
-                              variant={"outline"}
-                              className={cn(
-                                "w-[260px] justify-start text-left font-normal cursor-pointer",
-                                !selectedDate && "text-muted-foreground"
-                              )}
-                              title="Define la fecha de emisión del comprobante"
-                            >
-                            <CalendarIcon />
-                            {selectedDate
-                            ? format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: es }) // Mostrar la fecha en español
-                            : "Selecciona una fecha"}
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant={"outline"}
+                                  className={cn(
+                                    "w-[260px] justify-start text-left font-normal cursor-pointer",
+                                    !selectedDate && "text-muted-foreground"
+                                  )}
+                                >
+                                <CalendarIcon />
+                                {selectedDate
+                                ? format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: es }) // Mostrar la fecha en español
+                                : "Selecciona una fecha"}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">Define la fecha de emisión del comprobante</TooltipContent>
+                            </Tooltip>
                           </PopoverTrigger>
                           <PopoverContent className="w-[260px] p-0">
                             <Calendar
@@ -1284,9 +2245,16 @@ const getSaleReferenceId = () => {
                                 form.setValue("tipo_moneda", value, { shouldValidate: true }); // Actualiza el formulario
                                }}
                             >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecciona una moneda" />
-                              </SelectTrigger>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <SelectTrigger className="cursor-pointer transition-transform duration-150 hover:scale-[1.02]">
+                                    <SelectValue placeholder="Selecciona una moneda" />
+                                  </SelectTrigger>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  Seleccionar moneda
+                                </TooltipContent>
+                              </Tooltip>
                               <SelectContent>
                                 <SelectItem value="PEN">Soles (PEN)</SelectItem>
                                 <SelectItem value="USD">Dólares (USD)</SelectItem>
@@ -1295,11 +2263,106 @@ const getSaleReferenceId = () => {
                           </div>
                           <div className="flex flex-col flex-grow">
                             <Label className="text-sm font-medium py-2">Ingrese Metodo de Pago</Label>
+                              <div className="flex flex-col gap-2">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                                  <div className="flex w-full min-w-0 flex-col gap-1">
+                                    <Select
+                                      disabled={payments.length > 1}
+                                      value={quickPaymentMethodId !== null ? String(quickPaymentMethodId) : ""}
+                                      onValueChange={(value: string) => handleQuickPaymentSelect(Number(value))}
+                                    >
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <SelectTrigger className="w-full min-w-0 sm:min-w-[180px] cursor-pointer transition-transform duration-150 hover:scale-[1.02]">
+                                            {(() => {
+                                              if (payments.length > 1) {
+                                                return (
+                                                  <span className="flex min-w-0 items-center gap-2" data-slot="select-value">
+                                                    <CreditCard className="h-4 w-4" />
+                                                    <span className="truncate">Varios</span>
+                                                  </span>
+                                                );
+                                              }
+                                              const selectedMethod =
+                                                quickPaymentMethodId !== null
+                                                  ? paymentMethodsList.find(
+                                                      (method) => method.id === quickPaymentMethodId
+                                                    )
+                                                  : null;
+                                              if (!selectedMethod) {
+                                                return <SelectValue placeholder="Metodo rapido" />;
+                                              }
+                                              return (
+                                                <span className="flex min-w-0 items-center gap-2" data-slot="select-value">
+                                                  {getPaymentMethodIcon(selectedMethod.name)}
+                                                  <span className="truncate">{selectedMethod.name}</span>
+                                                </span>
+                                              );
+                                            })()}
+                                          </SelectTrigger>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                          Seleccionar metodo de pago
+                                        </TooltipContent>
+                                      </Tooltip>
+                                      <SelectContent>
+                                  {paymentMethodsList.map((method) => (
+                                    <SelectItem key={method.id} value={String(method.id)} textValue={method.name}>
+                                      <span className="flex items-center gap-2">
+                                        {getPaymentMethodIcon(method.name)}
+                                        <span className="truncate">{method.name}</span>
+                                        {preferredQuickPaymentMethodId === method.id && (
+                                          <span className="ml-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                            Más usado
+                                          </span>
+                                        )}
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                      </SelectContent>
+                                    </Select>
+                                    {autoSyncPayment && payments.length === 1 && (
+                                      <span className="inline-flex w-fit items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-500">
+                                        Monto autocompletado
+                                      </span>
+                                    )}
+                                  </div>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full sm:w-auto sm:self-start inline-flex items-center gap-2 cursor-pointer transition-transform duration-150 hover:scale-[1.02]"
+                                    onClick={() => {
+                                      setAutoSyncPayment(false);
+                                      setForceOpenPaymentModal(true);
+                                    }}
+                                  >
+                                    <Layers className="h-4 w-4" />
+                                    <span>Dividir pago</span>
+                                  </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      Dividir el pago en varios metodos
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </div>
                             <PaymentMethodsModal
+                              hideTrigger
                               value={payments}
-                              onChange={setPayments}
+                              onChange={(nextPayments) => {
+                                setPayments(nextPayments);
+                                setAutoSyncPayment(false);
+                              }}
                               selectedProducts={selectedProducts}
                               forceOpen={forceOpenPaymentModal}
+                              onOpenChange={(open) => {
+                                setForceOpenPaymentModal(false);
+                                if (open) {
+                                  setAutoSyncPayment(false);
+                                }
+                              }}
                             />
                           </div>
                         </div>
@@ -1307,22 +2370,32 @@ const getSaleReferenceId = () => {
        
                     <div className="flex-1 flex flex-col border rounded-md p-2">
                         <Label htmlFor="provider-combobox" className="text-sm font-medium mb-2">
-                          Ingrese un Cliente:
+                          <div className="flex items-center">
+                            <span>Ingrese un Cliente:</span>
+                            {renderStatusChip(Boolean(form.getValues("client_name")), true)}
+                          </div>
                         </Label>
                         <div className="flex justify-between gap-1">
                           <Popover open={openClient} onOpenChange={setOpenClient}>
                               <PopoverTrigger asChild>
                                 <Button
+                                  type="button"
                                   variant="outline"
                                   role="combobox"
                                   aria-expanded={openClient}
                                   className="w-[260px] justify-between cursor-pointer"
                                   disabled={isClientDisabled}
-                                  title="Selecciona el cliente que realizará la compra"
                                 >
-                                  {displayedClientName || "Selecciona un cliente..."}
-                                  <ChevronsUpDown className="opacity-50" />
-                                </Button>                             
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="flex w-full items-center justify-between">
+                                        {displayedClientName || "Selecciona un cliente..."}
+                                        <ChevronsUpDown className="opacity-50" />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">Selecciona el cliente que realizar? la compra</TooltipContent>
+                                  </Tooltip>
+                                </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-[260px] p-0">
                                 <Command>
@@ -1331,17 +2404,7 @@ const getSaleReferenceId = () => {
                                   <CommandList>
                                     <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                                     <CommandGroup>
-                                      {clients
-                                        .filter((client) => {
-                                          if (valueInvoice === "FACTURA") {
-                                            return client.type === "RUC";
-                                          }
-                                          if (valueInvoice === "BOLETA") {
-                                            return client.type !== "RUC";
-                                          }
-                                          return true;
-                                        })
-                                        .map((client) => {
+                                      {orderedClients.map((client) => {
                                           const normalizedClientName = normalizeOptionValue(client.name);
                                           const isSelected = normalizedClientName === normalizedSelectedClientValue;
                                           const commandValue = getCommandValue(client.name);
@@ -1350,7 +2413,7 @@ const getSaleReferenceId = () => {
                                             <CommandItem
                                               key={client.id ?? client.name}
                                               value={commandValue}
-                                              className="cursor-pointer"
+                                              className="cursor-pointer transition-colors hover:bg-accent/60 rounded-sm px-1"
                                               onSelect={() => {
                                                 if (isSelected) {
                                                   setOpenClient(false);
@@ -1361,10 +2424,20 @@ const getSaleReferenceId = () => {
                                                 setValue("client_name", client.name || "");
                                                 setValue("client_type", client.type || "");
                                                 setValue("client_typeNumber", client.typeNumber || "");
+                                                if (typeof client.id === "number") {
+                                                  recordRecentClient(client.id);
+                                                }
                                                 setOpenClient(false);
                                               }}
                                             >
-                                              {client.name}
+                                              <div className="flex items-center gap-2">
+                                                <span>{client.name}</span>
+                                                {recentClientSet.has(client.id) && (
+                                                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                                    Reciente
+                                                  </span>
+                                                )}
+                                              </div>
                                               <Check className={cn("ml-auto", isSelected ? "opacity-100" : "opacity-0")} />
                                             </CommandItem>
                                           );
@@ -1375,29 +2448,37 @@ const getSaleReferenceId = () => {
                               </PopoverContent>
                             </Popover>
                             <div className="flex items-center gap-2">
-                              <Button
-                                className="sm:w-auto sm:ml-2 ml-0 bg-green-700 hover:bg-green-800 text-white cursor-pointer"
-                                type="button"
-                                disabled={isClientDisabled}
-                                onClick={() => setIsDialogOpenClient(true)}
-                                title="Registrar un nuevo cliente durante la venta"
-                              >
-                                <Save className="w-6 h-6" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="sm:w-auto text-muted-foreground"
-                                title={
-                                  canUseSunatLookup
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    className="sm:w-auto sm:ml-2 ml-0 bg-green-700 hover:bg-green-800 text-white cursor-pointer"
+                                    type="button"
+                                    disabled={isClientDisabled}
+                                    onClick={() => setIsDialogOpenClient(true)}
+                                  >
+                                    <Save className="w-6 h-6" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Registrar un nuevo cliente durante la venta</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="sm:w-auto text-muted-foreground"
+                                    onClick={handleOpenSunatDialog}
+                                    disabled={!canUseSunatLookup || isSubmitting}
+                                  >
+                                    <Search className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  {canUseSunatLookup
                                     ? "Buscar clientes en SUNAT"
-                                    : "Disponible solo cuando el comprobante es Boleta o Factura"
-                                }
-                                onClick={handleOpenSunatDialog}
-                                disabled={!canUseSunatLookup || isSubmitting}
-                              >
-                                <Search className="h-4 w-4" />
-                              </Button>
+                                    : "Disponible solo cuando el comprobante es Boleta o Factura"}
+                                </TooltipContent>
+                              </Tooltip>
                             </div>
                             <AddClientDialog
                             isOpen={isDialogOpenClient}
@@ -1405,8 +2486,7 @@ const getSaleReferenceId = () => {
                             setClients={setClients}
                             setValue={form.setValue} // Pasar la función para actualizar el formulario principal
                             updateTipoComprobante={(tipoComprobante: string) => {
-                              setValueInvoice(tipoComprobante); // Actualiza el estado local del combobox
-                              form.setValue("tipoComprobante", tipoComprobante); // Actualiza el formulario
+                              handleTipoComprobanteChange(tipoComprobante);
                             }}
                             />   
                             <Dialog
@@ -1511,20 +2591,30 @@ const getSaleReferenceId = () => {
                                  
                         <div className="flex-1 flex flex-col border border-gray-600 rounded-md p-2">
                         <Label htmlFor="store-combobox" className="text-sm font-medium mb-2">
-                          Ingrese una Tienda:
+                          <div className="flex items-center">
+                            <span>Ingrese una Tienda:</span>
+                            {renderStatusChip(Boolean(form.getValues("store_name")))}
+                          </div>
                         </Label>   
                         <div className="flex justify-between gap-1">
                           <Popover open={openStore} onOpenChange={setOpenStore}>
                               <PopoverTrigger asChild>
                                 <Button
+                                  type="button"
                                   variant="outline"
                                   role="combobox"
                                   aria-expanded={openStore}
                                   className="w-[260px] justify-between cursor-pointer"
-                                  title="Selecciona la tienda para la venta"
                                 >
-                                  {displayedStoreName || "Seleccione una Tienda..."}
-                                  <ChevronsUpDown className="opacity-50" />
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="flex w-full items-center justify-between">
+                                        {valueStore || "Selecciona una tienda..."}
+                                        <ChevronsUpDown className="opacity-50" />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">Selecciona la tienda donde se registrar? la venta</TooltipContent>
+                                  </Tooltip>
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-[260px] p-0">
@@ -1541,9 +2631,9 @@ const getSaleReferenceId = () => {
 
                                         return (
                                           <CommandItem
-                                            key={store.id ?? store.name}
-                                            value={commandValue}
-                                            className="cursor-pointer"
+                                              key={store.id ?? store.name}
+                                                value={commandValue}
+                                                className="cursor-pointer transition-colors hover:bg-accent/60 rounded-sm px-1"
                                             onSelect={() => {
                                               if (isSelected) {
                                                 setOpenStore(false);
@@ -1587,117 +2677,127 @@ const getSaleReferenceId = () => {
                         </div>
                         <div className='flex-1 flex-col border border-gray-600 rounded-md p-2'> 
                           <Label htmlFor="product-combobox" className="text-sm font-medium mb-2">
-                            Ingrese un producto:
+                            <div className="flex items-center">
+                              <span>Ingrese un producto:</span>
+                              {renderStatusChip(selectedProducts.length > 0)}
+                            </div>
                           </Label>
-                          <div className="flex gap-1">
-                            <Popover open={open} onOpenChange={setOpen}>
-                              <PopoverTrigger asChild>
-                              <Button
-                              variant="outline"
-                              role="combobox"
-                              aria-expanded={open}
-                              className="w-[200px] sm:w-[300px] justify-between cursor-pointer"
-                              title="Selecciona un producto para agregarlo a la venta"
-                            >
-                              <span className="truncate max-w-[80%] block">
-                                {displayedProductName || "Selecciona un producto..."}
-                              </span>
-                              <ChevronsUpDown className="opacity-50" />
-                            </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[200px] sm:w-[300px] p-0">
-                                <Command>
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <Popover open={open} onOpenChange={setOpen}>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={open}
+                                    className="w-full justify-between cursor-pointer"
+                                  >
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="flex w-full items-center justify-between">
+                                          {value || "Selecciona un producto..."}
+                                          <ChevronsUpDown className="opacity-50" />
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">Selecciona el producto para la venta</TooltipContent>
+                                    </Tooltip>
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  className="min-w-0 max-w-none p-0"
+                                  style={{ width: "var(--radix-popover-trigger-width)" }}
+                                >
+                                  <Command className="w-full">
+                                  {selectedStoreId && (
+                                    <div className="flex items-center justify-between border-b px-2 py-1 text-[11px] text-muted-foreground">
+                                      <span>
+                                        {showOutOfStock ? "Mostrando sin stock" : "Ocultando sin stock"}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="rounded px-2 py-0.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10"
+                                        onClick={() => setShowOutOfStock((prev) => !prev)}
+                                      >
+                                        {showOutOfStock ? "Ocultar sin stock" : "Ver sin stock"}
+                                      </button>
+                                    </div>
+                                  )}
                                   <CommandInput 
                                   placeholder="Buscar producto..."/>
-                                  <CommandList>
+                                    <CommandList className="w-full">
                                     <CommandEmpty>No se encontraron productos.</CommandEmpty>
+                                    {suggestedOutOfStockProduct && (
+                                      <CommandGroup heading="Sugerido (sin stock)">
+                                        <CommandItem
+                                          key={`suggested-${suggestedOutOfStockProduct.id}`}
+                                          value={getCommandValue(suggestedOutOfStockProduct.name)}
+                                          className="cursor-not-allowed rounded-sm px-1 opacity-60"
+                                          onSelect={() => {
+                                            toast("Producto sin stock", {
+                                              description: "Selecciona otro producto o registra inventario.",
+                                            });
+                                          }}
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <span>{suggestedOutOfStockProduct.name}</span>
+                                            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-500">
+                                              Ultimo usado sin stock
+                                            </span>
+                                          </div>
+                                          <Check className="ml-auto opacity-0" />
+                                        </CommandItem>
+                                      </CommandGroup>
+                                    )}
                                     <CommandGroup>
-                                      {products.map((product) => {
+                                      {orderedProducts.map((product) => {
                                         const normalizedProductName = normalizeOptionValue(product.name);
                                         const isSelected = normalizedProductName === normalizedSelectedProductValue;
                                         const commandValue = getCommandValue(product.name);
+                                        const isOutOfStock = Boolean(selectedStoreId) && (product.stock ?? 0) <= 0;
+                                        const isSuggestedOutOfStock = isOutOfStock && lastRecentProductId === product.id;
 
                                         return (
                                           <CommandItem
                                             key={product.id ?? product.name}
                                             value={commandValue}
-                                            className="cursor-pointer"
+                                            className={cn(
+                                              "rounded-sm px-1 transition-colors",
+                                              isOutOfStock ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-accent/60",
+                                            )}
                                             onSelect={async () => {
+                                              if (isOutOfStock) {
+                                                toast("Producto sin stock", {
+                                                  description: "Selecciona otro producto o registra inventario.",
+                                                });
+                                                return;
+                                              }
                                               if (isSelected) {
                                                 setOpen(false);
                                                 return;
                                               }
 
-                                              setValueProduct(product.name || "");
-
-                                              const selectedProduct = product;
-
-                                              const existingProduct = selectedProducts.find(
-                                                (item) => item.id === selectedProduct.id,
-                                              );
-                                              let simulatedStock = existingProduct
-                                                ? selectedProduct.stock - existingProduct.quantity
-                                                : selectedProduct.stock;
-
-                                              if (selectedStoreId) {
-                                                try {
-                                                  const series = await getSeriesByProductAndStore(
-                                                    selectedStoreId,
-                                                    selectedProduct.id,
-                                                  );
-
-                                                  setCurrentProduct({
-                                                    ...selectedProduct,
-                                                    series,
-                                                  });
-
-                                                  const realStock = await getStockByProductAndStore(
-                                                    selectedStoreId,
-                                                    selectedProduct.id,
-                                                  );
-
-                                                  simulatedStock = existingProduct
-                                                    ? realStock - existingProduct.quantity
-                                                    : realStock;
-
-                                                  setStock(simulatedStock > 0 ? simulatedStock : 0);
-
-                                                  if (selectedProduct.price === 0 || selectedProduct.price === null) {
-                                                    setProductWithZeroPrice({
-                                                      id: selectedProduct.id,
-                                                      name: selectedProduct.name,
-                                                    });
-                                                    setIsPriceAlertOpen(true);
-                                                    return;
-                                                  }
-                                                } catch (error) {
-                                                  console.error("Error al obtener el stock del producto:", error);
-                                                  setCurrentProduct({
-                                                    ...selectedProduct,
-                                                    series: [],
-                                                  });
-                                                  setStock(0);
-                                                }
-                                              } else {
-                                                console.warn("No se ha seleccionado una tienda");
-                                                setCurrentProduct(null);
-                                                setStock(0);
-                                              }
-
-                                              const category = categoriesState.find(
-                                                (cat: any) => cat.id === selectedProduct.categoryId,
-                                              );
-
-                                              setValue(
-                                                "category_name",
-                                                category?.name || selectedProduct.category_name || "Sin categoria",
-                                              );
-                                              setValue("price", selectedProduct.price || 0);
-                                              setValue("description", selectedProduct.description || "");
-                                              setOpen(false);
+                                              await selectProductForSale(product);
                                             }}
                                           >
-                                            {product.name}
+                                            <div className="flex items-center gap-2">
+                                              <span>{product.name}</span>
+                                              {recentProductSet.has(product.id) && (
+                                                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                                  Reciente
+                                                </span>
+                                              )}
+                                              {isSuggestedOutOfStock && (
+                                                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-500">
+                                                  Ultimo usado sin stock
+                                                </span>
+                                              )}
+                                              {!isSuggestedOutOfStock && isOutOfStock && (
+                                                <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-500">
+                                                  Sin stock
+                                                </span>
+                                              )}
+                                            </div>
                                             <Check className={cn("ml-auto", isSelected ? "opacity-100" : "opacity-0")} />
                                           </CommandItem>
                                         );
@@ -1707,41 +2807,60 @@ const getSaleReferenceId = () => {
                                 </Command>
                               </PopoverContent>
                             </Popover>
-                            <Button className='sm:w-auto sm:ml-2 ml-0
-                            bg-green-700 hover:bg-green-800 text-white cursor-pointer' type="button" onClick={addProduct} title="Agregar el producto seleccionado a la venta">
-                                <span className="hidden sm:block">Agregar</span>
-                                <Plus className="w-2 h-2"/>
-                            </Button>                            
+                          </div>
+                            <TooltipProvider delayDuration={150}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-10 w-10 shrink-0 cursor-pointer border-emerald-700 bg-emerald-700 text-white transition-transform duration-150 hover:scale-[1.02] hover:border-emerald-800 hover:bg-emerald-800 dark:border-emerald-300 dark:bg-emerald-300 dark:text-emerald-950 dark:hover:border-emerald-200 dark:hover:bg-emerald-200"
+                                    onClick={addProduct}
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Agregar producto</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                             {/* Botón para abrir el modal */}
-                            <Button
-                              className="sm:w-auto sm:ml-2 ml-0 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
-                              title="Gestionar series del producto seleccionado"
-                              type="button" // Asegúrate de que el botón no envíe el formulario
-                              onClick={async () => {
-                                if (!currentProduct || !selectedStoreId) {
-                                  toast.error("Debe seleccionar un producto y una tienda primero.");
-                                  return;
-                                }
-                            
-                                try {
-                                  const series = await fetchSeriesByProductAndStore(selectedStoreId, currentProduct.id);
-                                  const existingProduct = selectedProducts.find((product) => product.id === currentProduct.id);
-                            
-                                  // Filtrar las series ya utilizadas
-                                  const remainingSeries = existingProduct
-                                    ? series.filter((serie: string) => !existingProduct.series?.includes(serie))
-                                    : series;
-                            
-                                  setAvailableSeries(remainingSeries); // Establece las series disponibles
-                                  setIsDialogOpenSeries(true); // Abre el modal
-                                } catch (error) {
-                                  console.error("Error al cargar las series:", error);
-                                }
-                              }}
-                            >
-                              <span className="hidden sm:block">Series</span>
-                              <Barcode className="w-6 h-6" />
-                            </Button> 
+                            <TooltipProvider delayDuration={150}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-10 w-10 shrink-0 cursor-pointer border-sky-700 bg-sky-700 text-white transition-transform duration-150 hover:scale-[1.02] hover:border-sky-800 hover:bg-sky-800 dark:border-sky-300 dark:bg-sky-300 dark:text-sky-950 dark:hover:border-sky-200 dark:hover:bg-sky-200"
+                                    type="button" // Asegúrate de que el botón no envíe el formulario
+                                    onClick={async () => {
+                                      if (!currentProduct || !selectedStoreId) {
+                                        toast.error("Debe seleccionar un producto y una tienda primero.");
+                                        return;
+                                      }
+                                  
+                                      try {
+                                        const series = await fetchSeriesByProductAndStore(selectedStoreId, currentProduct.id);
+                                        const existingProduct = selectedProducts.find((product) => product.id === currentProduct.id);
+                                  
+                                        // Filtrar las series ya utilizadas
+                                        const remainingSeries = existingProduct
+                                          ? series.filter((serie: string) => !existingProduct.series?.includes(serie))
+                                          : series;
+                                  
+                                        setAvailableSeries(remainingSeries); // Establece las series disponibles
+                                        setIsDialogOpenSeries(true); // Abre el modal
+                                      } catch (error) {
+                                        console.error("Error al cargar las series:", error);
+                                      }
+                                    }}
+                                  >
+                                    <Barcode className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Series</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                             <AddSeriesDialog
                             isOpen={isDialogOpenSeries}
                             onClose={() => setIsDialogOpenSeries(false)}
@@ -1765,28 +2884,77 @@ const getSaleReferenceId = () => {
                           <div className="flex justify-start gap-1">
                             <div className="flex flex-col">
                             <Label className="text-sm font-medium py-2">Cantidad</Label>
-                            <Input
-                              type="text" // Usamos "text" para tener control total sobre la validación
-                              placeholder="Cantidad"
-                              value={quantity.toString()} // Convertimos el valor a string para mostrarlo correctamente
-                              maxLength={10} // Limitar a 10 caracteres
-                              onChange={(e) => {
-                                const value = e.target.value;                  
-                                // Permitir solo números y un único punto decimal
-                                if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
-                                  setQuantity(Number(value)); // Actualizamos el estado con el valor ingresado
-                                }
-                              }}
-                              onBlur={() => {
-                                // Validar y convertir el valor a número al salir del campo
-                                const numericValue = parseFloat(String(quantity));
-                                if (!isNaN(numericValue)) {
-                                  setQuantity(numericValue); // Asegurarnos de que el valor sea un número válido
-                                } else {
-                                  setQuantity(1); // Restablecer a 0 si el valor no es válido
-                                }
-                              }}
-                            />
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="text" // Usamos "text" para tener control total sobre la validaci?n
+                                placeholder="Cantidad"
+                                className="h-9 flex-1 text-sm"
+                                value={quantity.toString()} // Convertimos el valor a string para mostrarlo correctamente
+                                maxLength={10} // Limitar a 10 caracteres
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  // Permitir solo n?meros y un ?nico punto decimal
+                                  if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
+                                    setQuantity(Number(value)); // Actualizamos el estado con el valor ingresado
+                                  }
+                                }}
+                                onBlur={() => {
+                                  // Validar y convertir el valor a n?mero al salir del campo
+                                  const numericValue = parseFloat(String(quantity));
+                                  if (!isNaN(numericValue) && numericValue > 0) {
+                                    setQuantity(numericValue); // Asegurarnos de que el valor sea un n?mero v?lido
+                                  } else {
+                                    setQuantity(1); // Restablecer a 1 si el valor no es v?lido
+                                  }
+                                }}
+                              />
+                              <div className="flex items-center gap-1">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-9 w-9 cursor-pointer border-rose-600 bg-rose-600 text-white hover:border-rose-700 hover:bg-rose-700 dark:border-rose-400 dark:bg-rose-400 dark:text-rose-950 dark:hover:border-rose-300 dark:hover:bg-rose-300"
+                                      aria-label="Disminuir cantidad"
+                                      onClick={() => {
+                                        setQuantity((prev) => {
+                                          const current = Number(prev) || 0;
+                                          return Math.max(1, current - 1);
+                                        });
+                                      }}
+                                    >
+                                      -
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">
+                                    Disminuir cantidad
+                                  </TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-9 w-9 cursor-pointer border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 dark:border-emerald-400 dark:bg-emerald-400 dark:text-emerald-950 dark:hover:border-emerald-300 dark:hover:bg-emerald-300"
+                                      aria-label="Aumentar cantidad"
+                                      onClick={() => {
+                                        setQuantity((prev) => {
+                                          const current = Number(prev) || 0;
+                                          return Math.max(1, current + 1);
+                                        });
+                                      }}
+                                    >
+                                      +
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">
+                                    Aumentar cantidad
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </div>
                             </div>
                             <div className="flex flex-col">
                             <Label className="text-sm font-medium py-2">Stock</Label>
@@ -1851,9 +3019,13 @@ const getSaleReferenceId = () => {
                                 <TableCell
                                   className="font-semibold truncate whitespace-nowrap overflow-hidden text-[11px] sm:text-xs"
                                   style={nameColumnWidthStyle}
-                                  title={product.name}
                                 >
-                                  {product.name}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="block truncate">{product.name}</span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">{product.name}</TooltipContent>
+                                  </Tooltip>
                                 </TableCell>
                                 <TableCell className="hidden sm:table-cell truncate text-xs">
                                   {product.category_name}
@@ -1930,18 +3102,22 @@ const getSaleReferenceId = () => {
                                   </div>
                                 </TableCell>
                                 <TableCell className="w-[44px] sm:w-[60px] py-1.5">
-                                  <Button
-                                    variant="outline"
-                                    className="h-8 sm:h-9 px-1 cursor-pointer"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      removeProduct(product.id);
-                                    }}
-                                    onDoubleClick={(e) => e.stopPropagation()}
-                                    title="Eliminar este producto de la venta"
-                                  >
-                                    <X className="w-4 h-4" color="red" />
-                                  </Button>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        className="h-8 sm:h-9 px-1 cursor-pointer"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          removeProduct(product.id);
+                                        }}
+                                        onDoubleClick={(e) => e.stopPropagation()}
+                                      >
+                                        <X className="w-4 h-4" color="red" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">Eliminar este producto de la venta</TooltipContent>
+                                  </Tooltip>
                                 </TableCell>
                               </TableRow>
                             );
@@ -2003,116 +3179,26 @@ const getSaleReferenceId = () => {
                       }}
                     />                   
 
-                    <Button
-                    className='mt-4 cursor-pointer'
-                    type="button"
-                    onClick={() => setIsDialogOpen(true)}
-                    title="Abre la confirmación para registrar la venta">
-                      Registrar Venta
-                    </Button>
-
-                      {/* Diálogo de confirmación */}
-                      <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Confirmar Registro</AlertDialogTitle>
-                          </AlertDialogHeader>
-                          <p>¿Estás seguro de que deseas registrar esta venta?</p>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => setIsDialogOpen(false)} className="cursor-pointer" title="Cancelar el registro de la venta">
-                              Cancelar
-                            </AlertDialogCancel>
-                            <AlertDialogAction className="cursor-pointer" title="Confirmar y registrar la venta"
-                              onClick={() => {
-                                setIsDialogOpen(false); // Cerrar el diálogo
-                                onSubmit(); // Llamar a la función de envío
-                              }}
-                            >
-                              Confirmar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                      {/* ...other buttons like "Limpiar" and "Volver"... */}
-
-                      {/* AlertDialog Previo Venta */}
-                      <AlertDialog open={isPriceAlertOpen} onOpenChange={setIsPriceAlertOpen}>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Precio de Venta Requerido</AlertDialogTitle>
-                          </AlertDialogHeader>
-                          <p>
-                            El producto <strong>{productWithZeroPrice?.name}</strong> tiene un precio de venta de <strong>0</strong>. Por favor, ingrese un precio válido.
-                          </p>
-                          <div className="flex flex-col gap-2 mt-4">
-                            <Label className="text-sm font-medium">Nuevo Precio de Venta</Label>
-                            <Input
-                              type="number"
-                              min={0.01}
-                              step="0.01"
-                              placeholder="Ingrese un precio"
-                              onChange={(e) => {
-                                const newPrice = parseFloat(e.target.value);
-                                if (newPrice > 0) {
-                                  setProducts((prev) =>
-                                    prev.map((product) =>
-                                      product.id === productWithZeroPrice?.id
-                                        ? { ...product, price: newPrice }
-                                        : product
-                                    )
-                                  );
-
-                                  // Actualiza el estado de currentProduct
-                                  setCurrentProduct((prev) =>
-                                    prev && prev.id === productWithZeroPrice?.id
-                                      ? { ...prev, price: newPrice }
-                                      : prev
-                                  );
-
-                                  setValue("price", newPrice); // Actualiza el precio en el formulario
-                                }
-                              }}
-                            />
-                          </div>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel
-                              onClick={() => setIsPriceAlertOpen(false)}
-                              className="cursor-pointer"
-                              title="Cancelar sin actualizar el precio"
-                            >
-                              Cancelar
-                            </AlertDialogCancel>
-                            <AlertDialogAction
-                              className="cursor-pointer"
-                              title="Confirmar el nuevo precio y continuar"
-                              onClick={() => {
-                                if (productWithZeroPrice) {
-                                  const updatedProduct = products.find(
-                                    (product) => product.id === productWithZeroPrice.id
-                                  );
-                                  if (!updatedProduct || updatedProduct.price <= 0) {
-                                    toast.error("Debe ingresar un precio válido antes de continuar.");
-                                    return;
-                                  }
-                                  // ✅ Forzar selección del producto después de actualizar su precio
-                                  setCurrentProduct({
-                                    ...updatedProduct,
-                                    series: [], // Aquí puedes conservar series si es necesario
-                                  });
-                                  setValueProduct(updatedProduct.name); // Fuerza el valor en el combobox
-                                }
-                                setIsPriceAlertOpen(false); // Cierra el AlertDialog solo al confirmar
-                              }}
-                            >
-                              Confirmar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-
-                    <Button className="cursor-pointer"
-                    type="button" // Evita que el botón envíe el formulario
-                    onClick={() => {
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            className="inline-flex items-center justify-center gap-2 cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
+                            onClick={() => setIsDialogOpen(true)}
+                          >
+                            Registrar Venta
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Abre la confirmacion para registrar la venta
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button className="cursor-pointer bg-slate-100 text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                          type="button" // Evita que el bot?n env?e el formulario
+                          onClick={() => {
                         form.reset({
                             name: "",
                             description: "",
@@ -2142,7 +3228,7 @@ const getSaleReferenceId = () => {
                         setValueStore(""); // Limpia el valor del combobox de tiendas
                         setValueInvoice(""); // Limpia el valor del combobox de tipo de comprobantes
 
-                        // Restablece el calendario al día de hoy
+                        // Restablece el calendario al d?a de hoy
                         const today = new Date();
                         setSelectedDate(today); // Actualiza el estado del calendario
                         form.setValue("fecha_emision_comprobante", today.toISOString().split("T")[0]); // Actualiza el valor del formulario
@@ -2156,25 +3242,284 @@ const getSaleReferenceId = () => {
                         setOpenClient(false); // Cierra el combobox de clientes
                         setOpenStore(false); // Cierra el combobox de tiendas
                         setOpenInvoice(false); // Cierra el combobox de tipo de comprobantes
+                        // Limpiar draft sincronicamente
+                        if (draftSaveTimerRef.current) {
+                          window.clearTimeout(draftSaveTimerRef.current);
+                          draftSaveTimerRef.current = null;
+                        }
+                        if (salesDraftKey && typeof window !== "undefined") {
+                          try {
+                            window.localStorage.removeItem(salesDraftKey);
+                          } catch (e) {
+                            console.warn("No se pudo limpiar el borrador:", e);
+                          }
+                        }
                     }}  // Restablece los campos del formulario
-                    title="Restablece todos los campos del formulario a sus valores iniciales"
-                    >
-                        Limpiar 
-                    </Button>
-                    <Button
-                    className="cursor-pointer"
-                    type="button" // Evita que el botón envíe el formulario
-                    onClick={() => router.back()} // Regresa a la página anterior
-                    title="Regresa a la vista anterior sin guardar"
-                    >
-                        Volver
-                    </Button>
-        </fieldset>       
-        </form>
+                          >
+                            Limpiar 
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Restablece todos los campos del formulario a sus valores iniciales
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                          className="cursor-pointer bg-slate-200 text-slate-900 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                          type="button" // Evita que el bot?n env?e el formulario
+                          onClick={() => router.back()} // Regresa a la p?gina anterior
+                          >
+                            Volver
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Regresa a la vista anterior sin guardar
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                      <AlertDialog open={draftPromptOpen} onOpenChange={setDraftPromptOpen}>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Venta en progreso</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Encontramos una venta sin finalizar. ¿Deseas restaurar la información guardada?
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel
+                              className="cursor-pointer"
+                              onClick={() => {
+                                // Limpiar draft sincronicamente
+                                if (draftSaveTimerRef.current) {
+                                  window.clearTimeout(draftSaveTimerRef.current);
+                                  draftSaveTimerRef.current = null;
+                                }
+                                if (salesDraftKey && typeof window !== "undefined") {
+                                  try {
+                                    window.localStorage.removeItem(salesDraftKey);
+                                  } catch (e) {
+                                    console.warn("No se pudo limpiar el borrador:", e);
+                                  }
+                                }
+                                draftAppliedRef.current = true;
+                                setPendingDraft(null);
+                                setDraftPromptOpen(false);
+                              }}
+                            >
+                              Descartar
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                              className="cursor-pointer"
+                              onClick={() => {
+                                if (pendingDraft) {
+                                  applyDraft(pendingDraft);
+                                }
+                                setPendingDraft(null);
+                                setDraftPromptOpen(false);
+                              }}
+                            >
+                              Restaurar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      {/* Di?logo de confirmaci?n */}
+                      <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmar Registro</AlertDialogTitle>
+                            <AlertDialogDescription>Estas seguro de que deseas registrar esta venta?</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => setIsDialogOpen(false)} className="cursor-pointer">
+                              Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction className="cursor-pointer"
+                              onClick={() => {
+                                setIsDialogOpen(false); // Cerrar el di?logo
+                                onSubmit(); // Llamar a la funci?n de env?o
+                              }}
+                            >
+                              Confirmar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+
+                      {/* AlertDialog Previo Venta */}
+                      <AlertDialog open={isPriceAlertOpen} onOpenChange={setIsPriceAlertOpen}>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Precio de Venta Requerido</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              El producto <strong>{productWithZeroPrice?.name}</strong> tiene un precio de venta de <strong>0</strong>. Por favor, ingrese un precio v?lido.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <div className="flex flex-col gap-2 mt-4">
+                            <Label className="text-sm font-medium">Nuevo Precio de Venta</Label>
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2 py-1">
+                              <Input
+                                type="number"
+                                min={0.01}
+                                step="0.01"
+                                inputMode="decimal"
+                                placeholder="Ingrese un precio"
+                                className="h-8 flex-1 border-0 bg-transparent px-0 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                value={priceAlertValue}
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  setPriceAlertValue(raw);
+                                  const newPrice = parseFloat(raw);
+                                  if (!Number.isNaN(newPrice) && newPrice > 0) {
+                                    setProducts((prev) =>
+                                      prev.map((product) =>
+                                        product.id === productWithZeroPrice?.id
+                                          ? { ...product, price: newPrice }
+                                          : product
+                                      )
+                                    );
+
+                                    setCurrentProduct((prev) =>
+                                      prev && prev.id === productWithZeroPrice?.id
+                                        ? { ...prev, price: newPrice }
+                                        : prev
+                                    );
+
+                                    setValue("price", newPrice);
+                                  }
+                                }}
+                              />
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7 border-rose-500/60 text-rose-700 hover:border-rose-500/80 hover:text-rose-800 dark:border-rose-400/40 dark:text-rose-200 dark:hover:border-rose-300/70 dark:hover:text-rose-100"
+                                  aria-label="Disminuir precio de venta"
+                                  onClick={() => {
+                                    const current = Number(priceAlertValue);
+                                    const safeCurrent = Number.isFinite(current) ? current : 0;
+                                    const next = Math.max(0, safeCurrent - 1);
+                                    setPriceAlertValue(String(next));
+                                    setProducts((prev) =>
+                                      prev.map((product) =>
+                                        product.id === productWithZeroPrice?.id
+                                          ? { ...product, price: next }
+                                          : product
+                                      )
+                                    );
+                                    setCurrentProduct((prev) =>
+                                      prev && prev.id === productWithZeroPrice?.id
+                                        ? { ...prev, price: next }
+                                        : prev
+                                    );
+                                    setValue("price", next);
+                                  }}
+                                >
+                                  -
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-7 w-7 border-emerald-500/60 text-emerald-700 hover:border-emerald-500/80 hover:text-emerald-800 dark:border-emerald-400/40 dark:text-emerald-200 dark:hover:border-emerald-300/70 dark:hover:text-emerald-100"
+                                  aria-label="Aumentar precio de venta"
+                                  onClick={() => {
+                                    const current = Number(priceAlertValue);
+                                    const safeCurrent = Number.isFinite(current) ? current : 0;
+                                    const next = safeCurrent + 1;
+                                    setPriceAlertValue(String(next));
+                                    setProducts((prev) =>
+                                      prev.map((product) =>
+                                        product.id === productWithZeroPrice?.id
+                                          ? { ...product, price: next }
+                                          : product
+                                      )
+                                    );
+                                    setCurrentProduct((prev) =>
+                                      prev && prev.id === productWithZeroPrice?.id
+                                        ? { ...prev, price: next }
+                                        : prev
+                                    );
+                                    setValue("price", next);
+                                  }}
+                                >
+                                  +
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                          <AlertDialogFooter>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <AlertDialogCancel
+                                  onClick={() => setIsPriceAlertOpen(false)}
+                                  disabled={isUpdatingPrice}
+                                  className="cursor-pointer"
+                                >
+                                  Cancelar
+                                </AlertDialogCancel>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Cancelar sin actualizar el precio
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <AlertDialogAction
+                                  className="cursor-pointer"
+                                  disabled={isUpdatingPrice}
+                                  onClick={async () => {
+                                    if (productWithZeroPrice) {
+                                      const updatedProduct = products.find(
+                                        (product) => product.id === productWithZeroPrice.id
+                                      );
+                                      if (!updatedProduct || updatedProduct.price <= 0) {
+                                        toast.error("Debe ingresar un precio v?lido antes de continuar.");
+                                        return;
+                                      }
+                                      setIsUpdatingPrice(true);
+                                      try {
+                                        await updateProductPriceSell(updatedProduct.id, updatedProduct.price);
+                                        setCurrentProduct({
+                                          ...updatedProduct,
+                                          series: [],
+                                        });
+                                        setValueProduct(updatedProduct.name);
+                                      } catch (error) {
+                                        toast.error("No se pudo actualizar el precio de venta. Int?ntalo nuevamente.");
+                                        return;
+                                      } finally {
+                                        setIsUpdatingPrice(false);
+                                      }
+                                    }
+                                    setIsPriceAlertOpen(false);
+                                  }}
+                                >
+                                  {isUpdatingPrice ? (
+                                    <span className="inline-flex items-center gap-2">
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      Guardando...
+                                    </span>
+                                  ) : (
+                                    "Confirmar"
+                                  )}
+                                </AlertDialogAction>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Confirmar el nuevo precio y continuar
+                              </TooltipContent>
+                            </Tooltip>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    
+          </fieldset>
+        </TooltipProvider>
+      </form>
     </div>
   )
 }
 
 export default SalesForm
-
-

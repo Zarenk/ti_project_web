@@ -6,7 +6,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type Client } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateClientDto } from './dto/update-client.dto';
@@ -158,7 +158,7 @@ export class ClientService {
         role: 'GUEST',
         organizationId: orgId,
       },
-      select: { id: true },
+      select: { id: true, tokenVersion: true, organizationId: true },
     });
 
     try {
@@ -172,7 +172,7 @@ export class ClientService {
         select: { id: true, name: true },
       });
 
-      return { userId: user.id, client };
+      return { userId: user.id, tokenVersion: user.tokenVersion, client };
     } catch (error) {
       await this.prismaService.user.delete({ where: { id: user.id } });
       if (
@@ -199,7 +199,7 @@ export class ClientService {
     organizationIdFromContext?: number | null,
     companyIdFromContext?: number | null,
   ) {
-    const created: any[] = [];
+    const created: Client[] = [];
 
     for (const client of clients) {
       const orgId =
@@ -349,9 +349,11 @@ export class ClientService {
       organizationId,
       companyId,
     ) as Prisma.ClientWhereInput;
-    return Object.keys(where).length === 0
-      ? this.prismaService.client.findMany()
-      : this.prismaService.client.findMany({ where });
+    return this.prismaService.client.findMany({
+      where: Object.keys(where).length === 0 ? undefined : where,
+      take: 500,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   findRegistered(organizationId?: number | null, companyId?: number | null) {

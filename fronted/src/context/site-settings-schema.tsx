@@ -104,6 +104,7 @@ export const siteSettingsSchema = z.object({
     store: z.boolean(),
     inventory: z.boolean(),
     sales: z.boolean(),
+    salesHistory: z.boolean(),
     purchases: z.boolean(),
     accounting: z.boolean(),
     marketing: z.boolean(),
@@ -177,8 +178,8 @@ export const defaultSiteSettings: SiteSettings = {
     showSearch: true,
     links: [
       { label: "Inicio", href: "/" },
-      { label: "Productos", href: "/productos" },
-      { label: "Contacto", href: "/contacto" },
+      { label: "Productos", href: "/store" },
+      { label: "Contacto", href: "/contact" },
     ],
   },
   hero: {
@@ -186,9 +187,9 @@ export const defaultSiteSettings: SiteSettings = {
     subtitle: "Descubre todo lo que tenemos para ti",
     ctaLabel: "Comenzar",
     ctaHref: "",
-    enableCarousel: false,
+    enableCarousel: true,
     speed: 5,
-    particles: false,
+    particles: true,
   },
   components: {
     cardStyle: "shadow",
@@ -232,6 +233,7 @@ export const defaultSiteSettings: SiteSettings = {
     store: true,
     inventory: true,
     sales: true,
+    salesHistory: true,
     purchases: true,
     accounting: true,
     marketing: true,

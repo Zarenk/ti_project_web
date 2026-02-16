@@ -1,0 +1,12 @@
+{
+  "name": "playwright-local",
+  "description": "Build browser automation and web scraping with Playwright on your local machine. Prevents 10 documented errors including CI timeout hangs, extension testing failures, and Ubuntu compatibility issues. Includes stealth mode for anti-bot bypass, authenticated sessions, infinite scroll handling, screenshot/PDF generation, and v1.57 Speedboard performance analysis. Use when: automating browsers, scraping protected sites, testing with real IPs, bypassing bot detection, generating screenshots/PDFs, or ",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jeremy Dawes",
+    "email": "jeremy@jezweb.net"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jezweb/claude-skills",
+  "keywords": []
+}

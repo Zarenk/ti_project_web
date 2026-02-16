@@ -5,6 +5,7 @@ import {
   ValidateNested,
   IsArray,
   IsNumber,
+  IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -58,6 +59,14 @@ class ItemDto {
 }
 
 export class CreateGuideDto {
+  @IsOptional()
+  @IsString()
+  serie?: string;
+
+  @IsOptional()
+  @IsString()
+  correlativo?: string;
+
   @IsString()
   @IsNotEmpty()
   tipoDocumentoRemitente!: string;
@@ -82,9 +91,85 @@ export class CreateGuideDto {
   @IsNotEmpty()
   motivoTraslado!: string;
 
+  @IsOptional()
+  @IsString()
+  motivoTrasladoCodigo?: string;
+
+  @IsOptional()
+  @IsString()
+  fechaEmision?: string;
+
   @IsString()
   @IsNotEmpty()
   fechaTraslado!: string;
+
+  @IsOptional()
+  @IsString()
+  modalidadTraslado?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoPartidaDireccion?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoPartidaUbigeo?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoPartidaDepartamento?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoPartidaProvincia?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoPartidaDistrito?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoPartidaUrbanizacion?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoPartidaPaisCodigo?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoLlegadaDireccion?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoLlegadaUbigeo?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoLlegadaDepartamento?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoLlegadaProvincia?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoLlegadaDistrito?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoLlegadaUrbanizacion?: string;
+
+  @IsOptional()
+  @IsString()
+  puntoLlegadaPaisCodigo?: string;
+
+  @IsOptional()
+  @IsString()
+  pesoBrutoUnidad?: string;
+
+  @IsOptional()
+  @IsNumber()
+  pesoBrutoTotal?: number;
 
   @IsObject()
   @ValidateNested()

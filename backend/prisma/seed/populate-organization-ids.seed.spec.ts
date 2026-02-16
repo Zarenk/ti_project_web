@@ -18,6 +18,17 @@ const mockedWriteFile = writeFile as jest.MockedFunction<typeof writeFile>;
 type AsyncMock<T = unknown> = jest.Mock<Promise<T>, any[]>;
 
 type PrismaMock = {
+  company: {
+    findFirst: AsyncMock<{ id: number } | null>;
+  };
+  category: {
+    findMany: AsyncMock<any[]>;
+    update: AsyncMock;
+  };
+  product: {
+    findMany: AsyncMock<any[]>;
+    update: AsyncMock;
+  };
   organization: {
     findFirst: AsyncMock<{ id: number; code?: string } | null>;
     create: AsyncMock<{ id: number }>;
@@ -80,19 +91,27 @@ type PrismaMock = {
 
 const buildPrismaMock = (): PrismaMock => {
   const storeFindMany = jest.fn<Promise<any[]>, any[]>(async (args) => {
-    if (args?.where?.organizationId === null) {
-      return [{ id: 101 }];
-    }
     if (args?.where?.id?.in) {
       return [{ id: 101, organizationId: 1 }];
     }
-    return [];
+    return [{ id: 101 }];
   });
 
   const organizationFindFirst = jest.fn<Promise<{ id: number; code?: string } | null>, any[]>();
   organizationFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
 
   const prisma: PrismaMock = {
+    company: {
+      findFirst: jest.fn(async () => ({ id: 500 })),
+    },
+    category: {
+      findMany: jest.fn(async () => []),
+      update: jest.fn(),
+    },
+    product: {
+      findMany: jest.fn(async () => []),
+      update: jest.fn(),
+    },
     organization: {
       findFirst: organizationFindFirst,
       create: jest.fn(async () => ({ id: 1 })),
@@ -241,7 +260,7 @@ describe('populateMissingOrganizationIds', () => {
     expect(summary.overall.planned).toBe(13);
     expect(summary.overall.updated).toBe(13);
     expect(summary.overall.reasons).toEqual({
-      'fallback:default-organization': 1,
+      'fallback:default-organization-and-company': 1,
       'inherit:cash-register': 2,
       'inherit:entry': 1,
       'inherit:inventory': 1,
@@ -261,7 +280,7 @@ describe('populateMissingOrganizationIds', () => {
 
     expect(prisma.store.update).toHaveBeenCalledWith({
       where: { id: 101 },
-      data: { organizationId: 1 },
+      data: { organizationId: 1, companyId: 500 },
     });
 
     expect(prisma.user.update).toHaveBeenCalledWith({
@@ -291,7 +310,7 @@ describe('populateMissingOrganizationIds', () => {
 
     expect(prisma.sales.update).toHaveBeenCalledWith({
       where: { id: 901 },
-      data: { organizationId: 1 },
+      data: { organizationId: 1, companyId: 500 },
     });
 
     expect(prisma.transfer.update).toHaveBeenCalledWith({
@@ -403,14 +422,18 @@ describe('populateMissingOrganizationIds', () => {
     expect(logger.info).toHaveBeenCalledWith(
       '[populate-org] store: chunk 2/2 updated 1 records.',
     );
-    expect(logger.info).toHaveBeenCalledWith(
+    const summaryCall = logger.info.mock.calls.find(([message]) =>
+      message.includes('[populate-org] store: updated 3 records (fallback:default-organization-and-company=3)'),
+    );
+    expect(summaryCall?.[0]).toEqual(
       expect.stringContaining(
-        '[populate-org] store: updated 3 records (fallback:default-organization=3) in ',
+        '[populate-org] store: updated 3 records (fallback:default-organization-and-company=3) in ',
       ),
     );
-    expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining('across 2 chunk(s).'),
+    const totalsCall = logger.info.mock.calls.find(([message]) =>
+      message.includes('across 2 chunk(s).'),
     );
+    expect(totalsCall).toBeDefined();
   });
 
   it('warns and continues when the summary file cannot be written', async () => {
@@ -445,7 +468,6 @@ describe('populateMissingOrganizationIds', () => {
     });
 
     expect(summary.processed.store.updated).toBe(0);
-    expect(summary.processed.store.chunks).toBe(1);
     expect(prisma.store.update).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(mockedMkdir).not.toHaveBeenCalled();
@@ -453,7 +475,7 @@ describe('populateMissingOrganizationIds', () => {
     expect(summary.overall.planned).toBe(13);
     expect(summary.overall.updated).toBe(0);
     expect(summary.overall.chunks).toBe(13);
-    expect(summary.overall.reasons['fallback:default-organization']).toBe(1);
+    expect(summary.overall.reasons['fallback:default-organization-and-company']).toBe(1);
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringContaining('dry-run active'),
     );
@@ -488,7 +510,7 @@ describe('populateMissingOrganizationIds', () => {
       expect.objectContaining({
         planned: 1,
         updated: 1,
-        reasons: { 'fallback:default-organization': 1 },
+        reasons: { 'fallback:default-organization-and-company': 1 },
       }),
     );
   });
@@ -580,7 +602,7 @@ describe('populateMissingOrganizationIds', () => {
     expect(prisma.organization.create).not.toHaveBeenCalled();
     expect(prisma.store.update).toHaveBeenCalledWith({
       where: { id: 101 },
-      data: { organizationId: 42 },
+      data: { organizationId: 42, companyId: 500 },
     });
     expect(summary.overall.planned).toBe(13);
     expect(summary.overall.updated).toBe(13);

@@ -7,19 +7,76 @@ import { join } from 'path'; // Ensure 'join' is imported for path handling
 import { ValidationPipe } from '@nestjs/common';
 import { MetricsService } from './metrics/metrics.service';
 import { TelemetryInterceptor } from './metrics/trace.interceptor';
-import './metrics/tracing';
+import { TenantHeaderSanitizerMiddleware } from './common/middleware/tenant-header.middleware';
+import { PrismaService } from './prisma/prisma.service';
+import { TenantSlugResolverMiddleware } from './common/middleware/tenant-slug-resolver.middleware';
+import {
+  getAllowedOrigins,
+  isAllowedOrigin,
+} from './common/cors/allowed-origins';
+import { TenantExceptionFilter } from './common/filters/tenant-exception.filter';
+import { inspect } from 'util';
+
+// Limit console.log depth globally to prevent massive object dumps
+inspect.defaultOptions.depth = 3;
+inspect.defaultOptions.maxArrayLength = 50;
+
+// Override console methods to prevent dumping huge objects
+const originalLog = console.log;
+const originalError = console.error;
+const originalWarn = console.warn;
+
+const safeStringify = (arg: any): string => {
+  if (typeof arg === 'string') return arg;
+  if (typeof arg === 'number' || typeof arg === 'boolean') return String(arg);
+  if (arg === null || arg === undefined) return String(arg);
+
+  // Check if it's a Prisma object (has lots of nested objects with 'findUnique', 'findMany', etc.)
+  if (arg && typeof arg === 'object' &&
+      ('findUnique' in arg || 'findMany' in arg || '$parent' in arg)) {
+    return '[PrismaClient - omitted for brevity]';
+  }
+
+  // Check if it's a NestJS module (has moduleRef, metadata, providers)
+  if (arg && typeof arg === 'object' &&
+      ('moduleRef' in arg || 'metadata' in arg || '_providers' in arg)) {
+    return '[NestJS Module - omitted for brevity]';
+  }
+
+  return inspect(arg, { depth: 3, maxArrayLength: 50, breakLength: 100 });
+};
+
+console.log = (...args: any[]) => {
+  originalLog(...args.map(safeStringify));
+};
+
+console.error = (...args: any[]) => {
+  originalError(...args.map(safeStringify));
+};
+
+console.warn = (...args: any[]) => {
+  originalWarn(...args.map(safeStringify));
+};
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.useGlobalFilters(new TenantExceptionFilter());
   const metrics = app.get(MetricsService);
-  app.useGlobalInterceptors(new TelemetryInterceptor(metrics));
+  const telemetryEnabled = process.env.DISABLE_TELEMETRY !== 'true';
+  if (telemetryEnabled) {
+    app.useGlobalInterceptors(new TelemetryInterceptor(metrics));
+    await import('./metrics/tracing');
+  }
 
-  const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map((o) =>
-    o.trim(),
-  ) || ['http://localhost:3000'];
+  console.log('[CORS]', getAllowedOrigins());
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
     allowedHeaders: [
@@ -42,6 +99,25 @@ async function bootstrap() {
 
   // PARA COLOCAR PREVIAMENTE EN LA URL /API/
   app.setGlobalPrefix('api');
+
+  const headerSanitizer = new TenantHeaderSanitizerMiddleware();
+  app.use('/api', (req, res, next) => headerSanitizer.use(req, res, next));
+
+  const prisma = app.get(PrismaService);
+  const slugResolver = new TenantSlugResolverMiddleware(prisma);
+  app.use('/api', (req, res, next) => slugResolver.use(req, res, next));
+
+  // Logging justo antes del ValidationPipe para verificar cómo llegan las cabeceras sanitizadas
+  app.use('/api', (req, _res, next) => {
+    const headerValues = ['x-org-id', 'x-company-id', 'x-org-unit-id']
+      .map((name) => `${name}=${req.headers[name] ?? '??'}`)
+      .join(', ');
+    console.log(
+      `[tenant-headers-before-validation] ${req.method} ${req.originalUrl} ${headerValues}`,
+    );
+    next();
+  });
+
   // Habilitar la validación global de DTOs
   app.useGlobalPipes(
     new ValidationPipe({

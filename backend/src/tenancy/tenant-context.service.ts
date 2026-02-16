@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, Scope } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, Scope } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 
@@ -30,6 +30,7 @@ export interface OrganizationFilter {
 @Injectable({ scope: Scope.REQUEST })
 export class TenantContextService {
   private context: TenantContext | null = null;
+  private readonly logger = new Logger(TenantContextService.name);
 
   constructor(@Inject(REQUEST) private readonly request: Request) {
     // context se calcula perezosamente mediante getContext()
@@ -204,6 +205,11 @@ export class TenantContextService {
       normalizedRole === 'SUPER_ADMIN_GLOBAL' ||
       normalizedRole === 'SUPER_ADMIN' ||
       explicitSuperAdmin;
+    
+    this.logger.debug(
+      `[buildContext] User role detection: user.role=${user.role}, normalizedRole=${normalizedRole}, ` +
+      `isGlobalSuperAdmin=${isGlobalSuperAdmin}, explicitSuperAdmin=${explicitSuperAdmin}`
+    );
     const isOrganizationRole =
       normalizedRole === 'SUPER_ADMIN_ORG' || normalizedRole === 'SUPER_ADMIN';
 
@@ -278,7 +284,7 @@ export class TenantContextService {
       organizationId,
       companyId,
       organizationUnitId,
-      userId: this.normalizeId(user.id),
+      userId: this.normalizeId(user.id ?? user.userId ?? user.sub),
       isGlobalSuperAdmin,
       isOrganizationSuperAdmin,
       isSuperAdmin: isGlobalSuperAdmin || isOrganizationSuperAdmin,

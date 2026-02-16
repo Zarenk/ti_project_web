@@ -92,7 +92,11 @@ export class ApisPeruService {
   private async fetchDni(dni: string): Promise<LookupResultDto> {
     const endpoint = `${this.baseUrl.replace(/\/$/, '')}/dni/${dni}`;
     const data = await this.executeRequest(endpoint);
-    const nombresCompletos = [data?.nombres, data?.apellidoPaterno, data?.apellidoMaterno]
+    const nombresCompletos = [
+      data?.nombres,
+      data?.apellidoPaterno,
+      data?.apellidoMaterno,
+    ]
       .filter((part) => !!part?.toString?.().trim())
       .join(' ')
       .trim();
@@ -100,7 +104,11 @@ export class ApisPeruService {
     return {
       type: 'DNI',
       identifier: dni,
-      name: nombresCompletos || data?.nombreCompleto || data?.nombre_completo || '--',
+      name:
+        nombresCompletos ||
+        data?.nombreCompleto ||
+        data?.nombre_completo ||
+        '--',
       address: null,
       status: null,
       condition: null,

@@ -1,11 +1,15 @@
-import { Body, Controller, HttpCode, Post, Logger } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, Logger, UseGuards } from '@nestjs/common';
 import { DebitNotePostedDto } from './dto/debit-note-posted.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EntriesService } from '../entries.service';
 import { format } from 'date-fns';
 import { DebitNoteAccountingService } from '../services/debit-note-accounting.service';
+import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('accounting/hooks/debit-note-posted')
+// TODO: Re-enable guards after adding auth headers to AccountingHookService
+// @UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class DebitNotePostedController {
   private readonly logger = new Logger(DebitNotePostedController.name);
 

@@ -1,0 +1,28 @@
+- generic [active] [ref=e1]:
+  - region "Notifications alt+T"
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - generic: Protegida nuestra web
+    - generic [ref=e5]:
+      - heading "Acceso no autorizado" [level=1] [ref=e6]
+      - paragraph [ref=e7]: No tienes permisos para ver esta sección.
+      - link "Volver a iniciar sesión" [ref=e8] [cursor=pointer]:
+        - /url: /login
+  - link [ref=e10] [cursor=pointer]:
+    - /url: https://wa.me/51949426294
+    - img [ref=e12]
+  - button "Logo" [ref=e16] [cursor=pointer]:
+    - img [ref=e17]
+    - img "Logo" [ref=e20]
+  - generic [ref=e26] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e27]:
+      - img [ref=e28]
+    - generic [ref=e31]:
+      - button "Open issues overlay" [ref=e32]:
+        - generic [ref=e33]:
+          - generic [ref=e34]: "0"
+          - generic [ref=e35]: "1"
+        - generic [ref=e36]: Issue
+      - button "Collapse issues badge" [ref=e37]:
+        - img [ref=e38]
+  - alert [ref=e40]

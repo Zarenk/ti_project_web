@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import UpdatePriceDialog from "./inventory-product-details-components/UpdatePriceModal";
-import { getProductByInventoryId, getProductSales } from "../inventory.api";
+import { getProductSales } from "../inventory.api";
 import { Book, DollarSign, LayoutGrid, Table } from "lucide-react";
 import UpdateCategoryDialog from "./inventory-product-details-components/UpdateCategoryModal";
 import { QRCodeCanvas } from "qrcode.react";
@@ -100,26 +100,9 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
     );
   }
 
-  // Obtener el productId real desde el API usando el inventoryId
-  const [realProductId, setRealProductId] = useState<number | null>(null)
-  useEffect(() => {
-    async function fetchRealProductId() {
-      try {
-        if (product?.inventoryId) {
-          const data = await getProductByInventoryId(product.inventoryId); // Llama al API con el inventoryId
-          setRealProductId(data.productId); // Guarda el productId verdadero
-        }
-      } catch (error) {
-        console.error("Error al obtener el productId:", error);
-        setRealProductId(null); // Establecer un valor predeterminado en caso de error
-      }
-    }
+  const productId = product?.id ?? null;
 
-    fetchRealProductId(); // Ejecutar al montar el componente
-  }, [product?.id]); // Dependencias vacías para que se ejecute solo al montar
-  //
-
-  // Obtener las salidas del producto usando el productId real
+  // Obtener las salidas del producto
   const [sales, setSales] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<"cards" | "tables">("cards");
   const dateTimeFormatter = useMemo(
@@ -159,18 +142,19 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
   useEffect(() => {
     async function fetchProductSales() {
       try {
-        if (product?.id) {
-          const data = await getProductSales(realProductId ?? 0);
+        if (productId != null) {
+          const data = await getProductSales(productId);
           setSales(data);
-          setIsLoading(false);
         }
       } catch (error) {
         console.error("Error al obtener las salidas del producto:", error);
+      } finally {
+        setIsLoading(false);
       }
     }
 
     fetchProductSales();
-  }, [realProductId]);
+  }, [productId]);
   //
 
   const totalStockByCurrency = stockDetails
@@ -318,11 +302,11 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
         </div>
         <UpdatePriceDialog 
             defaultPrice={product.priceSell} 
-            productId={realProductId!} 
+            productId={productId ?? product.id} 
         />
         <UpdateCategoryDialog 
         defaultCategoryId={product.categoryId} 
-        productId={realProductId!} 
+        productId={productId ?? product.id} 
         />
 
         <div className="space-y-4">
@@ -420,7 +404,7 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
                       {!hidePurchaseCost && (
                         <p><strong>Precio de Compra:</strong> S/. {(entry.price || 0).toFixed(2)}</p>
                       )}
-                      <p><strong>Moneda:</strong> {entry.tipoMoneda}</p>
+                      <p><strong>Moneda:</strong> {entry.tipoMoneda ?? "PEN"}</p>
                       <p><strong>Tienda:</strong> {entry.storeName}</p>
                       <p><strong>Proveedor:</strong> {entry.supplierName}</p>
                       <p><strong>Cantidad:</strong> {entry.quantity || 0}</p>

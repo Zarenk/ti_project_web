@@ -1,3 +1,4 @@
+import 'dotenv/config'; // Load environment variables first
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import CatalogTemplate from './catalog-template';
@@ -9,10 +10,11 @@ import path from 'path';
 import fs from 'fs';
 import SVGtoPDF from 'svg-to-pdfkit';
 import sharp from 'sharp';
-import { PrismaClient } from '@prisma/client';
 import { resolveBackendPath } from '../utils/path-utils';
+import { PrismaService } from '../prisma/prisma.service';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaService();
+void prisma.onModuleInit();
 
 let cachedBrandLogos: Record<string, string> | null = null;
 async function getBrandLogos(): Promise<Record<string, string>> {

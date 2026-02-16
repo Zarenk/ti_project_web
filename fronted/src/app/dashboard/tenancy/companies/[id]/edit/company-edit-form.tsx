@@ -38,11 +38,29 @@ const PDF_PAGE_SIZE = 10;
 const LOGO_MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 const DEFAULT_PRIMARY_COLOR = "#0B2B66";
 const DEFAULT_SECONDARY_COLOR = "#0F3B8C";
+const DOCUMENT_SEQUENCE_TYPES = [
+  {
+    documentType: "FACTURA",
+    label: "Facturas",
+    defaultSerie: "F001",
+    defaultCorrelative: "001",
+  },
+  {
+    documentType: "BOLETA",
+    label: "Boletas",
+    defaultSerie: "B001",
+    defaultCorrelative: "001",
+  },
+] as const;
 
 type NameField = (typeof NAME_FIELDS)[number];
 type FieldErrors = Partial<Record<keyof UpdateCompanyPayload, string | null>>;
+type SequenceState = Record<string, { serie: string; nextCorrelative: string }>;
 
-const validateCompanyForm = (state: UpdateCompanyPayload): FieldErrors => {
+const validateCompanyForm = (
+  state: UpdateCompanyPayload,
+  sequences?: SequenceState | null,
+): FieldErrors => {
   const errors: FieldErrors = {};
 
   NAME_FIELDS.forEach((field) => {
@@ -81,6 +99,29 @@ const validateCompanyForm = (state: UpdateCompanyPayload): FieldErrors => {
   validateColor(state.primaryColor ?? null, "primaryColor");
   validateColor(state.secondaryColor ?? null, "secondaryColor");
 
+  if (sequences) {
+    for (const { documentType, label } of DOCUMENT_SEQUENCE_TYPES) {
+      const current = sequences[documentType];
+      const serie = current?.serie?.trim() ?? "";
+      const correlativo = current?.nextCorrelative?.trim() ?? "";
+
+      if (!serie || !correlativo) {
+        errors.documentSequences = `Completa la serie y el numero inicial para ${label}.`;
+        break;
+      }
+
+      if (!/^[A-Z0-9-]+$/.test(serie)) {
+        errors.documentSequences = `La serie de ${label} solo admite letras, numeros o guiones.`;
+        break;
+      }
+
+      if (!/^\d+$/.test(correlativo)) {
+        errors.documentSequences = `El numero inicial de ${label} debe contener solo digitos.`;
+        break;
+      }
+    }
+  }
+
   return errors;
 };
 
@@ -116,7 +157,38 @@ export function CompanyEditForm({
     sunatSolPasswordProd: company.sunatSolPasswordProd ?? "",
   });
 
+  const createInitialSequenceState = (): SequenceState => {
+    const lookup = new Map(
+      (company.documentSequences ?? []).map((sequence) => [
+        (sequence.documentType ?? "").toUpperCase(),
+        sequence,
+      ]),
+    );
+
+    const initialState: SequenceState = {};
+    for (const config of DOCUMENT_SEQUENCE_TYPES) {
+      const stored = lookup.get(config.documentType);
+      const padding =
+        stored?.correlativeLength ??
+        (stored?.nextCorrelative
+          ? String(stored.nextCorrelative).length
+          : config.defaultCorrelative.length);
+      const formatted =
+        stored && typeof stored.nextCorrelative === "number"
+          ? String(stored.nextCorrelative).padStart(padding, "0")
+          : config.defaultCorrelative;
+
+      initialState[config.documentType] = {
+        serie: stored?.serie ?? config.defaultSerie,
+        nextCorrelative: formatted,
+      };
+    }
+
+    return initialState;
+  };
+
   const [formState, setFormState] = useState<UpdateCompanyPayload>(createInitialFormState);
+  const [sequenceState, setSequenceState] = useState<SequenceState>(createInitialSequenceState);
   const [sunatPaths, setSunatPaths] = useState({
     betaCert: company.sunatCertPathBeta ?? null,
     betaKey: company.sunatKeyPathBeta ?? null,
@@ -129,7 +201,9 @@ export function CompanyEditForm({
   const [sunatPdfs, setSunatPdfs] = useState<SunatStoredPdf[]>([]);
   const [sunatPdfsLoading, setSunatPdfsLoading] = useState(true);
   const [retryingId, setRetryingId] = useState<number | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>(() => validateCompanyForm(createInitialFormState()));
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>(() =>
+    validateCompanyForm(createInitialFormState(), createInitialSequenceState()),
+  );
   const [sunatLogQuery, setSunatLogQuery] = useState("");
   const [sunatLogStatusFilter, setSunatLogStatusFilter] = useState<"ALL" | string>("ALL");
   const [sunatLogEnvironmentFilter, setSunatLogEnvironmentFilter] = useState<"ALL" | SunatEnvironment>("ALL");
@@ -217,11 +291,11 @@ export function CompanyEditForm({
     (updater: (prev: UpdateCompanyPayload) => UpdateCompanyPayload) => {
       setFormState((prev) => {
         const nextState = updater(prev);
-        setFieldErrors(validateCompanyForm(nextState));
+        setFieldErrors(validateCompanyForm(nextState, sequenceState));
         return nextState;
       });
     },
-    [],
+    [sequenceState],
   );
 
   const fetchSunatLogs = useCallback(async () => {
@@ -303,6 +377,37 @@ export function CompanyEditForm({
       sunatRuc: digits,
     }));
   };
+
+  const updateSequenceField = useCallback(
+    (documentType: string, field: keyof SequenceState[string], value: string) => {
+      setSequenceState((prev) => {
+        const current = prev[documentType] ?? { serie: "", nextCorrelative: "" };
+        const nextState = {
+          ...prev,
+          [documentType]: {
+            ...current,
+            [field]: value,
+          },
+        };
+        setFieldErrors(validateCompanyForm(formState, nextState));
+        return nextState;
+      });
+    },
+    [formState],
+  );
+
+  const handleSequenceSerieChange =
+    (documentType: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
+      const raw = event.target.value.toUpperCase();
+      const sanitized = raw.replace(/[^A-Z0-9-]/g, "").slice(0, 8);
+      updateSequenceField(documentType, "serie", sanitized);
+    };
+
+  const handleSequenceCorrelativeChange =
+    (documentType: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
+      const digits = event.target.value.replace(/\D/g, "").slice(0, 9);
+      updateSequenceField(documentType, "nextCorrelative", digits);
+    };
 
   const inputValidationClass = (field: keyof UpdateCompanyPayload) =>
     fieldErrors[field] ? "border-destructive focus-visible:ring-destructive" : undefined;
@@ -468,13 +573,24 @@ export function CompanyEditForm({
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const submissionErrors = validateCompanyForm(formState);
+    const submissionErrors = validateCompanyForm(formState, sequenceState);
     setFieldErrors(submissionErrors);
     const hasErrors = Object.values(submissionErrors).some((value) => Boolean(value));
     if (hasErrors) {
       toast.error("Corrige los campos marcados antes de guardar.");
       return;
     }
+    const sequencePayload = DOCUMENT_SEQUENCE_TYPES.map(({ documentType }) => {
+      const current = sequenceState[documentType];
+      const serie = current?.serie?.trim() ?? "";
+      const nextCorrelative = current?.nextCorrelative?.trim() ?? "";
+      return {
+        documentType,
+        serie,
+        nextCorrelative,
+        correlativeLength: nextCorrelative.length || undefined,
+      };
+    }).filter((entry) => entry.serie && entry.nextCorrelative);
     startTransition(async () => {
       try {
         await updateCompany(company.id, {
@@ -494,6 +610,7 @@ export function CompanyEditForm({
           sunatSolPasswordBeta: sanitize(formState.sunatSolPasswordBeta),
           sunatSolUserProd: sanitize(formState.sunatSolUserProd),
           sunatSolPasswordProd: sanitize(formState.sunatSolPasswordProd),
+          documentSequences: sequencePayload,
         });
         await setTenantSelection({
           orgId: company.organization.id,
@@ -578,6 +695,70 @@ export function CompanyEditForm({
                 <p className="text-xs text-muted-foreground">Debe contener 11 dígitos numéricos.</p>
               )}
             </div>
+          </section>
+
+          <Separator />
+
+          <section className="space-y-4">
+            <div className="space-y-1">
+              <Label className="text-base font-medium text-slate-900 dark:text-slate-100">
+                Series y correlativos iniciales
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Ajusta la serie y el numero inicial para cada tipo de comprobante. El sistema continuara con el siguiente
+                correlativo automaticamente.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {DOCUMENT_SEQUENCE_TYPES.map(({ documentType, label, defaultSerie, defaultCorrelative }) => {
+                const current = sequenceState[documentType] ?? { serie: "", nextCorrelative: "" };
+                return (
+                  <div
+                    key={documentType}
+                    className="rounded-lg border border-slate-200 p-4 shadow-sm dark:border-slate-800"
+                  >
+                    <div className="flex items-center justify-between text-sm font-medium text-slate-900 dark:text-slate-100">
+                      <span>{label}</span>
+                      <span className="text-xs text-muted-foreground">{documentType}</span>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`sequence-${documentType}-serie`}>Serie</Label>
+                        <Input
+                          id={`sequence-${documentType}-serie`}
+                          value={current.serie}
+                          onChange={handleSequenceSerieChange(documentType)}
+                          placeholder={defaultSerie}
+                          maxLength={8}
+                          disabled={isPending}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`sequence-${documentType}-correlative`}>Numero inicial</Label>
+                        <Input
+                          id={`sequence-${documentType}-correlative`}
+                          value={current.nextCorrelative}
+                          onChange={handleSequenceCorrelativeChange(documentType)}
+                          placeholder={defaultCorrelative}
+                          inputMode="numeric"
+                          disabled={isPending}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          El siguiente comprobante se emitira con este numero y luego se incrementara.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {fieldErrors.documentSequences ? (
+              <p className="text-xs text-destructive">{fieldErrors.documentSequences}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Ejemplo: si tu ultimo numero fue 025, ingresa 026 para continuar desde ahi.
+              </p>
+            )}
           </section>
 
           <Separator />

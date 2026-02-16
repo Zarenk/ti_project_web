@@ -11,37 +11,202 @@ export interface InventoryApiItem {
   [key: string]: any;
 }
 
-// Obtener todo el inventario
-export async function getInventory(): Promise<InventoryApiItem[]> {
-  const response = await authFetch(`${BACKEND_URL}/api/inventory`, {
-    cache: 'no-store',
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('Error al obtener el inventario');
-  }
-
-  return (await response.json()) as InventoryApiItem[];
+interface TenantHeaders {
+  organizationId?: number;
+  companyId?: number;
 }
 
-export async function getAllPurchasePrices() {
-  const response = await authFetch(`${BACKEND_URL}/api/inventory/purchase-prices`, {
-    method: 'GET',
-    cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+export interface InventoryAlertSummary {
+  providersOverThreshold: Array<{
+    provider: string;
+    failureCount: number;
+    lastFailureAt: string;
+  }>;
+  reviewDueCount: number;
+  badgeCount: number;
+}
 
-  if (!response.ok) {
-    throw new Error('Error al obtener los precios de compra');
+export interface MonitoringAlertEventPayload {
+  id: number;
+  alertType: string;
+  status: string;
+  severity: string;
+  message: string;
+  providerName: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface InventoryAlertsPayload {
+  failureAlerts: MonitoringAlertEventPayload[];
+  recentEvents: MonitoringAlertEventPayload[];
+  reviewDueTemplates: Array<{
+    id: number;
+    documentType: string;
+    providerName: string;
+    updatedAt: string;
+  }>;
+}
+
+const ensureTenant = (tenant?: TenantHeaders) => {
+  return {
+    organizationId: Number(tenant?.organizationId) || undefined,
+    companyId: Number(tenant?.companyId) || undefined,
+  };
+};
+
+// Obtener todo el inventario
+export async function getInventory(): Promise<InventoryApiItem[]> {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory`, {
+      cache: 'no-store',
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al obtener el inventario');
+    }
+
+    return (await response.json()) as InventoryApiItem[];
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
   }
+}
 
-  return await response.json();
+
+export async function getAllPurchasePrices() {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/purchase-prices`, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al obtener los precios de compra');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+
+export async function getInventoryMetrics(tenant?: TenantHeaders) {
+  const payload = ensureTenant(tenant);
+  if (!payload.companyId) {
+    return null;
+  }
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/metrics`, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('No se pudieron cargar las m?tricas');
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+
+export async function getInventoryAlerts(
+  tenant?: TenantHeaders,
+): Promise<InventoryAlertsPayload | null> {
+  const payload = ensureTenant(tenant);
+  if (!payload.companyId) {
+    return null;
+  }
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory-alerts`, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => null);
+      throw new Error(body || 'No se pudieron cargar las alertas');
+    }
+
+    return (await response.json()) as InventoryAlertsPayload;
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+
+export async function getInventoryAlertSummary(tenant?: TenantHeaders) {
+  const payload = ensureTenant(tenant);
+  if (!payload.companyId) {
+    return null;
+  }
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory-alerts/summary`, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => null);
+      throw new Error(body || 'No se pudo cargar el resumen de alertas');
+    }
+
+    return (await response.json()) as InventoryAlertSummary;
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+
+export async function reviewTemplateAlert(templateId: number) {
+  const response = await authFetch(
+    `${BACKEND_URL}/api/inventory-alerts/template/${templateId}/review`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    },
+  );
+  if (!response.ok) {
+    const body = await response.text().catch(() => null);
+    throw new Error(body || 'No se pudo marcar la plantilla como revisada');
+  }
+  return response.json();
 }
 
 
@@ -90,6 +255,36 @@ export async function getStoresWithProduct(productId: number) {
 
     return await response.json();
   } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    console.error('Error al obtener las tiendas con stock del producto:', error.message || error);
+    throw error;
+  }
+}
+
+export async function getPublicStoresWithProduct(productId: number) {
+  try {
+    const response = await authFetch(
+      `${BACKEND_URL}/api/public/inventory/stores-with-product/${productId}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 400) {
+        return [];
+      }
+      throw new Error('Error al obtener las tiendas con stock del producto');
+    }
+
+    return await response.json();
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error('Error al obtener las tiendas con stock del producto:', error.message || error);
     throw error;
   }
@@ -111,6 +306,9 @@ export async function getAllStores() {
 
     return await response.json();
   } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error('Error al obtener todas las tiendas:', error.message || error);
     throw error;
   }
@@ -133,6 +331,9 @@ export async function getInventoryWithCurrency(): Promise<InventoryApiItem[]> {
 
     return (await response.json()) as InventoryApiItem[];
   } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error('Error al obtener el inventario con desglose por moneda:', error.message || error);
     throw error;
   } 
@@ -150,6 +351,9 @@ export async function getStockDetailsByStoreAndCurrency() {
     return await response.json();
   }
   catch(error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error('Error al obtener los detalles de stock por tienda y moneda:', error.message || error);
     throw error;
   }
@@ -167,7 +371,11 @@ export async function getProductEntries(productId: number) {
     return response.json();
   }
   catch(error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error('Error al obtener las entradas del producto:', error.message || error);
+    return [];
   }
 }
 
@@ -183,6 +391,9 @@ export async function getSeriesByProductAndStore(storeId: number, productId: num
     const data = await response.json();
     return data; // Devuelve las series disponibles
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error("Error al obtener las series:", error);
     return [];
   }
@@ -239,28 +450,51 @@ export async function getProductByInventoryId(inventoryId: number) {
     const data = await response.json();
     return data; // Devuelve { productId, productName }
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
     console.error("Error al obtener el producto por inventoryId:", error);
     throw error;
   }
 } 
 
 export async function getProductSales(productId: number) {
-  const response = await authFetch(`${BACKEND_URL}/api/inventory/product-sales/${productId}`);
-  if (!response.ok) {
-    throw new Error('Error al obtener las salidas del producto');
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/product-sales/${productId}`);
+    if (response.status === 404) {
+      return [];
+    }
+    if (!response.ok) {
+      throw new Error('Error al obtener las salidas del producto');
+    }
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    console.error('Error al obtener las salidas del producto:', error);
+    return [];
   }
-  return response.json();
 }
 
 export async function getCategoriesFromInventory(): Promise<string[]> {
   try {
-    const response = await authFetch(`${BACKEND_URL}/api/inventory/categories`);
+    const response = await authFetch(`${BACKEND_URL}/api/category`);
     if (!response.ok) {
-      throw new Error('Error al obtener las categorías');
+      throw new Error('Error al obtener las categor?as');
     }
-    return await response.json();
+    const data = await response.json();
+    if (!Array.isArray(data)) {
+      return [];
+    }
+    return data
+      .map((category: any) => category?.name)
+      .filter((name: any): name is string => typeof name === 'string' && name.trim().length > 0);
   } catch (error) {
-    console.error('Error al cargar las categorías:', error);
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    console.error('Error al cargar las categor?as:', error);
     return [];
   }
 }
@@ -273,6 +507,9 @@ export async function getProductsByStore(storeId: number, queryParams: string = 
     }
     return await response.json();
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error("Error al obtener los productos por tienda:", error);
     throw error;
   }
@@ -286,6 +523,9 @@ export async function getAllProductsByStore(storeId: number, queryParams: string
     }
     return await response.json();
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error("Error al obtener los productos por tienda:", error);
     throw error;
   }

@@ -1,11 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react"
 import {
-  ShoppingCart,
-  User,
-  Menu,
-  X,
   Laptop,
   Monitor,
   HardDrive,
@@ -22,16 +18,6 @@ import {
   Shield,
   Headset,
   CreditCard,
-  Star,
-  Phone,
-  Mail,
-  MapPin,
-  Facebook,
-  Twitter,
-  Instagram,
-  Youtube,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   type LucideIcon,
 } from "lucide-react"
@@ -39,67 +25,266 @@ import Navbar from "@/components/navbar"
 import { toast } from "sonner"
 import ProductForm from "@/app/dashboard/products/new/product-form"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { getProducts, getProduct } from "./dashboard/products/products.api"
-import { getCategoriesWithCount, getCategories } from "./dashboard/categories/categories.api"
-import { getStoresWithProduct } from "./dashboard/inventory/inventory.api"
+import {
+  getProducts,
+  getProduct,
+  getPublicProducts,
+} from "./dashboard/products/products.api"
+import {
+  getCategoriesWithCount,
+  getCategories,
+  getPublicCategoriesWithCount,
+} from "./dashboard/categories/categories.api"
+import { getStoresWithProduct, getPublicStoresWithProduct } from "./dashboard/inventory/inventory.api"
 import { getRecentEntries } from "./dashboard/entries/entries.api"
-import UltimosIngresosSection from '@/components/home/UltimosIngresosSection';
-import HeroSection from '@/components/home/HeroSection';
-import FeaturedProductsSection from '@/components/home/FeaturedProductsSection';
-import CategoriesSection from '@/components/home/CategoriesSection';
-import BenefitsSection from '@/components/home/BenefitsSection';
-import TestimonialsSection from '@/components/home/TestimonialSection';
-import NewsletterSection from '@/components/home/NewsletterSection';
-import { Skeleton } from "@/components/ui/skeleton";
+import UltimosIngresosSection from "@/components/home/UltimosIngresosSection"
+import HeroSection from "@/components/home/HeroSection"
+import FeaturedProductsSection from "@/components/home/FeaturedProductsSection"
+import CategoriesSection from "@/components/home/CategoriesSection"
+import BenefitsSection from "@/components/home/BenefitsSection"
+import TestimonialsSection from "@/components/home/TestimonialSection"
+import NewsletterSection from "@/components/home/NewsletterSection"
+import { Skeleton } from "@/components/ui/skeleton"
+import { getAuthToken } from "@/utils/auth-token"
+
+type ProductsResponse = Awaited<ReturnType<typeof getProducts>>
+type ProductListItem = ProductsResponse extends Array<infer Item> ? Item : never
+type ProductDetail = Awaited<ReturnType<typeof getProduct>>
+
+type CategoriesResponse = Awaited<ReturnType<typeof getCategories>>
+type CategoryRecord = CategoriesResponse extends Array<infer Item> ? Item : never
+
+type CategoriesWithCountResponse = Awaited<ReturnType<typeof getCategoriesWithCount>>
+type CategoryCountRecord = CategoriesWithCountResponse extends Array<infer Item> ? Item : never
+
+type StoreStockResponse = Awaited<ReturnType<typeof getStoresWithProduct>>
+type StoreStockRecord = StoreStockResponse extends Array<infer Item> ? Item : never
+
+
+interface Brand {
+  name: string
+  logoSvg?: string
+  logoPng?: string
+}
+
+interface FeaturedProduct {
+  id: number
+  name: string
+  description: string
+  price: number
+  brand: Brand | null
+  category: string
+  images: string[]
+  stock: number | null
+  specification?: {
+    processor?: string
+    ram?: string
+    storage?: string
+    graphics?: string
+    screen?: string
+    resolution?: string
+    refreshRate?: string
+    connectivity?: string
+  }
+}
+
+interface HomeCategory {
+  name: string
+  icon: LucideIcon
+  count: number
+}
+
+interface RecentProduct {
+  id: number
+  name: string
+  description: string
+  price: number
+  brand: Brand | null
+  category: string
+  images: string[]
+  stock: number
+}
+
+type GsapContext = import("gsap/gsap-core").Context
+
+const parseNumber = (value: unknown): number | undefined => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
+const extractImages = (images: unknown): string[] | null =>
+  Array.isArray(images) && images.every((img) => typeof img === "string" && img.length > 0)
+    ? images
+    : null
+
+const mapBrand = (brand: unknown): Brand | null => {
+  if (!brand || typeof brand !== "object") {
+    return null
+  }
+  const record = brand as Record<string, unknown>
+  const name = typeof record.name === "string" ? record.name : null
+  if (!name) {
+    return null
+  }
+  return {
+    name,
+    logoSvg: typeof record.logoSvg === "string" ? record.logoSvg : undefined,
+    logoPng: typeof record.logoPng === "string" ? record.logoPng : undefined,
+  }
+}
+
+const mapSpecification = (spec: unknown): FeaturedProduct["specification"] | undefined => {
+  if (!spec || typeof spec !== "object") {
+    return undefined
+  }
+  const record = spec as Record<string, unknown>
+  return {
+    processor: typeof record.processor === "string" ? record.processor : undefined,
+    ram: typeof record.ram === "string" ? record.ram : undefined,
+    storage: typeof record.storage === "string" ? record.storage : undefined,
+    graphics: typeof record.graphics === "string" ? record.graphics : undefined,
+    screen: typeof record.screen === "string" ? record.screen : undefined,
+    resolution: typeof record.resolution === "string" ? record.resolution : undefined,
+    refreshRate: typeof record.refreshRate === "string" ? record.refreshRate : undefined,
+    connectivity: typeof record.connectivity === "string" ? record.connectivity : undefined,
+  }
+}
+
+const mapProductListItemToFeatured = (product: ProductListItem): FeaturedProduct | null => {
+  const images = extractImages(product?.images)
+  if (!images) {
+    return null
+  }
+
+  const normalizedPrice =
+    parseNumber(product?.priceSell) ?? parseNumber(product?.price) ?? 0
+
+  const normalizedStock = parseNumber(product?.stock) ?? null
+  const categoryName =
+    typeof product?.category?.name === "string" ? product.category.name : "Sin categoría"
+
+  return {
+    id: product.id,
+    name: product.name,
+    description: typeof product.description === "string" ? product.description : "",
+    price: normalizedPrice,
+    brand: mapBrand(product?.brand ?? null),
+    category: categoryName,
+    images,
+    stock: normalizedStock,
+    specification: mapSpecification(product?.specification),
+  }
+}
+
+const calculateTotalStock = (stores: StoreStockRecord[]): number =>
+  stores.reduce<number>((sum, store) => sum + (parseNumber(store?.stock) ?? 0), 0)
+
+const isDefined = <T,>(value: T | null | undefined): value is T => value != null
+
+const extractProductFromEntry = (entry: unknown): ProductListItem | null => {
+  if (!entry || typeof entry !== "object") {
+    return null
+  }
+
+  if ("product" in entry && entry.product) {
+    return entry.product as ProductListItem
+  }
+
+  return entry as ProductListItem
+}
+
+const toRecentProduct = (product: FeaturedProduct): RecentProduct => ({
+  id: product.id,
+  name: product.name,
+  description: product.description,
+  price: product.price,
+  brand: product.brand,
+  category: product.category,
+  images: product.images,
+  stock: product.stock ?? 0,
+})
+
+const buildRecentProducts = (entries: unknown[]): RecentProduct[] =>
+  entries
+    .map(extractProductFromEntry)
+    .filter(isDefined)
+    .map(mapProductListItemToFeatured)
+    .filter(isDefined)
+    .map(toRecentProduct)
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  Laptops: Laptop,
+  Computadoras: Monitor,
+  "Tarjetas Gráficas": Cpu,
+  Almacenamiento: HardDrive,
+  Gaming: Gamepad2,
+  Accesorios: Headphones,
+  Monitores: Monitor,
+  Teclados: Keyboard,
+  Mouses: Mouse,
+  Tablets: Tablet,
+  Impresoras: Printer,
+  Smartphones: Smartphone,
+  Servidores: Server,
+}
+
+const HOME_BENEFITS = [
+  {
+    icon: Truck,
+    title: "Envíos a todo el Perú",
+    description: "Entrega rápida y segura en 24-72 horas",
+  },
+  {
+    icon: Shield,
+    title: "Garantía asegurada",
+    description: "Hasta 3 años de garantía extendida en todos nuestros productos",
+  },
+  {
+    icon: Headset,
+    title: "Soporte técnico",
+    description: "Atención especializada 24/7 para resolver tus dudas",
+  },
+  {
+    icon: CreditCard,
+    title: "Pagos seguros",
+    description: "Múltiples métodos de pago con máxima seguridad",
+  },
+]
+
+const HOME_TESTIMONIALS = [
+  {
+    name: "Carlos Mendoza",
+    rating: 5,
+    comment:
+      "Excelente servicio y productos de calidad. Mi laptop gaming llegó perfecta y funciona increíble.",
+    location: "Lima, Perú",
+  },
+  {
+    name: "María González",
+    rating: 5,
+    comment:
+      "Compré una PC para mi oficina y el soporte técnico fue excepcional. Muy recomendado.",
+    location: "Arequipa, Perú",
+  },
+  {
+    name: "Diego Ramírez",
+    rating: 5,
+    comment:
+      "Los mejores precios del mercado y entrega súper rápida. Ya es mi tienda de confianza.",
+    location: "Trujillo, Perú",
+  },
+]
 
 export default function Homepage() {
   const sectionsRef = useRef<HTMLDivElement>(null)
-  
-
-  
-  interface Brand {
-    name: string
-    logoSvg?: string
-    logoPng?: string
-  }
-
-  interface FeaturedProduct {
-    id: number
-    name: string
-    description: string
-    price: number
-    brand: Brand | null
-    category: string
-    images: string[]
-    stock: number | null
-    specification?: {
-      processor?: string
-      ram?: string
-      storage?: string
-      graphics?: string
-      screen?: string
-      resolution?: string
-      refreshRate?: string
-      connectivity?: string
-    }
-  }
-
-  interface HomeCategory {
-    name: string
-    icon: LucideIcon
-    count: number
-  }
-
-  interface RecentProduct {
-    id: number
-    name: string
-    description: string
-    price: number
-    brand: Brand | null
-    category: string
-    images: string[]
-    stock: number
-  }
+  const authStateRef = useRef<boolean | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
 
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([])
   const [heroProducts, setHeroProducts] = useState<FeaturedProduct[]>([])
@@ -107,56 +292,54 @@ export default function Homepage() {
   const [recentIndex, setRecentIndex] = useState(0)
   const [recentDirection, setRecentDirection] = useState(0)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [productToEdit, setProductToEdit] = useState<any | null>(null)
+  const [productToEdit, setProductToEdit] = useState<ProductDetail | null>(null)
   const [isLoadingProductToEdit, setIsLoadingProductToEdit] = useState(false)
-  const [productCategories, setProductCategories] = useState<any[]>([])
+  const [productCategories, setProductCategories] = useState<CategoryRecord[]>([])
   const [isLoadingProductCategories, setIsLoadingProductCategories] = useState(false)
+
+  const resolveAuthState = useCallback(async () => {
+    if (authStateRef.current !== null) {
+      return authStateRef.current
+    }
+    const token = await getAuthToken()
+    const hasAuth = Boolean(token)
+    authStateRef.current = hasAuth
+    setIsAuthenticated(hasAuth)
+    return hasAuth
+  }, [])
 
   const fetchProductsData = useCallback(async () => {
     try {
-      const products = await getProducts()
-      const withImages = (products as any[])
-        .filter((p) => p.images && p.images.length > 0)
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          description: p.description || "",
-          price: p.priceSell ?? p.price,
-          brand: p.brand
-            ? {
-                name: p.brand.name,
-                logoSvg: p.brand.logoSvg,
-                logoPng: p.brand.logoPng,
-              }
-            : null,
-          category: p.category?.name || "Sin categoría",
-          images: p.images || [],
-          stock: p.stock ?? null,
-          specification: p.specification ?? undefined,
-        })) as FeaturedProduct[]
-      // Compute stock for the top 10 items that we render
-      const topForStock = withImages.slice(0, 10)
+      const hasAuth = await resolveAuthState()
+      const productsResponse = hasAuth
+        ? await getProducts()
+        : await getPublicProducts()
+      const normalizedProducts = Array.isArray(productsResponse) ? productsResponse : []
+      const featured = normalizedProducts
+        .map(mapProductListItemToFeatured)
+        .filter(isDefined)
+
+      const topForStock = featured.slice(0, 10)
       const withStockTop = await Promise.all(
-        topForStock.map(async (p) => {
+        topForStock.map(async (product) => {
           try {
-            const stores = await getStoresWithProduct(p.id)
-            const total = Array.isArray(stores)
-              ? stores.reduce((sum: number, s: any) => sum + (s.stock ?? 0), 0)
-              : 0
-            return { ...p, stock: total }
+            const stores = hasAuth
+              ? await getStoresWithProduct(product.id)
+              : await getPublicStoresWithProduct(product.id)
+            const totalStock = Array.isArray(stores) ? calculateTotalStock(stores) : 0
+            return { ...product, stock: totalStock }
           } catch {
-            return { ...p, stock: p.stock ?? null }
+            return product
           }
-        })
+        }),
       )
-      // Limit hero to 6 for layout/performance (with stock info)
+
       setHeroProducts(withStockTop.slice(0, 6))
-      // Show up to 10 featured products as requested (with stock info)
       setFeaturedProducts(withStockTop)
     } catch (error) {
       console.error("Error fetching featured products:", error)
     }
-  }, [])
+  }, [resolveAuthState])
 
   useEffect(() => {
     void fetchProductsData()
@@ -176,7 +359,7 @@ export default function Homepage() {
     } finally {
       setIsLoadingProductToEdit(false)
     }
-  }, [])
+  }, [resolveAuthState])
 
   useEffect(() => {
     if (!isEditDialogOpen) {
@@ -188,6 +371,12 @@ export default function Homepage() {
 
     let isMounted = true
     setIsLoadingProductCategories(true)
+    if (isAuthenticated === false) {
+      setProductCategories([])
+      setIsLoadingProductCategories(false)
+      return
+    }
+
     getCategories()
       .then((data) => {
         if (!isMounted) {
@@ -211,10 +400,10 @@ export default function Homepage() {
     return () => {
       isMounted = false
     }
-  }, [isEditDialogOpen])
+  }, [isEditDialogOpen, isAuthenticated])
 
   const handleProductUpdateSuccess = useCallback(
-    async (_updatedProduct: any) => {
+    async () => {
       setIsEditDialogOpen(false)
       setProductToEdit(null)
       try {
@@ -222,77 +411,76 @@ export default function Homepage() {
       } catch (error) {
         console.error("Error refreshing products after update:", error)
       }
-    try {
-        const data = await getRecentEntries(5)
-        setRecentProducts(data)
-      } catch (error) {
-        console.error("Error refreshing recent entries after update:", error)
+      if (isAuthenticated) {
+        try {
+          const recent = await getRecentEntries(5)
+          const normalized = Array.isArray(recent) ? buildRecentProducts(recent) : []
+          setRecentProducts(normalized)
+        } catch (error) {
+          console.error("Error refreshing recent entries after update:", error)
+        }
+      } else {
+        setRecentProducts([])
       }
     },
-    [fetchProductsData],
+    [fetchProductsData, isAuthenticated],
   )
 
-  useEffect(() => {
-    async function fetchRecent() {
-      try {
-        const data = await getRecentEntries(5)
-        setRecentProducts(data)
-      } catch (error) {
-        console.error('Error fetching recent entries:', error)
+  const fetchRecentProducts = useCallback(async () => {
+    try {
+      const hasAuth = await resolveAuthState()
+      if (!hasAuth) {
+        setRecentProducts([])
+        return
       }
+      const data = await getRecentEntries(5)
+      const normalized = Array.isArray(data) ? buildRecentProducts(data) : []
+      setRecentProducts(normalized)
+    } catch (error) {
+      console.error("Error fetching recent entries:", error)
     }
-    fetchRecent()
-  }, [])
+  }, [resolveAuthState])
+
+  useEffect(() => {
+    void fetchRecentProducts()
+  }, [fetchRecentProducts])
 
   const [categories, setCategories] = useState<HomeCategory[]>([])
   const [categoryIndex, setCategoryIndex] = useState(0)
   const [direction, setDirection] = useState(0)
 
-  const iconMap: Record<string, LucideIcon> = {
-    Laptops: Laptop,
-    Computadoras: Monitor,
-    "Tarjetas Gráficas": Cpu,
-    Almacenamiento: HardDrive,
-    Gaming: Gamepad2,
-    Accesorios: Headphones,
-    Monitores: Monitor,
-    Teclados: Keyboard,
-    Mouses: Mouse,
-    Tablets: Tablet,
-    Impresoras: Printer,
-    Smartphones: Smartphone,
-    Servidores: Server,
-  }
-
   useEffect(() => {
     async function fetchCategoriesData() {
       try {
-        const data = await getCategoriesWithCount()
-        const mapped = data.map((cat: any) => ({
+        const hasAuth = await resolveAuthState()
+        const data = hasAuth
+          ? await getCategoriesWithCount()
+          : await getPublicCategoriesWithCount()
+        const mapped = (Array.isArray(data) ? data : []).map((cat: CategoryCountRecord) => ({
           name: cat.name,
-          icon: iconMap[cat.name] || HardDrive,
-          count: cat.productCount,
+          icon: ICON_MAP[cat.name] || HardDrive,
+          count: typeof cat.productCount === 'number' ? cat.productCount : 0,
         }))
         setCategories(mapped)
       } catch (error) {
         console.error("Error fetching categories:", error)
       }
     }
-    fetchCategoriesData()
+    void fetchCategoriesData()
   }, [])
 
   useEffect(() => {
-    let ctx: any
+    let ctx: GsapContext | undefined
     async function loadGsap() {
       try {
         const gsapModule = await import("gsap")
         const ScrollTrigger = await import("gsap/ScrollTrigger")
-        gsapModule.default.registerPlugin(ScrollTrigger.default)
-        ctx = gsapModule.default.context(() => {
-          const gsap = gsapModule.default
-          const sections = (gsap.utils.toArray as any)(".gsap-section") as HTMLElement[]
+        const gsapInstance = gsapModule.default
+        gsapInstance.registerPlugin(ScrollTrigger.default)
+        ctx = gsapInstance.context(() => {
+          const sections = gsapInstance.utils.toArray<HTMLElement>(".gsap-section")
           // Only clear any leftover inline styles; rely on ScrollUpSection for reveals
-          gsap.set(sections, { clearProps: "all" })
+          gsapInstance.set(sections, { clearProps: "all" })
         }, sectionsRef)
 
         // Ensure triggers recalc after layout/route transitions
@@ -306,14 +494,18 @@ export default function Homepage() {
     return () => ctx?.revert()
   }, [])
 
-  const nextCategories = () =>
+  const nextCategories = () => {
+    setDirection(1)
     setCategoryIndex((i) =>
       categories.length > 0 ? (i + 6) % categories.length : i,
     )
-  const prevCategories = () =>
+  }
+  const prevCategories = () => {
+    setDirection(-1)
     setCategoryIndex((i) =>
       categories.length > 0 ? (i - 6 + categories.length) % categories.length : i,
     )
+  }
 
   const visibleCategories =
     categories.length <= 6
@@ -352,50 +544,6 @@ export default function Homepage() {
             : []),
         ]
 
-
-  const benefits = [
-    {
-      icon: Truck,
-      title: "Envíos a todo el Perú",
-      description: "Entrega rápida y segura en 24-72 horas",
-    },
-    {
-      icon: Shield,
-      title: "Garantía asegurada",
-      description: "Hasta 3 años de garantía extendida en todos nuestros productos",
-    },
-    {
-      icon: Headset,
-      title: "Soporte técnico",
-      description: "Atención especializada 24/7 para resolver tus dudas",
-    },
-    {
-      icon: CreditCard,
-      title: "Pagos seguros",
-      description: "Múltiples métodos de pago con máxima seguridad",
-    },
-  ]
-
-  const testimonials = [
-    {
-      name: "Carlos Mendoza",
-      rating: 5,
-      comment: "Excelente servicio y productos de calidad. Mi laptop gaming llegó perfecta y funciona increíble.",
-      location: "Lima, Perú",
-    },
-    {
-      name: "María González",
-      rating: 5,
-      comment: "Compré una PC para mi oficina y el soporte técnico fue excepcional. Muy recomendado.",
-      location: "Arequipa, Perú",
-    },
-    {
-      name: "Diego Ramírez",
-      rating: 5,
-      comment: "Los mejores precios del mercado y entrega súper rápida. Ya es mi tienda de confianza.",
-      location: "Trujillo, Perú",
-    },
-  ]
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-gray-950 dark:to-black">
@@ -538,10 +686,10 @@ export default function Homepage() {
           )}
         </section>
         <section className="gsap-section" data-navcolor="#fef3c7">
-          <BenefitsSection benefits={benefits} />
+          <BenefitsSection benefits={HOME_BENEFITS} />
         </section>
         <section className="gsap-section" data-navcolor="#fce7f3">
-          <TestimonialsSection testimonials={testimonials} />
+          <TestimonialsSection testimonials={HOME_TESTIMONIALS} />
         </section>
         <section className="gsap-section" data-navcolor="#ecfccb">
           <NewsletterSection />

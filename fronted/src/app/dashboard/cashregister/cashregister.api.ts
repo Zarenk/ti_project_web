@@ -1,31 +1,6 @@
-import { getAuthHeaders } from "@/utils/auth-token";
+import { BACKEND_URL } from "@/lib/utils";
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 import { getTenantSelection } from "@/utils/tenant-preferences";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
-
-async function authorizedFetch(
-  url: string,
-  init: RequestInit = {},
-  requireAuth = true,
-): Promise<Response> {
-  const authHeaders = await getAuthHeaders();
-  if (requireAuth && !("Authorization" in authHeaders)) {
-    throw new Error("No se encontro un token de autenticacion");
-  }
-
-  const headers = new Headers(init.headers ?? {});
-  for (const [key, value] of Object.entries(authHeaders)) {
-    if (value != null && value !== "") {
-      headers.set(key, value);
-    }
-  }
-
-  return fetch(url, {
-    ...init,
-    headers,
-    credentials: init.credentials ?? "include",
-  });
-}
 
 async function safeJson<T>(response: Response): Promise<T | null> {
   if (response.status === 204) return null;
@@ -83,7 +58,7 @@ export async function getCashRegisterBalance(storeId: number) {
     const endpoint = await appendTenantQueryParams(
       `${BACKEND_URL}/api/cashregister/balance/${storeId}`,
     );
-    const response = await authorizedFetch(endpoint, {
+    const response = await authFetch(endpoint, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -106,6 +81,9 @@ export async function getCashRegisterBalance(storeId: number) {
 
     return Number(data.currentBalance ?? 0);
   } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
     console.error("Error al obtener el balance de la caja:", error.message || error);
     if (error instanceof SyntaxError) {
       return null;
@@ -119,7 +97,7 @@ export async function getTodayTransactions(storeId: number) {
     const endpoint = await appendTenantQueryParams(
       `${BACKEND_URL}/api/cashregister/transactions/${storeId}/today`,
     );
-    const response = await authorizedFetch(endpoint, {
+    const response = await authFetch(endpoint, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -132,6 +110,9 @@ export async function getTodayTransactions(storeId: number) {
 
     return response.json();
   } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error("Error al obtener las transacciones del dia:", error.message || error);
     throw error;
   }
@@ -167,7 +148,7 @@ export const createIndependentTransaction = async (data: {
 
   const payload = await withTenantIdentifiers(basePayload);
 
-  const response = await authorizedFetch(`${BACKEND_URL}/api/cashregister/transaction`, {
+  const response = await authFetch(`${BACKEND_URL}/api/cashregister/transaction`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -191,7 +172,7 @@ export async function getActiveCashRegister(
     const endpoint = await appendTenantQueryParams(
       `${BACKEND_URL}/api/cashregister/active/${storeId}`,
     );
-    const response = await authorizedFetch(endpoint, {
+    const response = await authFetch(endpoint, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });
@@ -221,6 +202,9 @@ export async function getActiveCashRegister(
     console.log("Response de la caja activa:", data);
     return data;
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
     console.error("Error al obtener la caja activa:", error);
     if (error instanceof SyntaxError) {
       return null;
@@ -279,7 +263,7 @@ export async function createCashClosure(payload: any): Promise<CreateCashClosure
 
   const payloadWithTenant = await withTenantIdentifiers(cleanPayload);
 
-  const response = await authorizedFetch(`${BACKEND_URL}/api/cashregister/closure`, {
+  const response = await authFetch(`${BACKEND_URL}/api/cashregister/closure`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -353,14 +337,21 @@ export async function createCashClosure(payload: any): Promise<CreateCashClosure
 }
 
 export async function getClosuresByStore(storeId: number) {
-  const endpoint = await appendTenantQueryParams(
-    `${BACKEND_URL}/api/cashregister/closures/${storeId}`,
-  );
-  const response = await authorizedFetch(endpoint);
-  if (!response.ok) {
-    throw new Error("Error al obtener los cierres de caja");
+  try {
+    const endpoint = await appendTenantQueryParams(
+      `${BACKEND_URL}/api/cashregister/closures/${storeId}`,
+    );
+    const response = await authFetch(endpoint);
+    if (!response.ok) {
+      throw new Error("Error al obtener los cierres de caja");
+    }
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
   }
-  return response.json();
 }
 
 export async function getTransactionsByDate(storeId: number, date: string) {
@@ -368,31 +359,41 @@ export async function getTransactionsByDate(storeId: number, date: string) {
     const endpoint = await appendTenantQueryParams(
       `${BACKEND_URL}/api/cashregister/get-transactions/${storeId}/${date}`,
     );
-    const res = await authorizedFetch(endpoint);
+    const res = await authFetch(endpoint);
     if (!res.ok) {
       throw new Error("Error obteniendo transacciones por fecha");
     }
     return res.json();
   } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error("Error en getTransactionsByDate:", error);
     throw error;
   }
 }
 
 export async function getClosureByDate(storeId: number, date: string) {
-  const endpoint = await appendTenantQueryParams(
-    `${BACKEND_URL}/api/cashregister/closure/${storeId}/by-date/${date}`,
-  );
-  const response = await authorizedFetch(endpoint);
-  if (!response.ok) {
-    return null;
+  try {
+    const endpoint = await appendTenantQueryParams(
+      `${BACKEND_URL}/api/cashregister/closure/${storeId}/by-date/${date}`,
+    );
+    const response = await authFetch(endpoint);
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
+    throw error;
   }
-  return response.json();
 }
 
 export const createCashRegister = async (payload: any) => {
   const payloadWithTenant = await withTenantIdentifiers(payload);
-  const response = await authorizedFetch(`${BACKEND_URL}/api/cashregister`, {
+  const response = await authFetch(`${BACKEND_URL}/api/cashregister`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -408,23 +409,37 @@ export const createCashRegister = async (payload: any) => {
 };
 
 export const getTransactions = async (cashRegisterId: number) => {
-  const endpoint = await appendTenantQueryParams(
-    `${BACKEND_URL}/api/cashregister/transaction/cashregister/${cashRegisterId}`,
-  );
-  const response = await authorizedFetch(endpoint);
+  try {
+    const endpoint = await appendTenantQueryParams(
+      `${BACKEND_URL}/api/cashregister/transaction/cashregister/${cashRegisterId}`,
+    );
+    const response = await authFetch(endpoint);
 
-  if (!response.ok) {
-    throw new Error("Error al obtener las transacciones de la caja");
+    if (!response.ok) {
+      throw new Error("Error al obtener las transacciones de la caja");
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
   }
-
-  return response.json();
 };
 
 export const getAllCashRegisters = async () => {
-  const endpoint = await appendTenantQueryParams(`${BACKEND_URL}/api/cashregister`);
-  const response = await authorizedFetch(endpoint);
-  if (!response.ok) {
-    throw new Error("Error al obtener las cajas registradoras");
+  try {
+    const endpoint = await appendTenantQueryParams(`${BACKEND_URL}/api/cashregister`);
+    const response = await authFetch(endpoint);
+    if (!response.ok) {
+      throw new Error("Error al obtener las cajas registradoras");
+    }
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    throw error;
   }
-  return response.json();
 };

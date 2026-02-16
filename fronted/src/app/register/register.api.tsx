@@ -1,4 +1,4 @@
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { BACKEND_URL } from '@/lib/utils';
 
 export async function registerUser(email: string, username: string, password: string, name: string) {
   const res = await fetch(`${BACKEND_URL}/api/users/self-register`, {

@@ -10,11 +10,16 @@ export class DefaultAdminService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit(): Promise<void> {
-    const email = process.env.DEFAULT_ADMIN_EMAIL ?? 'jdzare@gmail.com';
-    const rawPassword =
-      process.env.DEFAULT_ADMIN_PASSWORD ?? 'chuscasas19911991';
+    const email = process.env.DEFAULT_ADMIN_EMAIL?.trim();
+    const rawPassword = process.env.DEFAULT_ADMIN_PASSWORD?.trim();
+    if (!email || !rawPassword) {
+      this.logger.warn(
+        'DEFAULT_ADMIN_EMAIL/DEFAULT_ADMIN_PASSWORD are not configured. Skipping default admin bootstrap.',
+      );
+      return;
+    }
     const baseUsername =
-      process.env.DEFAULT_ADMIN_USERNAME ?? email.split('@')[0];
+      process.env.DEFAULT_ADMIN_USERNAME?.trim() || email.split('@')[0];
 
     const exists = await this.prisma.user.findUnique({ where: { email } });
     if (exists) {

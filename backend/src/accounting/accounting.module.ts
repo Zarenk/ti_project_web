@@ -18,9 +18,15 @@ import { InventoryAccountingService } from './services/inventory-account.service
 import { PaymentAccountingService } from './services/payment-accounting.service';
 import { DebitNoteAccountingService } from './services/debit-note-accounting.service';
 import { CreditNoteAccountingService } from './services/credit-note-accounting.service';
+import { TenancyModule } from 'src/tenancy/tenancy.module';
+import { AccountingSummaryService } from './services/accounting-summary.service';
+import { PleExportService } from './services/ple-export.service';
+import { AccountingAnalyticsService } from './services/accounting-analytics.service';
+import { JournalEntryService } from './services/journal-entry.service';
+import { AccountMappingService } from './services/account-mapping.service';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, TenancyModule],
   controllers: [
     AccountingController,
     SalePostedController,
@@ -41,6 +47,11 @@ import { CreditNoteAccountingService } from './services/credit-note-accounting.s
     InventoryAccountingService,
     PaymentAccountingService,
     DebitNoteAccountingService,
+    AccountingSummaryService,
+    AccountingAnalyticsService,
+    JournalEntryService,
+    AccountMappingService,
+    PleExportService,
     {
       provide: 'CreditNoteAccountingService',
       useClass: CreditNoteAccountingService,

@@ -1,6 +1,45 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { applyMultiTenantFixtures } from '../prisma/seed/multi-tenant-fixtures.seed';
+import { config } from 'dotenv';
+
+// Load environment variables from .env file before any tests run
+config({ path: join(__dirname, '..', '.env') });
+
+// 🔒 SAFETY: Prevent tests from running against production database
+function isProductionDatabase(url: string): boolean {
+  const prodHosts = [
+    'railway.app',
+    'neon.tech',
+    'render.com',
+    'heroku.com',
+    'prod.db',
+    'production.',
+    'aws.com',
+    'azure.com',
+    'googleapis.com',
+  ];
+  return prodHosts.some((host) => url.toLowerCase().includes(host));
+}
+
+const DATABASE_URL = process.env.DATABASE_URL || '';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+if (NODE_ENV === 'production' && DATABASE_URL) {
+  console.warn(
+    '⚠️  [TEST-SAFETY] NODE_ENV is "production". Verify DATABASE_URL!',
+  );
+  console.warn(`    DATABASE_URL: ${DATABASE_URL.substring(0, 50)}...`);
+}
+
+if (DATABASE_URL && isProductionDatabase(DATABASE_URL)) {
+  throw new Error(
+    '🚫 SAFETY ERROR: Production database detected in test environment!\n' +
+      `   DATABASE_URL: ${DATABASE_URL.substring(0, 50)}...\n` +
+      '   Please use a test/staging database for running tests.\n' +
+      '   If this is intentional, update the production host whitelist in global-setup.ts',
+  );
+}
 
 type PrismaConnectionError = {
   errorCode?: string;

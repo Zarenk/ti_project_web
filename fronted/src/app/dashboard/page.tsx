@@ -7,12 +7,10 @@ import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { getLowStockItems, getTotalInventory } from "./inventory/inventory.api"
-import { getMonthlySalesTotal, getRecentSales } from "./sales/sales.api"
-import { getUserDataFromToken, isTokenValid } from "@/lib/auth"
 import { useModulePermission } from "@/hooks/use-module-permission"
-import { getOrdersCount, getRecentOrders } from "./orders/orders.api"
-import { getAllEntries } from "./entries/entries.api"
+import { getOrdersDashboardOverview } from "./orders/orders.api"
+import { fetchDashboardOverview, fetchDashboardSparklines, type DashboardSparklines } from "@/lib/dashboard/overview"
+import { DashboardMetricCard } from "@/components/dashboard-metric-card"
 import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import { UnauthenticatedError } from "@/utils/auth-fetch"
@@ -22,6 +20,7 @@ import { listOrganizations, type OrganizationResponse } from "./tenancy/tenancy.
 import { clearTenantSelection, getTenantSelection, setTenantSelection } from "@/utils/tenant-preferences"
 import { wasManualLogoutRecently } from "@/utils/manual-logout"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { useAuth } from "@/context/auth-context"
 
 type ActivityItem = {
   id: number | string
@@ -42,7 +41,6 @@ type LowStockItem = {
 }
 
 export default function WelcomeDashboard() {
-  const [userRole, setUserRole] = useState<string | null>(null)
   const [organizations, setOrganizations] = useState<OrganizationResponse[]>([])
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
   const [organizationsLoading, setOrganizationsLoading] = useState(false)
@@ -55,14 +53,18 @@ export default function WelcomeDashboard() {
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([])
   const [pendingOrders, setPendingOrders] = useState(0)
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
+  const [sparklines, setSparklines] = useState<DashboardSparklines>({ inventory: [], sales: [], outOfStock: [], pendingOrders: [] })
 
   const checkPermission = useModulePermission()
   const router = useRouter()
   const authErrorShown = useRef(false)
   const { selection, version } = useTenantSelection()
+  const { role: authRole, authPending, sessionExpiring } = useAuth()
+  const userRole = authRole ?? null
 
   const handleAuthError = useCallback(async (err: unknown) => {
     if (authErrorShown.current) return true
+    if (authPending || sessionExpiring) return true
     if (err instanceof UnauthenticatedError) {
       if (wasManualLogoutRecently()) {
         authErrorShown.current = true
@@ -70,7 +72,10 @@ export default function WelcomeDashboard() {
       }
       authErrorShown.current = true
       if (await isTokenValid()) {
-        router.push("/unauthorized")
+        // Token is locally valid but API rejected — degrade gracefully
+        // instead of redirecting (common for new accounts with incomplete tenant setup)
+        console.warn("Dashboard data fetch rejected despite valid token.")
+        toast.error("No se pudieron cargar algunos datos del dashboard.")
       } else {
         toast.error("Tu sesion ha expirado. Vuelve a iniciar sesion.")
         const path = window.location.pathname
@@ -79,9 +84,9 @@ export default function WelcomeDashboard() {
       return true
     }
     return false
-  }, [router])
+  }, [router, authPending, sessionExpiring])
 
-  const isGlobalSuperAdmin = userRole === "SUPER_ADMIN_GLOBAL"
+  const isGlobalSuperAdmin = userRole?.trim().toUpperCase() === "SUPER_ADMIN_GLOBAL"
 
   const handleOrganizationChange = useCallback(
     (value: string) => {
@@ -110,20 +115,24 @@ export default function WelcomeDashboard() {
   )
 
   useEffect(() => {
+    if (authPending || sessionExpiring) {
+      return
+    }
+    if (!userRole) {
+      return
+    }
     let cancelled = false
 
     async function bootstrap() {
       try {
-        const data = await getUserDataFromToken()
         const allowedRoles = ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG", "ADMIN", "EMPLOYEE"]
-        if (!data || !(await isTokenValid()) || !allowedRoles.includes(data.role ?? "")) {
+        const normalizedUserRole = userRole.trim().toUpperCase()
+        if (!allowedRoles.includes(normalizedUserRole)) {
           router.push("/unauthorized")
           return
         }
 
-        setUserRole(data.role ?? null)
-
-        if (data.role === "SUPER_ADMIN_GLOBAL") {
+        if (userRole === "SUPER_ADMIN_GLOBAL") {
           setOrganizationsLoading(true)
           try {
             const orgList = await listOrganizations()
@@ -179,7 +188,7 @@ export default function WelcomeDashboard() {
     return () => {
       cancelled = true
     }
-  }, [router])
+  }, [router, userRole, authPending, sessionExpiring])
 
   useEffect(() => {
     if (!bootstrapReady || userRole === null) return
@@ -189,9 +198,13 @@ export default function WelcomeDashboard() {
   }, [bootstrapReady, selection.orgId, selectedOrgId, userRole])
 
   useEffect(() => {
+    if (authPending || sessionExpiring) {
+      return
+    }
     if (!bootstrapReady || userRole === null) return
 
-    if (userRole === "EMPLOYEE") {
+    const normalizedRole = userRole.trim().toUpperCase()
+    if (normalizedRole === "EMPLOYEE") {
       setLoading(false)
       setTotalInventory([])
       setMonthlySales(null)
@@ -229,37 +242,49 @@ export default function WelcomeDashboard() {
         const canSales = checkPermission("sales")
         const canOrders = checkPermission("sales")
 
+        const shouldFetchOverview = canInventory || canSales
         const [
-          inventoryData,
-          monthlySalesData,
-          pendingData,
-          recentOrders,
-          entries,
-          recentSales,
-          lowStock,
+          ordersOverview,
+          overviewData,
+          sparklineData,
         ] = await Promise.all([
-          canInventory ? getTotalInventory() : Promise.resolve<any[]>([]),
-          canSales ? getMonthlySalesTotal() : Promise.resolve<{ total: number; growth: number | null } | null>(null),
-          canOrders ? getOrdersCount("PENDING") : Promise.resolve<{ count: number }>({ count: 0 }),
-          canOrders ? getRecentOrders(10) : Promise.resolve<any[]>([]),
-          canInventory ? getAllEntries() : Promise.resolve<any[]>([]),
-          canSales ? getRecentSales() : Promise.resolve<any[]>([]),
-          canInventory ? getLowStockItems() : Promise.resolve<any[]>([]),
+          canOrders
+            ? getOrdersDashboardOverview({ status: "PENDING", limit: 10 })
+            : Promise.resolve<{ pendingCount: number; recentOrders: any[] } | null>(null),
+          shouldFetchOverview
+            ? fetchDashboardOverview()
+            : Promise.resolve({
+                inventoryTotals: [],
+                lowStock: [],
+                recentSales: [],
+                recentEntries: [],
+                monthlySales: { total: 0, growth: null },
+              }),
+          fetchDashboardSparklines(30),
         ])
 
         if (cancelled) return
 
-        const safeInventory = Array.isArray(inventoryData) ? inventoryData : []
-        const safePendingCount =
-          pendingData && typeof (pendingData as any).count === "number"
-            ? Number((pendingData as any).count)
-            : 0
-        const safeRecentOrders = Array.isArray(recentOrders) ? recentOrders : []
-        const safeEntries = Array.isArray(entries) ? entries : []
-        const safeRecentSales = Array.isArray(recentSales) ? recentSales : []
-        const safeLowStock = Array.isArray(lowStock) ? lowStock : []
+        const safeInventory =
+          shouldFetchOverview && Array.isArray(overviewData?.inventoryTotals)
+            ? overviewData.inventoryTotals
+            : []
+        const safePendingCount = ordersOverview?.pendingCount ?? 0
+        const safeRecentOrders = Array.isArray(ordersOverview?.recentOrders)
+          ? ordersOverview?.recentOrders ?? []
+          : []
+        const safeEntries = Array.isArray(overviewData?.recentEntries)
+          ? overviewData.recentEntries
+          : []
+        const safeRecentSales = Array.isArray(overviewData?.recentSales)
+          ? overviewData.recentSales
+          : []
+        const safeLowStock = Array.isArray(overviewData?.lowStock)
+          ? overviewData.lowStock
+          : []
 
         setTotalInventory(safeInventory)
+        const monthlySalesData = canSales ? overviewData.monthlySales ?? { total: 0, growth: null } : null
         setMonthlySales(monthlySalesData)
         setPendingOrders(safePendingCount)
         setLowStockItems(safeLowStock)
@@ -353,14 +378,15 @@ export default function WelcomeDashboard() {
 
         activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         setRecentActivity(activities.slice(0, 10))
+        setSparklines(sparklineData)
       } catch (error: unknown) {
+        if (cancelled) return
         if (!(await handleAuthError(error))) {
-          if (error instanceof Error && error.message === "Unauthorized") {
-            router.push("/unauthorized")
-          } else {
-            console.error("Error cargando datos:", error)
-            toast.error("No se pudo cargar la informacion del dashboard.")
+          if (authPending || sessionExpiring) {
+            return
           }
+          console.error("Error cargando datos:", error)
+          toast.error("No se pudo cargar la informacion del dashboard.")
         }
       } finally {
         if (!cancelled) {
@@ -385,6 +411,8 @@ export default function WelcomeDashboard() {
     router,
     version,
     userRole,
+    authPending,
+    sessionExpiring,
   ])
 
   const showOrganizationSelector =
@@ -503,64 +531,54 @@ export default function WelcomeDashboard() {
         <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
           <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
             <Link href="/dashboard/inventory" prefetch={false} className="block">
-            <Card className="cursor-pointer">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Inventario Total</CardTitle>
-                <Box className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-              <div className="text-2xl font-bold">
-                {loading ? 'Cargando...' : totalInventory.reduce((sum, item) => sum + item.totalStock, 0)}
-              </div>
-              <p className="text-xs text-muted-foreground">Items en stock</p>
-              </CardContent>
-            </Card>
+              <DashboardMetricCard
+                title="Inventario Total"
+                icon={<Box className="h-4 w-4" />}
+                value={loading ? "Cargando..." : totalInventory.reduce((sum, item) => sum + item.totalStock, 0)}
+                subtitle="Items en stock"
+                data={sparklines.inventory}
+                color="blue"
+              />
             </Link>
             <Link href="/dashboard/sales" prefetch={false} className="block">
-            <Card className="cursor-pointer">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Ventas del mes</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {loading
+              <DashboardMetricCard
+                title="Ventas del mes"
+                icon={<DollarSign className="h-4 w-4" />}
+                value={
+                  loading
                     ? "Cargando..."
                     : monthlySales
                     ? `S/. ${monthlySales.total.toFixed(2)}`
-                    : "Sin datos"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {monthlySales?.growth != null
+                    : "Sin datos"
+                }
+                subtitle={
+                  monthlySales?.growth != null
                     ? `${monthlySales.growth >= 0 ? "+" : ""}${monthlySales.growth.toFixed(1)}% desde el mes anterior`
-                    : "Sin datos del mes anterior"}
-                </p>
-              </CardContent>
-            </Card>
+                    : "Sin datos del mes anterior"
+                }
+                data={sparklines.sales}
+                color="emerald"
+              />
             </Link>
             <Link href="/dashboard/inventory?outOfStock=true" prefetch={false} className="block">
-            <Card className="cursor-pointer">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Items sin Stock</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{lowStockItems.length}</div>
-                <p className="text-xs text-muted-foreground">Productos que necesitan reabastecimiento</p>
-              </CardContent>
-            </Card>
+              <DashboardMetricCard
+                title="Items sin Stock"
+                icon={<TrendingUp className="h-4 w-4" />}
+                value={lowStockItems.length}
+                subtitle="Productos que necesitan reabastecimiento"
+                data={sparklines.outOfStock}
+                color="amber"
+              />
             </Link>
             <Link href="/dashboard/orders" prefetch={false} className="block">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Ordenes Pendientes</CardTitle>
-                  <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{pendingOrders}</div>
-                  <p className="text-xs text-muted-foreground">Ordenes que necesitan ser atendidas</p>
-                </CardContent>
-              </Card>
+              <DashboardMetricCard
+                title="Ordenes Pendientes"
+                icon={<ShoppingCart className="h-4 w-4" />}
+                value={pendingOrders}
+                subtitle="Ordenes que necesitan ser atendidas"
+                data={sparklines.pendingOrders}
+                color="violet"
+              />
             </Link>
           </div>
           <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
@@ -624,9 +642,11 @@ export default function WelcomeDashboard() {
                       <p className="text-sm text-muted-foreground">Observa tendencias de ventas y reportes de inventarios</p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/dashboard/sales/salesdashboard">Analizar</Link>
-                  </Button>
+                  {checkPermission("salesHistory") ? (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href="/dashboard/sales/salesdashboard">Analizar</Link>
+                    </Button>
+                  ) : null}
                 </div>
               </CardContent>
               <CardFooter>

@@ -11,8 +11,7 @@ import {
   type SiteSettingsWithMeta,
 } from "@/context/site-settings-schema";
 import { getRequestTenant } from "@/lib/server/tenant-context";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+import { BACKEND_URL } from "@/lib/utils";
 const SITE_SETTINGS_URL = `${BACKEND_URL}/api/site-settings`;
 
 export interface SiteSettingsFetchResult {

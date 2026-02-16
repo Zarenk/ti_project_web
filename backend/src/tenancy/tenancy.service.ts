@@ -13,6 +13,7 @@ import {
   OrganizationUnitInputDto,
 } from './dto/create-tenancy.dto';
 import { CreateCompanyDto } from './dto/create-company.dto';
+import { ValidateCompanyDto } from './dto/validate-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import {
@@ -32,6 +33,7 @@ type MinimalUnit = Pick<
 export interface TenantSelectionCompany {
   id: number;
   name: string;
+  businessVertical?: string | null;
 }
 
 export interface TenantSelectionSummary {
@@ -39,6 +41,13 @@ export interface TenantSelectionSummary {
   company: TenantSelectionCompany | null;
   companies: TenantSelectionCompany[];
 }
+
+type NormalizedSequenceInput = {
+  documentType: string;
+  serie: string;
+  nextCorrelative: number;
+  correlativeLength: number;
+};
 
 @Injectable()
 export class TenancyService {
@@ -168,8 +177,13 @@ export class TenancyService {
     const companyMatches =
       tenant.companyId === company.id || allowedCompanies.includes(company.id);
 
-    const orgAllowed = hasOrgConstraints ? orgMatches : tenant.organizationId === null || tenant.organizationId === company.organizationId;
-    const companyAllowed = hasCompanyConstraints ? companyMatches : tenant.companyId === null || tenant.companyId === company.id;
+    const orgAllowed = hasOrgConstraints
+      ? orgMatches
+      : tenant.organizationId === null ||
+        tenant.organizationId === company.organizationId;
+    const companyAllowed = hasCompanyConstraints
+      ? companyMatches
+      : tenant.companyId === null || tenant.companyId === company.id;
 
     if (!orgAllowed || !companyAllowed) {
       throw new ForbiddenException(
@@ -182,6 +196,19 @@ export class TenancyService {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const prisma = tx as unknown as PrismaService as any;
+        const trimmedOrgName = createTenancyDto.name?.trim() ?? '';
+        if (!trimmedOrgName) {
+          throw new BadRequestException('El nombre de la organizacion es obligatorio.');
+        }
+
+        const existingByName = await prisma.organization.findFirst({
+          where: {
+            name: { equals: trimmedOrgName, mode: 'insensitive' },
+          },
+        });
+        if (existingByName) {
+          throw new BadRequestException('Ya existe una organizacion con ese nombre.');
+        }
 
         const organizationSlug = await this.ensureOrganizationSlug(
           prisma,
@@ -190,11 +217,17 @@ export class TenancyService {
         );
 
         // 1. Crear organizacion
+        const organizationCode = await this.resolveOrganizationCode(
+          prisma,
+          createTenancyDto.code,
+          createTenancyDto.name,
+        );
+
         const organization = await prisma.organization.create({
           data: {
-            name: createTenancyDto.name.trim(),
+            name: trimmedOrgName,
             slug: organizationSlug,
-            code: this.normalizeCodeInput(createTenancyDto.code) ?? null,
+            code: organizationCode ?? null,
             status: createTenancyDto.status ?? 'ACTIVE',
           },
         });
@@ -317,6 +350,25 @@ export class TenancyService {
           ? trimmedName
           : currentOrganization.name;
 
+        if (
+          trimmedName?.length &&
+          trimmedName.localeCompare(currentOrganization.name, undefined, {
+            sensitivity: 'base',
+          }) !== 0
+        ) {
+          const existingByName = await prisma.organization.findFirst({
+            where: {
+              name: { equals: trimmedName, mode: 'insensitive' },
+              NOT: { id },
+            },
+          });
+          if (existingByName) {
+            throw new BadRequestException(
+              'Ya existe una organizacion con ese nombre.',
+            );
+          }
+        }
+
         let slugValue: string | undefined;
         if (updateTenancyDto.slug !== undefined || !currentOrganization.slug) {
           slugValue = await this.ensureOrganizationSlug(
@@ -327,12 +379,22 @@ export class TenancyService {
           );
         }
 
+        let nextCode: string | null | undefined = undefined;
+        if (updateTenancyDto.code !== undefined) {
+          nextCode = await this.resolveOrganizationCode(
+            prisma,
+            updateTenancyDto.code,
+            effectiveName,
+            id,
+          );
+        }
+
         const organization = await prisma.organization.update({
           where: { id },
           data: {
             name: trimmedName?.length ? trimmedName : undefined,
             slug: slugValue,
-            code: this.normalizeCodeInput(updateTenancyDto.code),
+            code: nextCode,
             status: updateTenancyDto.status,
           },
         });
@@ -415,12 +477,17 @@ export class TenancyService {
       throw new BadRequestException('El nombre de la empresa es obligatorio.');
     }
 
-    const organizationId = resolveOrganizationId({
-      provided: dto.organizationId ?? null,
-      fallbacks: [tenant.organizationId ?? null],
-      mismatchError:
-        'La organizacion proporcionada no coincide con el contexto actual.',
-    });
+    const providedOrganizationId = dto.organizationId ?? null;
+    const contextOrganizationId = tenant.organizationId ?? null;
+    const organizationId =
+      tenant.isGlobalSuperAdmin && providedOrganizationId
+        ? providedOrganizationId
+        : resolveOrganizationId({
+            provided: providedOrganizationId,
+            fallbacks: [contextOrganizationId],
+            mismatchError:
+              'La organizacion proporcionada no coincide con el contexto actual.',
+          });
 
     if (organizationId === null) {
       throw new BadRequestException(
@@ -458,6 +525,9 @@ export class TenancyService {
       dto.secondaryColor,
       'secondaryColor',
     );
+    const defaultQuoteMargin = this.normalizeMarginInput(
+      dto.defaultQuoteMargin,
+    );
     const sunatSolUserBeta = this.normalizeNullableInput(dto.sunatSolUserBeta);
     const sunatSolPasswordBeta = this.normalizeNullableInput(
       dto.sunatSolPasswordBeta,
@@ -474,42 +544,86 @@ export class TenancyService {
       dto.sunatCertPathProd,
     );
     const sunatKeyPathProd = this.normalizeNullableInput(dto.sunatKeyPathProd);
+    const normalizedSequences = this.normalizeDocumentSequencesInput(
+      dto.documentSequences,
+    );
+
+    if (legalName?.length) {
+      const existingLegalName = await this.prisma.company.findFirst({
+        where: {
+          organizationId,
+          legalName: { equals: legalName, mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      if (existingLegalName) {
+        throw new ConflictException(
+          'Ya existe una empresa con esa razon social en la organizacion.',
+        );
+      }
+    }
+
+    if (taxId?.length) {
+      const existingTaxId = await this.prisma.company.findFirst({
+        where: { taxId },
+        select: { id: true },
+      });
+      if (existingTaxId) {
+        throw new ConflictException('Ya existe una empresa con ese RUC/NIT.');
+      }
+    }
 
     try {
-      const company = await this.prisma.company.create({
-        data: {
-          organizationId,
-          name: trimmedName,
-          legalName: legalName?.length ? legalName : null,
-          taxId: taxId?.length ? taxId : null,
-          status,
-          sunatEnvironment,
-          sunatRuc: sunatRuc ?? null,
-          sunatBusinessName: sunatBusinessName ?? null,
-          sunatAddress: sunatAddress ?? null,
-          sunatPhone: sunatPhone ?? null,
-          logoUrl: logoUrl ?? null,
-          primaryColor: primaryColor ?? null,
-          secondaryColor: secondaryColor ?? null,
-          sunatSolUserBeta: sunatSolUserBeta ?? null,
-          sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
-          sunatCertPathBeta: sunatCertPathBeta ?? null,
-          sunatKeyPathBeta: sunatKeyPathBeta ?? null,
-          sunatSolUserProd: sunatSolUserProd ?? null,
-          sunatSolPasswordProd: sunatSolPasswordProd ?? null,
-          sunatCertPathProd: sunatCertPathProd ?? null,
-          sunatKeyPathProd: sunatKeyPathProd ?? null,
-        },
+      const company = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.company.create({
+          data: {
+            organizationId,
+            name: trimmedName,
+            legalName: legalName?.length ? legalName : null,
+            taxId: taxId?.length ? taxId : null,
+            status,
+            sunatEnvironment,
+            sunatRuc: sunatRuc ?? null,
+            sunatBusinessName: sunatBusinessName ?? null,
+            sunatAddress: sunatAddress ?? null,
+            sunatPhone: sunatPhone ?? null,
+            logoUrl: logoUrl ?? null,
+            primaryColor: primaryColor ?? null,
+            secondaryColor: secondaryColor ?? null,
+            defaultQuoteMargin: defaultQuoteMargin ?? undefined,
+            sunatSolUserBeta: sunatSolUserBeta ?? null,
+            sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
+            sunatCertPathBeta: sunatCertPathBeta ?? null,
+            sunatKeyPathBeta: sunatKeyPathBeta ?? null,
+            sunatSolUserProd: sunatSolUserProd ?? null,
+            sunatSolPasswordProd: sunatSolPasswordProd ?? null,
+            sunatCertPathProd: sunatCertPathProd ?? null,
+            sunatKeyPathProd: sunatKeyPathProd ?? null,
+          },
+        });
+
+        if (normalizedSequences) {
+          await this.saveCompanySequences(tx, created.id, normalizedSequences);
+        }
+
+        return tx.company.findUnique({
+          where: { id: created.id },
+          include: this.buildCompanyInclude(),
+        });
       });
 
-      return company;
+      if (!company) {
+        throw new NotFoundException('No se pudo cargar la empresa creada.');
+      }
+
+      return company as CompanySnapshot;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           const target = (error.meta?.target ?? []) as string[];
-          if (target.includes('organizationId_name')) {
+          if (target.includes('organizationId_legalName')) {
             throw new ConflictException(
-              'Ya existe una empresa con ese nombre en la organizacion.',
+              'Ya existe una empresa con esa razon social en la organizacion.',
             );
           }
           if (target.includes('taxId')) {
@@ -526,6 +640,84 @@ export class TenancyService {
     }
   }
 
+  async validateCompanyFields(
+    dto: ValidateCompanyDto,
+    tenant: TenantContext,
+  ): Promise<{ legalNameAvailable: boolean; taxIdAvailable: boolean }> {
+    if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
+      throw new ForbiddenException(
+        'Solo los super administradores pueden validar empresas.',
+      );
+    }
+
+    const providedOrganizationId = dto.organizationId ?? null;
+    const contextOrganizationId = tenant.organizationId ?? null;
+    const organizationId = tenant.isGlobalSuperAdmin
+      ? providedOrganizationId ?? contextOrganizationId
+      : resolveOrganizationId({
+          provided: providedOrganizationId,
+          fallbacks: [contextOrganizationId],
+          mismatchError:
+            'La organizacion proporcionada no coincide con el contexto actual.',
+        });
+
+    if (organizationId !== null && !Number.isFinite(organizationId)) {
+      throw new BadRequestException('Organizacion invalida para la validacion.');
+    }
+
+    if (
+      organizationId !== null &&
+      (tenant.allowedOrganizationIds?.length ?? 0) > 0 &&
+      !tenant.allowedOrganizationIds?.includes(organizationId)
+    ) {
+      throw new ForbiddenException(
+        'No tienes permisos para gestionar empresas de esta organizacion.',
+      );
+    }
+
+    const legalName = dto.legalName?.trim() ?? '';
+    const taxId = dto.taxId?.trim() ?? '';
+    const companyId = dto.companyId ?? null;
+
+    if (companyId !== null && !Number.isFinite(companyId)) {
+      throw new BadRequestException('Empresa invalida para la validacion.');
+    }
+
+    let legalNameAvailable = true;
+    let taxIdAvailable = true;
+
+    try {
+      if (legalName.length > 0 && organizationId !== null) {
+        const existingLegalName = await this.prisma.company.findFirst({
+          where: {
+            organizationId,
+            legalName: { equals: legalName, mode: 'insensitive' },
+            ...(companyId ? { NOT: { id: companyId } } : {}),
+          },
+          select: { id: true },
+        });
+        legalNameAvailable = !existingLegalName;
+      }
+
+      if (taxId.length > 0) {
+        const existingTaxId = await this.prisma.company.findFirst({
+          where: {
+            taxId,
+            ...(companyId ? { NOT: { id: companyId } } : {}),
+          },
+          select: { id: true },
+        });
+        taxIdAvailable = !existingTaxId;
+      }
+    } catch (error) {
+      throw new BadRequestException(
+        'No se pudo validar la empresa. Verifica los datos enviados.',
+      );
+    }
+
+    return { legalNameAvailable, taxIdAvailable };
+  }
+
   async listCompanies(tenant: TenantContext): Promise<TenancySnapshot[]> {
     if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
       throw new ForbiddenException(
@@ -540,7 +732,12 @@ export class TenancyService {
       where,
       include: {
         units: { orderBy: { id: 'asc' } },
-        companies: { orderBy: { id: 'asc' } },
+        companies: {
+          orderBy: { id: 'asc' },
+          include: {
+            documentSequences: { orderBy: { documentType: 'asc' } },
+          },
+        },
         _count: { select: { memberships: true } },
       },
       orderBy: { id: 'asc' },
@@ -568,11 +765,7 @@ export class TenancyService {
   > {
     const company = await this.prisma.company.findUnique({
       where: { id },
-      include: {
-        organization: {
-          select: { id: true, name: true, code: true, status: true },
-        },
-      },
+      include: this.buildCompanyInclude({ organization: true }),
     });
 
     if (!company) {
@@ -635,6 +828,9 @@ export class TenancyService {
       dto.secondaryColor,
       'secondaryColor',
     );
+    const defaultQuoteMargin = this.normalizeMarginInput(
+      dto.defaultQuoteMargin,
+    );
     const sunatSolUserBeta = this.normalizeNullableInput(dto.sunatSolUserBeta);
     const sunatSolPasswordBeta = this.normalizeNullableInput(
       dto.sunatSolPasswordBeta,
@@ -651,6 +847,9 @@ export class TenancyService {
       dto.sunatCertPathProd,
     );
     const sunatKeyPathProd = this.normalizeNullableInput(dto.sunatKeyPathProd);
+    const normalizedSequences = this.normalizeDocumentSequencesInput(
+      dto.documentSequences,
+    );
 
     if (dto.name !== undefined) {
       const trimmed = dto.name.trim();
@@ -662,14 +861,16 @@ export class TenancyService {
       data.name = trimmed;
     }
 
-    if (dto.legalName !== undefined) {
-      const trimmed = dto.legalName?.trim() ?? '';
-      data.legalName = trimmed.length ? trimmed : null;
+    const nextLegalNameInput =
+      dto.legalName !== undefined ? (dto.legalName?.trim() ?? '') : undefined;
+    if (nextLegalNameInput !== undefined) {
+      data.legalName = nextLegalNameInput.length ? nextLegalNameInput : null;
     }
 
-    if (dto.taxId !== undefined) {
-      const trimmed = dto.taxId?.trim() ?? '';
-      data.taxId = trimmed.length ? trimmed : null;
+    const nextTaxIdInput =
+      dto.taxId !== undefined ? (dto.taxId?.trim() ?? '') : undefined;
+    if (nextTaxIdInput !== undefined) {
+      data.taxId = nextTaxIdInput.length ? nextTaxIdInput : null;
     }
 
     if (dto.status !== undefined) {
@@ -701,6 +902,10 @@ export class TenancyService {
     if (dto.secondaryColor !== undefined) {
       data.secondaryColor = secondaryColor ?? null;
     }
+    if (dto.defaultQuoteMargin !== undefined) {
+      data.defaultQuoteMargin =
+        defaultQuoteMargin ?? existing.defaultQuoteMargin;
+    }
     if (dto.sunatSolUserBeta !== undefined) {
       data.sunatSolUserBeta = sunatSolUserBeta ?? null;
     }
@@ -726,18 +931,77 @@ export class TenancyService {
       data.sunatKeyPathProd = sunatKeyPathProd ?? null;
     }
 
+    if (nextLegalNameInput !== undefined) {
+      const nextLegalName =
+        nextLegalNameInput.length > 0 ? nextLegalNameInput : null;
+      const currentLegalName = existing.legalName?.trim() ?? null;
+      if (
+        nextLegalName &&
+        nextLegalName.localeCompare(currentLegalName ?? '', undefined, {
+          sensitivity: 'accent',
+        }) !== 0
+      ) {
+        const existingLegalName = await this.prisma.company.findFirst({
+          where: {
+            organizationId: existing.organizationId,
+            legalName: { equals: nextLegalName, mode: 'insensitive' },
+            NOT: { id: existing.id },
+          },
+          select: { id: true },
+        });
+        if (existingLegalName) {
+          throw new ConflictException(
+            'Ya existe una empresa con esa razon social en la organizacion.',
+          );
+        }
+      }
+    }
+
+    if (nextTaxIdInput !== undefined) {
+      const nextTaxId = nextTaxIdInput.length > 0 ? nextTaxIdInput : null;
+      if (nextTaxId && nextTaxId !== existing.taxId) {
+        const existingTaxId = await this.prisma.company.findFirst({
+          where: {
+            taxId: nextTaxId,
+            NOT: { id: existing.id },
+          },
+          select: { id: true },
+        });
+        if (existingTaxId) {
+          throw new ConflictException('Ya existe una empresa con ese RUC/NIT.');
+        }
+      }
+    }
+
     try {
-      return await this.prisma.company.update({
-        where: { id },
-        data,
+      const updatedCompany = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.company.update({
+          where: { id },
+          data,
+        });
+
+        if (normalizedSequences) {
+          await this.saveCompanySequences(tx, updated.id, normalizedSequences);
+        }
+
+        return tx.company.findUnique({
+          where: { id },
+          include: this.buildCompanyInclude(),
+        });
       });
+
+      if (!updatedCompany) {
+        throw new NotFoundException('La empresa actualizada no existe.');
+      }
+
+      return updatedCompany as CompanySnapshot;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           const target = (error.meta?.target ?? []) as string[];
-          if (target.includes('organizationId_name')) {
+          if (target.includes('organizationId_legalName')) {
             throw new ConflictException(
-              'Ya existe una empresa con ese nombre en la organizacion.',
+              'Ya existe una empresa con esa razon social en la organizacion.',
             );
           }
           if (target.includes('taxId')) {
@@ -749,6 +1013,23 @@ export class TenancyService {
       }
       throw error;
     }
+  }
+
+  async validateOrganizationName(
+    name: string,
+    excludeId?: number | null,
+  ): Promise<{ nameAvailable: boolean }> {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      return { nameAvailable: true };
+    }
+    const existing = await this.prisma.organization.findFirst({
+      where: {
+        name: { equals: trimmedName, mode: 'insensitive' },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+    });
+    return { nameAvailable: !existing };
   }
 
   async updateCompanyLogo(
@@ -779,6 +1060,7 @@ export class TenancyService {
       data: {
         logoUrl: filePath,
       },
+      include: this.buildCompanyInclude(),
     });
   }
 
@@ -826,6 +1108,7 @@ export class TenancyService {
     return this.prisma.company.update({
       where: { id },
       data,
+      include: this.buildCompanyInclude(),
     });
   }
 
@@ -926,6 +1209,12 @@ export class TenancyService {
           throw new NotFoundException(`User ${userId} was not found`);
         }
 
+        const previousSuperAdmins =
+          await prisma.organizationMembership.findMany({
+            where: { organizationId, role: 'SUPER_ADMIN' },
+            select: { userId: true },
+          });
+
         await prisma.organizationMembership.updateMany({
           where: { organizationId, role: 'SUPER_ADMIN' },
           data: { role: 'ADMIN', isDefault: false },
@@ -954,6 +1243,21 @@ export class TenancyService {
               isDefault: true,
             },
           });
+        }
+
+        await this.promoteUserToOrganizationSuperAdmin(prisma, userId);
+
+        const demotedUserIds = previousSuperAdmins
+          .map((entry) => entry.userId)
+          .filter(
+            (previousId): previousId is number =>
+              typeof previousId === 'number' &&
+              Number.isFinite(previousId) &&
+              previousId !== userId,
+          );
+
+        for (const demotedUserId of demotedUserIds) {
+          await this.maybeDemoteOrganizationSuperAdmin(prisma, demotedUserId);
         }
 
         const units = await prisma.organizationUnit.findMany({
@@ -1022,7 +1326,7 @@ export class TenancyService {
     const organizationInclude = {
       companies: {
         orderBy: { id: 'asc' },
-        select: { id: true, name: true },
+        select: { id: true, name: true, businessVertical: true },
       },
     };
 
@@ -1069,6 +1373,20 @@ export class TenancyService {
       });
     }
 
+    if (!organization && context.userId !== null) {
+      const membershipWithOrg =
+        await prismaClient.organizationMembership.findFirst({
+          where: { userId: context.userId },
+          orderBy: { createdAt: 'asc' },
+          include: {
+            organization: {
+              include: organizationInclude,
+            },
+          },
+        });
+      organization = membershipWithOrg?.organization ?? null;
+    }
+
     if (!organization) {
       return { organization: null, company: null, companies: [] };
     }
@@ -1096,6 +1414,7 @@ export class TenancyService {
     const companies = filteredCompanies.map((company) => ({
       id: company.id,
       name: (company.name ?? '').trim(),
+      businessVertical: company.businessVertical ?? null,
     }));
 
     const selectedCompany =
@@ -1117,7 +1436,9 @@ export class TenancyService {
     prisma: Prisma.TransactionClient | PrismaService,
     organizationId: number,
   ): Promise<OrganizationSuperAdmin | null> {
-    const membership = await (prisma as any).organizationMembership.findFirst({
+    const client = prisma as Prisma.TransactionClient;
+
+    const membership = await client.organizationMembership.findFirst({
       where: { organizationId, role: 'SUPER_ADMIN' },
       include: {
         user: {
@@ -1127,14 +1448,39 @@ export class TenancyService {
       orderBy: { id: 'asc' },
     });
 
-    if (!membership?.user) {
+    if (membership?.user) {
+      return {
+        id: membership.user.id,
+        username: membership.user.username,
+        email: membership.user.email,
+      };
+    }
+
+    const ownerMembership = await client.organizationMembership.findFirst({
+      where: { organizationId, role: 'OWNER' },
+      include: {
+        user: { select: { id: true, username: true, email: true } },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    if (!ownerMembership?.user) {
       return null;
     }
 
+    await client.organizationMembership.update({
+      where: { id: ownerMembership.id },
+      data: { role: 'SUPER_ADMIN' },
+    });
+    await this.promoteUserToOrganizationSuperAdmin(
+      prisma,
+      ownerMembership.user.id,
+    );
+
     return {
-      id: membership.user.id,
-      username: membership.user.username,
-      email: membership.user.email,
+      id: ownerMembership.user.id,
+      username: ownerMembership.user.username,
+      email: ownerMembership.user.email,
     };
   }
 
@@ -1195,21 +1541,14 @@ export class TenancyService {
 
     const prisma = tx as unknown as PrismaService as any;
     const createdCompanies: CompanySnapshot[] = [];
-    const seenNames = new Set<string>();
+    const seenLegalNames = new Set<string>();
+    const seenTaxIds = new Set<string>();
 
     for (const company of companies) {
       const trimmedName = company.name?.trim();
       if (!trimmedName) {
         throw new BadRequestException('Las companias requieren un nombre.');
       }
-
-      const normalizedName = trimmedName.toLowerCase();
-      if (seenNames.has(normalizedName)) {
-        throw new BadRequestException(
-          `La compania "${trimmedName}" esta duplicada en la solicitud.`,
-        );
-      }
-      seenNames.add(normalizedName);
 
       const legalName =
         company.legalName && company.legalName.trim().length > 0
@@ -1219,6 +1558,23 @@ export class TenancyService {
         company.taxId && company.taxId.trim().length > 0
           ? company.taxId.trim()
           : null;
+      const legalNameKey = legalName?.toLowerCase();
+      if (legalNameKey) {
+        if (seenLegalNames.has(legalNameKey)) {
+          throw new BadRequestException(
+            `La razon social "${legalName}" esta duplicada en la solicitud.`,
+          );
+        }
+        seenLegalNames.add(legalNameKey);
+      }
+      if (taxId) {
+        if (seenTaxIds.has(taxId)) {
+          throw new BadRequestException(
+            `El RUC/NIT "${taxId}" esta duplicado en la solicitud.`,
+          );
+        }
+        seenTaxIds.add(taxId);
+      }
       const sunatEnvironment =
         this.normalizeSunatEnvironment(company.sunatEnvironment) ?? 'BETA';
       const sunatRuc = this.normalizeNullableInput(company.sunatRuc);
@@ -1235,6 +1591,9 @@ export class TenancyService {
       const secondaryColor = this.normalizeColorInput(
         company.secondaryColor,
         'secondaryColor',
+      );
+      const defaultQuoteMargin = this.normalizeMarginInput(
+        company.defaultQuoteMargin,
       );
       const sunatSolUserBeta = this.normalizeNullableInput(
         company.sunatSolUserBeta,
@@ -1276,6 +1635,7 @@ export class TenancyService {
           logoUrl: logoUrl ?? null,
           primaryColor: primaryColor ?? null,
           secondaryColor: secondaryColor ?? null,
+          defaultQuoteMargin: defaultQuoteMargin ?? undefined,
           sunatSolUserBeta: sunatSolUserBeta ?? null,
           sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
           sunatCertPathBeta: sunatCertPathBeta ?? null,
@@ -1386,21 +1746,31 @@ export class TenancyService {
     }
 
     const prisma = tx as unknown as PrismaService as any;
-    const seenNames = new Set<string>();
+    const seenLegalNames = new Set<string>();
+    const seenTaxIds = new Set<string>();
 
     for (const company of companies) {
-      const normalizedName = this.normalizeCompanyName(company.name);
-      const nameKey = normalizedName.toLowerCase();
-      if (seenNames.has(nameKey)) {
-        throw new BadRequestException(
-          `Duplicate company name "${normalizedName}" in payload`,
-        );
-      }
-      seenNames.add(nameKey);
-
       const normalizedStatus = this.normalizeCompanyStatus(company.status);
+      const normalizedName = this.normalizeCompanyName(company.name);
       const legalName = this.normalizeNullableInput(company.legalName);
       const taxId = this.normalizeNullableInput(company.taxId);
+      if (legalName) {
+        const legalNameKey = legalName.toLowerCase();
+        if (seenLegalNames.has(legalNameKey)) {
+          throw new BadRequestException(
+            `Duplicate company legal name "${legalName}" in payload`,
+          );
+        }
+        seenLegalNames.add(legalNameKey);
+      }
+      if (taxId) {
+        if (seenTaxIds.has(taxId)) {
+          throw new BadRequestException(
+            `Duplicate company tax id "${taxId}" in payload`,
+          );
+        }
+        seenTaxIds.add(taxId);
+      }
       const sunatEnvironment = this.normalizeSunatEnvironment(
         company.sunatEnvironment,
       );
@@ -1418,6 +1788,9 @@ export class TenancyService {
       const secondaryColor = this.normalizeColorInput(
         company.secondaryColor,
         'secondaryColor',
+      );
+      const defaultQuoteMargin = this.normalizeMarginInput(
+        company.defaultQuoteMargin,
       );
       const sunatSolUserBeta = this.normalizeNullableInput(
         company.sunatSolUserBeta,
@@ -1494,6 +1867,10 @@ export class TenancyService {
         if (company.secondaryColor !== undefined) {
           updateData.secondaryColor = secondaryColor ?? null;
         }
+        if (company.defaultQuoteMargin !== undefined) {
+          updateData.defaultQuoteMargin =
+            defaultQuoteMargin ?? existing.defaultQuoteMargin;
+        }
         if (company.sunatSolUserBeta !== undefined) {
           updateData.sunatSolUserBeta = sunatSolUserBeta ?? null;
         }
@@ -1545,6 +1922,7 @@ export class TenancyService {
           logoUrl: logoUrl ?? null,
           primaryColor: primaryColor ?? null,
           secondaryColor: secondaryColor ?? null,
+          defaultQuoteMargin: defaultQuoteMargin ?? undefined,
           sunatSolUserBeta: sunatSolUserBeta ?? null,
           sunatSolPasswordBeta: sunatSolPasswordBeta ?? null,
           sunatCertPathBeta: sunatCertPathBeta ?? null,
@@ -1629,6 +2007,28 @@ export class TenancyService {
     return normalized.toUpperCase();
   }
 
+  private normalizeMarginInput(
+    value: number | null | undefined,
+  ): number | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value === null) {
+      return null;
+    }
+    if (Number.isNaN(value) || !Number.isFinite(value)) {
+      throw new BadRequestException(
+        'El margen de cotización debe ser un número válido.',
+      );
+    }
+    if (value < 0 || value > 1) {
+      throw new BadRequestException(
+        'El margen de cotización debe estar entre 0 y 1.',
+      );
+    }
+    return value;
+  }
+
   private normalizeCompanyStatus(
     status: string | undefined,
   ): 'ACTIVE' | 'INACTIVE' | undefined {
@@ -1669,6 +2069,128 @@ export class TenancyService {
     }
 
     return trimmed;
+  }
+
+  private buildCompanyInclude(options?: {
+    organization?: boolean;
+  }): Prisma.CompanyInclude {
+    const include: Prisma.CompanyInclude = {
+      documentSequences: { orderBy: { documentType: 'asc' } },
+    };
+
+    if (options?.organization) {
+      include.organization = {
+        select: { id: true, name: true, code: true, status: true },
+      };
+    }
+
+    return include;
+  }
+
+  private normalizeDocumentSequencesInput(
+    sequences?: Array<{
+      documentType?: string | null;
+      serie?: string | null;
+      nextCorrelative?: string | number | null;
+      correlativeLength?: number | null;
+    }> | null,
+  ): NormalizedSequenceInput[] | null {
+    if (!Array.isArray(sequences) || sequences.length === 0) {
+      return null;
+    }
+
+    const normalized: NormalizedSequenceInput[] = [];
+    const seenTypes = new Set<string>();
+
+    for (const entry of sequences) {
+      if (!entry) {
+        continue;
+      }
+
+      const documentType = entry.documentType?.toString().trim().toUpperCase();
+      if (!documentType) {
+        throw new BadRequestException(
+          'El tipo de documento de la serie es obligatorio.',
+        );
+      }
+
+      const serie = entry.serie?.toString().trim().toUpperCase();
+      if (!serie) {
+        throw new BadRequestException(
+          `La serie para el tipo de documento ${documentType} es obligatoria.`,
+        );
+      }
+
+      const correlativoRaw = entry.nextCorrelative?.toString().trim();
+      if (!correlativoRaw || !/^[0-9]+$/.test(correlativoRaw)) {
+        throw new BadRequestException(
+          `El numero correlativo inicial para ${documentType} debe contener solo digitos.`,
+        );
+      }
+
+      const correlativoNumber = Number.parseInt(correlativoRaw, 10);
+      if (!Number.isFinite(correlativoNumber) || correlativoNumber < 1) {
+        throw new BadRequestException(
+          `El numero correlativo inicial para ${documentType} debe ser mayor o igual a 1.`,
+        );
+      }
+
+      if (seenTypes.has(documentType)) {
+        throw new BadRequestException(
+          `Solo puedes configurar una serie por tipo de documento (${documentType}).`,
+        );
+      }
+      seenTypes.add(documentType);
+
+      const correlativeLength = Math.max(
+        Number(entry.correlativeLength ?? correlativoRaw.length) ||
+          correlativoRaw.length,
+        correlativoRaw.length,
+        1,
+      );
+
+      normalized.push({
+        documentType,
+        serie,
+        nextCorrelative: correlativoNumber,
+        correlativeLength,
+      });
+    }
+
+    return normalized.length ? normalized : null;
+  }
+
+  private async saveCompanySequences(
+    prisma: PrismaService | Prisma.TransactionClient,
+    companyId: number,
+    sequences: NormalizedSequenceInput[],
+  ): Promise<void> {
+    if (!sequences.length) {
+      return;
+    }
+
+    for (const sequence of sequences) {
+      await prisma.companyDocumentSequence.upsert({
+        where: {
+          companyId_documentType: {
+            companyId,
+            documentType: sequence.documentType,
+          },
+        },
+        update: {
+          serie: sequence.serie,
+          nextCorrelative: sequence.nextCorrelative,
+          correlativeLength: sequence.correlativeLength,
+        },
+        create: {
+          companyId,
+          documentType: sequence.documentType,
+          serie: sequence.serie,
+          nextCorrelative: sequence.nextCorrelative,
+          correlativeLength: sequence.correlativeLength,
+        },
+      });
+    }
   }
 
   private resolveParentId(
@@ -1782,7 +2304,174 @@ export class TenancyService {
       return null;
     }
 
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
+    const normalized = value
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private async promoteUserToOrganizationSuperAdmin(
+    prisma: PrismaService | Prisma.TransactionClient,
+    userId: number,
+  ): Promise<void> {
+    const user = await (prisma as Prisma.TransactionClient).user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!user) {
+      return;
+    }
+
+    const normalizedRole = (user.role ?? '').toString().trim().toUpperCase();
+
+    if (
+      normalizedRole === 'SUPER_ADMIN_GLOBAL' ||
+      normalizedRole === 'SUPER_ADMIN_ORG' ||
+      normalizedRole === 'SUPER_ADMIN'
+    ) {
+      return;
+    }
+
+    await (prisma as Prisma.TransactionClient).user.update({
+      where: { id: userId },
+      data: { role: 'SUPER_ADMIN_ORG' },
+    });
+  }
+
+  private async maybeDemoteOrganizationSuperAdmin(
+    prisma: PrismaService,
+    userId: number,
+  ): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!user) {
+      return;
+    }
+
+    const normalizedRole = (user.role ?? '').toString().trim().toUpperCase();
+
+    if (normalizedRole === 'SUPER_ADMIN_GLOBAL') {
+      return;
+    }
+
+    const remainingAssignments = await prisma.organizationMembership.count({
+      where: { userId, role: 'SUPER_ADMIN' },
+    });
+
+    if (remainingAssignments > 0) {
+      return;
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { role: 'ADMIN' },
+    });
+  }
+
+  private async resolveOrganizationCode(
+    prisma: PrismaService,
+    codeInput: string | null | undefined,
+    fallbackName: string,
+    excludeId?: number,
+  ): Promise<string | null> {
+    const normalized = this.normalizeCodeInput(codeInput);
+    if (normalized === undefined) {
+      const base = this.buildOrganizationCodeBase(fallbackName);
+      if (!base) {
+        return null;
+      }
+      return this.generateOrganizationCodeFromBase(prisma, base, excludeId);
+    }
+
+    if (normalized === null) {
+      return null;
+    }
+
+    await this.ensureOrganizationCodeAvailability(
+      prisma,
+      normalized,
+      excludeId,
+    );
+    return normalized;
+  }
+
+  private buildOrganizationCodeBase(input: string): string | null {
+    const normalized = input
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, ' ')
+      .trim();
+
+    if (!normalized) {
+      return null;
+    }
+
+    const tokens = normalized.split(/\s+/).filter(Boolean);
+    const compact = tokens
+      .map((token) => token.slice(0, 3))
+      .join('')
+      .slice(0, 10);
+
+    if (compact) {
+      return compact;
+    }
+
+    const fallback = normalized.replace(/\s+/g, '').slice(0, 10);
+    return fallback || 'ORG';
+  }
+
+  private async generateOrganizationCodeFromBase(
+    prisma: PrismaService,
+    base: string,
+    excludeId?: number,
+  ): Promise<string> {
+    let candidate = base;
+    let counter = 1;
+
+    while (true) {
+      const existing = await prisma.organization.findFirst({
+        where: {
+          code: candidate,
+          ...(excludeId ? { NOT: { id: excludeId } } : {}),
+        },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        return candidate;
+      }
+
+      counter += 1;
+      const suffix = String(counter);
+      const baseLength = Math.max(3, 10 - suffix.length);
+      candidate = `${base.slice(0, baseLength)}${suffix}`;
+    }
+  }
+
+  private async ensureOrganizationCodeAvailability(
+    prisma: PrismaService,
+    code: string,
+    excludeId?: number,
+  ): Promise<void> {
+    const existing = await prisma.organization.findFirst({
+      where: {
+        code,
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        'El codigo ingresado ya esta en uso por otra organizacion.',
+      );
+    }
   }
 }

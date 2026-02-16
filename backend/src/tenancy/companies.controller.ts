@@ -27,6 +27,7 @@ import { CompanySnapshot, TenancySnapshot } from './entities/tenancy.entity';
 import { TenantContextGuard } from './tenant-context.guard';
 import { TenantContextService } from './tenant-context.service';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { ValidateCompanyDto } from './dto/validate-company.dto';
 import { resolveBackendPath } from 'src/utils/path-utils';
 
 enum SunatUploadEnvironment {
@@ -71,6 +72,15 @@ export class CompaniesController {
   > {
     const context = tenant ?? this.tenantContextService.getContext();
     return this.tenancyService.getCompanyById(id, context);
+  }
+
+  @Post('validate')
+  validateCompany(
+    @Body() dto: ValidateCompanyDto,
+    @CurrentTenant() tenant: TenantContext | null,
+  ): Promise<{ legalNameAvailable: boolean; taxIdAvailable: boolean }> {
+    const context = tenant ?? this.tenantContextService.getContext();
+    return this.tenancyService.validateCompanyFields(dto, context);
   }
 
   @Post()

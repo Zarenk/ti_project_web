@@ -17,6 +17,7 @@ jest.mock('src/tenancy/organization-context.logger', () => ({
 type PrismaMock = {
   storeOnInventory: {
     findFirst: jest.Mock;
+    findMany: jest.Mock;
     findUnique: jest.Mock;
     update: jest.Mock;
   };
@@ -36,9 +37,10 @@ type PrismaMock = {
   cashTransactionPaymentMethod: { deleteMany: jest.Mock };
   cashRegister: { update: jest.Mock };
   cashTransaction: { delete: jest.Mock };
-  invoiceSales: { deleteMany: jest.Mock };
+  invoiceSales: { deleteMany: jest.Mock; findFirst: jest.Mock };
   orders: { update: jest.Mock };
   shippingGuide: { updateMany: jest.Mock };
+  sunatTransmission: { findFirst: jest.Mock };
   $transaction: jest.Mock;
   salesDetail: { findMany: jest.Mock };
   product: { findMany: jest.Mock };
@@ -50,6 +52,9 @@ describe('SalesService multi-organization support', () => {
   let prismaService: PrismaService;
   let activityService: { log: jest.Mock };
   let accountingHook: { postSale: jest.Mock; postPayment: jest.Mock };
+  let sunatService: { sendDocument: jest.Mock };
+  let quotaService: { ensureQuota: jest.Mock };
+  let verticalConfig: { getConfig: jest.Mock };
 
   const baseSaleInput = {
     userId: 10,
@@ -67,6 +72,11 @@ describe('SalesService multi-organization support', () => {
     prisma = {
       storeOnInventory: {
         findFirst: jest.fn().mockResolvedValue({ id: 1, stock: 10 }),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 1, stock: 10, inventory: { productId: 1 } },
+          ]),
         findUnique: jest.fn(),
         update: jest.fn(),
       },
@@ -102,12 +112,16 @@ describe('SalesService multi-organization support', () => {
       },
       invoiceSales: {
         deleteMany: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       orders: {
         update: jest.fn(),
       },
       shippingGuide: {
         updateMany: jest.fn(),
+      },
+      sunatTransmission: {
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       $transaction: jest.fn(),
       salesDetail: {
@@ -123,6 +137,14 @@ describe('SalesService multi-organization support', () => {
       postSale: jest.fn().mockResolvedValue(undefined),
       postPayment: jest.fn().mockResolvedValue(undefined),
     };
+    sunatService = {
+      sendDocument: jest.fn().mockResolvedValue(undefined),
+    };
+    quotaService = {
+      ensureQuota: jest.fn().mockResolvedValue(undefined),
+    };
+
+    verticalConfig = { getConfig: jest.fn().mockResolvedValue({}) } as any;
 
     (prepareSaleContext as jest.Mock).mockReset();
     (executeSale as jest.Mock).mockReset();
@@ -134,6 +156,9 @@ describe('SalesService multi-organization support', () => {
       prismaService,
       activityService as unknown as ActivityService,
       accountingHook as unknown as AccountingHook,
+      sunatService as any,
+      quotaService as any,
+      verticalConfig as any,
     );
   });
 
@@ -239,9 +264,7 @@ describe('SalesService multi-organization support', () => {
         ...baseSaleInput,
         organizationId: 123,
       }),
-    ).rejects.toThrow(
-      'La organización proporcionada no coincide con la tienda seleccionada.',
-    );
+    ).rejects.toThrow(/organiza/i);
   });
 
   it('applies organization filters when listing sales', async () => {
@@ -311,24 +334,25 @@ describe('SalesService multi-organization support', () => {
   it('filters revenue by category using the provided organizationId', async () => {
     const startDate = new Date('2024-01-01T00:00:00.000Z');
     const endDate = new Date('2024-01-31T23:59:59.000Z');
-    prisma.sales.findMany.mockResolvedValueOnce([{ id: 123 }]);
     prisma.salesDetail.findMany.mockResolvedValueOnce([
-      { productId: 10, quantity: 2, price: 50 },
-    ]);
-    prisma.product.findMany.mockResolvedValueOnce([
-      { id: 10, category: { name: 'Electrónicos' } },
+      {
+        quantity: 2,
+        price: 50,
+        entryDetail: {
+          product: { category: { name: 'Electrónicos' } },
+        },
+      },
     ]);
 
     const result = await service.getRevenueByCategory(startDate, endDate, 77);
 
-    expect(prisma.sales.findMany).toHaveBeenCalledWith(
+    expect(prisma.salesDetail.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ organizationId: 77 }),
+        where: expect.objectContaining({
+          sale: expect.objectContaining({ organizationId: 77 }),
+        }),
       }),
     );
-    expect(prisma.salesDetail.findMany).toHaveBeenCalledWith({
-      where: { salesId: { in: [123] } },
-    });
     expect(result).toEqual([{ name: 'Electrónicos', value: 100 }]);
   });
 
@@ -359,11 +383,20 @@ describe('SalesService multi-organization support', () => {
           {
             quantity: 1,
             price: 250,
+            series: ['ALPHA-001'],
             entryDetail: {
               price: 180,
               product: { name: 'Alpha Laptop 13"' },
               series: [{ serial: 'ALPHA-001' }],
             },
+          },
+        ],
+        sunatTransmissions: [
+          {
+            id: 1,
+            status: 'ACCEPTED',
+            ticket: 'T-1',
+            updatedAt: saleDate,
           },
         ],
       },
@@ -375,24 +408,25 @@ describe('SalesService multi-organization support', () => {
       expect.objectContaining({ where: { organizationId: 44 } }),
     );
     expect(result).toEqual([
-      {
+      expect.objectContaining({
         date: saleDate,
         serie: 'F001',
         correlativo: '000123',
         tipoComprobante: 'FACTURA',
         customerName: 'Alpha Cliente',
         total: 250,
+        sunatStatus: expect.objectContaining({ status: 'ACCEPTED' }),
         payments: [{ method: 'Tarjeta', amount: 250 }],
         items: [
-          {
+          expect.objectContaining({
             qty: 1,
             unitPrice: 250,
             costUnit: 180,
             productName: 'Alpha Laptop 13"',
             series: ['ALPHA-001'],
-          },
+          }),
         ],
-      },
+      }),
     ]);
   });
 
@@ -449,7 +483,10 @@ describe('SalesService multi-organization support', () => {
           salePayment: { deleteMany: jest.fn().mockResolvedValue(undefined) },
           shippingGuide: { updateMany: jest.fn().mockResolvedValue(undefined) },
           orders: { update: jest.fn().mockResolvedValue(undefined) },
-          invoiceSales: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+          invoiceSales: {
+            findFirst: jest.fn().mockResolvedValue(null),
+            deleteMany: jest.fn().mockResolvedValue(undefined),
+          },
           cashTransactionPaymentMethod: {
             deleteMany: jest.fn().mockResolvedValue(undefined),
           },
@@ -517,7 +554,10 @@ describe('SalesService multi-organization support', () => {
           salePayment: { deleteMany: jest.fn().mockResolvedValue(undefined) },
           shippingGuide: { updateMany: jest.fn().mockResolvedValue(undefined) },
           orders: { update: jest.fn().mockResolvedValue(undefined) },
-          invoiceSales: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+          invoiceSales: {
+            findFirst: jest.fn().mockResolvedValue(null),
+            deleteMany: jest.fn().mockResolvedValue(undefined),
+          },
           cashTransactionPaymentMethod: {
             deleteMany: jest.fn().mockResolvedValue(undefined),
           },

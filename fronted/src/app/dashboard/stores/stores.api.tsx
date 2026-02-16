@@ -1,22 +1,9 @@
-import { getAuthHeaders } from "@/utils/auth-token";
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
-
-async function authorizedFetch(url: string, init: RequestInit = {}) {
-  const auth = await getAuthHeaders();
-  const headers = new Headers(init.headers ?? {});
-
-  for (const [key, value] of Object.entries(auth)) {
-    if (value != null && value !== "") {
-      headers.set(key, value);
-    }
-  }
-
-  return fetch(url, { ...init, headers });
-}
+import { BACKEND_URL } from "@/lib/utils";
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
 
 export async function createStore(storeData: any){
-    const res = await authorizedFetch(`${BACKEND_URL}/api/stores`,{
+    const res = await authFetch(`${BACKEND_URL}/api/stores`,{
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',         
@@ -33,16 +20,35 @@ export async function createStore(storeData: any){
 }
 
 export async function getStores(){
-    const data = await authorizedFetch(`${BACKEND_URL}/api/stores`, {
-        'cache': 'no-store',
-    });
-    return data.json()
+    try {
+        const data = await authFetch(`${BACKEND_URL}/api/stores`, {
+            cache: 'no-store',
+        });
+        if (!data.ok) {
+            throw new Error(`Error al obtener tiendas: ${data.status}`);
+        }
+        return await data.json();
+    } catch (error) {
+        if (error instanceof UnauthenticatedError) {
+            return [];
+        }
+        console.error("Error al obtener tiendas:", error);
+        return [];
+    }
 }
 
 export async function getStore(id: string){
-    const data = await authorizedFetch(`${BACKEND_URL}/api/stores/${id}`, {
-        'cache': 'no-store',
-    });
+    let data: Response;
+    try {
+        data = await authFetch(`${BACKEND_URL}/api/stores/${id}`, {
+            'cache': 'no-store',
+        });
+    } catch (error) {
+        if (error instanceof UnauthenticatedError) {
+            return null;
+        }
+        throw error;
+    }
 
     const json = await data.json();
 
@@ -61,7 +67,7 @@ export async function getStore(id: string){
 // 
 export async function checkStoreExists(name: string): Promise<boolean> {
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/stores/check`, {
+    const response = await authFetch(`${BACKEND_URL}/api/stores/check`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -83,7 +89,7 @@ export async function checkStoreExists(name: string): Promise<boolean> {
 }
 
 export async function deleteStore(id: string){
-    const res = await authorizedFetch(`${BACKEND_URL}/api/stores/${id}`, {
+    const res = await authFetch(`${BACKEND_URL}/api/stores/${id}`, {
         method: 'DELETE',
     });
     return res.json()
@@ -97,7 +103,7 @@ export const deleteStores = async (ids: string[]) => {
       // Convertir los IDs a números antes de enviarlos
       const numericIds = ids.map((id) => Number(id))
 
-      const response = await authorizedFetch(`${BACKEND_URL}/api/stores/`, {
+      const response = await authFetch(`${BACKEND_URL}/api/stores/`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -117,7 +123,7 @@ export const deleteStores = async (ids: string[]) => {
   };
 
 export async function updateStore(id: string, newStore: any){
-    const res = await authorizedFetch(`${BACKEND_URL}/api/stores/${id}`, {
+    const res = await authFetch(`${BACKEND_URL}/api/stores/${id}`, {
         method: 'PATCH',
         headers: {
             'Content-Type': 'application/json',
@@ -138,7 +144,7 @@ export async function updateManyStores(stores: any[]) {
     console.log("Enviando tiendas al backend para actualización masiva:", stores); // Log para depuración
   
     try {
-      const response = await authorizedFetch(`${BACKEND_URL}/api/stores`, {
+      const response = await authFetch(`${BACKEND_URL}/api/stores`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -159,4 +165,21 @@ export async function updateManyStores(stores: any[]) {
       console.error("Error en updateManyStores:", error);
       throw error; // Lanza el error para que pueda ser manejado en el frontend
     }
+}
+
+export async function uploadStoreImage(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await authFetch(`${BACKEND_URL}/api/clients/upload-image`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    throw new Error(errorData?.message || 'Error al subir la imagen');
+  }
+
+  return res.json() as Promise<{ url: string }>;
 }

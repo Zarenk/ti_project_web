@@ -1,0 +1,12 @@
+{
+  "name": "email-gateway",
+  "description": "Multi-provider email sending for Cloudflare Workers and Node.js applications. Build transactional email systems with Resend (React Email support), SendGrid (enterprise scale), Mailgun (developer webhooks), or SMTP2Go (reliable relay). Includes template patterns, webhook verification, attachment handling, and error recovery. Use when sending emails via API, handling bounces/complaints, or migrating between providers.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jeremy Dawes",
+    "email": "jeremy@jezweb.net"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jezweb/claude-skills",
+  "keywords": []
+}

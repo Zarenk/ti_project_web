@@ -14,29 +14,48 @@ import {
   getUserDataFromToken,
   isTokenValid,
   refreshAuthToken,
+  type UserPermissionsMap,
 } from "@/lib/auth"
 import { toast } from 'sonner'
 import { signOut } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { clearManualLogout, markManualLogout } from "@/utils/manual-logout"
+import {
+  TENANT_ORGANIZATIONS_EVENT,
+  clearTenantSelection,
+  setTenantSelection,
+} from "@/utils/tenant-preferences"
+import { clearContextPreferences } from "@/utils/context-preferences"
+import { userContextStorage } from "@/utils/user-context-storage"
+import { useUserContextSync } from "@/hooks/use-user-context-sync"
+import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
 import { SESSION_EXPIRED_EVENT } from "@/utils/session-expired-event"
+import { logoutSession } from "./auth.api"
+import { SessionExpiryOverlay } from "@/components/session-expiry-overlay"
 
 type AuthContextType = {
   userId: number | null
   userName: string | null
   role: string | null
+  isPublicSignup: boolean | null
+  userPermissions: UserPermissionsMap | null
   authPending: boolean
+  sessionExpiring: boolean
   refreshUser: () => Promise<void>
   logout: (options?: { silent?: boolean }) => Promise<void>
+  logoutAndRedirect: (options?: { silent?: boolean; returnTo?: string }) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [userName, setUserName] = useState<string | null>(null)
   const [userId, setUserId] = useState<number | null>(null)
   const [role, setRole] = useState<string | null>(null)
+  const [isPublicSignup, setIsPublicSignup] = useState<boolean | null>(null)
+  const [userPermissions, setUserPermissions] = useState<UserPermissionsMap | null>(null)
   const [authPending, setAuthPending] = useState<boolean>(false)
   const sessionTimerRef = useRef<number | null>(null)
   const autoLogoutTriggeredRef = useRef(false)
@@ -44,6 +63,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshFailureNotifiedRef = useRef(false)
   const sessionExpiryInProgressRef = useRef(false)
   const [sessionExpiryOverlay, setSessionExpiryOverlay] = useState(false)
+  const lastUserIdRef = useRef<number | null>(null)
+  const authRedirectInProgressRef = useRef(false)
+  const lastPathKey = "ti.lastPath"
+  useUserContextSync(userId, role)
+  const ensureTenantDefaults = useCallback(async (ownerId?: number | null): Promise<boolean> => {
+    try {
+      const summary = await getCurrentTenant()
+      const resolvedOrgId = summary.organization?.id ?? null
+      const resolvedCompanyId = summary.company?.id ?? summary.companies?.[0]?.id ?? null
+      if (resolvedOrgId != null && resolvedCompanyId != null) {
+        setTenantSelection(
+          { orgId: resolvedOrgId, companyId: resolvedCompanyId },
+          { ownerId: ownerId ?? null },
+        )
+        window.dispatchEvent(new Event(TENANT_ORGANIZATIONS_EVENT))
+        return true
+      }
+    } catch {
+      /* ignore */
+    }
+    return false
+  }, [])
 
   const clearSessionTimer = useCallback(() => {
     if (sessionTimerRef.current !== null) {
@@ -55,9 +96,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     const data = await getUserDataFromToken()
     if (data) {
+      const hasChangedUser =
+        lastUserIdRef.current === null || lastUserIdRef.current !== data.id
+      if (hasChangedUser) {
+        const ensured = await ensureTenantDefaults(data.id ?? null)
+        if (!ensured) {
+          clearTenantSelection()
+        }
+      }
+      lastUserIdRef.current = data.id ?? null
+      const resolvedId = data.id ?? null
       setUserName(data.name ?? null)
-      setUserId(data.id ?? null)
+      setUserId(resolvedId)
       setRole(data.role ?? null)
+      setIsPublicSignup(
+        typeof data.isPublicSignup === "boolean" ? data.isPublicSignup : false,
+      )
+      setUserPermissions(data.userPermissions ?? null)
+      userContextStorage.setUserHint(resolvedId)
       autoLogoutTriggeredRef.current = false
       sessionExpiryInProgressRef.current = false
       setSessionExpiryOverlay(false)
@@ -66,11 +122,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserName(null)
       setUserId(null)
       setRole(null)
+      setIsPublicSignup(null)
+      setUserPermissions(null)
+      userContextStorage.setUserHint(null)
     }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("authchange"))
     }
-  }, [])
+  }, [ensureTenantDefaults])
     const logout = useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
       clearSessionTimer()
@@ -81,11 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 5000)
-        const logoutReq = fetch('/api/logout', {
-          method: 'POST',
-          credentials: 'include',
-          signal: controller.signal,
-        })
+        const logoutReq = logoutSession(controller.signal)
         const nextAuth = signOut({ redirect: false })
         await Promise.allSettled([logoutReq, nextAuth])
         clearTimeout(timeout)
@@ -98,30 +153,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setUserName(null)
         setUserId(null)
-        setRole(null)
+       setRole(null)
+       setIsPublicSignup(null)
+        setUserPermissions(null)
+        userContextStorage.setUserHint(null)
+        clearTenantSelection()
+        clearContextPreferences()
         if (!silent) {
           try { toast.success('Sesión cerrada') } catch {}
         }
         setAuthPending(false)
         refreshFailureNotifiedRef.current = false
+        lastUserIdRef.current = null
       }
     },
     [clearSessionTimer],
   )
 
   const redirectToLogin = useCallback(() => {
+    if (authRedirectInProgressRef.current) {
+      return
+    }
+    authRedirectInProgressRef.current = true
     if (typeof window === "undefined") {
       router.replace('/login')
       return
     }
     const { pathname, search, hash } = window.location
     if (pathname.startsWith('/login')) {
-      router.refresh()
       return
     }
-    const returnTo = `${pathname}${search}${hash}` || '/'
-    router.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`)
-    router.refresh()
+    let returnTo = `${pathname}${search}${hash}` || '/'
+    try {
+      const stored = window.sessionStorage.getItem(lastPathKey)
+      if (stored && stored.startsWith('/')) {
+        returnTo = returnTo || stored
+      }
+    } catch {
+      /* ignore */
+    }
+    const target = `/login?returnTo=${encodeURIComponent(returnTo)}`
+    router.replace(target)
+    window.setTimeout(() => {
+      try {
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.assign(target)
+        }
+      } catch {
+        /* ignore */
+      }
+    }, 800)
   }, [router])
 
   const forceLogoutDueToExpiry = useCallback(async () => {
@@ -134,9 +215,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       toast.error('Tu sesión ha expirado. Redirigiendo al inicio de sesión.')
     } catch {}
-    await logout({ silent: true })
-    redirectToLogin()
+    try {
+      await logout({ silent: true })
+    } finally {
+      redirectToLogin()
+    }
   }, [logout, redirectToLogin])
+
+  const logoutAndRedirect = useCallback(
+    async ({ silent = false, returnTo }: { silent?: boolean; returnTo?: string } = {}) => {
+      if (returnTo && typeof window !== "undefined") {
+        try {
+          if (returnTo.startsWith('/')) {
+            window.sessionStorage.setItem(lastPathKey, returnTo)
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      await logout({ silent })
+      redirectToLogin()
+    },
+    [logout, redirectToLogin],
+  )
 
   const scheduleSessionCheck = useCallback(async () => {
     if (typeof window === 'undefined' || !userId) {
@@ -210,6 +311,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser()
   }, [refreshUser])
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+    const { pathname: currentPath, search, hash } = window.location
+    if (!currentPath || currentPath.startsWith('/login')) {
+      return
+    }
+    const current = `${currentPath}${search}${hash}`
+    try {
+      window.sessionStorage.setItem(lastPathKey, current)
+    } catch {
+      /* ignore */
+    }
+  }, [pathname])
+
+  useEffect(() => {
+    if (!sessionExpiryOverlay) {
+      return
+    }
+    if (typeof window === "undefined") {
+      return
+    }
+    if (pathname && pathname.startsWith("/login")) {
+      setSessionExpiryOverlay(false)
+    }
+  }, [pathname, sessionExpiryOverlay])
+
   const handleSessionExpiredEvent = useCallback(() => {
     void forceLogoutDueToExpiry()
   }, [forceLogoutDueToExpiry])
@@ -270,17 +399,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ])
 
   return (
-    <AuthContext.Provider value={{ userId, userName, role, authPending, refreshUser, logout }}>
+    <AuthContext.Provider value={{ userId, userName, role, isPublicSignup, userPermissions, authPending, sessionExpiring: sessionExpiryOverlay, refreshUser, logout, logoutAndRedirect }}>
       {children}
       {sessionExpiryOverlay && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm text-center px-6">
-          <div className="rounded-lg border bg-card px-6 py-4 shadow-lg">
-            <p className="text-lg font-semibold text-card-foreground">Tu sesión ha expirado</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Estamos redirigiéndote al inicio de sesión para que puedas continuar trabajando.
-            </p>
-          </div>
-        </div>
+        <SessionExpiryOverlay
+          onRedirect={() => {
+            setSessionExpiryOverlay(false)
+            redirectToLogin()
+          }}
+        />
       )}
     </AuthContext.Provider>
   )

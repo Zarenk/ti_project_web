@@ -1,0 +1,69 @@
+# Test Spec Template
+# Copy this file and customise for your testing needs
+
+name: Feature Tests
+description: What these tests validate
+
+# Optional: defaults applied to all tests in this file
+defaults:
+  tool: my_tool_name      # Default tool to call
+  timeout: 5000           # Timeout in milliseconds
+
+tests:
+  # Basic test case
+  - name: basic_functionality
+    description: Verify basic operation works
+    params:
+      action: search
+      query: "test input"
+    expect:
+      status: success
+      count_gte: 0
+
+  # Test with validation rules
+  - name: search_with_filter
+    description: Search with date filter applied
+    params:
+      action: search
+      query: "recent items"
+      filter: "last_week"
+    expect:
+      contains: "results"
+      not_contains: "error"
+
+  # Test with JSON path validation
+  - name: response_structure
+    description: Verify response has expected structure
+    params:
+      action: get
+      id: "123"
+    expect:
+      json_path: "$.data.name"
+      type: string
+
+  # Override default tool for specific test
+  - name: different_tool_test
+    tool: other_tool_name
+    params:
+      action: list
+    expect:
+      type: array
+      count_gte: 1
+
+  # Test for expected errors
+  - name: invalid_input_error
+    description: Verify proper error on invalid input
+    params:
+      action: search
+      query: ""
+    expect:
+      status: error
+      contains: "invalid"
+
+  # Regex pattern matching
+  - name: date_format_validation
+    params:
+      action: search
+      query: "items from January"
+    expect:
+      matches: "\\d{4}-\\d{2}-\\d{2}"

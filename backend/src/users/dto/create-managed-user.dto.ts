@@ -6,6 +6,14 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
+import { UserRole } from '@prisma/client';
+
+const MANAGED_USER_ROLES: UserRole[] = [
+  UserRole.ADMIN,
+  UserRole.SUPER_ADMIN_ORG,
+  UserRole.EMPLOYEE,
+  UserRole.CLIENT,
+];
 
 export class CreateManagedUserDto {
   @IsEmail()
@@ -19,8 +27,8 @@ export class CreateManagedUserDto {
   @MinLength(8)
   password!: string;
 
-  @IsIn(['ADMIN', 'SUPER_ADMIN_ORG'])
-  role!: 'ADMIN' | 'SUPER_ADMIN_ORG';
+  @IsIn(MANAGED_USER_ROLES, { message: 'Rol invalido' })
+  role!: UserRole;
 
   @IsOptional()
   @IsString()

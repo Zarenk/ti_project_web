@@ -1,5 +1,5 @@
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
-import { getAuthHeaders } from '@/utils/auth-token'
+import { BACKEND_URL } from '@/lib/utils'
+import { authFetch } from '@/utils/auth-fetch'
 
 export async function getReviews(productId: number) {
   const res = await fetch(`${BACKEND_URL}/api/products/${productId}/reviews`)
@@ -14,10 +14,9 @@ export async function submitReview(
   rating: number,
   comment: string,
 ) {
-  const headers = await getAuthHeaders()
-  const res = await fetch(`${BACKEND_URL}/api/reviews`, {
+  const res = await authFetch(`${BACKEND_URL}/api/reviews`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ productId, rating, comment }),
   })
   if (!res.ok) {

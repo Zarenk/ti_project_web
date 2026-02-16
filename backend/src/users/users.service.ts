@@ -5,10 +5,18 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  HttpException,
+  HttpStatus,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UserRole, AuditAction, User } from '@prisma/client';
+import {
+  UserRole,
+  AuditAction,
+  User,
+  OrganizationMembershipRole,
+} from '@prisma/client';
+import { createHash } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityService } from 'src/activity/activity.service';
@@ -19,13 +27,43 @@ import { Request } from 'express';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
+import { UpdateLastContextDto } from './dto/update-last-context.dto';
+import { ValidateContextDto } from './dto/validate-context.dto';
+import { ContextEventsGateway } from './context-events.gateway';
+import { ContextThrottleService } from './context-throttle.service';
+import { ContextPrometheusService } from './context-prometheus.service';
+import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
 
 @Injectable()
 export class UsersService {
+  private static readonly MODULE_PERMISSION_KEYS = [
+    'dashboard',
+    'catalog',
+    'store',
+    'inventory',
+    'sales',
+    'purchases',
+    'accounting',
+    'marketing',
+    'providers',
+    'settings',
+    'hidePurchaseCost',
+    'hideDeleteActions',
+  ] as const;
+
+  private readonly CONTEXT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+  private readonly CONTEXT_RATE_LIMIT = 10;
+  private readonly CONTEXT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+  private readonly contextUpdateAttempts = new Map<number, number[]>();
+
   constructor(
     private prismaService: PrismaService,
     private jwtService: JwtService,
     private activityService: ActivityService,
+    private contextEventsGateway: ContextEventsGateway,
+    private contextThrottleService: ContextThrottleService,
+    private contextPrometheusService: ContextPrometheusService,
+    private readonly quotaService: SubscriptionQuotaService,
   ) {}
 
   async validateUser(email: string, password: string, req?: Request) {
@@ -72,6 +110,15 @@ export class UsersService {
       user.isPermanentlyLocked
     ) {
       user = await this.resetLoginState(user, req);
+    }
+
+    if (user.isPublicSignup && !user.emailVerifiedAt) {
+      throw new UnauthorizedException({
+        message:
+          'Debes verificar tu correo para acceder. Revisa tu bandeja de entrada o solicita un nuevo enlace.',
+        code: 'EMAIL_VERIFICATION_REQUIRED',
+        email: user.email,
+      });
     }
 
     const { password: _password, ...result } = user;
@@ -159,11 +206,40 @@ export class UsersService {
   }
 
   async login(user: any, req?: Request) {
+    const memberships =
+      await this.prismaService.organizationMembership.findMany({
+        where: { userId: user.id },
+        select: { organizationId: true },
+        orderBy: { createdAt: 'asc' },
+      });
+    const organizationIds = memberships
+      .map((membership) => membership.organizationId)
+      .filter(
+        (id): id is number => typeof id === 'number' && Number.isFinite(id),
+      );
+
+    const fallbackOrgId =
+      user.lastOrgId ?? user.organizationId ?? organizationIds[0] ?? null;
+
+    let defaultCompanyId: number | null = user.lastCompanyId ?? null;
+    if (!defaultCompanyId && fallbackOrgId) {
+      const firstCompany = await this.prismaService.company.findFirst({
+        where: { organizationId: fallbackOrgId },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+      });
+      defaultCompanyId = firstCompany?.id ?? null;
+    }
+
     const payload = {
       username: user.username,
       sub: user.id,
       role: user.role,
       tokenVersion: user.tokenVersion,
+      defaultOrganizationId: fallbackOrgId,
+      defaultCompanyId,
+      organizations: organizationIds,
+      isPublicSignup: Boolean(user.isPublicSignup),
     };
     const token = this.jwtService.sign(payload);
     await this.activityService.log(
@@ -194,14 +270,17 @@ export class UsersService {
     return { message: 'Logged out' };
   }
 
-  async register(data: {
-    email: string;
-    username?: string;
-    password: string;
-    role: string;
-    status?: string;
-    organizationId?: number | null;
-  }) {
+  async register(
+    data: {
+      email: string;
+      username?: string;
+      password: string;
+      role: string;
+      status?: string;
+      organizationId?: number | null;
+    },
+    options?: { bypassQuota?: boolean },
+  ) {
     logOrganizationContext({
       service: UsersService.name,
       operation: 'register',
@@ -222,6 +301,10 @@ export class UsersService {
     });
     if (existingUsername) {
       throw new BadRequestException('El nombre de usuario ya está registrado');
+    }
+
+    if (data.organizationId && !options?.bypassQuota) {
+      await this.quotaService.ensureQuota(data.organizationId, 'users', 1);
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
@@ -342,11 +425,359 @@ export class UsersService {
         email: true,
         role: true,
         createdAt: true,
+        isPublicSignup: true,
+        emailVerifiedAt: true,
         client: {
           select: { phone: true, image: true },
         },
       },
     });
+  }
+
+  async getCurrentUserSummary(userId: number) {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        organizationId: true,
+        lastOrgId: true,
+        lastCompanyId: true,
+        lastContextUpdatedAt: true,
+        lastContextHash: true,
+        accountingMode: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    const lastContext = await this.buildLastContextPayload(user);
+    const userPermissions = await this.resolveUserModulePermissions(
+      user.id,
+      lastContext?.orgId ?? user.organizationId ?? null,
+    );
+
+    return {
+      id: user.id,
+      name: user.username,
+      email: user.email,
+      role: user.role,
+      accountingMode: user.accountingMode ?? 'simple',
+      lastContext,
+      userPermissions,
+    };
+  }
+
+  /**
+   * Returns users that had API activity in the last 5 minutes.
+   * If organizationId is null → all users (for SUPER_ADMIN_GLOBAL).
+   * Otherwise → only users belonging to that organization.
+   */
+  async getActiveSessions(organizationId: number | null) {
+    const threshold = new Date(Date.now() - 5 * 60 * 1000);
+
+    const where: any = {
+      lastActiveAt: { gte: threshold },
+      status: 'ACTIVO',
+    };
+
+    if (organizationId !== null) {
+      where.memberships = {
+        some: { organizationId },
+      };
+    }
+
+    const users = await this.prismaService.user.findMany({
+      where,
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        lastActiveAt: true,
+        memberships: {
+          select: {
+            organization: {
+              select: { id: true, name: true },
+            },
+            role: true,
+          },
+        },
+      },
+      orderBy: { lastActiveAt: 'desc' },
+    });
+
+    return users.map((u) => ({
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      role: u.role,
+      lastActiveAt: u.lastActiveAt,
+      organizations: u.memberships.map((m) => ({
+        id: m.organization.id,
+        name: m.organization.name,
+        membershipRole: m.role,
+      })),
+    }));
+  }
+
+  async updateLastContext(
+    userId: number,
+    dto: UpdateLastContextDto,
+    req?: Request,
+  ) {
+    const startedAt = Date.now();
+    try {
+      this.enforceContextRateLimit(userId);
+      const user = await this.prismaService.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          role: true,
+          organizationId: true,
+          lastOrgId: true,
+          lastCompanyId: true,
+          lastContextUpdatedAt: true,
+          lastContextHash: true,
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException('Usuario no encontrado');
+      }
+
+      const isAdmin = user.role === UserRole.ADMIN;
+      const effectiveOrgId =
+        isAdmin && user.organizationId && user.organizationId !== dto.orgId
+          ? user.organizationId
+          : dto.orgId;
+      const effectiveCompanyId =
+        effectiveOrgId !== dto.orgId ? null : dto.companyId ?? null;
+
+      const { organization } = await this.assertOrganizationAccess(
+        user,
+        effectiveOrgId,
+      );
+      const company = effectiveCompanyId
+        ? await this.assertCompanyBelongsToOrganization(
+            effectiveOrgId,
+            effectiveCompanyId,
+          )
+        : null;
+
+      const now = new Date();
+      const contextHash = this.generateContextHash(
+        user.id,
+        effectiveOrgId,
+        effectiveCompanyId,
+      );
+
+      await this.prismaService.user.update({
+        where: { id: userId },
+        data: {
+          lastOrgId: effectiveOrgId,
+          lastCompanyId: effectiveCompanyId,
+          lastContextUpdatedAt: now,
+          lastContextHash: contextHash,
+        },
+      });
+
+      await this.activityService.log(
+        {
+          actorId: user.id,
+          actorEmail: user.email,
+          entityType: 'User',
+          entityId: user.id.toString(),
+          action: AuditAction.UPDATED,
+          summary: `Actualizo el contexto a org ${effectiveOrgId}${
+            effectiveCompanyId ? ` / company ${effectiveCompanyId}` : ''
+          }`,
+          diff: {
+            before: {
+              orgId: user.lastOrgId ?? null,
+              companyId: user.lastCompanyId ?? null,
+            },
+            after: {
+              orgId: effectiveOrgId,
+              companyId: effectiveCompanyId,
+            },
+          } as Prisma.JsonValue,
+        },
+        req,
+      );
+
+      this.contextEventsGateway.emitContextChanged(user.id, {
+        orgId: effectiveOrgId,
+        companyId: effectiveCompanyId,
+        updatedAt: now.toISOString(),
+      });
+      await this.trackContextPreference(
+        user.id,
+        effectiveOrgId,
+        effectiveCompanyId,
+        now,
+      );
+      await this.logContextHistory(
+        user.id,
+        effectiveOrgId,
+        effectiveCompanyId,
+        req,
+        now,
+      );
+
+      const latency = Date.now() - startedAt;
+      this.contextPrometheusService.recordContextUpdate('success', latency);
+
+      return {
+        orgId: effectiveOrgId,
+        companyId: effectiveCompanyId,
+        updatedAt: now.toISOString(),
+        hash: contextHash,
+        organization: {
+          id: organization.id,
+          name: organization.name?.trim() ?? null,
+        },
+        company: company
+          ? { id: company.id, name: company.name?.trim() ?? null }
+          : null,
+      };
+    } catch (error) {
+      const latency = Date.now() - startedAt;
+      this.contextPrometheusService.recordContextUpdate('error', latency);
+      throw error;
+    }
+  }
+
+  async validateContext(userId: number, dto: ValidateContextDto) {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+        organizationId: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    let organization: {
+      id: number;
+      name: string | null;
+      status: string;
+    } | null = null;
+    let membership: { role: OrganizationMembershipRole } | null = null;
+
+    try {
+      const result = await this.assertOrganizationAccess(user, dto.orgId);
+      organization = result.organization;
+      membership = result.membership;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return {
+          isValid: false,
+          reason: 'ORG_NOT_FOUND',
+          permissions: [],
+          organization: null,
+          company: null,
+        };
+      }
+      if (error instanceof ForbiddenException) {
+        return {
+          isValid: false,
+          reason: 'ORG_ACCESS_REVOKED',
+          permissions: [],
+          organization: null,
+          company: null,
+        };
+      }
+      throw error;
+    }
+
+    let companyPayload: { id: number; name: string | null } | null = null;
+    if (dto.companyId) {
+      try {
+        const company = await this.assertCompanyBelongsToOrganization(
+          dto.orgId,
+          dto.companyId,
+        );
+        companyPayload = { id: company.id, name: company.name?.trim() ?? null };
+      } catch (error) {
+        if (error instanceof NotFoundException) {
+          return {
+            isValid: false,
+            reason: 'COMPANY_NOT_FOUND',
+            permissions: [],
+            organization: organization
+              ? {
+                  id: organization.id,
+                  name: organization.name?.trim() ?? null,
+                }
+              : null,
+            company: null,
+          };
+        }
+        if (
+          error instanceof BadRequestException ||
+          error instanceof ForbiddenException
+        ) {
+          return {
+            isValid: false,
+            reason: 'COMPANY_INVALID',
+            permissions: [],
+            organization: organization
+              ? {
+                  id: organization.id,
+                  name: organization.name?.trim() ?? null,
+                }
+              : null,
+            company: null,
+          };
+        }
+        throw error;
+      }
+    }
+
+    const permissions = this.resolvePermissionList(
+      membership?.role ?? null,
+      user.role,
+    );
+
+    return {
+      isValid: true,
+      reason: null,
+      permissions,
+      organization: {
+        id: organization.id,
+        name: organization.name?.trim() ?? null,
+      },
+      company: companyPayload,
+    };
+  }
+
+  async getContextSuggestion(userId: number) {
+    const preference = await this.prismaService.userContextPreference.findFirst(
+      {
+        where: { userId },
+        orderBy: [{ lastSelectedAt: 'desc' }, { totalSelections: 'desc' }],
+      },
+    );
+
+    if (!preference) {
+      return { orgId: null, companyId: null };
+    }
+
+    return {
+      orgId: preference.orgId,
+      companyId: preference.companyId ?? null,
+    };
   }
 
   findAll(search?: string, organizationId?: number | null) {
@@ -377,6 +808,38 @@ export class UsersService {
       where,
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async checkExists(data: { email?: string; username?: string }) {
+    const normalizedEmail = data.email?.trim();
+    const normalizedUsername = data.username?.trim();
+
+    const [emailMatch, usernameMatch] = await Promise.all([
+      normalizedEmail
+        ? this.prismaService.user.findFirst({
+            where: {
+              email: { equals: normalizedEmail, mode: Prisma.QueryMode.insensitive },
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      normalizedUsername
+        ? this.prismaService.user.findFirst({
+            where: {
+              username: {
+                equals: normalizedUsername,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      emailExists: Boolean(emailMatch),
+      usernameExists: Boolean(usernameMatch),
+    };
   }
 
   async update(id: number, data: UpdateUserDto) {
@@ -488,6 +951,31 @@ export class UsersService {
     });
 
     return updated;
+  }
+
+  async updatePreferences(
+    userId: number,
+    data: { accountingMode?: string },
+  ) {
+    const updated = await this.prismaService.user.update({
+      where: { id: userId },
+      data: {
+        accountingMode: data.accountingMode,
+      },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        accountingMode: true,
+      },
+    });
+
+    return {
+      message: 'Preferencias actualizadas correctamente',
+      preferences: {
+        accountingMode: updated.accountingMode,
+      },
+    };
   }
 
   async changePassword(
@@ -611,5 +1099,355 @@ export class UsersService {
       status: updated.status,
       createdAt: updated.createdAt,
     };
+  }
+
+  private async resolveUserModulePermissions(
+    userId: number,
+    organizationId: number | null,
+  ): Promise<Record<string, boolean> | null> {
+    if (!organizationId) {
+      return null;
+    }
+
+    const membership =
+      await this.prismaService.organizationMembership.findFirst({
+        where: {
+          userId,
+          organizationId,
+        },
+        select: {
+          modulePermissions: true,
+        },
+      });
+
+    if (!membership?.modulePermissions) {
+      return null;
+    }
+
+    return this.sanitizeModulePermissions(membership.modulePermissions);
+  }
+
+  private sanitizeModulePermissions(
+    value: Prisma.JsonValue | null | undefined,
+  ): Record<string, boolean> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+
+    const result: Record<string, boolean> = {};
+    for (const key of UsersService.MODULE_PERMISSION_KEYS) {
+      const entry = (value as Record<string, unknown>)[key];
+      if (typeof entry === 'boolean') {
+        result[key] = entry;
+      }
+    }
+
+    return Object.keys(result).length > 0 ? result : null;
+  }
+
+  private enforceContextRateLimit(userId: number): void {
+    const now = Date.now();
+    const windowStart = now - this.CONTEXT_RATE_LIMIT_WINDOW_MS;
+    const attempts =
+      this.contextUpdateAttempts
+        .get(userId)
+        ?.filter((timestamp) => timestamp > windowStart) ?? [];
+
+    if (attempts.length >= this.CONTEXT_RATE_LIMIT) {
+      this.contextPrometheusService.recordRateLimitHit();
+      this.contextThrottleService.recordHit(userId);
+      throw new HttpException(
+        'Has alcanzado el limite de cambios de contexto. Intenta nuevamente en un minuto.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    attempts.push(now);
+    this.contextUpdateAttempts.set(userId, attempts);
+  }
+
+  private generateContextHash(
+    userId: number,
+    orgId: number,
+    companyId: number | null,
+  ): string {
+    return createHash('sha256')
+      .update(`${userId}:${orgId}:${companyId ?? 'null'}`)
+      .digest('hex');
+  }
+
+  private async buildLastContextPayload(user: {
+    id: number;
+    lastOrgId: number | null;
+    lastCompanyId: number | null;
+    lastContextUpdatedAt: Date | null;
+    lastContextHash: string | null;
+  }): Promise<{
+    orgId: number;
+    companyId: number | null;
+    updatedAt: string;
+    hash?: string | null;
+  } | null> {
+    if (!user.lastOrgId || !user.lastContextUpdatedAt) {
+      return null;
+    }
+
+    if (this.isContextExpired(user.lastContextUpdatedAt)) {
+      await this.expireStoredContext(user.id);
+      return null;
+    }
+
+    return {
+      orgId: user.lastOrgId,
+      companyId: user.lastCompanyId ?? null,
+      updatedAt: user.lastContextUpdatedAt.toISOString(),
+      hash: user.lastContextHash ?? null,
+    };
+  }
+
+  private isContextExpired(updatedAt: Date | null): boolean {
+    if (!updatedAt) {
+      return true;
+    }
+    return Date.now() - updatedAt.getTime() > this.CONTEXT_TTL_MS;
+  }
+
+  private async expireStoredContext(userId: number): Promise<void> {
+    await this.prismaService.user.update({
+      where: { id: userId },
+      data: {
+        lastOrgId: null,
+        lastCompanyId: null,
+        lastContextUpdatedAt: null,
+        lastContextHash: null,
+      },
+    });
+  }
+
+  private async assertOrganizationAccess(
+    user: {
+      id: number;
+      role: UserRole;
+      organizationId?: number | null;
+    },
+    organizationId: number,
+  ): Promise<{
+    organization: { id: number; name: string | null; status: string };
+    membership: { role: OrganizationMembershipRole } | null;
+  }> {
+    const organization = await this.prismaService.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, name: true, status: true },
+    });
+
+    if (!organization) {
+      throw new NotFoundException('La organizacion no existe.');
+    }
+
+    const normalizedStatus = (organization.status ?? '').toUpperCase();
+    if (normalizedStatus && normalizedStatus !== 'ACTIVE') {
+      throw new ForbiddenException(
+        'La organizacion seleccionada no esta activa.',
+      );
+    }
+
+    const isGlobalAdmin = user.role === UserRole.SUPER_ADMIN_GLOBAL;
+    const isOrgAdmin = user.role === UserRole.SUPER_ADMIN_ORG;
+    const isAdmin = user.role === UserRole.ADMIN;
+
+    if (isGlobalAdmin) {
+      return { organization, membership: null };
+    }
+
+    if (isOrgAdmin || isAdmin) {
+      if (
+        user.organizationId !== null &&
+        user.organizationId !== undefined &&
+        user.organizationId !== organizationId
+      ) {
+        throw new ForbiddenException(
+          'No tienes permisos para acceder a esta organizacion.',
+        );
+      }
+
+      const membership =
+        await this.prismaService.organizationMembership.findFirst({
+          where: { userId: user.id, organizationId },
+          select: { role: true },
+        });
+
+      return { organization, membership };
+    }
+
+    const membership =
+      await this.prismaService.organizationMembership.findFirst({
+        where: { userId: user.id, organizationId },
+        select: { role: true },
+      });
+
+    if (!membership) {
+      throw new ForbiddenException(
+        'No tienes permisos para acceder a esta organizacion.',
+      );
+    }
+
+    return { organization, membership };
+  }
+
+  private async assertCompanyBelongsToOrganization(
+    organizationId: number,
+    companyId: number,
+  ): Promise<{ id: number; name: string | null }> {
+    const company = await this.prismaService.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, name: true, organizationId: true, status: true },
+    });
+
+    if (!company) {
+      throw new NotFoundException('La empresa no existe.');
+    }
+
+    if (company.organizationId !== organizationId) {
+      throw new BadRequestException(
+        'La empresa no pertenece a la organizacion seleccionada.',
+      );
+    }
+
+    const normalizedStatus = (company.status ?? '').toUpperCase();
+    if (normalizedStatus && normalizedStatus !== 'ACTIVE') {
+      throw new ForbiddenException('La empresa seleccionada no esta activa.');
+    }
+
+    return { id: company.id, name: company.name };
+  }
+
+  private resolvePermissionList(
+    membershipRole: OrganizationMembershipRole | null,
+    userRole: UserRole,
+  ): string[] {
+    if (
+      userRole === UserRole.SUPER_ADMIN_GLOBAL ||
+      userRole === UserRole.SUPER_ADMIN_ORG
+    ) {
+      return ['read', 'write', 'admin'];
+    }
+
+    if (!membershipRole) {
+      return ['read'];
+    }
+
+    switch (membershipRole) {
+      case OrganizationMembershipRole.VIEWER:
+        return ['read'];
+      case OrganizationMembershipRole.MEMBER:
+        return ['read', 'write'];
+      case OrganizationMembershipRole.ADMIN:
+      case OrganizationMembershipRole.SUPER_ADMIN:
+      case OrganizationMembershipRole.OWNER:
+        return ['read', 'write', 'admin'];
+      default:
+        return ['read'];
+    }
+  }
+
+  private async trackContextPreference(
+    userId: number,
+    orgId: number,
+    companyId: number | null,
+    timestamp: Date,
+  ) {
+    const existing = await this.prismaService.userContextPreference.findFirst({
+      where: {
+        userId,
+        orgId,
+        companyId: companyId ?? null,
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await this.prismaService.userContextPreference.update({
+        where: { id: existing.id },
+        data: {
+          totalSelections: { increment: 1 },
+          lastSelectedAt: timestamp,
+        },
+      });
+      return;
+    }
+
+    await this.prismaService.userContextPreference.create({
+      data: {
+        userId,
+        orgId,
+        companyId: companyId ?? null,
+        totalSelections: 1,
+        lastSelectedAt: timestamp,
+      },
+    });
+  }
+
+  private async logContextHistory(
+    userId: number,
+    orgId: number,
+    companyId: number | null,
+    req: Request | undefined,
+    timestamp: Date,
+  ) {
+    const device =
+      req?.headers?.['user-agent']?.toString()?.slice(0, 200) ?? null;
+
+    await this.prismaService.userContextHistory.create({
+      data: {
+        userId,
+        orgId,
+        companyId: companyId ?? null,
+        createdAt: timestamp,
+        device,
+      },
+    });
+  }
+
+  async listContextHistory(userId: number, limitValue = 10, cursorId?: number) {
+    const limit = Math.min(Math.max(limitValue || 10, 1), 50);
+    const query: Prisma.UserContextHistoryFindManyArgs = {
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+    };
+
+    if (cursorId && cursorId > 0) {
+      query.cursor = { id: cursorId };
+      query.skip = 1;
+    }
+
+    const entries = await this.prismaService.userContextHistory.findMany(query);
+    const hasMore = entries.length > limit;
+    const items = hasMore ? entries.slice(0, -1) : entries;
+    const nextCursor = hasMore ? entries[entries.length - 1].id : null;
+
+    return {
+      items,
+      nextCursor,
+    };
+  }
+
+  async restoreFromHistory(userId: number, historyId: number, req?: Request) {
+    const entry = await this.prismaService.userContextHistory.findFirst({
+      where: { id: historyId, userId },
+    });
+
+    if (!entry) {
+      throw new NotFoundException('Historical context not found');
+    }
+
+    return this.updateLastContext(
+      userId,
+      {
+        orgId: entry.orgId,
+        companyId: entry.companyId ?? null,
+      },
+      req,
+    );
   }
 }

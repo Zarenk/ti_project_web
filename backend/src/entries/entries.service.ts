@@ -1,10 +1,10 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  HttpException,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
-  InternalServerErrorException,
-  HttpException,
 } from '@nestjs/common';
 import {
   Prisma,
@@ -25,10 +25,12 @@ import {
   resolveOrganizationId,
 } from 'src/tenancy/organization.utils';
 import { TenantContextService } from 'src/tenancy/tenant-context.service';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 import {
   InventoryUncheckedCreateInputWithOrganization,
   InventoryHistoryCreateInputWithOrganization,
 } from 'src/tenancy/prisma-organization.types';
+import { handlePrismaError } from 'src/common/errors/prisma-error.handler';
 
 @Injectable()
 export class EntriesService {
@@ -40,27 +42,22 @@ export class EntriesService {
     private accountingHook: AccountingHook,
     private accountingService: AccountingService,
     private readonly tenantContext: TenantContextService,
+    private readonly verticalConfig: VerticalConfigService,
   ) {}
 
-  private handlePrismaError(error: any): never {
-    console.error('Prisma error:', error);
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2025'
-    ) {
-      throw new NotFoundException(error.meta?.cause ?? 'No data found');
+  private async ensureEntriesFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
+      return;
     }
-    if (error instanceof Prisma.PrismaClientValidationError) {
-      // Errores de validación de tipos/enum -> 400 con detalle
-      throw new BadRequestException(error.message);
+
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.inventory === false) {
+      throw new ForbiddenException(
+        'El modulo de entradas/compras no esta habilitado para esta empresa.',
+      );
     }
-    if (
-      error instanceof Prisma.PrismaClientInitializationError &&
-      error.errorCode === 'P1000'
-    ) {
-      throw new UnauthorizedException('Database authentication failed');
-    }
-    throw new InternalServerErrorException('Unexpected database error');
   }
 
   // Crear una nueva entrada con detalles
@@ -84,7 +81,7 @@ export class EntriesService {
       referenceId?: string;
       details: {
         productId: number;
-        name: string;
+        name?: string;
         quantity: number;
         price: number;
         priceInSoles: number;
@@ -98,19 +95,47 @@ export class EntriesService {
         total: number;
         fechaEmision: Date;
       };
+      guide?: {
+        serie?: string;
+        correlativo?: string;
+        fechaEmision?: string;
+        fechaEntregaTransportista?: string;
+        motivoTraslado?: string;
+        puntoPartida?: string;
+        puntoLlegada?: string;
+        destinatario?: string;
+        pesoBrutoUnidad?: string;
+        pesoBrutoTotal?: string;
+        transportista?: string;
+      };
     },
     organizationIdFromContext?: number | null,
   ) {
     try {
-      console.log('Datos recibidos en createEntry:', data);
+      // Validate entries feature is enabled
+      const storeForValidation = await this.prisma.store.findUnique({
+        where: { id: data.storeId },
+        select: { companyId: true },
+      });
+      await this.ensureEntriesFeatureEnabled(storeForValidation?.companyId);
 
       if (data.referenceId) {
-        const existingEntry = await this.prisma.entry.findFirst({
-          where: { referenceId: data.referenceId },
-          include: { details: true },
-        });
-        if (existingEntry) {
-          return existingEntry;
+        try {
+          const existingEntry = await this.prisma.entry.findFirst({
+            where: {
+              referenceId: data.referenceId,
+              ...(organizationIdFromContext != null
+                ? { store: { organizationId: organizationIdFromContext } }
+                : {}),
+            },
+            include: { details: true },
+          });
+          if (existingEntry) {
+            return existingEntry;
+          }
+        } catch (checkErr) {
+          console.error('Prisma check for existing entry by referenceId failed:', checkErr);
+          // If the check fails (e.g., schema mismatch), continue with creation
         }
       }
       // Normalizar y validar para evitar errores de Prisma por tipos inesperados
@@ -235,17 +260,27 @@ export class EntriesService {
           );
         }
 
-        // Verificar que los productos existan
+        // Verificar que los productos existan (batch: 1 query en vez de N)
+        const productIds = normalizedDetails
+          .map((d) => d.productId)
+          .filter((id): id is number => typeof id === 'number');
+
         for (const detail of normalizedDetails) {
           if (!detail.productId) {
             throw new BadRequestException(
               'El campo "productId" es obligatorio en los detalles.',
             );
           }
+        }
 
-          const product = await prisma.product.findUnique({
-            where: { id: detail.productId },
-          });
+        const foundProducts = await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, name: true },
+        });
+        const productMap = new Map(foundProducts.map((p) => [p.id, p]));
+
+        for (const detail of normalizedDetails) {
+          const product = productMap.get(detail.productId);
           if (!product) {
             throw new NotFoundException(
               `El producto con ID ${detail.productId} no existe.`,
@@ -263,37 +298,68 @@ export class EntriesService {
         }
 
         // Crear la entrada y los detalles
+        // Construir el payload dinámicamente para evitar pasar campos que el cliente Prisma
+        // no reconozca (por ejemplo si el cliente no está regenerado tras cambios en schema)
+        const createPayload: any = {
+          storeId: data.storeId,
+          userId: data.userId,
+          providerId: data.providerId,
+          date: normalizedDate,
+          description: data.description,
+          tipoMoneda: data.tipoMoneda ?? 'PEN',
+          tipoCambioId: data.tipoCambioId,
+          paymentMethod: data.paymentMethod,
+          paymentTerm: paymentTerm as any,
+          serie: data.serie,
+          correlativo: data.correlativo,
+          providerName: data.providerName,
+          totalGross,
+          igvRate,
+          organizationId,
+          referenceId: data.referenceId ?? null,
+          details: {
+            create: verifiedProducts.map((product) => ({
+              productId: product.productId,
+              quantity: Number(product.quantity) || 0,
+              price: Number(product.price) || 0,
+              priceInSoles:
+                (product as any).priceInSoles == null ||
+                (product as any).priceInSoles === ''
+                  ? null
+                  : Number((product as any).priceInSoles),
+            })),
+          },
+        };
+
+        // Añadir datos de guia solo si vienen en el payload del frontend y no son undefined
+        if (data.guide) {
+          const guide = data.guide as any;
+          if (guide.serie !== undefined) createPayload.guiaSerie = guide.serie ?? null;
+          if (guide.correlativo !== undefined)
+            createPayload.guiaCorrelativo = guide.correlativo ?? null;
+          if (guide.fechaEmision !== undefined)
+            createPayload.guiaFechaEmision = guide.fechaEmision ?? null;
+          if (guide.fechaEntregaTransportista !== undefined)
+            createPayload.guiaFechaEntregaTransportista =
+              guide.fechaEntregaTransportista ?? null;
+          if (guide.motivoTraslado !== undefined)
+            createPayload.guiaMotivoTraslado = guide.motivoTraslado ?? null;
+          if (guide.puntoPartida !== undefined)
+            createPayload.guiaPuntoPartida = guide.puntoPartida ?? null;
+          if (guide.puntoLlegada !== undefined)
+            createPayload.guiaPuntoLlegada = guide.puntoLlegada ?? null;
+          if (guide.destinatario !== undefined)
+            createPayload.guiaDestinatario = guide.destinatario ?? null;
+          if (guide.pesoBrutoUnidad !== undefined)
+            createPayload.guiaPesoBrutoUnidad = guide.pesoBrutoUnidad ?? null;
+          if (guide.pesoBrutoTotal !== undefined)
+            createPayload.guiaPesoBrutoTotal = guide.pesoBrutoTotal ?? null;
+          if (guide.transportista !== undefined)
+            createPayload.guiaTransportista = guide.transportista ?? null;
+        }
+
         const entry = await prisma.entry.create({
-          data: {
-            storeId: data.storeId,
-            userId: data.userId,
-            providerId: data.providerId,
-            date: normalizedDate,
-            description: data.description,
-            tipoMoneda: data.tipoMoneda,
-            tipoCambioId: data.tipoCambioId,
-            paymentMethod: data.paymentMethod,
-            paymentTerm: paymentTerm as any,
-            serie: data.serie,
-            correlativo: data.correlativo,
-            providerName: data.providerName,
-            totalGross,
-            igvRate,
-            organizationId,
-            referenceId: data.referenceId ?? null,
-            details: {
-              create: verifiedProducts.map((product) => ({
-                productId: product.productId,
-                quantity: Number(product.quantity) || 0,
-                price: Number(product.price) || 0,
-                priceInSoles:
-                  (product as any).priceInSoles == null ||
-                  (product as any).priceInSoles === ''
-                    ? null
-                    : Number((product as any).priceInSoles),
-              })),
-            },
-          } as any,
+          data: createPayload as any,
           include: { details: true },
         });
 
@@ -339,24 +405,42 @@ export class EntriesService {
         }
 
         // Actualizar el stock de los productos en el inventario
-        for (const detail of verifiedProducts) {
-          // Verificar si el producto ya existe en Inventory
-          let inventory = await prisma.inventory.findFirst({
-            where: { productId: detail.productId, storeId: data.storeId },
-          });
+        // Batch fetch: inventories y storeOnInventory existentes (2 queries en vez de 2N)
+        const existingInventories = await prisma.inventory.findMany({
+          where: { productId: { in: productIds }, storeId: data.storeId },
+        });
+        const inventoryByProduct = new Map(
+          existingInventories.map((inv) => [inv.productId, inv]),
+        );
 
-          // Si no existe, crear el registro en Inventory
+        const existingInvIds = existingInventories.map((inv) => inv.id);
+        const existingStoreInvs =
+          existingInvIds.length > 0
+            ? await prisma.storeOnInventory.findMany({
+                where: {
+                  storeId: data.storeId,
+                  inventoryId: { in: existingInvIds },
+                },
+              })
+            : [];
+        const storeInvByInventoryId = new Map(
+          existingStoreInvs.map((si) => [si.inventoryId, si]),
+        );
+
+        for (const detail of verifiedProducts) {
+          // Usar cache del batch fetch; crear solo si no existe
+          let inventory = inventoryByProduct.get(detail.productId);
           if (!inventory) {
             const inventoryCreateData: InventoryUncheckedCreateInputWithOrganization =
               {
                 productId: detail.productId,
-                storeId: data.storeId, // Incluye storeId al crear el registro
+                storeId: data.storeId,
                 organizationId,
               };
-
             inventory = await prisma.inventory.create({
               data: inventoryCreateData,
             });
+            inventoryByProduct.set(detail.productId, inventory);
           }
 
           // Actualizar el campo inventoryId en los EntryDetail ya creados
@@ -366,29 +450,21 @@ export class EntriesService {
           if (entryDetail) {
             await prisma.entryDetail.update({
               where: { id: entryDetail.id },
-              data: { inventoryId: inventory.id }, // Asociar el EntryDetail con el Inventory
+              data: { inventoryId: inventory.id },
             });
           }
 
-          // Verificar si ya existe un registro en StoreOnInventory
-          const storeInventory = await prisma.storeOnInventory.findFirst({
-            where: {
-              storeId: data.storeId,
-              inventoryId: inventory.id,
-            },
-          });
+          const storeInventory = storeInvByInventoryId.get(inventory.id);
 
           if (!storeInventory) {
-            // Si no existe, crear un nuevo registro en StoreOnInventory
             await prisma.storeOnInventory.create({
               data: {
                 storeId: data.storeId,
                 inventoryId: inventory.id,
-                stock: detail.quantity || 0, // Inicializa el stock con la cantidad de la entrada
+                stock: detail.quantity || 0,
               },
             });
 
-            // Registrar el cambio en el historial
             const historyCreateData: InventoryHistoryCreateInputWithOrganization =
               {
                 inventory: { connect: { id: inventory.id } },
@@ -399,19 +475,15 @@ export class EntriesService {
                 newStock: detail.quantity || 0,
                 organizationId,
               };
-
-            // Registrar el cambio en el historial
             await prisma.inventoryHistory.create({
               data: historyCreateData,
             });
           } else {
-            // Si existe, actualizar el stock
             await prisma.storeOnInventory.update({
               where: { id: storeInventory.id },
               data: { stock: { increment: detail.quantity || 0 } },
             });
 
-            // Registrar el cambio en el historial
             const historyCreateData: InventoryHistoryCreateInputWithOrganization =
               {
                 inventory: { connect: { id: inventory.id } },
@@ -422,14 +494,11 @@ export class EntriesService {
                 newStock: storeInventory.stock + (detail.quantity || 0),
                 organizationId,
               };
-
-            // Registrar el cambio en el historial
             await prisma.inventoryHistory.create({
               data: historyCreateData,
             });
           }
         }
-        console.log('Entrada creada:', entry);
         return entry;
       });
 
@@ -488,7 +557,7 @@ export class EntriesService {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.handlePrismaError(error);
+      handlePrismaError(error);
     }
   }
   //
@@ -500,6 +569,9 @@ export class EntriesService {
       const resolvedOrganizationId =
         organizationId ?? ctx.organizationId ?? null;
       const resolvedCompanyId = ctx.companyId ?? null;
+
+      // Validate entries feature is enabled
+      await this.ensureEntriesFeatureEnabled(resolvedCompanyId);
 
       logOrganizationContext({
         service: EntriesService.name,
@@ -520,6 +592,8 @@ export class EntriesService {
 
       const entries = await this.prisma.entry.findMany({
         where,
+        take: 500,
+        orderBy: { createdAt: 'desc' },
         include: {
           details: { include: { product: true, series: true } },
           provider: true,
@@ -542,7 +616,7 @@ export class EntriesService {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.handlePrismaError(error);
+      handlePrismaError(error);
     }
   }
   //
@@ -604,7 +678,7 @@ export class EntriesService {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.handlePrismaError(error);
+      handlePrismaError(error);
     }
   }
   //
@@ -616,6 +690,9 @@ export class EntriesService {
       const resolvedOrganizationId =
         organizationId ?? ctx.organizationId ?? null;
       const resolvedCompanyId = ctx.companyId ?? null;
+
+      // Validate entries feature is enabled
+      await this.ensureEntriesFeatureEnabled(resolvedCompanyId);
 
       const organizationFilter = buildOrganizationFilter(
         resolvedOrganizationId,
@@ -638,6 +715,35 @@ export class EntriesService {
       }
 
       const orgId = (entry as any).organizationId ?? null;
+      const entryDetailIds = entry.details.map((d) => d.id);
+
+      // Validar que no existan ventas que referencien esta entrada
+      if (entryDetailIds.length > 0) {
+        const salesCount = await this.prisma.salesDetail.count({
+          where: { entryDetailId: { in: entryDetailIds } },
+        });
+        if (salesCount > 0) {
+          throw new ConflictException(
+            `No se puede eliminar la entrada porque tiene ${salesCount} producto(s) asociado(s) a ventas registradas. Primero debe anular las ventas correspondientes.`,
+          );
+        }
+      }
+
+      // Validar que el stock no quede negativo al revertir
+      for (const detail of entry.details) {
+        const storeInventory = await this.prisma.storeOnInventory.findFirst({
+          where: {
+            storeId: entry.storeId,
+            inventory: { productId: detail.productId },
+          },
+        });
+
+        if (storeInventory && storeInventory.stock < detail.quantity) {
+          throw new ConflictException(
+            `No se puede eliminar la entrada porque el producto "${detail.product.name}" tiene stock actual (${storeInventory.stock}) menor a la cantidad ingresada (${detail.quantity}). Es posible que se hayan realizado ventas u otros movimientos con ese inventario.`,
+          );
+        }
+      }
 
       logOrganizationContext({
         service: EntriesService.name,
@@ -650,68 +756,83 @@ export class EntriesService {
         },
       });
 
-      // Eliminar series asociadas
-      for (const detail of entry.details) {
-        await this.prisma.entryDetailSeries.deleteMany({
-          where: { entryDetailId: detail.id },
-        });
-      }
-
-      for (const detail of entry.details) {
-        // Verificar si el producto existe en el inventario de la tienda
-        const storeInventory = await this.prisma.storeOnInventory.findFirst({
-          where: {
-            storeId: entry.storeId,
-            inventory: { productId: detail.productId },
-          },
-        });
-
-        if (!storeInventory) {
-          throw new NotFoundException(
-            `No se encontró el inventario para el producto con ID ${detail.productId} en la tienda con ID ${entry.storeId}.`,
-          );
+      // Ejecutar toda la eliminacion dentro de una transaccion
+      const deletedEntry = await this.prisma.$transaction(async (tx) => {
+        // Eliminar series asociadas
+        for (const detail of entry.details) {
+          await tx.entryDetailSeries.deleteMany({
+            where: { entryDetailId: detail.id },
+          });
         }
 
-        // Actualizar el stock en StoreOnInventory
-        await this.prisma.storeOnInventory.update({
-          where: { id: storeInventory.id },
-          data: { stock: { decrement: detail.quantity } },
+        // Revertir stock y registrar historial
+        for (const detail of entry.details) {
+          const storeInventory = await tx.storeOnInventory.findFirst({
+            where: {
+              storeId: entry.storeId,
+              inventory: { productId: detail.productId },
+            },
+          });
+
+          if (!storeInventory) {
+            throw new NotFoundException(
+              `No se encontró el inventario para el producto con ID ${detail.productId} en la tienda con ID ${entry.storeId}.`,
+            );
+          }
+
+          await tx.storeOnInventory.update({
+            where: { id: storeInventory.id },
+            data: { stock: { decrement: detail.quantity } },
+          });
+
+          const historyCreateData: InventoryHistoryCreateInputWithOrganization =
+            {
+              inventory: { connect: { id: storeInventory.inventoryId } },
+              user: { connect: { id: entry.userId } },
+              action: 'delete',
+              stockChange: -detail.quantity,
+              previousStock: storeInventory.stock,
+              newStock: storeInventory.stock - detail.quantity,
+              organizationId: orgId,
+            };
+
+          await tx.inventoryHistory.create({
+            data: historyCreateData,
+          });
+        }
+
+        // Desvincular guias de remision (relacion opcional)
+        await tx.shippingGuide.updateMany({
+          where: { entryId: entry.id },
+          data: { entryId: null },
         });
 
-        // Registrar el cambio en el historial
-        const historyCreateData: InventoryHistoryCreateInputWithOrganization = {
-          inventory: { connect: { id: storeInventory.inventoryId } },
-          user: { connect: { id: entry.userId } },
-          action: 'delete',
-          stockChange: -detail.quantity,
-          previousStock: storeInventory.stock,
-          newStock: storeInventory.stock - detail.quantity,
-          organizationId: orgId,
-        };
+        // Eliminar la entrada (cascade: Invoice, EntryDetail)
+        return tx.entry.delete({ where: { id: entry.id } });
+      });
 
-        // Registrar el cambio en el historial
-        await this.prisma.inventoryHistory.create({
-          data: historyCreateData,
-        });
-      }
-
-      // Eliminar la entrada
+      // Registrar actividad fuera de la transaccion (no critico)
       const summary = entry.details
         .map((d) => `${d.quantity}x ${d.product.name}`)
         .join(', ');
-      await this.activityService.log({
-        actorId: entry.userId,
-        entityType: 'InventoryItem',
-        entityId: entry.id.toString(),
-        action: AuditAction.UPDATED,
-        summary: `Entrada eliminada afectando: ${summary}`,
-      });
-      return this.prisma.entry.delete({ where: { id: entry.id } });
+      try {
+        await this.activityService.log({
+          actorId: entry.userId,
+          entityType: 'InventoryItem',
+          entityId: entry.id.toString(),
+          action: AuditAction.DELETED,
+          summary: `Entrada #${entry.id} eliminada afectando: ${summary}`,
+        });
+      } catch (logError) {
+        console.warn('No se pudo registrar la actividad de eliminacion:', logError);
+      }
+
+      return deletedEntry;
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.handlePrismaError(error);
+      handlePrismaError(error);
     }
   }
 
@@ -752,28 +873,32 @@ export class EntriesService {
         );
       }
 
-      for (const entry of entries) {
-        const entryOrgId =
-          (entry as { organizationId?: number | null }).organizationId ?? null;
-
-        logOrganizationContext({
-          service: EntriesService.name,
-          operation: 'deleteEntries.entry',
-          organizationId: entryOrgId,
-          metadata: {
-            entryId: entry.id,
-            storeId: entry.storeId,
-            userId: entry.userId,
-            companyId: resolvedCompanyId ?? undefined,
+      // Validar que ninguna entrada tenga ventas asociadas
+      const allDetailIds = entries.flatMap((e) => e.details.map((d) => d.id));
+      if (allDetailIds.length > 0) {
+        const salesWithEntries = await this.prisma.salesDetail.findMany({
+          where: { entryDetailId: { in: allDetailIds } },
+          select: {
+            entryDetailId: true,
+            entryDetail: { select: { entryId: true } },
           },
+          take: 20,
         });
 
-        for (const detail of entry.details) {
-          await this.prisma.entryDetailSeries.deleteMany({
-            where: { entryDetailId: detail.id },
-          });
+        if (salesWithEntries.length > 0) {
+          const blockedEntryIds = [
+            ...new Set(
+              salesWithEntries.map((s) => s.entryDetail.entryId),
+            ),
+          ];
+          throw new ConflictException(
+            `No se pueden eliminar las entradas porque ${blockedEntryIds.length} entrada(s) (IDs: ${blockedEntryIds.join(', ')}) tienen productos asociados a ventas registradas. Primero debe anular las ventas correspondientes.`,
+          );
         }
+      }
 
+      // Validar que el stock no quede negativo al revertir
+      for (const entry of entries) {
         for (const detail of entry.details) {
           const storeInventory = await this.prisma.storeOnInventory.findFirst({
             where: {
@@ -782,57 +907,117 @@ export class EntriesService {
             },
           });
 
-          if (!storeInventory) {
-            throw new NotFoundException(
-              `No se encontró el inventario para el producto con ID ${detail.productId} en la tienda con ID ${entry.storeId}.`,
+          if (storeInventory && storeInventory.stock < detail.quantity) {
+            throw new ConflictException(
+              `No se puede eliminar la entrada #${entry.id} porque el producto "${detail.product.name}" tiene stock actual (${storeInventory.stock}) menor a la cantidad ingresada (${detail.quantity}). Es posible que se hayan realizado ventas u otros movimientos con ese inventario.`,
             );
           }
+        }
+      }
 
-          await this.prisma.storeOnInventory.update({
-            where: { id: storeInventory.id },
-            data: { stock: { decrement: detail.quantity } },
+      // Ejecutar toda la eliminacion dentro de una transaccion
+      const result = await this.prisma.$transaction(async (tx) => {
+        for (const entry of entries) {
+          const entryOrgId =
+            (entry as { organizationId?: number | null }).organizationId ??
+            null;
+
+          logOrganizationContext({
+            service: EntriesService.name,
+            operation: 'deleteEntries.entry',
+            organizationId: entryOrgId,
+            metadata: {
+              entryId: entry.id,
+              storeId: entry.storeId,
+              userId: entry.userId,
+              companyId: resolvedCompanyId ?? undefined,
+            },
           });
 
-          const historyCreateData: InventoryHistoryCreateInputWithOrganization =
-            {
-              inventory: { connect: { id: storeInventory.inventoryId } },
-              user: { connect: { id: entry.userId } },
-              action: 'delete',
-              stockChange: -detail.quantity,
-              previousStock: storeInventory.stock,
-              newStock: storeInventory.stock - detail.quantity,
-              organizationId: entryOrgId,
-            };
+          // Eliminar series
+          for (const detail of entry.details) {
+            await tx.entryDetailSeries.deleteMany({
+              where: { entryDetailId: detail.id },
+            });
+          }
 
-          await this.prisma.inventoryHistory.create({
-            data: historyCreateData,
+          // Revertir stock y registrar historial
+          for (const detail of entry.details) {
+            const storeInventory = await tx.storeOnInventory.findFirst({
+              where: {
+                storeId: entry.storeId,
+                inventory: { productId: detail.productId },
+              },
+            });
+
+            if (!storeInventory) {
+              throw new NotFoundException(
+                `No se encontró el inventario para el producto con ID ${detail.productId} en la tienda con ID ${entry.storeId}.`,
+              );
+            }
+
+            await tx.storeOnInventory.update({
+              where: { id: storeInventory.id },
+              data: { stock: { decrement: detail.quantity } },
+            });
+
+            const historyCreateData: InventoryHistoryCreateInputWithOrganization =
+              {
+                inventory: { connect: { id: storeInventory.inventoryId } },
+                user: { connect: { id: entry.userId } },
+                action: 'delete',
+                stockChange: -detail.quantity,
+                previousStock: storeInventory.stock,
+                newStock: storeInventory.stock - detail.quantity,
+                organizationId: entryOrgId,
+              };
+
+            await tx.inventoryHistory.create({
+              data: historyCreateData,
+            });
+          }
+
+          // Desvincular guias de remision (relacion opcional)
+          await tx.shippingGuide.updateMany({
+            where: { entryId: entry.id },
+            data: { entryId: null },
           });
         }
 
+        // Eliminar todas las entradas
+        const deleted = await tx.entry.deleteMany({
+          where: { id: { in: entries.map((e) => e.id) } },
+        });
+
+        return deleted;
+      });
+
+      // Registrar actividad fuera de la transaccion (no critico)
+      for (const entry of entries) {
         const summary = entry.details
           .map((d) => `${d.quantity}x ${d.product.name}`)
           .join(', ');
-        await this.activityService.log({
-          actorId: entry.userId,
-          entityType: 'InventoryItem',
-          entityId: entry.id.toString(),
-          action: AuditAction.UPDATED,
-          summary: `Entrada eliminada afectando: ${summary}`,
-        });
+        try {
+          await this.activityService.log({
+            actorId: entry.userId,
+            entityType: 'InventoryItem',
+            entityId: entry.id.toString(),
+            action: AuditAction.DELETED,
+            summary: `Entrada #${entry.id} eliminada afectando: ${summary}`,
+          });
+        } catch (logError) {
+          console.warn('No se pudo registrar la actividad de eliminacion:', logError);
+        }
       }
 
-      const deletedEntries = await this.prisma.entry.deleteMany({
-        where: { id: { in: entries.map((e) => e.id) } },
-      });
-
       return {
-        message: `${deletedEntries.count} entrada(s) eliminada(s) correctamente.`,
+        message: `${result.count} entrada(s) eliminada(s) correctamente.`,
       };
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.handlePrismaError(error);
+      handlePrismaError(error);
     }
   }
 
@@ -843,6 +1028,9 @@ export class EntriesService {
       const resolvedOrganizationId =
         organizationId ?? ctx.organizationId ?? null;
       const resolvedCompanyId = ctx.companyId ?? null;
+
+      // Validate entries feature is enabled
+      await this.ensureEntriesFeatureEnabled(resolvedCompanyId);
 
       const store = await this.prisma.store.findFirst({
         where: {
@@ -875,7 +1063,7 @@ export class EntriesService {
       });
     } catch (error) {
       if (error instanceof HttpException) throw error;
-      this.handlePrismaError(error);
+      handlePrismaError(error);
     }
   }
   async findRecentEntries(limit: number, organizationId?: number | null) {
@@ -942,13 +1130,24 @@ export class EntriesService {
   // Actualizar una entrada con un PDF
   async updateEntryPdf(entryId: number, pdfUrl: string) {
     try {
+      // Validar que entryId sea un número válido
+      if (!entryId || isNaN(entryId) || !Number.isInteger(entryId)) {
+        throw new BadRequestException(
+          `ID de entrada inválido: ${entryId}. Debe ser un número entero válido.`
+        );
+      }
+
       const entry = await this.prisma.entry.findUnique({
         where: { id: entryId },
+        include: { store: { select: { companyId: true } } },
       });
 
       if (!entry) {
         throw new NotFoundException(`La entrada con ID ${entryId} no existe.`);
       }
+
+      // Validate entries feature is enabled
+      await this.ensureEntriesFeatureEnabled(entry.store?.companyId);
 
       return this.prisma.entry.update({
         where: { id: entryId },
@@ -958,20 +1157,31 @@ export class EntriesService {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.handlePrismaError(error);
+      handlePrismaError(error);
     }
   }
 
   // Actualizar una entrada con un PDF_GUIA
   async updateEntryPdfGuia(entryId: number, guiaUrl: string) {
     try {
+      // Validar que entryId sea un número válido
+      if (!entryId || isNaN(entryId) || !Number.isInteger(entryId)) {
+        throw new BadRequestException(
+          `ID de entrada inválido: ${entryId}. Debe ser un número entero válido.`
+        );
+      }
+
       const entry = await this.prisma.entry.findUnique({
         where: { id: entryId },
+        include: { store: { select: { companyId: true } } },
       });
 
       if (!entry) {
         throw new NotFoundException(`La entrada con ID ${entryId} no existe.`);
       }
+
+      // Validate entries feature is enabled
+      await this.ensureEntriesFeatureEnabled(entry.store?.companyId);
 
       return this.prisma.entry.update({
         where: { id: entryId },
@@ -981,7 +1191,7 @@ export class EntriesService {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.handlePrismaError(error);
+      handlePrismaError(error);
     }
   }
 }

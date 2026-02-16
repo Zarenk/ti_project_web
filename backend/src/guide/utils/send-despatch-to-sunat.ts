@@ -6,19 +6,39 @@ interface SunatResponse {
   applicationResponse: string;
 }
 
-export async function sendDespatchToSunat(zipPath: string, zipName: string) {
-  const wsdlPath = path.join(
-    process.cwd(),
-    'src',
-    'guide',
-    'wsdl',
-    'guia.wsdl',
-  );
+type SendDespatchOptions = {
+  endpoint?: string;
+  username?: string;
+  password?: string;
+  wsdlPath?: string;
+};
+
+const DEFAULT_WSDL_CANDIDATES = [
+  path.join(process.cwd(), 'dist', 'src', 'guide', 'wsdl', 'guia.wsdl'),
+  path.join(process.cwd(), 'src', 'guide', 'wsdl', 'guia.wsdl'),
+];
+
+function resolveWsdlPath(customPath?: string) {
+  if (customPath && fs.existsSync(customPath)) return customPath;
+  for (const candidate of DEFAULT_WSDL_CANDIDATES) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return customPath ?? DEFAULT_WSDL_CANDIDATES[0];
+}
+
+export async function sendDespatchToSunat(
+  zipPath: string,
+  zipName: string,
+  options: SendDespatchOptions = {},
+) {
+  const wsdlPath = resolveWsdlPath(options.wsdlPath);
   const endpoint =
+    options.endpoint ??
+    process.env.SUNAT_SOAP_ENDPOINT ??
     'https://e-beta.sunat.gob.pe/ol-ti-itemision-guia-gem-beta/billService';
 
   if (!fs.existsSync(wsdlPath)) {
-    throw new Error(`El archivo WSDL no se encontró en la ruta: ${wsdlPath}`);
+    throw new Error(`El archivo WSDL no se encontrÃ³ en la ruta: ${wsdlPath}`);
   }
 
   const zipBuffer = fs.readFileSync(zipPath);
@@ -26,8 +46,11 @@ export async function sendDespatchToSunat(zipPath: string, zipName: string) {
 
   const client = await soap.createClientAsync(wsdlPath, { endpoint });
 
-  const usuarioSol = `20123456789MODDATOS`;
-  const passwordSol = 'moddatos';
+  const usuarioSol = options.username ?? process.env.SUNAT_USERNAME ?? '';
+  const passwordSol = options.password ?? process.env.SUNAT_PASSWORD ?? '';
+  if (!usuarioSol || !passwordSol) {
+    throw new Error('Credenciales SOL no configuradas para SOAP.');
+  }
   client.setSecurity(new soap.BasicAuthSecurity(usuarioSol, passwordSol));
 
   const args = {
